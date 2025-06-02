@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ops::{Bound, RangeBounds},
+    ops::RangeBounds,
     sync::Arc,
 };
 
@@ -12,7 +12,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        Epoch, OracleResponse, Timestamp,
+        Epoch, OracleResponse, RangeExt as _, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, MessageId},
@@ -947,7 +947,7 @@ where
         Ok(())
     }
 
-    /// Applies a loose block without executing it. This only updates the outboxes.
+    /// Applies an unexecuted block without executing it. This only updates the outboxes.
     pub async fn apply_unexecuted_block(
         &mut self,
         block: &ConfirmedBlock,
@@ -1179,31 +1179,6 @@ where
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
         Ok(targets)
-    }
-}
-
-trait RangeExt {
-    /// Returns the range as a tuple of inclusive bounds.
-    /// If the range is empty, returns `None`.
-    fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)>;
-}
-
-impl<T: RangeBounds<BlockHeight>> RangeExt for T {
-    fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)> {
-        let start = match self.start_bound() {
-            Bound::Included(height) => *height,
-            Bound::Excluded(height) => height.try_add_one().ok()?,
-            Bound::Unbounded => BlockHeight(0),
-        };
-        let end = match self.end_bound() {
-            Bound::Included(height) => *height,
-            Bound::Excluded(height) => height.try_sub_one().ok()?,
-            Bound::Unbounded => BlockHeight::MAX,
-        };
-        if start > end {
-            return None;
-        }
-        Some((start, end))
     }
 }
 

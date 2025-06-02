@@ -261,7 +261,7 @@ where
             .await
     }
 
-    /// Processes a loose block without executing it.
+    /// Processes an unexecuted block without executing it.
     #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn process_unexecuted_certificate(
         &mut self,

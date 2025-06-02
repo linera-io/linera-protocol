@@ -890,7 +890,7 @@ where
             .await
     }
 
-    /// Applies a loose block without executing it. This does not update the execution state, but
+    /// Applies an unexecuted block without executing it. This does not update the execution state, but
     /// can create cross-chain messages and store blobs. It also does _not_ check the signatures;
     /// the caller is responsible for checking them using the correct committee.
     #[instrument(skip_all, fields(

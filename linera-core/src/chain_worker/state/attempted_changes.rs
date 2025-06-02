@@ -415,7 +415,7 @@ where
         Ok((info, actions))
     }
 
-    /// Processes a loose block without executing it.
+    /// Processes an unexecuted block without executing it.
     pub(super) async fn process_unexecuted_certificate(
         &mut self,
         certificate: ConfirmedBlockCertificate,

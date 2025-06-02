@@ -747,9 +747,9 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Processes the confirmed block as a loose certificate in the local node.
+    /// Processes the confirmed block in the local node without executing it.
     #[instrument(level = "trace", skip_all)]
-    async fn receive_unexecuted_certificate(
+    async fn receive_sender_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
@@ -829,7 +829,7 @@ impl<Env: Environment> Client<Env> {
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
-                    warn!("Failed to process loose certificate value");
+                    warn!("Failed to process unexecuted certificate value");
                     return Err(err.into());
                 }
             }
@@ -1208,12 +1208,8 @@ impl<Env: Environment> Client<Env> {
         future::try_join_all(blob_ids.into_iter().map(|blob_id| async move {
             let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
             // This will download all ancestors of the certificate and process all of them locally.
-            self.receive_unexecuted_certificate(
-                certificate,
-                ReceiveCertificateMode::NeedsCheck,
-                None,
-            )
-            .await
+            self.receive_sender_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
+                .await
         }))
         .await?;
 
@@ -1246,7 +1242,7 @@ impl<Env: Environment> Client<Env> {
                 };
                 if let Ok((remote_node, cert)) = result {
                     if self
-                        .receive_unexecuted_certificate(
+                        .receive_sender_certificate(
                             cert,
                             ReceiveCertificateMode::NeedsCheck,
                             Some(vec![remote_node]),
@@ -2081,7 +2077,7 @@ impl<Env: Environment> ChainClient<Env> {
                     let hash = certificate.hash();
                     let mode = ReceiveCertificateMode::AlreadyChecked;
                     if let Err(err) = client
-                        .receive_unexecuted_certificate(certificate, mode, None)
+                        .receive_sender_certificate(certificate, mode, None)
                         .await
                     {
                         error!("Received invalid certificate {hash}: {err}");
@@ -2991,7 +2987,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await
     }
 
-    /// Processes loose certificate for which this chain is a recipient.
+    /// Processes unexecuted certificate for which this chain is a recipient.
     #[instrument(
         level = "trace",
         skip(certificate),
@@ -3002,7 +2998,7 @@ impl<Env: Environment> ChainClient<Env> {
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
         self.client
-            .receive_unexecuted_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
+            .receive_sender_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
             .await
     }
 

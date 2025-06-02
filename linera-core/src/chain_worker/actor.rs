@@ -121,7 +121,7 @@ where
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
-    /// Apply a loose block without executing it.
+    /// Apply an unexecuted block without executing it.
     ProcessUnexecutedCertificate {
         certificate: ConfirmedBlockCertificate,
         #[debug(skip)]
