@@ -6,3 +6,4 @@ metadata:
 data:
   scylla.yaml: |
     query_tombstone_page_limit: 200000
+    commitlog_segment_size_in_mb: 256
