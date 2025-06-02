@@ -1,4 +1,4 @@
-# <img src="https://github.com/linera-io/linera-protocol/assets/1105398/fe08c941-93af-4114-bb83-bcc0eaec95f9" width="250" height="90" />
+# <img src="https://github.com/linera-io/linera-protocol/assets/1105398/fe08c941-93af-4114-bb83-bcc0eaec95f9" width="250" height="85" />
 
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE)
 [![Build Status for Docker](https://github.com/linera-io/linera-protocol/actions/workflows/docker-compose.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/docker-compose.yml)
@@ -10,7 +10,9 @@
 <!-- [![Build Status for Kubernetes](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml) -->
 
 [Linera](https://linera.io) is a decentralized blockchain infrastructure designed for highly scalable,
-low-latency Web3 applications.
+secure, low-latency Web3 applications.
+
+## Documentation
 
 Visit our [developer page](https://linera.dev) and read our
 [whitepaper](https://linera.io/whitepaper) to learn more about the Linera protocol.
@@ -62,6 +64,9 @@ from low to high levels in the dependency graph)
 
 * [`examples`](./examples) Examples of Linera applications written in Rust.
 
+## Prerequisites
+
+See [`INSTALL.md`](./INSTALL.md) for software requirements to develop in this repo.
 
 ## Quickstart with the Linera CLI tool
 
@@ -130,3 +135,15 @@ linera query-balance "$CHAIN2:$ACCOUNT2"
 
 More complex examples may be found in our [developer manual](https://linera.dev) as well
 as the [example applications](./examples) in this repository.
+
+## Contributing
+
+We welcome contributions from the community! If you'd like to contribute to the Linera protocol:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+For detailed guidelines, see our [contribution guide](https://linera.dev/getting-started/contributing).

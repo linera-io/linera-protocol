@@ -82,22 +82,20 @@ enum KeyTag {
     Subview,
 }
 
-impl<C, W> View<C> for ByteCollectionView<C, W>
-where
-    C: Context + Send + Sync,
-    W: View<C> + Send + Sync,
-{
+impl<W: View + Sync> View for ByteCollectionView<W::Context, W> {
     const NUM_INIT_KEYS: usize = 0;
 
-    fn context(&self) -> &C {
+    type Context = W::Context;
+
+    fn context(&self) -> &Self::Context {
         &self.context
     }
 
-    fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+    fn pre_load(_context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
         Ok(vec![])
     }
 
-    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+    fn post_load(context: Self::Context, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         Ok(Self {
             context,
             delete_storage_first: false,
@@ -105,7 +103,7 @@ where
         })
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    async fn load(context: Self::Context) -> Result<Self, ViewError> {
         Self::post_load(context, &[])
     }
 
@@ -160,11 +158,7 @@ where
     }
 }
 
-impl<C, W> ClonableView<C> for ByteCollectionView<C, W>
-where
-    C: Context + Send + Sync,
-    W: ClonableView<C> + Send + Sync,
-{
+impl<W: ClonableView + Sync> ClonableView for ByteCollectionView<W::Context, W> {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         let cloned_updates = self
             .updates
@@ -187,11 +181,7 @@ where
     }
 }
 
-impl<C, W> ByteCollectionView<C, W>
-where
-    C: Context + Send,
-    W: View<C>,
-{
+impl<W: View + Sync> ByteCollectionView<W::Context, W> {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
         self.context
             .base_key()
@@ -418,7 +408,7 @@ where
     }
 
     /// Gets the extra data.
-    pub fn extra(&self) -> &C::Extra {
+    pub fn extra(&self) -> &<W::Context as Context>::Extra {
         self.context.extra()
     }
 
@@ -464,11 +454,7 @@ where
     }
 }
 
-impl<C, W> ByteCollectionView<C, W>
-where
-    C: Context + Send,
-    W: View<C> + Sync,
-{
+impl<W: View + Sync> ByteCollectionView<W::Context, W> {
     /// Applies a function f on each index (aka key). Keys are visited in the
     /// lexicographic order. If the function returns false, then the loop
     /// ends prematurely.
@@ -630,11 +616,7 @@ where
     }
 }
 
-impl<C, W> HashableView<C> for ByteCollectionView<C, W>
-where
-    C: Context + Send + Sync,
-    W: HashableView<C> + Send + Sync + 'static,
-{
+impl<W: HashableView + Sync> HashableView for ByteCollectionView<W::Context, W> {
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
@@ -710,23 +692,23 @@ pub struct CollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-impl<C, I, W> View<C> for CollectionView<C, I, W>
+impl<W: View + Sync, I> View for CollectionView<W::Context, I, W>
 where
-    C: Context + Send + Sync,
     I: Send + Sync + Serialize + DeserializeOwned,
-    W: View<C> + Send + Sync,
 {
-    const NUM_INIT_KEYS: usize = ByteCollectionView::<C, W>::NUM_INIT_KEYS;
+    const NUM_INIT_KEYS: usize = ByteCollectionView::<W::Context, W>::NUM_INIT_KEYS;
 
-    fn context(&self) -> &C {
+    type Context = W::Context;
+
+    fn context(&self) -> &Self::Context {
         self.collection.context()
     }
 
-    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        ByteCollectionView::<C, W>::pre_load(context)
+    fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
+        ByteCollectionView::<W::Context, W>::pre_load(context)
     }
 
-    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+    fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let collection = ByteCollectionView::post_load(context, values)?;
         Ok(CollectionView {
             collection,
@@ -734,7 +716,7 @@ where
         })
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    async fn load(context: Self::Context) -> Result<Self, ViewError> {
         Self::post_load(context, &[])
     }
 
@@ -755,11 +737,9 @@ where
     }
 }
 
-impl<C, I, W> ClonableView<C> for CollectionView<C, I, W>
+impl<I, W: ClonableView + Sync> ClonableView for CollectionView<W::Context, I, W>
 where
-    C: Context + Send + Sync,
     I: Send + Sync + Serialize + DeserializeOwned,
-    W: ClonableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(CollectionView {
@@ -769,12 +749,7 @@ where
     }
 }
 
-impl<C, I, W> CollectionView<C, I, W>
-where
-    C: Context + Send,
-    I: Serialize,
-    W: View<C>,
-{
+impl<I: Serialize, W: View + Sync> CollectionView<W::Context, I, W> {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is added to the collection. The resulting view
     /// can be modified.
@@ -920,16 +895,14 @@ where
     }
 
     /// Gets the extra data.
-    pub fn extra(&self) -> &C::Extra {
+    pub fn extra(&self) -> &<W::Context as Context>::Extra {
         self.collection.extra()
     }
 }
 
-impl<C, I, W> CollectionView<C, I, W>
+impl<I, W: View + Sync> CollectionView<W::Context, I, W>
 where
-    C: Context + Send,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
-    W: View<C> + Sync,
 {
     /// Returns the list of indices in the collection in the order determined by
     /// the serialization.
@@ -978,12 +951,7 @@ where
     }
 }
 
-impl<C, I, W> CollectionView<C, I, W>
-where
-    C: Context + Send,
-    I: DeserializeOwned,
-    W: View<C> + Sync,
-{
+impl<I: DeserializeOwned, W: View + Sync> CollectionView<W::Context, I, W> {
     /// Applies a function f on each index. Indices are visited in an order
     /// determined by the serialization. If the function returns false then
     /// the loop ends prematurely.
@@ -1058,11 +1026,9 @@ where
     }
 }
 
-impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
+impl<I, W: HashableView + Sync> HashableView for CollectionView<W::Context, I, W>
 where
-    C: Context + Send + Sync,
     I: Clone + Send + Sync + Serialize + DeserializeOwned,
-    W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -1082,23 +1048,20 @@ pub struct CustomCollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-impl<C, I, W> View<C> for CustomCollectionView<C, I, W>
-where
-    C: Context + Send + Sync,
-    I: Send + Sync,
-    W: View<C> + Send + Sync,
-{
-    const NUM_INIT_KEYS: usize = ByteCollectionView::<C, W>::NUM_INIT_KEYS;
+impl<I: Send + Sync, W: View + Sync> View for CustomCollectionView<W::Context, I, W> {
+    const NUM_INIT_KEYS: usize = ByteCollectionView::<W::Context, W>::NUM_INIT_KEYS;
 
-    fn context(&self) -> &C {
+    type Context = W::Context;
+
+    fn context(&self) -> &Self::Context {
         self.collection.context()
     }
 
-    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        ByteCollectionView::<C, W>::pre_load(context)
+    fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
+        ByteCollectionView::<_, W>::pre_load(context)
     }
 
-    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+    fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let collection = ByteCollectionView::post_load(context, values)?;
         Ok(CustomCollectionView {
             collection,
@@ -1106,7 +1069,7 @@ where
         })
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    async fn load(context: Self::Context) -> Result<Self, ViewError> {
         Self::post_load(context, &[])
     }
 
@@ -1127,11 +1090,8 @@ where
     }
 }
 
-impl<C, I, W> ClonableView<C> for CustomCollectionView<C, I, W>
-where
-    C: Context + Send + Sync,
-    I: Send + Sync,
-    W: ClonableView<C> + Send + Sync,
+impl<I: Send + Sync, W: ClonableView + Sync> ClonableView
+    for CustomCollectionView<W::Context, I, W>
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(CustomCollectionView {
@@ -1141,12 +1101,7 @@ where
     }
 }
 
-impl<C, I, W> CustomCollectionView<C, I, W>
-where
-    C: Context + Send,
-    I: CustomSerialize,
-    W: View<C>,
-{
+impl<I: CustomSerialize, W: View + Sync> CustomCollectionView<W::Context, I, W> {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is added to the collection. The resulting view
     /// can be modified.
@@ -1292,17 +1247,12 @@ where
     }
 
     /// Gets the extra data.
-    pub fn extra(&self) -> &C::Extra {
+    pub fn extra(&self) -> &<W::Context as Context>::Extra {
         self.collection.extra()
     }
 }
 
-impl<C, I, W> CustomCollectionView<C, I, W>
-where
-    C: Context + Send,
-    I: Send + CustomSerialize,
-    W: View<C> + Sync,
-{
+impl<I: CustomSerialize + Send, W: View + Sync> CustomCollectionView<W::Context, I, W> {
     /// Returns the list of indices in the collection in the order determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1349,12 +1299,7 @@ where
     }
 }
 
-impl<C, I, W> CustomCollectionView<C, I, W>
-where
-    C: Context + Send,
-    I: CustomSerialize,
-    W: View<C> + Sync,
-{
+impl<I: CustomSerialize, W: View + Sync> CustomCollectionView<W::Context, I, W> {
     /// Applies a function f on each index. Indices are visited in an order
     /// determined by the custom serialization. If the function f returns false,
     /// then the loop ends prematurely.
@@ -1431,11 +1376,9 @@ where
     }
 }
 
-impl<C, I, W> HashableView<C> for CustomCollectionView<C, I, W>
+impl<I, W: HashableView + Sync> HashableView for CustomCollectionView<W::Context, I, W>
 where
-    C: Context + Send + Sync,
-    I: Clone + Send + Sync + CustomSerialize,
-    W: HashableView<C> + Send + Sync + 'static,
+    Self: View + Sync,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -1466,7 +1409,6 @@ mod graphql {
 
     use super::{CollectionView, CustomCollectionView, ReadGuardedView};
     use crate::{
-        context::Context,
         graphql::{hash_name, mangle, missing_key_error, Entry, MapFilters, MapInput},
         views::View,
     };
@@ -1504,16 +1446,15 @@ mod graphql {
     }
 
     #[async_graphql::Object(cache_control(no_cache), name_type)]
-    impl<C, K, V> CollectionView<C, K, V>
+    impl<K, V> CollectionView<V::Context, K, V>
     where
-        C: Send + Sync + Context,
         K: async_graphql::InputType
             + async_graphql::OutputType
             + serde::ser::Serialize
             + serde::de::DeserializeOwned
             + std::fmt::Debug
             + Clone,
-        V: View<C> + async_graphql::OutputType,
+        V: View + async_graphql::OutputType,
         MapInput<K>: async_graphql::InputType,
         MapFilters<K>: async_graphql::InputType,
     {
@@ -1558,7 +1499,7 @@ mod graphql {
         }
     }
 
-    impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
+    impl<C: Send + Sync, K: async_graphql::InputType, V: async_graphql::OutputType>
         async_graphql::TypeName for CustomCollectionView<C, K, V>
     {
         fn type_name() -> Cow<'static, str> {
@@ -1573,14 +1514,13 @@ mod graphql {
     }
 
     #[async_graphql::Object(cache_control(no_cache), name_type)]
-    impl<C, K, V> CustomCollectionView<C, K, V>
+    impl<K, V> CustomCollectionView<V::Context, K, V>
     where
-        C: Send + Sync + Context,
         K: async_graphql::InputType
             + async_graphql::OutputType
             + crate::common::CustomSerialize
             + std::fmt::Debug,
-        V: View<C> + async_graphql::OutputType,
+        V: View + async_graphql::OutputType,
         MapInput<K>: async_graphql::InputType,
         MapFilters<K>: async_graphql::InputType,
     {

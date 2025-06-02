@@ -140,7 +140,7 @@ pub trait ReadableKeyValueStore: WithError {
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
-    fn read_multi_values<V: DeserializeOwned + Send>(
+    fn read_multi_values<V: DeserializeOwned + Send + Sync>(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> impl Future<Output = Result<Vec<Option<V>>, Self::Error>>

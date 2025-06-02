@@ -2,16 +2,16 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_clonable_view_code(input))
 ---
-impl<MyParam> linera_views::views::ClonableView<CustomContext> for TestView<MyParam>
+impl<MyParam> linera_views::views::ClonableView for TestView<MyParam>
 where
     MyParam: Send + Sync + 'static,
-    RegisterView<CustomContext, usize>: ClonableView<CustomContext>,
+    RegisterView<CustomContext, usize>: ClonableView,
     CollectionView<
         CustomContext,
         usize,
         RegisterView<CustomContext, usize>,
-    >: ClonableView<CustomContext>,
-    Self: Send + Sync,
+    >: ClonableView,
+    Self: linera_views::views::View + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
         Ok(Self {

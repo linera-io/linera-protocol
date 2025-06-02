@@ -141,12 +141,14 @@ pub struct BucketQueueView<C, T, const N: usize> {
     delete_storage_first: bool,
 }
 
-impl<C, T, const N: usize> View<C> for BucketQueueView<C, T, N>
+impl<C, T, const N: usize> View for BucketQueueView<C, T, N>
 where
-    C: Context + Send + Sync,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = 2;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -292,10 +294,9 @@ where
     }
 }
 
-impl<C, T, const N: usize> ClonableView<C> for BucketQueueView<C, T, N>
+impl<C: Clone, T: Clone, const N: usize> ClonableView for BucketQueueView<C, T, N>
 where
-    C: Context + Send + Sync,
-    T: Clone + Send + Sync + Serialize + DeserializeOwned,
+    Self: View,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(BucketQueueView {
@@ -309,10 +310,7 @@ where
     }
 }
 
-impl<C, T, const N: usize> BucketQueueView<C, T, N>
-where
-    C: Context + Send + Sync,
-{
+impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     /// Gets the key corresponding to the index
     fn get_index_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
         Ok(if index == 0 {
@@ -369,11 +367,7 @@ where
     }
 }
 
-impl<C, T, const N: usize> BucketQueueView<C, T, N>
-where
-    C: Context + Send + Sync,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
-{
+impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C, T, N> {
     /// Gets a reference on the front value if any.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -520,7 +514,10 @@ where
     /// assert_eq!(queue.back().await.unwrap(), Some(37));
     /// # })
     /// ```
-    pub async fn back(&mut self) -> Result<Option<T>, ViewError> {
+    pub async fn back(&mut self) -> Result<Option<T>, ViewError>
+    where
+        T: Clone,
+    {
         if let Some(value) = self.new_back_values.back() {
             return Ok(Some(value.clone()));
         }
@@ -695,10 +692,10 @@ where
     }
 }
 
-impl<C, T, const N: usize> HashableView<C> for BucketQueueView<C, T, N>
+impl<C: Context, T: Serialize + DeserializeOwned + Send + Sync + Clone, const N: usize> HashableView
+    for BucketQueueView<C, T, N>
 where
-    C: Context + Send + Sync,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+    Self: View,
 {
     type Hasher = sha3::Sha3_256;
 
