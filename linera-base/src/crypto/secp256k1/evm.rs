@@ -370,13 +370,9 @@ impl EvmSecretKey {
 }
 
 impl EvmSignature {
-    /// Computes a secp256k1 signature for `value` using the given `secret`.
-    /// It first serializes the `T` type and then creates the `CryptoHash` from the serialized bytes.
-    pub fn new<'de, T>(value: &T, secret: &EvmSecretKey) -> Self
-    where
-        T: BcsSignable<'de>,
-    {
-        Self::sign_prehash(secret, CryptoHash::new(value))
+    /// Computes a secp256k1 signature for `prehash` using the given `secret`.
+    pub fn new<'de>(prehash: CryptoHash, secret: &EvmSecretKey) -> Self {
+        Self::sign_prehash(secret, prehash)
     }
 
     /// Computes a signature from a prehash.
