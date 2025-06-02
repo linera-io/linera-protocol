@@ -438,7 +438,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
         let channel = self.channel.clone();
         let prefix_len = self.prefix_len;
         let semaphore = self.semaphore.clone();
