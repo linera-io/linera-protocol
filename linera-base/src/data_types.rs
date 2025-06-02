@@ -486,13 +486,6 @@ impl TryFrom<BlockHeight> for usize {
     }
 }
 
-#[cfg(not(with_testing))]
-impl From<u64> for BlockHeight {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-
 impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
