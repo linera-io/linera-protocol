@@ -43,27 +43,49 @@ use crate::{
 /// only from a submitted message
 const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
 
+/// This is the selector of the `process_streams` that should be called
+/// only from a submitted message
+const PROCESS_STREAMS_SELECTOR: &[u8] = &[180, 238, 58, 29];
+
 /// This is the selector of the `instantiate` that should be called
 /// only when creating a new instance of a shared contract
 const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
-fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), ExecutionError> {
+fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
+    if vec == EXECUTE_MESSAGE_SELECTOR {
+        return Err(EvmExecutionError::IllegalOperationCall(
+            "function execute_message".to_string(),
+        ));
+    }
+    if vec == PROCESS_STREAMS_SELECTOR {
+        return Err(EvmExecutionError::IllegalOperationCall(
+            "function process_streams".to_string(),
+        ));
+    }
+    if vec == INSTANTIATE_SELECTOR {
+        return Err(EvmExecutionError::IllegalOperationCall(
+            "function instantiate".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_message_length(actual_length: usize, min_length: usize) -> Result<(), EvmExecutionError> {
     ensure!(
-        vec != EXECUTE_MESSAGE_SELECTOR,
-        ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
-    );
-    ensure!(
-        vec != INSTANTIATE_SELECTOR,
-        ExecutionError::EvmError(EvmExecutionError::OperationCallInstantiate)
+        actual_length >= min_length,
+        EvmExecutionError::OperationIsTooShort
     );
     Ok(())
 }
 
-fn ensure_message_length(actual_length: usize, min_length: usize) -> Result<(), ExecutionError> {
-    ensure!(
-        actual_length >= min_length,
-        ExecutionError::EvmError(EvmExecutionError::OperationIsTooShort)
-    );
+fn ensure_selector_presence(
+    module: &[u8],
+    selector: &[u8],
+    fct_name: &str,
+) -> Result<(), EvmExecutionError> {
+    if !has_selector(module, selector) {
+        return Err(EvmExecutionError::MissingFunction(fct_name.to_string()));
+    }
     Ok(())
 }
 
@@ -75,7 +97,9 @@ const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
 mod tests {
     use revm_primitives::keccak256;
 
-    use crate::evm::revm::{EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR};
+    use crate::evm::revm::{
+        EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR, PROCESS_STREAMS_SELECTOR,
+    };
 
     // The function keccak256 is not const so we cannot build the execute_message
     // selector directly.
@@ -86,16 +110,22 @@ mod tests {
     }
 
     #[test]
+    fn check_process_streams_selector() {
+        let selector = &keccak256("process_streams(bytes)".as_bytes())[..4];
+        assert_eq!(selector, PROCESS_STREAMS_SELECTOR);
+    }
+
+    #[test]
     fn check_instantiate_selector() {
         let selector = &keccak256("instantiate(bytes)".as_bytes())[..4];
         assert_eq!(selector, INSTANTIATE_SELECTOR);
     }
 }
 
-fn has_instantiation_function(module: &[u8]) -> bool {
+fn has_selector(module: &[u8], selector: &[u8]) -> bool {
     let push4 = 0x63; // An EVM instruction
     let mut vec = vec![push4];
-    vec.extend(INSTANTIATE_SELECTOR);
+    vec.extend(selector);
     module.windows(5).any(|window| window == vec)
 }
 
@@ -919,7 +949,7 @@ where
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
         self.initialize_contract()?;
-        if has_instantiation_function(&self.module) {
+        if has_selector(&self.module, INSTANTIATE_SELECTOR) {
             let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
             let argument = get_revm_instantiation_bytes(instantiation_argument);
             let result = self.transact_commit(Choice::Call, argument)?;
@@ -934,12 +964,12 @@ where
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
-            let result = self.init_transact_commit(Choice::Call, operation[4..].to_vec())?;
+            let result = self.init_transact_commit(operation[4..].to_vec())?;
             result.interpreter_result_and_logs()?
         } else {
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
-            let result = self.init_transact_commit(Choice::Call, operation)?;
+            let result = self.init_transact_commit(operation)?;
             result.output_and_logs()
         };
         self.consume_fuel(gas_final)?;
@@ -949,11 +979,22 @@ where
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
+        ensure_selector_presence(
+            &self.module,
+            EXECUTE_MESSAGE_SELECTOR,
+            "function execute_message(bytes)",
+        )?;
         let operation = get_revm_execute_message_bytes(message);
         self.execute_no_return_operation(operation, "message")
     }
 
     fn process_streams(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
+        self.db.set_contract_address()?;
+        ensure_selector_presence(
+            &self.module,
+            PROCESS_STREAMS_SELECTOR,
+            "function process_streams(bytes)",
+        )?;
         let operation = get_revm_process_streams_bytes(streams)?;
         self.execute_no_return_operation(operation, "process_streams")
     }
@@ -966,7 +1007,7 @@ where
 fn process_execution_result(
     storage_stats: StorageStats,
     result: ExecutionResult,
-) -> Result<ExecutionResultSuccess, ExecutionError> {
+) -> Result<ExecutionResultSuccess, EvmExecutionError> {
     match result {
         ExecutionResult::Success {
             reason,
@@ -978,20 +1019,28 @@ fn process_execution_result(
             let mut gas_final = gas_used;
             gas_final -= storage_stats.storage_costs();
             assert_eq!(gas_refunded, storage_stats.storage_refund());
-            Ok(ExecutionResultSuccess {
-                reason,
-                gas_final,
-                logs,
-                output,
-            })
+            if !matches!(reason, SuccessReason::Return) {
+                Err(EvmExecutionError::NoReturnInterpreter {
+                    reason,
+                    gas_used,
+                    gas_refunded,
+                    logs,
+                    output,
+                })
+            } else {
+                Ok(ExecutionResultSuccess {
+                    reason,
+                    gas_final,
+                    logs,
+                    output,
+                })
+            }
         }
         ExecutionResult::Revert { gas_used, output } => {
-            let error = EvmExecutionError::Revert { gas_used, output };
-            Err(ExecutionError::EvmError(error))
+            Err(EvmExecutionError::Revert { gas_used, output })
         }
         ExecutionResult::Halt { gas_used, reason } => {
-            let error = EvmExecutionError::Halt { gas_used, reason };
-            Err(ExecutionError::EvmError(error))
+            Err(EvmExecutionError::Halt { gas_used, reason })
         }
     }
 }
@@ -1010,7 +1059,7 @@ where
         operation: Vec<u8>,
         origin: &str,
     ) -> Result<(), ExecutionError> {
-        let result = self.init_transact_commit(Choice::Call, operation)?;
+        let result = self.init_transact_commit(operation)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
         self.write_logs(logs, origin)?;
@@ -1021,7 +1070,6 @@ where
     /// Executes the transaction. If needed initializes the contract.
     fn init_transact_commit(
         &mut self,
-        ch: Choice,
         vec: Vec<u8>,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         // An application can be instantiated in Linera sense, but not in EVM sense,
@@ -1030,7 +1078,7 @@ where
         if !self.db.is_initialized()? {
             self.initialize_contract()?;
         }
-        self.transact_commit(ch, vec)
+        self.transact_commit(Choice::Call, vec)
     }
 
     /// Initializes the contract.
@@ -1100,13 +1148,12 @@ where
             )
             .map_err(|error| {
                 let error = format!("{:?}", error);
-                let error = EvmExecutionError::TransactCommitError(error);
-                ExecutionError::EvmError(error)
+                EvmExecutionError::TransactCommitError(error)
             })
         }?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
-        process_execution_result(storage_stats, result)
+        Ok(process_execution_result(storage_stats, result)?)
     }
 
     fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
@@ -1256,8 +1303,7 @@ where
             )
             .map_err(|error| {
                 let error = format!("{:?}", error);
-                let error = EvmExecutionError::TransactCommitError(error);
-                ExecutionError::EvmError(error)
+                EvmExecutionError::TransactCommitError(error)
             })
         }?;
         let storage_stats = self.db.take_storage_stats();

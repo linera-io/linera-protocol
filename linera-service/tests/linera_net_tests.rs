@@ -1025,7 +1025,6 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     Ok(())
 }
 
-
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -1074,12 +1073,10 @@ async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> 
             None,
         )
         .await?;
-
-    let application_id: [u64; 4] =
-        <[u64; 4]>::from(evm_application_id.application_description_hash);
-    let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
-    let application_id: B256 = application_id.into();
-
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
     // Creating the applications.
 
@@ -1107,10 +1104,6 @@ async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> 
 
     Ok(())
 }
-
-
-
-
 
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
@@ -1149,6 +1142,11 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
         function subscribe(bytes32 chain_id, bytes32 application_id);
         function get_value(bytes32 chain_id);
     }
+    let query = get_valueCall {
+        chain_id: chain_id1,
+    };
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
 
     let constructor_argument = Vec::new();
     let instantiation_argument = Vec::new();
@@ -1167,6 +1165,11 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
             None,
         )
         .await?;
+    let application_id: [u64; 4] =
+        <[u64; 4]>::from(evm_application_id.application_description_hash);
+    let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
+    let application_id: B256 = application_id.into();
+
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
@@ -1182,6 +1185,10 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
         .make_application(&chain2, &evm_application_id)
         .await?;
 
+    let result = application2.run_json_query(query.clone()).await?;
+    let counter_value = read_evm_u64_entry(result);
+    assert_eq!(counter_value, 0);
+
     // First: subscribing to the application
 
     let mutation = subscribeCall {
@@ -1191,6 +1198,10 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application2.run_json_query(mutation).await?;
+
+    let result = application2.run_json_query(query.clone()).await?;
+    let counter_value = read_evm_u64_entry(result);
+    assert_eq!(counter_value, 0);
 
     // Second: increment the values
 
@@ -1205,11 +1216,6 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 
     // Fourth: getting the value
 
-    let query = get_valueCall {
-        chain_id: chain_id1,
-    };
-    let query = query.abi_encode();
-    let query = EvmQuery::Query(query);
     let result = application2.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, increment);
