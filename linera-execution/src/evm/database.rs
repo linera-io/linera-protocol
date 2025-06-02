@@ -18,7 +18,7 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
+use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -41,6 +41,8 @@ const SSTORE_COST_RESET: u64 = 2900;
 /// The refund from releasing data.
 const SSTORE_REFUND_RELEASE: u64 = 4800;
 
+/// The number of key writes, reads, release, and no change in EVM has to be accounted for.
+/// Then we remove those costs from the final bill.
 #[derive(Clone, Default)]
 pub(crate) struct StorageStats {
     key_no_operation: u64,
@@ -65,9 +67,16 @@ impl StorageStats {
     }
 }
 
+/// This is the encapsulation of the `Runtime` corresponding to the contract.
 pub(crate) struct DatabaseRuntime<Runtime> {
+    /// This is the storage statistics of the read/write in order to adjust gas costs.
     storage_stats: Arc<Mutex<StorageStats>>,
+    /// This is the EVM address of the contract.
+    /// At the creation, is is set to `Address::ZERO` and then later set to the correct value.
+    pub contract_address: Address,
+    /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
+    /// The uncommited changes to the contract.
     pub changes: EvmState,
 }
 
@@ -75,6 +84,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     fn clone(&self) -> Self {
         Self {
             storage_stats: self.storage_stats.clone(),
+            contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
         }
@@ -96,7 +106,13 @@ pub enum KeyCategory {
     Storage,
 }
 
-impl<Runtime> DatabaseRuntime<Runtime> {
+fn application_id_to_address(application_id: ApplicationId) -> Address {
+    let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
+    let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
+    Address::from_slice(&application_id[0..20])
+}
+
+impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     /// Encode the `index` of the EVM storage associated to the smart contract
     /// in a linera key.
     fn get_linera_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
@@ -110,7 +126,7 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         if address == &Address::ZERO {
             return Some(KeyTag::NullAddress as u8);
         }
-        if address == &Address::ZERO.create(0) {
+        if address == &self.contract_address {
             return Some(KeyTag::ContractAddress as u8);
         }
         None
@@ -119,8 +135,12 @@ impl<Runtime> DatabaseRuntime<Runtime> {
     /// Creates a new `DatabaseRuntime`.
     pub fn new(runtime: Runtime) -> Self {
         let storage_stats = StorageStats::default();
+        // We cannot acquire a lock on runtime here.
+        // So, we set the contract_address to a default value
+        // and update it later.
         Self {
             storage_stats: Arc::new(Mutex::new(storage_stats)),
+            contract_address: Address::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
         }
@@ -328,6 +348,15 @@ where
             None => 0,
             Some(account_info) => account_info.nonce,
         })
+    }
+
+    /// Sets the EVM contract address from the value Address::ZERO.
+    /// The value is set from the `ApplicationId`.
+    pub fn set_contract_address(&mut self) -> Result<(), ExecutionError> {
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let application_id = runtime.application_id()?;
+        self.contract_address = application_id_to_address(application_id);
+        Ok(())
     }
 
     /// Checks if the contract is already initialized. It is possible

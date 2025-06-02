@@ -487,13 +487,6 @@ impl TryFrom<BlockHeight> for usize {
     }
 }
 
-#[cfg(not(with_testing))]
-impl From<u64> for BlockHeight {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-
 /// Allows converting [`BlockHeight`] ranges to inclusive tuples of bounds.
 pub trait RangeExt {
     /// Returns the range as a tuple of inclusive bounds.

@@ -25,6 +25,8 @@ pub enum EvmExecutionError {
     OperationCallExecuteMessage,
     #[error("It is illegal to call instantiate from an operation")]
     OperationCallInstantiate,
+    #[error("Incorrect contract creation: {0}")]
+    IncorrectContractCreation(String),
     #[error("The operation should contain the evm selector and so have length 4 or more")]
     OperationIsTooShort,
     #[error("Transact error {0}")]
