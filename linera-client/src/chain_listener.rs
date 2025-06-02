@@ -193,7 +193,9 @@ impl<C: ClientContext> ChainListener<C> {
     pub async fn run(mut self) -> Result<(), Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
-            BTreeSet::from_iter(guard.wallet().chain_ids())
+            let mut chain_ids = BTreeSet::from_iter(guard.wallet().chain_ids());
+            chain_ids.insert(guard.wallet().genesis_admin_chain());
+            chain_ids
         };
         self.listen_recursively(chain_ids).await?;
         loop {
