@@ -197,7 +197,6 @@ async fn test_chain_listener() -> anyhow::Result<()> {
 /// Tests that the chain listener always listens to the admin chain.
 #[test_log::test(tokio::test)]
 async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
-    // Create two chains.
     let signer = InMemorySigner::new(Some(42));
     let config = ChainListenerConfig::default();
     let storage_builder = MemoryStorageBuilder::default();
