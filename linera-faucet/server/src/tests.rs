@@ -36,7 +36,7 @@ impl chain_listener::ClientContext for ClientContext {
         self.client.storage_client()
     }
 
-    fn client(&self) -> &linera_core::client::Client<environment::Test> {
+    fn client(&self) -> &Arc<linera_core::client::Client<environment::Test>> {
         unimplemented!()
     }
 

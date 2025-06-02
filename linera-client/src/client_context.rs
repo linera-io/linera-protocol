@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
-    client::{ChainClient, Client, MessagePolicy, PendingProposal},
+    client::{ChainClient, Client, MessagePolicy},
     data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::{CrossChainMessageDelivery, ValidatorNode},
@@ -87,24 +87,7 @@ where
         self.client.storage_client()
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Env> {
-        // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
-
-        self.make_chain_client_internal(
-            chain_id,
-            chain.block_hash,
-            chain.next_block_height,
-            chain.pending_proposal,
-            chain.owner,
-        )
-    }
-
-    fn client(&self) -> &Client<Env> {
+    fn client(&self) -> &Arc<Client<Env>> {
         &self.client
     }
 
@@ -264,23 +247,6 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         self.wallet
             .first_non_admin_chain()
             .expect("No non-admin chain specified in wallet with no non-admin chain")
-    }
-
-    fn make_chain_client_internal(
-        &self,
-        chain_id: ChainId,
-        block_hash: Option<CryptoHash>,
-        next_block_height: BlockHeight,
-        pending_proposal: Option<PendingProposal>,
-        preferred_owner: Option<AccountOwner>,
-    ) -> ChainClient<Env> {
-        self.client.create_chain_client(
-            chain_id,
-            block_hash,
-            next_block_height,
-            pending_proposal,
-            preferred_owner,
-        )
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -901,7 +867,7 @@ where
                 benchmark_chains.insert(chain_id, pub_key.into());
                 self.client.track_chain(chain_id);
 
-                let mut chain_client = self.make_chain_client_internal(
+                let mut chain_client = self.client.create_chain_client(
                     chain_id,
                     None,
                     BlockHeight::ZERO,
