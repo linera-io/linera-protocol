@@ -5,7 +5,7 @@ pragma solidity ^0.8.0;
 import "./Linera.sol";
 import "./LineraTypes.sol";
 
-contract ExampleExecuteMessage {
+contract ExampleProcessStreams {
     uint64 total_value;
     uint8 public constant stream_key = 49;
     mapping(bytes32 => uint64) chain_values;

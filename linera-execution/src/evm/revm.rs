@@ -1036,7 +1036,7 @@ pub struct RevmContractInstance<Runtime> {
     db: DatabaseRuntime<Runtime>,
 }
 
-enum Choice {
+enum EvmTxKind {
     Create,
     Call,
 }
@@ -1053,7 +1053,7 @@ impl ExecutionResultSuccess {
     fn interpreter_result_and_logs(self) -> Result<(u64, Vec<u8>, Vec<Log>), ExecutionError> {
         let result: InstructionResult = self.reason.into();
         let Output::Call(output) = self.output else {
-            unreachable!("The output should have been created from a Choice::Call");
+            unreachable!("The output should have been created from a EvmTxKind::Call");
         };
         let gas = Gas::new(0);
         let result = InterpreterResult {
@@ -1067,7 +1067,7 @@ impl ExecutionResultSuccess {
 
     fn output_and_logs(self) -> (u64, Vec<u8>, Vec<Log>) {
         let Output::Call(output) = self.output else {
-            unreachable!("The output should have been created from a Choice::Call");
+            unreachable!("The output should have been created from a EvmTxKind::Call");
         };
         let output = output.as_ref().to_vec();
         (self.gas_final, output, self.logs)
@@ -1077,7 +1077,7 @@ impl ExecutionResultSuccess {
     fn check_contract_initialization(&self, expected_address: Address) -> Result<(), String> {
         // Checks that the output is the expected one.
         let Output::Create(_, contract_address) = self.output else {
-            return Err("Input should be Choice::Create".to_string());
+            return Err("Input should be ExmTxKind::Create".to_string());
         };
         // Checks that the contract address exists.
         let contract_address = contract_address.ok_or("Deployment failed")?;
@@ -1100,7 +1100,7 @@ where
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
             let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
             let argument = get_revm_instantiation_bytes(instantiation_argument);
-            let result = self.transact_commit(Choice::Call, argument)?;
+            let result = self.transact_commit(EvmTxKind::Call, argument)?;
             self.write_logs(result.logs, "instantiate")?;
         }
         Ok(())
@@ -1226,7 +1226,7 @@ where
         if !self.db.is_initialized()? {
             self.initialize_contract()?;
         }
-        self.transact_commit(Choice::Call, vec)
+        self.transact_commit(EvmTxKind::Call, vec)
     }
 
     /// Initializes the contract.
@@ -1234,7 +1234,7 @@ where
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        let result = self.transact_commit(Choice::Create, vec_init)?;
+        let result = self.transact_commit(EvmTxKind::Create, vec_init)?;
         result
             .check_contract_initialization(self.db.contract_address)
             .map_err(|error| {
@@ -1245,13 +1245,13 @@ where
 
     fn transact_commit(
         &mut self,
-        ch: Choice,
+        ch: EvmTxKind,
         input: Vec<u8>,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         let data = Bytes::from(input);
         let kind = match ch {
-            Choice::Create => TxKind::Create,
-            Choice::Call => TxKind::Call(self.db.contract_address),
+            EvmTxKind::Create => TxKind::Create,
+            EvmTxKind::Call => TxKind::Call(self.db.contract_address),
         };
         let inspector = CallInterceptorContract {
             db: self.db.clone(),

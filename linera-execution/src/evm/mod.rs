@@ -43,7 +43,8 @@ pub enum EvmExecutionError {
     },
     #[error("The operation was halted with {gas_used} gas used due to {reason:?}")]
     Halt { gas_used: u64, reason: HaltReason },
-    #[error("The interpreter did not return, reason={reason:?}, gas_used={gas_used}, gas_refunded={gas_refunded}, logs={logs:?}, output={output:?}")]
+    #[error("The interpreter did not return, reason={:?}, gas_used={}, gas_refunded={}, logs={:?}, output={:?}",
+            reason, gas_used, gas_refunded, logs, output)]
     NoReturnInterpreter {
         reason: SuccessReason,
         gas_used: u64,
