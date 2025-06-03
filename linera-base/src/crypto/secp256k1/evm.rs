@@ -72,7 +72,11 @@ impl FromStr for EvmSignature {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // If the string starts with "0x", we remove it before decoding.
-        let s = if s.starts_with("0x") { &s[2..] } else { s };
+        let s = if let Some(stripped) = s.strip_prefix("0x") {
+            stripped
+        } else {
+            s
+        };
         let bytes = hex::decode(s)?;
         let sig = Signature::from_erc2098(&bytes);
         Ok(EvmSignature(sig))
@@ -197,7 +201,11 @@ impl FromStr for EvmPublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // If the string starts with "0x", we remove it to decode the hex string.
-        let s = if s.starts_with("0x") { &s[2..] } else { s };
+        let s = if let Some(stripped) = s.strip_prefix("0x") {
+            stripped
+        } else {
+            s
+        };
         hex::decode(s)?.as_slice().try_into()
     }
 }
@@ -375,7 +383,7 @@ impl EvmSecretKey {
 
 impl EvmSignature {
     /// Computes a secp256k1 signature for `prehash` using the given `secret`.
-    pub fn new<'de>(prehash: CryptoHash, secret: &EvmSecretKey) -> Self {
+    pub fn new(prehash: CryptoHash, secret: &EvmSecretKey) -> Self {
         Self::sign_prehash(secret, prehash)
     }
 
@@ -548,7 +556,7 @@ mod tests {
         .unwrap();
 
         let signature = EvmSignature::new(crypto_hash, &signer);
-        let js_signature = EvmSignature::from_str(&"0xe257048813b851f812ba6e508e972d8bb09504824692b027ca95d31301dbe8c7103a2f35ce9950d031d260f412dcba09c24027288872a67abe261c0a3e55c9121b").unwrap();
+        let js_signature = EvmSignature::from_str("0xe257048813b851f812ba6e508e972d8bb09504824692b027ca95d31301dbe8c7103a2f35ce9950d031d260f412dcba09c24027288872a67abe261c0a3e55c9121b").unwrap();
         assert_eq!(signature, js_signature);
     }
 
