@@ -1233,7 +1233,7 @@ where
         let result = self.transact_commit(EvmTxKind::Create, vec_init)?;
         result
             .check_contract_initialization(self.db.contract_address)
-            .map_err(|error| EvmExecutionError::IncorrectContractCreation(error))?;
+            .map_err(EvmExecutionError::IncorrectContractCreation)?;
         self.write_logs(result.logs, "deploy")
     }
 
@@ -1383,7 +1383,7 @@ where
                 let (result, changes) = self.transact(TxKind::Create, vec_init)?;
                 result
                     .check_contract_initialization(self.db.contract_address)
-                    .map_err(|error| EvmExecutionError::IncorrectContractCreation(error))?;
+                    .map_err(EvmExecutionError::IncorrectContractCreation)?;
                 changes
             };
             self.db.changes = changes;
