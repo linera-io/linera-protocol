@@ -148,7 +148,10 @@ mod tests {
 
             function process_streams(InternalStreamUpdate[] internal_streams);
         }
-        assert_eq!(process_streamsCall::SIGNATURE, "process_streams((((bytes32)),((uint8,((bytes32))),(bytes)),uint32,uint32)[])");
+        assert_eq!(
+            process_streamsCall::SIGNATURE,
+            "process_streams((((bytes32)),((uint8,((bytes32))),(bytes)),uint32,uint32)[])"
+        );
         assert_eq!(process_streamsCall::SELECTOR, PROCESS_STREAMS_SELECTOR);
     }
 
@@ -268,9 +271,14 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
         InternalChainId { value }
     }
 
-    fn application_id_to_internal_application_id(application_id: ApplicationId) -> InternalApplicationId {
-        let application_description_hash = crypto_hash_to_internal_crypto_hash(application_id.application_description_hash);
-        InternalApplicationId { application_description_hash }
+    fn application_id_to_internal_application_id(
+        application_id: ApplicationId,
+    ) -> InternalApplicationId {
+        let application_description_hash =
+            crypto_hash_to_internal_crypto_hash(application_id.application_description_hash);
+        InternalApplicationId {
+            application_description_hash,
+        }
     }
 
     fn stream_name_to_internal_stream_name(stream_name: StreamName) -> InternalStreamName {
@@ -278,29 +286,53 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
         InternalStreamName { stream_name }
     }
 
-    fn generic_application_id_to_internal_generic_application_id(generic_application_id: GenericApplicationId) -> InternalGenericApplicationId {
+    fn generic_application_id_to_internal_generic_application_id(
+        generic_application_id: GenericApplicationId,
+    ) -> InternalGenericApplicationId {
         match generic_application_id {
             GenericApplicationId::System => {
                 let application_description_hash = InternalCryptoHash { value: B256::ZERO };
-                InternalGenericApplicationId { choice: 0, user: InternalApplicationId { application_description_hash } }
+                InternalGenericApplicationId {
+                    choice: 0,
+                    user: InternalApplicationId {
+                        application_description_hash,
+                    },
+                }
+            }
+            GenericApplicationId::User(application_id) => InternalGenericApplicationId {
+                choice: 1,
+                user: application_id_to_internal_application_id(application_id),
             },
-            GenericApplicationId::User(application_id) => InternalGenericApplicationId { choice: 1, user: application_id_to_internal_application_id(application_id) },
         }
     }
 
     fn stream_id_to_internal_stream_id(stream_id: StreamId) -> InternalStreamId {
-        let application_id = generic_application_id_to_internal_generic_application_id(stream_id.application_id);
+        let application_id =
+            generic_application_id_to_internal_generic_application_id(stream_id.application_id);
         let stream_name = stream_name_to_internal_stream_name(stream_id.stream_name);
-        InternalStreamId { application_id, stream_name }
+        InternalStreamId {
+            application_id,
+            stream_name,
+        }
     }
 
-    fn stream_update_to_internal_stream_update(stream_update: StreamUpdate) -> InternalStreamUpdate {
+    fn stream_update_to_internal_stream_update(
+        stream_update: StreamUpdate,
+    ) -> InternalStreamUpdate {
         let chain_id = chain_id_to_internal_chain_id(stream_update.chain_id);
         let stream_id = stream_id_to_internal_stream_id(stream_update.stream_id);
-        InternalStreamUpdate { chain_id, stream_id, previous_index: stream_update.previous_index, next_index: stream_update.next_index }
+        InternalStreamUpdate {
+            chain_id,
+            stream_id,
+            previous_index: stream_update.previous_index,
+            next_index: stream_update.next_index,
+        }
     }
 
-    let internal_streams = streams.into_iter().map(stream_update_to_internal_stream_update).collect::<Vec<_>>();
+    let internal_streams = streams
+        .into_iter()
+        .map(stream_update_to_internal_stream_update)
+        .collect::<Vec<_>>();
 
     let fct_call = process_streamsCall { internal_streams };
     fct_call.abi_encode()
