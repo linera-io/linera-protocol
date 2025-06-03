@@ -5,7 +5,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     num::NonZeroUsize,
     sync::Arc,
-    time::Duration,
     vec,
 };
 
@@ -49,14 +48,13 @@ use {
 };
 
 use crate::{
-    client::{Client, MessagePolicy},
+    client::{ChainClientOptions, Client},
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    updater::DEFAULT_GRACE_PERIOD,
     worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
 };
 
@@ -950,16 +948,12 @@ where
                 storage,
                 signer: self.signer.clone(),
             },
-            10,
             self.admin_id(),
-            MessagePolicy::new_accept_all(),
-            CrossChainMessageDelivery::NonBlocking,
             false,
             [chain_id],
             format!("Client node for {:.8}", chain_id),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ChainClientOptions::test_default(),
         ));
         Ok(client.create_chain_client(
             chain_id,
