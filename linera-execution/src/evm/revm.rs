@@ -738,12 +738,10 @@ impl<'a> ContractPrecompile {
             RuntimePrecompile::Contract(contract_tag) => {
                 Self::contract_runtime_call(contract_tag, context)
             }
-            RuntimePrecompile::Service(_) => {
-                let error = EvmExecutionError::PrecompileError(
-                    "Service tags are not available in GeneralContractCall".to_string(),
-                );
-                Err(ExecutionError::EvmError(error))
-            }
+            RuntimePrecompile::Service(_) => Err(EvmExecutionError::PrecompileError(
+                "Service tags are not available in GeneralContractCall".to_string(),
+            )
+            .into()),
         }
     }
 }
@@ -777,12 +775,10 @@ impl<'a> ServicePrecompile {
     ) -> Result<Vec<u8>, ExecutionError> {
         match bcs::from_bytes(input)? {
             RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
-            RuntimePrecompile::Contract(_) => {
-                let error = EvmExecutionError::PrecompileError(
-                    "Contract calls are not available in GeneralServiceCall".to_string(),
-                );
-                Err(ExecutionError::EvmError(error))
-            }
+            RuntimePrecompile::Contract(_) => Err(EvmExecutionError::PrecompileError(
+                "Contract calls are not available in GeneralServiceCall".to_string(),
+            )
+            .into()),
             RuntimePrecompile::Service(service_tag) => {
                 Self::service_runtime_call(service_tag, context)
             }
@@ -1237,9 +1233,7 @@ where
         let result = self.transact_commit(EvmTxKind::Create, vec_init)?;
         result
             .check_contract_initialization(self.db.contract_address)
-            .map_err(|error| {
-                ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error))
-            })?;
+            .map_err(|error| EvmExecutionError::IncorrectContractCreation(error))?;
         self.write_logs(result.logs, "deploy")
     }
 
@@ -1389,11 +1383,7 @@ where
                 let (result, changes) = self.transact(TxKind::Create, vec_init)?;
                 result
                     .check_contract_initialization(self.db.contract_address)
-                    .map_err(|error| {
-                        ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(
-                            error,
-                        ))
-                    })?;
+                    .map_err(|error| EvmExecutionError::IncorrectContractCreation(error))?;
                 changes
             };
             self.db.changes = changes;
