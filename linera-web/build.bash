@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-# Execute from linera-protocol directory.
-
 set -eu
 
 cd $(dirname -- "${BASH_SOURCE[0]}")

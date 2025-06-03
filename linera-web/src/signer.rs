@@ -104,7 +104,6 @@ impl Signer for JsSigner {
             .map_err(JsSignerError::from)?
             .as_string()
             .ok_or(JsSignerError::JsConversionError)?;
-        web_sys::console::log_1(&JsValue::from_str(&js_public_key));
         let pk = EvmPublicKey::from_str(&js_public_key)
             .map_err(|_| JsSignerError::PublicKeyParseError)?;
         Ok(AccountPublicKey::EvmSecp256k1(pk))
@@ -116,8 +115,8 @@ impl Signer for JsSigner {
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error> {
         let js_owner = JsValue::from_str(&owner.to_string());
-        // Pass CryptoHash without serializing b/c that adds new bytes
-        // to the serialized value which don't want for signing.
+        // Pass CryptoHash without serializing as that adds bytes
+        // to the serialized value which we don't want for signing.
         let js_cryptohash = value.as_bytes().0.to_vec();
         let js_signature = self
             .sign(js_owner, js_cryptohash)
