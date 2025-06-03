@@ -1281,7 +1281,10 @@ impl NodeService {
                 .send()
                 .await;
             if matches!(result, Err(ref error) if error.is_timeout()) {
-                warn!("Timeout when sending query {query:?} to the node service");
+                warn!(
+                    "Timeout when sending query {} to the node service",
+                    truncate_query_output(query)
+                );
                 continue;
             }
             let response = result.with_context(|| {
