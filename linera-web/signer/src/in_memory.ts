@@ -27,12 +27,6 @@ export class EmbeddedEIP191Signer implements IJsSigner {
     return signature
   }
 
-  /**
-   * Returns the public key for the given owner.
-   * In Linera's EIP-191 compatible wallet, the owner is the wallet address.
-   * @param owner owner for which we want to get the public key
-   * @returns Uncompressed public key in hex format.
-   */
   async get_public_key(owner: string): Promise<string> {
     if (typeof owner !== 'string' || !ethers.isAddress(owner) || this.wallet.address.toLowerCase() !== owner.toLowerCase()) {
       throw new Error('Invalid owner address');

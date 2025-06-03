@@ -57,16 +57,43 @@ impl From<JsValue> for JsSignerError {
 
 impl std::error::Error for JsSignerError {}
 
+// An interface that will be compiled to TypeScript and exported for use in the browser.
 #[wasm_bindgen(typescript_custom_section)]
 const JS_SIGNER_INTERFACE: &'static str = r#"
+/**
+ * Interface for signing and key management compatible with Ethereum (EVM) addresses.
+ */
 export interface IJsSigner {
+  /**
+   * Signs a given value using the private key associated with the specified EVM address.
+   * The signing process must follow the EIP-191 standard.
+   *
+   * @param owner - The EVM address whose private key will be used to sign the value.
+   * @param value - The data to be signed, as a `Uint8Array`.
+   * @returns A promise that resolves to the EIP-191-compatible signature in hexadecimal string format.
+   */
   sign(owner: string, value: Uint8Array): Promise<string>;
+
+  /**
+   * Retrieves the public key corresponding to the private key associated with the specified EVM address.
+   *
+   * @param owner - The EVM address for which to retrieve the public key.
+   * @returns A promise that resolves to the public key as a hexadecimal string.
+   */
   get_public_key(owner: string): Promise<string>;
+
+  /**
+   * Checks whether the instance holds a key whose associated address matches the given EVM address.
+   *
+   * @param owner - The EVM address to check for.
+   * @returns A promise that resolves to `true` if the key exists and matches the given address, otherwise `false`.
+   */
   contains_key(owner: string): Promise<boolean>;
 }"#;
 
 #[wasm_bindgen]
 extern "C" {
+    // We refer to the interface defined above.
     #[wasm_bindgen(typescript_type = "IJsSigner")]
     pub type JsSigner;
 
