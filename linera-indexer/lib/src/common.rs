@@ -46,8 +46,8 @@ pub enum IndexerError {
     PluginAlreadyRegistered,
     #[error("Invalid certificate content: {0:?}")]
     InvalidCertificateValue(CryptoHash),
-    #[error("Clone with root key error")]
-    CloneWithRootKeyError,
+    #[error("Open exclusive error")]
+    OpenExclusiveError,
 
     #[cfg(feature = "rocksdb")]
     #[error(transparent)]
