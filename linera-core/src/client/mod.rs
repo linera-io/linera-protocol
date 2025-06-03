@@ -161,7 +161,7 @@ pub struct Client<Env: Environment> {
     /// The maximum active chain workers.
     max_loaded_chains: NonZeroUsize,
     /// Configuration options.
-    options: ClientOptions,
+    options: ChainClientOptions,
 }
 
 impl<Env: Environment> Client<Env> {
@@ -174,7 +174,7 @@ impl<Env: Environment> Client<Env> {
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
         max_loaded_chains: NonZeroUsize,
-        options: ClientOptions,
+        options: ChainClientOptions,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -1278,7 +1278,7 @@ impl MessagePolicy {
 }
 
 #[derive(Debug, Clone)]
-pub struct ClientOptions {
+pub struct ChainClientOptions {
     /// Maximum number of pending message bundles processed at a time in a block.
     pub max_pending_message_bundles: usize,
     /// The policy for automatically handling incoming messages.
@@ -1293,11 +1293,11 @@ pub struct ClientOptions {
 }
 
 #[cfg(with_testing)]
-impl ClientOptions {
+impl ChainClientOptions {
     pub fn test_default() -> Self {
         use crate::DEFAULT_GRACE_PERIOD;
 
-        ClientOptions {
+        ChainClientOptions {
             max_pending_message_bundles: 10,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
@@ -1321,7 +1321,7 @@ pub struct ChainClient<Env: Environment> {
     chain_id: ChainId,
     /// The client options.
     #[debug(skip)]
-    options: ClientOptions,
+    options: ChainClientOptions,
     /// The preferred owner of the chain used to sign proposals.
     /// `None` if we cannot propose on this chain.
     preferred_owner: Option<AccountOwner>,
@@ -1503,13 +1503,13 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Gets a mutable reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
-    pub fn options_mut(&mut self) -> &mut ClientOptions {
+    pub fn options_mut(&mut self) -> &mut ChainClientOptions {
         &mut self.options
     }
 
     /// Gets a reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
-    pub fn options(&self) -> &ClientOptions {
+    pub fn options(&self) -> &ChainClientOptions {
         &self.options
     }
 

@@ -13,7 +13,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, Client, ClientOptions},
+    client::{ChainClient, ChainClientOptions, Client},
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
 };
@@ -114,7 +114,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
             NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
-            ClientOptions::test_default(),
+            ChainClientOptions::test_default(),
         )),
     };
     context
@@ -198,7 +198,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             [],
             "Client node with no chains".to_string(),
             NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
-            ClientOptions::test_default(),
+            ChainClientOptions::test_default(),
         )),
     };
     let context = Arc::new(Mutex::new(context));

@@ -152,7 +152,7 @@ where
 
     #[cfg(with_testing)]
     pub fn new_test_client_context(storage: S, wallet: W, signer: Si) -> Self {
-        use linera_core::{client::ClientOptions, node::CrossChainMessageDelivery};
+        use linera_core::{client::ChainClientOptions, node::CrossChainMessageDelivery};
 
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
@@ -181,9 +181,9 @@ where
             chain_ids,
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            ClientOptions {
+            ChainClientOptions {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
-                ..ClientOptions::test_default()
+                ..ChainClientOptions::test_default()
             },
         );
 

@@ -48,7 +48,7 @@ use {
 };
 
 use crate::{
-    client::{Client, ClientOptions},
+    client::{ChainClientOptions, Client},
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -953,7 +953,7 @@ where
             [chain_id],
             format!("Client node for {:.8}", chain_id),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            ClientOptions::test_default(),
+            ChainClientOptions::test_default(),
         ));
         Ok(client.create_chain_client(
             chain_id,
