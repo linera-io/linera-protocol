@@ -117,7 +117,8 @@ pub struct ClientContextOptions {
 }
 
 impl ClientContextOptions {
-    pub fn to_client_options(&self) -> ChainClientOptions {
+    /// Creates [`ChainClientOptions`] with the corresponding values.
+    pub fn to_chain_client_options(&self) -> ChainClientOptions {
         let message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),

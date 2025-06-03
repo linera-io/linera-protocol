@@ -136,7 +136,7 @@ where
             chain_ids,
             name,
             options.max_loaded_chains,
-            options.to_client_options(),
+            options.to_chain_client_options(),
         );
 
         ClientContext {
