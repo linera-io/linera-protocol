@@ -269,7 +269,10 @@ impl<W: View> ByteCollectionView<W::Context, W> {
         &self,
         short_key: &[u8],
     ) -> Result<Option<ReadGuardedView<W>>, ViewError> {
-        let mut updates = self.updates.write().await;
+        let mut updates = self
+            .updates
+            .try_write()
+            .ok_or(ViewError::CannotAcquireCollectionEntry)?;
         match updates.entry(short_key.to_vec()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
