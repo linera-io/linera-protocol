@@ -349,9 +349,9 @@ where
             ViewError::KeyTooLong | ViewError::ArithmeticError(_) => {
                 Status::out_of_range(err.to_string())
             }
-            ViewError::NotFound(_) | ViewError::MissingEntries => {
-                Status::not_found(err.to_string())
-            }
+            ViewError::NotFound(_)
+            | ViewError::CannotAcquireCollectionEntry
+            | ViewError::MissingEntries => Status::not_found(err.to_string()),
         };
         status.set_source(Arc::new(err));
         status
