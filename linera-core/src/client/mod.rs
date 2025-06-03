@@ -149,17 +149,8 @@ pub struct Client<Env: Environment> {
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     local_node: LocalNodeClient<Env::Storage>,
-    /// Maximum number of pending message bundles processed at a time in a block.
-    max_pending_message_bundles: usize,
-    /// The policy for automatically handling incoming messages.
-    message_policy: MessagePolicy,
     /// The admin chain ID.
     admin_id: ChainId,
-    /// Whether to block on cross-chain message delivery.
-    cross_chain_message_delivery: CrossChainMessageDelivery,
-    /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
-    /// as a fraction of time taken to reach quorum.
-    grace_period: f64,
     /// Chains that should be tracked by the client.
     // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
@@ -169,8 +160,8 @@ pub struct Client<Env: Environment> {
     chains: DashMap<ChainId, ChainClientState>,
     /// The maximum active chain workers.
     max_loaded_chains: NonZeroUsize,
-    /// The delay when downloading a blob, after which we try a second validator.
-    blob_download_timeout: Duration,
+    /// Configuration options.
+    options: ClientOptions,
 }
 
 impl<Env: Environment> Client<Env> {
@@ -202,19 +193,23 @@ impl<Env: Environment> Client<Env> {
         .with_allow_messages_from_deprecated_epochs(true);
         let local_node = LocalNodeClient::new(state);
 
+        let options = ClientOptions {
+            max_pending_message_bundles,
+            message_policy,
+            cross_chain_message_delivery,
+            grace_period,
+            blob_download_timeout,
+        };
+
         Self {
             environment,
             local_node,
             chains: DashMap::new(),
-            max_pending_message_bundles,
             admin_id,
-            message_policy,
-            cross_chain_message_delivery,
-            grace_period,
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             max_loaded_chains,
-            blob_download_timeout,
+            options,
         }
     }
 
@@ -267,13 +262,7 @@ impl<Env: Environment> Client<Env> {
         ChainClient {
             client: self.clone(),
             chain_id,
-            options: ChainClientOptions {
-                max_pending_message_bundles: self.max_pending_message_bundles,
-                message_policy: self.message_policy.clone(),
-                cross_chain_message_delivery: self.cross_chain_message_delivery,
-                grace_period: self.grace_period,
-                blob_download_timeout: self.blob_download_timeout,
-            },
+            options: self.options.clone(),
             preferred_owner,
             initial_block_hash: block_hash,
             initial_next_block_height: next_block_height,
@@ -292,10 +281,13 @@ impl<Env: Environment> Client<Env> {
                 // If the chain is missing then the error is a WorkerError
                 // and so a BlobsNotFound
                 // TODO(#2351): make sure the blobs are legitimate!
-                let blobs =
-                    RemoteNode::download_blobs(&blob_ids, validators, self.blob_download_timeout)
-                        .await
-                        .ok_or(LocalNodeError::BlobsNotFound(blob_ids))?;
+                let blobs = RemoteNode::download_blobs(
+                    &blob_ids,
+                    validators,
+                    self.options.blob_download_timeout,
+                )
+                .await
+                .ok_or(LocalNodeError::BlobsNotFound(blob_ids))?;
                 self.local_node.storage_client().write_blobs(&blobs).await?;
                 self.local_node.chain_info(chain_id).await
             }
@@ -484,9 +476,10 @@ impl<Env: Environment> Client<Env> {
         // Recover history from the current validators, according to the admin chain.
         // TODO(#2351): make sure that the blob is legitimately created!
         let nodes = self.validator_nodes().await?;
-        let blob = RemoteNode::download_blob(&nodes, chain_desc_id, self.blob_download_timeout)
-            .await
-            .ok_or(LocalNodeError::BlobsNotFound(vec![chain_desc_id]))?;
+        let blob =
+            RemoteNode::download_blob(&nodes, chain_desc_id, self.options.blob_download_timeout)
+                .await
+                .ok_or(LocalNodeError::BlobsNotFound(vec![chain_desc_id]))?;
         self.local_node.storage_client().write_blob(&blob).await?;
         Ok(blob)
     }
@@ -521,7 +514,7 @@ impl<Env: Environment> Client<Env> {
         let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
-            delivery: self.cross_chain_message_delivery,
+            delivery: self.options.cross_chain_message_delivery,
         };
         let certificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
@@ -587,7 +580,7 @@ impl<Env: Environment> Client<Env> {
                         .await
                 })
             },
-            self.grace_period,
+            self.options.grace_period,
         )
         .await?;
         Ok(())
@@ -622,7 +615,7 @@ impl<Env: Environment> Client<Env> {
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
             },
-            self.grace_period,
+            self.options.grace_period,
         )
         .await?;
         ensure!(
@@ -715,10 +708,13 @@ impl<Env: Environment> Client<Env> {
         if let Err(err) = self.process_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs =
-                        RemoteNode::download_blobs(blob_ids, &nodes, self.blob_download_timeout)
-                            .await
-                            .ok_or(err)?;
+                    let blobs = RemoteNode::download_blobs(
+                        blob_ids,
+                        &nodes,
+                        self.options.blob_download_timeout,
+                    )
+                    .await
+                    .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
                     self.process_certificate(certificate).await?;
                 }
@@ -933,7 +929,7 @@ impl<Env: Environment> Client<Env> {
                 self.try_synchronize_chain_state_from(&remote_node, chain_id)
                     .await
             },
-            self.grace_period,
+            self.options.grace_period,
         )
         .await?;
 
@@ -1296,7 +1292,7 @@ impl MessagePolicy {
 
 #[non_exhaustive]
 #[derive(Debug, Clone)]
-pub struct ChainClientOptions {
+pub struct ClientOptions {
     /// Maximum number of pending message bundles processed at a time in a block.
     pub max_pending_message_bundles: usize,
     /// The policy for automatically handling incoming messages.
@@ -1324,7 +1320,7 @@ pub struct ChainClient<Env: Environment> {
     chain_id: ChainId,
     /// The client options.
     #[debug(skip)]
-    options: ChainClientOptions,
+    options: ClientOptions,
     /// The preferred owner of the chain used to sign proposals.
     /// `None` if we cannot propose on this chain.
     preferred_owner: Option<AccountOwner>,
@@ -1506,13 +1502,13 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Gets a mutable reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
-    pub fn options_mut(&mut self) -> &mut ChainClientOptions {
+    pub fn options_mut(&mut self) -> &mut ClientOptions {
         &mut self.options
     }
 
     /// Gets a reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
-    pub fn options(&self) -> &ChainClientOptions {
+    pub fn options(&self) -> &ClientOptions {
         &self.options
     }
 
