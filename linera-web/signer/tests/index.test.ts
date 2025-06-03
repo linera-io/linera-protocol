@@ -1,8 +1,8 @@
-import { ethers } from 'ethers';
-import { EmbeddedEIP191Signer } from '../src';
+import { ethers } from "ethers";
+import { EmbeddedEIP191Signer } from "../src";
 
-test('constructs signer from mnemonic correctly', async () => {
-  const phrase = 'test test test test test test test test test test test junk';
+test("constructs signer from mnemonic correctly", async () => {
+  const phrase = "test test test test test test test test test test test junk";
 
   const signer = EmbeddedEIP191Signer.fromMnemonic(phrase);
   const expectedWallet = ethers.Wallet.fromPhrase(phrase);
@@ -15,11 +15,15 @@ test('constructs signer from mnemonic correctly', async () => {
   expect(await signer.contains_key(owner)).toBe(true);
 });
 
-test('signs message correctly', async () => {
-  const secretKey = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
+test("signs message correctly", async () => {
+  const secretKey =
+    "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
   const signer = new EmbeddedEIP191Signer(secretKey);
-  const cryptoHash = "c520e2b24b05e70c39c36d4aa98e9129ac0079ea002d4c382e6996ea11946d1e";
+  const cryptoHash =
+    "c520e2b24b05e70c39c36d4aa98e9129ac0079ea002d4c382e6996ea11946d1e";
   const owner = signer.address().toLowerCase();
   const signature = await signer.sign(owner, Buffer.from(cryptoHash, "hex"));
-  expect(signature).toBe("0xe257048813b851f812ba6e508e972d8bb09504824692b027ca95d31301dbe8c7103a2f35ce9950d031d260f412dcba09c24027288872a67abe261c0a3e55c9121b");
+  expect(signature).toBe(
+    "0xe257048813b851f812ba6e508e972d8bb09504824692b027ca95d31301dbe8c7103a2f35ce9950d031d260f412dcba09c24027288872a67abe261c0a3e55c9121b",
+  );
 });
