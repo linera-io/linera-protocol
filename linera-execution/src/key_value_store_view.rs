@@ -417,9 +417,9 @@ impl<C: Context> KeyValueStoreView<C> {
         let _latency = metrics::KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY.measure_latency();
         let map = self.map.get();
         let mut results = Vec::with_capacity(indices.len());
-        for (i, index) in indices.into_iter().enumerate() {
+        for index in indices {
             ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
-            results[i] = map.contains_key(&index);
+            results.push(map.contains_key(&index));
         }
         Ok(results)
     }
@@ -447,9 +447,9 @@ impl<C: Context> KeyValueStoreView<C> {
         let _latency = metrics::KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY.measure_latency();
         let map = self.map.get();
         let mut results = Vec::with_capacity(indices.len());
-        for (i, index) in indices.into_iter().enumerate() {
+        for index in indices {
             ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
-            results[i] = map.get(&index).cloned();
+            results.push(map.get(&index).cloned());
         }
         Ok(results)
     }
