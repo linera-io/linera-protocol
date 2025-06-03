@@ -13,11 +13,9 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, Client, MessagePolicy},
+    client::{ChainClient, Client, ClientOptions},
     environment,
-    node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
-    DEFAULT_GRACE_PERIOD,
 };
 use linera_execution::system::Recipient;
 use linera_storage::Storage;
@@ -102,7 +100,6 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let genesis_config = make_genesis_config(&builder);
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
-    let delivery = CrossChainMessageDelivery::NonBlocking;
 
     let mut context = ClientContext {
         wallet: Wallet::new(genesis_config),
@@ -112,16 +109,12 @@ async fn test_chain_listener() -> anyhow::Result<()> {
                 network: builder.make_node_provider(),
                 signer,
             },
-            10,
             admin_id,
-            MessagePolicy::new_accept_all(),
-            delivery,
             false,
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
             NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ClientOptions::test_default(),
         )),
     };
     context
@@ -191,7 +184,6 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let genesis_config = make_genesis_config(&builder);
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
-    let delivery = CrossChainMessageDelivery::NonBlocking;
 
     let context = ClientContext {
         wallet: Wallet::new(genesis_config),
@@ -201,16 +193,12 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
                 network: builder.make_node_provider(),
                 signer,
             },
-            10,
             admin_id,
-            MessagePolicy::new_accept_all(),
-            delivery,
             false,
             [],
             "Client node with no chains".to_string(),
             NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ClientOptions::test_default(),
         )),
     };
     let context = Arc::new(Mutex::new(context));

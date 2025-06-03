@@ -166,20 +166,15 @@ pub struct Client<Env: Environment> {
 
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
-    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all)]
     pub fn new(
         environment: Env,
-        max_pending_message_bundles: usize,
         admin_id: ChainId,
-        message_policy: MessagePolicy,
-        cross_chain_message_delivery: CrossChainMessageDelivery,
         long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
         max_loaded_chains: NonZeroUsize,
-        grace_period: f64,
-        blob_download_timeout: Duration,
+        options: ClientOptions,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -192,14 +187,6 @@ impl<Env: Environment> Client<Env> {
         .with_allow_inactive_chains(true)
         .with_allow_messages_from_deprecated_epochs(true);
         let local_node = LocalNodeClient::new(state);
-
-        let options = ClientOptions {
-            max_pending_message_bundles,
-            message_policy,
-            cross_chain_message_delivery,
-            grace_period,
-            blob_download_timeout,
-        };
 
         Self {
             environment,
@@ -1290,7 +1277,6 @@ impl MessagePolicy {
     }
 }
 
-#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct ClientOptions {
     /// Maximum number of pending message bundles processed at a time in a block.
@@ -1304,6 +1290,21 @@ pub struct ClientOptions {
     pub grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
     pub blob_download_timeout: Duration,
+}
+
+#[cfg(with_testing)]
+impl ClientOptions {
+    pub fn test_default() -> Self {
+        use crate::DEFAULT_GRACE_PERIOD;
+
+        ClientOptions {
+            max_pending_message_bundles: 10,
+            message_policy: MessagePolicy::new_accept_all(),
+            cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
+            grace_period: DEFAULT_GRACE_PERIOD,
+            blob_download_timeout: Duration::from_secs(1),
+        }
+    }
 }
 
 /// Client to operate a chain by interacting with validators and the given local storage

@@ -15,10 +15,10 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
-    client::{ChainClient, Client, MessagePolicy},
+    client::{ChainClient, Client},
     data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
-    node::{CrossChainMessageDelivery, ValidatorNode},
+    node::ValidatorNode,
     Environment, JoinSetExt as _,
 };
 use linera_persistent::{Persist, PersistExt as _};
@@ -119,7 +119,6 @@ where
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
         });
-        let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
             0 => "Client node".to_string(),
@@ -132,19 +131,12 @@ where
                 storage,
                 signer,
             },
-            options.max_pending_message_bundles,
             wallet.genesis_admin_chain(),
-            MessagePolicy::new(
-                options.blanket_message_policy,
-                options.restrict_chain_ids_to,
-            ),
-            delivery,
             options.long_lived_services,
             chain_ids,
             name,
             options.max_loaded_chains,
-            options.grace_period,
-            options.blob_download_timeout,
+            options.to_client_options(),
         );
 
         ClientContext {
@@ -160,7 +152,7 @@ where
 
     #[cfg(with_testing)]
     pub fn new_test_client_context(storage: S, wallet: W, signer: Si) -> Self {
-        use linera_core::DEFAULT_GRACE_PERIOD;
+        use linera_core::{client::ClientOptions, node::CrossChainMessageDelivery};
 
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
@@ -172,7 +164,6 @@ where
             retry_delay,
             max_retries,
         };
-        let delivery = CrossChainMessageDelivery::new(true);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
             0 => "Client node".to_string(),
@@ -185,16 +176,15 @@ where
                 network: NodeProvider::new(node_options),
                 signer,
             },
-            10,
             wallet.genesis_admin_chain(),
-            MessagePolicy::new_accept_all(),
-            delivery,
             false,
             chain_ids,
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ClientOptions {
+                cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
+                ..ClientOptions::test_default()
+            },
         );
 
         ClientContext {
