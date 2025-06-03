@@ -701,10 +701,12 @@ where
         blob_id: BlobId,
         blob_state: BlobState,
     ) -> Result<Epoch, ViewError> {
-        let current_blob_state = self.read_blob_state(blob_id).await?;
-        match current_blob_state {
+        match self.read_blob_state(blob_id).await? {
             Some(current_blob_state) => {
                 if current_blob_state.epoch < blob_state.epoch {
+                    // We tolerate race conditions because two active chains are likely to
+                    // be both from the latest epoch, and otherwise failing to pick the
+                    // more recent blob state has limited impact.
                     self.write_blob_state(blob_id, &blob_state).await?;
                     Ok(blob_state.epoch)
                 } else {
