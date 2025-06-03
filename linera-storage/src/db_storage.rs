@@ -996,15 +996,7 @@ where
         Ok(())
     }
 
-    async fn write_batch(&self, mut batch: Batch) -> Result<(), ViewError> {
-        if batch.key_value_bytes.is_empty() {
-            return Ok(());
-        }
-        if batch.key_value_bytes.len() == 1 {
-            let (key, bytes) = batch.key_value_bytes.pop().unwrap();
-            Self::write_entry(&self.store, key, bytes).await?;
-            return Ok(());
-        }
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         let mut futures = Vec::new();
         for (key, bytes) in batch.key_value_bytes.into_iter() {
             let store = self.store.clone();
