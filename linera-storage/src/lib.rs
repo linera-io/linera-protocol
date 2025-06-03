@@ -131,15 +131,14 @@ pub trait Storage: Sized {
         &self,
         blob_id: BlobId,
         blob_state: BlobState,
-    ) -> Result<Epoch, ViewError>;
+    ) -> Result<Option<Epoch>, ViewError>;
 
     /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
-        overwrite: bool,
-    ) -> Result<Vec<Epoch>, ViewError>;
+    ) -> Result<Vec<Option<Epoch>>, ViewError>;
 
     /// Writes several blobs.
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;

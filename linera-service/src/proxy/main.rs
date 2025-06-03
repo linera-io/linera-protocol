@@ -370,8 +370,11 @@ where
             BlobLastUsedBy(blob_id) => {
                 let blob_state = self.storage.read_blob_state(*blob_id).await?;
                 let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let last_used_by = blob_state
+                    .last_used_by
+                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
                 Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
-                    blob_state.last_used_by,
+                    last_used_by,
                 ))))
             }
             MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(

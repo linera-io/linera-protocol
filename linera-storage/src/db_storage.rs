@@ -700,7 +700,7 @@ where
         &self,
         blob_id: BlobId,
         blob_state: BlobState,
-    ) -> Result<Epoch, ViewError> {
+    ) -> Result<Option<Epoch>, ViewError> {
         match self.read_blob_state(blob_id).await? {
             Some(current_blob_state) => {
                 if current_blob_state.epoch < blob_state.epoch {
@@ -724,8 +724,7 @@ where
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
-        overwrite: bool,
-    ) -> Result<Vec<Epoch>, ViewError> {
+    ) -> Result<Vec<Option<Epoch>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -739,24 +738,24 @@ where
             .await?;
         let mut latest_epochs = Vec::new();
         let mut batch = Batch::new();
-        let mut need_write = false;
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
-            let (should_write, latest_epoch) = match maybe_blob_state {
-                None => (true, blob_state.epoch),
-                Some(current_blob_state) => (
-                    overwrite && current_blob_state.epoch < blob_state.epoch,
-                    current_blob_state.epoch.max(blob_state.epoch),
-                ),
+            let latest_epoch = match maybe_blob_state {
+                None => {
+                    batch.add_blob_state(*blob_id, &blob_state)?;
+                    blob_state.epoch
+                }
+                Some(current_blob_state) => {
+                    if current_blob_state.epoch < blob_state.epoch {
+                        batch.add_blob_state(*blob_id, &blob_state)?;
+                        blob_state.epoch
+                    } else {
+                        current_blob_state.epoch
+                    }
+                }
             };
-            if should_write {
-                batch.add_blob_state(*blob_id, &blob_state)?;
-                need_write = true;
-            }
             latest_epochs.push(latest_epoch);
         }
-        if need_write {
-            self.write_batch(batch).await?;
-        }
+        self.write_batch(batch).await?;
         Ok(latest_epochs)
     }
 
@@ -1000,6 +999,9 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+        if batch.key_value_bytes.is_empty() {
+            return Ok(());
+        }
         let mut futures = Vec::new();
         for (key, bytes) in batch.key_value_bytes.into_iter() {
             let store = self.store.clone();

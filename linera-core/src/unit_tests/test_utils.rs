@@ -596,7 +596,9 @@ where
             Err(err) => Err(err),
             Ok(blob_state) => match blob_state {
                 None => Err(NodeError::BlobsNotFound(vec![blob_id])),
-                Some(blob_state) => Ok(blob_state.last_used_by),
+                Some(blob_state) => blob_state
+                    .last_used_by
+                    .ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
             },
         };
 

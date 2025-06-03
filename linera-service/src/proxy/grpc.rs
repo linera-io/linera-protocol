@@ -632,7 +632,10 @@ where
             .map_err(Self::error_to_status)?;
         let blob_state =
             blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
-        Ok(Response::new(blob_state.last_used_by.into()))
+        let last_used_by = blob_state
+            .last_used_by
+            .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+        Ok(Response::new(last_used_by.into()))
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]
