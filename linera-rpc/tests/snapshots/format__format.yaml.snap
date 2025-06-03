@@ -1073,14 +1073,6 @@ StreamId:
         TYPENAME: StreamName
 StreamName:
   NEWTYPESTRUCT: BYTES
-StreamUpdate:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - stream_id:
-        TYPENAME: StreamId
-    - previous_index: U32
-    - next_index: U32
 SystemMessage:
   ENUM:
     0:

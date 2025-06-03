@@ -45,7 +45,7 @@ const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
 
 /// This is the selector of the `process_streams` that should be called
 /// only from a submitted message
-const PROCESS_STREAMS_SELECTOR: &[u8] = &[180, 238, 58, 29];
+const PROCESS_STREAMS_SELECTOR: &[u8] = &[227, 9, 189, 153];
 
 /// This is the selector of the `instantiate` that should be called
 /// only when creating a new instance of a shared contract
@@ -111,8 +111,45 @@ mod tests {
 
     #[test]
     fn check_process_streams_selector() {
-        let selector = &keccak256("process_streams(bytes)".as_bytes())[..4];
-        assert_eq!(selector, PROCESS_STREAMS_SELECTOR);
+        use alloy_sol_types::{sol, SolCall};
+        sol! {
+            struct InternalCryptoHash {
+                bytes32 value;
+            }
+
+            struct InternalApplicationId {
+                InternalCryptoHash application_description_hash;
+            }
+
+            struct InternalGenericApplicationId {
+                uint8 choice;
+                InternalApplicationId user;
+            }
+
+            struct InternalStreamName {
+                bytes stream_name;
+            }
+
+            struct InternalStreamId {
+                InternalGenericApplicationId application_id;
+                InternalStreamName stream_name;
+            }
+
+            struct InternalChainId {
+                InternalCryptoHash value;
+            }
+
+            struct InternalStreamUpdate {
+                InternalChainId chain_id;
+                InternalStreamId stream_id;
+                uint32 previous_index;
+                uint32 next_index;
+            }
+
+            function process_streams(InternalStreamUpdate[] internal_streams);
+        }
+        assert_eq!(process_streamsCall::SIGNATURE, "process_streams((((bytes32)),((uint8,((bytes32))),(bytes)),uint32,uint32)[])");
+        assert_eq!(process_streamsCall::SELECTOR, PROCESS_STREAMS_SELECTOR);
     }
 
     #[test]
@@ -180,7 +217,7 @@ fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
 fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     // See TODO(#3966) for a better support of the input.
     use alloy_primitives::{Bytes, B256};
-    use alloy_sol_types::{sol, SolType};
+    use alloy_sol_types::{sol, SolCall};
     use linera_base::identifiers::{GenericApplicationId, StreamId};
     sol! {
         struct InternalCryptoHash {
@@ -215,6 +252,8 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
             uint32 previous_index;
             uint32 next_index;
         }
+
+        function process_streams(InternalStreamUpdate[] internal_streams);
     }
 
     fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> InternalCryptoHash {
@@ -261,9 +300,10 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
         InternalStreamUpdate { chain_id, stream_id, previous_index: stream_update.previous_index, next_index: stream_update.next_index }
     }
 
-    type InternalStreamUpdateArray = alloy_sol_types::sol_data::Array<InternalStreamUpdate>;
     let internal_streams = streams.into_iter().map(stream_update_to_internal_stream_update).collect::<Vec<_>>();
-    <InternalStreamUpdateArray as SolType>::abi_encode(&internal_streams)
+
+    let fct_call = process_streamsCall { internal_streams };
+    fct_call.abi_encode()
 }
 
 #[derive(Clone)]
@@ -1066,12 +1106,12 @@ where
 
     fn process_streams(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
+        let operation = get_revm_process_streams_bytes(streams);
         ensure_selector_presence(
             &self.module,
             PROCESS_STREAMS_SELECTOR,
             "function process_streams(bytes)",
         )?;
-        let operation = get_revm_process_streams_bytes(streams);
         self.execute_no_return_operation(operation, "process_streams")
     }
 
