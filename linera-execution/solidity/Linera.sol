@@ -4,6 +4,10 @@ pragma solidity ^0.8.0;
 
 import "./LineraTypes.sol";
 
+// The "LineraTypes.sol" is created via the command
+// cargo run -p serde-generate-bin -- --language solidity LineraTypes.yaml > LineraTypes.sol
+// from the package "serde-reflection" commit 95e57c4c2df2fc7215e627da353071a2cb91fdcb
+
 // This library provides Linera functionalities to EVM contracts
 // It should not be modified.
 
