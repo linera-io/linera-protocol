@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, Epoch, NetworkDescription, TimeDelta, Timestamp},
+    data_types::{Blob, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
 };
 use linera_chain::{
@@ -696,35 +696,13 @@ where
         Ok(())
     }
 
-    async fn maybe_write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: BlobState,
-    ) -> Result<Epoch, ViewError> {
-        let current_blob_state = self.read_blob_state(blob_id).await?;
-        let (should_write, latest_epoch) = match current_blob_state {
-            Some(current_blob_state) => (
-                current_blob_state.epoch < blob_state.epoch,
-                current_blob_state.epoch.max(blob_state.epoch),
-            ),
-            None => (true, blob_state.epoch),
-        };
-
-        if should_write {
-            self.write_blob_state(blob_id, &blob_state).await?;
-        }
-
-        Ok(latest_epoch)
-    }
-
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
-        overwrite: bool,
-    ) -> Result<Vec<Epoch>, ViewError> {
+    ) -> Result<(), ViewError> {
         if blob_ids.is_empty() {
-            return Ok(Vec::new());
+            return Ok(());
         }
         let blob_state_keys = blob_ids
             .iter()
@@ -734,36 +712,22 @@ where
             .store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
-        let mut latest_epochs = Vec::new();
         let mut batch = Batch::new();
-        let mut need_write = false;
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
-            let (should_write, latest_epoch) = match maybe_blob_state {
-                None => (true, blob_state.epoch),
-                Some(current_blob_state) => (
-                    overwrite && current_blob_state.epoch < blob_state.epoch,
-                    current_blob_state.epoch.max(blob_state.epoch),
-                ),
-            };
-            if should_write {
-                batch.add_blob_state(*blob_id, &blob_state)?;
-                need_write = true;
+            match maybe_blob_state {
+                None => {
+                    batch.add_blob_state(*blob_id, &blob_state)?;
+                }
+                Some(state) => {
+                    if state.epoch < blob_state.epoch {
+                        batch.add_blob_state(*blob_id, &blob_state)?;
+                    }
+                }
             }
-            latest_epochs.push(latest_epoch);
         }
-        if need_write {
-            self.write_batch(batch).await?;
-        }
-        Ok(latest_epochs)
-    }
-
-    async fn write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: &BlobState,
-    ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        batch.add_blob_state(blob_id, blob_state)?;
+        // We tolerate race conditions because two active chains are likely to
+        // be both from the latest epoch, and otherwise failing to pick the
+        // more recent blob state has limited impact.
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -997,6 +961,9 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+        if batch.key_value_bytes.is_empty() {
+            return Ok(());
+        }
         let mut futures = Vec::new();
         for (key, bytes) in batch.key_value_bytes.into_iter() {
             let store = self.store.clone();
