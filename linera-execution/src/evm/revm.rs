@@ -177,17 +177,93 @@ fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
     argument.abi_encode()
 }
 
-fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Result<Vec<u8>, ExecutionError> {
+fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     // See TODO(#3966) for a better support of the input.
-    use alloy_primitives::Bytes;
-    use alloy_sol_types::{sol, SolCall};
+    use alloy_primitives::{Bytes, B256};
+    use alloy_sol_types::{sol, SolType};
+    use linera_base::identifiers::{GenericApplicationId, StreamId};
     sol! {
-        function process_streams(bytes value);
+        struct InternalCryptoHash {
+            bytes32 value;
+        }
+
+        struct InternalApplicationId {
+            InternalCryptoHash application_description_hash;
+        }
+
+        struct InternalGenericApplicationId {
+            uint8 choice;
+            InternalApplicationId user;
+        }
+
+        struct InternalStreamName {
+            bytes stream_name;
+        }
+
+        struct InternalStreamId {
+            InternalGenericApplicationId application_id;
+            InternalStreamName stream_name;
+        }
+
+        struct InternalChainId {
+            InternalCryptoHash value;
+        }
+
+        struct InternalStreamUpdate {
+            InternalChainId chain_id;
+            InternalStreamId stream_id;
+            uint32 previous_index;
+            uint32 next_index;
+        }
     }
-    let value = bcs::to_bytes(&streams)?;
-    let value = Bytes::from(value);
-    let argument = process_streamsCall { value };
-    Ok(argument.abi_encode())
+
+    fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> InternalCryptoHash {
+        let hash: [u64; 4] = <[u64; 4]>::from(hash);
+        let hash: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(hash);
+        let value: B256 = hash.into();
+        InternalCryptoHash { value }
+    }
+
+    fn chain_id_to_internal_chain_id(chain_id: ChainId) -> InternalChainId {
+        let value = crypto_hash_to_internal_crypto_hash(chain_id.0);
+        InternalChainId { value }
+    }
+
+    fn application_id_to_internal_application_id(application_id: ApplicationId) -> InternalApplicationId {
+        let application_description_hash = crypto_hash_to_internal_crypto_hash(application_id.application_description_hash);
+        InternalApplicationId { application_description_hash }
+    }
+
+    fn stream_name_to_internal_stream_name(stream_name: StreamName) -> InternalStreamName {
+        let stream_name = Bytes::from(stream_name.0);
+        InternalStreamName { stream_name }
+    }
+
+    fn generic_application_id_to_internal_generic_application_id(generic_application_id: GenericApplicationId) -> InternalGenericApplicationId {
+        match generic_application_id {
+            GenericApplicationId::System => {
+                let application_description_hash = InternalCryptoHash { value: B256::ZERO };
+                InternalGenericApplicationId { choice: 0, user: InternalApplicationId { application_description_hash } }
+            },
+            GenericApplicationId::User(application_id) => InternalGenericApplicationId { choice: 1, user: application_id_to_internal_application_id(application_id) },
+        }
+    }
+
+    fn stream_id_to_internal_stream_id(stream_id: StreamId) -> InternalStreamId {
+        let application_id = generic_application_id_to_internal_generic_application_id(stream_id.application_id);
+        let stream_name = stream_name_to_internal_stream_name(stream_id.stream_name);
+        InternalStreamId { application_id, stream_name }
+    }
+
+    fn stream_update_to_internal_stream_update(stream_update: StreamUpdate) -> InternalStreamUpdate {
+        let chain_id = chain_id_to_internal_chain_id(stream_update.chain_id);
+        let stream_id = stream_id_to_internal_stream_id(stream_update.stream_id);
+        InternalStreamUpdate { chain_id, stream_id, previous_index: stream_update.previous_index, next_index: stream_update.next_index }
+    }
+
+    type InternalStreamUpdateArray = alloy_sol_types::sol_data::Array<InternalStreamUpdate>;
+    let internal_streams = streams.into_iter().map(stream_update_to_internal_stream_update).collect::<Vec<_>>();
+    <InternalStreamUpdateArray as SolType>::abi_encode(&internal_streams)
 }
 
 #[derive(Clone)]
@@ -995,7 +1071,7 @@ where
             PROCESS_STREAMS_SELECTOR,
             "function process_streams(bytes)",
         )?;
-        let operation = get_revm_process_streams_bytes(streams)?;
+        let operation = get_revm_process_streams_bytes(streams);
         self.execute_no_return_operation(operation, "process_streams")
     }
 
