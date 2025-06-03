@@ -1138,7 +1138,7 @@ where
         ensure_selector_presence(
             &self.module,
             PROCESS_STREAMS_SELECTOR,
-            "function process_streams(bytes)",
+            "function process_streams(LineraTypes.StreamUpdate[] memory streams)",
         )?;
         self.execute_no_return_operation(operation, "process_streams")
     }
