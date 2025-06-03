@@ -20,7 +20,7 @@ pub enum JsSignerError {
     PublicKeyParseError = 2,
     JsConversionError = 3,
     UnexpectedSignatureFormat = 4,
-    UknownError = 9,
+    UnknownError = 9,
 }
 
 impl Display for JsSignerError {
@@ -33,7 +33,7 @@ impl Display for JsSignerError {
             JsSignerError::UnexpectedSignatureFormat => {
                 write!(f, "Unexpected signature format received from JS")
             }
-            JsSignerError::UknownError => write!(f, "An unknown error occurred"),
+            JsSignerError::UnknownError => write!(f, "An unknown error occurred"),
         }
     }
 }
@@ -47,10 +47,10 @@ impl From<JsValue> for JsSignerError {
                 2 => JsSignerError::PublicKeyParseError,
                 3 => JsSignerError::JsConversionError,
                 4 => JsSignerError::UnexpectedSignatureFormat,
-                _ => JsSignerError::UknownError,
+                _ => JsSignerError::UnknownError,
             }
         } else {
-            JsSignerError::UknownError
+            JsSignerError::UnknownError
         }
     }
 }
@@ -104,6 +104,7 @@ impl Signer for JsSigner {
             .map_err(JsSignerError::from)?
             .as_string()
             .ok_or(JsSignerError::JsConversionError)?;
+        web_sys::console::log_1(&JsValue::from_str(&js_public_key));
         let pk = EvmPublicKey::from_str(&js_public_key)
             .map_err(|_| JsSignerError::PublicKeyParseError)?;
         Ok(AccountPublicKey::EvmSecp256k1(pk))
