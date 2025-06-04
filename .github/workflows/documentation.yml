@@ -12,7 +12,7 @@ on:
       - 'scripts/**'
   workflow_dispatch:
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
+# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
 concurrency:
   group: '${{ github.workflow }} ${{ github.ref }}'
   cancel-in-progress: true
