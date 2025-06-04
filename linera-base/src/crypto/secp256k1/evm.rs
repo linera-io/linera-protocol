@@ -72,12 +72,7 @@ impl FromStr for EvmSignature {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // If the string starts with "0x", we remove it before decoding.
-        let s = if let Some(stripped) = s.strip_prefix("0x") {
-            stripped
-        } else {
-            s
-        };
-        let bytes = hex::decode(s)?;
+        let bytes = hex::decode(s.strip_prefix("0x").unwrap_or(s))?;
         let sig = Signature::from_erc2098(&bytes);
         Ok(EvmSignature(sig))
     }
@@ -200,13 +195,9 @@ impl FromStr for EvmPublicKey {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // If the string starts with "0x", we remove it to decode the hex string.
-        let s = if let Some(stripped) = s.strip_prefix("0x") {
-            stripped
-        } else {
-            s
-        };
-        hex::decode(s)?.as_slice().try_into()
+        hex::decode(s.strip_prefix("0x").unwrap_or(s))?
+            .as_slice()
+            .try_into()
     }
 }
 

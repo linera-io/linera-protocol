@@ -1,2 +1,2 @@
-export * from "./in_memory";
-export * from "./metamask_signer";
+export * from "./in-memory";
+export * from "./metamask-signer";

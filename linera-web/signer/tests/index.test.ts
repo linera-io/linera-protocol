@@ -9,10 +9,10 @@ test("constructs signer from mnemonic correctly", async () => {
 
   // In Linera EIP-191 compatible wallet, the owner is the wallet address.
   const owner = expectedWallet.address.toLowerCase();
-  const publicKey = await signer.get_public_key(owner);
+  const publicKey = await signer.getPublicKey(owner);
 
   expect(publicKey).toBe(expectedWallet.signingKey.publicKey.toLowerCase());
-  expect(await signer.contains_key(owner)).toBe(true);
+  expect(await signer.containsKey(owner)).toBe(true);
 });
 
 test("signs message correctly", async () => {

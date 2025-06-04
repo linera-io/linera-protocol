@@ -17,10 +17,10 @@ use web_sys::wasm_bindgen;
 pub enum JsSignerError {
     MissingKey = 0,
     SigningError = 1,
-    PublicKeyParseError = 2,
-    JsConversionError = 3,
+    PublicKeyParse = 2,
+    JsConversion = 3,
     UnexpectedSignatureFormat = 4,
-    UnknownError = 9,
+    Unknown = 9,
 }
 
 impl Display for JsSignerError {
@@ -28,12 +28,12 @@ impl Display for JsSignerError {
         match self {
             JsSignerError::MissingKey => write!(f, "No key found for the given owner"),
             JsSignerError::SigningError => write!(f, "Error signing the value"),
-            JsSignerError::PublicKeyParseError => write!(f, "Error parsing the public key"),
-            JsSignerError::JsConversionError => write!(f, "Error converting JS value"),
+            JsSignerError::PublicKeyParse => write!(f, "Error parsing the public key"),
+            JsSignerError::JsConversion => write!(f, "Error converting JS value"),
             JsSignerError::UnexpectedSignatureFormat => {
                 write!(f, "Unexpected signature format received from JS")
             }
-            JsSignerError::UnknownError => write!(f, "An unknown error occurred"),
+            JsSignerError::Unknown => write!(f, "An unknown error occurred"),
         }
     }
 }
@@ -44,13 +44,13 @@ impl From<JsValue> for JsSignerError {
             match fnum as u8 {
                 0 => JsSignerError::MissingKey,
                 1 => JsSignerError::SigningError,
-                2 => JsSignerError::PublicKeyParseError,
-                3 => JsSignerError::JsConversionError,
+                2 => JsSignerError::PublicKeyParse,
+                3 => JsSignerError::JsConversion,
                 4 => JsSignerError::UnexpectedSignatureFormat,
-                _ => JsSignerError::UnknownError,
+                _ => JsSignerError::Unknown,
             }
         } else {
-            JsSignerError::UnknownError
+            JsSignerError::Unknown
         }
     }
 }
@@ -59,11 +59,11 @@ impl std::error::Error for JsSignerError {}
 
 // An interface that will be compiled to TypeScript and exported for use in the browser.
 #[wasm_bindgen(typescript_custom_section)]
-const JS_SIGNER_INTERFACE: &'static str = r#"
+const SIGNER_INTERFACE: &'static str = r#"
 /**
  * Interface for signing and key management compatible with Ethereum (EVM) addresses.
  */
-export interface IJsSigner {
+export interface Signer {
   /**
    * Signs a given value using the private key associated with the specified EVM address.
    * The signing process must follow the EIP-191 standard.
@@ -80,7 +80,7 @@ export interface IJsSigner {
    * @param owner - The EVM address for which to retrieve the public key.
    * @returns A promise that resolves to the public key as a hexadecimal string.
    */
-  get_public_key(owner: string): Promise<string>;
+  getPublicKey(owner: string): Promise<string>;
 
   /**
    * Checks whether the instance holds a key whose associated address matches the given EVM address.
@@ -88,13 +88,13 @@ export interface IJsSigner {
    * @param owner - The EVM address to check for.
    * @returns A promise that resolves to `true` if the key exists and matches the given address, otherwise `false`.
    */
-  contains_key(owner: string): Promise<boolean>;
+  containsKey(owner: string): Promise<boolean>;
 }"#;
 
 #[wasm_bindgen]
 extern "C" {
     // We refer to the interface defined above.
-    #[wasm_bindgen(typescript_type = "IJsSigner")]
+    #[wasm_bindgen(typescript_type = "Signer")]
     pub type JsSigner;
 
     #[wasm_bindgen(catch, method)]
@@ -117,10 +117,7 @@ impl Signer for JsSigner {
             .await
             .map_err(JsSignerError::from)?;
 
-        Ok(
-            serde_wasm_bindgen::from_value(js_bool)
-                .map_err(|_| JsSignerError::JsConversionError)?,
-        )
+        Ok(serde_wasm_bindgen::from_value(js_bool).map_err(|_| JsSignerError::JsConversion)?)
     }
 
     async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Self::Error> {
@@ -130,9 +127,9 @@ impl Signer for JsSigner {
             .await
             .map_err(JsSignerError::from)?
             .as_string()
-            .ok_or(JsSignerError::JsConversionError)?;
-        let pk = EvmPublicKey::from_str(&js_public_key)
-            .map_err(|_| JsSignerError::PublicKeyParseError)?;
+            .ok_or(JsSignerError::JsConversion)?;
+        let pk =
+            EvmPublicKey::from_str(&js_public_key).map_err(|_| JsSignerError::PublicKeyParse)?;
         Ok(AccountPublicKey::EvmSecp256k1(pk))
     }
 
@@ -150,7 +147,7 @@ impl Signer for JsSigner {
             .await
             .map_err(JsSignerError::from)?
             .as_string()
-            .ok_or(JsSignerError::JsConversionError)?;
+            .ok_or(JsSignerError::JsConversion)?;
         let signature = EvmSignature::from_str(&js_signature)
             .map_err(|_| JsSignerError::UnexpectedSignatureFormat)?;
         Ok(AccountSignature::EvmSecp256k1(signature))

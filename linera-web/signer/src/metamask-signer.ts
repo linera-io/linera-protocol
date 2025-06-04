@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { IJsSigner } from "@linera/client";
+import { Signer } from "@linera/client";
 
 import type { MetaMaskInpageProvider } from "@metamask/providers";
 
@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-export class MetaMaskEIP191Signer implements IJsSigner {
+export class MetaMaskEIP191Signer implements Signer {
   private provider: ethers.BrowserProvider;
 
   constructor() {
@@ -73,13 +73,13 @@ export class MetaMaskEIP191Signer implements IJsSigner {
     }
   }
 
-  async get_public_key(owner: string): Promise<string> {
+  async getPublicKey(owner: string): Promise<string> {
     throw new Error(
       "MetaMask does not provide a way to retrieve the public key directly.",
     );
   }
 
-  async contains_key(owner: string): Promise<boolean> {
+  async containsKey(owner: string): Promise<boolean> {
     const accounts = await this.provider.send("eth_requestAccounts", []);
     return accounts.some(
       (acc: string) => acc.toLowerCase() === owner.toLowerCase(),

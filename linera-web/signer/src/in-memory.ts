@@ -1,7 +1,7 @@
 import { Wallet, ethers } from "ethers";
-import { IJsSigner } from "@linera/client";
+import { Signer } from "@linera/client";
 
-export class EmbeddedEIP191Signer implements IJsSigner {
+export class EmbeddedEIP191Signer implements Signer {
   private wallet: Wallet;
 
   constructor(privateKeyHex: string) {
@@ -31,7 +31,7 @@ export class EmbeddedEIP191Signer implements IJsSigner {
     return signature;
   }
 
-  async get_public_key(owner: string): Promise<string> {
+  async getPublicKey(owner: string): Promise<string> {
     if (
       typeof owner !== "string" ||
       !ethers.isAddress(owner) ||
@@ -42,7 +42,7 @@ export class EmbeddedEIP191Signer implements IJsSigner {
     return this.wallet.signingKey.publicKey;
   }
 
-  async contains_key(owner: string): Promise<boolean> {
+  async containsKey(owner: string): Promise<boolean> {
     // The owner for Linera's EIP-191 wallet is the wallet address.
     if (typeof owner !== "string" || !ethers.isAddress(owner)) {
       throw new Error("Invalid owner address");
