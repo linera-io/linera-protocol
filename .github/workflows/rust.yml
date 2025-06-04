@@ -2,7 +2,8 @@ name: Rust
 
 on:
   push:
-    branches: [ main, 'devnet_*', 'testnet_*' ]
+    branches: [ 'devnet_*', 'testnet_*' ]
+  merge_group:
   pull_request:
     branches:
       - "**"
