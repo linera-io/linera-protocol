@@ -947,7 +947,7 @@ where
         Ok(())
     }
 
-    /// Applies an unexecuted block without executing it. This only updates the outboxes.
+    /// Applies a block without executing it. This only updates the outboxes.
     pub async fn apply_unexecuted_block(
         &mut self,
         block: &ConfirmedBlock,
@@ -1084,6 +1084,8 @@ where
         Ok(())
     }
 
+    /// Returns the hashes of all blocks in the given range. Returns an error if we are missing
+    /// any of those blocks.
     pub async fn block_hashes(
         &self,
         range: impl RangeBounds<BlockHeight>,
