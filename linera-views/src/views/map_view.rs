@@ -1419,7 +1419,7 @@ where
 
 impl<C, I, V> HashableView for MapView<C, I, V>
 where
-    Self: View + Sync,
+    Self: View,
     ByteMapView<C, V>: HashableView,
 {
     type Hasher = <ByteMapView<C, V> as HashableView>::Hasher;
@@ -1954,7 +1954,7 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C, V> ByteMapView<C, V>
     where
-        C: Context + Send + Sync,
+        C: Context,
         V: async_graphql::OutputType
             + serde::ser::Serialize
             + serde::de::DeserializeOwned
@@ -2026,7 +2026,7 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C, I, V> MapView<C, I, V>
     where
-        C: Context + Send + Sync,
+        C: Context,
         I: async_graphql::OutputType
             + async_graphql::InputType
             + serde::ser::Serialize
@@ -2097,7 +2097,7 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C, I, V> CustomMapView<C, I, V>
     where
-        C: Context + Send + Sync,
+        C: Context,
         I: async_graphql::OutputType
             + async_graphql::InputType
             + crate::common::CustomSerialize

@@ -23,6 +23,7 @@ use linera_views::{
         AdminKeyValueStore, CommonStoreInternalConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
+    FutureSyncExt,
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
@@ -97,7 +98,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_read_value(request).await?;
+        let response = client.process_read_value(request).make_sync().await?;
         let response = response.into_inner();
         let ReplyReadValue {
             value,
@@ -120,7 +121,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_contains_key(request).await?;
+        let response = client.process_contains_key(request).make_sync().await?;
         let response = response.into_inner();
         let ReplyContainsKey { test } = response;
         Ok(test)
@@ -139,7 +140,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_contains_keys(request).await?;
+        let response = client.process_contains_keys(request).make_sync().await?;
         let response = response.into_inner();
         let ReplyContainsKeys { tests } = response;
         Ok(tests)
@@ -161,7 +162,10 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_read_multi_values(request).await?;
+        let response = client
+            .process_read_multi_values(request)
+            .make_sync()
+            .await?;
         let response = response.into_inner();
         let ReplyReadMultiValues {
             values,
@@ -193,7 +197,10 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_find_keys_by_prefix(request).await?;
+        let response = client
+            .process_find_keys_by_prefix(request)
+            .make_sync()
+            .await?;
         let response = response.into_inner();
         let ReplyFindKeysByPrefix {
             keys,
@@ -224,7 +231,10 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_find_key_values_by_prefix(request).await?;
+        let response = client
+            .process_find_key_values_by_prefix(request)
+            .make_sync()
+            .await?;
         let response = response.into_inner();
         let ReplyFindKeyValuesByPrefix {
             key_values,
@@ -340,7 +350,10 @@ impl ServiceStoreClientInternal {
             let channel = self.channel.clone();
             let mut client = StoreProcessorClient::new(channel);
             let _guard = self.acquire().await;
-            let _response = client.process_write_batch_extended(request).await?;
+            let _response = client
+                .process_write_batch_extended(request)
+                .make_sync()
+                .await?;
         }
         Ok(())
     }
@@ -383,7 +396,7 @@ impl ServiceStoreClientInternal {
         };
         let request = tonic::Request::new(query);
         let mut client = StoreProcessorClient::new(channel);
-        let response = client.process_specific_chunk(request).await?;
+        let response = client.process_specific_chunk(request).make_sync().await?;
         let response = response.into_inner();
         let ReplySpecificChunk { chunk } = response;
         Ok(chunk)
@@ -458,8 +471,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_list_all(()).await?;
+        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let response = client.process_list_all(()).make_sync().await?;
         let response = response.into_inner();
         let ReplyListAll { namespaces } = response;
         let namespaces = namespaces
@@ -478,8 +491,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_list_root_keys(request).await?;
+        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let response = client.process_list_root_keys(request).make_sync().await?;
         let response = response.into_inner();
         let ReplyListRootKeys { root_keys } = response;
         Ok(root_keys)
@@ -488,8 +501,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     async fn delete_all(config: &Self::Config) -> Result<(), ServiceStoreError> {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let _response = client.process_delete_all(()).await?;
+        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let _response = client.process_delete_all(()).make_sync().await?;
         Ok(())
     }
 
@@ -499,8 +512,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_exists_namespace(request).await?;
+        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let response = client.process_exists_namespace(request).make_sync().await?;
         let response = response.into_inner();
         let ReplyExistsNamespace { exists } = response;
         Ok(exists)
@@ -515,8 +528,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let _response = client.process_create_namespace(request).await?;
+        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let _response = client.process_create_namespace(request).make_sync().await?;
         Ok(())
     }
 
@@ -526,8 +539,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let _response = client.process_delete_namespace(request).await?;
+        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let _response = client.process_delete_namespace(request).make_sync().await?;
         Ok(())
     }
 }

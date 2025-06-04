@@ -217,7 +217,7 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
         impl #impl_generics linera_views::views::RootView for #struct_name #type_generics
         where
             #(#input_constraints,)*
-            Self: linera_views::views::View + Sync,
+            Self: linera_views::views::View,
         {
             async fn save(&mut self) -> Result<(), linera_views::ViewError> {
                 use linera_views::{context::Context, batch::Batch, store::WritableKeyValueStore as _, views::View};
@@ -255,7 +255,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
         where
             #(#field_types: linera_views::views::HashableView,)*
             #(#input_constraints,)*
-            Self: linera_views::views::View + Sync,
+            Self: linera_views::views::View,
         {
             type Hasher = linera_views::sha3::Sha3_256;
 
@@ -293,7 +293,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
         where
             #(#field_types: linera_views::views::HashableView,)*
             #(#input_constraints,)*
-            Self: linera_views::views::View + Sync,
+            Self: linera_views::views::View,
         {
             async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
@@ -353,7 +353,7 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
         where
             #(#input_constraints,)*
             #(#clone_constraints,)*
-            Self: linera_views::views::View + Sync,
+            Self: linera_views::views::View,
         {
             fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
                 Ok(Self {

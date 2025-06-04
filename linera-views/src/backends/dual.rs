@@ -35,6 +35,7 @@ pub enum StoreInUse {
 }
 
 /// The trait for a (static) root key assignment.
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait DualStoreRootKeyAssignment {
     /// Obtains the store assigned to this root key.
     fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error>;
@@ -63,9 +64,9 @@ where
 
 impl<S1, S2, A> ReadableKeyValueStore for DualStore<S1, S2, A>
 where
-    S1: ReadableKeyValueStore + Send + Sync,
-    S2: ReadableKeyValueStore + Send + Sync,
-    A: Send + Sync,
+    S1: ReadableKeyValueStore,
+    S2: ReadableKeyValueStore,
+    A: DualStoreRootKeyAssignment,
 {
     // TODO(#2524): consider changing MAX_KEY_SIZE into a function.
     const MAX_KEY_SIZE: usize = if S1::MAX_KEY_SIZE < S2::MAX_KEY_SIZE {
@@ -193,9 +194,9 @@ where
 
 impl<S1, S2, A> WritableKeyValueStore for DualStore<S1, S2, A>
 where
-    S1: WritableKeyValueStore + WithError + Send + Sync,
-    S2: WritableKeyValueStore + WithError + Send + Sync,
-    A: Send + Sync,
+    S1: WritableKeyValueStore,
+    S2: WritableKeyValueStore,
+    A: DualStoreRootKeyAssignment,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
@@ -234,9 +235,9 @@ where
 
 impl<S1, S2, A> AdminKeyValueStore for DualStore<S1, S2, A>
 where
-    S1: AdminKeyValueStore + Send + Sync,
-    S2: AdminKeyValueStore + Send + Sync,
-    A: DualStoreRootKeyAssignment + Send + Sync,
+    S1: AdminKeyValueStore,
+    S2: AdminKeyValueStore,
+    A: DualStoreRootKeyAssignment,
 {
     type Config = DualStoreConfig<S1::Config, S2::Config>;
 
@@ -357,9 +358,9 @@ where
 #[cfg(with_testing)]
 impl<S1, S2, A> TestKeyValueStore for DualStore<S1, S2, A>
 where
-    S1: TestKeyValueStore + Send + Sync,
-    S2: TestKeyValueStore + Send + Sync,
-    A: DualStoreRootKeyAssignment + Send + Sync,
+    S1: TestKeyValueStore,
+    S2: TestKeyValueStore,
+    A: DualStoreRootKeyAssignment,
 {
     async fn new_test_config() -> Result<Self::Config, Self::Error> {
         let first_config = S1::new_test_config().await.map_err(DualStoreError::First)?;

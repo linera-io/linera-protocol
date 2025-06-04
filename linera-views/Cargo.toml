@@ -53,6 +53,7 @@ scylla = { workspace = true, optional = true }
 serde.workspace = true
 sha3.workspace = true
 static_assertions.workspace = true
+sync_wrapper.workspace = true
 sysinfo.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true

@@ -64,7 +64,7 @@ fn get_journaling_key(tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
 }
 
 /// Low-level, asynchronous direct write key-value operations with simplified batch
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait DirectWritableKeyValueStore: WithError {
     /// The maximal number of items in a batch.
     const MAX_BATCH_SIZE: usize;
@@ -110,7 +110,7 @@ pub struct JournalingKeyValueStore<K> {
 
 impl<K> DeletePrefixExpander for &JournalingKeyValueStore<K>
 where
-    K: DirectKeyValueStore + Send + Sync,
+    K: DirectKeyValueStore,
 {
     type Error = K::Error;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -131,7 +131,7 @@ where
 
 impl<K> ReadableKeyValueStore for JournalingKeyValueStore<K>
 where
-    K: ReadableKeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore,
     K::Error: From<JournalConsistencyError>,
 {
     /// The size constant do not change
@@ -178,7 +178,7 @@ where
 
 impl<K> AdminKeyValueStore for JournalingKeyValueStore<K>
 where
-    K: AdminKeyValueStore + Send + Sync,
+    K: AdminKeyValueStore,
 {
     type Config = K::Config;
 
@@ -232,7 +232,7 @@ where
 
 impl<K> WritableKeyValueStore for JournalingKeyValueStore<K>
 where
-    K: DirectKeyValueStore + Send + Sync,
+    K: DirectKeyValueStore,
     K::Error: From<JournalConsistencyError>,
 {
     /// The size constant do not change
@@ -263,7 +263,7 @@ where
 
 impl<K> JournalingKeyValueStore<K>
 where
-    K: DirectKeyValueStore + Send + Sync,
+    K: DirectKeyValueStore,
     K::Error: From<JournalConsistencyError>,
 {
     /// Resolves the pending operations that were previously stored in the database

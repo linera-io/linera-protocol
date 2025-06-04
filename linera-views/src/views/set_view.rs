@@ -610,7 +610,7 @@ impl<C: Context, I: Serialize + DeserializeOwned + Send> SetView<C, I> {
 
 impl<C, I> HashableView for SetView<C, I>
 where
-    Self: View + Sync,
+    Self: View,
     ByteSetView<C>: HashableView,
 {
     type Hasher = <ByteSetView<C> as HashableView>::Hasher;
@@ -890,7 +890,7 @@ where
 
 impl<C: Context, I> HashableView for CustomSetView<C, I>
 where
-    Self: View + Sync,
+    Self: View,
 {
     type Hasher = sha3::Sha3_256;
 

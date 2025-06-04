@@ -86,7 +86,7 @@ pub trait WithError {
 }
 
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
@@ -132,10 +132,7 @@ pub trait ReadableKeyValueStore: WithError {
     fn read_value<V: DeserializeOwned>(
         &self,
         key: &[u8],
-    ) -> impl Future<Output = Result<Option<V>, Self::Error>>
-    where
-        Self: Sync,
-    {
+    ) -> impl Future<Output = Result<Option<V>, Self::Error>> {
         async { Ok(from_bytes_option(&self.read_value_bytes(key).await?)?) }
     }
 
@@ -143,10 +140,7 @@ pub trait ReadableKeyValueStore: WithError {
     fn read_multi_values<V: DeserializeOwned + Send + Sync>(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> impl Future<Output = Result<Vec<Option<V>>, Self::Error>>
-    where
-        Self: Sync,
-    {
+    ) -> impl Future<Output = Result<Vec<Option<V>>, Self::Error>> {
         async {
             let mut values = Vec::with_capacity(keys.len());
             for entry in self.read_multi_values_bytes(keys).await? {
@@ -158,7 +152,7 @@ pub trait ReadableKeyValueStore: WithError {
 }
 
 /// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait WritableKeyValueStore: WithError {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
@@ -172,7 +166,7 @@ pub trait WritableKeyValueStore: WithError {
 }
 
 /// Low-level trait for the administration of stores and their namespaces.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait AdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;

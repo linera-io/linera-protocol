@@ -73,7 +73,7 @@ where
 
 impl<K> ReadableKeyValueStore for ValueSplittingStore<K>
 where
-    K: ReadableKeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore,
     K::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
@@ -235,7 +235,7 @@ where
 
 impl<K> WritableKeyValueStore for ValueSplittingStore<K>
 where
-    K: WritableKeyValueStore + Send + Sync,
+    K: WritableKeyValueStore,
     K::Error: 'static,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
@@ -280,7 +280,7 @@ where
 
 impl<K> AdminKeyValueStore for ValueSplittingStore<K>
 where
-    K: AdminKeyValueStore + Send + Sync,
+    K: AdminKeyValueStore,
     K::Error: 'static,
 {
     type Config = K::Config;
@@ -330,7 +330,7 @@ where
 #[cfg(with_testing)]
 impl<K> TestKeyValueStore for ValueSplittingStore<K>
 where
-    K: TestKeyValueStore + Send + Sync,
+    K: TestKeyValueStore,
     K::Error: 'static,
 {
     async fn new_test_config() -> Result<K::Config, Self::Error> {

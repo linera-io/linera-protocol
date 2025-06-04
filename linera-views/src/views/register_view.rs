@@ -239,7 +239,7 @@ mod graphql {
 
     impl<C, T> async_graphql::OutputType for RegisterView<C, T>
     where
-        C: Context + Send + Sync,
+        C: Context,
         T: async_graphql::OutputType + Send + Sync,
     {
         fn type_name() -> Cow<'static, str> {

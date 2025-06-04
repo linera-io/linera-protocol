@@ -5714,6 +5714,7 @@ dependencies = [
  "serde",
  "sha3",
  "static_assertions",
+ "sync_wrapper 1.0.2",
  "sysinfo",
  "tempfile",
  "test-case",

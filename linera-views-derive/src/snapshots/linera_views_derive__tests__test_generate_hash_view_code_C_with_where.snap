@@ -7,7 +7,7 @@ where
     RegisterView<C, usize>: linera_views::views::HashableView,
     CollectionView<C, usize, RegisterView<C, usize>>: linera_views::views::HashableView,
     MyParam: Send + Sync + 'static,
-    Self: linera_views::views::View + Sync,
+    Self: linera_views::views::View,
 {
     type Hasher = linera_views::sha3::Sha3_256;
     async fn hash_mut(

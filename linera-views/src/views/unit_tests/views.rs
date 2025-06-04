@@ -132,7 +132,7 @@ async fn run_test_queue_operations<C>(
     context: C,
 ) -> Result<(), anyhow::Error>
 where
-    C: Context<Error: Send + Sync> + Clone + Send + Sync + 'static,
+    C: Context + 'static,
 {
     let mut expected_state = VecDeque::new();
     let mut queue = QueueView::load(context.clone()).await?;
@@ -166,7 +166,7 @@ async fn check_queue_state<C>(
     expected_state: &VecDeque<usize>,
 ) -> Result<(), anyhow::Error>
 where
-    C: Context<Error: Send + Sync> + Clone + Send + Sync,
+    C: Context,
 {
     let count = expected_state.len();
 
@@ -185,7 +185,7 @@ fn check_contents(contents: Vec<usize>, expected: &VecDeque<usize>) {
 }
 
 trait TestContextFactory {
-    type Context: Context<Error: Send + Sync> + Clone + Send + Sync + 'static;
+    type Context: Context + 'static;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error>;
 }
@@ -513,7 +513,7 @@ async fn populate_reentrant_collection_view<C, Key, Value>(
     entries: impl IntoIterator<Item = (Key, Value)>,
 ) -> anyhow::Result<()>
 where
-    C: Context + Send + Sync,
+    C: Context,
     Key: Serialize + DeserializeOwned + Clone + Debug + Default + Send + Sync,
     Value: Serialize + DeserializeOwned + Default + Send + Sync,
 {

@@ -285,7 +285,7 @@ where
 
 impl<K> ReadableKeyValueStore for MeteredStore<K>
 where
-    K: ReadableKeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     type Keys = K::Keys;
@@ -417,7 +417,7 @@ where
 
 impl<K> WritableKeyValueStore for MeteredStore<K>
 where
-    K: WritableKeyValueStore + Send + Sync,
+    K: WritableKeyValueStore,
 {
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
@@ -438,7 +438,7 @@ where
 
 impl<K> AdminKeyValueStore for MeteredStore<K>
 where
-    K: AdminKeyValueStore + Send + Sync,
+    K: AdminKeyValueStore,
 {
     type Config = K::Config;
 
@@ -522,7 +522,7 @@ where
 #[cfg(with_testing)]
 impl<K> TestKeyValueStore for MeteredStore<K>
 where
-    K: TestKeyValueStore + Send + Sync,
+    K: TestKeyValueStore,
 {
     async fn new_test_config() -> Result<K::Config, Self::Error> {
         K::new_test_config().await
