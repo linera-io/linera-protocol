@@ -3,6 +3,7 @@ name: Run README tests
 on:
   push:
     branches: [ 'devnet_*', 'testnet_*' ]
+  pull_request:
   merge_group:
   workflow_dispatch:
   
@@ -34,6 +35,7 @@ permissions:
 
 jobs:
   test-readme-scripts:
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
     steps:
