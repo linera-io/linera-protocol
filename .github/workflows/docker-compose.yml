@@ -2,7 +2,8 @@ name: Docker Compose
 
 on:
   push:
-    branches: [ main, 'devnet_*', 'testnet_*' ]
+    branches: [ 'devnet_*', 'testnet_*' ]
+    merge_group:
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests

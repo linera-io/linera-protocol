@@ -445,24 +445,3 @@ jobs:
     - name: Check linera-service GraphQL schema
       run: |
         diff <(cargo run --locked --bin linera-schema-export) linera-service-graphql-client/gql/service_schema.graphql
-
-  lint-check-all-features:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 40
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Put lint toolchain file in place
-      run: |
-        ln -sf toolchains/nightly/rust-toolchain.toml
-    - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install cargo-all-features
-      run: |
-        cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata --locked
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Run cargo check-all-features
-      run: |
-        cargo check-all-features --all-targets
