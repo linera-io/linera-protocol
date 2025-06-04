@@ -9,7 +9,11 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
 };
-use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
+use linera_core::{
+    client::{BlanketMessagePolicy, ChainClientOptions, MessagePolicy},
+    node::CrossChainMessageDelivery,
+    DEFAULT_GRACE_PERIOD,
+};
 use linera_execution::ResourceControlPolicy;
 
 use crate::util;
@@ -110,6 +114,25 @@ pub struct ClientContextOptions {
         value_parser = util::parse_millis
     )]
     pub blob_download_timeout: Duration,
+}
+
+impl ClientContextOptions {
+    /// Creates [`ChainClientOptions`] with the corresponding values.
+    pub fn to_chain_client_options(&self) -> ChainClientOptions {
+        let message_policy = MessagePolicy::new(
+            self.blanket_message_policy,
+            self.restrict_chain_ids_to.clone(),
+        );
+        let cross_chain_message_delivery =
+            CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
+        ChainClientOptions {
+            max_pending_message_bundles: self.max_pending_message_bundles,
+            message_policy,
+            cross_chain_message_delivery,
+            grace_period: self.grace_period,
+            blob_download_timeout: self.blob_download_timeout,
+        }
+    }
 }
 
 #[derive(Debug, Clone, clap::Args)]

@@ -19,9 +19,7 @@ use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
-    config::{
-        ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
-    },
+    config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
     grpc::{
         api::{
             self,
@@ -144,12 +142,12 @@ where
 pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 
 struct GrpcProxyInner<S> {
-    public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
     worker_connection_pool: GrpcConnectionPool,
     notifier: ChannelNotifier<Result<Notification, Status>>,
     tls: TlsConfig,
     storage: S,
+    id: usize,
 }
 
 impl<S> GrpcProxy<S>
@@ -157,15 +155,14 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     pub fn new(
-        public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
         connect_timeout: Duration,
         timeout: Duration,
         tls: TlsConfig,
         storage: S,
+        id: usize,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
-            public_config,
             internal_config,
             worker_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)
@@ -173,6 +170,7 @@ where
             notifier: ChannelNotifier::default(),
             tls,
             storage,
+            id,
         }))
     }
 
@@ -182,20 +180,28 @@ where
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
     }
 
+    fn config(&self) -> &ProxyConfig {
+        self.0
+            .internal_config
+            .proxies
+            .get(self.0.id)
+            .expect("No proxy config provided.")
+    }
+
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
         NotifierServiceServer::new(self.clone())
     }
 
     fn public_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().public_port))
     }
 
     fn metrics_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.metrics_port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().metrics_port))
     }
 
     fn internal_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().private_port))
     }
 
     fn shard_for(&self, proxyable: &impl GrpcProxyable) -> Option<ShardConfig> {
@@ -626,7 +632,10 @@ where
             .map_err(Self::error_to_status)?;
         let blob_state =
             blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
-        Ok(Response::new(blob_state.last_used_by.into()))
+        let last_used_by = blob_state
+            .last_used_by
+            .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+        Ok(Response::new(last_used_by.into()))
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]

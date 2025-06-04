@@ -260,14 +260,14 @@ where
         })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let first_store = self
             .first_store
-            .clone_with_root_key(root_key)
+            .open_exclusive(root_key)
             .map_err(DualStoreError::First)?;
         let second_store = self
             .second_store
-            .clone_with_root_key(root_key)
+            .open_exclusive(root_key)
             .map_err(DualStoreError::Second)?;
         let store_in_use = A::assigned_store(root_key)?;
         Ok(Self {

@@ -340,12 +340,11 @@ where
         }
 
         // Update the blob state with last used certificate hash.
-        let blob_state = certificate.value().to_blob_state();
-        let overwrite = blobs_result.is_ok(); // Overwrite only if we wrote the certificate.
+        let blob_state = certificate.value().to_blob_state(blobs_result.is_ok());
         let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
         self.state
             .storage
-            .maybe_write_blob_states(&blob_ids, blob_state, overwrite)
+            .maybe_write_blob_states(&blob_ids, blob_state)
             .await?;
         let mut blobs = blobs_result?
             .into_iter()

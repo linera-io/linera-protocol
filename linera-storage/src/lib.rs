@@ -14,8 +14,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch,
-        NetworkDescription, TimeDelta, Timestamp,
+        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, NetworkDescription,
+        TimeDelta, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
@@ -115,31 +115,16 @@ pub trait Storage: Sized {
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError>;
 
-    /// Writes the given blob state.
-    async fn write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: &BlobState,
-    ) -> Result<(), ViewError>;
-
     /// Writes the given blobs, but only if they already have a blob state. Returns `true` for the
     /// blobs that were written.
     async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError>;
-
-    /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
-    async fn maybe_write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: BlobState,
-    ) -> Result<Epoch, ViewError>;
 
     /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
-        overwrite: bool,
-    ) -> Result<Vec<Epoch>, ViewError>;
+    ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;

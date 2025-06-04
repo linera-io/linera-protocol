@@ -3,7 +3,7 @@
 
 #[cfg(with_testing)]
 use std::num::NonZeroUsize;
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use futures::Future;
 use linera_base::{
@@ -15,10 +15,10 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
-    client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
+    client::{ChainClient, Client},
     data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
-    node::{CrossChainMessageDelivery, ValidatorNode},
+    node::ValidatorNode,
     Environment, JoinSetExt as _,
 };
 use linera_persistent::{Persist, PersistExt as _};
@@ -71,8 +71,6 @@ pub struct ClientContext<Env: Environment, W> {
     pub retry_delay: Duration,
     pub max_retries: u32,
     pub chain_listeners: JoinSet,
-    pub blanket_message_policy: BlanketMessagePolicy,
-    pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 }
 
 impl<Env: Environment, W> chain_listener::ClientContext for ClientContext<Env, W>
@@ -89,24 +87,7 @@ where
         self.client.storage_client()
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Env> {
-        // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
-
-        self.make_chain_client_internal(
-            chain_id,
-            chain.block_hash,
-            chain.next_block_height,
-            chain.pending_proposal,
-            chain.owner,
-        )
-    }
-
-    fn client(&self) -> &Client<Env> {
+    fn client(&self) -> &Arc<Client<Env>> {
         &self.client
     }
 
@@ -138,7 +119,6 @@ where
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
         });
-        let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
             0 => "Client node".to_string(),
@@ -151,15 +131,12 @@ where
                 storage,
                 signer,
             },
-            options.max_pending_message_bundles,
             wallet.genesis_admin_chain(),
-            delivery,
             options.long_lived_services,
             chain_ids,
             name,
             options.max_loaded_chains,
-            options.grace_period,
-            options.blob_download_timeout,
+            options.to_chain_client_options(),
         );
 
         ClientContext {
@@ -170,14 +147,12 @@ where
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
             chain_listeners: JoinSet::default(),
-            blanket_message_policy: options.blanket_message_policy,
-            restrict_chain_ids_to: options.restrict_chain_ids_to,
         }
     }
 
     #[cfg(with_testing)]
     pub fn new_test_client_context(storage: S, wallet: W, signer: Si) -> Self {
-        use linera_core::DEFAULT_GRACE_PERIOD;
+        use linera_core::{client::ChainClientOptions, node::CrossChainMessageDelivery};
 
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
@@ -189,7 +164,6 @@ where
             retry_delay,
             max_retries,
         };
-        let delivery = CrossChainMessageDelivery::new(true);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
             0 => "Client node".to_string(),
@@ -202,15 +176,15 @@ where
                 network: NodeProvider::new(node_options),
                 signer,
             },
-            10,
             wallet.genesis_admin_chain(),
-            delivery,
             false,
             chain_ids,
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ChainClientOptions {
+                cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
+                ..ChainClientOptions::test_default()
+            },
         );
 
         ClientContext {
@@ -221,8 +195,6 @@ where
             retry_delay,
             max_retries,
             chain_listeners: JoinSet::default(),
-            blanket_message_policy: BlanketMessagePolicy::Accept,
-            restrict_chain_ids_to: None,
         }
     }
 }
@@ -265,28 +237,6 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         self.wallet
             .first_non_admin_chain()
             .expect("No non-admin chain specified in wallet with no non-admin chain")
-    }
-
-    fn make_chain_client_internal(
-        &self,
-        chain_id: ChainId,
-        block_hash: Option<CryptoHash>,
-        next_block_height: BlockHeight,
-        pending_proposal: Option<PendingProposal>,
-        preferred_owner: Option<AccountOwner>,
-    ) -> ChainClient<Env> {
-        let mut chain_client = self.client.create_chain_client(
-            chain_id,
-            block_hash,
-            next_block_height,
-            pending_proposal,
-            preferred_owner,
-        );
-        chain_client.options_mut().message_policy = MessagePolicy::new(
-            self.blanket_message_policy,
-            self.restrict_chain_ids_to.clone(),
-        );
-        chain_client
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -907,7 +857,7 @@ where
                 benchmark_chains.insert(chain_id, pub_key.into());
                 self.client.track_chain(chain_id);
 
-                let mut chain_client = self.make_chain_client_internal(
+                let mut chain_client = self.client.create_chain_client(
                     chain_id,
                     None,
                     BlockHeight::ZERO,

@@ -10,7 +10,8 @@
 mod database;
 pub mod revm;
 
-use revm_context::result::HaltReason;
+use revm_context::result::{HaltReason, Output, SuccessReason};
+use revm_primitives::Log;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -21,10 +22,10 @@ pub enum EvmExecutionError {
     LoadServiceModule(#[source] anyhow::Error),
     #[error("Commit error {0}")]
     CommitError(String),
-    #[error("It is illegal to call execute_message from an operation")]
-    OperationCallExecuteMessage,
-    #[error("It is illegal to call instantiate from an operation")]
-    OperationCallInstantiate,
+    #[error("It is illegal to call {0} from an operation")]
+    IllegalOperationCall(String),
+    #[error("The function {0} is being called but is missing from the bytecode API")]
+    MissingFunction(String),
     #[error("Incorrect contract creation: {0}")]
     IncorrectContractCreation(String),
     #[error("The operation should contain the evm selector and so have length 4 or more")]
@@ -33,6 +34,8 @@ pub enum EvmExecutionError {
     TransactError(String),
     #[error("Transact commit error {0}")]
     TransactCommitError(String),
+    #[error("Precompile error: {0}")]
+    PrecompileError(String),
     #[error("The operation was reverted with {gas_used} gas used and output {output:?}")]
     Revert {
         gas_used: u64,
@@ -40,4 +43,13 @@ pub enum EvmExecutionError {
     },
     #[error("The operation was halted with {gas_used} gas used due to {reason:?}")]
     Halt { gas_used: u64, reason: HaltReason },
+    #[error("The interpreter did not return, reason={:?}, gas_used={}, gas_refunded={}, logs={:?}, output={:?}",
+            reason, gas_used, gas_refunded, logs, output)]
+    NoReturnInterpreter {
+        reason: SuccessReason,
+        gas_used: u64,
+        gas_refunded: u64,
+        logs: Vec<Log>,
+        output: Output,
+    },
 }

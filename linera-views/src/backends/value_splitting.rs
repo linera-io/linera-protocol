@@ -294,8 +294,8 @@ where
         Ok(Self { store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.clone_with_root_key(root_key)?;
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.open_exclusive(root_key)?;
         Ok(Self { store })
     }
 
