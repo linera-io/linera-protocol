@@ -8,7 +8,7 @@ on:
       - completed
   workflow_dispatch:
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
+# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.head_ref || github.event.workflow_run.head_commit.id || github.event.workflow_run.id || github.run_id }}'
   cancel-in-progress: true

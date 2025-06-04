@@ -2,7 +2,8 @@ name: Rust
 
 on:
   push:
-    branches: [ main, 'devnet_*', 'testnet_*' ]
+    branches: [ 'devnet_*', 'testnet_*' ]
+  merge_group:
   pull_request:
     branches:
       - "**"
@@ -15,7 +16,7 @@ on:
       - 'kubernetes/**'
   workflow_dispatch:
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
+# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
   cancel-in-progress: true
