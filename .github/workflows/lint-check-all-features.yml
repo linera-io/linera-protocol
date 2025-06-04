@@ -3,6 +3,7 @@ name: Lint check all features
 on:
   push:
     branches: [ 'devnet_*', 'testnet_*' ]
+  pull_request:
   merge_group:
   workflow_dispatch:
 
@@ -28,6 +29,7 @@ permissions:
 
 jobs:
   lint-check-all-features:
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
 
