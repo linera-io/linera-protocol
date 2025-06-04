@@ -31,7 +31,7 @@ use {
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
-    key_value_store_view::KeyValueStoreView,
+    key_value_store_view::HashedKeyValueStoreView,
     ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
     OutgoingMessage, ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
@@ -44,7 +44,7 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+    pub users: HashedReentrantCollectionView<C, ApplicationId, HashedKeyValueStoreView<C>>,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
 }

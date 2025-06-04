@@ -1,17 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! We implement two types:
-//! 1) The first type `KeyValueStoreView` implements View and the function of `KeyValueStore`.
-//!
-//! 2) The second type `ViewContainer` encapsulates `KeyValueStoreView` and provides the following functionalities:
-//!    * The `Clone` trait
-//!    * a `write_batch` that takes a `&self` instead of a `&mut self`
-//!    * a `write_batch` that writes in the context instead of writing of the view.
-//!
-//! Currently, that second type is only used for tests.
-//!
-//! Key tags to create the sub-keys of a `KeyValueStoreView` on top of the base key.
+//! We implement a `KeyValueStoreView` implements View and the function of `KeyValueStore`.
 
 use std::{collections::BTreeMap, fmt::Debug};
 
@@ -22,8 +12,9 @@ use linera_base::ensure;
 use linera_views::{
     ViewError,
     batch::{Batch, WriteOperation},
-    common::get_interval,
+    common::{get_interval, HasherOutput},
     context::Context,
+    hashable_wrapper::WrappedHashableContainerView,
     register_view::RegisterView,
     store::ReadableKeyValueStore,
     views::{ClonableView, HashableView, Hasher, View},
@@ -649,3 +640,6 @@ impl<C: Context> HashableView for KeyValueStoreView<C> {
         self.compute_hash().await
     }
 }
+
+/// Type wrapping `KeyValueStoreView` while memoizing the hash.
+pub(crate) type HashedKeyValueStoreView<C> = WrappedHashableContainerView<C, KeyValueStoreView<C>, HasherOutput>;
