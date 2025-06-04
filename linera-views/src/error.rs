@@ -20,9 +20,9 @@ pub enum ViewError {
     #[error(transparent)]
     ArithmeticError(#[from] linera_base::data_types::ArithmeticError),
 
-    /// An failed to lock a reentrant collection entry since it currently being accessed
+    /// Failed to lock a reentrant collection entry since it is currently being accessed
     #[error(
-        "failed to lock a reentrant collection entry since it currently being accessed: {0:?}"
+        "failed to lock a reentrant collection entry since it is currently being accessed: {0:?}"
     )]
     TryLockError(Vec<u8>),
 
