@@ -299,12 +299,7 @@ impl<Env: Environment> Client<Env> {
                 return Ok(info);
             }
             match self
-                .download_certificates_from(
-                    remote_node,
-                    chain_id,
-                    info.next_block_height,
-                    target_next_block_height,
-                )
+                .download_certificates_from(remote_node, chain_id, target_next_block_height)
                 .await
             {
                 Err(err) => warn!(
@@ -332,40 +327,41 @@ impl<Env: Environment> Client<Env> {
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
-        mut start: BlockHeight,
         stop: BlockHeight,
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
         let mut last_info = None;
         // First load any blocks from local storage, if available.
         let mut hashes = Vec::new();
+        let mut next_height = BlockHeight::ZERO;
         {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            while start < stop {
-                let Some(hash) = chain.preprocessed_blocks.get(&start).await? else {
+            next_height = next_height.max(chain.tip_state.get().next_block_height);
+            while next_height < stop {
+                let Some(hash) = chain.preprocessed_blocks.get(&next_height).await? else {
                     break;
                 };
                 hashes.push(hash);
-                start = start.try_add_one()?;
+                next_height = next_height.try_add_one()?;
             }
         }
         for certificate in self.storage_client().read_certificates(hashes).await? {
-            self.handle_certificate(Box::new(certificate)).await?;
+            last_info = Some(self.handle_certificate(Box::new(certificate)).await?.info);
         }
         // Now download the rest in batches from the remote node.
-        while start < stop {
+        while next_height < stop {
             // TODO(#2045): Analyze network errors instead of guessing the batch size.
             let limit = u64::from(stop)
-                .checked_sub(u64::from(start))
+                .checked_sub(u64::from(next_height))
                 .ok_or(ArithmeticError::Overflow)?
                 .min(1000);
             let certificates = remote_node
-                .query_certificates_from(chain_id, start, limit)
+                .query_certificates_from(chain_id, next_height, limit)
                 .await?;
             let Some(info) = self.process_certificates(remote_node, certificates).await? else {
                 break;
             };
-            assert!(info.next_block_height > start);
-            start = info.next_block_height;
+            assert!(info.next_block_height > next_height);
+            next_height = info.next_block_height;
             last_info = Some(info);
         }
         Ok(last_info)
@@ -1037,12 +1033,7 @@ impl<Env: Environment> Client<Env> {
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let remote_info = remote_node.handle_chain_info_query(query).await?;
         if let Some(new_info) = self
-            .download_certificates_from(
-                remote_node,
-                chain_id,
-                local_info.next_block_height,
-                remote_info.next_block_height,
-            )
+            .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
             .await?
         {
             local_info = new_info;
