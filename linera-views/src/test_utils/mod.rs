@@ -22,32 +22,38 @@ use crate::{
     },
 };
 
+/// The size of the small value used for tests.
+pub const SMALL_BYTE_UPPER_LIMIT: u8 = 3;
+
 /// Returns a random key prefix used for tests
 pub fn get_random_key_prefix() -> Vec<u8> {
     let mut key_prefix = vec![0];
-    let value: usize = make_nondeterministic_rng().rng_mut().gen();
+    let value: usize = make_nondeterministic_rng().gen();
     bcs::serialize_into(&mut key_prefix, &value).unwrap();
     key_prefix
 }
 
-/// Takes a random number generator, a `key_prefix` and extends it by n random bytes.
-pub fn get_random_byte_vector<R: Rng>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+fn get_random_byte_vector_with_byte_upper_limit<R: Rng>(
+    rng: &mut R,
+    key_prefix: &[u8],
+    n: usize,
+    byte_upper_limit: u8,
+) -> Vec<u8> {
     let mut v = key_prefix.to_vec();
     for _ in 0..n {
-        let val = rng.gen_range(0..256) as u8;
+        let val = rng.gen_range(0..=byte_upper_limit);
         v.push(val);
     }
     v
 }
 
-/// Appends a small value to a key making collisions likely.
-pub fn get_small_key_space<R: Rng>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
-    let mut key = key_prefix.to_vec();
-    for _ in 0..n {
-        let byte = rng.gen_range(0..4) as u8;
-        key.push(byte);
-    }
-    key
+fn get_small_key_space<R: Rng>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+    get_random_byte_vector_with_byte_upper_limit(rng, key_prefix, n, SMALL_BYTE_UPPER_LIMIT)
+}
+
+/// Takes a random number generator, a `key_prefix` and extends it by n random bytes.
+pub fn get_random_byte_vector<R: Rng>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+    get_random_byte_vector_with_byte_upper_limit(rng, key_prefix, n, u8::MAX)
 }
 
 /// Builds a random k element subset of n
@@ -61,36 +67,43 @@ pub fn get_random_kset<R: Rng>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
 }
 
 /// Takes a random number generator, a `key_prefix` and generates
-/// pairs `(key, value)` with key obtained by appending 8 bytes at random to `key_prefix`
-/// and value obtained by appending 8 bytes to the trivial vector.
-/// We return n such `(key, value)` pairs which are all distinct
+/// pairs `(key, value)` with key obtained by appending `len_key` random bytes to `key_prefix`
+/// and value obtained by creating a vector with `len_value` random bytes.
+/// We return n such `(key, value)` pairs which are all distinct.
 pub fn get_random_key_values_prefix<R: Rng>(
     rng: &mut R,
     key_prefix: Vec<u8>,
     len_key: usize,
     len_value: usize,
     num_entries: usize,
+    key_byte_upper_limit: u8,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
-    loop {
-        let mut v_ret = Vec::new();
-        let mut vector_set = HashSet::new();
-        for _ in 0..num_entries {
-            let v1 = get_random_byte_vector(rng, &key_prefix, len_key);
-            let v2 = get_random_byte_vector(rng, &Vec::new(), len_value);
-            let v12 = (v1.clone(), v2);
-            vector_set.insert(v1);
-            v_ret.push(v12);
-        }
-        if vector_set.len() == num_entries {
-            return v_ret;
-        }
+    let mut key_value_pairs = Vec::new();
+    let mut unique_keys = HashSet::new();
+    for _ in 0..num_entries {
+        let key = loop {
+            let key = get_random_byte_vector_with_byte_upper_limit(
+                rng,
+                &key_prefix,
+                len_key,
+                key_byte_upper_limit,
+            );
+            if !unique_keys.contains(&key) {
+                unique_keys.insert(key.clone());
+                break key;
+            }
+        };
+        let value = get_random_byte_vector(rng, &Vec::new(), len_value);
+        key_value_pairs.push((key, value));
     }
+
+    key_value_pairs
 }
 
 /// Takes a random number generator `rng`, a number n and returns n random `(key, value)`
 /// which are all distinct with key and value being of length 8.
 pub fn get_random_key_values<R: Rng>(rng: &mut R, num_entries: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries)
+    get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries, u8::MAX)
 }
 
 type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
@@ -101,8 +114,7 @@ pub fn get_random_key_value_operations<R: Rng>(
     num_entries: usize,
     k: usize,
 ) -> VectorPutDelete {
-    let key_value_vector = get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries);
-    (key_value_vector, k)
+    (get_random_key_values(rng, num_entries), k)
 }
 
 /// A random reordering of the puts and deletes.
@@ -234,31 +246,39 @@ pub async fn run_reads<S: RestrictedKeyValueStore>(store: S, key_values: Vec<(Ve
     }
 }
 
-fn get_random_key_values1(num_entries: usize, len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    let key_prefix = vec![0];
-    let mut rng = make_deterministic_rng();
-    get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, num_entries)
-}
-
 /// Generates a list of random key-values with no duplicates
-pub fn get_random_key_values2(
+pub fn get_random_key_values_with_sizes(
     num_entries: usize,
     len_key: usize,
     len_value: usize,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
-    let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
-    let mut key_values = Vec::new();
-    let mut key_set = HashSet::new();
-    for _ in 0..num_entries {
-        let key = get_small_key_space(&mut rng, &key_prefix, len_key);
-        if !key_set.contains(&key) {
-            key_set.insert(key.clone());
-            let value = get_random_byte_vector(&mut rng, &[], len_value);
-            key_values.push((key, value));
-        }
-    }
-    key_values
+    let mut rng = make_deterministic_rng();
+    get_random_key_values_prefix(
+        &mut rng,
+        key_prefix,
+        len_key,
+        len_value,
+        num_entries,
+        u8::MAX,
+    )
+}
+
+fn get_random_key_values_with_small_keys(
+    num_entries: usize,
+    len_key: usize,
+    len_value: usize,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
+    let key_prefix = vec![0];
+    let mut rng = make_deterministic_rng();
+    get_random_key_values_prefix(
+        &mut rng,
+        key_prefix,
+        len_key,
+        len_value,
+        num_entries,
+        SMALL_BYTE_UPPER_LIMIT,
+    )
 }
 
 /// Adds a prefix to a list of key-values
@@ -276,11 +296,11 @@ pub fn add_prefix(prefix: &[u8], key_values: Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Ve
 /// We build a number of scenarios for testing the reads.
 pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
     vec![
-        get_random_key_values1(7, 3),
-        get_random_key_values1(150, 3),
-        get_random_key_values1(30, 10),
-        get_random_key_values2(30, 4, 10),
-        get_random_key_values2(30, 4, 100),
+        get_random_key_values_with_sizes(7, 8, 3),
+        get_random_key_values_with_sizes(150, 8, 3),
+        get_random_key_values_with_sizes(30, 8, 10),
+        get_random_key_values_with_small_keys(30, 4, 10),
+        get_random_key_values_with_small_keys(30, 4, 100),
     ]
 }
 

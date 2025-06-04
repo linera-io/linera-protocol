@@ -74,9 +74,8 @@ impl DeletionSet {
 pub(crate) fn get_upper_bound_option(key_prefix: &[u8]) -> Option<Vec<u8>> {
     let len = key_prefix.len();
     for i in (0..len).rev() {
-        let val = key_prefix[i];
-        if val < u8::MAX {
-            let mut upper_bound = key_prefix[0..i + 1].to_vec();
+        if key_prefix[i] < u8::MAX {
+            let mut upper_bound = key_prefix[0..=i].to_vec();
             upper_bound[i] += 1;
             return Some(upper_bound);
         }

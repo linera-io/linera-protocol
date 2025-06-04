@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use crate::{
     batch::Batch,
     store::{KeyValueStore, TestKeyValueStore},
-    test_utils::{add_prefix, get_random_key_values2},
+    test_utils::{add_prefix, get_random_key_values_with_small_keys},
 };
 
 // We generate about 2000 keys of length 11 with a key of length 10000
@@ -46,7 +46,7 @@ where
     for _ in 0..iterations {
         let key_values = add_prefix(
             PREFIX,
-            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+            get_random_key_values_with_small_keys(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
         );
         let mut batch = Batch::new();
         for key_value in &key_values[..NUM_INSERT] {
@@ -76,7 +76,7 @@ where
     for _ in 0..iterations {
         let key_values = add_prefix(
             PREFIX,
-            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+            get_random_key_values_with_small_keys(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
         );
         let mut batch = Batch::new();
         for key_value in &key_values[..NUM_INSERT] {
@@ -108,7 +108,7 @@ where
     for _ in 0..iterations {
         let key_values = add_prefix(
             PREFIX,
-            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+            get_random_key_values_with_small_keys(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
         );
         let mut batch = Batch::new();
         for key_value in &key_values {
@@ -136,7 +136,7 @@ where
     for _ in 0..iterations {
         let key_values = add_prefix(
             PREFIX,
-            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+            get_random_key_values_with_small_keys(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
         );
         let mut batch = Batch::new();
         for key_value in &key_values {
@@ -167,7 +167,7 @@ where
     for _ in 0..iterations {
         let key_values = add_prefix(
             PREFIX,
-            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+            get_random_key_values_with_small_keys(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
         );
         let mut batch = Batch::new();
         for key_value in &key_values {
@@ -197,7 +197,7 @@ where
     for _ in 0..iterations {
         let key_values = add_prefix(
             PREFIX,
-            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+            get_random_key_values_with_small_keys(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
         );
         let mut batch = Batch::new();
         for key_value in &key_values {
@@ -226,7 +226,7 @@ pub async fn write_batch<S: TestKeyValueStore>(iterations: u64) -> Duration {
     for _ in 0..iterations {
         let key_values = add_prefix(
             PREFIX,
-            get_random_key_values2(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
+            get_random_key_values_with_small_keys(NUM_ENTRIES, LEN_KEY, LEN_VALUE),
         );
         let mut batch = Batch::new();
         for key_value in &key_values {
