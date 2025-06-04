@@ -1146,7 +1146,7 @@ where
     // This must happen before the old committee is removed.
     user.synchronize_from_validators().await.unwrap();
     user.process_inbox().await.unwrap();
-    assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
     admin.finalize_committee().await.unwrap();
 
     // Create a new committee.
@@ -1158,7 +1158,7 @@ where
     );
     assert!(admin.pending_proposal().is_none());
     assert!(admin.identity().await.is_ok());
-    assert_eq!(admin.epoch().await.unwrap(), Epoch::from(2));
+    assert_eq!(admin.chain_info().await?.epoch, Epoch::from(2));
 
     // Sending money from the admin chain is supported.
     let cert = admin
@@ -1186,11 +1186,11 @@ where
         user.receive_certificate_and_update_validators(cert).await,
         Err(ChainClientError::CommitteeSynchronizationError)
     );
-    assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
     user.synchronize_from_validators().await.unwrap();
 
     user.process_inbox().await.unwrap();
-    assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Have the admin chain deprecate the previous epoch.
     admin.finalize_committee().await.unwrap();
@@ -1209,7 +1209,7 @@ where
         .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
-    assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Try again to make a transfer back to the admin chain.
     let cert = user
@@ -1236,13 +1236,13 @@ where
 
     let committee = Committee::new(validators, ResourceControlPolicy::default());
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(admin.epoch().await.unwrap(), Epoch::from(3));
+    assert_eq!(admin.chain_info().await?.epoch, Epoch::from(3));
 
     // Despite the restrictive application permissions, some system operations are still allowed,
     // and the user chain can migrate to the new epoch.
     user.synchronize_from_validators().await?;
     user.process_inbox().await?;
-    assert_eq!(user.epoch().await.unwrap(), Epoch::from(3));
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(3));
 
     Ok(())
 }
