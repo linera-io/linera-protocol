@@ -488,13 +488,13 @@ impl TryFrom<BlockHeight> for usize {
 }
 
 /// Allows converting [`BlockHeight`] ranges to inclusive tuples of bounds.
-pub trait RangeExt {
+pub trait BlockHeightRangeBounds {
     /// Returns the range as a tuple of inclusive bounds.
     /// If the range is empty, returns `None`.
     fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)>;
 }
 
-impl<T: RangeBounds<BlockHeight>> RangeExt for T {
+impl<T: RangeBounds<BlockHeight>> BlockHeightRangeBounds for T {
     fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)> {
         let start = match self.start_bound() {
             Bound::Included(height) => *height,

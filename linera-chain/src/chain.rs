@@ -12,7 +12,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        Epoch, OracleResponse, RangeExt as _, Timestamp,
+        BlockHeightRangeBounds as _, Epoch, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, MessageId},
