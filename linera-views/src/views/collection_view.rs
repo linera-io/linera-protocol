@@ -82,7 +82,7 @@ enum KeyTag {
     Subview,
 }
 
-impl<W: View + Sync> View for ByteCollectionView<W::Context, W> {
+impl<W: View> View for ByteCollectionView<W::Context, W> {
     const NUM_INIT_KEYS: usize = 0;
 
     type Context = W::Context;
@@ -158,7 +158,7 @@ impl<W: View + Sync> View for ByteCollectionView<W::Context, W> {
     }
 }
 
-impl<W: ClonableView + Sync> ClonableView for ByteCollectionView<W::Context, W> {
+impl<W: ClonableView> ClonableView for ByteCollectionView<W::Context, W> {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         let cloned_updates = self
             .updates
@@ -181,7 +181,7 @@ impl<W: ClonableView + Sync> ClonableView for ByteCollectionView<W::Context, W> 
     }
 }
 
-impl<W: View + Sync> ByteCollectionView<W::Context, W> {
+impl<W: View> ByteCollectionView<W::Context, W> {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
         self.context
             .base_key()
@@ -454,7 +454,7 @@ impl<W: View + Sync> ByteCollectionView<W::Context, W> {
     }
 }
 
-impl<W: View + Sync> ByteCollectionView<W::Context, W> {
+impl<W: View> ByteCollectionView<W::Context, W> {
     /// Applies a function f on each index (aka key). Keys are visited in the
     /// lexicographic order. If the function returns false, then the loop
     /// ends prematurely.
@@ -616,7 +616,7 @@ impl<W: View + Sync> ByteCollectionView<W::Context, W> {
     }
 }
 
-impl<W: HashableView + Sync> HashableView for ByteCollectionView<W::Context, W> {
+impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
@@ -692,7 +692,7 @@ pub struct CollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-impl<W: View + Sync, I> View for CollectionView<W::Context, I, W>
+impl<W: View, I> View for CollectionView<W::Context, I, W>
 where
     I: Send + Sync + Serialize + DeserializeOwned,
 {
@@ -737,7 +737,7 @@ where
     }
 }
 
-impl<I, W: ClonableView + Sync> ClonableView for CollectionView<W::Context, I, W>
+impl<I, W: ClonableView> ClonableView for CollectionView<W::Context, I, W>
 where
     I: Send + Sync + Serialize + DeserializeOwned,
 {
@@ -749,7 +749,7 @@ where
     }
 }
 
-impl<I: Serialize, W: View + Sync> CollectionView<W::Context, I, W> {
+impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is added to the collection. The resulting view
     /// can be modified.
@@ -900,7 +900,7 @@ impl<I: Serialize, W: View + Sync> CollectionView<W::Context, I, W> {
     }
 }
 
-impl<I, W: View + Sync> CollectionView<W::Context, I, W>
+impl<I, W: View> CollectionView<W::Context, I, W>
 where
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
@@ -951,7 +951,7 @@ where
     }
 }
 
-impl<I: DeserializeOwned, W: View + Sync> CollectionView<W::Context, I, W> {
+impl<I: DeserializeOwned, W: View> CollectionView<W::Context, I, W> {
     /// Applies a function f on each index. Indices are visited in an order
     /// determined by the serialization. If the function returns false then
     /// the loop ends prematurely.
@@ -1026,7 +1026,7 @@ impl<I: DeserializeOwned, W: View + Sync> CollectionView<W::Context, I, W> {
     }
 }
 
-impl<I, W: HashableView + Sync> HashableView for CollectionView<W::Context, I, W>
+impl<I, W: HashableView> HashableView for CollectionView<W::Context, I, W>
 where
     I: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
@@ -1048,7 +1048,7 @@ pub struct CustomCollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-impl<I: Send + Sync, W: View + Sync> View for CustomCollectionView<W::Context, I, W> {
+impl<I: Send + Sync, W: View> View for CustomCollectionView<W::Context, I, W> {
     const NUM_INIT_KEYS: usize = ByteCollectionView::<W::Context, W>::NUM_INIT_KEYS;
 
     type Context = W::Context;
@@ -1090,9 +1090,7 @@ impl<I: Send + Sync, W: View + Sync> View for CustomCollectionView<W::Context, I
     }
 }
 
-impl<I: Send + Sync, W: ClonableView + Sync> ClonableView
-    for CustomCollectionView<W::Context, I, W>
-{
+impl<I: Send + Sync, W: ClonableView> ClonableView for CustomCollectionView<W::Context, I, W> {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(CustomCollectionView {
             collection: self.collection.clone_unchecked()?,
@@ -1101,7 +1099,7 @@ impl<I: Send + Sync, W: ClonableView + Sync> ClonableView
     }
 }
 
-impl<I: CustomSerialize, W: View + Sync> CustomCollectionView<W::Context, I, W> {
+impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is added to the collection. The resulting view
     /// can be modified.
@@ -1252,7 +1250,7 @@ impl<I: CustomSerialize, W: View + Sync> CustomCollectionView<W::Context, I, W> 
     }
 }
 
-impl<I: CustomSerialize + Send, W: View + Sync> CustomCollectionView<W::Context, I, W> {
+impl<I: CustomSerialize + Send, W: View> CustomCollectionView<W::Context, I, W> {
     /// Returns the list of indices in the collection in the order determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1299,7 +1297,7 @@ impl<I: CustomSerialize + Send, W: View + Sync> CustomCollectionView<W::Context,
     }
 }
 
-impl<I: CustomSerialize, W: View + Sync> CustomCollectionView<W::Context, I, W> {
+impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// Applies a function f on each index. Indices are visited in an order
     /// determined by the custom serialization. If the function f returns false,
     /// then the loop ends prematurely.
@@ -1376,9 +1374,9 @@ impl<I: CustomSerialize, W: View + Sync> CustomCollectionView<W::Context, I, W> 
     }
 }
 
-impl<I, W: HashableView + Sync> HashableView for CustomCollectionView<W::Context, I, W>
+impl<I, W: HashableView> HashableView for CustomCollectionView<W::Context, I, W>
 where
-    Self: View + Sync,
+    Self: View,
 {
     type Hasher = sha3::Sha3_256;
 

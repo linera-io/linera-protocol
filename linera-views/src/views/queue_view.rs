@@ -501,7 +501,6 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C: Context, T: async_graphql::OutputType> QueueView<C, T>
     where
-        C: Send + Sync,
         T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
     {
         async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {

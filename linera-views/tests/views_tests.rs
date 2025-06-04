@@ -60,7 +60,7 @@ pub struct StateView<C> {
 
 #[allow(async_fn_in_trait)]
 pub trait StateStorage {
-    type Context: Context<Extra = usize, Error: Send + Sync> + Clone + Send + Sync + 'static;
+    type Context: Context<Extra = usize> + 'static;
 
     async fn new() -> Self;
 

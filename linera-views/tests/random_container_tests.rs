@@ -25,7 +25,7 @@ struct CollectionStateView<C> {
 
 impl<C> CollectionStateView<C>
 where
-    C: Send + Context + Sync,
+    C: Context,
 {
     async fn key_values(&self) -> BTreeMap<u8, u32> {
         let mut map = BTreeMap::new();
@@ -607,7 +607,7 @@ struct ReentrantCollectionStateView<C> {
 
 impl<C> ReentrantCollectionStateView<C>
 where
-    C: Send + Context + Sync,
+    C: Context,
 {
     async fn key_values(&self) -> Result<BTreeMap<u8, u32>> {
         let mut map = BTreeMap::new();

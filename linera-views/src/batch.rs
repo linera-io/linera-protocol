@@ -383,10 +383,7 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
     type Iter: BatchValueWriter<Self>;
 
     /// Creates a simplified batch from a standard one.
-    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
-        store: S,
-        batch: Batch,
-    ) -> Result<Self, S::Error>;
+    async fn from_batch<S: DeletePrefixExpander>(store: S, batch: Batch) -> Result<Self, S::Error>;
 
     /// Returns an owning iterator over the values in the batch.
     fn into_iter(self) -> Self::Iter;
@@ -415,7 +412,7 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
 /// An iterator-like object that can write values one by one to a batch while updating the
 /// total size of the batch.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
-pub trait BatchValueWriter<Batch>: Send + Sync {
+pub trait BatchValueWriter<Batch> {
     /// Returns true if there are no more values to write.
     fn is_empty(&self) -> bool;
 
@@ -482,10 +479,7 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
         self.insertions.push((key, value))
     }
 
-    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
-        store: S,
-        batch: Batch,
-    ) -> Result<Self, S::Error> {
+    async fn from_batch<S: DeletePrefixExpander>(store: S, batch: Batch) -> Result<Self, S::Error> {
         let unordered_batch = batch.simplify();
         unordered_batch.expand_delete_prefixes(&store).await
     }
@@ -584,10 +578,7 @@ impl SimplifiedBatch for UnorderedBatch {
         self.simple_unordered_batch.add_insert(key, value)
     }
 
-    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
-        store: S,
-        batch: Batch,
-    ) -> Result<Self, S::Error> {
+    async fn from_batch<S: DeletePrefixExpander>(store: S, batch: Batch) -> Result<Self, S::Error> {
         let mut unordered_batch = batch.simplify();
         unordered_batch
             .expand_colliding_prefix_deletions(&store)
