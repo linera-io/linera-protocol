@@ -6,7 +6,7 @@ impl<C> linera_views::views::CryptoHashView for TestView<C>
 where
     RegisterView<C, usize>: linera_views::views::HashableView,
     CollectionView<C, usize, RegisterView<C, usize>>: linera_views::views::HashableView,
-    Self: linera_views::views::View + Sync,
+    Self: linera_views::views::View,
 {
     async fn crypto_hash(
         &self,

@@ -11,7 +11,7 @@ where
         RegisterView<CustomContext, usize>,
     >: linera_views::views::HashableView,
     MyParam: Send + Sync + 'static,
-    Self: linera_views::views::View + Sync,
+    Self: linera_views::views::View,
 {
     async fn crypto_hash(
         &self,

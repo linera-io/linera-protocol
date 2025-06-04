@@ -10,7 +10,7 @@ where
         usize,
         RegisterView<custom::GenericContext<T>, usize>,
     >: linera_views::views::HashableView,
-    Self: linera_views::views::View + Sync,
+    Self: linera_views::views::View,
 {
     type Hasher = linera_views::sha3::Sha3_256;
     async fn hash_mut(
