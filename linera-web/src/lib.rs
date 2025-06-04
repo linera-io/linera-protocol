@@ -54,7 +54,7 @@ async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore 
 
 /// A wallet that stores the user's chains and keys in memory.
 #[wasm_bindgen(js_name = "Wallet")]
-pub struct InMemoryWallet(persistent::Memory<Wallet>);
+pub struct PersistentWallet(persistent::Memory<Wallet>);
 
 type ClientContext =
     linera_client::client_context::ClientContext<WebEnvironment, persistent::Memory<Wallet>>;
@@ -99,8 +99,8 @@ impl JsFaucet {
     /// # Errors
     /// If we couldn't retrieve the genesis config from the faucet.
     #[wasm_bindgen(js_name = createWallet)]
-    pub async fn create_wallet(&self) -> JsResult<InMemoryWallet> {
-        Ok(InMemoryWallet(persistent::Memory::new(
+    pub async fn create_wallet(&self) -> JsResult<PersistentWallet> {
+        Ok(PersistentWallet(persistent::Memory::new(
             linera_client::wallet::Wallet::new(self.0.genesis_config().await?),
         )))
     }
@@ -118,7 +118,7 @@ impl JsFaucet {
     #[wasm_bindgen(js_name = claimChain)]
     pub async fn claim_chain(
         &self,
-        wallet: &mut InMemoryWallet,
+        wallet: &mut PersistentWallet,
         owner: JsValue,
     ) -> JsResult<String> {
         use persistent::PersistExt as _;
@@ -144,13 +144,13 @@ impl JsFaucet {
 }
 
 #[wasm_bindgen(js_class = "InMemoryWallet")]
-impl InMemoryWallet {
+impl PersistentWallet {
     /// Attempts to read the wallet from persistent storage.
     ///
     /// # Errors
     /// If storage is inaccessible.
     #[wasm_bindgen]
-    pub async fn read() -> Result<Option<InMemoryWallet>, JsError> {
+    pub async fn read() -> Result<Option<PersistentWallet>, JsError> {
         Ok(None)
     }
 }
@@ -192,7 +192,7 @@ impl Client {
     /// On transport or protocol error, or if persistent storage is
     /// unavailable.
     #[wasm_bindgen(constructor)]
-    pub async fn new(wallet: InMemoryWallet, signer: JsSigner) -> Result<Client, JsError> {
+    pub async fn new(wallet: PersistentWallet, signer: JsSigner) -> Result<Client, JsError> {
         let mut storage = get_storage().await?;
         wallet
             .0
