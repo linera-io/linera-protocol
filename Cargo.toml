@@ -135,6 +135,7 @@ humantime = "2.1.0"
 indexed_db_futures = "0.4.1"
 insta = "1.36.1"
 is-terminal = "0.4.12"
+itertools = "0.14.0"
 js-sys = "0.3.70"
 k256 = { version = "0.13.4", default-features = false, features = [
     "ecdsa",

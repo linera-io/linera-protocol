@@ -12,6 +12,7 @@ use std::{
     sync::{self, Arc},
 };
 
+use itertools::Itertools;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch},
@@ -501,7 +502,17 @@ where
                     })?,
             );
         }
-        let certificates = self.storage.read_certificates(hashes).await?;
+        let certificates = self.storage.read_certificates(hashes.clone()).await?;
+        let (certificates, invalid_certificates) = certificates
+            .into_iter()
+            .zip(hashes)
+            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
+                Some(cert) => itertools::Either::Left(cert),
+                None => itertools::Either::Right(hash),
+            });
+        if !invalid_certificates.is_empty() {
+            return Err(WorkerError::ReadCertificatesError(invalid_certificates));
+        }
         let certificates = heights
             .into_iter()
             .zip(certificates)

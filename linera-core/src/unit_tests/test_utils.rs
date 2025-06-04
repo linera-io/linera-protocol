@@ -14,6 +14,7 @@ use futures::{
     lock::{Mutex, MutexGuard},
     Future,
 };
+use itertools::Itertools;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, InMemorySigner, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
@@ -557,6 +558,16 @@ where
             .await
             .map_err(Into::into);
 
+        let certificate = match certificate {
+            Err(error) => Err(error),
+            Ok(entry) => match entry {
+                Some(certificate) => Ok(certificate),
+                None => Err(NodeError::ReadCertificatesError {
+                    error: hash.to_string(),
+                }),
+            },
+        };
+
         sender.send(certificate)
     }
 
@@ -569,9 +580,30 @@ where
         let certificates = validator
             .state
             .storage_client()
-            .read_certificates(hashes)
+            .read_certificates(hashes.clone())
             .await
             .map_err(Into::into);
+
+        let certificates = match certificates {
+            Err(error) => Err(error),
+            Ok(certificates) => {
+                let (certificates, invalid_certificates) = certificates
+                    .into_iter()
+                    .zip(hashes)
+                    .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| {
+                        match certificate {
+                            Some(cert) => itertools::Either::Left(cert),
+                            None => itertools::Either::Right(hash),
+                        }
+                    });
+                if invalid_certificates.is_empty() {
+                    Ok(certificates)
+                } else {
+                    let error = format!("{:?}", invalid_certificates);
+                    Err(NodeError::ReadCertificatesError { error })
+                }
+            }
+        };
 
         sender.send(certificates)
     }

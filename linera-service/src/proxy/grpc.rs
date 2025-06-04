@@ -16,6 +16,7 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
+use itertools::Itertools;
 use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
@@ -337,13 +338,12 @@ where
     }
 
     /// Returns the appropriate gRPC status for the given [`ViewError`].
-    fn error_to_status(err: ViewError) -> Status {
+    fn view_error_to_status(err: ViewError) -> Status {
         let mut status = match &err {
             ViewError::BcsError(_) => Status::invalid_argument(err.to_string()),
             ViewError::StoreError { .. }
             | ViewError::TokioJoinError(_)
             | ViewError::TryLockError(_)
-            | ViewError::InconsistentEntries
             | ViewError::PostLoadValuesError
             | ViewError::IoError(_) => Status::internal(err.to_string()),
             ViewError::KeyTooLong | ViewError::ArithmeticError(_) => {
@@ -476,7 +476,7 @@ where
             .storage
             .read_network_description()
             .await
-            .map_err(Self::error_to_status)?
+            .map_err(Self::view_error_to_status)?
             .ok_or_else(|| Status::not_found("Cannot find network description in the database"))?;
         Ok(Response::new(description.into()))
     }
@@ -488,7 +488,7 @@ where
         let blob = Blob::new(content);
         let id = blob.id();
         let result = self.0.storage.maybe_write_blobs(&[blob]).await;
-        if !result.map_err(Self::error_to_status)?[0] {
+        if !result.map_err(Self::view_error_to_status)?[0] {
             return Err(Status::not_found("Blob not found"));
         }
         Ok(Response::new(id.try_into()?))
@@ -505,7 +505,7 @@ where
             .storage
             .read_blob(blob_id)
             .await
-            .map_err(Self::error_to_status)?;
+            .map_err(Self::view_error_to_status)?;
         let blob = blob.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
@@ -571,7 +571,8 @@ where
             .storage
             .read_certificate(hash)
             .await
-            .map_err(Self::error_to_status)?
+            .map_err(Self::view_error_to_status)?
+            .ok_or(Status::not_found(hash.to_string()))?
             .into();
         Ok(Response::new(certificate.try_into()?))
     }
@@ -593,18 +594,30 @@ where
         let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
             GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
-        let mut certificates = vec![];
+        let mut returned_certificates = vec![];
 
         'outer: for batch in hashes.chunks(100) {
-            for certificate in self
+            let certificates = self
                 .0
                 .storage
                 .read_certificates(batch.to_vec())
                 .await
-                .map_err(Self::error_to_status)?
-            {
+                .map_err(Self::view_error_to_status)?;
+            let (certificates, invalid_certificates) = certificates
+                .into_iter()
+                .zip(batch.to_vec())
+                .partition_map::<Vec<_>, Vec<_>, _, _, _>(
+                    |(certificate, hash)| match certificate {
+                        Some(cert) => itertools::Either::Left(cert),
+                        None => itertools::Either::Right(hash),
+                    },
+                );
+            if !invalid_certificates.is_empty() {
+                return Err(Status::not_found(format!("{:?}", invalid_certificates)));
+            }
+            for certificate in certificates {
                 if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
-                    certificates.push(linera_chain::types::Certificate::from(certificate));
+                    returned_certificates.push(linera_chain::types::Certificate::from(certificate));
                 } else {
                     break 'outer;
                 }
@@ -612,7 +625,7 @@ where
         }
 
         Ok(Response::new(CertificatesBatchResponse::try_from(
-            certificates,
+            returned_certificates,
         )?))
     }
 
@@ -627,7 +640,7 @@ where
             .storage
             .read_blob_state(blob_id)
             .await
-            .map_err(Self::error_to_status)?;
+            .map_err(Self::view_error_to_status)?;
         let blob_state =
             blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
         let last_used_by = blob_state
@@ -647,7 +660,7 @@ where
             .storage
             .missing_blobs(&blob_ids)
             .await
-            .map_err(Self::error_to_status)?;
+            .map_err(Self::view_error_to_status)?;
         Ok(Response::new(missing_blob_ids.try_into()?))
     }
 }

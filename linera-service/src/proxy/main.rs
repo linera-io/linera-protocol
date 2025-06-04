@@ -8,6 +8,7 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
+use itertools::Itertools;
 use linera_base::listen_for_shutdown_signals;
 use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
@@ -339,7 +340,19 @@ where
                 Box::new(self.storage.read_confirmed_block(*hash).await?),
             ))),
             DownloadCertificates(hashes) => {
-                let certificates = self.storage.read_certificates(hashes).await?;
+                let certificates = self.storage.read_certificates(hashes.clone()).await?;
+                let (certificates, invalid_certificates) = certificates
+                    .into_iter()
+                    .zip(hashes)
+                    .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| {
+                        match certificate {
+                            Some(cert) => itertools::Either::Left(cert),
+                            None => itertools::Either::Right(hash),
+                        }
+                    });
+                if !invalid_certificates.is_empty() {
+                    bail!("Certificates missing or invalid: {invalid_certificates:?}");
+                }
                 Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))
             }
             BlobLastUsedBy(blob_id) => {

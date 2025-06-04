@@ -22,6 +22,7 @@ use futures::{
     future::{self, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
+use itertools::Itertools;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -1467,6 +1468,9 @@ pub enum ChainClientError {
 
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
+
+    #[error("The certificates are missing or inconsistent: {0:?}")]
+    ReadCertificatesError(Vec<CryptoHash>),
 
     #[error("JSON (de)serialization error: {0}")]
     JsonError(#[from] serde_json::Error),
@@ -3820,9 +3824,20 @@ impl<Env: Environment> ChainClient<Env> {
         let certificates = self
             .client
             .storage_client()
-            .read_certificates(missing_certificate_hashes)
+            .read_certificates(missing_certificate_hashes.clone())
             .await?;
-
+        let (certificates, invalid_certificates) = certificates
+            .into_iter()
+            .zip(missing_certificate_hashes)
+            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
+                Some(cert) => itertools::Either::Left(cert),
+                None => itertools::Either::Right(hash),
+            });
+        if !invalid_certificates.is_empty() {
+            return Err(ChainClientError::ReadCertificatesError(
+                invalid_certificates,
+            ));
+        }
         for certificate in certificates {
             remote_node
                 .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)

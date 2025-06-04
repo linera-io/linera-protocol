@@ -194,6 +194,9 @@ pub enum NodeError {
     #[error("Worker error: {error}")]
     WorkerError { error: String },
 
+    #[error("The certificates are missing or inconsistent: {error}")]
+    ReadCertificatesError { error: String },
+
     // This error must be normalized during conversions.
     #[error("The chain {0} is not active in validator")]
     InactiveChain(ChainId),

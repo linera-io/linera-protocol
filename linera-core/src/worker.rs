@@ -149,6 +149,9 @@ pub enum WorkerError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
+    #[error("The certificates are missing or inconsistent: {0:?}")]
+    ReadCertificatesError(Vec<CryptoHash>),
+
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
 

@@ -10,6 +10,7 @@ use std::{
 };
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
+use itertools::Itertools;
 use linera_base::{
     data_types::{BlockHeight, Round},
     identifiers::{BlobId, ChainId},
@@ -364,9 +365,24 @@ where
         if !keys.is_empty() {
             // Send the requested certificates in order.
             let storage = self.local_node.storage_client();
-            let certs = storage.read_certificates(keys.into_iter()).await?;
-            for cert in certs {
-                self.send_confirmed_certificate(cert, delivery).await?;
+            let certificates = storage.read_certificates(keys.clone()).await?;
+            let (certificates, invalid_certificates) = certificates
+                .into_iter()
+                .zip(keys)
+                .partition_map::<Vec<_>, Vec<_>, _, _, _>(
+                    |(certificate, hash)| match certificate {
+                        Some(cert) => itertools::Either::Left(cert),
+                        None => itertools::Either::Right(hash),
+                    },
+                );
+            if !invalid_certificates.is_empty() {
+                return Err(ChainClientError::ReadCertificatesError(
+                    invalid_certificates,
+                ));
+            }
+            for certificate in certificates {
+                self.send_confirmed_certificate(certificate, delivery)
+                    .await?;
             }
         }
         if let Some(cert) = timeout {

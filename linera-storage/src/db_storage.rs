@@ -788,7 +788,7 @@ where
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError> {
+    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
         let keys = Self::get_keys_for_certificates(&[hash])?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
@@ -804,7 +804,7 @@ where
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError> {
+    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         if hashes.is_empty() {
             return Ok(Vec::new());
@@ -937,20 +937,20 @@ where
     fn deserialize_certificate(
         pair: &[Option<Vec<u8>>],
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError> {
-        let cert_bytes = pair[0]
-            .as_ref()
-            .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
-        let value_bytes = pair[1]
-            .as_ref()
-            .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
+    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
+        let Some(cert_bytes) = pair[0].as_ref() else {
+            return Ok(None);
+        };
+        let Some(value_bytes) = pair[1].as_ref() else {
+            return Ok(None);
+        };
         let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
         let value = bcs::from_bytes::<ConfirmedBlock>(value_bytes)?;
-        assert_eq!(value.hash(), hash);
-        let certificate = cert
-            .with_value(value)
-            .ok_or(ViewError::InconsistentEntries)?;
-        Ok(certificate)
+        let value_hash = value.hash();
+        if value_hash != hash {
+            return Ok(None);
+        }
+        Ok(cert.with_value(value))
     }
 
     async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {

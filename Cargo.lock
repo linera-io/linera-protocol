@@ -5139,6 +5139,7 @@ dependencies = [
  "dashmap 5.5.3",
  "fungible",
  "futures",
+ "itertools 0.14.0",
  "linera-base",
  "linera-chain",
  "linera-core",
@@ -5551,6 +5552,7 @@ dependencies = [
  "futures",
  "heck 0.4.1",
  "http 1.3.1",
+ "itertools 0.14.0",
  "k8s-openapi",
  "kube",
  "linera-base",
@@ -5646,6 +5648,7 @@ dependencies = [
  "linera-views",
  "prometheus",
  "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

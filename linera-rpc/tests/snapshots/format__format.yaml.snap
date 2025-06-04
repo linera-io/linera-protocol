@@ -672,10 +672,14 @@ NodeError:
         STRUCT:
           - error: STR
     5:
+      ReadCertificatesError:
+        STRUCT:
+          - error: STR
+    6:
       InactiveChain:
         NEWTYPE:
           TYPENAME: ChainId
-    6:
+    7:
       MissingCrossChainUpdate:
         STRUCT:
           - chain_id:
@@ -684,59 +688,59 @@ NodeError:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-    7:
+    8:
       BlobsNotFound:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    8:
-      MissingCertificateValue: UNIT
     9:
+      MissingCertificateValue: UNIT
+    10:
       MissingCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    10:
-      MissingVoteInValidatorResponse: UNIT
     11:
-      InvalidChainInfoResponse: UNIT
+      MissingVoteInValidatorResponse: UNIT
     12:
-      UnexpectedCertificateValue: UNIT
+      InvalidChainInfoResponse: UNIT
     13:
-      InvalidDecoding: UNIT
+      UnexpectedCertificateValue: UNIT
     14:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     15:
+      UnexpectedMessage: UNIT
+    16:
       GrpcError:
         STRUCT:
           - error: STR
-    16:
+    17:
       ClientIoError:
         STRUCT:
           - error: STR
-    17:
+    18:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    18:
+    19:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    19:
+    20:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    20:
+    21:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    21:
-      DuplicatesInBlobsNotFound: UNIT
     22:
-      UnexpectedEntriesInBlobsNotFound: UNIT
+      DuplicatesInBlobsNotFound: UNIT
     23:
-      EmptyBlobsNotFound: UNIT
+      UnexpectedEntriesInBlobsNotFound: UNIT
     24:
+      EmptyBlobsNotFound: UNIT
+    25:
       ResponseHandlingError:
         STRUCT:
           - error: STR

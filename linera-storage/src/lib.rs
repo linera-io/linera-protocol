@@ -140,13 +140,13 @@ pub trait Storage: Sized {
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError>;
+    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
+    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
 
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
