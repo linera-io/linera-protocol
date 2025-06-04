@@ -30,12 +30,11 @@ use {
 
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
-    resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
-    key_value_store_view::HashedKeyValueStoreView,
-    ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    OutgoingMessage, ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
-    SystemMessage, Timestamp, TransactionTracker,
+    key_value_store_view::HashedKeyValueStoreView, resources::ResourceController,
+    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ContractSyncRuntime,
+    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageContext,
+    MessageKind, Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, Query,
+    QueryContext, QueryOutcome, ServiceSyncRuntime, SystemMessage, Timestamp, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.

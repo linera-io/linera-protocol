@@ -5,20 +5,19 @@
 
 use std::{collections::BTreeMap, fmt::Debug};
 
+use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
-use linera_base::ensure;
-
 use linera_views::{
-    ViewError,
     batch::{Batch, WriteOperation},
     common::{get_interval, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     register_view::RegisterView,
+    sha3,
     store::ReadableKeyValueStore,
     views::{ClonableView, HashableView, Hasher, View},
-    sha3,
+    ViewError,
 };
 
 #[cfg(with_metrics)]
@@ -396,4 +395,5 @@ impl<C: Context> HashableView for KeyValueStoreView<C> {
 }
 
 /// Type wrapping `KeyValueStoreView` while memoizing the hash.
-pub(crate) type HashedKeyValueStoreView<C> = WrappedHashableContainerView<C, KeyValueStoreView<C>, HasherOutput>;
+pub(crate) type HashedKeyValueStoreView<C> =
+    WrappedHashableContainerView<C, KeyValueStoreView<C>, HasherOutput>;
