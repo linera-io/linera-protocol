@@ -416,7 +416,7 @@ where
 
     /// Stores a block's blobs, and adds its messages to the outbox where possible.
     /// Does not execute the block.
-    pub(super) async fn process_certificate_without_executing(
+    pub(super) async fn preprocess_certificate(
         &mut self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<NetworkActions, WorkerError> {
@@ -454,7 +454,7 @@ where
         // Update the outboxes.
         self.state
             .chain
-            .process_block_without_executing(certificate.value())
+            .preprocess_block(certificate.value())
             .await?;
         // Persist chain.
         self.save().await?;

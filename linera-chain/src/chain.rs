@@ -280,7 +280,7 @@ where
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
 
     /// Blocks that have been verified but not executed yet, and that may not be contiguous.
-    pub other_blocks: MapView<C, BlockHeight, CryptoHash>,
+    pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
 }
 
 /// Block-chaining state.
@@ -943,22 +943,20 @@ where
             &block.body.messages,
         )?;
         self.confirmed_log.push(hash);
-        self.other_blocks.remove(&block.header.height)?;
+        self.preprocessed_blocks.remove(&block.header.height)?;
         Ok(())
     }
 
-    /// Applies a block without executing it. This only updates the outboxes.
-    pub async fn process_block_without_executing(
-        &mut self,
-        block: &ConfirmedBlock,
-    ) -> Result<(), ChainError> {
+    /// Adds a block to `preprocessed_blocks`, and updates the outboxes where possible.
+    pub async fn preprocess_block(&mut self, block: &ConfirmedBlock) -> Result<(), ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
-        if block.header.height < self.tip_state.get().next_block_height {
+        let height = block.header.height;
+        if height < self.tip_state.get().next_block_height {
             return Ok(());
         }
         self.process_outgoing_messages(block).await?;
-        self.other_blocks.insert(&block.header.height, hash)?;
+        self.preprocessed_blocks.insert(&height, hash)?;
         Ok(())
     }
 
@@ -1104,11 +1102,11 @@ where
         };
         for height in start.max(next_height).0..=end.0 {
             hashes.push(
-                self.other_blocks
+                self.preprocessed_blocks
                     .get(&BlockHeight(height))
                     .await?
                     .ok_or_else(|| {
-                        ChainError::InternalError("missing entry in unexecuted_blocks".into())
+                        ChainError::InternalError("missing entry in preprocessed_blocks".into())
                     })?,
             );
         }
@@ -1159,11 +1157,9 @@ where
                             ChainError::InternalError("missing entry in confirmed_log".into())
                         })?)
                     }
-                    Some(height) => {
-                        Some(self.other_blocks.get(&height).await?.ok_or_else(|| {
-                            ChainError::InternalError("missing entry in unexecuted_blocks".into())
-                        })?)
-                    }
+                    Some(height) => Some(self.preprocessed_blocks.get(&height).await?.ok_or_else(
+                        || ChainError::InternalError("missing entry in preprocessed_blocks".into()),
+                    )?),
                     None => None,
                 };
                 // Schedule only if no block is missing that sent something to the same recipient.

@@ -208,8 +208,8 @@ pub enum WorkerError {
         height: BlockHeight,
         chain_id: ChainId,
     },
-    #[error("other_blocks entry at height {height} for chain {chain_id:8} not found")]
-    OtherBlocksEntryNotFound {
+    #[error("preprocessed_blocks entry at height {height} for chain {chain_id:8} not found")]
+    PreprocessedBlocksEntryNotFound {
         height: BlockHeight,
         chain_id: ChainId,
     },
@@ -890,7 +890,7 @@ where
             .await
     }
 
-    /// Applies a block without executing it. This does not update the execution state, but
+    /// Preprocesses a block without executing it. This does not update the execution state, but
     /// can create cross-chain messages and store blobs. It also does _not_ check the signatures;
     /// the caller is responsible for checking them using the correct committee.
     #[instrument(skip_all, fields(
@@ -898,19 +898,19 @@ where
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
     ))]
-    pub async fn fully_process_certificate_with_notifications_without_executing(
+    pub async fn fully_preprocess_certificate_with_notifications(
         &self,
         certificate: ConfirmedBlockCertificate,
         notifier: &impl Notifier,
     ) -> Result<(), WorkerError> {
-        trace!("{} <-- {:?} (loose)", self.nickname, certificate);
+        trace!("{} <-- {:?} (preprocess)", self.nickname, certificate);
 
         let notifications = (*notifier).clone();
         let this = self.clone();
         linera_base::task::spawn(async move {
             let actions = this
                 .query_chain_worker(certificate.block().header.chain_id, move |callback| {
-                    ChainWorkerRequest::ProcessCertificateWithoutExecuting {
+                    ChainWorkerRequest::PreprocessCertificate {
                         certificate,
                         callback,
                     }

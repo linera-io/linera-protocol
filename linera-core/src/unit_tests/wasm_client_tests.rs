@@ -597,7 +597,10 @@ where
             .await?;
         assert_eq!(chain.tip_state.get().next_block_height.0, 0);
         assert_eq!(
-            chain.other_blocks.get(&cert.inner().height()).await?,
+            chain
+                .preprocessed_blocks
+                .get(&cert.inner().height())
+                .await?,
             Some(cert.hash())
         );
     }

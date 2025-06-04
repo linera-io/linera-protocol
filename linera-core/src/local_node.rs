@@ -125,15 +125,16 @@ where
         .await?)
     }
 
+    /// Preprocesses a block without executing it.
     #[instrument(level = "trace", skip_all)]
-    pub async fn process_certificate_without_executing(
+    pub async fn preprocess_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
         notifier: &impl Notifier,
     ) -> Result<(), LocalNodeError> {
         self.node
             .state
-            .fully_process_certificate_with_notifications_without_executing(certificate, notifier)
+            .fully_preprocess_certificate_with_notifications(certificate, notifier)
             .await?;
         Ok(())
     }
@@ -325,7 +326,7 @@ where
                 let mut next_height = chain.tip_state.get().next_block_height;
                 // TODO(#3969): This is not great for performance, but the whole function will
                 // probably go away with #3969 anyway.
-                while chain.other_blocks.contains_key(&next_height).await? {
+                while chain.preprocessed_blocks.contains_key(&next_height).await? {
                     next_height.try_add_assign_one()?;
                 }
                 Ok::<_, LocalNodeError>((*chain_id, next_height))
