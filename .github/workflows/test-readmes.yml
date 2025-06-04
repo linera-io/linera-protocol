@@ -3,7 +3,7 @@ name: Run README tests
 on:
   push:
     branches: [ 'devnet_*', 'testnet_*' ]
-    merge_group:
+  merge_group:
   workflow_dispatch:
   
 
