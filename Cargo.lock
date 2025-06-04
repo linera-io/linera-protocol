@@ -5636,7 +5636,6 @@ dependencies = [
  "serde",
  "serde-reflection",
  "similar-asserts",
- "sync_wrapper 1.0.2",
  "test-strategy",
  "thiserror 1.0.69",
  "tokio",

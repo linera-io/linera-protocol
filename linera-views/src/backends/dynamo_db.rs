@@ -6,8 +6,6 @@
 use std::{
     collections::HashMap,
     env,
-    future::Future,
-    pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -54,18 +52,11 @@ use crate::{
         KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
+    FutureSyncExt as _,
 };
 
 /// Name of the environment variable with the address to a DynamoDB local instance.
 const DYNAMODB_LOCAL_ENDPOINT: &str = "DYNAMODB_LOCAL_ENDPOINT";
-
-trait FutureSyncExt: Future + Sized {
-    fn boxed_sync(self) -> Pin<Box<sync_wrapper::SyncFuture<Self>>> {
-        Box::pin(sync_wrapper::SyncFuture::new(self))
-    }
-}
-
-impl<F: Future> FutureSyncExt for F {}
 
 /// Gets the AWS configuration from the environment
 async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {

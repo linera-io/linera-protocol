@@ -25,12 +25,7 @@ web = ["linera-base/web", "gloo-utils"]
 indexeddb = ["indexed_db_futures", "wasm-bindgen"]
 web-default = ["web", "indexeddb"]
 
-dynamodb = [
-    "aws-config",
-    "aws-sdk-dynamodb",
-    "aws-smithy-types",
-    "sync_wrapper/futures",
-]
+dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
 scylladb = ["scylla"]
 
 [dependencies]

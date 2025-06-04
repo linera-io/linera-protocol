@@ -15,7 +15,7 @@ use std::{
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use dashmap::{mapref::entry::Entry, DashMap};
-use futures::{future::join_all, FutureExt as _, StreamExt};
+use futures::{future::join_all, StreamExt as _};
 use linera_base::ensure;
 use scylla::{
     client::{
@@ -52,6 +52,7 @@ use crate::{
         WithError,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
+    FutureSyncExt as _,
 };
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
@@ -233,7 +234,7 @@ impl ScyllaDbClient {
                 Self::build_default_policy(),
             ))
             .build()
-            .boxed()
+            .boxed_sync()
             .await
             .map_err(Into::into)
     }
