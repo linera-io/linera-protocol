@@ -758,10 +758,13 @@ impl<Env: Environment> Client<Env> {
         {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs =
-                        RemoteNode::download_blobs(blob_ids, &nodes, self.blob_download_timeout)
-                            .await
-                            .ok_or(err)?;
+                    let blobs = RemoteNode::download_blobs(
+                        blob_ids,
+                        &nodes,
+                        self.options.blob_download_timeout,
+                    )
+                    .await
+                    .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
                     self.process_unexecuted_certificate(certificate.clone())
                         .await?;
@@ -804,10 +807,13 @@ impl<Env: Environment> Client<Env> {
         {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs =
-                        RemoteNode::download_blobs(blob_ids, &nodes, self.blob_download_timeout)
-                            .await
-                            .ok_or(err)?;
+                    let blobs = RemoteNode::download_blobs(
+                        blob_ids,
+                        &nodes,
+                        self.options.blob_download_timeout,
+                    )
+                    .await
+                    .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
                     self.process_unexecuted_certificate(certificate).await?;
                 }
