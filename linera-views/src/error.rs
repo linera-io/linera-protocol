@@ -47,10 +47,6 @@ pub enum ViewError {
     #[error("entry does not exist in memory: {0}")]
     NotFound(String),
 
-    /// The database is corrupt: Entries don't have the expected hash.
-    #[error("inconsistent database entries")]
-    InconsistentEntries,
-
     /// The database is corrupt: Some entries are missing
     #[error("missing database entries")]
     MissingEntries,
