@@ -257,7 +257,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Fetches the chain description blob if needed, and returns the chain info.
-    pub async fn fetch_chain_info(
+    async fn fetch_chain_info(
         &self,
         chain_id: ChainId,
         validators: &[RemoteNode<impl ValidatorNode>],
@@ -284,7 +284,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Downloads and processes all certificates up to (excluding) the specified height.
     #[instrument(level = "trace", skip(self, validators))]
-    pub async fn download_certificates(
+    async fn download_certificates(
         &self,
         validators: &[RemoteNode<impl ValidatorNode>],
         chain_id: ChainId,
@@ -293,40 +293,49 @@ impl<Env: Environment> Client<Env> {
         // Sequentially try each validator in random order.
         let mut validators_vec = validators.iter().collect::<Vec<_>>();
         validators_vec.shuffle(&mut rand::thread_rng());
+        let mut info = self.fetch_chain_info(chain_id, validators).await?;
         for remote_node in validators_vec {
-            let info = self.fetch_chain_info(chain_id, validators).await?;
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
-            self.try_download_certificates_from(
-                remote_node,
-                chain_id,
-                info.next_block_height,
-                target_next_block_height,
-            )
-            .await?;
+            match self
+                .download_certificates_from(
+                    remote_node,
+                    chain_id,
+                    info.next_block_height,
+                    target_next_block_height,
+                )
+                .await
+            {
+                Err(err) => warn!(
+                    "Failed to download certificates from validator {:?}: {err}",
+                    remote_node.public_key
+                ),
+                Ok(Some(new_info)) => info = new_info,
+                Ok(None) => {}
+            }
         }
-        let info = self.fetch_chain_info(chain_id, validators).await?;
-        if target_next_block_height <= info.next_block_height {
-            Ok(info)
-        } else {
-            Err(ChainClientError::CannotDownloadCertificates {
+        ensure!(
+            target_next_block_height <= info.next_block_height,
+            ChainClientError::CannotDownloadCertificates {
                 chain_id,
                 target_next_block_height,
-            })
-        }
+            }
+        );
+        Ok(info)
     }
 
     /// Downloads and processes all certificates up to (excluding) the specified height from the
     /// given validator.
     #[instrument(level = "trace", skip_all)]
-    async fn try_download_certificates_from(
+    async fn download_certificates_from(
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
+        let mut last_info = None;
         // First load any blocks from local storage, if available.
         let mut hashes = Vec::new();
         {
@@ -349,62 +358,44 @@ impl<Env: Environment> Client<Env> {
                 .checked_sub(u64::from(start))
                 .ok_or(ArithmeticError::Overflow)?
                 .min(1000);
-            let Some(certificates) = remote_node
-                .try_query_certificates_from(chain_id, start, limit)
-                .await?
-            else {
-                break;
-            };
-            let Some(info) = self
-                .try_process_certificates(remote_node, chain_id, certificates)
-                .await
-            else {
+            let certificates = remote_node
+                .query_certificates_from(chain_id, start, limit)
+                .await?;
+            let Some(info) = self.process_certificates(remote_node, certificates).await? else {
                 break;
             };
             assert!(info.next_block_height > start);
             start = info.next_block_height;
+            last_info = Some(info);
         }
-        Ok(())
+        Ok(last_info)
     }
 
     /// Tries to process all the certificates, requesting any missing blobs from the given node.
     /// Returns the chain info of the last successfully processed certificate.
     #[instrument(level = "trace", skip_all)]
-    pub async fn try_process_certificates(
+    async fn process_certificates(
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
-        chain_id: ChainId,
         certificates: Vec<ConfirmedBlockCertificate>,
-    ) -> Option<Box<ChainInfo>> {
+    ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
         let mut info = None;
         for certificate in certificates {
-            let hash = certificate.hash();
             let certificate = Box::new(certificate);
-            if certificate.block().header.chain_id != chain_id {
-                // The certificate is not as expected. Give up.
-                warn!("Failed to process network certificate {}", hash);
-                return info;
-            }
             let mut result = self.handle_certificate(certificate.clone()).await;
 
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 if let Some(blobs) = remote_node.try_download_blobs(blob_ids).await {
+                    // TODO(#2351): Don't store downloaded blobs without certificate.
                     let _ = self.local_node.store_blobs(&blobs).await;
                     result = self.handle_certificate(certificate.clone()).await;
                 }
             }
 
-            match result {
-                Ok(response) => info = Some(response.info),
-                Err(error) => {
-                    // The certificate is not as expected. Give up.
-                    warn!("Failed to process network certificate {}: {}", hash, error);
-                    return info;
-                }
-            };
+            info = Some(result?.info);
         }
         // Done with all certificates.
-        info
+        Ok(info)
     }
 
     async fn handle_certificate<T: ProcessableCertificate>(
@@ -1029,7 +1020,7 @@ impl<Env: Environment> Client<Env> {
             &committee,
             |_: &()| (),
             |remote_node| async move {
-                self.try_synchronize_chain_state_from(&remote_node, chain_id)
+                self.synchronize_chain_state_from(&remote_node, chain_id)
                     .await
             },
             self.options.grace_period,
@@ -1045,44 +1036,39 @@ impl<Env: Environment> Client<Env> {
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain, and processes them.
     #[instrument(level = "trace", skip(self, remote_node, chain_id))]
-    async fn try_synchronize_chain_state_from(
+    async fn synchronize_chain_state_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
-        let local_info = self.local_node.chain_info(chain_id).await?;
-        let range = BlockHeightRange {
-            start: local_info.next_block_height,
-            limit: None,
-        };
-        let query = ChainInfoQuery::new(chain_id)
-            .with_sent_certificate_hashes_in_range(range)
-            .with_manager_values();
-        let info = remote_node.handle_chain_info_query(query).await?;
-        if info.next_block_height < local_info.next_block_height {
-            return Ok(());
-        }
-
-        let certificates: Vec<ConfirmedBlockCertificate> = remote_node
-            .download_certificates(info.requested_sent_certificate_hashes)
-            .await?;
-
-        if !certificates.is_empty()
-            && self
-                .try_process_certificates(remote_node, chain_id, certificates)
-                .await
-                .is_none()
+        let mut local_info = self.local_node.chain_info(chain_id).await?;
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let remote_info = remote_node.handle_chain_info_query(query).await?;
+        if let Some(new_info) = self
+            .download_certificates_from(
+                remote_node,
+                chain_id,
+                local_info.next_block_height,
+                remote_info.next_block_height,
+            )
+            .await?
         {
+            local_info = new_info;
+        };
+
+        // If we are at the same height as the remote node, we also update our chain manager.
+        if local_info.next_block_height != remote_info.next_block_height {
             return Ok(());
         };
-        if let Some(timeout) = info.manager.timeout {
+
+        if let Some(timeout) = remote_info.manager.timeout {
             self.handle_certificate(Box::new(*timeout)).await?;
         }
         let mut proposals = Vec::new();
-        if let Some(proposal) = info.manager.requested_proposed {
+        if let Some(proposal) = remote_info.manager.requested_proposed {
             proposals.push(*proposal);
         }
-        if let Some(locking) = info.manager.requested_locking {
+        if let Some(locking) = remote_info.manager.requested_locking {
             match *locking {
                 LockingBlock::Fast(proposal) => {
                     proposals.push(proposal);
@@ -3599,7 +3585,7 @@ impl<Env: Environment> ChainClient<Env> {
                 }
                 if let Err(error) = self
                     .client
-                    .try_synchronize_chain_state_from(&remote_node, chain_id)
+                    .synchronize_chain_state_from(&remote_node, chain_id)
                     .await
                 {
                     error!(
@@ -3628,7 +3614,7 @@ impl<Env: Environment> ChainClient<Env> {
                 }
                 if let Err(error) = self
                     .client
-                    .try_synchronize_chain_state_from(&remote_node, chain_id)
+                    .synchronize_chain_state_from(&remote_node, chain_id)
                     .await
                 {
                     error!(

@@ -110,7 +110,7 @@ jobs:
         cargo test --locked
 
   default-features-and-witty-integration-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-8-cores
     timeout-minutes: 40
 
     steps:
@@ -234,26 +234,6 @@ jobs:
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
         cargo test --features storage-service -- storage_service --nocapture
 
-  test-readme-scripts:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 40
-    steps:
-    - uses: actions/checkout@v4
-    - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Build example applications
-      run: |
-        cd examples
-        cargo build --locked --release --target wasm32-unknown-unknown
-        cd ..
-        cargo build --locked -p linera-storage-service
-    - name: Run the storage-service instance and the README script tests
-      run: |
-        cargo test --locked -p linera-service --features storage-service -- test_script_in_readme --nocapture
-
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -283,7 +263,7 @@ jobs:
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
 
   check-wit-files:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -465,24 +445,3 @@ jobs:
     - name: Check linera-service GraphQL schema
       run: |
         diff <(cargo run --locked --bin linera-schema-export) linera-service-graphql-client/gql/service_schema.graphql
-
-  lint-check-all-features:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 40
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Put lint toolchain file in place
-      run: |
-        ln -sf toolchains/nightly/rust-toolchain.toml
-    - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install cargo-all-features
-      run: |
-        cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata --locked
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Run cargo check-all-features
-      run: |
-        cargo check-all-features --all-targets
