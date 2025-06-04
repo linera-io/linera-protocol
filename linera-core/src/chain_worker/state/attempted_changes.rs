@@ -414,8 +414,9 @@ where
         Ok((info, actions))
     }
 
-    /// Processes an unexecuted block without executing it.
-    pub(super) async fn process_unexecuted_certificate(
+    /// Stores a block's blobs, and adds its messages to the outbox where possible.
+    /// Does not execute the block.
+    pub(super) async fn process_certificate_without_executing(
         &mut self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<NetworkActions, WorkerError> {
@@ -453,7 +454,7 @@ where
         // Update the outboxes.
         self.state
             .chain
-            .apply_unexecuted_block(certificate.value())
+            .process_block_without_executing(certificate.value())
             .await?;
         // Persist chain.
         self.save().await?;

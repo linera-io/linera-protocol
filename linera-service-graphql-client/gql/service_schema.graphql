@@ -363,7 +363,7 @@ type ChainStateExtendedView {
 	"""
 	Blocks that have been verified but not executed yet, and that may not be contiguous.
 	"""
-	unexecutedBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
+	otherBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
 }
 
 """

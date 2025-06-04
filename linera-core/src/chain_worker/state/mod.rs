@@ -261,15 +261,15 @@ where
             .await
     }
 
-    /// Processes an unexecuted block without executing it.
+    /// Processes a block without executing it.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn process_unexecuted_certificate(
+    pub(super) async fn process_certificate_without_executing(
         &mut self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<NetworkActions, WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_unexecuted_certificate(certificate)
+            .process_certificate_without_executing(certificate)
             .await
     }
 
@@ -491,16 +491,12 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
         for height in heights.range(next_block_height..) {
-            hashes.push(
-                self.chain
-                    .unexecuted_blocks
-                    .get(height)
-                    .await?
-                    .ok_or_else(|| WorkerError::UnexecutedBlocksEntryNotFound {
-                        height: *height,
-                        chain_id: self.chain_id(),
-                    })?,
-            );
+            hashes.push(self.chain.other_blocks.get(height).await?.ok_or_else(|| {
+                WorkerError::OtherBlocksEntryNotFound {
+                    height: *height,
+                    chain_id: self.chain_id(),
+                }
+            })?);
         }
         let certificates = self.storage.read_certificates(hashes).await?;
         let certificates = heights

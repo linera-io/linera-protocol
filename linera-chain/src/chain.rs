@@ -280,7 +280,7 @@ where
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
 
     /// Blocks that have been verified but not executed yet, and that may not be contiguous.
-    pub unexecuted_blocks: MapView<C, BlockHeight, CryptoHash>,
+    pub other_blocks: MapView<C, BlockHeight, CryptoHash>,
 }
 
 /// Block-chaining state.
@@ -943,12 +943,12 @@ where
             &block.body.messages,
         )?;
         self.confirmed_log.push(hash);
-        self.unexecuted_blocks.remove(&block.header.height)?;
+        self.other_blocks.remove(&block.header.height)?;
         Ok(())
     }
 
     /// Applies a block without executing it. This only updates the outboxes.
-    pub async fn apply_unexecuted_block(
+    pub async fn process_block_without_executing(
         &mut self,
         block: &ConfirmedBlock,
     ) -> Result<(), ChainError> {
@@ -958,7 +958,7 @@ where
             return Ok(());
         }
         self.process_outgoing_messages(block).await?;
-        self.unexecuted_blocks.insert(&block.header.height, hash)?;
+        self.other_blocks.insert(&block.header.height, hash)?;
         Ok(())
     }
 
@@ -1104,7 +1104,7 @@ where
         };
         for height in start.max(next_height).0..=end.0 {
             hashes.push(
-                self.unexecuted_blocks
+                self.other_blocks
                     .get(&BlockHeight(height))
                     .await?
                     .ok_or_else(|| {
@@ -1160,7 +1160,7 @@ where
                         })?)
                     }
                     Some(height) => {
-                        Some(self.unexecuted_blocks.get(&height).await?.ok_or_else(|| {
+                        Some(self.other_blocks.get(&height).await?.ok_or_else(|| {
                             ChainError::InternalError("missing entry in unexecuted_blocks".into())
                         })?)
                     }

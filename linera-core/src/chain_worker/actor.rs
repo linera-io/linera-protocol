@@ -121,8 +121,8 @@ where
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
-    /// Apply an unexecuted block without executing it.
-    ProcessUnexecutedCertificate {
+    /// Apply a block without executing it.
+    ProcessCertificateWithoutExecuting {
         certificate: ConfirmedBlockCertificate,
         #[debug(skip)]
         callback: oneshot::Sender<Result<NetworkActions, WorkerError>>,
@@ -399,13 +399,13 @@ where
                         .await,
                 )
                 .is_ok(),
-            ChainWorkerRequest::ProcessUnexecutedCertificate {
+            ChainWorkerRequest::ProcessCertificateWithoutExecuting {
                 certificate,
                 callback,
             } => callback
                 .send(
                     self.worker
-                        .process_unexecuted_certificate(certificate)
+                        .process_certificate_without_executing(certificate)
                         .await,
                 )
                 .is_ok(),
@@ -497,7 +497,7 @@ where
             ChainWorkerRequest::ProcessConfirmedBlock { callback, .. } => {
                 callback.send(Err(error)).is_ok()
             }
-            ChainWorkerRequest::ProcessUnexecutedCertificate { callback, .. } => {
+            ChainWorkerRequest::ProcessCertificateWithoutExecuting { callback, .. } => {
                 callback.send(Err(error)).is_ok()
             }
             ChainWorkerRequest::ProcessCrossChainUpdate { callback, .. } => {

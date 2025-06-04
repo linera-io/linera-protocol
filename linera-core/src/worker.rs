@@ -208,8 +208,8 @@ pub enum WorkerError {
         height: BlockHeight,
         chain_id: ChainId,
     },
-    #[error("unexecuted_blocks entry at height {height} for chain {chain_id:8} not found")]
-    UnexecutedBlocksEntryNotFound {
+    #[error("other_blocks entry at height {height} for chain {chain_id:8} not found")]
+    OtherBlocksEntryNotFound {
         height: BlockHeight,
         chain_id: ChainId,
     },
@@ -890,7 +890,7 @@ where
             .await
     }
 
-    /// Applies an unexecuted block without executing it. This does not update the execution state, but
+    /// Applies a block without executing it. This does not update the execution state, but
     /// can create cross-chain messages and store blobs. It also does _not_ check the signatures;
     /// the caller is responsible for checking them using the correct committee.
     #[instrument(skip_all, fields(
@@ -898,7 +898,7 @@ where
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
     ))]
-    pub async fn fully_process_unexecuted_certificate_with_notifications(
+    pub async fn fully_process_certificate_with_notifications_without_executing(
         &self,
         certificate: ConfirmedBlockCertificate,
         notifier: &impl Notifier,
@@ -910,7 +910,7 @@ where
         linera_base::task::spawn(async move {
             let actions = this
                 .query_chain_worker(certificate.block().header.chain_id, move |callback| {
-                    ChainWorkerRequest::ProcessUnexecutedCertificate {
+                    ChainWorkerRequest::ProcessCertificateWithoutExecuting {
                         certificate,
                         callback,
                     }

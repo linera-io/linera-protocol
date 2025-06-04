@@ -126,14 +126,14 @@ where
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn process_unexecuted_certificate(
+    pub async fn process_certificate_without_executing(
         &self,
         certificate: ConfirmedBlockCertificate,
         notifier: &impl Notifier,
     ) -> Result<(), LocalNodeError> {
         self.node
             .state
-            .fully_process_unexecuted_certificate_with_notifications(certificate, notifier)
+            .fully_process_certificate_with_notifications_without_executing(certificate, notifier)
             .await?;
         Ok(())
     }
@@ -323,7 +323,9 @@ where
             .map(|chain_id| async move {
                 let chain = self.chain_state_view(*chain_id).await?;
                 let mut next_height = chain.tip_state.get().next_block_height;
-                while chain.unexecuted_blocks.contains_key(&next_height).await? {
+                // TODO(#3969): This is not great for performance, but the whole function will
+                // probably go away with #3969 anyway.
+                while chain.other_blocks.contains_key(&next_height).await? {
                     next_height.try_add_assign_one()?;
                 }
                 Ok::<_, LocalNodeError>((*chain_id, next_height))

@@ -332,7 +332,7 @@ impl<Env: Environment> Client<Env> {
         {
             let chain = self.local_node.chain_state_view(chain_id).await?;
             while start < stop {
-                let Some(hash) = chain.unexecuted_blocks.get(&start).await? else {
+                let Some(hash) = chain.other_blocks.get(&start).await? else {
                     break;
                 };
                 hashes.push(hash);
@@ -507,12 +507,12 @@ impl<Env: Environment> Client<Env> {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn process_unexecuted_certificate(
+    pub async fn process_certificate_without_executing(
         &self,
         certificate: Box<ConfirmedBlockCertificate>,
     ) -> Result<(), LocalNodeError> {
         self.local_node
-            .process_unexecuted_certificate(*certificate, &self.notifier)
+            .process_certificate_without_executing(*certificate, &self.notifier)
             .await?;
         Ok(())
     }
@@ -753,7 +753,7 @@ impl<Env: Environment> Client<Env> {
             self.validator_nodes().await?
         };
         if let Err(err) = self
-            .process_unexecuted_certificate(certificate.clone())
+            .process_certificate_without_executing(certificate.clone())
             .await
         {
             match &err {
@@ -766,7 +766,7 @@ impl<Env: Environment> Client<Env> {
                     .await
                     .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
-                    self.process_unexecuted_certificate(certificate.clone())
+                    self.process_certificate_without_executing(certificate.clone())
                         .await?;
                 }
                 _ => {
@@ -781,7 +781,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     #[instrument(level = "trace", skip_all)]
-    async fn receive_checked_unexecuted_certificate(
+    async fn receive_checked_certificate_without_executing(
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
@@ -802,7 +802,7 @@ impl<Env: Environment> Client<Env> {
         // Process the received operations. Download required hashed certificate values if
         // necessary.
         if let Err(err) = self
-            .process_unexecuted_certificate(certificate.clone())
+            .process_certificate_without_executing(certificate.clone())
             .await
         {
             match &err {
@@ -815,7 +815,8 @@ impl<Env: Environment> Client<Env> {
                     .await
                     .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
-                    self.process_unexecuted_certificate(certificate).await?;
+                    self.process_certificate_without_executing(certificate)
+                        .await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
@@ -3005,7 +3006,7 @@ impl<Env: Environment> ChainClient<Env> {
         skip(certificate),
         fields(certificate_hash = ?certificate.hash()),
     )]
-    async fn receive_unexecuted_certificate(
+    async fn receive_certificate_without_executing(
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
