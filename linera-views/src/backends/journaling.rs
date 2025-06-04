@@ -64,7 +64,7 @@ fn get_journaling_key(tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
 }
 
 /// Low-level, asynchronous direct write key-value operations with simplified batch
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait DirectWritableKeyValueStore: WithError {
     /// The maximal number of items in a batch.
     const MAX_BATCH_SIZE: usize;

@@ -341,7 +341,7 @@ impl ServiceStoreClientInternal {
             let channel = self.channel.clone();
             let mut client = StoreProcessorClient::new(channel);
             let _guard = self.acquire().await;
-            let _response = client.process_write_batch_extended(request).await?;
+            let _response = SyncFuture::new(client.process_write_batch_extended(request)).await?;
         }
         Ok(())
     }
@@ -459,8 +459,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_list_all(()).await?;
+        let mut client = SyncFuture::new(StoreProcessorClient::connect(endpoint)).await?;
+        let response = SyncFuture::new(client.process_list_all(())).await?;
         let response = response.into_inner();
         let ReplyListAll { namespaces } = response;
         let namespaces = namespaces
@@ -479,8 +479,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_list_root_keys(request).await?;
+        let mut client = SyncFuture::new(StoreProcessorClient::connect(endpoint)).await?;
+        let response = SyncFuture::new(client.process_list_root_keys(request)).await?;
         let response = response.into_inner();
         let ReplyListRootKeys { root_keys } = response;
         Ok(root_keys)
@@ -489,8 +489,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     async fn delete_all(config: &Self::Config) -> Result<(), ServiceStoreError> {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let _response = client.process_delete_all(()).await?;
+        let mut client = SyncFuture::new(StoreProcessorClient::connect(endpoint)).await?;
+        let _response = SyncFuture::new(client.process_delete_all(())).await?;
         Ok(())
     }
 
@@ -500,8 +500,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_exists_namespace(request).await?;
+        let mut client = SyncFuture::new(StoreProcessorClient::connect(endpoint)).await?;
+        let response = SyncFuture::new(client.process_exists_namespace(request)).await?;
         let response = response.into_inner();
         let ReplyExistsNamespace { exists } = response;
         Ok(exists)
@@ -516,8 +516,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let _response = client.process_create_namespace(request).await?;
+        let mut client = SyncFuture::new(StoreProcessorClient::connect(endpoint)).await?;
+        let _response = SyncFuture::new(client.process_create_namespace(request)).await?;
         Ok(())
     }
 
@@ -527,8 +527,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let _response = client.process_delete_namespace(request).await?;
+        let mut client = SyncFuture::new(StoreProcessorClient::connect(endpoint)).await?;
+        let _response = SyncFuture::new(client.process_delete_namespace(request)).await?;
         Ok(())
     }
 }

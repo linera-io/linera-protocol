@@ -367,7 +367,7 @@ impl Batch {
 /// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
 /// Thus we need to access the databases in order to replace a `DeletePrefix`
 /// by a vector of the keys to be removed.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait DeletePrefixExpander {
     /// The error type that can happen when expanding the key prefix.
     type Error: Debug;
@@ -376,7 +376,7 @@ pub trait DeletePrefixExpander {
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
 
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 /// A notion of batch useful for certain computations (notably journaling).
 pub trait SimplifiedBatch: Sized + Send + Sync {
     /// The iterator type used to process values from the batch.
@@ -414,6 +414,7 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
 
 /// An iterator-like object that can write values one by one to a batch while updating the
 /// total size of the batch.
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait BatchValueWriter<Batch>: Send + Sync {
     /// Returns true if there are no more values to write.
     fn is_empty(&self) -> bool;
