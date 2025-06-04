@@ -3953,6 +3953,7 @@ dependencies = [
  "serde",
  "sha3",
  "static_assertions",
+ "sync_wrapper 1.0.1",
  "sysinfo",
  "tempfile",
  "thiserror 1.0.65",

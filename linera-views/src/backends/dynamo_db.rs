@@ -6,6 +6,8 @@
 use std::{
     collections::HashMap,
     env,
+    future::Future,
+    pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -33,7 +35,7 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use aws_smithy_types::error::operation::BuildError;
-use futures::future::{join_all, FutureExt as _};
+use futures::future::join_all;
 use linera_base::ensure;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -57,10 +59,18 @@ use crate::{
 /// Name of the environment variable with the address to a DynamoDB local instance.
 const DYNAMODB_LOCAL_ENDPOINT: &str = "DYNAMODB_LOCAL_ENDPOINT";
 
+trait FutureSyncExt: Future + Sized {
+    fn boxed_sync(self) -> Pin<Box<sync_wrapper::SyncFuture<Self>>> {
+        Box::pin(sync_wrapper::SyncFuture::new(self))
+    }
+}
+
+impl<F: Future> FutureSyncExt for F {}
+
 /// Gets the AWS configuration from the environment
 async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
-        .boxed()
+        .boxed_sync()
         .await;
     Ok((&base_config).into())
 }
@@ -73,7 +83,7 @@ fn get_endpoint_address() -> Option<String> {
 async fn get_dynamodb_local_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError>
 {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
-        .boxed()
+        .boxed_sync()
         .await;
     let endpoint_address = get_endpoint_address().unwrap();
     let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
@@ -393,7 +403,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                 .list_tables()
                 .set_exclusive_start_table_name(start_table)
                 .send()
-                .boxed()
+                .boxed_sync()
                 .await?;
             if let Some(namespaces_blk) = response.table_names {
                 namespaces.extend(namespaces_blk);
@@ -432,7 +442,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                 .delete_table()
                 .table_name(&table)
                 .send()
-                .boxed()
+                .boxed_sync()
                 .await?;
         }
         Ok(())
@@ -450,7 +460,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .table_name(namespace)
             .set_key(Some(key_db))
             .send()
-            .boxed()
+            .boxed_sync()
             .await;
         let Err(error) = response else {
             return Ok(true);
@@ -512,7 +522,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                     .build()?,
             )
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
         Ok(())
     }
@@ -527,7 +537,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .delete_table()
             .table_name(namespace)
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
         Ok(())
     }
@@ -615,7 +625,7 @@ impl DynamoDbStoreInternal {
             .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
             .set_exclusive_start_key(start_key_map)
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
         Ok(response)
     }
@@ -631,7 +641,7 @@ impl DynamoDbStoreInternal {
             .table_name(&self.namespace)
             .set_key(Some(key_db))
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
 
         match response.item {
@@ -655,7 +665,7 @@ impl DynamoDbStoreInternal {
             .set_key(Some(key_db))
             .projection_expression(PARTITION_ATTRIBUTE)
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
 
         Ok(response.item.is_some())
@@ -960,7 +970,7 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
                 .transact_write_items()
                 .set_transact_items(Some(builder.transactions))
                 .send()
-                .boxed()
+                .boxed_sync()
                 .await?;
         }
         let mut builder = TransactionBuilder::new(&self.start_key);
@@ -976,7 +986,7 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
                 .transact_write_items()
                 .set_transact_items(Some(builder.transactions))
                 .send()
-                .boxed()
+                .boxed_sync()
                 .await?;
         }
         Ok(())
