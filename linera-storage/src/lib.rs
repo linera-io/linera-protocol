@@ -354,6 +354,31 @@ pub struct ReadCertificatesError {
     pub inconsistent_entries: Vec<CryptoHash>,
 }
 
+impl From<ReadCertificateError> for ReadCertificatesError {
+    fn from(error: ReadCertificateError) -> Self {
+        let mut missing_lite_certificates = Vec::new();
+        let mut missing_confirmed_certificates = Vec::new();
+        let mut inconsistent_hashes = Vec::new();
+        let mut inconsistent_entries = Vec::new();
+        match error {
+            ReadCertificateError::MissingLiteCertificate(hash) => {
+                missing_lite_certificates.push(hash)
+            }
+            ReadCertificateError::MissingConfirmedBlock(hash) => {
+                missing_confirmed_certificates.push(hash)
+            }
+            ReadCertificateError::InconsistentHash(hash) => inconsistent_hashes.push(hash),
+            ReadCertificateError::InconsistentEntries(hash) => inconsistent_entries.push(hash),
+        }
+        Self {
+            missing_lite_certificates,
+            missing_confirmed_certificates,
+            inconsistent_hashes,
+            inconsistent_entries,
+        }
+    }
+}
+
 impl std::fmt::Display for ReadCertificatesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut strings = Vec::new();

@@ -561,6 +561,14 @@ where
             .await
             .map_err(Into::into);
 
+        let certificate = match certificate {
+            Err(error) => Err(error),
+            Ok(entry) => match entry {
+                Ok(certificate) => Ok(certificate),
+                Err(error) => Err(error.into()),
+            },
+        };
+
         sender.send(certificate)
     }
 
@@ -576,6 +584,14 @@ where
             .read_certificates(hashes)
             .await
             .map_err(Into::into);
+
+        let certificates = match certificates {
+            Err(error) => Err(error),
+            Ok(entry) => match entry {
+                Ok(certificates) => Ok(certificates),
+                Err(error) => Err(error.into()),
+            },
+        };
 
         sender.send(certificates)
     }

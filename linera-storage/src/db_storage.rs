@@ -985,7 +985,7 @@ where
         }
         Ok(cert
             .with_value(value)
-            .ok_or_else(|| ReadCertificateError::InconsistentEntries(hash)))
+            .ok_or(ReadCertificateError::InconsistentEntries(hash)))
     }
 
     async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {

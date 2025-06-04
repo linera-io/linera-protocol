@@ -32,7 +32,7 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
-use linera_storage::{ReadCertificatesError, Storage};
+use linera_storage::{ReadCertificateError, ReadCertificatesError, Storage};
 use linera_views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
@@ -218,6 +218,12 @@ pub enum WorkerError {
     TooManyPublishedBlobs(u64),
     #[error(transparent)]
     Decompression(#[from] DecompressionError),
+}
+
+impl From<ReadCertificateError> for WorkerError {
+    fn from(error: ReadCertificateError) -> Self {
+        WorkerError::ReadCertificatesError(error.into())
+    }
 }
 
 impl From<ChainError> for WorkerError {
