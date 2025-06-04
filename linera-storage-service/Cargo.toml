@@ -32,6 +32,7 @@ linera-version.workspace = true
 linera-views.workspace = true
 prost.workspace = true
 serde.workspace = true
+sync_wrapper.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true, features = ["codegen", "prost", "transport"] }

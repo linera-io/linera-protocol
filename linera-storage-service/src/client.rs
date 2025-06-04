@@ -25,6 +25,7 @@ use linera_views::{
     },
 };
 use serde::de::DeserializeOwned;
+use sync_wrapper::SyncFuture;
 use tonic::transport::{Channel, Endpoint};
 
 #[cfg(with_testing)]
@@ -97,7 +98,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_read_value(request).await?;
+        let response = SyncFuture::new(client.process_read_value(request)).await?;
         let response = response.into_inner();
         let ReplyReadValue {
             value,
@@ -120,7 +121,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_contains_key(request).await?;
+        let response = SyncFuture::new(client.process_contains_key(request)).await?;
         let response = response.into_inner();
         let ReplyContainsKey { test } = response;
         Ok(test)
@@ -139,7 +140,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_contains_keys(request).await?;
+        let response = SyncFuture::new(client.process_contains_keys(request)).await?;
         let response = response.into_inner();
         let ReplyContainsKeys { tests } = response;
         Ok(tests)
@@ -161,7 +162,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_read_multi_values(request).await?;
+        let response = SyncFuture::new(client.process_read_multi_values(request)).await?;
         let response = response.into_inner();
         let ReplyReadMultiValues {
             values,
@@ -193,7 +194,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_find_keys_by_prefix(request).await?;
+        let response = SyncFuture::new(client.process_find_keys_by_prefix(request)).await?;
         let response = response.into_inner();
         let ReplyFindKeysByPrefix {
             keys,
@@ -224,7 +225,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
-        let response = client.process_find_key_values_by_prefix(request).await?;
+        let response = SyncFuture::new(client.process_find_key_values_by_prefix(request)).await?;
         let response = response.into_inner();
         let ReplyFindKeyValuesByPrefix {
             key_values,
@@ -383,7 +384,7 @@ impl ServiceStoreClientInternal {
         };
         let request = tonic::Request::new(query);
         let mut client = StoreProcessorClient::new(channel);
-        let response = client.process_specific_chunk(request).await?;
+        let response = SyncFuture::new(client.process_specific_chunk(request)).await?;
         let response = response.into_inner();
         let ReplySpecificChunk { chunk } = response;
         Ok(chunk)

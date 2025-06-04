@@ -50,7 +50,7 @@ pub const MIN_VIEW_TAG: u8 = 1;
 
 /// A view gives exclusive access to read and write the data stored at an underlying
 /// address in storage.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait View: Sized {
     /// The number of keys used for the initialization
     const NUM_INIT_KEYS: usize;
