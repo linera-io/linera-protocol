@@ -34,7 +34,10 @@ use {
     std::{cmp::Reverse, collections::BTreeMap},
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage, ReadCertificateError, ReadCertificatesError, ResultReadCertificate, ResultReadCertificates};
+use crate::{
+    ChainRuntimeContext, Clock, ReadCertificateError, ReadCertificatesError, ResultReadCertificate,
+    ResultReadCertificates, Storage,
+};
 
 #[cfg(with_metrics)]
 pub mod metrics {
@@ -785,10 +788,7 @@ where
         Ok(results[0] && results[1])
     }
 
-    async fn read_certificate(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<ResultReadCertificate, ViewError> {
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<ResultReadCertificate, ViewError> {
         let keys = Self::get_keys_for_certificates(&[hash])?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
@@ -831,16 +831,29 @@ where
                 Err(error) => {
                     has_error = true;
                     match error {
-                        ReadCertificateError::MissingLiteCertificate(hash) => missing_lite_certificates.push(hash),
-                        ReadCertificateError::MissingConfirmedBlock(hash) => missing_confirmed_certificates.push(hash),
-                        ReadCertificateError::InconsistentHash(hash) => inconsistent_hashes.push(hash),
-                        ReadCertificateError::InconsistentEntries(hash) => inconsistent_entries.push(hash),
+                        ReadCertificateError::MissingLiteCertificate(hash) => {
+                            missing_lite_certificates.push(hash)
+                        }
+                        ReadCertificateError::MissingConfirmedBlock(hash) => {
+                            missing_confirmed_certificates.push(hash)
+                        }
+                        ReadCertificateError::InconsistentHash(hash) => {
+                            inconsistent_hashes.push(hash)
+                        }
+                        ReadCertificateError::InconsistentEntries(hash) => {
+                            inconsistent_entries.push(hash)
+                        }
                     }
                 }
             };
         }
         if has_error {
-            Ok(Err(ReadCertificatesError { missing_lite_certificates, missing_confirmed_certificates, inconsistent_hashes, inconsistent_entries }))
+            Ok(Err(ReadCertificatesError {
+                missing_lite_certificates,
+                missing_confirmed_certificates,
+                inconsistent_hashes,
+                inconsistent_entries,
+            }))
         } else {
             Ok(Ok(certificates))
         }
@@ -971,8 +984,8 @@ where
             return Ok(Err(ReadCertificateError::InconsistentHash(hash)));
         }
         Ok(cert
-           .with_value(value)
-           .ok_or_else(|| ReadCertificateError::InconsistentEntries(hash)))
+            .with_value(value)
+            .ok_or_else(|| ReadCertificateError::InconsistentEntries(hash)))
     }
 
     async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {
