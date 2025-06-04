@@ -474,7 +474,7 @@ where
                 maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let certificates = self.storage.read_certificates(hashes).await?;
+        let certificates = self.storage.read_certificates(hashes).await??;
         let certificates = heights
             .into_iter()
             .zip(certificates)

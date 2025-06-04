@@ -24,6 +24,7 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
+use thiserror::Error;
 #[cfg(with_revm)]
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
@@ -136,13 +137,13 @@ pub trait Storage: Sized {
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError>;
+    ) -> Result<ResultReadCertificate, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
+    ) -> Result<ResultReadCertificates, ViewError>;
 
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
@@ -331,6 +332,53 @@ pub struct ChainRuntimeContext<S> {
     user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<ApplicationId, UserServiceCode>>,
 }
+
+#[derive(Debug, Error)]
+pub enum ReadCertificateError {
+    MissingLiteCertificate(CryptoHash),
+    MissingConfirmedBlock(CryptoHash),
+    InconsistentHash(CryptoHash),
+    InconsistentEntries(CryptoHash),
+}
+
+impl std::fmt::Display for ReadCertificateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+type ResultReadCertificate = Result<ConfirmedBlockCertificate, ReadCertificateError>;
+
+#[derive(Debug, Error)]
+pub struct ReadCertificatesError {
+    pub missing_lite_certificates: Vec<CryptoHash>,
+    pub missing_confirmed_certificates: Vec<CryptoHash>,
+    pub inconsistent_hashes: Vec<CryptoHash>,
+    pub inconsistent_entries: Vec<CryptoHash>,
+}
+
+
+impl std::fmt::Display for ReadCertificatesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut strings = Vec::new();
+        if !self.missing_lite_certificates.is_empty() {
+            strings.push(format!("missing_lite_certificates: {:?}", self.missing_lite_certificates));
+        }
+        if !self.missing_confirmed_certificates.is_empty() {
+            strings.push(format!("missing_confirmed_certificates: {:?}", self.missing_confirmed_certificates));
+        }
+        if !self.inconsistent_hashes.is_empty() {
+            strings.push(format!("inconsistent_hashes: {:?}", self.inconsistent_hashes));
+        }
+        if !self.inconsistent_entries.is_empty() {
+            strings.push(format!("inconsistent_entries: {:?}", self.inconsistent_entries));
+        }
+        write!(f, "ReadCertificatesError {{ {} }}", strings.join(", "))
+    }
+}
+
+
+type ResultReadCertificates = Result<Vec<ConfirmedBlockCertificate>, ReadCertificatesError>;
 
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]

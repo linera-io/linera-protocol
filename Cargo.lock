@@ -5614,6 +5614,7 @@ dependencies = [
  "linera-views",
  "prometheus",
  "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

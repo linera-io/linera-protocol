@@ -32,7 +32,7 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
-use linera_storage::Storage;
+use linera_storage::{ReadCertificatesError, Storage};
 use linera_views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
@@ -151,6 +151,9 @@ pub enum WorkerError {
 
     #[error(transparent)]
     ViewError(#[from] ViewError),
+
+    #[error(transparent)]
+    ReadCertificatesError(#[from] ReadCertificatesError),
 
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
