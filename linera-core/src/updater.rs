@@ -366,7 +366,7 @@ where
         if !keys.is_empty() {
             // Send the requested certificates in order.
             let storage = self.local_node.storage_client();
-            let certs = storage.read_certificates(keys.into_iter()).await?;
+            let certs = storage.read_certificates(keys.into_iter()).await??;
             for cert in certs {
                 self.send_confirmed_certificate(cert, delivery).await?;
             }

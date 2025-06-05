@@ -59,7 +59,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::{Clock as _, Storage as _};
+use linera_storage::{Clock as _, ReadCertificatesError, Storage as _};
 use linera_views::ViewError;
 use rand::prelude::SliceRandom as _;
 use serde::{Deserialize, Serialize};
@@ -1342,6 +1342,9 @@ pub enum ChainClientError {
 
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
+
+    #[error(transparent)]
+    ReadCertificatesError(#[from] ReadCertificatesError),
 
     #[error("JSON (de)serialization error: {0}")]
     JsonError(#[from] serde_json::Error),
@@ -3681,7 +3684,7 @@ impl<Env: Environment> ChainClient<Env> {
             .client
             .storage_client()
             .read_certificates(missing_certificate_hashes)
-            .await?;
+            .await??;
 
         for certificate in certificates {
             remote_node

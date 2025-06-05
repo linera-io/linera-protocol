@@ -36,6 +36,7 @@ use linera_execution::{
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{context::Context, views::RootView, ViewError};
+use thiserror::Error;
 
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
@@ -133,16 +134,13 @@ pub trait Storage: Sized {
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
     /// Reads the certificate with the given hash.
-    async fn read_certificate(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError>;
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<ResultReadCertificate, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
+    ) -> Result<ResultReadCertificates, ViewError>;
 
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
@@ -331,6 +329,88 @@ pub struct ChainRuntimeContext<S> {
     user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<ApplicationId, UserServiceCode>>,
 }
+
+#[derive(Debug, Error)]
+pub enum ReadCertificateError {
+    MissingLiteCertificate(CryptoHash),
+    MissingConfirmedBlock(CryptoHash),
+    InconsistentHash(CryptoHash),
+    InconsistentEntries(CryptoHash),
+}
+
+impl std::fmt::Display for ReadCertificateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+type ResultReadCertificate = Result<ConfirmedBlockCertificate, ReadCertificateError>;
+
+#[derive(Debug, Error)]
+pub struct ReadCertificatesError {
+    pub missing_lite_certificates: Vec<CryptoHash>,
+    pub missing_confirmed_certificates: Vec<CryptoHash>,
+    pub inconsistent_hashes: Vec<CryptoHash>,
+    pub inconsistent_entries: Vec<CryptoHash>,
+}
+
+impl From<ReadCertificateError> for ReadCertificatesError {
+    fn from(error: ReadCertificateError) -> Self {
+        let mut missing_lite_certificates = Vec::new();
+        let mut missing_confirmed_certificates = Vec::new();
+        let mut inconsistent_hashes = Vec::new();
+        let mut inconsistent_entries = Vec::new();
+        match error {
+            ReadCertificateError::MissingLiteCertificate(hash) => {
+                missing_lite_certificates.push(hash)
+            }
+            ReadCertificateError::MissingConfirmedBlock(hash) => {
+                missing_confirmed_certificates.push(hash)
+            }
+            ReadCertificateError::InconsistentHash(hash) => inconsistent_hashes.push(hash),
+            ReadCertificateError::InconsistentEntries(hash) => inconsistent_entries.push(hash),
+        }
+        Self {
+            missing_lite_certificates,
+            missing_confirmed_certificates,
+            inconsistent_hashes,
+            inconsistent_entries,
+        }
+    }
+}
+
+impl std::fmt::Display for ReadCertificatesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut strings = Vec::new();
+        if !self.missing_lite_certificates.is_empty() {
+            strings.push(format!(
+                "missing_lite_certificates: {:?}",
+                self.missing_lite_certificates
+            ));
+        }
+        if !self.missing_confirmed_certificates.is_empty() {
+            strings.push(format!(
+                "missing_confirmed_certificates: {:?}",
+                self.missing_confirmed_certificates
+            ));
+        }
+        if !self.inconsistent_hashes.is_empty() {
+            strings.push(format!(
+                "inconsistent_hashes: {:?}",
+                self.inconsistent_hashes
+            ));
+        }
+        if !self.inconsistent_entries.is_empty() {
+            strings.push(format!(
+                "inconsistent_entries: {:?}",
+                self.inconsistent_entries
+            ));
+        }
+        write!(f, "ReadCertificatesError {{ {} }}", strings.join(", "))
+    }
+}
+
+type ResultReadCertificates = Result<Vec<ConfirmedBlockCertificate>, ReadCertificatesError>;
 
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]

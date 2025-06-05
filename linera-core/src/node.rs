@@ -21,6 +21,7 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::{committee::Committee, ExecutionError};
+use linera_storage::{ReadCertificateError, ReadCertificatesError};
 use linera_version::VersionInfo;
 use linera_views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -194,6 +195,9 @@ pub enum NodeError {
     #[error("Worker error: {error}")]
     WorkerError { error: String },
 
+    #[error("Read certificates error: {error}")]
+    ReadCertificatesError { error: String },
+
     // This error must be normalized during conversions.
     #[error("The chain {0} is not active in validator")]
     InactiveChain(ChainId),
@@ -284,6 +288,22 @@ impl CrossChainMessageDelivery {
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
         Self::ViewError {
+            error: error.to_string(),
+        }
+    }
+}
+
+impl From<ReadCertificatesError> for NodeError {
+    fn from(error: ReadCertificatesError) -> Self {
+        Self::ReadCertificatesError {
+            error: error.to_string(),
+        }
+    }
+}
+
+impl From<ReadCertificateError> for NodeError {
+    fn from(error: ReadCertificateError) -> Self {
+        Self::ReadCertificatesError {
             error: error.to_string(),
         }
     }

@@ -221,9 +221,11 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     for i in 0.. {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         let result = storage.read_certificate(certificate.hash()).await;
-        if result.ok().as_ref() == Some(&certificate) {
-            break;
-        }
+        if let Some(x) = result.ok().as_ref() {
+            if x.as_ref().ok() == Some(&certificate) {
+                break;
+            }
+        };
         if i == 5 {
             panic!("Failed to learn about new block.");
         }

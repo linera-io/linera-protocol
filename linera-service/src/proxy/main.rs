@@ -364,7 +364,7 @@ where
                 Box::new(self.storage.read_confirmed_block(*hash).await?),
             ))),
             DownloadCertificates(hashes) => {
-                let certificates = self.storage.read_certificates(hashes).await?;
+                let certificates = self.storage.read_certificates(hashes).await??;
                 Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))
             }
             BlobLastUsedBy(blob_id) => {

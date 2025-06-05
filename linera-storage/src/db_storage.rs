@@ -34,7 +34,10 @@ use {
     std::{cmp::Reverse, collections::BTreeMap},
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage};
+use crate::{
+    ChainRuntimeContext, Clock, ReadCertificateError, ReadCertificatesError, ResultReadCertificate,
+    ResultReadCertificates, Storage,
+};
 
 #[cfg(with_metrics)]
 pub mod metrics {
@@ -785,10 +788,7 @@ where
         Ok(results[0] && results[1])
     }
 
-    async fn read_certificate(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError> {
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<ResultReadCertificate, ViewError> {
         let keys = Self::get_keys_for_certificates(&[hash])?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
@@ -804,10 +804,10 @@ where
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError> {
+    ) -> Result<ResultReadCertificates, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         if hashes.is_empty() {
-            return Ok(Vec::new());
+            return Ok(Ok(Vec::new()));
         }
         let keys = Self::get_keys_for_certificates(&hashes)?;
         let values = self.store.read_multi_values_bytes(keys).await;
@@ -819,11 +819,44 @@ where
         }
         let values = values?;
         let mut certificates = Vec::new();
+        let mut missing_lite_certificates = Vec::new();
+        let mut missing_confirmed_certificates = Vec::new();
+        let mut inconsistent_hashes = Vec::new();
+        let mut inconsistent_entries = Vec::new();
+        let mut has_error = false;
         for (pair, hash) in values.chunks_exact(2).zip(hashes) {
             let certificate = Self::deserialize_certificate(pair, hash)?;
-            certificates.push(certificate);
+            match certificate {
+                Ok(certificate) => certificates.push(certificate),
+                Err(error) => {
+                    has_error = true;
+                    match error {
+                        ReadCertificateError::MissingLiteCertificate(hash) => {
+                            missing_lite_certificates.push(hash)
+                        }
+                        ReadCertificateError::MissingConfirmedBlock(hash) => {
+                            missing_confirmed_certificates.push(hash)
+                        }
+                        ReadCertificateError::InconsistentHash(hash) => {
+                            inconsistent_hashes.push(hash)
+                        }
+                        ReadCertificateError::InconsistentEntries(hash) => {
+                            inconsistent_entries.push(hash)
+                        }
+                    }
+                }
+            };
         }
-        Ok(certificates)
+        if has_error {
+            Ok(Err(ReadCertificatesError {
+                missing_lite_certificates,
+                missing_confirmed_certificates,
+                inconsistent_hashes,
+                inconsistent_entries,
+            }))
+        } else {
+            Ok(Ok(certificates))
+        }
     }
 
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
@@ -937,20 +970,22 @@ where
     fn deserialize_certificate(
         pair: &[Option<Vec<u8>>],
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError> {
-        let cert_bytes = pair[0]
-            .as_ref()
-            .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
-        let value_bytes = pair[1]
-            .as_ref()
-            .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
+    ) -> Result<ResultReadCertificate, ViewError> {
+        let Some(cert_bytes) = pair[0].as_ref() else {
+            return Ok(Err(ReadCertificateError::MissingLiteCertificate(hash)));
+        };
+        let Some(value_bytes) = pair[1].as_ref() else {
+            return Ok(Err(ReadCertificateError::MissingLiteCertificate(hash)));
+        };
         let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
         let value = bcs::from_bytes::<ConfirmedBlock>(value_bytes)?;
-        assert_eq!(value.hash(), hash);
-        let certificate = cert
+        let value_hash = value.hash();
+        if value_hash != hash {
+            return Ok(Err(ReadCertificateError::InconsistentHash(hash)));
+        }
+        Ok(cert
             .with_value(value)
-            .ok_or(ViewError::InconsistentEntries)?;
-        Ok(certificate)
+            .ok_or(ReadCertificateError::InconsistentEntries(hash)))
     }
 
     async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {

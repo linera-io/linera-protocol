@@ -64,7 +64,7 @@ where
             Some(hash) => hash,
             None => return Ok(None),
         };
-        let certificate = self.0.storage.read_certificate(certificate_hash).await?;
+        let certificate = self.0.storage.read_certificate(certificate_hash).await??;
         Ok(Some(certificate))
     }
 
