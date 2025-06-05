@@ -6,7 +6,7 @@ use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
-    data_types::Amount,
+    data_types::{Amount, Epoch},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamId},
     time::Duration,
     vm::VmRuntime,
@@ -309,8 +309,8 @@ pub enum ClientCommand {
         public_key: ValidatorPublicKey,
     },
 
-    /// Deprecates all committees except the last one.
-    FinalizeCommittee,
+    /// Deprecates all committees up to and including the specified one.
+    RevokeEpochs { epoch: Epoch },
 
     /// View or update the resource control policy
     ResourceControlPolicy {
@@ -902,7 +902,7 @@ impl ClientCommand {
             | ClientCommand::SetValidator { .. }
             | ClientCommand::RemoveValidator { .. }
             | ClientCommand::ResourceControlPolicy { .. }
-            | ClientCommand::FinalizeCommittee
+            | ClientCommand::RevokeEpochs { .. }
             | ClientCommand::CreateGenesisConfig { .. }
             | ClientCommand::PublishModule { .. }
             | ClientCommand::ListEventsFromIndex { .. }

@@ -691,7 +691,7 @@ impl Runnable for Job {
                 info!("Operations confirmed after {} ms", time_total.as_millis());
             }
 
-            FinalizeCommittee => {
+            RevokeEpochs { epoch } => {
                 info!("Starting operations to remove old committees");
                 let time_start = Instant::now();
                 let mut context =
@@ -699,12 +699,12 @@ impl Runnable for Job {
 
                 let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
 
-                // Remove the old committee.
-                info!("Finalizing current committee");
+                // Remove the old committees.
+                info!("Revoking epochs");
                 context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
-                        async move { chain_client.finalize_committee().await }
+                        async move { chain_client.revoke_epochs(epoch).await }
                     })
                     .await
                     .context("Failed to finalize committee")?;
@@ -712,7 +712,7 @@ impl Runnable for Job {
 
                 let time_total = time_start.elapsed();
                 info!(
-                    "Finalizing committee confirmed after {} ms",
+                    "Revoking committees confirmed after {} ms",
                     time_total.as_millis()
                 );
             }
