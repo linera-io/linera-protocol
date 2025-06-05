@@ -28,8 +28,8 @@ cfg_if::cfg_if! {
 }
 
 /// Errors that can be returned from signers.
-pub trait Error: StdError + TaskSendable + 'static {}
-impl<T: StdError + TaskSendable + 'static> Error for T {}
+pub trait Error: StdError + TaskSendable {}
+impl<T: StdError + TaskSendable> Error for T {}
 
 impl StdError for Box<dyn Error + '_> {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
