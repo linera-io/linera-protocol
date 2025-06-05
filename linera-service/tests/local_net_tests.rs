@@ -178,14 +178,14 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(Some(chain_1)).await?;
     if let Some(service) = &node_service_2 {
         service.process_inbox(&chain_2).await?;
-        client.finalize_committee().await?;
+        client.revoke_epochs(Epoch(2)).await?;
         service.process_inbox(&chain_2).await?;
         let committees = service.query_committees(&chain_2).await?;
         let epochs = committees.into_keys().collect::<Vec<_>>();
         assert_eq!(&epochs, &[Epoch(3)]);
     } else {
         client_2.process_inbox(chain_2).await?;
-        client.finalize_committee().await?;
+        client.revoke_epochs(Epoch(2)).await?;
         client_2.process_inbox(chain_2).await?;
     }
 
@@ -195,14 +195,14 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         client.remove_validator(&validator_key.0).await?;
         if let Some(service) = &node_service_2 {
             service.process_inbox(&chain_2).await?;
-            client.finalize_committee().await?;
+            client.revoke_epochs(Epoch(3 + i as u32)).await?;
             service.process_inbox(&chain_2).await?;
             let committees = service.query_committees(&chain_2).await?;
             let epochs = committees.into_keys().collect::<Vec<_>>();
             assert_eq!(&epochs, &[Epoch(4 + i as u32)]);
         } else {
             client_2.process_inbox(chain_2).await?;
-            client.finalize_committee().await?;
+            client.revoke_epochs(Epoch(3 + i as u32)).await?;
             client_2.process_inbox(chain_2).await?;
         }
         net.remove_validator(i)?;
@@ -418,7 +418,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Ensure the faucet is on the new epoch before removing the old ones.
     faucet_client.process_inbox(faucet_chain).await?;
-    client.finalize_committee().await?;
+    client.revoke_epochs(Epoch::ZERO).await?;
     faucet_client.process_inbox(faucet_chain).await?;
 
     if matches!(network, Network::Grpc) {

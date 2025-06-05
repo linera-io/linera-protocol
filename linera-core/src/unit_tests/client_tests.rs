@@ -1192,6 +1192,16 @@ where
     user.process_inbox().await.unwrap();
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
+    // Revoking the current or an already revoked epoch fails.
+    assert_matches!(
+        admin.revoke_epochs(Epoch::ZERO).await,
+        Err(ChainClientError::EpochAlreadyRevoked)
+    );
+    assert_matches!(
+        admin.revoke_epochs(Epoch::from(3)).await,
+        Err(ChainClientError::CannotRevokeCurrentEpoch(Epoch(2)))
+    );
+
     // Have the admin chain deprecate the previous epoch.
     admin.revoke_epochs(Epoch::from(1)).await.unwrap();
 
