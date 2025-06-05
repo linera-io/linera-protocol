@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
-    types::{Block, GenericCertificate, LiteCertificate},
+    types::{Block, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome};
@@ -57,7 +57,7 @@ pub enum LocalNodeError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("Local node operation failed: {0}")]
+    #[error("Worker operation failed: {0}")]
     WorkerError(WorkerError),
 
     #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
@@ -123,6 +123,20 @@ where
                 .fully_handle_certificate_with_notifications(certificate, notifier),
         )
         .await?)
+    }
+
+    /// Preprocesses a block without executing it.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn preprocess_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        notifier: &impl Notifier,
+    ) -> Result<(), LocalNodeError> {
+        self.node
+            .state
+            .fully_preprocess_certificate_with_notifications(certificate, notifier)
+            .await?;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -308,8 +322,14 @@ where
         let futures = chain_ids
             .into_iter()
             .map(|chain_id| async move {
-                let local_info = self.chain_info(*chain_id).await?;
-                Ok::<_, LocalNodeError>((*chain_id, local_info.next_block_height))
+                let chain = self.chain_state_view(*chain_id).await?;
+                let mut next_height = chain.tip_state.get().next_block_height;
+                // TODO(#3969): This is not great for performance, but the whole function will
+                // probably go away with #3969 anyway.
+                while chain.preprocessed_blocks.contains_key(&next_height).await? {
+                    next_height.try_add_assign_one()?;
+                }
+                Ok::<_, LocalNodeError>((*chain_id, next_height))
             })
             .collect::<Vec<_>>();
         stream::iter(futures)

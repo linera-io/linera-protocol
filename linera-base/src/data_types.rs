@@ -13,6 +13,7 @@ use std::{
     hash::Hash,
     io, iter,
     num::ParseIntError,
+    ops::{Bound, RangeBounds},
     path::Path,
     str::FromStr,
 };
@@ -483,6 +484,32 @@ impl TryFrom<BlockHeight> for usize {
 
     fn try_from(height: BlockHeight) -> Result<usize, ArithmeticError> {
         usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)
+    }
+}
+
+/// Allows converting [`BlockHeight`] ranges to inclusive tuples of bounds.
+pub trait BlockHeightRangeBounds {
+    /// Returns the range as a tuple of inclusive bounds.
+    /// If the range is empty, returns `None`.
+    fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)>;
+}
+
+impl<T: RangeBounds<BlockHeight>> BlockHeightRangeBounds for T {
+    fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)> {
+        let start = match self.start_bound() {
+            Bound::Included(height) => *height,
+            Bound::Excluded(height) => height.try_add_one().ok()?,
+            Bound::Unbounded => BlockHeight(0),
+        };
+        let end = match self.end_bound() {
+            Bound::Included(height) => *height,
+            Bound::Excluded(height) => height.try_sub_one().ok()?,
+            Bound::Unbounded => BlockHeight::MAX,
+        };
+        if start > end {
+            return None;
+        }
+        Some((start, end))
     }
 }
 

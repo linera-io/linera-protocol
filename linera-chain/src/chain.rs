@@ -3,6 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    ops::RangeBounds,
     sync::Arc,
 };
 
@@ -11,7 +12,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        Epoch, OracleResponse, Timestamp,
+        BlockHeightRangeBounds as _, Epoch, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, MessageId},
@@ -277,6 +278,9 @@ where
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
+
+    /// Blocks that have been verified but not executed yet, and that may not be contiguous.
+    pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
 }
 
 /// Block-chaining state.
@@ -418,9 +422,6 @@ where
                 // Important for the test in `all_messages_delivered_up_to`.
                 self.outbox_counters.get_mut().remove(&update);
             }
-        }
-        if outbox.queue.count() == 0 {
-            self.outboxes.remove_entry(target)?;
         }
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
@@ -942,6 +943,20 @@ where
             &block.body.messages,
         )?;
         self.confirmed_log.push(hash);
+        self.preprocessed_blocks.remove(&block.header.height)?;
+        Ok(())
+    }
+
+    /// Adds a block to `preprocessed_blocks`, and updates the outboxes where possible.
+    pub async fn preprocess_block(&mut self, block: &ConfirmedBlock) -> Result<(), ChainError> {
+        let hash = block.inner().hash();
+        let block = block.inner().inner();
+        let height = block.header.height;
+        if height < self.tip_state.get().next_block_height {
+            return Ok(());
+        }
+        self.process_outgoing_messages(block).await?;
+        self.preprocessed_blocks.insert(&height, hash)?;
         Ok(())
     }
 
@@ -1067,6 +1082,37 @@ where
         Ok(())
     }
 
+    /// Returns the hashes of all blocks in the given range. Returns an error if we are missing
+    /// any of those blocks.
+    pub async fn block_hashes(
+        &self,
+        range: impl RangeBounds<BlockHeight>,
+    ) -> Result<Vec<CryptoHash>, ChainError> {
+        let next_height = self.tip_state.get().next_block_height;
+        // If the range is not empty, it can always be represented as start..=end.
+        let Some((start, end)) = range.to_inclusive() else {
+            return Ok(Vec::new());
+        };
+        let mut hashes = if let Ok(last_height) = next_height.try_sub_one() {
+            let usize_start = usize::try_from(start)?;
+            let usize_end = usize::try_from(end.min(last_height))?;
+            self.confirmed_log.read(usize_start..=usize_end).await?
+        } else {
+            Vec::new()
+        };
+        for height in start.max(next_height).0..=end.0 {
+            hashes.push(
+                self.preprocessed_blocks
+                    .get(&BlockHeight(height))
+                    .await?
+                    .ok_or_else(|| {
+                        ChainError::InternalError("missing entry in preprocessed_blocks".into())
+                    })?,
+            );
+        }
+        Ok(hashes)
+    }
+
     /// Resets the chain manager for the next block height.
     fn reset_chain_manager(
         &mut self,
@@ -1094,12 +1140,33 @@ where
         // application.
         let recipients = block.recipients();
         let block_height = block.header.height;
+        let next_height = self.tip_state.get().next_block_height;
 
         // Update the outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
         let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-        for mut outbox in outboxes {
+        for (mut outbox, target) in outboxes.into_iter().zip(&targets) {
+            if block_height > next_height {
+                // Find the hash of the block that was most recently added to the outbox.
+                let prev_hash = match outbox.next_height_to_schedule.get().try_sub_one().ok() {
+                    Some(height) if height < next_height => {
+                        let index =
+                            usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                        Some(self.confirmed_log.get(index).await?.ok_or_else(|| {
+                            ChainError::InternalError("missing entry in confirmed_log".into())
+                        })?)
+                    }
+                    Some(height) => Some(self.preprocessed_blocks.get(&height).await?.ok_or_else(
+                        || ChainError::InternalError("missing entry in preprocessed_blocks".into()),
+                    )?),
+                    None => None,
+                };
+                // Schedule only if no block is missing that sent something to the same recipient.
+                if prev_hash.as_ref() != block.body.previous_message_blocks.get(target) {
+                    continue;
+                }
+            }
             if outbox.schedule_message(block_height)? {
                 *outbox_counters.entry(block_height).or_default() += 1;
             }

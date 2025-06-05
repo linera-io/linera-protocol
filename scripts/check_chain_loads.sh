@@ -24,6 +24,9 @@ sed -i -e '/linera-core\/src\/chain_worker\/state\/mod\.rs/d' "$USAGES_FILE"
 sed -i -e '/linera-core\/src\/unit_tests\/worker_tests\.rs/d' "$USAGES_FILE"
 sed -i -e '/linera-core\/src\/unit_tests\/test_utils\.rs/d' "$USAGES_FILE"
 
+# Client tests load chains to verify certain conditions
+sed -i -e '/linera-core\/src\/unit_tests\/wasm_client_tests\.rs/d' "$USAGES_FILE"
+
 # The SDK integration test framework uses `create_chain` to create a dummy admin chain before the
 # test (and the workers) start
 if [ "$(grep 'linera-sdk/src/test/validator.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; then

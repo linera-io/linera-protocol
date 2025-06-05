@@ -203,6 +203,16 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    #[error("confirmed_log entry at height {height} for chain {chain_id:8} not found")]
+    ConfirmedLogEntryNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
+    #[error("preprocessed_blocks entry at height {height} for chain {chain_id:8} not found")]
+    PreprocessedBlocksEntryNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
     #[error("The worker is too busy to handle new chains")]
@@ -878,6 +888,45 @@ where
 
         self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await
+    }
+
+    /// Preprocesses a block without executing it. This does not update the execution state, but
+    /// can create cross-chain messages and store blobs. It also does _not_ check the signatures;
+    /// the caller is responsible for checking them using the correct committee.
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.block().header.chain_id),
+        height = %certificate.block().header.height,
+    ))]
+    pub async fn fully_preprocess_certificate_with_notifications(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        notifier: &impl Notifier,
+    ) -> Result<(), WorkerError> {
+        trace!("{} <-- {:?} (preprocess)", self.nickname, certificate);
+
+        let notifications = (*notifier).clone();
+        let this = self.clone();
+        linera_base::task::spawn(async move {
+            let actions = this
+                .query_chain_worker(certificate.block().header.chain_id, move |callback| {
+                    ChainWorkerRequest::PreprocessCertificate {
+                        certificate,
+                        callback,
+                    }
+                })
+                .await?;
+            notifications.notify(&actions.notifications);
+            let mut requests = VecDeque::from(actions.cross_chain_requests);
+            while let Some(request) = requests.pop_front() {
+                let actions = this.handle_cross_chain_request(request).await?;
+                requests.extend(actions.cross_chain_requests);
+                notifications.notify(&actions.notifications);
+            }
+            Ok(())
+        })
+        .await
+        .unwrap_or_else(|_| Err(WorkerError::JoinError))
     }
 
     /// Processes a validated block certificate.

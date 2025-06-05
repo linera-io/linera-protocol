@@ -589,10 +589,21 @@ where
         .unwrap();
 
     receiver.synchronize_from_validators().await.unwrap();
-    receiver
-        .receive_certificate_and_update_validators(cert.clone())
-        .await
-        .unwrap();
+    {
+        // The receiver did not execute the sender chain.
+        let chain = receiver
+            .storage_client()
+            .load_chain(sender.chain_id())
+            .await?;
+        assert_eq!(chain.tip_state.get().next_block_height.0, 0);
+        assert_eq!(
+            chain
+                .preprocessed_blocks
+                .get(&cert.inner().height())
+                .await?,
+            Some(cert.hash())
+        );
+    }
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let messages = &certs[0].block().body.incoming_bundles;

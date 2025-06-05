@@ -27,7 +27,7 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
 use linera_storage::{Clock as _, Storage};
-use linera_views::{views::ClonableView, ViewError};
+use linera_views::views::ClonableView;
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
 
 #[cfg(test)]
@@ -261,6 +261,18 @@ where
             .await
     }
 
+    /// Preprocesses a block without executing it.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub(super) async fn preprocess_certificate(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Result<NetworkActions, WorkerError> {
+        ChainWorkerStateWithAttemptedChanges::new(self)
+            .await
+            .preprocess_certificate(certificate)
+            .await
+    }
+
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn process_cross_chain_update(
@@ -458,22 +470,38 @@ where
     ) -> Result<NetworkActions, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
         let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
-        let heights_usize = heights
-            .iter()
+        let next_block_height = self.chain.tip_state.get().next_block_height;
+        let log_heights = heights
+            .range(..next_block_height)
             .copied()
             .map(usize::try_from)
             .collect::<Result<Vec<_>, _>>()?;
-        let hashes = self
+        let mut hashes = self
             .chain
             .confirmed_log
-            .multi_get(heights_usize.clone())
+            .multi_get(log_heights)
             .await?
             .into_iter()
-            .zip(heights_usize)
+            .zip(&heights)
             .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
+                maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                    height: *height,
+                    chain_id: self.chain_id(),
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
+        for height in heights.range(next_block_height..) {
+            hashes.push(
+                self.chain
+                    .preprocessed_blocks
+                    .get(height)
+                    .await?
+                    .ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound {
+                        height: *height,
+                        chain_id: self.chain_id(),
+                    })?,
+            );
+        }
         let certificates = self.storage.read_certificates(hashes).await?;
         let certificates = heights
             .into_iter()
