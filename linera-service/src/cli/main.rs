@@ -701,10 +701,12 @@ impl Runnable for Job {
 
                 // Remove the old committee.
                 info!("Finalizing current committee");
+                let current_epoch = chain_client.chain_info().await?.epoch;
+                let revoked_epoch = current_epoch.try_sub_one()?;
                 context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
-                        async move { chain_client.finalize_committee().await }
+                        async move { chain_client.revoke_epochs(revoked_epoch).await }
                     })
                     .await
                     .context("Failed to finalize committee")?;

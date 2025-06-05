@@ -812,6 +812,13 @@ impl Epoch {
         Ok(Self(val))
     }
 
+    /// Tries to return an epoch with a number decreased by one. Returns an error if an underflow
+    /// happens.
+    pub fn try_sub_one(self) -> Result<Self, ArithmeticError> {
+        let val = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
+        Ok(Self(val))
+    }
+
     /// Tries to add one to this epoch's number. Returns an error if an overflow happens.
     #[inline]
     pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {

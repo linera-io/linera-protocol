@@ -1147,7 +1147,7 @@ where
     user.synchronize_from_validators().await.unwrap();
     user.process_inbox().await.unwrap();
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
-    admin.finalize_committee().await.unwrap();
+    admin.revoke_epochs(Epoch::ZERO).await.unwrap();
 
     // Create a new committee.
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
@@ -1193,7 +1193,7 @@ where
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Have the admin chain deprecate the previous epoch.
-    admin.finalize_committee().await.unwrap();
+    admin.revoke_epochs(Epoch::from(1)).await.unwrap();
 
     // Try to make a transfer back to the admin chain.
     let cert = user

@@ -1509,6 +1509,12 @@ pub enum ChainClientError {
 
     #[error("signer error: {0:?}")]
     Signer(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("Cannot revoke the current epoch {0}")]
+    CannotRevokeCurrentEpoch(Epoch),
+
+    #[error("Epoch is already revoked")]
+    EpochAlreadyRevoked,
 }
 
 impl From<Infallible> for ChainClientError {
@@ -3381,20 +3387,29 @@ impl<Env: Environment> ChainClient<Env> {
             .await?)
     }
 
-    /// Deprecates all the configurations of voting rights but the last one (admin chains
+    /// Deprecates all the configurations of voting rights up to the given one (admin chains
     /// only). Currently, each individual chain is still entitled to wait before accepting
     /// this command. However, it is expected that deprecated validators stop functioning
     /// shortly after such command is issued.
     #[instrument(level = "trace")]
-    pub async fn finalize_committee(
+    pub async fn revoke_epochs(
         &self,
+        revoked_epoch: Epoch,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees().await?;
+        ensure!(
+            revoked_epoch < current_epoch,
+            ChainClientError::CannotRevokeCurrentEpoch(current_epoch)
+        );
+        ensure!(
+            committees.contains_key(&revoked_epoch),
+            ChainClientError::EpochAlreadyRevoked
+        );
         let operations = committees
             .keys()
             .filter_map(|epoch| {
-                if *epoch != current_epoch {
+                if *epoch <= revoked_epoch {
                     Some(Operation::system(SystemOperation::Admin(
                         AdminOperation::RemoveCommittee { epoch: *epoch },
                     )))
