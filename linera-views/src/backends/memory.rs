@@ -412,10 +412,6 @@ pub enum MemoryStoreError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// The value is too large for the `MemoryStore`
-    #[error("The value is too large for the MemoryStore")]
-    TooLargeValue,
-
     /// The namespace does not exist
     #[error("The namespace does not exist")]
     NamespaceNotFound,

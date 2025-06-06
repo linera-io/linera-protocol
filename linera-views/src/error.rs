@@ -8,8 +8,8 @@ pub enum ViewError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// We failed to acquire an entry in a `CollectionView` or a `ReentrantCollectionView`.
-    #[error("trying to access a collection view or reentrant collection view while some entries are still being accessed")]
+    /// We failed to acquire an entry in a `CollectionView`.
+    #[error("trying to access a collection view while some entries are still being accessed")]
     CannotAcquireCollectionEntry,
 
     /// Input output error.
@@ -20,8 +20,10 @@ pub enum ViewError {
     #[error(transparent)]
     ArithmeticError(#[from] linera_base::data_types::ArithmeticError),
 
-    /// An error happened while trying to lock.
-    #[error("failed to lock collection entry: {0:?}")]
+    /// Failed to lock a reentrant collection entry since it is currently being accessed
+    #[error(
+        "failed to lock a reentrant collection entry since it is currently being accessed: {0:?}"
+    )]
     TryLockError(Vec<u8>),
 
     /// Tokio errors can happen while joining.
@@ -58,10 +60,6 @@ pub enum ViewError {
     /// The values are incoherent.
     #[error("post load values error")]
     PostLoadValuesError,
-
-    /// The value is too large for the client
-    #[error("the value is too large for the client")]
-    TooLargeValue,
 }
 
 impl ViewError {
