@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["SecretBox"],"trait":["CloneableSecret","ExposeSecret","ExposeSecretMut"],"type":["SecretSlice","SecretString"]};

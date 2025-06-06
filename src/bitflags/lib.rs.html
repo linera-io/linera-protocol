@@ -1,0 +1,1025 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.9.0/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="bitflags" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">bitflags/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+<a href=#2 id=2 data-nosnippet>2</a>// file at the top-level directory of this distribution and at
+<a href=#3 id=3 data-nosnippet>3</a>// http://rust-lang.org/COPYRIGHT.
+<a href=#4 id=4 data-nosnippet>4</a>//
+<a href=#5 id=5 data-nosnippet>5</a>// Licensed under the Apache License, Version 2.0 &lt;LICENSE-APACHE or
+<a href=#6 id=6 data-nosnippet>6</a>// http://www.apache.org/licenses/LICENSE-2.0&gt; or the MIT license
+<a href=#7 id=7 data-nosnippet>7</a>// &lt;LICENSE-MIT or http://opensource.org/licenses/MIT&gt;, at your
+<a href=#8 id=8 data-nosnippet>8</a>// option. This file may not be copied, modified, or distributed
+<a href=#9 id=9 data-nosnippet>9</a>// except according to those terms.
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a></span><span class="doccomment">/*!
+<a href=#12 id=12 data-nosnippet>12</a>Generate types for C-style flags with ergonomic APIs.
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a># Getting started
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a>Add `bitflags` to your `Cargo.toml`:
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a>```toml
+<a href=#19 id=19 data-nosnippet>19</a>[dependencies.bitflags]
+<a href=#20 id=20 data-nosnippet>20</a>version = "2.9.0"
+<a href=#21 id=21 data-nosnippet>21</a>```
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a>## Generating flags types
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a>Use the [`bitflags`] macro to generate flags types:
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a>```rust
+<a href=#28 id=28 data-nosnippet>28</a>use bitflags::bitflags;
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a>bitflags! {
+<a href=#31 id=31 data-nosnippet>31</a>    pub struct Flags: u32 {
+<a href=#32 id=32 data-nosnippet>32</a>        const A = 0b00000001;
+<a href=#33 id=33 data-nosnippet>33</a>        const B = 0b00000010;
+<a href=#34 id=34 data-nosnippet>34</a>        const C = 0b00000100;
+<a href=#35 id=35 data-nosnippet>35</a>    }
+<a href=#36 id=36 data-nosnippet>36</a>}
+<a href=#37 id=37 data-nosnippet>37</a>```
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a>See the docs for the `bitflags` macro for the full syntax.
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a>Also see the [`example_generated`](./example_generated/index.html) module for an example of what the `bitflags` macro generates for a flags type.
+<a href=#42 id=42 data-nosnippet>42</a>
+<a href=#43 id=43 data-nosnippet>43</a>### Externally defined flags
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a>If you're generating flags types for an external source, such as a C API, you can define
+<a href=#46 id=46 data-nosnippet>46</a>an extra unnamed flag as a mask of all bits the external source may ever set. Usually this would be all bits (`!0`):
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a>```rust
+<a href=#49 id=49 data-nosnippet>49</a># use bitflags::bitflags;
+<a href=#50 id=50 data-nosnippet>50</a>bitflags! {
+<a href=#51 id=51 data-nosnippet>51</a>    pub struct Flags: u32 {
+<a href=#52 id=52 data-nosnippet>52</a>        const A = 0b00000001;
+<a href=#53 id=53 data-nosnippet>53</a>        const B = 0b00000010;
+<a href=#54 id=54 data-nosnippet>54</a>        const C = 0b00000100;
+<a href=#55 id=55 data-nosnippet>55</a>
+<a href=#56 id=56 data-nosnippet>56</a>        // The source may set any bits
+<a href=#57 id=57 data-nosnippet>57</a>        const _ = !0;
+<a href=#58 id=58 data-nosnippet>58</a>    }
+<a href=#59 id=59 data-nosnippet>59</a>}
+<a href=#60 id=60 data-nosnippet>60</a>```
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a>Why should you do this? Generated methods like `all` and truncating operators like `!` only consider
+<a href=#63 id=63 data-nosnippet>63</a>bits in defined flags. Adding an unnamed flag makes those methods consider additional bits,
+<a href=#64 id=64 data-nosnippet>64</a>without generating additional constants for them. It helps compatibility when the external source
+<a href=#65 id=65 data-nosnippet>65</a>may start setting additional bits at any time. The [known and unknown bits](#known-and-unknown-bits)
+<a href=#66 id=66 data-nosnippet>66</a>section has more details on this behavior.
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>### Custom derives
+<a href=#69 id=69 data-nosnippet>69</a>
+<a href=#70 id=70 data-nosnippet>70</a>You can derive some traits on generated flags types if you enable Cargo features. The following
+<a href=#71 id=71 data-nosnippet>71</a>libraries are currently supported:
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a>- `serde`: Support `#[derive(Serialize, Deserialize)]`, using text for human-readable formats,
+<a href=#74 id=74 data-nosnippet>74</a>  and a raw number for binary formats.
+<a href=#75 id=75 data-nosnippet>75</a>- `arbitrary`: Support `#[derive(Arbitrary)]`, only generating flags values with known bits.
+<a href=#76 id=76 data-nosnippet>76</a>- `bytemuck`: Support `#[derive(Pod, Zeroable)]`, for casting between flags values and their
+<a href=#77 id=77 data-nosnippet>77</a>  underlying bits values.
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a>You can also define your own flags type outside of the [`bitflags`] macro and then use it to generate methods.
+<a href=#80 id=80 data-nosnippet>80</a>This can be useful if you need a custom `#[derive]` attribute for a library that `bitflags` doesn't
+<a href=#81 id=81 data-nosnippet>81</a>natively support:
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a>```rust
+<a href=#84 id=84 data-nosnippet>84</a># use std::fmt::Debug as SomeTrait;
+<a href=#85 id=85 data-nosnippet>85</a># use bitflags::bitflags;
+<a href=#86 id=86 data-nosnippet>86</a>#[derive(SomeTrait)]
+<a href=#87 id=87 data-nosnippet>87</a>pub struct Flags(u32);
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a>bitflags! {
+<a href=#90 id=90 data-nosnippet>90</a>    impl Flags: u32 {
+<a href=#91 id=91 data-nosnippet>91</a>        const A = 0b00000001;
+<a href=#92 id=92 data-nosnippet>92</a>        const B = 0b00000010;
+<a href=#93 id=93 data-nosnippet>93</a>        const C = 0b00000100;
+<a href=#94 id=94 data-nosnippet>94</a>    }
+<a href=#95 id=95 data-nosnippet>95</a>}
+<a href=#96 id=96 data-nosnippet>96</a>```
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a>### Adding custom methods
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a>The [`bitflags`] macro supports attributes on generated flags types within the macro itself, while
+<a href=#101 id=101 data-nosnippet>101</a>`impl` blocks can be added outside of it:
+<a href=#102 id=102 data-nosnippet>102</a>
+<a href=#103 id=103 data-nosnippet>103</a>```rust
+<a href=#104 id=104 data-nosnippet>104</a># use bitflags::bitflags;
+<a href=#105 id=105 data-nosnippet>105</a>bitflags! {
+<a href=#106 id=106 data-nosnippet>106</a>    // Attributes can be applied to flags types
+<a href=#107 id=107 data-nosnippet>107</a>    #[repr(transparent)]
+<a href=#108 id=108 data-nosnippet>108</a>    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+<a href=#109 id=109 data-nosnippet>109</a>    pub struct Flags: u32 {
+<a href=#110 id=110 data-nosnippet>110</a>        const A = 0b00000001;
+<a href=#111 id=111 data-nosnippet>111</a>        const B = 0b00000010;
+<a href=#112 id=112 data-nosnippet>112</a>        const C = 0b00000100;
+<a href=#113 id=113 data-nosnippet>113</a>    }
+<a href=#114 id=114 data-nosnippet>114</a>}
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a>// Impl blocks can be added to flags types
+<a href=#117 id=117 data-nosnippet>117</a>impl Flags {
+<a href=#118 id=118 data-nosnippet>118</a>    pub fn as_u64(&amp;self) -&gt; u64 {
+<a href=#119 id=119 data-nosnippet>119</a>        self.bits() as u64
+<a href=#120 id=120 data-nosnippet>120</a>    }
+<a href=#121 id=121 data-nosnippet>121</a>}
+<a href=#122 id=122 data-nosnippet>122</a>```
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a>## Working with flags values
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a>Use generated constants and standard bitwise operators to interact with flags values:
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>```rust
+<a href=#129 id=129 data-nosnippet>129</a># use bitflags::bitflags;
+<a href=#130 id=130 data-nosnippet>130</a># bitflags! {
+<a href=#131 id=131 data-nosnippet>131</a>#     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+<a href=#132 id=132 data-nosnippet>132</a>#     pub struct Flags: u32 {
+<a href=#133 id=133 data-nosnippet>133</a>#         const A = 0b00000001;
+<a href=#134 id=134 data-nosnippet>134</a>#         const B = 0b00000010;
+<a href=#135 id=135 data-nosnippet>135</a>#         const C = 0b00000100;
+<a href=#136 id=136 data-nosnippet>136</a>#     }
+<a href=#137 id=137 data-nosnippet>137</a># }
+<a href=#138 id=138 data-nosnippet>138</a>// union
+<a href=#139 id=139 data-nosnippet>139</a>let ab = Flags::A | Flags::B;
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>// intersection
+<a href=#142 id=142 data-nosnippet>142</a>let a = ab &amp; Flags::A;
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>// difference
+<a href=#145 id=145 data-nosnippet>145</a>let b = ab - Flags::A;
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a>// complement
+<a href=#148 id=148 data-nosnippet>148</a>let c = !ab;
+<a href=#149 id=149 data-nosnippet>149</a>```
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>See the docs for the [`Flags`] trait for more details on operators and how they behave.
+<a href=#152 id=152 data-nosnippet>152</a>
+<a href=#153 id=153 data-nosnippet>153</a># Formatting and parsing
+<a href=#154 id=154 data-nosnippet>154</a>
+<a href=#155 id=155 data-nosnippet>155</a>`bitflags` defines a text format that can be used to convert any flags value to and from strings.
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>See the [`parser`] module for more details.
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a># Specification
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a>The terminology and behavior of generated flags types is
+<a href=#162 id=162 data-nosnippet>162</a>[specified in the source repository](https://github.com/bitflags/bitflags/blob/main/spec.md).
+<a href=#163 id=163 data-nosnippet>163</a>Details are repeated in these docs where appropriate, but is exhaustively listed in the spec. Some
+<a href=#164 id=164 data-nosnippet>164</a>things are worth calling out explicitly here.
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a>## Flags types, flags values, flags
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a>The spec and these docs use consistent terminology to refer to things in the bitflags domain:
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a>- **Bits type**: A type that defines a fixed number of bits at specific locations.
+<a href=#171 id=171 data-nosnippet>171</a>- **Flag**: A set of bits in a bits type that may have a unique name.
+<a href=#172 id=172 data-nosnippet>172</a>- **Flags type**: A set of defined flags over a specific bits type.
+<a href=#173 id=173 data-nosnippet>173</a>- **Flags value**: An instance of a flags type using its specific bits value for storage.
+<a href=#174 id=174 data-nosnippet>174</a>
+<a href=#175 id=175 data-nosnippet>175</a>```
+<a href=#176 id=176 data-nosnippet>176</a># use bitflags::bitflags;
+<a href=#177 id=177 data-nosnippet>177</a>bitflags! {
+<a href=#178 id=178 data-nosnippet>178</a>    struct FlagsType: u8 {
+<a href=#179 id=179 data-nosnippet>179</a>//                    -- Bits type
+<a href=#180 id=180 data-nosnippet>180</a>//         --------- Flags type
+<a href=#181 id=181 data-nosnippet>181</a>        const A = 1;
+<a href=#182 id=182 data-nosnippet>182</a>//            ----- Flag
+<a href=#183 id=183 data-nosnippet>183</a>    }
+<a href=#184 id=184 data-nosnippet>184</a>}
+<a href=#185 id=185 data-nosnippet>185</a>
+<a href=#186 id=186 data-nosnippet>186</a>let flag = FlagsType::A;
+<a href=#187 id=187 data-nosnippet>187</a>//  ---- Flags value
+<a href=#188 id=188 data-nosnippet>188</a>```
+<a href=#189 id=189 data-nosnippet>189</a>
+<a href=#190 id=190 data-nosnippet>190</a>## Known and unknown bits
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a>Any bits in a flag you define are called _known bits_. Any other bits are _unknown bits_.
+<a href=#193 id=193 data-nosnippet>193</a>In the following flags type:
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a>```
+<a href=#196 id=196 data-nosnippet>196</a># use bitflags::bitflags;
+<a href=#197 id=197 data-nosnippet>197</a>bitflags! {
+<a href=#198 id=198 data-nosnippet>198</a>    struct Flags: u8 {
+<a href=#199 id=199 data-nosnippet>199</a>        const A = 1;
+<a href=#200 id=200 data-nosnippet>200</a>        const B = 1 &lt;&lt; 1;
+<a href=#201 id=201 data-nosnippet>201</a>        const C = 1 &lt;&lt; 2;
+<a href=#202 id=202 data-nosnippet>202</a>    }
+<a href=#203 id=203 data-nosnippet>203</a>}
+<a href=#204 id=204 data-nosnippet>204</a>```
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a>The known bits are `0b0000_0111` and the unknown bits are `0b1111_1000`.
+<a href=#207 id=207 data-nosnippet>207</a>
+<a href=#208 id=208 data-nosnippet>208</a>`bitflags` doesn't guarantee that a flags value will only ever have known bits set, but some operators
+<a href=#209 id=209 data-nosnippet>209</a>will unset any unknown bits they encounter. In a future version of `bitflags`, all operators will
+<a href=#210 id=210 data-nosnippet>210</a>unset unknown bits.
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>If you're using `bitflags` for flags types defined externally, such as from C, you probably want all
+<a href=#213 id=213 data-nosnippet>213</a>bits to be considered known, in case that external source changes. You can do this using an unnamed
+<a href=#214 id=214 data-nosnippet>214</a>flag, as described in [externally defined flags](#externally-defined-flags).
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a>## Zero-bit flags
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a>Flags with no bits set should be avoided because they interact strangely with [`Flags::contains`]
+<a href=#219 id=219 data-nosnippet>219</a>and [`Flags::intersects`]. A zero-bit flag is always contained, but is never intersected. The
+<a href=#220 id=220 data-nosnippet>220</a>names of zero-bit flags can be parsed, but are never formatted.
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a>## Multi-bit flags
+<a href=#223 id=223 data-nosnippet>223</a>
+<a href=#224 id=224 data-nosnippet>224</a>Flags that set multiple bits should be avoided unless each bit is also in a single-bit flag.
+<a href=#225 id=225 data-nosnippet>225</a>Take the following flags type as an example:
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a>```
+<a href=#228 id=228 data-nosnippet>228</a># use bitflags::bitflags;
+<a href=#229 id=229 data-nosnippet>229</a>bitflags! {
+<a href=#230 id=230 data-nosnippet>230</a>    struct Flags: u8 {
+<a href=#231 id=231 data-nosnippet>231</a>        const A = 1;
+<a href=#232 id=232 data-nosnippet>232</a>        const B = 1 | 1 &lt;&lt; 1;
+<a href=#233 id=233 data-nosnippet>233</a>    }
+<a href=#234 id=234 data-nosnippet>234</a>}
+<a href=#235 id=235 data-nosnippet>235</a>```
+<a href=#236 id=236 data-nosnippet>236</a>
+<a href=#237 id=237 data-nosnippet>237</a>The result of `Flags::A ^ Flags::B` is `0b0000_0010`, which doesn't correspond to either
+<a href=#238 id=238 data-nosnippet>238</a>`Flags::A` or `Flags::B` even though it's still a known bit.
+<a href=#239 id=239 data-nosnippet>239</a>*/
+<a href=#240 id=240 data-nosnippet>240</a>
+<a href=#241 id=241 data-nosnippet>241</a></span><span class="attr">#![cfg_attr(not(any(feature = <span class="string">"std"</span>, test)), no_std)]
+<a href=#242 id=242 data-nosnippet>242</a>#![cfg_attr(not(test), forbid(unsafe_code))]
+<a href=#243 id=243 data-nosnippet>243</a>#![cfg_attr(test, allow(mixed_script_confusables))]
+<a href=#244 id=244 data-nosnippet>244</a>
+<a href=#245 id=245 data-nosnippet>245</a>#[doc(inline)]
+<a href=#246 id=246 data-nosnippet>246</a></span><span class="kw">pub use </span>traits::{Bits, Flag, Flags};
+<a href=#247 id=247 data-nosnippet>247</a>
+<a href=#248 id=248 data-nosnippet>248</a><span class="kw">pub mod </span>iter;
+<a href=#249 id=249 data-nosnippet>249</a><span class="kw">pub mod </span>parser;
+<a href=#250 id=250 data-nosnippet>250</a>
+<a href=#251 id=251 data-nosnippet>251</a><span class="kw">mod </span>traits;
+<a href=#252 id=252 data-nosnippet>252</a>
+<a href=#253 id=253 data-nosnippet>253</a><span class="attr">#[doc(hidden)]
+<a href=#254 id=254 data-nosnippet>254</a></span><span class="kw">pub mod </span>__private {
+<a href=#255 id=255 data-nosnippet>255</a>    <span class="attr">#[allow(unused_imports)]
+<a href=#256 id=256 data-nosnippet>256</a>    </span><span class="comment">// Easier than conditionally checking any optional external dependencies
+<a href=#257 id=257 data-nosnippet>257</a>    </span><span class="kw">pub use crate</span>::{external::__private::<span class="kw-2">*</span>, traits::__private::<span class="kw-2">*</span>};
+<a href=#258 id=258 data-nosnippet>258</a>
+<a href=#259 id=259 data-nosnippet>259</a>    <span class="kw">pub use </span>core;
+<a href=#260 id=260 data-nosnippet>260</a>}
+<a href=#261 id=261 data-nosnippet>261</a>
+<a href=#262 id=262 data-nosnippet>262</a><span class="attr">#[allow(unused_imports)]
+<a href=#263 id=263 data-nosnippet>263</a></span><span class="kw">pub use </span>external::<span class="kw-2">*</span>;
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a><span class="attr">#[allow(deprecated)]
+<a href=#266 id=266 data-nosnippet>266</a></span><span class="kw">pub use </span>traits::BitFlags;
+<a href=#267 id=267 data-nosnippet>267</a>
+<a href=#268 id=268 data-nosnippet>268</a><span class="comment">/*
+<a href=#269 id=269 data-nosnippet>269</a>How does the bitflags crate work?
+<a href=#270 id=270 data-nosnippet>270</a>
+<a href=#271 id=271 data-nosnippet>271</a>This library generates a `struct` in the end-user's crate with a bunch of constants on it that represent flags.
+<a href=#272 id=272 data-nosnippet>272</a>The difference between `bitflags` and a lot of other libraries is that we don't actually control the generated `struct` in the end.
+<a href=#273 id=273 data-nosnippet>273</a>It's part of the end-user's crate, so it belongs to them. That makes it difficult to extend `bitflags` with new functionality
+<a href=#274 id=274 data-nosnippet>274</a>because we could end up breaking valid code that was already written.
+<a href=#275 id=275 data-nosnippet>275</a>
+<a href=#276 id=276 data-nosnippet>276</a>Our solution is to split the type we generate into two: the public struct owned by the end-user, and an internal struct owned by `bitflags` (us).
+<a href=#277 id=277 data-nosnippet>277</a>To give you an example, let's say we had a crate that called `bitflags!`:
+<a href=#278 id=278 data-nosnippet>278</a>
+<a href=#279 id=279 data-nosnippet>279</a>```rust
+<a href=#280 id=280 data-nosnippet>280</a>bitflags! {
+<a href=#281 id=281 data-nosnippet>281</a>    pub struct MyFlags: u32 {
+<a href=#282 id=282 data-nosnippet>282</a>        const A = 1;
+<a href=#283 id=283 data-nosnippet>283</a>        const B = 2;
+<a href=#284 id=284 data-nosnippet>284</a>    }
+<a href=#285 id=285 data-nosnippet>285</a>}
+<a href=#286 id=286 data-nosnippet>286</a>```
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>What they'd end up with looks something like this:
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>```rust
+<a href=#291 id=291 data-nosnippet>291</a>pub struct MyFlags(&lt;MyFlags as PublicFlags&gt;::InternalBitFlags);
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>const _: () = {
+<a href=#294 id=294 data-nosnippet>294</a>    #[repr(transparent)]
+<a href=#295 id=295 data-nosnippet>295</a>    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+<a href=#296 id=296 data-nosnippet>296</a>    pub struct MyInternalBitFlags {
+<a href=#297 id=297 data-nosnippet>297</a>        bits: u32,
+<a href=#298 id=298 data-nosnippet>298</a>    }
+<a href=#299 id=299 data-nosnippet>299</a>
+<a href=#300 id=300 data-nosnippet>300</a>    impl PublicFlags for MyFlags {
+<a href=#301 id=301 data-nosnippet>301</a>        type Internal = InternalBitFlags;
+<a href=#302 id=302 data-nosnippet>302</a>    }
+<a href=#303 id=303 data-nosnippet>303</a>};
+<a href=#304 id=304 data-nosnippet>304</a>```
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>If we want to expose something like a new trait impl for generated flags types, we add it to our generated `MyInternalBitFlags`,
+<a href=#307 id=307 data-nosnippet>307</a>and let `#[derive]` on `MyFlags` pick up that implementation, if an end-user chooses to add one.
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>The public API is generated in the `__impl_public_flags!` macro, and the internal API is generated in
+<a href=#310 id=310 data-nosnippet>310</a>the `__impl_internal_flags!` macro.
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>The macros are split into 3 modules:
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a>- `public`: where the user-facing flags types are generated.
+<a href=#315 id=315 data-nosnippet>315</a>- `internal`: where the `bitflags`-facing flags types are generated.
+<a href=#316 id=316 data-nosnippet>316</a>- `external`: where external library traits are implemented conditionally.
+<a href=#317 id=317 data-nosnippet>317</a>*/
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a></span><span class="doccomment">/**
+<a href=#320 id=320 data-nosnippet>320</a>Generate a flags type.
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a># `struct` mode
+<a href=#323 id=323 data-nosnippet>323</a>
+<a href=#324 id=324 data-nosnippet>324</a>A declaration that begins with `$vis struct` will generate a `struct` for a flags type, along with
+<a href=#325 id=325 data-nosnippet>325</a>methods and trait implementations for it. The body of the declaration defines flags as constants,
+<a href=#326 id=326 data-nosnippet>326</a>where each constant is a flags value of the generated flags type.
+<a href=#327 id=327 data-nosnippet>327</a>
+<a href=#328 id=328 data-nosnippet>328</a>## Examples
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>Generate a flags type using `u8` as the bits type:
+<a href=#331 id=331 data-nosnippet>331</a>
+<a href=#332 id=332 data-nosnippet>332</a>```
+<a href=#333 id=333 data-nosnippet>333</a># use bitflags::bitflags;
+<a href=#334 id=334 data-nosnippet>334</a>bitflags! {
+<a href=#335 id=335 data-nosnippet>335</a>    struct Flags: u8 {
+<a href=#336 id=336 data-nosnippet>336</a>        const A = 1;
+<a href=#337 id=337 data-nosnippet>337</a>        const B = 1 &lt;&lt; 1;
+<a href=#338 id=338 data-nosnippet>338</a>        const C = 0b0000_0100;
+<a href=#339 id=339 data-nosnippet>339</a>    }
+<a href=#340 id=340 data-nosnippet>340</a>}
+<a href=#341 id=341 data-nosnippet>341</a>```
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a>Flags types are private by default and accept standard visibility modifiers. Flags themselves
+<a href=#344 id=344 data-nosnippet>344</a>are always public:
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a>```
+<a href=#347 id=347 data-nosnippet>347</a># use bitflags::bitflags;
+<a href=#348 id=348 data-nosnippet>348</a>bitflags! {
+<a href=#349 id=349 data-nosnippet>349</a>    pub struct Flags: u8 {
+<a href=#350 id=350 data-nosnippet>350</a>        // Constants are always `pub`
+<a href=#351 id=351 data-nosnippet>351</a>        const A = 1;
+<a href=#352 id=352 data-nosnippet>352</a>    }
+<a href=#353 id=353 data-nosnippet>353</a>}
+<a href=#354 id=354 data-nosnippet>354</a>```
+<a href=#355 id=355 data-nosnippet>355</a>
+<a href=#356 id=356 data-nosnippet>356</a>Flags may refer to other flags using their [`Flags::bits`] value:
+<a href=#357 id=357 data-nosnippet>357</a>
+<a href=#358 id=358 data-nosnippet>358</a>```
+<a href=#359 id=359 data-nosnippet>359</a># use bitflags::bitflags;
+<a href=#360 id=360 data-nosnippet>360</a>bitflags! {
+<a href=#361 id=361 data-nosnippet>361</a>    struct Flags: u8 {
+<a href=#362 id=362 data-nosnippet>362</a>        const A = 1;
+<a href=#363 id=363 data-nosnippet>363</a>        const B = 1 &lt;&lt; 1;
+<a href=#364 id=364 data-nosnippet>364</a>        const AB = Flags::A.bits() | Flags::B.bits();
+<a href=#365 id=365 data-nosnippet>365</a>    }
+<a href=#366 id=366 data-nosnippet>366</a>}
+<a href=#367 id=367 data-nosnippet>367</a>```
+<a href=#368 id=368 data-nosnippet>368</a>
+<a href=#369 id=369 data-nosnippet>369</a>A single `bitflags` invocation may include zero or more flags type declarations:
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a>```
+<a href=#372 id=372 data-nosnippet>372</a># use bitflags::bitflags;
+<a href=#373 id=373 data-nosnippet>373</a>bitflags! {}
+<a href=#374 id=374 data-nosnippet>374</a>
+<a href=#375 id=375 data-nosnippet>375</a>bitflags! {
+<a href=#376 id=376 data-nosnippet>376</a>    struct Flags1: u8 {
+<a href=#377 id=377 data-nosnippet>377</a>        const A = 1;
+<a href=#378 id=378 data-nosnippet>378</a>    }
+<a href=#379 id=379 data-nosnippet>379</a>
+<a href=#380 id=380 data-nosnippet>380</a>    struct Flags2: u8 {
+<a href=#381 id=381 data-nosnippet>381</a>        const A = 1;
+<a href=#382 id=382 data-nosnippet>382</a>    }
+<a href=#383 id=383 data-nosnippet>383</a>}
+<a href=#384 id=384 data-nosnippet>384</a>```
+<a href=#385 id=385 data-nosnippet>385</a>
+<a href=#386 id=386 data-nosnippet>386</a># `impl` mode
+<a href=#387 id=387 data-nosnippet>387</a>
+<a href=#388 id=388 data-nosnippet>388</a>A declaration that begins with `impl` will only generate methods and trait implementations for the
+<a href=#389 id=389 data-nosnippet>389</a>`struct` defined outside of the `bitflags` macro.
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>The struct itself must be a newtype using the bits type as its field.
+<a href=#392 id=392 data-nosnippet>392</a>
+<a href=#393 id=393 data-nosnippet>393</a>The syntax for `impl` mode is identical to `struct` mode besides the starting token.
+<a href=#394 id=394 data-nosnippet>394</a>
+<a href=#395 id=395 data-nosnippet>395</a>## Examples
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a>Implement flags methods and traits for a custom flags type using `u8` as its underlying bits type:
+<a href=#398 id=398 data-nosnippet>398</a>
+<a href=#399 id=399 data-nosnippet>399</a>```
+<a href=#400 id=400 data-nosnippet>400</a># use bitflags::bitflags;
+<a href=#401 id=401 data-nosnippet>401</a>struct Flags(u8);
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a>bitflags! {
+<a href=#404 id=404 data-nosnippet>404</a>    impl Flags: u8 {
+<a href=#405 id=405 data-nosnippet>405</a>        const A = 1;
+<a href=#406 id=406 data-nosnippet>406</a>        const B = 1 &lt;&lt; 1;
+<a href=#407 id=407 data-nosnippet>407</a>        const C = 0b0000_0100;
+<a href=#408 id=408 data-nosnippet>408</a>    }
+<a href=#409 id=409 data-nosnippet>409</a>}
+<a href=#410 id=410 data-nosnippet>410</a>```
+<a href=#411 id=411 data-nosnippet>411</a>
+<a href=#412 id=412 data-nosnippet>412</a># Named and unnamed flags
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a>Constants in the body of a declaration are flags. The identifier of the constant is the name of
+<a href=#415 id=415 data-nosnippet>415</a>the flag. If the identifier is `_`, then the flag is unnamed. Unnamed flags don't appear in the
+<a href=#416 id=416 data-nosnippet>416</a>generated API, but affect how bits are truncated.
+<a href=#417 id=417 data-nosnippet>417</a>
+<a href=#418 id=418 data-nosnippet>418</a>## Examples
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>Adding an unnamed flag that makes all bits known:
+<a href=#421 id=421 data-nosnippet>421</a>
+<a href=#422 id=422 data-nosnippet>422</a>```
+<a href=#423 id=423 data-nosnippet>423</a># use bitflags::bitflags;
+<a href=#424 id=424 data-nosnippet>424</a>bitflags! {
+<a href=#425 id=425 data-nosnippet>425</a>    struct Flags: u8 {
+<a href=#426 id=426 data-nosnippet>426</a>        const A = 1;
+<a href=#427 id=427 data-nosnippet>427</a>        const B = 1 &lt;&lt; 1;
+<a href=#428 id=428 data-nosnippet>428</a>
+<a href=#429 id=429 data-nosnippet>429</a>        const _ = !0;
+<a href=#430 id=430 data-nosnippet>430</a>    }
+<a href=#431 id=431 data-nosnippet>431</a>}
+<a href=#432 id=432 data-nosnippet>432</a>```
+<a href=#433 id=433 data-nosnippet>433</a>
+<a href=#434 id=434 data-nosnippet>434</a>Flags types may define multiple unnamed flags:
+<a href=#435 id=435 data-nosnippet>435</a>
+<a href=#436 id=436 data-nosnippet>436</a>```
+<a href=#437 id=437 data-nosnippet>437</a># use bitflags::bitflags;
+<a href=#438 id=438 data-nosnippet>438</a>bitflags! {
+<a href=#439 id=439 data-nosnippet>439</a>    struct Flags: u8 {
+<a href=#440 id=440 data-nosnippet>440</a>        const _ = 1;
+<a href=#441 id=441 data-nosnippet>441</a>        const _ = 1 &lt;&lt; 1;
+<a href=#442 id=442 data-nosnippet>442</a>    }
+<a href=#443 id=443 data-nosnippet>443</a>}
+<a href=#444 id=444 data-nosnippet>444</a>```
+<a href=#445 id=445 data-nosnippet>445</a>*/
+<a href=#446 id=446 data-nosnippet>446</a></span><span class="attr">#[macro_export]
+<a href=#447 id=447 data-nosnippet>447</a></span><span class="macro">macro_rules!</span> bitflags {
+<a href=#448 id=448 data-nosnippet>448</a>    (
+<a href=#449 id=449 data-nosnippet>449</a>        $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+<a href=#450 id=450 data-nosnippet>450</a>        <span class="macro-nonterminal">$vis</span>:vis <span class="kw">struct </span><span class="macro-nonterminal">$BitFlags</span>:ident: <span class="macro-nonterminal">$T</span>:ty {
+<a href=#451 id=451 data-nosnippet>451</a>            $(
+<a href=#452 id=452 data-nosnippet>452</a>                $(<span class="attr">#[<span class="macro-nonterminal">$inner</span>:ident $(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>]</span>)*
+<a href=#453 id=453 data-nosnippet>453</a>                <span class="kw">const </span><span class="macro-nonterminal">$Flag</span>:tt = <span class="macro-nonterminal">$value</span>:expr;
+<a href=#454 id=454 data-nosnippet>454</a>            )*
+<a href=#455 id=455 data-nosnippet>455</a>        }
+<a href=#456 id=456 data-nosnippet>456</a>
+<a href=#457 id=457 data-nosnippet>457</a>        $(<span class="macro-nonterminal">$t</span>:tt)*
+<a href=#458 id=458 data-nosnippet>458</a>    ) =&gt; {
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="comment">// Declared in the scope of the `bitflags!` call
+<a href=#460 id=460 data-nosnippet>460</a>        // This type appears in the end-user's API
+<a href=#461 id=461 data-nosnippet>461</a>        </span><span class="macro-nonterminal">$</span><span class="macro">crate::__declare_public_bitflags!</span> {
+<a href=#462 id=462 data-nosnippet>462</a>            $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+<a href=#463 id=463 data-nosnippet>463</a>            <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$BitFlags
+<a href=#464 id=464 data-nosnippet>464</a>        </span>}
+<a href=#465 id=465 data-nosnippet>465</a>
+<a href=#466 id=466 data-nosnippet>466</a>        <span class="comment">// Workaround for: https://github.com/bitflags/bitflags/issues/320
+<a href=#467 id=467 data-nosnippet>467</a>        </span><span class="macro-nonterminal">$</span><span class="macro">crate::__impl_public_bitflags_consts!</span> {
+<a href=#468 id=468 data-nosnippet>468</a>            <span class="macro-nonterminal">$BitFlags</span>: <span class="macro-nonterminal">$T </span>{
+<a href=#469 id=469 data-nosnippet>469</a>                $(
+<a href=#470 id=470 data-nosnippet>470</a>                    $(<span class="attr">#[<span class="macro-nonterminal">$inner </span>$(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>]</span>)*
+<a href=#471 id=471 data-nosnippet>471</a>                    <span class="kw">const </span><span class="macro-nonterminal">$Flag </span>= <span class="macro-nonterminal">$value</span>;
+<a href=#472 id=472 data-nosnippet>472</a>                )*
+<a href=#473 id=473 data-nosnippet>473</a>            }
+<a href=#474 id=474 data-nosnippet>474</a>        }
+<a href=#475 id=475 data-nosnippet>475</a>
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="attr">#[allow(
+<a href=#477 id=477 data-nosnippet>477</a>            dead_code,
+<a href=#478 id=478 data-nosnippet>478</a>            deprecated,
+<a href=#479 id=479 data-nosnippet>479</a>            unused_doc_comments,
+<a href=#480 id=480 data-nosnippet>480</a>            unused_attributes,
+<a href=#481 id=481 data-nosnippet>481</a>            unused_mut,
+<a href=#482 id=482 data-nosnippet>482</a>            unused_imports,
+<a href=#483 id=483 data-nosnippet>483</a>            non_upper_case_globals,
+<a href=#484 id=484 data-nosnippet>484</a>            clippy::assign_op_pattern,
+<a href=#485 id=485 data-nosnippet>485</a>            clippy::indexing_slicing,
+<a href=#486 id=486 data-nosnippet>486</a>            clippy::same_name_method,
+<a href=#487 id=487 data-nosnippet>487</a>            clippy::iter_without_into_iter,
+<a href=#488 id=488 data-nosnippet>488</a>        )]
+<a href=#489 id=489 data-nosnippet>489</a>        </span><span class="kw">const _</span>: () = {
+<a href=#490 id=490 data-nosnippet>490</a>            <span class="comment">// Declared in a "hidden" scope that can't be reached directly
+<a href=#491 id=491 data-nosnippet>491</a>            // These types don't appear in the end-user's API
+<a href=#492 id=492 data-nosnippet>492</a>            </span><span class="macro-nonterminal">$</span><span class="macro">crate::__declare_internal_bitflags!</span> {
+<a href=#493 id=493 data-nosnippet>493</a>                <span class="macro-nonterminal">$vis </span><span class="kw">struct </span>InternalBitFlags: <span class="macro-nonterminal">$T
+<a href=#494 id=494 data-nosnippet>494</a>            </span>}
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__impl_internal_bitflags!</span> {
+<a href=#497 id=497 data-nosnippet>497</a>                <span class="macro-nonterminal">InternalBitFlags</span>: <span class="macro-nonterminal">$T</span>, <span class="macro-nonterminal">$BitFlags </span>{
+<a href=#498 id=498 data-nosnippet>498</a>                    $(
+<a href=#499 id=499 data-nosnippet>499</a>                        $(<span class="attr">#[<span class="macro-nonterminal">$inner </span>$(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>]</span>)*
+<a href=#500 id=500 data-nosnippet>500</a>                        <span class="kw">const </span><span class="macro-nonterminal">$Flag </span>= <span class="macro-nonterminal">$value</span>;
+<a href=#501 id=501 data-nosnippet>501</a>                    )*
+<a href=#502 id=502 data-nosnippet>502</a>                }
+<a href=#503 id=503 data-nosnippet>503</a>            }
+<a href=#504 id=504 data-nosnippet>504</a>
+<a href=#505 id=505 data-nosnippet>505</a>            <span class="comment">// This is where new library trait implementations can be added
+<a href=#506 id=506 data-nosnippet>506</a>            </span><span class="macro-nonterminal">$</span><span class="macro">crate::__impl_external_bitflags!</span> {
+<a href=#507 id=507 data-nosnippet>507</a>                <span class="macro-nonterminal">InternalBitFlags</span>: <span class="macro-nonterminal">$T</span>, <span class="macro-nonterminal">$BitFlags </span>{
+<a href=#508 id=508 data-nosnippet>508</a>                    $(
+<a href=#509 id=509 data-nosnippet>509</a>                        $(<span class="attr">#[<span class="macro-nonterminal">$inner </span>$(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>]</span>)*
+<a href=#510 id=510 data-nosnippet>510</a>                        <span class="kw">const </span><span class="macro-nonterminal">$Flag</span>;
+<a href=#511 id=511 data-nosnippet>511</a>                    )*
+<a href=#512 id=512 data-nosnippet>512</a>                }
+<a href=#513 id=513 data-nosnippet>513</a>            }
+<a href=#514 id=514 data-nosnippet>514</a>
+<a href=#515 id=515 data-nosnippet>515</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__impl_public_bitflags_forward!</span> {
+<a href=#516 id=516 data-nosnippet>516</a>                <span class="macro-nonterminal">$BitFlags</span>: <span class="macro-nonterminal">$T</span>, InternalBitFlags
+<a href=#517 id=517 data-nosnippet>517</a>            }
+<a href=#518 id=518 data-nosnippet>518</a>
+<a href=#519 id=519 data-nosnippet>519</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__impl_public_bitflags_ops!</span> {
+<a href=#520 id=520 data-nosnippet>520</a>                <span class="macro-nonterminal">$BitFlags
+<a href=#521 id=521 data-nosnippet>521</a>            </span>}
+<a href=#522 id=522 data-nosnippet>522</a>
+<a href=#523 id=523 data-nosnippet>523</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__impl_public_bitflags_iter!</span> {
+<a href=#524 id=524 data-nosnippet>524</a>                <span class="macro-nonterminal">$BitFlags</span>: <span class="macro-nonterminal">$T</span>, <span class="macro-nonterminal">$BitFlags
+<a href=#525 id=525 data-nosnippet>525</a>            </span>}
+<a href=#526 id=526 data-nosnippet>526</a>        };
+<a href=#527 id=527 data-nosnippet>527</a>
+<a href=#528 id=528 data-nosnippet>528</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::bitflags!</span> {
+<a href=#529 id=529 data-nosnippet>529</a>            $(<span class="macro-nonterminal">$t</span>)*
+<a href=#530 id=530 data-nosnippet>530</a>        }
+<a href=#531 id=531 data-nosnippet>531</a>    };
+<a href=#532 id=532 data-nosnippet>532</a>    (
+<a href=#533 id=533 data-nosnippet>533</a>        $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+<a href=#534 id=534 data-nosnippet>534</a>        <span class="kw">impl </span><span class="macro-nonterminal">$BitFlags</span>:ident: <span class="macro-nonterminal">$T</span>:ty {
+<a href=#535 id=535 data-nosnippet>535</a>            $(
+<a href=#536 id=536 data-nosnippet>536</a>                $(<span class="attr">#[<span class="macro-nonterminal">$inner</span>:ident $(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>]</span>)*
+<a href=#537 id=537 data-nosnippet>537</a>                <span class="kw">const </span><span class="macro-nonterminal">$Flag</span>:tt = <span class="macro-nonterminal">$value</span>:expr;
+<a href=#538 id=538 data-nosnippet>538</a>            )*
+<a href=#539 id=539 data-nosnippet>539</a>        }
+<a href=#540 id=540 data-nosnippet>540</a>
+<a href=#541 id=541 data-nosnippet>541</a>        $(<span class="macro-nonterminal">$t</span>:tt)*
+<a href=#542 id=542 data-nosnippet>542</a>    ) =&gt; {
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::__impl_public_bitflags_consts!</span> {
+<a href=#544 id=544 data-nosnippet>544</a>            <span class="macro-nonterminal">$BitFlags</span>: <span class="macro-nonterminal">$T </span>{
+<a href=#545 id=545 data-nosnippet>545</a>                $(
+<a href=#546 id=546 data-nosnippet>546</a>                    $(<span class="attr">#[<span class="macro-nonterminal">$inner </span>$(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>]</span>)*
+<a href=#547 id=547 data-nosnippet>547</a>                    <span class="kw">const </span><span class="macro-nonterminal">$Flag </span>= <span class="macro-nonterminal">$value</span>;
+<a href=#548 id=548 data-nosnippet>548</a>                )*
+<a href=#549 id=549 data-nosnippet>549</a>            }
+<a href=#550 id=550 data-nosnippet>550</a>        }
+<a href=#551 id=551 data-nosnippet>551</a>
+<a href=#552 id=552 data-nosnippet>552</a>        <span class="attr">#[allow(
+<a href=#553 id=553 data-nosnippet>553</a>            dead_code,
+<a href=#554 id=554 data-nosnippet>554</a>            deprecated,
+<a href=#555 id=555 data-nosnippet>555</a>            unused_doc_comments,
+<a href=#556 id=556 data-nosnippet>556</a>            unused_attributes,
+<a href=#557 id=557 data-nosnippet>557</a>            unused_mut,
+<a href=#558 id=558 data-nosnippet>558</a>            unused_imports,
+<a href=#559 id=559 data-nosnippet>559</a>            non_upper_case_globals,
+<a href=#560 id=560 data-nosnippet>560</a>            clippy::assign_op_pattern,
+<a href=#561 id=561 data-nosnippet>561</a>            clippy::iter_without_into_iter,
+<a href=#562 id=562 data-nosnippet>562</a>        )]
+<a href=#563 id=563 data-nosnippet>563</a>        </span><span class="kw">const _</span>: () = {
+<a href=#564 id=564 data-nosnippet>564</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__impl_public_bitflags!</span> {
+<a href=#565 id=565 data-nosnippet>565</a>                $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+<a href=#566 id=566 data-nosnippet>566</a>                <span class="macro-nonterminal">$BitFlags</span>: <span class="macro-nonterminal">$T</span>, <span class="macro-nonterminal">$BitFlags </span>{
+<a href=#567 id=567 data-nosnippet>567</a>                    $(
+<a href=#568 id=568 data-nosnippet>568</a>                        $(<span class="attr">#[<span class="macro-nonterminal">$inner </span>$(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>]</span>)*
+<a href=#569 id=569 data-nosnippet>569</a>                        <span class="kw">const </span><span class="macro-nonterminal">$Flag </span>= <span class="macro-nonterminal">$value</span>;
+<a href=#570 id=570 data-nosnippet>570</a>                    )*
+<a href=#571 id=571 data-nosnippet>571</a>                }
+<a href=#572 id=572 data-nosnippet>572</a>            }
+<a href=#573 id=573 data-nosnippet>573</a>
+<a href=#574 id=574 data-nosnippet>574</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__impl_public_bitflags_ops!</span> {
+<a href=#575 id=575 data-nosnippet>575</a>                <span class="macro-nonterminal">$BitFlags
+<a href=#576 id=576 data-nosnippet>576</a>            </span>}
+<a href=#577 id=577 data-nosnippet>577</a>
+<a href=#578 id=578 data-nosnippet>578</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__impl_public_bitflags_iter!</span> {
+<a href=#579 id=579 data-nosnippet>579</a>                <span class="macro-nonterminal">$BitFlags</span>: <span class="macro-nonterminal">$T</span>, <span class="macro-nonterminal">$BitFlags
+<a href=#580 id=580 data-nosnippet>580</a>            </span>}
+<a href=#581 id=581 data-nosnippet>581</a>        };
+<a href=#582 id=582 data-nosnippet>582</a>
+<a href=#583 id=583 data-nosnippet>583</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::bitflags!</span> {
+<a href=#584 id=584 data-nosnippet>584</a>            $(<span class="macro-nonterminal">$t</span>)*
+<a href=#585 id=585 data-nosnippet>585</a>        }
+<a href=#586 id=586 data-nosnippet>586</a>    };
+<a href=#587 id=587 data-nosnippet>587</a>    () =&gt; {};
+<a href=#588 id=588 data-nosnippet>588</a>}
+<a href=#589 id=589 data-nosnippet>589</a>
+<a href=#590 id=590 data-nosnippet>590</a><span class="doccomment">/// Implement functions on bitflags types.
+<a href=#591 id=591 data-nosnippet>591</a>///
+<a href=#592 id=592 data-nosnippet>592</a>/// We need to be careful about adding new methods and trait implementations here because they
+<a href=#593 id=593 data-nosnippet>593</a>/// could conflict with items added by the end-user.
+<a href=#594 id=594 data-nosnippet>594</a></span><span class="attr">#[macro_export]
+<a href=#595 id=595 data-nosnippet>595</a>#[doc(hidden)]
+<a href=#596 id=596 data-nosnippet>596</a></span><span class="macro">macro_rules!</span> __impl_bitflags {
+<a href=#597 id=597 data-nosnippet>597</a>    (
+<a href=#598 id=598 data-nosnippet>598</a>        $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+<a href=#599 id=599 data-nosnippet>599</a>        <span class="macro-nonterminal">$PublicBitFlags</span>:ident: <span class="macro-nonterminal">$T</span>:ty {
+<a href=#600 id=600 data-nosnippet>600</a>            <span class="kw">fn </span>empty() <span class="macro-nonterminal">$empty</span>:block
+<a href=#601 id=601 data-nosnippet>601</a>            <span class="kw">fn </span>all() <span class="macro-nonterminal">$all</span>:block
+<a href=#602 id=602 data-nosnippet>602</a>            <span class="kw">fn </span>bits(<span class="macro-nonterminal">$bits0</span>:ident) <span class="macro-nonterminal">$bits</span>:block
+<a href=#603 id=603 data-nosnippet>603</a>            <span class="kw">fn </span>from_bits(<span class="macro-nonterminal">$from_bits0</span>:ident) <span class="macro-nonterminal">$from_bits</span>:block
+<a href=#604 id=604 data-nosnippet>604</a>            <span class="kw">fn </span>from_bits_truncate(<span class="macro-nonterminal">$from_bits_truncate0</span>:ident) <span class="macro-nonterminal">$from_bits_truncate</span>:block
+<a href=#605 id=605 data-nosnippet>605</a>            <span class="kw">fn </span>from_bits_retain(<span class="macro-nonterminal">$from_bits_retain0</span>:ident) <span class="macro-nonterminal">$from_bits_retain</span>:block
+<a href=#606 id=606 data-nosnippet>606</a>            <span class="kw">fn </span>from_name(<span class="macro-nonterminal">$from_name0</span>:ident) <span class="macro-nonterminal">$from_name</span>:block
+<a href=#607 id=607 data-nosnippet>607</a>            <span class="kw">fn </span>is_empty(<span class="macro-nonterminal">$is_empty0</span>:ident) <span class="macro-nonterminal">$is_empty</span>:block
+<a href=#608 id=608 data-nosnippet>608</a>            <span class="kw">fn </span>is_all(<span class="macro-nonterminal">$is_all0</span>:ident) <span class="macro-nonterminal">$is_all</span>:block
+<a href=#609 id=609 data-nosnippet>609</a>            <span class="kw">fn </span>intersects(<span class="macro-nonterminal">$intersects0</span>:ident, <span class="macro-nonterminal">$intersects1</span>:ident) <span class="macro-nonterminal">$intersects</span>:block
+<a href=#610 id=610 data-nosnippet>610</a>            <span class="kw">fn </span>contains(<span class="macro-nonterminal">$contains0</span>:ident, <span class="macro-nonterminal">$contains1</span>:ident) <span class="macro-nonterminal">$contains</span>:block
+<a href=#611 id=611 data-nosnippet>611</a>            <span class="kw">fn </span>insert(<span class="macro-nonterminal">$insert0</span>:ident, <span class="macro-nonterminal">$insert1</span>:ident) <span class="macro-nonterminal">$insert</span>:block
+<a href=#612 id=612 data-nosnippet>612</a>            <span class="kw">fn </span>remove(<span class="macro-nonterminal">$remove0</span>:ident, <span class="macro-nonterminal">$remove1</span>:ident) <span class="macro-nonterminal">$remove</span>:block
+<a href=#613 id=613 data-nosnippet>613</a>            <span class="kw">fn </span>toggle(<span class="macro-nonterminal">$toggle0</span>:ident, <span class="macro-nonterminal">$toggle1</span>:ident) <span class="macro-nonterminal">$toggle</span>:block
+<a href=#614 id=614 data-nosnippet>614</a>            <span class="kw">fn </span>set(<span class="macro-nonterminal">$set0</span>:ident, <span class="macro-nonterminal">$set1</span>:ident, <span class="macro-nonterminal">$set2</span>:ident) <span class="macro-nonterminal">$set</span>:block
+<a href=#615 id=615 data-nosnippet>615</a>            <span class="kw">fn </span>intersection(<span class="macro-nonterminal">$intersection0</span>:ident, <span class="macro-nonterminal">$intersection1</span>:ident) <span class="macro-nonterminal">$intersection</span>:block
+<a href=#616 id=616 data-nosnippet>616</a>            <span class="kw">fn </span>union(<span class="macro-nonterminal">$union0</span>:ident, <span class="macro-nonterminal">$union1</span>:ident) <span class="macro-nonterminal">$</span><span class="kw">union</span>:<span class="macro-nonterminal">block
+<a href=#617 id=617 data-nosnippet>617</a>            </span><span class="kw">fn </span>difference(<span class="macro-nonterminal">$difference0</span>:ident, <span class="macro-nonterminal">$difference1</span>:ident) <span class="macro-nonterminal">$difference</span>:block
+<a href=#618 id=618 data-nosnippet>618</a>            <span class="kw">fn </span>symmetric_difference(<span class="macro-nonterminal">$symmetric_difference0</span>:ident, <span class="macro-nonterminal">$symmetric_difference1</span>:ident) <span class="macro-nonterminal">$symmetric_difference</span>:block
+<a href=#619 id=619 data-nosnippet>619</a>            <span class="kw">fn </span>complement(<span class="macro-nonterminal">$complement0</span>:ident) <span class="macro-nonterminal">$complement</span>:block
+<a href=#620 id=620 data-nosnippet>620</a>        }
+<a href=#621 id=621 data-nosnippet>621</a>    ) =&gt; {
+<a href=#622 id=622 data-nosnippet>622</a>        <span class="attr">#[allow(dead_code, deprecated, unused_attributes)]
+<a href=#623 id=623 data-nosnippet>623</a>        </span>$(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+<a href=#624 id=624 data-nosnippet>624</a>        <span class="kw">impl </span><span class="macro-nonterminal">$PublicBitFlags </span>{
+<a href=#625 id=625 data-nosnippet>625</a>            <span class="doccomment">/// Get a flags value with all bits unset.
+<a href=#626 id=626 data-nosnippet>626</a>            </span><span class="attr">#[inline]
+<a href=#627 id=627 data-nosnippet>627</a>            </span><span class="kw">pub const fn </span>empty() -&gt; <span class="self">Self </span>{
+<a href=#628 id=628 data-nosnippet>628</a>                <span class="macro-nonterminal">$empty
+<a href=#629 id=629 data-nosnippet>629</a>            </span>}
+<a href=#630 id=630 data-nosnippet>630</a>
+<a href=#631 id=631 data-nosnippet>631</a>            <span class="doccomment">/// Get a flags value with all known bits set.
+<a href=#632 id=632 data-nosnippet>632</a>            </span><span class="attr">#[inline]
+<a href=#633 id=633 data-nosnippet>633</a>            </span><span class="kw">pub const fn </span>all() -&gt; <span class="self">Self </span>{
+<a href=#634 id=634 data-nosnippet>634</a>                <span class="macro-nonterminal">$all
+<a href=#635 id=635 data-nosnippet>635</a>            </span>}
+<a href=#636 id=636 data-nosnippet>636</a>
+<a href=#637 id=637 data-nosnippet>637</a>            <span class="doccomment">/// Get the underlying bits value.
+<a href=#638 id=638 data-nosnippet>638</a>            ///
+<a href=#639 id=639 data-nosnippet>639</a>            /// The returned value is exactly the bits set in this flags value.
+<a href=#640 id=640 data-nosnippet>640</a>            </span><span class="attr">#[inline]
+<a href=#641 id=641 data-nosnippet>641</a>            </span><span class="kw">pub const fn </span>bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="macro-nonterminal">$T </span>{
+<a href=#642 id=642 data-nosnippet>642</a>                <span class="kw">let </span><span class="macro-nonterminal">$bits0 </span>= <span class="self">self</span>;
+<a href=#643 id=643 data-nosnippet>643</a>                <span class="macro-nonterminal">$bits
+<a href=#644 id=644 data-nosnippet>644</a>            </span>}
+<a href=#645 id=645 data-nosnippet>645</a>
+<a href=#646 id=646 data-nosnippet>646</a>            <span class="doccomment">/// Convert from a bits value.
+<a href=#647 id=647 data-nosnippet>647</a>            ///
+<a href=#648 id=648 data-nosnippet>648</a>            /// This method will return `None` if any unknown bits are set.
+<a href=#649 id=649 data-nosnippet>649</a>            </span><span class="attr">#[inline]
+<a href=#650 id=650 data-nosnippet>650</a>            </span><span class="kw">pub const fn </span>from_bits(bits: <span class="macro-nonterminal">$T</span>) -&gt; <span class="macro-nonterminal">$crate::__private::core::option::Option</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#651 id=651 data-nosnippet>651</a>                <span class="kw">let </span><span class="macro-nonterminal">$from_bits0 </span>= bits;
+<a href=#652 id=652 data-nosnippet>652</a>                <span class="macro-nonterminal">$from_bits
+<a href=#653 id=653 data-nosnippet>653</a>            </span>}
+<a href=#654 id=654 data-nosnippet>654</a>
+<a href=#655 id=655 data-nosnippet>655</a>            <span class="doccomment">/// Convert from a bits value, unsetting any unknown bits.
+<a href=#656 id=656 data-nosnippet>656</a>            </span><span class="attr">#[inline]
+<a href=#657 id=657 data-nosnippet>657</a>            </span><span class="kw">pub const fn </span>from_bits_truncate(bits: <span class="macro-nonterminal">$T</span>) -&gt; <span class="self">Self </span>{
+<a href=#658 id=658 data-nosnippet>658</a>                <span class="kw">let </span><span class="macro-nonterminal">$from_bits_truncate0 </span>= bits;
+<a href=#659 id=659 data-nosnippet>659</a>                <span class="macro-nonterminal">$from_bits_truncate
+<a href=#660 id=660 data-nosnippet>660</a>            </span>}
+<a href=#661 id=661 data-nosnippet>661</a>
+<a href=#662 id=662 data-nosnippet>662</a>            <span class="doccomment">/// Convert from a bits value exactly.
+<a href=#663 id=663 data-nosnippet>663</a>            </span><span class="attr">#[inline]
+<a href=#664 id=664 data-nosnippet>664</a>            </span><span class="kw">pub const fn </span>from_bits_retain(bits: <span class="macro-nonterminal">$T</span>) -&gt; <span class="self">Self </span>{
+<a href=#665 id=665 data-nosnippet>665</a>                <span class="kw">let </span><span class="macro-nonterminal">$from_bits_retain0 </span>= bits;
+<a href=#666 id=666 data-nosnippet>666</a>                <span class="macro-nonterminal">$from_bits_retain
+<a href=#667 id=667 data-nosnippet>667</a>            </span>}
+<a href=#668 id=668 data-nosnippet>668</a>
+<a href=#669 id=669 data-nosnippet>669</a>            <span class="doccomment">/// Get a flags value with the bits of a flag with the given name set.
+<a href=#670 id=670 data-nosnippet>670</a>            ///
+<a href=#671 id=671 data-nosnippet>671</a>            /// This method will return `None` if `name` is empty or doesn't
+<a href=#672 id=672 data-nosnippet>672</a>            /// correspond to any named flag.
+<a href=#673 id=673 data-nosnippet>673</a>            </span><span class="attr">#[inline]
+<a href=#674 id=674 data-nosnippet>674</a>            </span><span class="kw">pub fn </span>from_name(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="macro-nonterminal">$crate::__private::core::option::Option</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#675 id=675 data-nosnippet>675</a>                <span class="kw">let </span><span class="macro-nonterminal">$from_name0 </span>= name;
+<a href=#676 id=676 data-nosnippet>676</a>                <span class="macro-nonterminal">$from_name
+<a href=#677 id=677 data-nosnippet>677</a>            </span>}
+<a href=#678 id=678 data-nosnippet>678</a>
+<a href=#679 id=679 data-nosnippet>679</a>            <span class="doccomment">/// Whether all bits in this flags value are unset.
+<a href=#680 id=680 data-nosnippet>680</a>            </span><span class="attr">#[inline]
+<a href=#681 id=681 data-nosnippet>681</a>            </span><span class="kw">pub const fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#682 id=682 data-nosnippet>682</a>                <span class="kw">let </span><span class="macro-nonterminal">$is_empty0 </span>= <span class="self">self</span>;
+<a href=#683 id=683 data-nosnippet>683</a>                <span class="macro-nonterminal">$is_empty
+<a href=#684 id=684 data-nosnippet>684</a>            </span>}
+<a href=#685 id=685 data-nosnippet>685</a>
+<a href=#686 id=686 data-nosnippet>686</a>            <span class="doccomment">/// Whether all known bits in this flags value are set.
+<a href=#687 id=687 data-nosnippet>687</a>            </span><span class="attr">#[inline]
+<a href=#688 id=688 data-nosnippet>688</a>            </span><span class="kw">pub const fn </span>is_all(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#689 id=689 data-nosnippet>689</a>                <span class="kw">let </span><span class="macro-nonterminal">$is_all0 </span>= <span class="self">self</span>;
+<a href=#690 id=690 data-nosnippet>690</a>                <span class="macro-nonterminal">$is_all
+<a href=#691 id=691 data-nosnippet>691</a>            </span>}
+<a href=#692 id=692 data-nosnippet>692</a>
+<a href=#693 id=693 data-nosnippet>693</a>            <span class="doccomment">/// Whether any set bits in a source flags value are also set in a target flags value.
+<a href=#694 id=694 data-nosnippet>694</a>            </span><span class="attr">#[inline]
+<a href=#695 id=695 data-nosnippet>695</a>            </span><span class="kw">pub const fn </span>intersects(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="self">Self</span>) -&gt; bool {
+<a href=#696 id=696 data-nosnippet>696</a>                <span class="kw">let </span><span class="macro-nonterminal">$intersects0 </span>= <span class="self">self</span>;
+<a href=#697 id=697 data-nosnippet>697</a>                <span class="kw">let </span><span class="macro-nonterminal">$intersects1 </span>= other;
+<a href=#698 id=698 data-nosnippet>698</a>                <span class="macro-nonterminal">$intersects
+<a href=#699 id=699 data-nosnippet>699</a>            </span>}
+<a href=#700 id=700 data-nosnippet>700</a>
+<a href=#701 id=701 data-nosnippet>701</a>            <span class="doccomment">/// Whether all set bits in a source flags value are also set in a target flags value.
+<a href=#702 id=702 data-nosnippet>702</a>            </span><span class="attr">#[inline]
+<a href=#703 id=703 data-nosnippet>703</a>            </span><span class="kw">pub const fn </span>contains(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="self">Self</span>) -&gt; bool {
+<a href=#704 id=704 data-nosnippet>704</a>                <span class="kw">let </span><span class="macro-nonterminal">$contains0 </span>= <span class="self">self</span>;
+<a href=#705 id=705 data-nosnippet>705</a>                <span class="kw">let </span><span class="macro-nonterminal">$contains1 </span>= other;
+<a href=#706 id=706 data-nosnippet>706</a>                <span class="macro-nonterminal">$contains
+<a href=#707 id=707 data-nosnippet>707</a>            </span>}
+<a href=#708 id=708 data-nosnippet>708</a>
+<a href=#709 id=709 data-nosnippet>709</a>            <span class="doccomment">/// The bitwise or (`|`) of the bits in two flags values.
+<a href=#710 id=710 data-nosnippet>710</a>            </span><span class="attr">#[inline]
+<a href=#711 id=711 data-nosnippet>711</a>            </span><span class="kw">pub fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="self">Self</span>) {
+<a href=#712 id=712 data-nosnippet>712</a>                <span class="kw">let </span><span class="macro-nonterminal">$insert0 </span>= <span class="self">self</span>;
+<a href=#713 id=713 data-nosnippet>713</a>                <span class="kw">let </span><span class="macro-nonterminal">$insert1 </span>= other;
+<a href=#714 id=714 data-nosnippet>714</a>                <span class="macro-nonterminal">$insert
+<a href=#715 id=715 data-nosnippet>715</a>            </span>}
+<a href=#716 id=716 data-nosnippet>716</a>
+<a href=#717 id=717 data-nosnippet>717</a>            <span class="doccomment">/// The intersection of a source flags value with the complement of a target flags value (`&amp;!`).
+<a href=#718 id=718 data-nosnippet>718</a>            ///
+<a href=#719 id=719 data-nosnippet>719</a>            /// This method is not equivalent to `self &amp; !other` when `other` has unknown bits set.
+<a href=#720 id=720 data-nosnippet>720</a>            /// `remove` won't truncate `other`, but the `!` operator will.
+<a href=#721 id=721 data-nosnippet>721</a>            </span><span class="attr">#[inline]
+<a href=#722 id=722 data-nosnippet>722</a>            </span><span class="kw">pub fn </span>remove(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="self">Self</span>) {
+<a href=#723 id=723 data-nosnippet>723</a>                <span class="kw">let </span><span class="macro-nonterminal">$remove0 </span>= <span class="self">self</span>;
+<a href=#724 id=724 data-nosnippet>724</a>                <span class="kw">let </span><span class="macro-nonterminal">$remove1 </span>= other;
+<a href=#725 id=725 data-nosnippet>725</a>                <span class="macro-nonterminal">$remove
+<a href=#726 id=726 data-nosnippet>726</a>            </span>}
+<a href=#727 id=727 data-nosnippet>727</a>
+<a href=#728 id=728 data-nosnippet>728</a>            <span class="doccomment">/// The bitwise exclusive-or (`^`) of the bits in two flags values.
+<a href=#729 id=729 data-nosnippet>729</a>            </span><span class="attr">#[inline]
+<a href=#730 id=730 data-nosnippet>730</a>            </span><span class="kw">pub fn </span>toggle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="self">Self</span>) {
+<a href=#731 id=731 data-nosnippet>731</a>                <span class="kw">let </span><span class="macro-nonterminal">$toggle0 </span>= <span class="self">self</span>;
+<a href=#732 id=732 data-nosnippet>732</a>                <span class="kw">let </span><span class="macro-nonterminal">$toggle1 </span>= other;
+<a href=#733 id=733 data-nosnippet>733</a>                <span class="macro-nonterminal">$toggle
+<a href=#734 id=734 data-nosnippet>734</a>            </span>}
+<a href=#735 id=735 data-nosnippet>735</a>
+<a href=#736 id=736 data-nosnippet>736</a>            <span class="doccomment">/// Call `insert` when `value` is `true` or `remove` when `value` is `false`.
+<a href=#737 id=737 data-nosnippet>737</a>            </span><span class="attr">#[inline]
+<a href=#738 id=738 data-nosnippet>738</a>            </span><span class="kw">pub fn </span>set(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="self">Self</span>, value: bool) {
+<a href=#739 id=739 data-nosnippet>739</a>                <span class="kw">let </span><span class="macro-nonterminal">$set0 </span>= <span class="self">self</span>;
+<a href=#740 id=740 data-nosnippet>740</a>                <span class="kw">let </span><span class="macro-nonterminal">$set1 </span>= other;
+<a href=#741 id=741 data-nosnippet>741</a>                <span class="kw">let </span><span class="macro-nonterminal">$set2 </span>= value;
+<a href=#742 id=742 data-nosnippet>742</a>                <span class="macro-nonterminal">$set
+<a href=#743 id=743 data-nosnippet>743</a>            </span>}
+<a href=#744 id=744 data-nosnippet>744</a>
+<a href=#745 id=745 data-nosnippet>745</a>            <span class="doccomment">/// The bitwise and (`&amp;`) of the bits in two flags values.
+<a href=#746 id=746 data-nosnippet>746</a>            </span><span class="attr">#[inline]
+<a href=#747 id=747 data-nosnippet>747</a>            #[must_use]
+<a href=#748 id=748 data-nosnippet>748</a>            </span><span class="kw">pub const fn </span>intersection(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+<a href=#749 id=749 data-nosnippet>749</a>                <span class="kw">let </span><span class="macro-nonterminal">$intersection0 </span>= <span class="self">self</span>;
+<a href=#750 id=750 data-nosnippet>750</a>                <span class="kw">let </span><span class="macro-nonterminal">$intersection1 </span>= other;
+<a href=#751 id=751 data-nosnippet>751</a>                <span class="macro-nonterminal">$intersection
+<a href=#752 id=752 data-nosnippet>752</a>            </span>}
+<a href=#753 id=753 data-nosnippet>753</a>
+<a href=#754 id=754 data-nosnippet>754</a>            <span class="doccomment">/// The bitwise or (`|`) of the bits in two flags values.
+<a href=#755 id=755 data-nosnippet>755</a>            </span><span class="attr">#[inline]
+<a href=#756 id=756 data-nosnippet>756</a>            #[must_use]
+<a href=#757 id=757 data-nosnippet>757</a>            </span><span class="kw">pub const fn </span>union(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+<a href=#758 id=758 data-nosnippet>758</a>                <span class="kw">let </span><span class="macro-nonterminal">$union0 </span>= <span class="self">self</span>;
+<a href=#759 id=759 data-nosnippet>759</a>                <span class="kw">let </span><span class="macro-nonterminal">$union1 </span>= other;
+<a href=#760 id=760 data-nosnippet>760</a>                <span class="macro-nonterminal">$union
+<a href=#761 id=761 data-nosnippet>761</a>            </span>}
+<a href=#762 id=762 data-nosnippet>762</a>
+<a href=#763 id=763 data-nosnippet>763</a>            <span class="doccomment">/// The intersection of a source flags value with the complement of a target flags value (`&amp;!`).
+<a href=#764 id=764 data-nosnippet>764</a>            ///
+<a href=#765 id=765 data-nosnippet>765</a>            /// This method is not equivalent to `self &amp; !other` when `other` has unknown bits set.
+<a href=#766 id=766 data-nosnippet>766</a>            /// `difference` won't truncate `other`, but the `!` operator will.
+<a href=#767 id=767 data-nosnippet>767</a>            </span><span class="attr">#[inline]
+<a href=#768 id=768 data-nosnippet>768</a>            #[must_use]
+<a href=#769 id=769 data-nosnippet>769</a>            </span><span class="kw">pub const fn </span>difference(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+<a href=#770 id=770 data-nosnippet>770</a>                <span class="kw">let </span><span class="macro-nonterminal">$difference0 </span>= <span class="self">self</span>;
+<a href=#771 id=771 data-nosnippet>771</a>                <span class="kw">let </span><span class="macro-nonterminal">$difference1 </span>= other;
+<a href=#772 id=772 data-nosnippet>772</a>                <span class="macro-nonterminal">$difference
+<a href=#773 id=773 data-nosnippet>773</a>            </span>}
+<a href=#774 id=774 data-nosnippet>774</a>
+<a href=#775 id=775 data-nosnippet>775</a>            <span class="doccomment">/// The bitwise exclusive-or (`^`) of the bits in two flags values.
+<a href=#776 id=776 data-nosnippet>776</a>            </span><span class="attr">#[inline]
+<a href=#777 id=777 data-nosnippet>777</a>            #[must_use]
+<a href=#778 id=778 data-nosnippet>778</a>            </span><span class="kw">pub const fn </span>symmetric_difference(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+<a href=#779 id=779 data-nosnippet>779</a>                <span class="kw">let </span><span class="macro-nonterminal">$symmetric_difference0 </span>= <span class="self">self</span>;
+<a href=#780 id=780 data-nosnippet>780</a>                <span class="kw">let </span><span class="macro-nonterminal">$symmetric_difference1 </span>= other;
+<a href=#781 id=781 data-nosnippet>781</a>                <span class="macro-nonterminal">$symmetric_difference
+<a href=#782 id=782 data-nosnippet>782</a>            </span>}
+<a href=#783 id=783 data-nosnippet>783</a>
+<a href=#784 id=784 data-nosnippet>784</a>            <span class="doccomment">/// The bitwise negation (`!`) of the bits in a flags value, truncating the result.
+<a href=#785 id=785 data-nosnippet>785</a>            </span><span class="attr">#[inline]
+<a href=#786 id=786 data-nosnippet>786</a>            #[must_use]
+<a href=#787 id=787 data-nosnippet>787</a>            </span><span class="kw">pub const fn </span>complement(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#788 id=788 data-nosnippet>788</a>                <span class="kw">let </span><span class="macro-nonterminal">$complement0 </span>= <span class="self">self</span>;
+<a href=#789 id=789 data-nosnippet>789</a>                <span class="macro-nonterminal">$complement
+<a href=#790 id=790 data-nosnippet>790</a>            </span>}
+<a href=#791 id=791 data-nosnippet>791</a>        }
+<a href=#792 id=792 data-nosnippet>792</a>    };
+<a href=#793 id=793 data-nosnippet>793</a>}
+<a href=#794 id=794 data-nosnippet>794</a>
+<a href=#795 id=795 data-nosnippet>795</a><span class="doccomment">/// A macro that matches flags values, similar to Rust's `match` statement.
+<a href=#796 id=796 data-nosnippet>796</a>///
+<a href=#797 id=797 data-nosnippet>797</a>/// In a regular `match` statement, the syntax `Flag::A | Flag::B` is interpreted as an or-pattern,
+<a href=#798 id=798 data-nosnippet>798</a>/// instead of the bitwise-or of `Flag::A` and `Flag::B`. This can be surprising when combined with flags types
+<a href=#799 id=799 data-nosnippet>799</a>/// because `Flag::A | Flag::B` won't match the pattern `Flag::A | Flag::B`. This macro is an alternative to
+<a href=#800 id=800 data-nosnippet>800</a>/// `match` for flags values that doesn't have this issue.
+<a href=#801 id=801 data-nosnippet>801</a>///
+<a href=#802 id=802 data-nosnippet>802</a>/// # Syntax
+<a href=#803 id=803 data-nosnippet>803</a>///
+<a href=#804 id=804 data-nosnippet>804</a>/// ```ignore
+<a href=#805 id=805 data-nosnippet>805</a>/// bitflags_match!(expression, {
+<a href=#806 id=806 data-nosnippet>806</a>///     pattern1 =&gt; result1,
+<a href=#807 id=807 data-nosnippet>807</a>///     pattern2 =&gt; result2,
+<a href=#808 id=808 data-nosnippet>808</a>///     ..
+<a href=#809 id=809 data-nosnippet>809</a>///     _ =&gt; default_result,
+<a href=#810 id=810 data-nosnippet>810</a>/// })
+<a href=#811 id=811 data-nosnippet>811</a>/// ```
+<a href=#812 id=812 data-nosnippet>812</a>///
+<a href=#813 id=813 data-nosnippet>813</a>/// The final `_ =&gt; default_result` arm is required, otherwise the macro will fail to compile.
+<a href=#814 id=814 data-nosnippet>814</a>///
+<a href=#815 id=815 data-nosnippet>815</a>/// # Examples
+<a href=#816 id=816 data-nosnippet>816</a>///
+<a href=#817 id=817 data-nosnippet>817</a>/// ```rust
+<a href=#818 id=818 data-nosnippet>818</a>/// use bitflags::{bitflags, bitflags_match};
+<a href=#819 id=819 data-nosnippet>819</a>///
+<a href=#820 id=820 data-nosnippet>820</a>/// bitflags! {
+<a href=#821 id=821 data-nosnippet>821</a>///     #[derive(PartialEq)]
+<a href=#822 id=822 data-nosnippet>822</a>///     struct Flags: u8 {
+<a href=#823 id=823 data-nosnippet>823</a>///         const A = 1 &lt;&lt; 0;
+<a href=#824 id=824 data-nosnippet>824</a>///         const B = 1 &lt;&lt; 1;
+<a href=#825 id=825 data-nosnippet>825</a>///         const C = 1 &lt;&lt; 2;
+<a href=#826 id=826 data-nosnippet>826</a>///     }
+<a href=#827 id=827 data-nosnippet>827</a>/// }
+<a href=#828 id=828 data-nosnippet>828</a>///
+<a href=#829 id=829 data-nosnippet>829</a>/// let flags = Flags::A | Flags::B;
+<a href=#830 id=830 data-nosnippet>830</a>///
+<a href=#831 id=831 data-nosnippet>831</a>/// bitflags_match!(flags, {
+<a href=#832 id=832 data-nosnippet>832</a>///     Flags::A | Flags::B =&gt; println!("A and/or B are set"),
+<a href=#833 id=833 data-nosnippet>833</a>///     _ =&gt; println!("neither A nor B are set"),
+<a href=#834 id=834 data-nosnippet>834</a>/// })
+<a href=#835 id=835 data-nosnippet>835</a>/// ```
+<a href=#836 id=836 data-nosnippet>836</a>///
+<a href=#837 id=837 data-nosnippet>837</a>/// # How it works
+<a href=#838 id=838 data-nosnippet>838</a>///
+<a href=#839 id=839 data-nosnippet>839</a>/// The macro expands to a series of `if` statements, checking equality between the input expression
+<a href=#840 id=840 data-nosnippet>840</a>/// and each pattern. This allows for correct matching of bitflag combinations, which is not possible
+<a href=#841 id=841 data-nosnippet>841</a>/// with a regular match expression due to the way bitflags are implemented.
+<a href=#842 id=842 data-nosnippet>842</a>///
+<a href=#843 id=843 data-nosnippet>843</a>/// Patterns are evaluated in order.
+<a href=#844 id=844 data-nosnippet>844</a></span><span class="attr">#[macro_export]
+<a href=#845 id=845 data-nosnippet>845</a></span><span class="macro">macro_rules!</span> bitflags_match {
+<a href=#846 id=846 data-nosnippet>846</a>    (<span class="macro-nonterminal">$operation</span>:expr, {
+<a href=#847 id=847 data-nosnippet>847</a>        $(<span class="macro-nonterminal">$t</span>:tt)*
+<a href=#848 id=848 data-nosnippet>848</a>    }) =&gt; {
+<a href=#849 id=849 data-nosnippet>849</a>        <span class="comment">// Expand to a closure so we can use `return`
+<a href=#850 id=850 data-nosnippet>850</a>        // This makes it possible to apply attributes to the "match arms"
+<a href=#851 id=851 data-nosnippet>851</a>        </span>(|| {
+<a href=#852 id=852 data-nosnippet>852</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__bitflags_match!</span>(<span class="macro-nonterminal">$operation</span>, { $(<span class="macro-nonterminal">$t</span>)* })
+<a href=#853 id=853 data-nosnippet>853</a>        })()
+<a href=#854 id=854 data-nosnippet>854</a>    };
+<a href=#855 id=855 data-nosnippet>855</a>}
+<a href=#856 id=856 data-nosnippet>856</a>
+<a href=#857 id=857 data-nosnippet>857</a><span class="doccomment">/// Expand the `bitflags_match` macro
+<a href=#858 id=858 data-nosnippet>858</a></span><span class="attr">#[macro_export]
+<a href=#859 id=859 data-nosnippet>859</a>#[doc(hidden)]
+<a href=#860 id=860 data-nosnippet>860</a></span><span class="macro">macro_rules!</span> __bitflags_match {
+<a href=#861 id=861 data-nosnippet>861</a>    <span class="comment">// Eat an optional `,` following a block match arm
+<a href=#862 id=862 data-nosnippet>862</a>    </span>(<span class="macro-nonterminal">$operation</span>:expr, { <span class="macro-nonterminal">$pattern</span>:expr =&gt; { $(<span class="macro-nonterminal">$body</span>:tt)* } , $(<span class="macro-nonterminal">$t</span>:tt)+ }) =&gt; {
+<a href=#863 id=863 data-nosnippet>863</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::__bitflags_match!</span>(<span class="macro-nonterminal">$operation</span>, { <span class="macro-nonterminal">$pattern </span>=&gt; { $(<span class="macro-nonterminal">$body</span>)* } $(<span class="macro-nonterminal">$t</span>)+ })
+<a href=#864 id=864 data-nosnippet>864</a>    };
+<a href=#865 id=865 data-nosnippet>865</a>    <span class="comment">// Expand a block match arm `A =&gt; { .. }`
+<a href=#866 id=866 data-nosnippet>866</a>    </span>(<span class="macro-nonterminal">$operation</span>:expr, { <span class="macro-nonterminal">$pattern</span>:expr =&gt; { $(<span class="macro-nonterminal">$body</span>:tt)* } $(<span class="macro-nonterminal">$t</span>:tt)+ }) =&gt; {
+<a href=#867 id=867 data-nosnippet>867</a>        {
+<a href=#868 id=868 data-nosnippet>868</a>            <span class="kw">if </span><span class="macro-nonterminal">$operation </span>== <span class="macro-nonterminal">$pattern </span>{
+<a href=#869 id=869 data-nosnippet>869</a>                <span class="kw">return </span>{
+<a href=#870 id=870 data-nosnippet>870</a>                    $(<span class="macro-nonterminal">$body</span>)*
+<a href=#871 id=871 data-nosnippet>871</a>                };
+<a href=#872 id=872 data-nosnippet>872</a>            }
+<a href=#873 id=873 data-nosnippet>873</a>
+<a href=#874 id=874 data-nosnippet>874</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__bitflags_match!</span>(<span class="macro-nonterminal">$operation</span>, { $(<span class="macro-nonterminal">$t</span>)+ })
+<a href=#875 id=875 data-nosnippet>875</a>        }
+<a href=#876 id=876 data-nosnippet>876</a>    };
+<a href=#877 id=877 data-nosnippet>877</a>    <span class="comment">// Expand an expression match arm `A =&gt; x,`
+<a href=#878 id=878 data-nosnippet>878</a>    </span>(<span class="macro-nonterminal">$operation</span>:expr, { <span class="macro-nonterminal">$pattern</span>:expr =&gt; <span class="macro-nonterminal">$body</span>:expr , $(<span class="macro-nonterminal">$t</span>:tt)+ }) =&gt; {
+<a href=#879 id=879 data-nosnippet>879</a>        {
+<a href=#880 id=880 data-nosnippet>880</a>            <span class="kw">if </span><span class="macro-nonterminal">$operation </span>== <span class="macro-nonterminal">$pattern </span>{
+<a href=#881 id=881 data-nosnippet>881</a>                <span class="kw">return </span><span class="macro-nonterminal">$body</span>;
+<a href=#882 id=882 data-nosnippet>882</a>            }
+<a href=#883 id=883 data-nosnippet>883</a>
+<a href=#884 id=884 data-nosnippet>884</a>            <span class="macro-nonterminal">$</span><span class="macro">crate::__bitflags_match!</span>(<span class="macro-nonterminal">$operation</span>, { $(<span class="macro-nonterminal">$t</span>)+ })
+<a href=#885 id=885 data-nosnippet>885</a>        }
+<a href=#886 id=886 data-nosnippet>886</a>    };
+<a href=#887 id=887 data-nosnippet>887</a>    <span class="comment">// Expand the default case
+<a href=#888 id=888 data-nosnippet>888</a>    </span>(<span class="macro-nonterminal">$operation</span>:expr, { <span class="kw">_ </span>=&gt; <span class="macro-nonterminal">$default</span>:expr $(,)<span class="question-mark">? </span>}) =&gt; {
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="macro-nonterminal">$default
+<a href=#890 id=890 data-nosnippet>890</a>    </span>}
+<a href=#891 id=891 data-nosnippet>891</a>}
+<a href=#892 id=892 data-nosnippet>892</a>
+<a href=#893 id=893 data-nosnippet>893</a><span class="doccomment">/// A macro that processed the input to `bitflags!` and shuffles attributes around
+<a href=#894 id=894 data-nosnippet>894</a>/// based on whether or not they're "expression-safe".
+<a href=#895 id=895 data-nosnippet>895</a>///
+<a href=#896 id=896 data-nosnippet>896</a>/// This macro is a token-tree muncher that works on 2 levels:
+<a href=#897 id=897 data-nosnippet>897</a>///
+<a href=#898 id=898 data-nosnippet>898</a>/// For each attribute, we explicitly match on its identifier, like `cfg` to determine
+<a href=#899 id=899 data-nosnippet>899</a>/// whether or not it should be considered expression-safe.
+<a href=#900 id=900 data-nosnippet>900</a>///
+<a href=#901 id=901 data-nosnippet>901</a>/// If you find yourself with an attribute that should be considered expression-safe
+<a href=#902 id=902 data-nosnippet>902</a>/// and isn't, it can be added here.
+<a href=#903 id=903 data-nosnippet>903</a></span><span class="attr">#[macro_export]
+<a href=#904 id=904 data-nosnippet>904</a>#[doc(hidden)]
+<a href=#905 id=905 data-nosnippet>905</a></span><span class="macro">macro_rules!</span> __bitflags_expr_safe_attrs {
+<a href=#906 id=906 data-nosnippet>906</a>    <span class="comment">// Entrypoint: Move all flags and all attributes into `unprocessed` lists
+<a href=#907 id=907 data-nosnippet>907</a>    // where they'll be munched one-at-a-time
+<a href=#908 id=908 data-nosnippet>908</a>    </span>(
+<a href=#909 id=909 data-nosnippet>909</a>        $(<span class="attr">#[<span class="macro-nonterminal">$inner</span>:ident $(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>]</span>)*
+<a href=#910 id=910 data-nosnippet>910</a>        { <span class="macro-nonterminal">$e</span>:expr }
+<a href=#911 id=911 data-nosnippet>911</a>    ) =&gt; {
+<a href=#912 id=912 data-nosnippet>912</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::__bitflags_expr_safe_attrs!</span> {
+<a href=#913 id=913 data-nosnippet>913</a>            <span class="macro-nonterminal">expr</span>: { <span class="macro-nonterminal">$e </span>},
+<a href=#914 id=914 data-nosnippet>914</a>            attrs: {
+<a href=#915 id=915 data-nosnippet>915</a>                <span class="comment">// All attributes start here
+<a href=#916 id=916 data-nosnippet>916</a>                </span>unprocessed: [$(<span class="attr">#[<span class="macro-nonterminal">$inner </span>$(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>]</span>)<span class="kw-2">*</span>],
+<a href=#917 id=917 data-nosnippet>917</a>                <span class="comment">// Attributes that are safe on expressions go here
+<a href=#918 id=918 data-nosnippet>918</a>                </span>processed: [],
+<a href=#919 id=919 data-nosnippet>919</a>            },
+<a href=#920 id=920 data-nosnippet>920</a>        }
+<a href=#921 id=921 data-nosnippet>921</a>    };
+<a href=#922 id=922 data-nosnippet>922</a>    <span class="comment">// Process the next attribute on the current flag
+<a href=#923 id=923 data-nosnippet>923</a>    // `cfg`: The next flag should be propagated to expressions
+<a href=#924 id=924 data-nosnippet>924</a>    // NOTE: You can copy this rules block and replace `cfg` with
+<a href=#925 id=925 data-nosnippet>925</a>    // your attribute name that should be considered expression-safe
+<a href=#926 id=926 data-nosnippet>926</a>    </span>(
+<a href=#927 id=927 data-nosnippet>927</a>        expr: { <span class="macro-nonterminal">$e</span>:expr },
+<a href=#928 id=928 data-nosnippet>928</a>            attrs: {
+<a href=#929 id=929 data-nosnippet>929</a>            unprocessed: [
+<a href=#930 id=930 data-nosnippet>930</a>                <span class="comment">// cfg matched here
+<a href=#931 id=931 data-nosnippet>931</a>                </span><span class="attr">#[cfg $(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>]
+<a href=#932 id=932 data-nosnippet>932</a>                </span>$(<span class="macro-nonterminal">$attrs_rest</span>:tt)*
+<a href=#933 id=933 data-nosnippet>933</a>            ],
+<a href=#934 id=934 data-nosnippet>934</a>            processed: [$(<span class="macro-nonterminal">$expr</span>:tt)<span class="kw-2">*</span>],
+<a href=#935 id=935 data-nosnippet>935</a>        },
+<a href=#936 id=936 data-nosnippet>936</a>    ) =&gt; {
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::__bitflags_expr_safe_attrs!</span> {
+<a href=#938 id=938 data-nosnippet>938</a>            <span class="macro-nonterminal">expr</span>: { <span class="macro-nonterminal">$e </span>},
+<a href=#939 id=939 data-nosnippet>939</a>            attrs: {
+<a href=#940 id=940 data-nosnippet>940</a>                unprocessed: [
+<a href=#941 id=941 data-nosnippet>941</a>                    $(<span class="macro-nonterminal">$attrs_rest</span>)*
+<a href=#942 id=942 data-nosnippet>942</a>                ],
+<a href=#943 id=943 data-nosnippet>943</a>                processed: [
+<a href=#944 id=944 data-nosnippet>944</a>                    $(<span class="macro-nonterminal">$expr</span>)*
+<a href=#945 id=945 data-nosnippet>945</a>                    <span class="comment">// cfg added here
+<a href=#946 id=946 data-nosnippet>946</a>                    </span><span class="attr">#[cfg $(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>]
+<a href=#947 id=947 data-nosnippet>947</a>                </span>],
+<a href=#948 id=948 data-nosnippet>948</a>            },
+<a href=#949 id=949 data-nosnippet>949</a>        }
+<a href=#950 id=950 data-nosnippet>950</a>    };
+<a href=#951 id=951 data-nosnippet>951</a>    <span class="comment">// Process the next attribute on the current flag
+<a href=#952 id=952 data-nosnippet>952</a>    // `$other`: The next flag should not be propagated to expressions
+<a href=#953 id=953 data-nosnippet>953</a>    </span>(
+<a href=#954 id=954 data-nosnippet>954</a>        expr: { <span class="macro-nonterminal">$e</span>:expr },
+<a href=#955 id=955 data-nosnippet>955</a>            attrs: {
+<a href=#956 id=956 data-nosnippet>956</a>            unprocessed: [
+<a href=#957 id=957 data-nosnippet>957</a>                <span class="comment">// $other matched here
+<a href=#958 id=958 data-nosnippet>958</a>                </span><span class="attr">#[<span class="macro-nonterminal">$other</span>:ident $(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>]
+<a href=#959 id=959 data-nosnippet>959</a>                </span>$(<span class="macro-nonterminal">$attrs_rest</span>:tt)*
+<a href=#960 id=960 data-nosnippet>960</a>            ],
+<a href=#961 id=961 data-nosnippet>961</a>            processed: [$(<span class="macro-nonterminal">$expr</span>:tt)<span class="kw-2">*</span>],
+<a href=#962 id=962 data-nosnippet>962</a>        },
+<a href=#963 id=963 data-nosnippet>963</a>    ) =&gt; {
+<a href=#964 id=964 data-nosnippet>964</a>        <span class="macro-nonterminal">$</span><span class="macro">crate::__bitflags_expr_safe_attrs!</span> {
+<a href=#965 id=965 data-nosnippet>965</a>            <span class="macro-nonterminal">expr</span>: { <span class="macro-nonterminal">$e </span>},
+<a href=#966 id=966 data-nosnippet>966</a>                attrs: {
+<a href=#967 id=967 data-nosnippet>967</a>                unprocessed: [
+<a href=#968 id=968 data-nosnippet>968</a>                    $(<span class="macro-nonterminal">$attrs_rest</span>)*
+<a href=#969 id=969 data-nosnippet>969</a>                ],
+<a href=#970 id=970 data-nosnippet>970</a>                processed: [
+<a href=#971 id=971 data-nosnippet>971</a>                    <span class="comment">// $other not added here
+<a href=#972 id=972 data-nosnippet>972</a>                    </span>$(<span class="macro-nonterminal">$expr</span>)*
+<a href=#973 id=973 data-nosnippet>973</a>                ],
+<a href=#974 id=974 data-nosnippet>974</a>            },
+<a href=#975 id=975 data-nosnippet>975</a>        }
+<a href=#976 id=976 data-nosnippet>976</a>    };
+<a href=#977 id=977 data-nosnippet>977</a>    <span class="comment">// Once all attributes on all flags are processed, generate the actual code
+<a href=#978 id=978 data-nosnippet>978</a>    </span>(
+<a href=#979 id=979 data-nosnippet>979</a>        expr: { <span class="macro-nonterminal">$e</span>:expr },
+<a href=#980 id=980 data-nosnippet>980</a>        attrs: {
+<a href=#981 id=981 data-nosnippet>981</a>            unprocessed: [],
+<a href=#982 id=982 data-nosnippet>982</a>            processed: [$(<span class="attr">#[<span class="macro-nonterminal">$expr</span>:ident $(<span class="macro-nonterminal">$exprargs</span>:tt)<span class="kw-2">*</span>]</span>)<span class="kw-2">*</span>],
+<a href=#983 id=983 data-nosnippet>983</a>        },
+<a href=#984 id=984 data-nosnippet>984</a>    ) =&gt; {
+<a href=#985 id=985 data-nosnippet>985</a>        $(<span class="attr">#[<span class="macro-nonterminal">$expr </span>$(<span class="macro-nonterminal">$exprargs</span>)<span class="kw-2">*</span>]</span>)*
+<a href=#986 id=986 data-nosnippet>986</a>        { <span class="macro-nonterminal">$e </span>}
+<a href=#987 id=987 data-nosnippet>987</a>    }
+<a href=#988 id=988 data-nosnippet>988</a>}
+<a href=#989 id=989 data-nosnippet>989</a>
+<a href=#990 id=990 data-nosnippet>990</a><span class="doccomment">/// Implement a flag, which may be a wildcard `_`.
+<a href=#991 id=991 data-nosnippet>991</a></span><span class="attr">#[macro_export]
+<a href=#992 id=992 data-nosnippet>992</a>#[doc(hidden)]
+<a href=#993 id=993 data-nosnippet>993</a></span><span class="macro">macro_rules!</span> __bitflags_flag {
+<a href=#994 id=994 data-nosnippet>994</a>    (
+<a href=#995 id=995 data-nosnippet>995</a>        {
+<a href=#996 id=996 data-nosnippet>996</a>            name: <span class="kw">_</span>,
+<a href=#997 id=997 data-nosnippet>997</a>            named: { $(<span class="macro-nonterminal">$named</span>:tt)* },
+<a href=#998 id=998 data-nosnippet>998</a>            unnamed: { $(<span class="macro-nonterminal">$unnamed</span>:tt)* },
+<a href=#999 id=999 data-nosnippet>999</a>        }
+<a href=#1000 id=1000 data-nosnippet>1000</a>    ) =&gt; {
+<a href=#1001 id=1001 data-nosnippet>1001</a>        $(<span class="macro-nonterminal">$unnamed</span>)*
+<a href=#1002 id=1002 data-nosnippet>1002</a>    };
+<a href=#1003 id=1003 data-nosnippet>1003</a>    (
+<a href=#1004 id=1004 data-nosnippet>1004</a>        {
+<a href=#1005 id=1005 data-nosnippet>1005</a>            name: <span class="macro-nonterminal">$Flag</span>:ident,
+<a href=#1006 id=1006 data-nosnippet>1006</a>            named: { $(<span class="macro-nonterminal">$named</span>:tt)* },
+<a href=#1007 id=1007 data-nosnippet>1007</a>            unnamed: { $(<span class="macro-nonterminal">$unnamed</span>:tt)* },
+<a href=#1008 id=1008 data-nosnippet>1008</a>        }
+<a href=#1009 id=1009 data-nosnippet>1009</a>    ) =&gt; {
+<a href=#1010 id=1010 data-nosnippet>1010</a>        $(<span class="macro-nonterminal">$named</span>)*
+<a href=#1011 id=1011 data-nosnippet>1011</a>    };
+<a href=#1012 id=1012 data-nosnippet>1012</a>}
+<a href=#1013 id=1013 data-nosnippet>1013</a>
+<a href=#1014 id=1014 data-nosnippet>1014</a><span class="attr">#[macro_use]
+<a href=#1015 id=1015 data-nosnippet>1015</a></span><span class="kw">mod </span>public;
+<a href=#1016 id=1016 data-nosnippet>1016</a><span class="attr">#[macro_use]
+<a href=#1017 id=1017 data-nosnippet>1017</a></span><span class="kw">mod </span>internal;
+<a href=#1018 id=1018 data-nosnippet>1018</a><span class="attr">#[macro_use]
+<a href=#1019 id=1019 data-nosnippet>1019</a></span><span class="kw">mod </span>external;
+<a href=#1020 id=1020 data-nosnippet>1020</a>
+<a href=#1021 id=1021 data-nosnippet>1021</a><span class="attr">#[cfg(feature = <span class="string">"example_generated"</span>)]
+<a href=#1022 id=1022 data-nosnippet>1022</a></span><span class="kw">pub mod </span>example_generated;
+<a href=#1023 id=1023 data-nosnippet>1023</a>
+<a href=#1024 id=1024 data-nosnippet>1024</a><span class="attr">#[cfg(test)]
+<a href=#1025 id=1025 data-nosnippet>1025</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>

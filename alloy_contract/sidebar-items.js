@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"struct":["CallBuilder","ContractInstance","EthCall","Event","EventPoller","Interface"],"trait":["CallDecoder"],"type":["DynCallBuilder","RawCallBuilder","Result","SolCallBuilder"]};

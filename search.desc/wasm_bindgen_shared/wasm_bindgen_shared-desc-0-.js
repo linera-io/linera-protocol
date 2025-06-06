@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wasm_bindgen_shared", 0, "Returns whether a string is a valid JavaScript identifier. …")

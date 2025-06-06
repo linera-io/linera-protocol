@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"type":["AbsVal","Add1","And","Compare","Cube","Diff","Double","Eq","Exp","FoldProd","FoldSum","Gcf","Gr","GrEq","Le","LeEq","Length","Log2","Maximum","Minimum","Mod","Negate","NotEq","Or","PartialQuot","Prod","Quot","Shleft","Shright","Sqrt","Square","Sub1","Sum","Xor"]};
