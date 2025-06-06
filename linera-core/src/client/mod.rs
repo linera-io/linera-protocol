@@ -721,6 +721,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Processes the confirmed block in the local node without executing it.
     #[instrument(level = "trace", skip_all)]
+    #[allow(dead_code)] // Otherwise CI fails when built for docker.
     async fn receive_sender_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
@@ -756,51 +757,6 @@ impl<Env: Environment> Client<Env> {
                 _ => {
                     // The certificate is not as expected. Give up.
                     warn!("Failed to process network hashed certificate value");
-                    return Err(err.into());
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    async fn receive_and_preprocess_checked_certificate(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-    ) -> Result<(), ChainClientError> {
-        let certificate = Box::new(certificate);
-        let block = certificate.block();
-
-        // Verify the certificate before doing any expensive networking.
-        let (max_epoch, committees) = self.admin_committees().await?;
-        ensure!(
-            block.header.epoch <= max_epoch,
-            ChainClientError::CommitteeSynchronizationError
-        );
-        let remote_committee = committees
-            .get(&block.header.epoch)
-            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
-        // Recover history from the network.
-        let nodes = self.make_nodes(remote_committee)?;
-        // Process the received operations. Download required hashed certificate values if
-        // necessary.
-        if let Err(err) = self.preprocess_certificate(certificate.clone()).await {
-            match &err {
-                LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs = RemoteNode::download_blobs(
-                        blob_ids,
-                        &nodes,
-                        self.options.blob_download_timeout,
-                    )
-                    .await
-                    .ok_or(err)?;
-                    self.local_node.store_blobs(&blobs).await?;
-                    self.preprocess_certificate(certificate).await?;
-                }
-                _ => {
-                    // The certificate is not as expected. Give up.
-                    warn!("Failed to preprocess certificate value");
                     return Err(err.into());
                 }
             }
@@ -2941,21 +2897,6 @@ impl<Env: Environment> ChainClient<Env> {
                 certificate,
                 ReceiveCertificateMode::NeedsCheck,
             )
-            .await
-    }
-
-    /// Processes a certificate for which this chain is a recipient.
-    #[instrument(
-        level = "trace",
-        skip(certificate),
-        fields(certificate_hash = ?certificate.hash()),
-    )]
-    async fn receive_sender_certificate(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-    ) -> Result<(), ChainClientError> {
-        self.client
-            .receive_sender_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
             .await
     }
 
