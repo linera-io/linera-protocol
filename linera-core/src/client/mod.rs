@@ -270,10 +270,12 @@ impl<Env: Environment> Client<Env> {
                 // This should be a single blob: the ChainDescription of the chain we're
                 // fetching the info for.
                 assert_eq!(blob_ids.len(), 1);
-                let chain_desc_blob = self.fetch_blob(blob_ids[0], validators).await?;
+                let chain_desc_blob = self
+                    .update_local_node_with_blobs_from(blob_ids, validators)
+                    .await?;
                 self.local_node
                     .storage_client()
-                    .write_blobs(&[chain_desc_blob])
+                    .write_blobs(&chain_desc_blob)
                     .await?;
                 self.local_node.chain_info(chain_id).await
             }
@@ -453,42 +455,6 @@ impl<Env: Environment> Client<Env> {
             .collect())
     }
 
-    async fn fetch_blob(
-        &self,
-        blob_id: BlobId,
-        nodes: &[RemoteNode<impl ValidatorNode>],
-    ) -> Result<Blob, LocalNodeError> {
-        // TODO(#3844): a very naive algorithm, just trying the validator nodes one by one - to be
-        // replaced with something better
-        for node in nodes {
-            let blob_certificate = match node.download_certificate_for_blob(blob_id).await {
-                Ok(certificate) => certificate,
-                Err(_) => continue,
-            };
-            let Some(blob) = blob_certificate
-                .value()
-                .block()
-                .created_blobs()
-                .get(&blob_id)
-                .cloned()
-            else {
-                continue;
-            };
-            if self
-                .receive_sender_certificate(
-                    blob_certificate,
-                    ReceiveCertificateMode::NeedsCheck,
-                    None,
-                )
-                .await
-                .is_ok()
-            {
-                return Ok(blob);
-            }
-        }
-        Err(LocalNodeError::BlobsNotFound(vec![blob_id]))
-    }
-
     /// Ensures that the client has the `ChainDescription` blob corresponding to this
     /// client's `ChainId`.
     pub async fn ensure_has_chain_description(
@@ -507,7 +473,11 @@ impl<Env: Environment> Client<Env> {
         };
         // Recover history from the current validators, according to the admin chain.
         let nodes = self.validator_nodes().await?;
-        Ok(self.fetch_blob(chain_desc_id, &nodes).await?)
+        Ok(self
+            .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
+            .await?
+            .pop()
+            .unwrap())
     }
 
     /// Updates the latest block and next block height and round information from the chain info.
@@ -1093,8 +1063,11 @@ impl<Env: Environment> Client<Env> {
                         }
                     }
                     if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
-                        self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
-                            .await?;
+                        self.update_local_node_with_blobs_from(
+                            blob_ids.clone(),
+                            &[remote_node.clone()],
+                        )
+                        .await?;
                         // We found the missing blobs: retry.
                         if let Err(new_err) = self
                             .local_node
@@ -1148,17 +1121,36 @@ impl<Env: Environment> Client<Env> {
     async fn update_local_node_with_blobs_from(
         &self,
         blob_ids: Vec<BlobId>,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
-    ) -> Result<(), ChainClientError> {
+        remote_nodes: &[RemoteNode<impl ValidatorNode>],
+    ) -> Result<Vec<Blob>, LocalNodeError> {
         future::try_join_all(blob_ids.into_iter().map(|blob_id| async move {
-            let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
-            // This will download all ancestors of the certificate and process all of them locally.
-            self.receive_sender_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
-                .await
+            for remote_node in remote_nodes {
+                let certificate = match remote_node.download_certificate_for_blob(blob_id).await {
+                    Ok(certificate) => certificate,
+                    Err(_) => continue,
+                };
+                // This will download all ancestors of the certificate and process all of them locally.
+                if self
+                    .receive_sender_certificate(
+                        certificate,
+                        ReceiveCertificateMode::NeedsCheck,
+                        None,
+                    )
+                    .await
+                    .is_ok()
+                {
+                    let blob = self
+                        .local_node
+                        .storage_client()
+                        .read_blob(blob_id)
+                        .await?
+                        .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
+                    return Ok(blob);
+                }
+            }
+            Err(LocalNodeError::BlobsNotFound(vec![blob_id]))
         }))
-        .await?;
-
-        Ok(())
+        .await
     }
 
     /// Downloads and processes confirmed block certificates that use the given blobs.
