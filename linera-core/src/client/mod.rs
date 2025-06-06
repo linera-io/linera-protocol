@@ -1835,17 +1835,6 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(preferred_owner)
     }
 
-    /// Obtains the public key associated to the current identity.
-    #[instrument(level = "trace")]
-    pub async fn public_key(&self) -> Result<AccountPublicKey, ChainClientError> {
-        let id = self.identity().await?;
-        Ok(self
-            .signer()
-            .get_public_key(&id)
-            .await
-            .expect("key should be known at this point"))
-    }
-
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
     /// its current height and are not missing any received messages from the inbox.
     #[instrument(level = "trace")]
