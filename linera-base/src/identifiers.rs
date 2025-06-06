@@ -50,6 +50,15 @@ impl AccountOwner {
     pub fn is_chain(&self) -> bool {
         self == &AccountOwner::CHAIN
     }
+
+    /// The size of the `AccountOwner`.
+    pub fn size(&self) -> u32 {
+        match self {
+            AccountOwner::Reserved(_) => 1,
+            AccountOwner::Address32(_) => 32,
+            AccountOwner::Address20(_) => 20,
+        }
+    }
 }
 
 #[cfg(with_testing)]

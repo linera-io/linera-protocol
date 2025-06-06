@@ -210,6 +210,7 @@ async fn test_fee_consumption(
         evm_fuel_unit: Amount::from_tokens(2),
         read_operation: Amount::from_tokens(3),
         write_operation: Amount::from_tokens(5),
+        byte_runtime: Amount::from_nanos(1),
         byte_read: Amount::from_tokens(7),
         byte_written: Amount::from_tokens(11),
         byte_stored: Amount::from_tokens(13),

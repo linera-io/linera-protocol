@@ -33,6 +33,8 @@ pub struct ResourceControlPolicy {
     pub read_operation: Amount,
     /// The price of one write operation.
     pub write_operation: Amount,
+    /// The price of one byte from runtime operation.
+    pub byte_runtime: Amount,
     /// The price of reading a byte.
     pub byte_read: Amount,
     /// The price of writing a byte
@@ -101,6 +103,7 @@ impl fmt::Display for ResourceControlPolicy {
             evm_fuel_unit,
             read_operation,
             write_operation,
+            byte_runtime,
             byte_read,
             byte_written,
             blob_read,
@@ -136,6 +139,7 @@ impl fmt::Display for ResourceControlPolicy {
             {evm_fuel_unit:.2} cost per EVM fuel unit\n\
             {read_operation:.2} cost per read operation\n\
             {write_operation:.2} cost per write operation\n\
+            {byte_runtime:.2} cost per runtime byte read operation\n\
             {byte_read:.2} cost per byte read\n\
             {byte_written:.2} cost per byte written\n\
             {blob_read:.2} base cost per read blob\n\
@@ -185,6 +189,7 @@ impl ResourceControlPolicy {
             evm_fuel_unit: Amount::ZERO,
             read_operation: Amount::ZERO,
             write_operation: Amount::ZERO,
+            byte_runtime: Amount::ZERO,
             byte_read: Amount::ZERO,
             byte_written: Amount::ZERO,
             blob_read: Amount::ZERO,
@@ -261,6 +266,7 @@ impl ResourceControlPolicy {
         Self {
             wasm_fuel_unit: Amount::from_nanos(10),
             evm_fuel_unit: Amount::from_nanos(10),
+            byte_runtime: Amount::from_nanos(1),
             byte_read: Amount::from_nanos(10),
             byte_written: Amount::from_nanos(100),
             blob_read: Amount::from_nanos(100),
@@ -298,6 +304,7 @@ impl ResourceControlPolicy {
         amount.try_add_assign(self.fuel_price(resources.wasm_fuel, VmRuntime::Wasm)?)?;
         amount.try_add_assign(self.fuel_price(resources.evm_fuel, VmRuntime::Evm)?)?;
         amount.try_add_assign(self.read_operations_price(resources.read_operations)?)?;
+        amount.try_add_assign(self.bytes_runtime_price(resources.bytes_runtime)?)?;
         amount.try_add_assign(self.write_operations_price(resources.write_operations)?)?;
         amount.try_add_assign(self.bytes_read_price(resources.bytes_to_read as u64)?)?;
         amount.try_add_assign(self.bytes_written_price(resources.bytes_to_write as u64)?)?;
@@ -338,6 +345,10 @@ impl ResourceControlPolicy {
 
     pub(crate) fn write_operations_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
         self.write_operation.try_mul(count as u128)
+    }
+
+    pub(crate) fn bytes_runtime_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
+        self.byte_runtime.try_mul(count as u128)
     }
 
     pub(crate) fn bytes_read_price(&self, count: u64) -> Result<Amount, ArithmeticError> {

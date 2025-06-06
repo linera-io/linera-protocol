@@ -136,6 +136,7 @@ impl From<Resources> for wit_contract_api::Resources {
             evm_fuel: resources.evm_fuel,
             read_operations: resources.read_operations,
             write_operations: resources.write_operations,
+            bytes_runtime: resources.bytes_runtime,
             bytes_to_read: resources.bytes_to_read,
             bytes_to_write: resources.bytes_to_write,
             blobs_to_read: resources.blobs_to_read,

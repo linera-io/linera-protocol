@@ -615,74 +615,101 @@ where
     type FindKeyValuesByPrefix = u32;
 
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        Ok(self.inner().chain_id)
+        let mut this = self.inner();
+        let chain_id = this.chain_id;
+        this.resource_controller.track_runtime_chain_id()?;
+        Ok(chain_id)
     }
 
     fn block_height(&mut self) -> Result<BlockHeight, ExecutionError> {
-        Ok(self.inner().height)
+        let mut this = self.inner();
+        let height = this.height;
+        this.resource_controller.track_runtime_block_height()?;
+        Ok(height)
     }
 
     fn application_id(&mut self) -> Result<ApplicationId, ExecutionError> {
-        Ok(self.inner().current_application().id)
+        let mut this = self.inner();
+        let application_id = this.current_application().id;
+        this.resource_controller.track_runtime_application_id()?;
+        Ok(application_id)
     }
 
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        Ok(self
-            .inner()
-            .current_application()
-            .description
-            .creator_chain_id)
+        let mut this = self.inner();
+        let application_creator_chain_id = this.current_application().description.creator_chain_id;
+        this.resource_controller.track_runtime_application_id()?;
+        Ok(application_creator_chain_id)
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        Ok(self
-            .inner()
-            .current_application()
-            .description
-            .parameters
-            .clone())
+        let mut this = self.inner();
+        let parameters = this.current_application().description.parameters.clone();
+        this.resource_controller
+            .track_runtime_application_parameters(&parameters)?;
+        Ok(parameters)
     }
 
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.inner()
+        let mut this = self.inner();
+        let timestamp = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::SystemTimestamp { callback })?
-            .recv_response()
+            .recv_response()?;
+        this.resource_controller.track_runtime_timestamp()?;
+        Ok(timestamp)
     }
 
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
-        self.inner()
+        let mut this = self.inner();
+        let balance = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ChainBalance { callback })?
-            .recv_response()
+            .recv_response()?;
+        this.resource_controller.track_runtime_balance()?;
+        Ok(balance)
     }
 
     fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
-        self.inner()
+        let mut this = self.inner();
+        let balance = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
-            .recv_response()
+            .recv_response()?;
+        this.resource_controller.track_runtime_balance()?;
+        Ok(balance)
     }
 
     fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError> {
-        self.inner()
+        let mut this = self.inner();
+        let owner_balances = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
-            .recv_response()
+            .recv_response()?;
+        this.resource_controller
+            .track_runtime_owner_balances(&owner_balances)?;
+        Ok(owner_balances)
     }
 
     fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError> {
-        self.inner()
+        let mut this = self.inner();
+        let owners = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
-            .recv_response()
+            .recv_response()?;
+        this.resource_controller.track_runtime_owners(&owners)?;
+        Ok(owners)
     }
 
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
-        self.inner()
+        let mut this = self.inner();
+        let chain_ownership = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ChainOwnership { callback })?
-            .recv_response()
+            .recv_response()?;
+        this.resource_controller
+            .track_runtime_chain_ownership(&chain_ownership)?;
+        Ok(chain_ownership)
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {

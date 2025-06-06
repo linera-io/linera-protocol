@@ -45,6 +45,7 @@ where
 /// Creates a dummy [`Resources`] instance to use for the WIT roundtrip test.
 fn resources_test_case() -> Resources {
     Resources {
+        bytes_runtime: 40,
         bytes_to_read: 1_474_560,
         bytes_to_write: 571,
         blobs_to_read: 71,
@@ -70,6 +71,7 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
         is_tracked: false,
         destination: ChainId(CryptoHash::test_hash("chain_id_0")),
         grant: Resources {
+            bytes_runtime: 0,
             bytes_to_read: 200,
             bytes_to_write: 0,
             blobs_to_read: 100,
