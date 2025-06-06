@@ -129,7 +129,7 @@ impl AccountSecretKey {
                 AccountSignature::Secp256k1(signature)
             }
             AccountSecretKey::EvmSecp256k1(secret) => {
-                let signature = secp256k1::evm::EvmSignature::new(value, secret);
+                let signature = secp256k1::evm::EvmSignature::new(CryptoHash::new(value), secret);
                 AccountSignature::EvmSecp256k1(signature)
             }
         }

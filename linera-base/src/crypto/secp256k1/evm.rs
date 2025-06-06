@@ -67,12 +67,12 @@ pub struct EvmKeyPair {
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct EvmSignature(pub(crate) Signature);
 
-#[cfg(with_testing)]
 impl FromStr for EvmSignature {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = hex::decode(s)?;
+        // If the string starts with "0x", we remove it before decoding.
+        let bytes = hex::decode(s.strip_prefix("0x").unwrap_or(s))?;
         let sig = Signature::from_erc2098(&bytes);
         Ok(EvmSignature(sig))
     }
@@ -195,7 +195,9 @@ impl FromStr for EvmPublicKey {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        hex::decode(s)?.as_slice().try_into()
+        hex::decode(s.strip_prefix("0x").unwrap_or(s))?
+            .as_slice()
+            .try_into()
     }
 }
 
@@ -371,13 +373,9 @@ impl EvmSecretKey {
 }
 
 impl EvmSignature {
-    /// Computes a secp256k1 signature for `value` using the given `secret`.
-    /// It first serializes the `T` type and then creates the `CryptoHash` from the serialized bytes.
-    pub fn new<'de, T>(value: &T, secret: &EvmSecretKey) -> Self
-    where
-        T: BcsSignable<'de>,
-    {
-        Self::sign_prehash(secret, CryptoHash::new(value))
+    /// Computes a secp256k1 signature for `prehash` using the given `secret`.
+    pub fn new(prehash: CryptoHash, secret: &EvmSecretKey) -> Self {
+        Self::sign_prehash(secret, prehash)
     }
 
     /// Computes a signature from a prehash.
@@ -534,12 +532,32 @@ mod serde_utils {
 #[cfg(with_testing)]
 mod tests {
     #[test]
+    fn eip191_compatibility() {
+        use std::str::FromStr;
+
+        use crate::crypto::{CryptoHash, EvmSecretKey, EvmSignature};
+
+        // Generated in MetaMask.
+        let secret_key = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
+        let signer = EvmSecretKey::from_str(secret_key).unwrap();
+
+        let crypto_hash = CryptoHash::from_str(
+            "c520e2b24b05e70c39c36d4aa98e9129ac0079ea002d4c382e6996ea11946d1e",
+        )
+        .unwrap();
+
+        let signature = EvmSignature::new(crypto_hash, &signer);
+        let js_signature = EvmSignature::from_str("0xe257048813b851f812ba6e508e972d8bb09504824692b027ca95d31301dbe8c7103a2f35ce9950d031d260f412dcba09c24027288872a67abe261c0a3e55c9121b").unwrap();
+        assert_eq!(signature, js_signature);
+    }
+
+    #[test]
     fn test_signatures() {
         use serde::{Deserialize, Serialize};
 
         use crate::crypto::{
             secp256k1::evm::{EvmKeyPair, EvmSignature},
-            BcsSignable, TestString,
+            BcsSignable, CryptoHash, TestString,
         };
 
         #[derive(Debug, Serialize, Deserialize)]
@@ -551,10 +569,11 @@ mod tests {
         let keypair2 = EvmKeyPair::generate();
 
         let ts = TestString("hello".into());
+        let ts_cryptohash = CryptoHash::new(&ts);
         let tsx = TestString("hellox".into());
         let foo = Foo("hello".into());
 
-        let s = EvmSignature::new(&ts, &keypair1.secret_key);
+        let s = EvmSignature::new(ts_cryptohash, &keypair1.secret_key);
         assert!(s.check(&ts, &keypair1.public_key).is_ok());
         assert!(s.check(&ts, &keypair2.public_key).is_err());
         assert!(s.check(&tsx, &keypair1.public_key).is_err());
@@ -587,10 +606,11 @@ mod tests {
     fn test_signature_serialization() {
         use crate::crypto::{
             secp256k1::evm::{EvmKeyPair, EvmSignature},
-            TestString,
+            CryptoHash, TestString,
         };
         let keypair = EvmKeyPair::generate();
-        let sig = EvmSignature::new(&TestString("hello".into()), &keypair.secret_key);
+        let prehash = CryptoHash::new(&TestString("hello".into()));
+        let sig = EvmSignature::new(prehash, &keypair.secret_key);
         let s = serde_json::to_string(&sig).unwrap();
         let sig2: EvmSignature = serde_json::from_str(&s).unwrap();
         assert_eq!(sig, sig2);
@@ -628,10 +648,11 @@ mod tests {
     fn human_readable_ser() {
         use crate::crypto::{
             secp256k1::evm::{EvmKeyPair, EvmSignature},
-            TestString,
+            CryptoHash, TestString,
         };
         let key_pair = EvmKeyPair::generate();
-        let sig = EvmSignature::new(&TestString("hello".into()), &key_pair.secret_key);
+        let prehash = CryptoHash::new(&TestString("hello".into()));
+        let sig = EvmSignature::new(prehash, &key_pair.secret_key);
         let s = serde_json::to_string(&sig).unwrap();
         let sig2: EvmSignature = serde_json::from_str(&s).unwrap();
         assert_eq!(sig, sig2);

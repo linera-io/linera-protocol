@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSignature, TestString},
+    crypto::{AccountPublicKey, AccountSignature, CryptoHash, TestString},
     data_types::{BlobContent, ChainDescription, ChainOrigin, OracleResponse, Round},
     identifiers::{AccountOwner, BlobType, GenericApplicationId},
     ownership::ChainOwnership,
@@ -47,7 +47,7 @@ fn get_registry() -> Result<Registry> {
         let evm_public_key = evm_secret_key.public();
         tracer.trace_value(&mut samples, &evm_public_key)?;
         let evm_signature = linera_base::crypto::EvmSignature::new(
-            &TestString::new("signature".to_string()),
+            CryptoHash::new(&TestString::new("signature".to_string())),
             &evm_secret_key,
         );
         tracer.trace_value(&mut samples, &evm_signature)?;

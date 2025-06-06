@@ -754,10 +754,10 @@ mod signing {
         use std::str::FromStr;
 
         // Generated in MetaMask.
-        let pk = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
+        let secret_key = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
 
         let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(
-            linera_base::crypto::EvmSecretKey::from_str(pk).unwrap(),
+            linera_base::crypto::EvmSecretKey::from_str(secret_key).unwrap(),
         );
 
         let proposed_block = ProposedBlock {
