@@ -485,6 +485,7 @@ View or update the resource control policy
 * `--evm-fuel-unit <EVM_FUEL_UNIT>` — Set the price per unit of EVM fuel
 * `--read-operation <READ_OPERATION>` — Set the price per read operation
 * `--write-operation <WRITE_OPERATION>` — Set the price per write operation
+* `--byte-runtime <BYTE_RUNTIME>` — Set the price per byte obtained from runtime
 * `--byte-read <BYTE_READ>` — Set the price per byte read
 * `--byte-written <BYTE_WRITTEN>` — Set the price per byte written
 * `--blob-read <BLOB_READ>` — Set the base price to read a blob
@@ -543,6 +544,7 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--evm-fuel-unit-price <EVM_FUEL_UNIT_PRICE>` — Set the price per unit of EVM fuel. (This will overwrite value from `--policy-config`)
 * `--read-operation-price <READ_OPERATION_PRICE>` — Set the price per read operation. (This will overwrite value from `--policy-config`)
 * `--write-operation-price <WRITE_OPERATION_PRICE>` — Set the price per write operation. (This will overwrite value from `--policy-config`)
+* `--byte-runtime-price <BYTE_RUNTIME_PRICE>` — Set the price per byte read from runtime. (This will overwrite value from `--policy-config`)
 * `--byte-read-price <BYTE_READ_PRICE>` — Set the price per byte read. (This will overwrite value from `--policy-config`)
 * `--byte-written-price <BYTE_WRITTEN_PRICE>` — Set the price per byte written. (This will overwrite value from `--policy-config`)
 * `--blob-read-price <BLOB_READ_PRICE>` — Set the base price to read a blob. (This will overwrite value from `--policy-config`)

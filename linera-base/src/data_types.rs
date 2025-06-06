@@ -266,6 +266,8 @@ pub struct Resources {
     pub read_operations: u32,
     /// A number of write operations to be executed.
     pub write_operations: u32,
+    /// A number of bytes read from runtime.
+    pub bytes_runtime: u32,
     /// A number of bytes to read.
     pub bytes_to_read: u32,
     /// A number of bytes to write.
