@@ -154,7 +154,7 @@ impl UserContractCode {
 #[cfg(web)]
 const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
-    // implementor
+    // implementer
 
     impl From<UserContractCode> for JsValue {
         fn from(code: UserContractCode) -> JsValue {
