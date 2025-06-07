@@ -12,6 +12,7 @@ mod execution;
 mod execution_state_actor;
 #[cfg(with_graphql)]
 mod graphql;
+mod key_value_store_view;
 mod policy;
 mod resources;
 mod runtime;

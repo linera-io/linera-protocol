@@ -13,7 +13,6 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
-    key_value_store_view::KeyValueStoreView,
     map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
     views::{ClonableView, View},
@@ -31,11 +30,11 @@ use {
 
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
-    resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
-    ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    OutgoingMessage, ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
-    SystemMessage, Timestamp, TransactionTracker,
+    key_value_store_view::HashedKeyValueStoreView, resources::ResourceController,
+    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ContractSyncRuntime,
+    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageContext,
+    MessageKind, Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, Query,
+    QueryContext, QueryOutcome, ServiceSyncRuntime, SystemMessage, Timestamp, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -44,7 +43,7 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+    pub users: HashedReentrantCollectionView<C, ApplicationId, HashedKeyValueStoreView<C>>,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
 }
