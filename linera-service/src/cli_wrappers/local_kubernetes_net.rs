@@ -380,21 +380,14 @@ impl LocalKubernetesNet {
                 Grpc = "ClearText"
                 [internal_protocol]
                 Grpc = "ClearText"
-            "#
-        );
-
-        for k in 0..3 {
-            content.push_str(&format!(
-                r#"
 
                 [[proxies]]
-                host = "proxy-{k}.default.svc.cluster.local"
+                host = "proxy-0.default.svc.cluster.local"
                 public_port = {port}
                 private_port = {internal_port}
                 metrics_port = {metrics_port}
-                "#
-            ));
-        }
+            "#
+        );
 
         for k in 0..self.num_shards {
             let shard_port = 19100;
