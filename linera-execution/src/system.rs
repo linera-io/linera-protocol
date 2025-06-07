@@ -797,7 +797,6 @@ where
             })
             .collect();
         self.committees.set(committees);
-        // If `admin_id` is `None`, this chain is its own admin chain.
         let admin_id = self
             .context()
             .extra()

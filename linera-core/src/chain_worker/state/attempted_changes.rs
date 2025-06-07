@@ -305,7 +305,6 @@ where
             return Ok((info, actions));
         }
         let local_time = self.state.storage.clock().current_time();
-        // TODO(#2351): This sets the committee and then checks that committee's signatures.
         self.state.ensure_is_active().await?;
         // Verify the certificate.
         let (epoch, committee) = self.state.chain.current_committee()?;
