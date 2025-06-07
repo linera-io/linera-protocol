@@ -8,7 +8,7 @@ mod ed25519;
 mod hash;
 #[allow(dead_code)]
 mod secp256k1;
-mod signer;
+pub mod signer;
 use std::{fmt::Display, io, num::ParseIntError, str::FromStr};
 
 use alloy_primitives::FixedBytes;
