@@ -17,7 +17,10 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, InMemorySigner, ValidatorKeypair},
+    crypto::{
+        AccountPublicKey, AccountSecretKey, AccountSignature, CryptoHash, InMemorySigner,
+        ValidatorKeypair,
+    },
     data_types::*,
     identifiers::{Account, AccountOwner, ChainId, EventId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -543,8 +546,24 @@ where
         .await
         .unwrap();
     let unknown_key_pair = AccountSecretKey::generate();
+    let original_public_key = match block_proposal.signature {
+        AccountSignature::Ed25519 { public_key, .. } => public_key,
+        _ => {
+            panic!(
+                "Expected an Ed25519 signature, found: {:?}",
+                block_proposal.signature
+            );
+        }
+    };
     let mut bad_signature_block_proposal = block_proposal.clone();
-    bad_signature_block_proposal.signature = unknown_key_pair.sign(&block_proposal.content);
+    let bad_signature = match unknown_key_pair.sign(&block_proposal.content) {
+        AccountSignature::Ed25519 { signature, .. } => AccountSignature::Ed25519 {
+            public_key: original_public_key,
+            signature,
+        },
+        _ => panic!("Expected an Ed25519 signature"),
+    };
+    bad_signature_block_proposal.signature = bad_signature;
     assert_matches!(
         env.worker()
             .handle_block_proposal(bad_signature_block_proposal)
