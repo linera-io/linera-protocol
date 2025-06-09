@@ -267,9 +267,6 @@ impl<Env: Environment> Client<Env> {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 // If the chain is missing then the error is a WorkerError
                 // and so a BlobsNotFound
-                // This should be a single blob: the ChainDescription of the chain we're
-                // fetching the info for.
-                assert_eq!(blob_ids.len(), 1);
                 self.update_local_node_with_blobs_from(blob_ids, validators)
                     .await?;
                 self.local_node.chain_info(chain_id).await
