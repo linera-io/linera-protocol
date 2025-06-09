@@ -451,7 +451,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Ensures that the client has the `ChainDescription` blob corresponding to this
     /// client's `ChainId`.
-    pub async fn ensure_has_chain_description(
+    pub async fn get_chain_description(
         &self,
         chain_id: ChainId,
     ) -> Result<ChainDescription, ChainClientError> {
@@ -1695,9 +1695,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Returns the chain's description. Fetches it from the validators if necessary.
     pub async fn ensure_has_chain_description(&self) -> Result<ChainDescription, ChainClientError> {
-        self.client
-            .ensure_has_chain_description(self.chain_id)
-            .await
+        self.client.get_chain_description(self.chain_id).await
     }
 
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
