@@ -51,19 +51,18 @@ pub trait Persist: Deref {
         Self::Target: Sized;
 }
 
-#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait PersistExt: Persist {
     /// Applies a mutation to the value, persisting when done.
-    async fn mutate<R: Send>(
+    async fn mutate<R>(
         &mut self,
-        mutation: impl FnOnce(&mut Self::Target) -> R + Send,
+        mutation: impl FnOnce(&mut Self::Target) -> R,
     ) -> Result<R, Self::Error>;
 }
 
 impl<T: Persist> PersistExt for T {
     async fn mutate<R>(
         &mut self,
-        mutation: impl FnOnce(&mut Self::Target) -> R + Send,
+        mutation: impl FnOnce(&mut Self::Target) -> R,
     ) -> Result<R, Self::Error> {
         let output = mutation(self.as_mut());
         self.persist().await?;
