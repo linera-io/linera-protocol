@@ -18,9 +18,9 @@ use tokio::runtime::Runtime;
 
 /// Benchmarks several transactions transferring tokens across chains.
 fn cross_chain_native_token_transfers(criterion: &mut Criterion) {
-    let chain_count = 100;
+    let chain_count = 40;
     let accounts_per_chain = 1;
-    let transfers_per_account = 100;
+    let transfers_per_account = 40;
 
     criterion.bench_function("same_chain_native_token_transfers", |bencher| {
         bencher
