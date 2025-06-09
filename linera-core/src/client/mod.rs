@@ -260,8 +260,8 @@ impl<Env: Environment> Client<Env> {
     async fn fetch_chain_info(
         &self,
         chain_id: ChainId,
-        validators: &[RemoteNode<impl ValidatorNode>],
-    ) -> Result<Box<ChainInfo>, LocalNodeError> {
+        validators: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         match self.local_node.chain_info(chain_id).await {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
@@ -269,9 +269,9 @@ impl<Env: Environment> Client<Env> {
                 // and so a BlobsNotFound
                 self.update_local_node_with_blobs_from(blob_ids, validators)
                     .await?;
-                self.local_node.chain_info(chain_id).await
+                Ok(self.local_node.chain_info(chain_id).await?)
             }
-            err => err,
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -279,7 +279,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip(self, validators))]
     async fn download_certificates(
         &self,
-        validators: &[RemoteNode<impl ValidatorNode>],
+        validators: &[RemoteNode<Env::ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
@@ -318,7 +318,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn download_certificates_from(
         &self,
-        remote_node: &RemoteNode<impl ValidatorNode>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
         stop: BlockHeight,
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
@@ -374,7 +374,7 @@ impl<Env: Environment> Client<Env> {
             let mut result = self.handle_certificate(certificate.clone()).await;
 
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                for blob_id in blob_ids {
+                future::try_join_all(blob_ids.iter().map(|blob_id| async move {
                     let blob_certificate =
                         remote_node.download_certificate_for_blob(*blob_id).await?;
                     self.receive_sender_certificate(
@@ -383,7 +383,9 @@ impl<Env: Environment> Client<Env> {
                         None,
                     )
                     .await?;
-                }
+                    Result::<(), ChainClientError>::Ok(())
+                }))
+                .await?;
                 result = self.handle_certificate(certificate.clone()).await;
             }
 
@@ -1114,34 +1116,38 @@ impl<Env: Environment> Client<Env> {
     async fn update_local_node_with_blobs_from(
         &self,
         blob_ids: Vec<BlobId>,
-        remote_nodes: &[RemoteNode<impl ValidatorNode>],
-    ) -> Result<Vec<Blob>, LocalNodeError> {
+        remote_nodes: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<Vec<Blob>, ChainClientError> {
+        let timeout = self.options.blob_download_timeout;
         future::try_join_all(blob_ids.into_iter().map(|blob_id| async move {
-            for remote_node in remote_nodes {
-                let certificate = match remote_node.download_certificate_for_blob(blob_id).await {
-                    Ok(certificate) => certificate,
-                    Err(_) => continue,
-                };
-                // This will download all ancestors of the certificate and process all of them locally.
-                if self
-                    .receive_sender_certificate(
+            let mut stream = remote_nodes
+                .iter()
+                .zip(0..)
+                .map(|(remote_node, i)| async move {
+                    linera_base::time::timer::sleep(timeout * i * i).await;
+                    let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
+                    // This will download all ancestors of the certificate and process all of them locally.
+                    self.receive_sender_certificate(
                         certificate,
                         ReceiveCertificateMode::NeedsCheck,
-                        None,
+                        Some(vec![remote_node.clone()]),
                     )
-                    .await
-                    .is_ok()
-                {
+                    .await?;
                     let blob = self
                         .local_node
                         .storage_client()
                         .read_blob(blob_id)
                         .await?
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
+                    Result::<_, ChainClientError>::Ok(blob)
+                })
+                .collect::<FuturesUnordered<_>>();
+            while let Some(maybe_blob) = stream.next().await {
+                if let Ok(blob) = maybe_blob {
                     return Ok(blob);
                 }
             }
-            Err(LocalNodeError::BlobsNotFound(vec![blob_id]))
+            Err(LocalNodeError::BlobsNotFound(vec![blob_id]).into())
         }))
         .await
     }
