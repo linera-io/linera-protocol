@@ -151,8 +151,8 @@ where
             )
             .await;
         self.context.lock().await.update_wallet(&client).await?;
-        let chain_id = match result? {
-            ClientOutcome::Committed((description, _certificate)) => description.id(),
+        let description = match result? {
+            ClientOutcome::Committed((description, _certificate)) => description,
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Err(Error::new(format!(
                     "This faucet is using a multi-owner chain and is not the leader right now. \
@@ -161,13 +161,7 @@ where
                 )));
             }
         };
-        Ok(self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .ensure_has_chain_description()
-            .await?)
+        Ok(description)
     }
 }
 /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
