@@ -26,7 +26,7 @@ use futures::{
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
         Round, Timestamp,
@@ -1464,7 +1464,7 @@ pub enum ChainClientError {
     },
 
     #[error("signer error: {0:?}")]
-    Signer(#[source] Box<dyn std::error::Error + Send + Sync>),
+    Signer(#[source] Box<dyn signer::Error>),
 
     #[error("Cannot revoke the current epoch {0}")]
     CannotRevokeCurrentEpoch(Epoch),
@@ -1480,7 +1480,7 @@ impl From<Infallible> for ChainClientError {
 }
 
 impl ChainClientError {
-    pub fn signer_failure(err: impl std::error::Error + Send + Sync + 'static) -> Self {
+    pub fn signer_failure(err: impl signer::Error + 'static) -> Self {
         Self::Signer(Box::new(err))
     }
 }
