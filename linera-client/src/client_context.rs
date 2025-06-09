@@ -347,7 +347,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
     ) -> Result<(), Error> {
         self.client.track_chain(chain_id);
         let client = self.make_chain_client(chain_id);
-        let chain_description = client.ensure_has_chain_description().await?;
+        let chain_description = client.get_chain_description().await?;
         let config = chain_description.config();
 
         if !config.ownership.verify_owner(&owner) {

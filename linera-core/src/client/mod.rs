@@ -1694,7 +1694,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns the chain's description. Fetches it from the validators if necessary.
-    pub async fn ensure_has_chain_description(&self) -> Result<ChainDescription, ChainClientError> {
+    pub async fn get_chain_description(&self) -> Result<ChainDescription, ChainClientError> {
         self.client.get_chain_description(self.chain_id).await
     }
 
