@@ -16,7 +16,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_client::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext, ClientContextExt as _},
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
@@ -165,7 +165,8 @@ where
             .context
             .lock()
             .await
-            .chain_description(chain_id)
+            .make_chain_client(chain_id)
+            .ensure_has_chain_description()
             .await?)
     }
 }

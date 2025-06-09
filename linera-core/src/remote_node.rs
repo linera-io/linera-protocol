@@ -231,20 +231,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(())
     }
 
-    /// Tries to download the given blobs from this node. Returns `None` if not all could be found.
-    #[instrument(level = "trace")]
-    pub(crate) async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Option<Vec<Blob>> {
-        let mut stream = blob_ids
-            .iter()
-            .map(|blob_id| self.try_download_blob(*blob_id))
-            .collect::<FuturesUnordered<_>>();
-        let mut blobs = Vec::new();
-        while let Some(maybe_blob) = stream.next().await {
-            blobs.push(maybe_blob?);
-        }
-        Some(blobs)
-    }
-
     #[instrument(level = "trace")]
     async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
         match self.node.download_blob(blob_id).await {

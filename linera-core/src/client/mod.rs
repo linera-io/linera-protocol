@@ -28,8 +28,8 @@ use linera_base::{
     abi::Abi,
     crypto::{AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
-        Round, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
+        ChainDescription, Epoch, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -270,12 +270,7 @@ impl<Env: Environment> Client<Env> {
                 // This should be a single blob: the ChainDescription of the chain we're
                 // fetching the info for.
                 assert_eq!(blob_ids.len(), 1);
-                let chain_desc_blob = self
-                    .update_local_node_with_blobs_from(blob_ids, validators)
-                    .await?;
-                self.local_node
-                    .storage_client()
-                    .write_blobs(&chain_desc_blob)
+                self.update_local_node_with_blobs_from(blob_ids, validators)
                     .await?;
                 self.local_node.chain_info(chain_id).await
             }
@@ -460,7 +455,7 @@ impl<Env: Environment> Client<Env> {
     pub async fn ensure_has_chain_description(
         &self,
         chain_id: ChainId,
-    ) -> Result<Blob, ChainClientError> {
+    ) -> Result<ChainDescription, ChainClientError> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
         let blob = self
             .local_node
@@ -469,15 +464,16 @@ impl<Env: Environment> Client<Env> {
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
-            return Ok(blob);
+            return Ok(bcs::from_bytes(blob.bytes())?);
         };
         // Recover history from the current validators, according to the admin chain.
         let nodes = self.validator_nodes().await?;
-        Ok(self
+        let blob = self
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
             .await?
             .pop()
-            .unwrap())
+            .unwrap();
+        Ok(bcs::from_bytes(blob.bytes())?)
     }
 
     /// Updates the latest block and next block height and round information from the chain info.
@@ -1692,6 +1688,13 @@ impl<Env: Environment> ChainClient<Env> {
             .await?;
         self.client.update_from_info(&response.info);
         Ok(response.info)
+    }
+
+    /// Returns the chain's description. Fetches it from the validators if necessary.
+    pub async fn ensure_has_chain_description(&self) -> Result<ChainDescription, ChainClientError> {
+        self.client
+            .ensure_has_chain_description(self.chain_id)
+            .await
     }
 
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
@@ -3453,9 +3456,9 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<Env::Storage>,
-    ) -> Option<BlockHeight> {
-        let info = self.local_chain_info(chain_id, local_node).await?;
-        Some(info.next_block_height)
+    ) -> BlockHeight {
+        let maybe_info = self.local_chain_info(chain_id, local_node).await;
+        maybe_info.map_or(BlockHeight::ZERO, |info| info.next_block_height)
     }
 
     #[instrument(level = "trace", skip(remote_node, local_node, notification))]
@@ -3467,14 +3470,7 @@ impl<Env: Environment> ChainClient<Env> {
     ) {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
-                if let Err(error) = self.client.ensure_has_chain_description(origin).await {
-                    error!(
-                        chain_id = %self.chain_id,
-                        "NewIncomingBundle: could not find blob for sender's chain: {error}"
-                    );
-                    return;
-                }
-                if self.local_next_block_height(origin, &mut local_node).await > Some(height) {
+                if self.local_next_block_height(origin, &mut local_node).await > height {
                     debug!(
                         chain_id = %self.chain_id,
                         "Accepting redundant notification for new message"
@@ -3491,7 +3487,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return;
                 }
-                if self.local_next_block_height(origin, &mut local_node).await <= Some(height) {
+                if self.local_next_block_height(origin, &mut local_node).await <= height {
                     error!(
                         chain_id = %self.chain_id,
                         "NewIncomingBundle: Fail to synchronize new message after notification"
@@ -3503,7 +3499,7 @@ impl<Env: Environment> ChainClient<Env> {
                 if self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await
-                    > Some(height)
+                    > height
                 {
                     debug!(
                         chain_id = %self.chain_id,
@@ -3525,7 +3521,7 @@ impl<Env: Environment> ChainClient<Env> {
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await;
-                if local_height <= Some(height) {
+                if local_height <= height {
                     error!("NewBlock: Fail to synchronize new block after notification");
                 }
             }
