@@ -5,7 +5,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     num::NonZeroUsize,
     sync::Arc,
-    time::Duration,
     vec,
 };
 
@@ -49,14 +48,13 @@ use {
 };
 
 use crate::{
-    client::Client,
+    client::{ChainClientOptions, Client},
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    updater::DEFAULT_GRACE_PERIOD,
     worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
 };
 
@@ -513,6 +511,10 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Into::into);
+        let blob = match blob {
+            Ok(blob) => blob.ok_or(NodeError::BlobsNotFound(vec![blob_id])),
+            Err(error) => Err(error),
+        };
         sender.send(blob.map(|blob| blob.into_content()))
     }
 
@@ -584,13 +586,21 @@ where
         sender: oneshot::Sender<Result<CryptoHash, NodeError>>,
     ) -> Result<(), Result<CryptoHash, NodeError>> {
         let validator = self.client.lock().await;
-        let certificate_hash = validator
+        let blob_state = validator
             .state
             .storage_client()
             .read_blob_state(blob_id)
             .await
-            .map(|blob_state| blob_state.last_used_by)
             .map_err(Into::into);
+        let certificate_hash = match blob_state {
+            Err(err) => Err(err),
+            Ok(blob_state) => match blob_state {
+                None => Err(NodeError::BlobsNotFound(vec![blob_id])),
+                Some(blob_state) => blob_state
+                    .last_used_by
+                    .ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
+            },
+        };
 
         sender.send(certificate_hash)
     }
@@ -670,7 +680,7 @@ where
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
 #[allow(dead_code)]
-pub struct TestBuilder<'a, B: StorageBuilder> {
+pub struct TestBuilder<B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
     admin_description: Option<ChainDescription>,
@@ -680,7 +690,7 @@ pub struct TestBuilder<'a, B: StorageBuilder> {
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
     pub chain_owners: BTreeMap<ChainId, AccountOwner>,
-    pub signer: &'a mut InMemorySigner,
+    pub signer: InMemorySigner,
 }
 
 #[async_trait]
@@ -724,9 +734,10 @@ impl GenesisStorageBuilder {
     }
 }
 
-pub type ChainClient<S> = crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
+pub type ChainClient<S> =
+    crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>, InMemorySigner>>;
 
-impl<'signer, B> TestBuilder<'signer, B>
+impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
 {
@@ -734,7 +745,7 @@ where
         mut storage_builder: B,
         count: usize,
         with_faulty_validators: usize,
-        signer: &'signer mut InMemorySigner,
+        mut signer: InMemorySigner,
     ) -> Result<Self, anyhow::Error> {
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -937,22 +948,18 @@ where
             crate::environment::Impl {
                 network: self.make_node_provider(),
                 storage,
+                signer: self.signer.clone(),
             },
-            Box::new(self.signer.clone()),
-            10,
             self.admin_id(),
-            CrossChainMessageDelivery::NonBlocking,
             false,
             [chain_id],
             format!("Client node for {:.8}", chain_id),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ChainClientOptions::test_default(),
         ));
         Ok(client.create_chain_client(
             chain_id,
             block_hash,
-            Timestamp::from(0),
             block_height,
             None,
             self.chain_owners.get(&chain_id).copied(),

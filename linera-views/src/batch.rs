@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{get_interval, get_uleb128_size},
-    views::ViewError,
+    ViewError,
 };
 
 /// A write operation as requested by a view when it needs to persist staged changes.
@@ -367,7 +367,7 @@ impl Batch {
 /// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
 /// Thus we need to access the databases in order to replace a `DeletePrefix`
 /// by a vector of the keys to be removed.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait DeletePrefixExpander {
     /// The error type that can happen when expanding the key prefix.
     type Error: Debug;
@@ -376,17 +376,14 @@ pub trait DeletePrefixExpander {
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
 
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 /// A notion of batch useful for certain computations (notably journaling).
 pub trait SimplifiedBatch: Sized + Send + Sync {
     /// The iterator type used to process values from the batch.
     type Iter: BatchValueWriter<Self>;
 
     /// Creates a simplified batch from a standard one.
-    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
-        store: S,
-        batch: Batch,
-    ) -> Result<Self, S::Error>;
+    async fn from_batch<S: DeletePrefixExpander>(store: S, batch: Batch) -> Result<Self, S::Error>;
 
     /// Returns an owning iterator over the values in the batch.
     fn into_iter(self) -> Self::Iter;
@@ -414,7 +411,8 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
 
 /// An iterator-like object that can write values one by one to a batch while updating the
 /// total size of the batch.
-pub trait BatchValueWriter<Batch>: Send + Sync {
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
+pub trait BatchValueWriter<Batch> {
     /// Returns true if there are no more values to write.
     fn is_empty(&self) -> bool;
 
@@ -481,10 +479,7 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
         self.insertions.push((key, value))
     }
 
-    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
-        store: S,
-        batch: Batch,
-    ) -> Result<Self, S::Error> {
+    async fn from_batch<S: DeletePrefixExpander>(store: S, batch: Batch) -> Result<Self, S::Error> {
         let unordered_batch = batch.simplify();
         unordered_batch.expand_delete_prefixes(&store).await
     }
@@ -583,10 +578,7 @@ impl SimplifiedBatch for UnorderedBatch {
         self.simple_unordered_batch.add_insert(key, value)
     }
 
-    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
-        store: S,
-        batch: Batch,
-    ) -> Result<Self, S::Error> {
+    async fn from_batch<S: DeletePrefixExpander>(store: S, batch: Batch) -> Result<Self, S::Error> {
         let mut unordered_batch = batch.simplify();
         unordered_batch
             .expand_colliding_prefix_deletions(&store)

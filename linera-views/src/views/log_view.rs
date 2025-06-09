@@ -52,13 +52,14 @@ pub struct LogView<C, T> {
     new_values: Vec<T>,
 }
 
-impl<C, T> View<C> for LogView<C, T>
+impl<C, T> View for LogView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = 1;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -128,10 +129,9 @@ where
     }
 }
 
-impl<C, T> ClonableView<C> for LogView<C, T>
+impl<C, T> ClonableView for LogView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -192,9 +192,8 @@ where
 
 impl<C, T> LogView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    T: Clone + DeserializeOwned + Serialize + Send,
+    C: Context,
+    T: Clone + DeserializeOwned + Serialize + Send + Sync,
 {
     /// Reads the logged value with the given index (including staged ones).
     /// ```rust
@@ -349,10 +348,9 @@ where
     }
 }
 
-impl<C, T> HashableView<C> for LogView<C, T>
+impl<C, T> HashableView for LogView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
@@ -398,7 +396,6 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C: Context, T: async_graphql::OutputType> LogView<C, T>
     where
-        C: Send + Sync,
         T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
     {
         async fn entries(

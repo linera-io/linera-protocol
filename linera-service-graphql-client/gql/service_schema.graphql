@@ -206,7 +206,6 @@ A block height to identify blocks in a chain
 """
 scalar BlockHeight
 
-
 type BucketQueueView_BlockHeight_e824a938 {
 	entries(count: Int): [BlockHeight!]!
 }
@@ -361,6 +360,10 @@ type ChainStateExtendedView {
 	We use a `RegisterView` to prioritize speed for small maps.
 	"""
 	outboxCounters: JSONObject!
+	"""
+	Blocks that have been verified but not executed yet, and that may not be contiguous.
+	"""
+	preprocessedBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
 }
 
 """
@@ -471,6 +474,14 @@ type Entry_BlobId_Blob_9f0b41f3 {
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_BlockHeight_CryptoHash_74e16b71 {
+	key: BlockHeight!
+	value: CryptoHash
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_ChainId_BlockHeight_2fe78645 {
 	key: ChainId!
 	value: BlockHeight
@@ -519,12 +530,10 @@ type ExecutionStateView {
 	system: SystemExecutionStateView!
 }
 
-
 """
 A unique identifier for a user application or for the system application
 """
 scalar GenericApplicationId
-
 
 """
 The state of an inbox.
@@ -592,7 +601,6 @@ type IndexAndEvent {
 	event: [Int!]!
 }
 
-
 """
 A scalar that can represent any JSON Object value.
 """
@@ -614,6 +622,10 @@ input MapFilters_BlobId_4d2a0555 {
 	keys: [BlobId!]
 }
 
+input MapFilters_BlockHeight_e824a938 {
+	keys: [BlockHeight!]
+}
+
 input MapFilters_ChainId_37f83aa9 {
 	keys: [ChainId!]
 }
@@ -624,6 +636,10 @@ input MapInput_AccountOwner_d6668c53 {
 
 input MapInput_BlobId_4d2a0555 {
 	filters: MapFilters_BlobId_4d2a0555
+}
+
+input MapInput_BlockHeight_e824a938 {
+	filters: MapFilters_BlockHeight_e824a938
 }
 
 input MapInput_ChainId_37f83aa9 {
@@ -646,6 +662,12 @@ type MapView_BlobId_Blob_9f0b41f3 {
 	keys(count: Int): [BlobId!]!
 	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
+}
+
+type MapView_BlockHeight_CryptoHash_1bae6d76 {
+	keys(count: Int): [BlockHeight!]!
+	entry(key: BlockHeight!): Entry_BlockHeight_CryptoHash_74e16b71!
+	entries(input: MapInput_BlockHeight_e824a938): [Entry_BlockHeight_CryptoHash_74e16b71!]!
 }
 
 type MapView_ChainId_BlockHeight_f2e56e12 {
@@ -1142,7 +1164,6 @@ The name of an event stream
 """
 scalar StreamName
 
-
 type SubscriptionRoot {
 	"""
 	Subscribes to notifications from the specified chain.
@@ -1184,7 +1205,13 @@ scalar VersionInfo
 
 scalar VmRuntime
 
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: QueryRoot

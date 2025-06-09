@@ -98,7 +98,11 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     client.query_validators(None).await?;
 
-    let address = format!("{}:127.0.0.1:{}", network.short(), LocalNet::proxy_port(0));
+    let address = format!(
+        "{}:127.0.0.1:{}",
+        network.short(),
+        LocalNet::proxy_public_port(0, 0)
+    );
     assert_eq!(
         client.query_validator(&address).await?,
         net.genesis_config()?.hash()
@@ -119,7 +123,12 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     net.start_validator(4).await?;
     net.start_validator(5).await?;
 
-    let address = format!("{}:127.0.0.1:{}", network.short(), LocalNet::proxy_port(4));
+    let address = format!(
+        "{}:127.0.0.1:{}",
+        network.short(),
+        LocalNet::proxy_public_port(4, 0)
+    );
+
     assert_eq!(
         client.query_validator(&address).await?,
         net.genesis_config()?.hash()
@@ -127,7 +136,11 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Add 5th validator
     client
-        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(
+            net.validator_keys(4).unwrap(),
+            LocalNet::proxy_public_port(4, 0),
+            100,
+        )
         .await?;
 
     client.query_validators(None).await?;
@@ -139,7 +152,11 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Add 6th validator
     client
-        .set_validator(net.validator_keys(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .set_validator(
+            net.validator_keys(5).unwrap(),
+            LocalNet::proxy_public_port(5, 0),
+            100,
+        )
         .await?;
     if matches!(network, Network::Grpc) {
         assert!(
@@ -161,14 +178,14 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(Some(chain_1)).await?;
     if let Some(service) = &node_service_2 {
         service.process_inbox(&chain_2).await?;
-        client.finalize_committee().await?;
+        client.revoke_epochs(Epoch(2)).await?;
         service.process_inbox(&chain_2).await?;
         let committees = service.query_committees(&chain_2).await?;
         let epochs = committees.into_keys().collect::<Vec<_>>();
         assert_eq!(&epochs, &[Epoch(3)]);
     } else {
         client_2.process_inbox(chain_2).await?;
-        client.finalize_committee().await?;
+        client.revoke_epochs(Epoch(2)).await?;
         client_2.process_inbox(chain_2).await?;
     }
 
@@ -178,14 +195,14 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         client.remove_validator(&validator_key.0).await?;
         if let Some(service) = &node_service_2 {
             service.process_inbox(&chain_2).await?;
-            client.finalize_committee().await?;
+            client.revoke_epochs(Epoch(3 + i as u32)).await?;
             service.process_inbox(&chain_2).await?;
             let committees = service.query_committees(&chain_2).await?;
             let epochs = committees.into_keys().collect::<Vec<_>>();
             assert_eq!(&epochs, &[Epoch(4 + i as u32)]);
         } else {
             client_2.process_inbox(chain_2).await?;
-            client.finalize_committee().await?;
+            client.revoke_epochs(Epoch(3 + i as u32)).await?;
             client_2.process_inbox(chain_2).await?;
         }
         net.remove_validator(i)?;
@@ -280,7 +297,12 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
     net.generate_validator_config(4).await?;
     net.start_validator(4).await?;
 
-    let address = format!("{}:127.0.0.1:{}", network.short(), LocalNet::proxy_port(4));
+    let address = format!(
+        "{}:127.0.0.1:{}",
+        network.short(),
+        LocalNet::proxy_public_port(4, 0)
+    );
+
     assert_eq!(
         client.query_validator(&address).await?,
         net.genesis_config()?.hash()
@@ -288,7 +310,11 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
 
     // Add 5th validator to the network
     client
-        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(
+            net.validator_keys(4).unwrap(),
+            LocalNet::proxy_public_port(4, 0),
+            100,
+        )
         .await?;
 
     client.query_validators(None).await?;
@@ -368,7 +394,12 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     net.generate_validator_config(4).await?;
     net.start_validator(4).await?;
 
-    let address = format!("{}:127.0.0.1:{}", network.short(), LocalNet::proxy_port(4));
+    let address = format!(
+        "{}:127.0.0.1:{}",
+        network.short(),
+        LocalNet::proxy_public_port(4, 0)
+    );
+
     assert_eq!(
         client.query_validator(&address).await?,
         net.genesis_config()?.hash()
@@ -376,14 +407,18 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Add 5th validator to the network
     client
-        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(
+            net.validator_keys(4).unwrap(),
+            LocalNet::proxy_public_port(4, 0),
+            100,
+        )
         .await?;
 
     client.query_validators(None).await?;
 
     // Ensure the faucet is on the new epoch before removing the old ones.
     faucet_client.process_inbox(faucet_chain).await?;
-    client.finalize_committee().await?;
+    client.revoke_epochs(Epoch::ZERO).await?;
     faucet_client.process_inbox(faucet_chain).await?;
 
     if matches!(network, Network::Grpc) {
@@ -407,7 +442,12 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     net.generate_validator_config(5).await?;
     net.start_validator(5).await?;
 
-    let address = format!("{}:127.0.0.1:{}", network.short(), LocalNet::proxy_port(5));
+    let address = format!(
+        "{}:127.0.0.1:{}",
+        network.short(),
+        LocalNet::proxy_public_port(5, 0)
+    );
+
     assert_eq!(
         client.query_validator(&address).await?,
         net.genesis_config()?.hash()
@@ -415,7 +455,11 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Add 6th validator to the network
     client
-        .set_validator(net.validator_keys(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .set_validator(
+            net.validator_keys(5).unwrap(),
+            LocalNet::proxy_public_port(5, 0),
+            100,
+        )
         .await?;
 
     client.query_validators(None).await?;
@@ -468,7 +512,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     let client2 = net.make_client().await;
     let mut height = 0;
     client2.wallet_init(None).await?;
-    client2.follow_chain(chain).await?;
+    client2.follow_chain(chain, false).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let port = get_node_port().await;

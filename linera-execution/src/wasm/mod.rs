@@ -307,7 +307,7 @@ pub enum WasmExecutionError {
     LoadServiceModule(#[source] anyhow::Error),
     #[error("Failed to instrument Wasm module to add fuel metering")]
     InstrumentModule,
-    #[error("Invalid Wasm module")]
+    #[error("Invalid Wasm module: {0}")]
     InvalidBytecode(#[from] wasm_instrument::parity_wasm::SerializationError),
     #[cfg(with_wasmer)]
     #[error("Failed to instantiate Wasm module: {_0}")]

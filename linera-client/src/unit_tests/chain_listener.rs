@@ -13,13 +13,12 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, Client},
+    client::{ChainClient, ChainClientOptions, Client},
     environment,
-    node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
-    DEFAULT_GRACE_PERIOD,
 };
 use linera_execution::system::Recipient;
+use linera_storage::Storage;
 use tokio_util::sync::CancellationToken;
 
 use super::util::make_genesis_config;
@@ -45,23 +44,8 @@ impl chain_listener::ClientContext for ClientContext {
         self.client.storage_client()
     }
 
-    fn client(&self) -> &linera_core::client::Client<Self::Environment> {
+    fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>> {
         &self.client
-    }
-
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        self.client.create_chain_client(
-            chain_id,
-            chain.block_hash,
-            chain.timestamp,
-            chain.next_block_height,
-            chain.pending_proposal.clone(),
-            chain.owner,
-        )
     }
 
     async fn update_wallet_for_new_chain(
@@ -88,7 +72,11 @@ impl chain_listener::ClientContext for ClientContext {
         &mut self,
         client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
-        self.wallet.update_from_state(client);
+        let info = client.chain_info().await?;
+        let client_owner = client.preferred_owner();
+        let pending_proposal = client.pending_proposal().clone();
+        self.wallet
+            .update_from_info(pending_proposal, client_owner, &info);
         Ok(())
     }
 }
@@ -104,7 +92,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let config = ChainListenerConfig::default();
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
@@ -112,7 +100,6 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let genesis_config = make_genesis_config(&builder);
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
-    let delivery = CrossChainMessageDelivery::NonBlocking;
 
     let mut context = ClientContext {
         wallet: Wallet::new(genesis_config),
@@ -120,17 +107,14 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             environment::Impl {
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
+                signer,
             },
-            Box::new(signer),
-            10,
             admin_id,
-            delivery,
             false,
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
             NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ChainClientOptions::test_default(),
         )),
     };
     context
@@ -180,6 +164,68 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         clock.add(TimeDelta::from_secs(1));
         if i == 30 {
             panic!("Unexpected local balance: {}", balance);
+        }
+    }
+
+    cancellation_token.cancel();
+    handle.await?;
+
+    Ok(())
+}
+
+/// Tests that the chain listener always listens to the admin chain.
+#[test_log::test(tokio::test)]
+async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
+    let signer = InMemorySigner::new(Some(42));
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::default();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
+    let client0 = builder.add_root_chain(0, Amount::ONE).await?;
+    let genesis_config = make_genesis_config(&builder);
+    let admin_id = genesis_config.admin_id();
+    let storage = builder.make_storage().await?;
+
+    let context = ClientContext {
+        wallet: Wallet::new(genesis_config),
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+            },
+            admin_id,
+            false,
+            [],
+            "Client node with no chains".to_string(),
+            NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
+            ChainClientOptions::test_default(),
+        )),
+    };
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let handle = linera_base::task::spawn({
+        let storage = storage.clone();
+        async move {
+            ChainListener::new(config, context, storage, child_token)
+                .run()
+                .await
+                .unwrap()
+        }
+    });
+    // Burn one token.
+    let certificate = client0
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await?
+        .unwrap();
+    for i in 0.. {
+        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
+        let result = storage.read_certificate(certificate.hash()).await;
+        if result.ok().as_ref() == Some(&certificate) {
+            break;
+        }
+        if i == 5 {
+            panic!("Failed to learn about new block.");
         }
     }
 

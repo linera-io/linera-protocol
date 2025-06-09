@@ -13,7 +13,7 @@ use crate::{
     batch::Batch,
     common::from_bytes_option,
     lru_caching::{StorageCacheConfig, DEFAULT_STORAGE_CACHE_CONFIG},
-    views::ViewError,
+    ViewError,
 };
 
 /// The common initialization parameters for the `KeyValueStore`
@@ -63,7 +63,9 @@ impl Default for CommonStoreConfig {
 }
 
 /// The error type for the key-value stores.
-pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> + 'static {
+pub trait KeyValueStoreError:
+    std::error::Error + From<bcs::Error> + Debug + Send + Sync + 'static
+{
     /// The name of the backend.
     const BACKEND: &'static str;
 }
@@ -71,8 +73,8 @@ pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> + 'st
 impl<E: KeyValueStoreError> From<E> for ViewError {
     fn from(error: E) -> Self {
         Self::StoreError {
-            backend: E::BACKEND.to_string(),
-            error: error.to_string(),
+            backend: E::BACKEND,
+            error: Box::new(error),
         }
     }
 }
@@ -84,7 +86,7 @@ pub trait WithError {
 }
 
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
@@ -130,25 +132,19 @@ pub trait ReadableKeyValueStore: WithError {
     fn read_value<V: DeserializeOwned>(
         &self,
         key: &[u8],
-    ) -> impl Future<Output = Result<Option<V>, Self::Error>>
-    where
-        Self: Sync,
-    {
-        async { from_bytes_option(&self.read_value_bytes(key).await?) }
+    ) -> impl Future<Output = Result<Option<V>, Self::Error>> {
+        async { Ok(from_bytes_option(&self.read_value_bytes(key).await?)?) }
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
-    fn read_multi_values<V: DeserializeOwned + Send>(
+    fn read_multi_values<V: DeserializeOwned + Send + Sync>(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> impl Future<Output = Result<Vec<Option<V>>, Self::Error>>
-    where
-        Self: Sync,
-    {
+    ) -> impl Future<Output = Result<Vec<Option<V>>, Self::Error>> {
         async {
             let mut values = Vec::with_capacity(keys.len());
             for entry in self.read_multi_values_bytes(keys).await? {
-                values.push(from_bytes_option::<_, bcs::Error>(&entry)?);
+                values.push(from_bytes_option(&entry)?);
             }
             Ok(values)
         }
@@ -156,7 +152,7 @@ pub trait ReadableKeyValueStore: WithError {
 }
 
 /// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait WritableKeyValueStore: WithError {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
@@ -170,7 +166,7 @@ pub trait WritableKeyValueStore: WithError {
 }
 
 /// Low-level trait for the administration of stores and their namespaces.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait AdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;
@@ -180,8 +176,13 @@ pub trait AdminKeyValueStore: WithError + Sized {
     /// Connects to an existing namespace using the given configuration.
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
 
-    /// Takes a connection and creates a new one with a different `root_key`.
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
+    /// Opens the key partition starting at `root_key` and returns a clone of the
+    /// connection to work in this partition.
+    ///
+    /// IMPORTANT: It is assumed that the returned connection is the only user of the
+    /// partition (for both read and write) and will remain so until it is ended. Future
+    /// implementations of this method may fail if this is not the case.
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;

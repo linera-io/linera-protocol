@@ -28,10 +28,10 @@ use linera_base::{
     bcs,
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId},
+    identifiers::{ApplicationId, ChainId},
 };
 use linera_execution::ExecutionError;
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use rand_distr::WeightedError;
 use thiserror::Error;
 
@@ -42,11 +42,11 @@ pub enum ChainError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
     #[error("Execution error: {0} during {1:?}")]
     ExecutionError(Box<ExecutionError>, ChainExecutionContext),
 
-    #[error("The chain being queried is not active {0:?}")]
+    #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error(
         "Cannot vote for block proposal of chain {chain_id:?} because a message \
@@ -119,8 +119,10 @@ pub enum ChainError {
     UnexpectedPreviousBlockHash,
     #[error("Sequence numbers above the maximal value are not usable for blocks")]
     InvalidBlockHeight,
-    #[error("Block timestamp must not be earlier than the parent block's.")]
-    InvalidBlockTimestamp,
+    #[error(
+        "Block timestamp {new} must not be earlier than the parent block's timestamp {parent}"
+    )]
+    InvalidBlockTimestamp { parent: Timestamp, new: Timestamp },
     #[error("Cannot initiate a new block while the previous one is still pending confirmation")]
     PreviousBlockMustBeConfirmedFirst,
     #[error("Round number should be at least {0:?}")]
@@ -143,8 +145,8 @@ pub enum ChainError {
     CertificateSignatureVerificationFailed { error: String },
     #[error("Internal error {0}")]
     InternalError(String),
-    #[error("Block proposal is too large")]
-    BlockProposalTooLarge,
+    #[error("Block proposal has size {0} which is too large")]
+    BlockProposalTooLarge(usize),
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
     #[error("Insufficient balance to pay the fees")]
@@ -168,17 +170,6 @@ pub enum ChainError {
         expected: CryptoHash,
         actual: CryptoHash,
     },
-    #[error("Blobs not found: {0:?}")]
-    BlobsNotFound(Vec<BlobId>),
-}
-
-impl From<ViewError> for ChainError {
-    fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => ChainError::BlobsNotFound(blob_ids),
-            error => ChainError::ViewError(error),
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug)]

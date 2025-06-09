@@ -2,35 +2,36 @@
 source: linera-views-derive/src/lib.rs
 expression: "pretty(generate_view_code(input, true))"
 ---
-impl linera_views::views::View<custom::GenericContext<T>> for TestView
+impl linera_views::views::View for TestView
 where
+    custom::GenericContext<T>: linera_views::context::Context,
     RegisterView<
         custom::GenericContext<T>,
         usize,
-    >: linera_views::views::View<custom::GenericContext<T>>,
+    >: linera_views::views::View<Context = custom::GenericContext<T>>,
     CollectionView<
         custom::GenericContext<T>,
         usize,
         RegisterView<custom::GenericContext<T>, usize>,
-    >: linera_views::views::View<custom::GenericContext<T>>,
-    Self: Send + Sync,
+    >: linera_views::views::View<Context = custom::GenericContext<T>>,
 {
-    const NUM_INIT_KEYS: usize = RegisterView::<
+    const NUM_INIT_KEYS: usize = <RegisterView<
         custom::GenericContext<T>,
         usize,
-    >::NUM_INIT_KEYS
-        + CollectionView::<
+    > as linera_views::views::View>::NUM_INIT_KEYS
+        + <CollectionView<
             custom::GenericContext<T>,
             usize,
             RegisterView<custom::GenericContext<T>, usize>,
-        >::NUM_INIT_KEYS;
+        > as linera_views::views::View>::NUM_INIT_KEYS;
+    type Context = custom::GenericContext<T>;
     fn context(&self) -> &custom::GenericContext<T> {
         use linera_views::views::View;
         self.register.context()
     }
     fn pre_load(
         context: &custom::GenericContext<T>,
-    ) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
+    ) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let index = 0;
@@ -59,7 +60,7 @@ where
     fn post_load(
         context: custom::GenericContext<T>,
         values: &[Option<Vec<u8>>],
-    ) -> Result<Self, linera_views::views::ViewError> {
+    ) -> Result<Self, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut pos = 0;
         let index = 0;
@@ -93,7 +94,7 @@ where
     }
     async fn load(
         context: custom::GenericContext<T>,
-    ) -> Result<Self, linera_views::views::ViewError> {
+    ) -> Result<Self, linera_views::ViewError> {
         use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
         #[cfg(not(target_arch = "wasm32"))]
         linera_views::metrics::increment_counter(
@@ -128,7 +129,7 @@ where
     fn flush(
         &mut self,
         batch: &mut linera_views::batch::Batch,
-    ) -> Result<bool, linera_views::views::ViewError> {
+    ) -> Result<bool, linera_views::ViewError> {
         use linera_views::views::View;
         let deleted0 = self.register.flush(batch)?;
         let deleted1 = self.collection.flush(batch)?;

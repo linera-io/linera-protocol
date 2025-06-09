@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, Epoch, NetworkDescription, TimeDelta, Timestamp},
+    data_types::{Blob, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
 };
 use linera_chain::{
@@ -21,10 +21,10 @@ use linera_execution::{
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
-    batch::Batch,
     context::ViewContext,
     store::{AdminKeyValueStore, KeyIterable as _, KeyValueStore},
-    views::{View, ViewError},
+    views::View,
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
@@ -222,23 +222,26 @@ pub mod metrics {
     });
 }
 
-trait BatchExt {
-    fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError>;
-
-    fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError>;
-
-    fn add_certificate(&mut self, certificate: &ConfirmedBlockCertificate)
-        -> Result<(), ViewError>;
-
-    fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError>;
-
-    fn add_network_description(
-        &mut self,
-        information: &NetworkDescription,
-    ) -> Result<(), ViewError>;
+#[derive(Default)]
+struct Batch {
+    key_value_bytes: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
-impl BatchExt for Batch {
+impl Batch {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
+        self.key_value_bytes.push((key, value));
+    }
+
+    fn put_key_value<T: Serialize>(&mut self, key: Vec<u8>, value: &T) -> Result<(), ViewError> {
+        let bytes = bcs::to_bytes(value)?;
+        self.key_value_bytes.push((key, bytes));
+        Ok(())
+    }
+
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -553,7 +556,7 @@ where
             user_services: self.user_services.clone(),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
@@ -605,13 +608,12 @@ where
         Ok(value)
     }
 
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_bytes = maybe_blob_bytes.ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?;
-        Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
+        Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
@@ -637,19 +639,20 @@ where
             .collect())
     }
 
-    async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
+    async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
+        let blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATE_COUNTER
             .with_label_values(&[])
             .inc();
-        let blob_state = maybe_blob_state
-            .ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id))?;
         Ok(blob_state)
     }
 
-    async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError> {
+    async fn read_blob_states(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<BlobState>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -657,21 +660,14 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
             .collect::<Result<_, _>>()?;
-        let maybe_blob_states = self
+        let blob_states = self
             .store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATES_COUNTER
             .with_label_values(&[])
-            .inc();
-        let blob_states = maybe_blob_states
-            .into_iter()
-            .zip(blob_ids)
-            .map(|(blob_state, blob_id)| {
-                blob_state.ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id))
-            })
-            .collect::<Result<_, _>>()?;
+            .inc_by(blob_ids.len() as u64);
         Ok(blob_states)
     }
 
@@ -700,36 +696,13 @@ where
         Ok(())
     }
 
-    async fn maybe_write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: BlobState,
-    ) -> Result<Epoch, ViewError> {
-        let current_blob_state = self.read_blob_state(blob_id).await;
-        let (should_write, latest_epoch) = match current_blob_state {
-            Ok(current_blob_state) => (
-                current_blob_state.epoch < blob_state.epoch,
-                current_blob_state.epoch.max(blob_state.epoch),
-            ),
-            Err(ViewError::NotFound(_)) => (true, blob_state.epoch),
-            Err(err) => return Err(err),
-        };
-
-        if should_write {
-            self.write_blob_state(blob_id, &blob_state).await?;
-        }
-
-        Ok(latest_epoch)
-    }
-
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
-        overwrite: bool,
-    ) -> Result<Vec<Epoch>, ViewError> {
+    ) -> Result<(), ViewError> {
         if blob_ids.is_empty() {
-            return Ok(Vec::new());
+            return Ok(());
         }
         let blob_state_keys = blob_ids
             .iter()
@@ -739,36 +712,22 @@ where
             .store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
-        let mut latest_epochs = Vec::new();
         let mut batch = Batch::new();
-        let mut need_write = false;
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
-            let (should_write, latest_epoch) = match maybe_blob_state {
-                None => (true, blob_state.epoch),
-                Some(current_blob_state) => (
-                    overwrite && current_blob_state.epoch < blob_state.epoch,
-                    current_blob_state.epoch.max(blob_state.epoch),
-                ),
-            };
-            if should_write {
-                batch.add_blob_state(*blob_id, &blob_state)?;
-                need_write = true;
+            match maybe_blob_state {
+                None => {
+                    batch.add_blob_state(*blob_id, &blob_state)?;
+                }
+                Some(state) => {
+                    if state.epoch < blob_state.epoch {
+                        batch.add_blob_state(*blob_id, &blob_state)?;
+                    }
+                }
             }
-            latest_epochs.push(latest_epoch);
         }
-        if need_write {
-            self.write_batch(batch).await?;
-        }
-        Ok(latest_epochs)
-    }
-
-    async fn write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: &BlobState,
-    ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        batch.add_blob_state(blob_id, blob_state)?;
+        // We tolerate race conditions because two active chains are likely to
+        // be both from the latest epoch, and otherwise failing to pick the
+        // more recent blob state has limited impact.
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -856,7 +815,7 @@ where
             #[cfg(with_metrics)]
             metrics::READ_CERTIFICATES_COUNTER
                 .with_label_values(&[])
-                .inc();
+                .inc_by(hashes.len() as u64);
         }
         let values = values?;
         let mut certificates = Vec::new();
@@ -867,12 +826,12 @@ where
         Ok(certificates)
     }
 
-    async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+    async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
-        let maybe_value = self.store.read_value_bytes(&event_key).await?;
+        let event = self.store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
-        maybe_value.ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))
+        Ok(event)
     }
 
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
@@ -953,7 +912,7 @@ where
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
         let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.open_exclusive(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
 }
@@ -994,8 +953,23 @@ where
         Ok(certificate)
     }
 
+    async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {
+        let mut batch = linera_views::batch::Batch::new();
+        batch.put_key_value_bytes(key, bytes);
+        store.write_batch(batch).await?;
+        Ok(())
+    }
+
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.store.write_batch(batch).await?;
+        if batch.key_value_bytes.is_empty() {
+            return Ok(());
+        }
+        let mut futures = Vec::new();
+        for (key, bytes) in batch.key_value_bytes.into_iter() {
+            let store = self.store.clone();
+            futures.push(async move { Self::write_entry(&store, key, bytes).await });
+        }
+        futures::future::try_join_all(futures).await?;
         Ok(())
     }
 

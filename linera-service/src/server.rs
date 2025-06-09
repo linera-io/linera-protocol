@@ -26,8 +26,9 @@ use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_persistent::{self as persistent, Persist};
 use linera_rpc::{
     config::{
-        CrossChainConfig, ExporterServiceConfig, NetworkProtocol, NotificationConfig, ShardConfig,
-        ShardId, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+        CrossChainConfig, ExporterServiceConfig, NetworkProtocol, NotificationConfig, ProxyConfig,
+        ShardConfig, ShardId, TlsConfig, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
     },
     grpc, simple,
 };
@@ -270,15 +271,6 @@ struct ValidatorOptions {
     #[serde(default)]
     block_exporters: Vec<ExporterServiceConfig>,
 
-    /// The port for the metrics endpoint
-    metrics_port: u16,
-
-    /// The host of the proxy in the internal network.
-    internal_host: String,
-
-    /// The port of the proxy on the internal network.
-    internal_port: u16,
-
     /// The network protocol for the frontend.
     external_protocol: NetworkProtocol,
 
@@ -287,6 +279,9 @@ struct ValidatorOptions {
 
     /// The public name and the port of each of the shards
     shards: Vec<ShardConfig>,
+
+    /// The name and the port of the proxies
+    proxies: Vec<ProxyConfig>,
 }
 
 fn make_server_config<R: CryptoRng>(
@@ -306,10 +301,8 @@ fn make_server_config<R: CryptoRng>(
         public_key,
         protocol: options.internal_protocol,
         shards: options.shards,
-        host: options.internal_host,
-        port: options.internal_port,
         block_exporters: options.block_exporters,
-        metrics_port: options.metrics_port,
+        proxies: options.proxies,
     };
     let validator = ValidatorConfig {
         network,
@@ -599,7 +592,9 @@ async fn run(options: ServerOptions) {
                     .await
                     .expect("Unable to read validator options file");
                 let options: ValidatorOptions =
-                    toml::from_str(&options_string).expect("Invalid options file format");
+                    toml::from_str(&options_string).unwrap_or_else(|_| {
+                        panic!("Invalid options file format: \n {}", options_string)
+                    });
                 let path = options.server_config_path.clone();
                 let mut server = make_server_config(&path, &mut rng, options)
                     .expect("Unable to open server config file");
@@ -732,11 +727,15 @@ mod test {
             server_config_path = "server.json"
             host = "host"
             port = 9000
-            internal_host = "internal_host"
-            internal_port = 10000
-            metrics_port = 5000
             external_protocol = { Simple = "Tcp" }
             internal_protocol = { Simple = "Udp" }
+
+            [[proxies]]
+            host = "proxy"
+            public_port = 20100
+            private_port = 20200
+            metrics_host = "proxy"
+            metrics_port = 21100
 
             [[shards]]
             host = "host1"
@@ -761,13 +760,16 @@ mod test {
                 internal_protocol: NetworkProtocol::Simple(TransportProtocol::Udp),
                 host: "host".into(),
                 port: 9000,
+                proxies: vec![ProxyConfig {
+                    host: "proxy".into(),
+                    public_port: 20100,
+                    private_port: 20200,
+                    metrics_port: 21100,
+                }],
                 block_exporters: vec![ExporterServiceConfig {
                     host: "exporter".into(),
                     port: 12000
                 }],
-                internal_host: "internal_host".into(),
-                internal_port: 10000,
-                metrics_port: 5000,
                 shards: vec![
                     ShardConfig {
                         host: "host1".into(),

@@ -36,7 +36,7 @@ pub struct KeyValueStoreMetrics {
     write_batch_latency: HistogramVec,
     clear_journal_latency: HistogramVec,
     connect_latency: HistogramVec,
-    clone_with_root_key_latency: HistogramVec,
+    open_exclusive_latency: HistogramVec,
     list_all_latency: HistogramVec,
     list_root_keys_latency: HistogramVec,
     delete_all_latency: HistogramVec,
@@ -130,9 +130,9 @@ impl KeyValueStoreMetrics {
         let entry2 = format!("{} connect latency", title_name);
         let connect_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_clone_with_root_key_latency", var_name);
+        let entry1 = format!("{}_open_exclusive_latency", var_name);
         let entry2 = format!("{} clone with root key latency", title_name);
-        let clone_with_root_key_latency = register_histogram_vec(&entry1, &entry2, &[], None);
+        let open_exclusive_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
         let entry1 = format!("{}_list_all_latency", var_name);
         let entry2 = format!("{} list all latency", title_name);
@@ -239,7 +239,7 @@ impl KeyValueStoreMetrics {
             write_batch_latency,
             clear_journal_latency,
             connect_latency,
-            clone_with_root_key_latency,
+            open_exclusive_latency,
             list_all_latency,
             list_root_keys_latency,
             delete_all_latency,
@@ -285,7 +285,7 @@ where
 
 impl<K> ReadableKeyValueStore for MeteredStore<K>
 where
-    K: ReadableKeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     type Keys = K::Keys;
@@ -417,7 +417,7 @@ where
 
 impl<K> WritableKeyValueStore for MeteredStore<K>
 where
-    K: WritableKeyValueStore + Send + Sync,
+    K: WritableKeyValueStore,
 {
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
@@ -438,7 +438,7 @@ where
 
 impl<K> AdminKeyValueStore for MeteredStore<K>
 where
-    K: AdminKeyValueStore + Send + Sync,
+    K: AdminKeyValueStore,
 {
     type Config = K::Config;
 
@@ -455,9 +455,9 @@ where
         Ok(Self { counter, store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let _latency = self.counter.clone_with_root_key_latency.measure_latency();
-        let store = self.store.clone_with_root_key(root_key)?;
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let _latency = self.counter.open_exclusive_latency.measure_latency();
+        let store = self.store.open_exclusive(root_key)?;
         let counter = self.counter.clone();
         Ok(Self { counter, store })
     }
@@ -522,7 +522,7 @@ where
 #[cfg(with_testing)]
 impl<K> TestKeyValueStore for MeteredStore<K>
 where
-    K: TestKeyValueStore + Send + Sync,
+    K: TestKeyValueStore,
 {
     async fn new_test_config() -> Result<K::Config, Self::Error> {
         K::new_test_config().await

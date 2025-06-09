@@ -264,7 +264,7 @@ where
 
 impl<K> ReadableKeyValueStore for LruCachingStore<K>
 where
-    K: ReadableKeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
@@ -424,7 +424,7 @@ where
 
 impl<K> WritableKeyValueStore for LruCachingStore<K>
 where
-    K: WritableKeyValueStore + Send + Sync,
+    K: WritableKeyValueStore,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
@@ -471,7 +471,7 @@ pub struct LruCachingConfig<C> {
 
 impl<K> AdminKeyValueStore for LruCachingStore<K>
 where
-    K: AdminKeyValueStore + Send + Sync,
+    K: AdminKeyValueStore,
 {
     type Config = LruCachingConfig<K::Config>;
 
@@ -487,8 +487,8 @@ where
         ))
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.clone_with_root_key(root_key)?;
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.open_exclusive(root_key)?;
         let store = LruCachingStore::new(store, self.storage_cache_config());
         store.enable_exclusive_access();
         Ok(store)
@@ -525,7 +525,7 @@ where
 #[cfg(with_testing)]
 impl<K> TestKeyValueStore for LruCachingStore<K>
 where
-    K: TestKeyValueStore + Send + Sync,
+    K: TestKeyValueStore,
 {
     async fn new_test_config() -> Result<LruCachingConfig<K::Config>, K::Error> {
         let inner_config = K::new_test_config().await?;

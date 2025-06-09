@@ -47,7 +47,7 @@ use linera_base::{
     task,
     vm::VmRuntime,
 };
-use linera_views::{batch::Batch, views::ViewError};
+use linera_views::{batch::Batch, ViewError};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
 use thiserror::Error;
@@ -193,7 +193,7 @@ const _: () = {
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error("User application reported an error: {0}")]
@@ -281,8 +281,12 @@ pub enum ExecutionError {
     ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
     #[error("Failed to send service code to worker thread: {0:?}")]
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
+    #[error("The chain being queried is not active {0}")]
+    InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    #[error("Events not found: {0:?}")]
+    EventsNotFound(Vec<EventId>),
 
     #[error("Invalid HTTP header name used for HTTP request")]
     InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),
@@ -328,8 +332,6 @@ pub enum ExecutionError {
     TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<ApplicationId>),
-    #[error("Chain is not active yet.")]
-    InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
     #[error("process_streams was not called for all stream updates")]
@@ -340,15 +342,6 @@ pub enum ExecutionError {
     EventNotFound(EventId),
     #[error("UpdateStreams is outdated")]
     OutdatedUpdateStreams,
-}
-
-impl From<ViewError> for ExecutionError {
-    fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => ExecutionError::BlobsNotFound(blob_ids),
-            error => ExecutionError::ViewError(error),
-        }
-    }
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -402,9 +395,9 @@ pub trait ExecutionRuntimeContext {
         description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
@@ -1070,20 +1063,18 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
-        Ok(self
-            .blobs
-            .get(&blob_id)
-            .ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?
-            .clone())
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+        match self.blobs.get(&blob_id) {
+            None => Ok(None),
+            Some(blob) => Ok(Some(blob.clone())),
+        }
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
-        Ok(self
-            .events
-            .get(&event_id)
-            .ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))?
-            .clone())
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+        match self.events.get(&event_id) {
+            None => Ok(None),
+            Some(event) => Ok(Some(event.clone())),
+        }
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
@@ -1292,14 +1283,16 @@ impl From<Vec<u8>> for QueryResponse {
 /// The state of a blob of binary data.
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
 pub struct BlobState {
-    /// Hash of the last `Certificate` that published or used this blob.
-    pub last_used_by: CryptoHash,
+    /// Hash of the last `Certificate` that published or used this blob. If empty, the
+    /// blob is known to be published by a confirmed certificate but we may not have fully
+    /// processed this certificate just yet.
+    pub last_used_by: Option<CryptoHash>,
     /// The `ChainId` of the chain that published the change
     pub chain_id: ChainId,
     /// The `BlockHeight` of the chain that published the change
     pub block_height: BlockHeight,
-    /// Epoch of the `last_used_by` certificate.
-    pub epoch: Epoch,
+    /// Epoch of the `last_used_by` certificate (if any).
+    pub epoch: Option<Epoch>,
 }
 
 /// The runtime to use for running the application.

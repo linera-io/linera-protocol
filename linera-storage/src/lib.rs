@@ -14,8 +14,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch,
-        NetworkDescription, TimeDelta, Timestamp,
+        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, NetworkDescription,
+        TimeDelta, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
@@ -35,10 +35,7 @@ use linera_execution::{
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
-use linera_views::{
-    context::Context,
-    views::{RootView, ViewError},
-};
+use linera_views::{context::Context, views::RootView, ViewError};
 
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
@@ -87,16 +84,19 @@ pub trait Storage: Sized {
     async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError>;
 
     /// Reads the blob with the given blob ID.
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
 
     /// Reads the blobs with the given blob IDs.
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
 
     /// Reads the blob state with the given blob ID.
-    async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError>;
+    async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError>;
 
     /// Reads the blob states with the given blob IDs.
-    async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError>;
+    async fn read_blob_states(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<BlobState>>, ViewError>;
 
     /// Reads the hashed certificate values in descending order from the given hash.
     async fn read_confirmed_blocks_downward(
@@ -115,31 +115,16 @@ pub trait Storage: Sized {
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError>;
 
-    /// Writes the given blob state.
-    async fn write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: &BlobState,
-    ) -> Result<(), ViewError>;
-
     /// Writes the given blobs, but only if they already have a blob state. Returns `true` for the
     /// blobs that were written.
     async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError>;
-
-    /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
-    async fn maybe_write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: BlobState,
-    ) -> Result<Epoch, ViewError>;
 
     /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
-        overwrite: bool,
-    ) -> Result<Vec<Epoch>, ViewError>;
+    ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;
@@ -160,7 +145,7 @@ pub trait Storage: Sized {
     ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
 
     /// Reads the event with the given ID.
-    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
+    async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
@@ -221,7 +206,9 @@ pub trait Storage: Sized {
         application_description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
-        let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
+        let contract_blob = self.read_blob(contract_bytecode_blob_id).await?.ok_or(
+            ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]),
+        )?;
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
@@ -278,7 +265,9 @@ pub trait Storage: Sized {
         application_description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
-        let service_blob = self.read_blob(service_bytecode_blob_id).await?;
+        let service_blob = self.read_blob(service_bytecode_blob_id).await?.ok_or(
+            ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]),
+        )?;
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.into_bytes().to_vec(),
         };
@@ -393,11 +382,11 @@ where
         }
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         self.storage.read_blob(blob_id).await
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         self.storage.read_event(event_id).await
     }
 

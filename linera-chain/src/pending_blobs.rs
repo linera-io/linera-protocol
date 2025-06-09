@@ -12,7 +12,8 @@ use linera_views::{
     context::Context,
     map_view::MapView,
     register_view::RegisterView,
-    views::{ClonableView, View, ViewError},
+    views::{ClonableView, View},
+    ViewError,
 };
 
 use crate::ChainError;

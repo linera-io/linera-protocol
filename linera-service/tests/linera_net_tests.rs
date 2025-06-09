@@ -337,11 +337,90 @@ impl AmmApp {
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
+async fn test_evm_end_to_end_basic_check(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_sol_types::{sol, SolCall};
+    use linera_base::vm::EvmQuery;
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_sdk::abis::evm::EvmAbi;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    sol! {
+        function failing_function();
+        function test_precompile_sha256();
+        function check_contract_address(address evm_address);
+    }
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_basic_check.sol")?;
+
+    let constructor_argument = Vec::new();
+    let instantiation_argument = Vec::new();
+    let application_id = client
+        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+            evm_contract.clone(),
+            evm_contract,
+            VmRuntime::Evm,
+            &constructor_argument,
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    let evm_address = application_id.evm_address();
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await?;
+
+    // Checking that failing function lead to an error
+    let failing_function = failing_functionCall {};
+    let failing_function = failing_function.abi_encode();
+    let failing_function = EvmQuery::Query(failing_function);
+    let result = application.run_json_query(failing_function).await;
+    assert!(result.is_err());
+
+    // Checking that failing function lead to an error
+    let test_sha256 = test_precompile_sha256Call {};
+    let test_sha256 = test_sha256.abi_encode();
+    let test_sha256 = EvmQuery::Query(test_sha256);
+    let result = application.run_json_query(test_sha256).await?;
+    assert_eq!(read_evm_u64_entry(result), 0);
+
+    // Checking that the EVM contract address matches the one of Linera
+    let check_contract_address = check_contract_addressCall { evm_address };
+    let check_contract_address = check_contract_address.abi_encode();
+    let check_contract_address = EvmQuery::Query(check_contract_address);
+    let result = application.run_json_query(check_contract_address).await?;
+    assert_eq!(read_evm_u64_entry(result), 49);
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -353,7 +432,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         }
         function increment(uint64 input);
         function get_value();
-        function failing_function();
     }
 
     let original_counter_value = 35;
@@ -387,12 +465,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let application = node_service
         .make_application(&chain, &application_id)
         .await?;
-
-    let failing_function = failing_functionCall {};
-    let failing_function = failing_function.abi_encode();
-    let failing_function = EvmQuery::Query(failing_function);
-    let result = application.run_json_query(failing_function).await;
-    assert!(result.is_err());
 
     let query = get_valueCall {};
     let query = query.abi_encode();
@@ -546,6 +618,7 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -635,6 +708,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -746,6 +820,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -777,6 +852,9 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
         function nest_increment(uint64 input);
         function nest_get_value();
     }
+    let query = nest_get_valueCall {};
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
 
     let wasm_contract = wasm_application_id.bytes32();
     let nest_constructor_argument = ConstructorArgs { wasm_contract };
@@ -805,11 +883,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
         .make_application(&chain, &nest_application_id)
         .await?;
 
-    let query = nest_get_valueCall {};
-    let query = query.abi_encode();
-    let query = EvmQuery::Query(query);
     let result = nest_application.run_json_query(query.clone()).await?;
-
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_counter_value);
 
@@ -843,6 +917,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -957,12 +1032,219 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
+async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_sol_types::{sol, SolCall};
+    use linera_base::vm::EvmQuery;
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_sdk::abis::evm::EvmAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client1) = config.instantiate().await?;
+
+    let client2 = net.make_client().await;
+    client2.wallet_init(None).await?;
+
+    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+
+    sol! {
+        function get_value();
+    }
+    let query = get_valueCall {};
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
+
+    let constructor_argument = Vec::new();
+    let instantiation_argument = Vec::new();
+
+    let (evm_contract, _dir) =
+        get_evm_contract_path("tests/fixtures/evm_example_empty_instantiate.sol")?;
+
+    let application_id = client1
+        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+            evm_contract.clone(),
+            evm_contract,
+            VmRuntime::Evm,
+            &constructor_argument,
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+
+    // Creating the applications.
+
+    let application1 = node_service1
+        .make_application(&chain1, &application_id)
+        .await?;
+
+    let application2 = node_service2
+        .make_application(&chain2, &application_id)
+        .await?;
+
+    // Checking the initial value of the contracts.
+    let result = application1.run_json_query(query.clone()).await?;
+    let counter_value = read_evm_u64_entry(result);
+    assert_eq!(counter_value, 42);
+    let result = application2.run_json_query(query).await?;
+    let counter_value = read_evm_u64_entry(result);
+    assert_eq!(counter_value, 37);
+
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_primitives::B256;
+    use alloy_sol_types::{sol, SolCall};
+    use linera_base::vm::EvmQuery;
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_sdk::abis::evm::EvmAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client1) = config.instantiate().await?;
+
+    let client2 = net.make_client().await;
+    client2.wallet_init(None).await?;
+
+    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let chain_id1: [u64; 4] = <[u64; 4]>::from(chain1.0);
+    let chain_id1: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(chain_id1);
+    let chain_id1: B256 = chain_id1.into();
+
+    let increment = 5;
+
+    // Creating the API of the contracts
+
+    sol! {
+        function increment_value(uint64 increment);
+        function subscribe(bytes32 chain_id, bytes32 application_id);
+        function get_value(bytes32 chain_id);
+    }
+    let query = get_valueCall {
+        chain_id: chain_id1,
+    };
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
+
+    let constructor_argument = Vec::new();
+    let instantiation_argument = Vec::new();
+
+    let (evm_contract, _dir) =
+        get_evm_contract_path("tests/fixtures/evm_example_process_streams.sol")?;
+
+    let evm_application_id = client1
+        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+            evm_contract.clone(),
+            evm_contract,
+            VmRuntime::Evm,
+            &constructor_argument,
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+    let application_id: [u64; 4] =
+        <[u64; 4]>::from(evm_application_id.application_description_hash);
+    let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
+    let application_id: B256 = application_id.into();
+
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+
+    // Creating the applications.
+
+    let application1 = node_service1
+        .make_application(&chain1, &evm_application_id)
+        .await?;
+
+    let application2 = node_service2
+        .make_application(&chain2, &evm_application_id)
+        .await?;
+
+    let result = application2.run_json_query(query.clone()).await?;
+    let counter_value = read_evm_u64_entry(result);
+    assert_eq!(counter_value, 0);
+
+    // First: subscribing to the application
+
+    let mutation = subscribeCall {
+        chain_id: chain_id1,
+        application_id,
+    };
+    let mutation = mutation.abi_encode();
+    let mutation = EvmQuery::Mutation(mutation);
+    application2.run_json_query(mutation).await?;
+
+    let result = application2.run_json_query(query.clone()).await?;
+    let counter_value = read_evm_u64_entry(result);
+    assert_eq!(counter_value, 0);
+
+    // Second: increment the values
+
+    let mutation = increment_valueCall { increment };
+    let mutation = mutation.abi_encode();
+    let mutation = EvmQuery::Mutation(mutation);
+    application1.run_json_query(mutation).await?;
+
+    // Third: process the inbox on chain2
+
+    node_service2.process_inbox(&chain2).await?;
+
+    // Fourth: getting the value
+
+    let result = application2.run_json_query(query.clone()).await?;
+    let counter_value = read_evm_u64_entry(result);
+    assert_eq!(counter_value, increment);
+
+    // Fifth: winding down
+
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1041,6 +1323,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1095,6 +1378,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter_no_graphql(config: impl LineraNetConfig) -> Result<()> {
     use counter_no_graphql::{CounterNoGraphQlAbi, CounterRequest};
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1211,6 +1495,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::time::Instant;
     use social::SocialAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1594,6 +1879,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Result<()> {
     use non_fungible::{NftOutput, NonFungibleTokenAbi};
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2272,6 +2558,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
     use amm::{AmmAbi, Parameters};
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2997,6 +3284,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -3229,6 +3517,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::crypto::AccountPublicKey;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -3306,8 +3595,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     assert!(client2.local_balance(account2).await? > Amount::ZERO);
 
     // Verify that a third party can also follow the chain.
-    client3.follow_chain(chain2).await?;
-    client3.sync(chain2).await?;
+    client3.follow_chain(chain2, true).await?;
     assert!(client3.local_balance(account2).await? > Amount::ZERO);
 
     net.ensure_is_running().await?;
@@ -3389,7 +3677,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     let chain_id = client3.request_chain(&faucet, false).await?.0;
     assert!(chain_id != client3.load_wallet()?.default_chain().unwrap());
     client3.forget_chain(chain_id).await?;
-    client3.follow_chain(chain_id).await?;
+    client3.follow_chain(chain_id, false).await?;
 
     let chain3 = client3.request_chain(&faucet, true).await?.0;
     assert_eq!(chain3, client3.load_wallet()?.default_chain().unwrap());
@@ -3568,10 +3856,10 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
         thread,
     };
 
+    use tokio::task::JoinHandle;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
-
-    use tokio::task::JoinHandle;
 
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;

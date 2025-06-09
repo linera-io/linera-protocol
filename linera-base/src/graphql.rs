@@ -77,6 +77,8 @@ macro_rules! bcs_scalar {
                         inaccessible: false,
                         tags: ::std::default::Default::default(),
                         specified_by_url: ::std::option::Option::None,
+                        directive_invocations: ::std::default::Default::default(),
+                        requires_scopes: ::std::default::Default::default(),
                     },
                 )
             }
@@ -118,6 +120,8 @@ macro_rules! bcs_scalar {
                         inaccessible: false,
                         tags: ::std::default::Default::default(),
                         specified_by_url: ::std::option::Option::None,
+                        directive_invocations: ::std::default::Default::default(),
+                        requires_scopes: ::std::default::Default::default(),
                     },
                 )
             }

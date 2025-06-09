@@ -11,7 +11,8 @@ use crate::{
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View},
+    ViewError,
 };
 
 #[cfg(with_metrics)]
@@ -41,13 +42,14 @@ pub struct RegisterView<C, T> {
     update: Option<Box<T>>,
 }
 
-impl<C, T> View<C> for RegisterView<C, T>
+impl<C, T> View for RegisterView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = 1;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -109,10 +111,9 @@ where
     }
 }
 
-impl<C, T> ClonableView<C> for RegisterView<C, T>
+impl<C, T> ClonableView for RegisterView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -209,10 +210,9 @@ where
     }
 }
 
-impl<C, T> HashableView<C> for RegisterView<C, T>
+impl<C, T> HashableView for RegisterView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
@@ -230,6 +230,7 @@ where
 pub type HashedRegisterView<C, T> =
     WrappedHashableContainerView<C, RegisterView<C, T>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 
@@ -238,7 +239,7 @@ mod graphql {
 
     impl<C, T> async_graphql::OutputType for RegisterView<C, T>
     where
-        C: Context + Send + Sync,
+        C: Context,
         T: async_graphql::OutputType + Send + Sync,
     {
         fn type_name() -> Cow<'static, str> {

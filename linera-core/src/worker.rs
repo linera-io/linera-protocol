@@ -33,7 +33,7 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -150,7 +150,7 @@ pub enum WorkerError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
 
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
@@ -203,6 +203,16 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    #[error("confirmed_log entry at height {height} for chain {chain_id:8} not found")]
+    ConfirmedLogEntryNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
+    #[error("preprocessed_blocks entry at height {height} for chain {chain_id:8} not found")]
+    PreprocessedBlocksEntryNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
     #[error("The worker is too busy to handle new chains")]
@@ -221,7 +231,6 @@ impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: ChainError) -> Self {
         match chain_error {
-            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             ChainError::ExecutionError(execution_error, context) => {
                 if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
                     Self::BlobsNotFound(blob_ids)
@@ -233,15 +242,6 @@ impl From<ChainError> for WorkerError {
                 }
             }
             error => Self::ChainError(Box::new(error)),
-        }
-    }
-}
-
-impl From<ViewError> for WorkerError {
-    fn from(view_error: ViewError) -> Self {
-        match view_error {
-            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::ViewError(error),
         }
     }
 }
@@ -888,6 +888,45 @@ where
 
         self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await
+    }
+
+    /// Preprocesses a block without executing it. This does not update the execution state, but
+    /// can create cross-chain messages and store blobs. It also does _not_ check the signatures;
+    /// the caller is responsible for checking them using the correct committee.
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.block().header.chain_id),
+        height = %certificate.block().header.height,
+    ))]
+    pub async fn fully_preprocess_certificate_with_notifications(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        notifier: &impl Notifier,
+    ) -> Result<(), WorkerError> {
+        trace!("{} <-- {:?} (preprocess)", self.nickname, certificate);
+
+        let notifications = (*notifier).clone();
+        let this = self.clone();
+        linera_base::task::spawn(async move {
+            let actions = this
+                .query_chain_worker(certificate.block().header.chain_id, move |callback| {
+                    ChainWorkerRequest::PreprocessCertificate {
+                        certificate,
+                        callback,
+                    }
+                })
+                .await?;
+            notifications.notify(&actions.notifications);
+            let mut requests = VecDeque::from(actions.cross_chain_requests);
+            while let Some(request) = requests.pop_front() {
+                let actions = this.handle_cross_chain_request(request).await?;
+                requests.extend(actions.cross_chain_requests);
+                notifications.notify(&actions.notifications);
+            }
+            Ok(())
+        })
+        .await
+        .unwrap_or_else(|_| Err(WorkerError::JoinError))
     }
 
     /// Processes a validated block certificate.

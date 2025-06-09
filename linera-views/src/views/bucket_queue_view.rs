@@ -141,13 +141,14 @@ pub struct BucketQueueView<C, T, const N: usize> {
     delete_storage_first: bool,
 }
 
-impl<C, T, const N: usize> View<C> for BucketQueueView<C, T, N>
+impl<C, T, const N: usize> View for BucketQueueView<C, T, N>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = 2;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -162,7 +163,7 @@ where
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let value1 = values.first().ok_or(ViewError::PostLoadValuesError)?;
         let value2 = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
-        let front = from_bytes_option::<Vec<T>, _>(value1)?;
+        let front = from_bytes_option::<Vec<T>>(value1)?;
         let mut stored_data = VecDeque::from(match front {
             Some(front) => {
                 vec![(0, Bucket::Loaded { data: front })]
@@ -171,7 +172,7 @@ where
                 vec![]
             }
         });
-        let stored_indices = from_bytes_option_or_default::<StoredIndices, _>(value2)?;
+        let stored_indices = from_bytes_option_or_default::<StoredIndices>(value2)?;
         for i in 1..stored_indices.len() {
             let length = stored_indices.indices[i].0;
             let index = stored_indices.indices[i].1;
@@ -293,11 +294,9 @@ where
     }
 }
 
-impl<C, T, const N: usize> ClonableView<C> for BucketQueueView<C, T, N>
+impl<C: Clone, T: Clone, const N: usize> ClonableView for BucketQueueView<C, T, N>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    T: Clone + Send + Sync + Serialize + DeserializeOwned,
+    Self: View,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(BucketQueueView {
@@ -311,11 +310,7 @@ where
     }
 }
 
-impl<C, T, const N: usize> BucketQueueView<C, T, N>
-where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-{
+impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     /// Gets the key corresponding to the index
     fn get_index_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
         Ok(if index == 0 {
@@ -372,12 +367,7 @@ where
     }
 }
 
-impl<C, T, const N: usize> BucketQueueView<C, T, N>
-where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
-{
+impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C, T, N> {
     /// Gets a reference on the front value if any.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -524,7 +514,10 @@ where
     /// assert_eq!(queue.back().await.unwrap(), Some(37));
     /// # })
     /// ```
-    pub async fn back(&mut self) -> Result<Option<T>, ViewError> {
+    pub async fn back(&mut self) -> Result<Option<T>, ViewError>
+    where
+        T: Clone,
+    {
         if let Some(value) = self.new_back_values.back() {
             return Ok(Some(value.clone()));
         }
@@ -699,11 +692,10 @@ where
     }
 }
 
-impl<C, T, const N: usize> HashableView<C> for BucketQueueView<C, T, N>
+impl<C: Context, T: Serialize + DeserializeOwned + Send + Sync + Clone, const N: usize> HashableView
+    for BucketQueueView<C, T, N>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+    Self: View,
 {
     type Hasher = sha3::Sha3_256;
 

@@ -32,7 +32,7 @@ use linera_execution::{
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
     memory::MemoryStore,
-    views::{View, ViewError},
+    views::View,
 };
 use test_case::test_case;
 
@@ -43,13 +43,7 @@ use crate::{
     ChainError, ChainExecutionContext, ChainStateView,
 };
 
-impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>>
-where
-    MemoryContext<TestExecutionRuntimeContext>:
-        linera_views::context::Context + Clone + Send + Sync + 'static,
-    ViewError:
-        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::context::Context>::Error>,
-{
+impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
     pub async fn new(chain_id: ChainId) -> Self {
         let exec_runtime_context =
             TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());

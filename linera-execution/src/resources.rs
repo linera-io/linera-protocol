@@ -12,7 +12,7 @@ use linera_base::{
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
-use linera_views::{context::Context, views::ViewError};
+use linera_views::{context::Context, ViewError};
 use serde::Serialize;
 
 use crate::{ExecutionError, Message, Operation, ResourceControlPolicy, SystemExecutionStateView};

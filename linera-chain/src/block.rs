@@ -139,12 +139,12 @@ impl ConfirmedBlock {
     }
 
     /// Returns a blob state that applies to all blobs used by this block.
-    pub fn to_blob_state(&self) -> BlobState {
+    pub fn to_blob_state(&self, is_stored_block: bool) -> BlobState {
         BlobState {
-            last_used_by: self.0.hash(),
+            last_used_by: is_stored_block.then_some(self.0.hash()),
             chain_id: self.chain_id(),
             block_height: self.height(),
-            epoch: self.epoch(),
+            epoch: is_stored_block.then_some(self.epoch()),
         }
     }
 }

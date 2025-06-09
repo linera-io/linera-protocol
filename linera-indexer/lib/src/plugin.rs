@@ -63,7 +63,7 @@ pub fn route<Q: ObjectType + 'static>(name: &str, query: Q, app: axum::Router) -
     .layer(tower_http::cors::CorsLayer::permissive())
 }
 
-pub async fn load<S, V: View<ViewContext<(), S>>>(
+pub async fn load<S, V: View<Context = ViewContext<(), S>>>(
     store: S,
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
@@ -73,8 +73,8 @@ where
 {
     let root_key = name.as_bytes().to_vec();
     let store = store
-        .clone_with_root_key(&root_key)
-        .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
+        .open_exclusive(&root_key)
+        .map_err(|_e| IndexerError::OpenExclusiveError)?;
     let context = ViewContext::create_root_context(store, ())
         .await
         .map_err(|e| IndexerError::ViewError(e.into()))?;

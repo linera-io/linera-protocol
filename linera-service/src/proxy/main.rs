@@ -99,6 +99,10 @@ pub struct ProxyOptions {
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
     storage_replication_factor: u32,
+
+    /// Runs a specific proxy instance.
+    #[arg(long)]
+    id: Option<usize>,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -116,6 +120,7 @@ struct ProxyContext {
     config: ValidatorServerConfig,
     send_timeout: Duration,
     recv_timeout: Duration,
+    id: usize,
 }
 
 impl ProxyContext {
@@ -125,6 +130,7 @@ impl ProxyContext {
             config,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
+            id: options.id.unwrap_or(0),
         })
     }
 }
@@ -158,12 +164,12 @@ where
         let proxy = match (internal_protocol, external_protocol) {
             (NetworkProtocol::Grpc { .. }, NetworkProtocol::Grpc(tls)) => {
                 Self::Grpc(GrpcProxy::new(
-                    context.config.validator.network,
                     context.config.internal_network,
                     context.send_timeout,
                     context.recv_timeout,
                     tls,
                     storage,
+                    context.id,
                 ))
             }
             (
@@ -182,6 +188,7 @@ where
                 send_timeout: context.send_timeout,
                 recv_timeout: context.recv_timeout,
                 storage,
+                id: context.id,
             })),
             _ => {
                 bail!(
@@ -206,6 +213,7 @@ where
     send_timeout: Duration,
     recv_timeout: Duration,
     storage: S,
+    id: usize,
 }
 
 #[async_trait]
@@ -257,17 +265,14 @@ impl<S> SimpleProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
+    #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.metrics_port()), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting proxy");
         let mut join_set = JoinSet::new();
-        let address = self.get_listen_address(self.public_config.port);
+        let address = self.get_listen_address();
 
         #[cfg(with_metrics)]
-        Self::start_metrics(
-            self.get_listen_address(self.internal_config.metrics_port),
-            shutdown_signal.clone(),
-        );
+        Self::start_metrics(address, shutdown_signal.clone());
 
         self.public_config
             .protocol
@@ -280,13 +285,29 @@ where
         Ok(())
     }
 
+    fn port(&self) -> u16 {
+        self.internal_config
+            .proxies
+            .get(self.id)
+            .unwrap_or_else(|| panic!("proxy with id {} must be present", self.id))
+            .public_port
+    }
+
+    fn metrics_port(&self) -> u16 {
+        self.internal_config
+            .proxies
+            .get(self.id)
+            .unwrap_or_else(|| panic!("proxy with id {} must be present", self.id))
+            .metrics_port
+    }
+
     #[cfg(with_metrics)]
     pub fn start_metrics(address: SocketAddr, shutdown_signal: CancellationToken) {
         prometheus_server::start_metrics(address, shutdown_signal)
     }
 
-    fn get_listen_address(&self, port: u16) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], port))
+    fn get_listen_address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.port()))
     }
 
     async fn try_proxy_message(
@@ -319,7 +340,7 @@ where
                     .storage
                     .read_network_description()
                     .await?
-                    .ok_or(anyhow!("Cannot find network description in the database"))?;
+                    .ok_or_else(|| anyhow!("Cannot find network description in the database"))?;
                 Ok(Some(RpcMessage::NetworkDescriptionResponse(Box::new(
                     description,
                 ))))
@@ -334,7 +355,9 @@ where
                 Ok(Some(RpcMessage::UploadBlobResponse(Box::new(id))))
             }
             DownloadBlob(blob_id) => {
-                let content = self.storage.read_blob(*blob_id).await?.into_content();
+                let blob = self.storage.read_blob(*blob_id).await?;
+                let blob = blob.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let content = blob.into_content();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
             DownloadConfirmedBlock(hash) => Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(
@@ -344,9 +367,16 @@ where
                 let certificates = self.storage.read_certificates(hashes).await?;
                 Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))
             }
-            BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
-                self.storage.read_blob_state(*blob_id).await?.last_used_by,
-            )))),
+            BlobLastUsedBy(blob_id) => {
+                let blob_state = self.storage.read_blob_state(*blob_id).await?;
+                let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let last_used_by = blob_state
+                    .last_used_by
+                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
+                    last_used_by,
+                ))))
+            }
             MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(
                 self.storage.missing_blobs(&blob_ids).await?,
             ))),

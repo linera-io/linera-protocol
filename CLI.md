@@ -22,7 +22,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera sync-validator`↴](#linera-sync-validator)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
-* [`linera finalize-committee`↴](#linera-finalize-committee)
+* [`linera revoke-epochs`↴](#linera-revoke-epochs)
 * [`linera resource-control-policy`↴](#linera-resource-control-policy)
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
@@ -86,7 +86,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `sync-validator` — Synchronizes a validator with the local state of chains
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
-* `finalize-committee` — Deprecates all committees except the last one
+* `revoke-epochs` — Deprecates all committees up to and including the specified one
 * `resource-control-policy` — View or update the resource control policy
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
@@ -461,11 +461,15 @@ Remove a validator (admin only)
 
 
 
-## `linera finalize-committee`
+## `linera revoke-epochs`
 
-Deprecates all committees except the last one
+Deprecates all committees up to and including the specified one
 
-**Usage:** `linera finalize-committee`
+**Usage:** `linera revoke-epochs <EPOCH>`
+
+###### **Arguments:**
+
+* `<EPOCH>`
 
 
 
@@ -857,11 +861,15 @@ Request a new chain from a faucet and add it to the wallet
 
 Add a new followed chain (i.e. a chain without keypair) to the wallet
 
-**Usage:** `linera wallet follow-chain <CHAIN_ID>`
+**Usage:** `linera wallet follow-chain [OPTIONS] <CHAIN_ID>`
 
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — The chain ID
+
+###### **Options:**
+
+* `--sync` — Synchronize the new chain and download all its blocks from the validators
 
 
 

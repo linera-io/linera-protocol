@@ -15,7 +15,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum IndexerError {
     #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
+    ViewError(#[from] linera_views::ViewError),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
     #[error(transparent)]
@@ -46,8 +46,8 @@ pub enum IndexerError {
     PluginAlreadyRegistered,
     #[error("Invalid certificate content: {0:?}")]
     InvalidCertificateValue(CryptoHash),
-    #[error("Clone with root key error")]
-    CloneWithRootKeyError,
+    #[error("Open exclusive error")]
+    OpenExclusiveError,
 
     #[cfg(feature = "rocksdb")]
     #[error(transparent)]
@@ -71,14 +71,5 @@ impl From<linera_views::scylla_db::ScyllaDbStoreError> for IndexerError {
 }
 
 pub async fn graphiql(uri: Uri) -> impl IntoResponse {
-    response::Html(
-        GraphiQLSource::build()
-            .endpoint(uri.path())
-            .finish()
-            .replace("@17", "@18")
-            .replace(
-                "ReactDOM.render(",
-                "ReactDOM.createRoot(document.getElementById(\"graphiql\")).render(",
-            ),
-    )
+    response::Html(GraphiQLSource::build().endpoint(uri.path()).finish())
 }

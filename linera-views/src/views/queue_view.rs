@@ -56,13 +56,14 @@ pub struct QueueView<C, T> {
     new_back_values: VecDeque<T>,
 }
 
-impl<C, T> View<C> for QueueView<C, T>
+impl<C, T> View for QueueView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    T: Send + Sync + Serialize,
+    C: Context,
+    T: Serialize + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = 1;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -154,10 +155,9 @@ where
     }
 }
 
-impl<C, T> ClonableView<C> for QueueView<C, T>
+impl<C, T> ClonableView for QueueView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -183,8 +183,7 @@ impl<C, T> QueueView<C, T> {
 
 impl<'a, C, T> QueueView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
@@ -454,10 +453,9 @@ where
     }
 }
 
-impl<C, T> HashableView<C> for QueueView<C, T>
+impl<C, T> HashableView for QueueView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
@@ -503,7 +501,6 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C: Context, T: async_graphql::OutputType> QueueView<C, T>
     where
-        C: Send + Sync,
         T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
     {
         async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {

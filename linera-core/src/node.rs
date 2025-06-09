@@ -22,7 +22,7 @@ use linera_chain::{
 };
 use linera_execution::{committee::Committee, ExecutionError};
 use linera_version::VersionInfo;
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -195,7 +195,7 @@ pub enum NodeError {
     WorkerError { error: String },
 
     // This error must be normalized during conversions.
-    #[error("The chain {0:?} is not active in validator")]
+    #[error("The chain {0} is not active in validator")]
     InactiveChain(ChainId),
 
     // This error must be normalized during conversions.
@@ -221,11 +221,6 @@ pub enum NodeError {
 
     #[error("Validator's response to block proposal failed to include a vote")]
     MissingVoteInValidatorResponse,
-
-    #[error(
-        "Failed to update validator because our local node doesn't have an active chain {0:?}"
-    )]
-    InactiveLocalChain(ChainId),
 
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
@@ -288,11 +283,8 @@ impl CrossChainMessageDelivery {
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::ViewError {
-                error: error.to_string(),
-            },
+        Self::ViewError {
+            error: error.to_string(),
         }
     }
 }
@@ -326,7 +318,6 @@ impl From<ChainError> for NodeError {
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
-            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             ChainError::ExecutionError(execution_error, context) => {
                 if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
                     Self::BlobsNotFound(blob_ids)

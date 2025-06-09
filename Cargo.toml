@@ -75,17 +75,17 @@ alloy-primitives = { version = "1.1.0", default-features = false, features = [
     "serde",
     "k256",
 ] }
-alloy-sol-types = "1.1.0"
+alloy-sol-types = "1.1.2"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
-async-graphql = "=7.0.2"
-async-graphql-axum = "=7.0.2"
-async-graphql-derive = "=7.0.2"
+async-graphql = "=7.0.17"
+async-graphql-axum = "=7.0.17"
+async-graphql-derive = "=7.0.17"
 async-lock = "3.3.0"
 async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
 aws-smithy-types = "1.3.1"
-axum = "0.7.4"
+axum = "0.8.1"
 base64 = "0.22.0"
 bcs = "0.1.6"
 bincode = "1.3.3"
@@ -173,7 +173,7 @@ rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
     "rustls-tls",
 ] }
-revm = { version = "23.1.0", default-features = false, features = [
+revm = { version = "24.0.1", default-features = false, features = [
     "std",
     "kzg-rs",
     "secp256k1",
@@ -181,28 +181,25 @@ revm = { version = "23.1.0", default-features = false, features = [
     "blst",
     "serde",
 ] }
-revm-context = { version = "4.1.0", default-features = false, features = [
+revm-context = { version = "5.0.0", default-features = false, features = [
     "serde",
 ] }
-revm-context-interface = { version = "4.1.0", default-features = false, features = [
+revm-context-interface = { version = "5.0.0", default-features = false, features = [
     "serde",
 ] }
-revm-database = { version = "4.0.0", default-features = false, features = [
+revm-database = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
-revm-database-interface = { version = "4.0.0", default-features = false, features = [
+revm-handler = { version = "5.0.0", default-features = false, features = [
     "serde",
 ] }
-revm-handler = { version = "4.1.0", default-features = false, features = [
+revm-interpreter = { version = "20.0.0", default-features = false, features = [
     "serde",
 ] }
-revm-interpreter = { version = "19.1.0", default-features = false, features = [
+revm-primitives = { version = "19.1.0", default-features = false, features = [
     "serde",
 ] }
-revm-primitives = { version = "19.0.0", default-features = false, features = [
-    "serde",
-] }
-revm-state = { version = "4.0.0", default-features = false, features = [
+revm-state = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
 rocksdb = "0.21.0"
@@ -225,6 +222,7 @@ similar-asserts = "1.5.0"
 static_assertions = "1.1.0"
 stdext = "0.3.3"
 syn = "2.0.52"
+sync_wrapper = { version = "1.0.1", features = ["futures"] }
 sysinfo = "0.33.1"
 tempfile = "3.20.0"
 test-case = "3.3.1"
@@ -287,6 +285,7 @@ linera-faucet-server = { version = "0.15.0", path = "linera-faucet/server" }
 linera-indexer = { version = "0.15.0", path = "./linera-indexer/lib" }
 linera-indexer-graphql-client = { version = "0.15.0", path = "./linera-indexer/graphql-client" }
 linera-indexer-plugins = { version = "0.15.0", path = "./linera-indexer/plugins" }
+linera-persistent = { version = "0.15.0", path = "./linera-persistent" }
 linera-rpc = { version = "0.15.0", path = "./linera-rpc" }
 linera-sdk = { version = "0.15.0", path = "./linera-sdk" }
 linera-sdk-derive = { version = "0.15.0", path = "./linera-sdk-derive" }

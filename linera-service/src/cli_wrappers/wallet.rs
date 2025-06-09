@@ -836,11 +836,14 @@ impl ClientWrapper {
     }
 
     /// Runs `linera wallet follow-chain CHAIN_ID`.
-    pub async fn follow_chain(&self, chain_id: ChainId) -> Result<()> {
+    pub async fn follow_chain(&self, chain_id: ChainId, sync: bool) -> Result<()> {
         let mut command = self.command().await?;
         command
             .args(["wallet", "follow-chain"])
             .arg(chain_id.to_string());
+        if sync {
+            command.arg("--sync");
+        }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
@@ -961,10 +964,11 @@ impl ClientWrapper {
         Ok(())
     }
 
-    pub async fn finalize_committee(&self) -> Result<()> {
+    pub async fn revoke_epochs(&self, epoch: Epoch) -> Result<()> {
         self.command()
             .await?
-            .arg("finalize-committee")
+            .arg("revoke-epochs")
+            .arg(epoch.to_string())
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())
@@ -1278,7 +1282,10 @@ impl NodeService {
                 .send()
                 .await;
             if matches!(result, Err(ref error) if error.is_timeout()) {
-                warn!("Timeout when sending query {query:?} to the node service");
+                warn!(
+                    "Timeout when sending query {} to the node service",
+                    truncate_query_output(query)
+                );
                 continue;
             }
             let response = result.with_context(|| {

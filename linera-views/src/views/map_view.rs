@@ -100,13 +100,14 @@ where
     }
 }
 
-impl<C, V> View<C> for ByteMapView<C, V>
+impl<C, V> View for ByteMapView<C, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     V: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = 0;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -172,11 +173,9 @@ where
     }
 }
 
-impl<C, V> ClonableView<C> for ByteMapView<C, V>
+impl<C: Clone, V: Clone> ClonableView for ByteMapView<C, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    V: Clone + Send + Sync + Serialize,
+    Self: View,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(ByteMapView {
@@ -190,7 +189,6 @@ where
 impl<C, V> ByteMapView<C, V>
 where
     C: Context,
-    ViewError: From<C::Error>,
 {
     /// Inserts or resets the value of a key of the map.
     /// ```rust
@@ -291,8 +289,7 @@ where
 
 impl<C, V> ByteMapView<C, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     V: Clone + DeserializeOwned + 'static,
 {
     /// Reads the value at the given position, if any.
@@ -400,7 +397,6 @@ where
 impl<C, V> ByteMapView<C, V>
 where
     C: Context,
-    ViewError: From<C::Error>,
     V: Clone + Serialize + DeserializeOwned + 'static,
 {
     /// Applies the function f on each index (aka key) which has the assigned prefix.
@@ -804,7 +800,6 @@ where
 impl<C, V> ByteMapView<C, V>
 where
     C: Context,
-    ViewError: From<C::Error>,
     V: Clone + Send + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of keys and values of the map matching a prefix
@@ -866,8 +861,7 @@ where
 
 impl<C, V> ByteMapView<C, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     V: Default + DeserializeOwned + 'static,
 {
     /// Obtains a mutable reference to a value at a given position.
@@ -920,10 +914,9 @@ where
     }
 }
 
-impl<C, V> HashableView<C> for ByteMapView<C, V>
+impl<C, V> HashableView for ByteMapView<C, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     type Hasher = sha3::Sha3_256;
@@ -962,14 +955,15 @@ pub struct MapView<C, I, V> {
     _phantom: PhantomData<I>,
 }
 
-impl<C, I, V> View<C> for MapView<C, I, V>
+impl<C, I, V> View for MapView<C, I, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Send + Sync,
     V: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         self.map.context()
@@ -1008,12 +1002,10 @@ where
     }
 }
 
-impl<C, I, V> ClonableView<C> for MapView<C, I, V>
+impl<C, I, V: Clone> ClonableView for MapView<C, I, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    I: Send + Sync,
-    V: Clone + Send + Sync + Serialize,
+    Self: View,
+    ByteMapView<C, V>: ClonableView,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(MapView {
@@ -1025,8 +1017,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Serialize,
 {
     /// Inserts or resets a value at an index.
@@ -1106,8 +1097,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Serialize,
     V: Clone + DeserializeOwned + 'static,
 {
@@ -1166,8 +1156,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Send + DeserializeOwned,
     V: Clone + Sync + Serialize + DeserializeOwned + 'static,
 {
@@ -1350,8 +1339,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Send + DeserializeOwned,
     V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
@@ -1402,8 +1390,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Serialize,
     V: Default + DeserializeOwned + 'static,
 {
@@ -1430,14 +1417,12 @@ where
     }
 }
 
-impl<C, I, V> HashableView<C> for MapView<C, I, V>
+impl<C, I, V> HashableView for MapView<C, I, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    I: Send + Sync + Serialize + DeserializeOwned,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+    Self: View,
+    ByteMapView<C, V>: HashableView,
 {
-    type Hasher = sha3::Sha3_256;
+    type Hasher = <ByteMapView<C, V> as HashableView>::Hasher;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.map.hash_mut().await
@@ -1455,14 +1440,15 @@ pub struct CustomMapView<C, I, V> {
     _phantom: PhantomData<I>,
 }
 
-impl<C, I, V> View<C> for CustomMapView<C, I, V>
+impl<C, I, V> View for CustomMapView<C, I, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    I: Send + Sync + CustomSerialize,
-    V: Clone + Send + Sync + Serialize,
+    C: Context,
+    I: CustomSerialize + Send + Sync,
+    V: Serialize + Clone + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         self.map.context()
@@ -1501,12 +1487,10 @@ where
     }
 }
 
-impl<C, I, V> ClonableView<C> for CustomMapView<C, I, V>
+impl<C, I, V> ClonableView for CustomMapView<C, I, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    I: Send + Sync + CustomSerialize,
-    V: Clone + Send + Sync + Serialize,
+    Self: View,
+    ByteMapView<C, V>: ClonableView,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(CustomMapView {
@@ -1516,12 +1500,7 @@ where
     }
 }
 
-impl<C, I, V> CustomMapView<C, I, V>
-where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
-    I: CustomSerialize,
-{
+impl<C: Context, I: CustomSerialize, V> CustomMapView<C, I, V> {
     /// Insert or resets a value.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1599,8 +1578,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: CustomSerialize,
     V: Clone + DeserializeOwned + 'static,
 {
@@ -1658,8 +1636,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Send + CustomSerialize,
     V: Clone + Serialize + DeserializeOwned + 'static,
 {
@@ -1846,8 +1823,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Send + CustomSerialize,
     V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
@@ -1898,8 +1874,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: CustomSerialize,
     V: Default + DeserializeOwned + 'static,
 {
@@ -1928,10 +1903,9 @@ where
     }
 }
 
-impl<C, I, V> HashableView<C> for CustomMapView<C, I, V>
+impl<C, I, V> HashableView for CustomMapView<C, I, V>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     I: Send + Sync + CustomSerialize,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
@@ -1980,7 +1954,7 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C, V> ByteMapView<C, V>
     where
-        C: Context + Send + Sync,
+        C: Context,
         V: async_graphql::OutputType
             + serde::ser::Serialize
             + serde::de::DeserializeOwned
@@ -2052,7 +2026,7 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C, I, V> MapView<C, I, V>
     where
-        C: Context + Send + Sync,
+        C: Context,
         I: async_graphql::OutputType
             + async_graphql::InputType
             + serde::ser::Serialize
@@ -2123,7 +2097,7 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C, I, V> CustomMapView<C, I, V>
     where
-        C: Context + Send + Sync,
+        C: Context,
         I: async_graphql::OutputType
             + async_graphql::InputType
             + crate::common::CustomSerialize

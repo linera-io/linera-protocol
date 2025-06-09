@@ -25,11 +25,13 @@ use linera_core::{
     Environment,
 };
 use linera_storage::{Clock as _, Storage as _};
-use linera_views::views::ViewError;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
-use crate::{wallet::Wallet, Error};
+use crate::{
+    wallet::{UserChain, Wallet},
+    Error,
+};
 
 #[derive(Debug, Default, Clone, clap::Args)]
 pub struct ChainListenerConfig {
@@ -69,9 +71,22 @@ pub trait ClientContext {
 
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ContextChainClient<Self>;
+    fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>>;
 
-    fn client(&self) -> &linera_core::client::Client<Self::Environment>;
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Self::Environment> {
+        let chain = self
+            .wallet()
+            .get(chain_id)
+            .cloned()
+            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
+        self.client().create_chain_client(
+            chain_id,
+            chain.block_hash,
+            chain.next_block_height,
+            chain.pending_proposal,
+            chain.owner,
+        )
+    }
 
     async fn update_wallet_for_new_chain(
         &mut self,
@@ -98,8 +113,8 @@ pub trait ClientContextExt: ClientContext {
         let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
 
         let blob = match self.storage().read_blob(blob_id).await {
-            Ok(blob) => blob,
-            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
+            Ok(Some(blob)) => blob,
+            Ok(None) => {
                 // we're missing the blob describing the chain we're assigning - try to
                 // get it
                 self.client().ensure_has_chain_description(chain_id).await?
@@ -194,7 +209,9 @@ impl<C: ClientContext> ChainListener<C> {
     pub async fn run(mut self) -> Result<(), Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
-            BTreeSet::from_iter(guard.wallet().chain_ids())
+            let mut chain_ids = BTreeSet::from_iter(guard.wallet().chain_ids());
+            chain_ids.insert(guard.wallet().genesis_admin_chain());
+            chain_ids
         };
         self.listen_recursively(chain_ids).await?;
         loop {

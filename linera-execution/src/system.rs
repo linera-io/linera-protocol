@@ -27,7 +27,7 @@ use linera_views::{
     map_view::{HashedMapView, MapView},
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    views::{ClonableView, HashableView, View, ViewError},
+    views::{ClonableView, HashableView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -351,6 +351,13 @@ where
             .collect()
     }
 
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+        match self.context().extra().get_event(event_id.clone()).await? {
+            None => Err(ExecutionError::EventsNotFound(vec![event_id])),
+            Some(vec) => Ok(vec),
+        }
+    }
+
     /// Executes the sender's side of an operation and returns a list of actions to be
     /// taken.
     pub async fn execute_operation(
@@ -508,14 +515,14 @@ where
                 let admin_id = self
                     .admin_id
                     .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain)?;
+                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: epoch.0,
                 };
                 let bytes = match txn_tracker.next_replayed_oracle_response()? {
-                    None => self.context().extra().get_event(event_id.clone()).await?,
+                    None => self.get_event(event_id.clone()).await?,
                     Some(OracleResponse::Event(recorded_event_id, bytes))
                         if recorded_event_id == event_id =>
                     {
@@ -538,14 +545,14 @@ where
                 let admin_id = self
                     .admin_id
                     .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain)?;
+                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
                     index: epoch.0,
                 };
                 let bytes = match txn_tracker.next_replayed_oracle_response()? {
-                    None => self.context().extra().get_event(event_id.clone()).await?,
+                    None => self.get_event(event_id.clone()).await?,
                     Some(OracleResponse::Event(recorded_event_id, bytes))
                         if recorded_event_id == event_id =>
                     {
@@ -997,8 +1004,8 @@ where
 
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
-            Ok(blob) => Ok(blob.into()),
-            Err(ViewError::BlobsNotFound(_)) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
+            Ok(Some(blob)) => Ok(blob.into()),
+            Ok(None) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error.into()),
         }
     }

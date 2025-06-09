@@ -85,11 +85,13 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapFilters<K> {
                         name: "keys".to_string(),
                         description: None,
                         ty: Option::<Vec<K>>::create_type_info(registry),
+                        deprecation: Default::default(),
                         default_value: None,
                         visible: None,
                         inaccessible: false,
                         tags: Vec::new(),
                         is_secret: false,
+                        directive_invocations: Vec::new(),
                     },
                 )]
                 .into_iter()
@@ -99,6 +101,7 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapFilters<K> {
                 tags: Vec::new(),
                 rust_typename: Some(std::any::type_name::<Self>()),
                 oneof: false,
+                directive_invocations: Default::default(),
             },
         )
     }
@@ -160,11 +163,13 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
                         name: "filters".to_string(),
                         description: None,
                         ty: Option::<MapFilters<K>>::create_type_info(registry),
+                        deprecation: Default::default(),
                         default_value: None,
                         visible: None,
                         inaccessible: false,
                         tags: Vec::new(),
                         is_secret: false,
+                        directive_invocations: Vec::new(),
                     },
                 )]
                 .into_iter()
@@ -174,6 +179,7 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
                 tags: Vec::new(),
                 rust_typename: Some(std::any::type_name::<Self>()),
                 oneof: false,
+                directive_invocations: Default::default(),
             },
         )
     }
