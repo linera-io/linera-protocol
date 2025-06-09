@@ -95,6 +95,10 @@ impl Signer for JsSigner {
         owner: &AccountOwner,
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error> {
+        let address = match owner {
+            AccountOwner::Address20(address) => *address,
+            _ => return Err(JsSignerError::MissingKey),
+        };
         let js_owner = JsValue::from_str(&owner.to_string());
         // Pass CryptoHash without serializing as that adds bytes
         // to the serialized value which we don't want for signing.
@@ -107,6 +111,6 @@ impl Signer for JsSigner {
             .ok_or(JsSignerError::JsConversion)?;
         let signature = EvmSignature::from_str(&js_signature)
             .map_err(|_| JsSignerError::UnexpectedSignatureFormat)?;
-        Ok(AccountSignature::EvmSecp256k1(signature))
+        Ok(AccountSignature::EvmSecp256k1 { signature, address })
     }
 }

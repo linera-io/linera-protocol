@@ -107,7 +107,7 @@ pub enum AccountSignature {
         /// Signature of the value.
         signature: secp256k1::evm::EvmSignature,
         /// The EVM address of the signer.
-        address: Address,
+        address: [u8; 20],
     },
 }
 
@@ -156,7 +156,7 @@ impl AccountSecretKey {
             }
             AccountSecretKey::EvmSecp256k1(secret) => {
                 let signature = secp256k1::evm::EvmSignature::new(CryptoHash::new(value), secret);
-                let address = Address::from_public_key(&secret.public().0);
+                let address = Address::from_public_key(&secret.public().0).0 .0;
                 AccountSignature::EvmSecp256k1 { signature, address }
             }
         }
@@ -183,7 +183,7 @@ impl AccountSecretKey {
             }
             AccountSecretKey::EvmSecp256k1(secret) => {
                 let signature = secp256k1::evm::EvmSignature::sign_prehash(secret, value);
-                let address = Address::from_public_key(&secret.public().0);
+                let address = Address::from_public_key(&secret.public().0).0 .0;
                 AccountSignature::EvmSecp256k1 { signature, address }
             }
         }
@@ -265,7 +265,7 @@ impl AccountSignature {
         match self {
             AccountSignature::Ed25519 { public_key, .. } => AccountOwner::from(*public_key),
             AccountSignature::Secp256k1 { public_key, .. } => AccountOwner::from(*public_key),
-            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(address.0 .0),
+            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(*address),
         }
     }
 }

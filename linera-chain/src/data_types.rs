@@ -751,7 +751,7 @@ mod signing {
         )
         .unwrap();
 
-        let address = secret_key.address();
+        let address = secret_key.address().0 .0;
 
         let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(secret_key);
 

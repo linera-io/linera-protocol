@@ -114,6 +114,11 @@ impl EvmPublicKey {
             }
         }
     }
+
+    /// Returns an EVM address for the public key.
+    pub fn address(&self) -> alloy_primitives::Address {
+        alloy_primitives::Address::from_public_key(&self.0)
+    }
 }
 
 impl fmt::Debug for EvmSecretKey {
@@ -371,7 +376,6 @@ impl EvmSecretKey {
         EvmSecretKey(SigningKey::random(rng))
     }
 
-    #[cfg(with_testing)]
     /// Returns an EVM address for the public key.
     pub fn address(&self) -> alloy_primitives::Address {
         alloy_primitives::Address::from_private_key(&self.0)
