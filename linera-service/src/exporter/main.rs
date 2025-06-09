@@ -107,8 +107,8 @@ impl Runnable for ExporterContext {
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         let sender = start_runloops(
-            ExporterCancellationSignal::new(shutdown_notifier.clone()),
             storage,
+            ExporterCancellationSignal::new(shutdown_notifier.clone()),
             self.config.limits,
             self.node_options,
             self.config.id,

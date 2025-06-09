@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{Blob, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::types::{ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate};
+use linera_chain::types::ConfirmedBlockCertificate;
 use linera_client::config::{DestinationId, LimitsConfig};
 use linera_sdk::{
     ensure,
@@ -32,7 +32,7 @@ pub(super) struct ExporterStorage<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    shared_storage: SharedStorage<<S as Storage>::BlockExporterContext, S>,
+    shared_storage: SharedStorage<S::BlockExporterContext, S>,
 }
 
 struct SharedStorage<C, S>
@@ -67,15 +67,15 @@ where
         limits: LimitsConfig,
     ) -> Self {
         let shared_canonical_state =
-            CanonicalState::new((limits.auxiliary_cache_size / 2).into(), state_context);
+            CanonicalState::new((limits.auxiliary_cache_size_mb / 2).into(), state_context);
         let blobs_cache = Arc::new(FifoCache::with_weighter(
             limits.blob_cache_items_capacity as usize,
-            limits.blob_cache_weight as u64,
+            limits.blob_cache_weight_mb as u64,
             CacheWeighter::default(),
         ));
         let blocks_cache = Arc::new(FifoCache::with_weighter(
             limits.block_cache_items_capacity as usize,
-            limits.block_cache_weight as u64,
+            limits.block_cache_weight_mb as u64,
             CacheWeighter::default(),
         ));
 
@@ -95,7 +95,7 @@ where
         match self.blocks_cache.get_value_or_guard_async(&hash).await {
             Ok(value) => Ok(value),
             Err(guard) => {
-                let block = self.download_block(hash).await?;
+                let block = self.storage.read_certificate(hash).await?;
                 let heaped_block = Arc::new(block);
                 let _ = guard.insert(heaped_block.clone());
                 Ok(heaped_block)
@@ -107,25 +107,12 @@ where
         match self.blobs_cache.get_value_or_guard_async(&blob_id).await {
             Ok(blob) => Ok(blob),
             Err(guard) => {
-                let blob = self.download_blob(blob_id).await?;
+                let blob = self.storage.read_blob(blob_id).await?.unwrap();
                 let heaped_blob = Arc::new(blob);
                 let _ = guard.insert(heaped_blob.clone());
                 Ok(heaped_blob)
             }
         }
-    }
-
-    async fn download_block(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ExporterError> {
-        let cert = self.storage.read_certificate(hash).await?;
-        Ok(cert)
-    }
-
-    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, ExporterError> {
-        let blob = self.storage.read_blob(blob_id).await?;
-        Ok(blob)
     }
 
     async fn push_block(&mut self, block_hash: CryptoHash) -> Result<(), ExporterError> {
@@ -196,8 +183,9 @@ where
         let (view, canonical_state, destination_states) =
             BlockExporterStateView::initiate(context, number_of_destinaions).await?;
 
-        let chain_states_cache_capacity = ((limits.auxiliary_cache_size / 2) as u64 * 1024 * 1024)
-            / (size_of::<CryptoHash>() + size_of::<LiteBlockId>()) as u64;
+        let chain_states_cache_capacity =
+            ((limits.auxiliary_cache_size_mb / 2) as u64 * 1024 * 1024)
+                / (size_of::<CryptoHash>() + size_of::<LiteBlockId>()) as u64;
         let chain_states_cache = LfuCache::builder()
             .max_capacity(chain_states_cache_capacity)
             .build();
@@ -219,7 +207,7 @@ where
     pub(super) async fn get_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<GenericCertificate<ConfirmedBlock>>, ExporterError> {
+    ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
         self.shared_storage.get_block(hash).await
     }
 
@@ -250,11 +238,9 @@ where
             ExporterError::BadInitialization
         );
         self.shared_storage.push_block(block_id.hash).await?;
-        self.exporter_state_view
-            .initialize_chain(block_id.clone())
-            .await?;
+        self.exporter_state_view.initialize_chain(*block_id).await?;
         self.chain_states_cache
-            .insert(block_id.chain_id, block_id.clone().into());
+            .insert(block_id.chain_id, (*block_id).into());
 
         Ok(())
     }
@@ -265,14 +251,10 @@ where
             return Ok(());
         }
 
-        if self
-            .exporter_state_view
-            .index_block(block_id.clone())
-            .await?
-        {
+        if self.exporter_state_view.index_block(*block_id).await? {
             self.shared_storage.push_block(block_id.hash).await?;
             self.chain_states_cache
-                .insert(block_id.chain_id, block_id.clone().into());
+                .insert(block_id.chain_id, (*block_id).into());
         }
 
         Ok(())
@@ -395,21 +377,20 @@ struct CacheWeighter<Q, V> {
     value: PhantomData<V>,
 }
 
-impl Weighter<BlobId, Arc<Blob>> for CacheWeighter<BlobId, Arc<Blob>> {
+impl Weighter<BlobId, Arc<Blob>> for BlobCacheWeighter {
     fn weight(&self, _key: &BlobId, val: &Arc<Blob>) -> u64 {
         (size_of::<BlobId>()
             + size_of::<Arc<Blob>>()
-            + 2 * size_of::<usize>()
+            + 2 * size_of::<usize>() // two reference counts in Arc, just a micro-optimization
             + size_of::<Blob>()
             + val.bytes().len()) as u64
     }
 }
 
-impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>>
-    for CacheWeighter<CryptoHash, Arc<ConfirmedBlockCertificate>>
-{
+impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>> for BlockCacheWeighter {
     fn weight(&self, _key: &CryptoHash, val: &Arc<ConfirmedBlockCertificate>) -> u64 {
         (size_of::<CryptoHash>()
+            + 2 * size_of::<usize>()
             + size_of::<Arc<ConfirmedBlockCertificate>>()
             + bcs::serialized_size(val).unwrap()) as u64
     }

@@ -17,15 +17,6 @@ use tokio_stream::StreamExt;
 
 use crate::{common::ExporterError, dispatch, storage::ExporterStorage};
 
-struct ExportTask<'a, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
-    node: GrpcClient,
-    destination_id: DestinationId,
-    storage: &'a ExporterStorage<S>,
-}
-
 pub(crate) struct Exporter<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -59,7 +50,7 @@ where
 
     pub(super) async fn run_with_shutdown<F: IntoFuture<Output = ()>>(
         self,
-        signal: F,
+        shutdown_signal: F,
     ) -> anyhow::Result<()> {
         let address = self.destination_config.address();
         let node = self.node_provider.make_node(&address)?;
@@ -72,7 +63,7 @@ where
 
             biased;
 
-            _ = signal => {},
+            _ = shutdown_signal => {},
 
             res = task_queue.run() => res?,
 
@@ -82,6 +73,15 @@ where
 
         Ok(())
     }
+}
+
+struct ExportTask<'a, S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    node: GrpcClient,
+    destination_id: DestinationId,
+    storage: &'a ExporterStorage<S>,
 }
 
 impl<'a, S> ExportTask<'a, S>

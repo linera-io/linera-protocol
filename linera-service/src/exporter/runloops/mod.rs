@@ -25,8 +25,41 @@ use crate::{
 mod block_processor;
 mod validator_exporter;
 
+pub(crate) fn start_runloops<S, F>(
+    storage: S,
+    shutdown_signal: F,
+    limits: LimitsConfig,
+    options: NodeOptions,
+    block_exporter_id: u32,
+    clients_per_thread: usize,
+    destination_config: DestinationConfig,
+) -> Result<UnboundedSender<BlockId>, ExporterError>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
+    <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
+{
+    let (task_sender, queue_front) = unbounded_channel();
+    let moved_task_sender = task_sender.clone();
+    let _handle = thread::spawn(move || {
+        start_block_processor(
+            storage,
+            shutdown_signal,
+            limits,
+            options,
+            block_exporter_id,
+            clients_per_thread,
+            moved_task_sender,
+            destination_config,
+            queue_front,
+        )
+    });
+
+    Ok(task_sender)
+}
+
 fn start_exporters<S, F>(
-    signal: F,
+    shutdown_signal: F,
     options: NodeOptions,
     work_queue_size: usize,
     clients_per_thread: usize,
@@ -45,7 +78,7 @@ where
     let _threadpool = {
         let mut pool = Vec::new();
         for n in 0..number_of_threads {
-            let moved_signal = signal.clone();
+            let moved_signal = shutdown_signal.clone();
             let moved_storage = storage.clone()?;
             let destinations = destination_config
                 .destinations
@@ -81,7 +114,7 @@ where
 
 #[tokio::main(flavor = "current_thread")]
 async fn start_exporter_tasks<S, F>(
-    signal: F,
+    shutdown_signal: F,
     options: NodeOptions,
     work_queue_size: usize,
     mut storage: ExporterStorage<S>,
@@ -102,7 +135,7 @@ async fn start_exporter_tasks<S, F>(
             destination,
             work_queue_size,
         );
-        let _handle = set.spawn(exporter_task.run_with_shutdown(signal.clone()));
+        let _handle = set.spawn(exporter_task.run_with_shutdown(shutdown_signal.clone()));
     }
 
     while let Some(res) = set.join_next().await {
@@ -113,8 +146,8 @@ async fn start_exporter_tasks<S, F>(
 #[allow(clippy::too_many_arguments)]
 #[tokio::main(flavor = "current_thread")]
 async fn start_block_processor<S, F>(
-    signal: F,
     storage: S,
+    shutdown_signal: F,
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
@@ -139,7 +172,7 @@ where
     let mut block_processor = BlockProcessor::new(block_processor_storage, queue_rear, queue_front);
 
     start_exporters(
-        signal.clone(),
+        shutdown_signal.clone(),
         options,
         limits.work_queue_size.into(),
         clients_per_thread,
@@ -149,42 +182,9 @@ where
     .unwrap();
 
     block_processor
-        .run_with_shutdown(signal, limits.persistence_period)
+        .run_with_shutdown(shutdown_signal, limits.persistence_period)
         .await
         .unwrap();
 
     Ok(())
-}
-
-pub(crate) fn start_runloops<S, F>(
-    signal: F,
-    storage: S,
-    limits: LimitsConfig,
-    options: NodeOptions,
-    block_exporter_id: u32,
-    clients_per_thread: usize,
-    destination_config: DestinationConfig,
-) -> Result<UnboundedSender<BlockId>, ExporterError>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-    F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
-    <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
-{
-    let (task_sender, queue_front) = unbounded_channel();
-    let moved_task_sender = task_sender.clone();
-    let _handle = thread::spawn(move || {
-        start_block_processor(
-            signal,
-            storage,
-            limits,
-            options,
-            block_exporter_id,
-            clients_per_thread,
-            moved_task_sender,
-            destination_config,
-            queue_front,
-        )
-    });
-
-    Ok(task_sender)
 }

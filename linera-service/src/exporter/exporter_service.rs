@@ -52,7 +52,7 @@ impl ExporterService {
             .await
     }
 
-    pub async fn start_notification_server(
+    async fn start_notification_server(
         self,
         port: u16,
         cancellation_token: CancellationToken,
@@ -119,7 +119,7 @@ mod test {
         let cancellation_token = CancellationToken::new();
         let (tx, _rx) = unbounded_channel();
         let server = ExporterService::new(tx);
-        tokio::spawn(server.run(cancellation_token.clone(), port));
+        let server_handle = tokio::spawn(server.run(cancellation_token.clone(), port));
         LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
 
         let mut client = NotifierServiceClient::connect(format!("http://{endpoint}")).await?;
@@ -136,6 +136,9 @@ mod test {
             .notify(Request::new(request.try_into().unwrap()))
             .await
             .is_ok());
+
+        cancellation_token.cancel();
+        assert!(server_handle.await.is_ok());
 
         Ok(())
     }

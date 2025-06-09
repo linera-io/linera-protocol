@@ -181,7 +181,7 @@ required-features = ["benchmark"]
 
 [[bin]]
 name = "linera-exporter"
-path = "src/linera-exporter/main.rs"
+path = "src/exporter/main.rs"
 
 [[bench]]
 name = "transfers"

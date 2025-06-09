@@ -1,10 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, future::IntoFuture, sync::Arc, time::Duration};
+use std::{collections::HashSet, future::IntoFuture, time::Duration};
 
-use linera_base::crypto::CryptoHash;
-use linera_chain::types::{Block, ConfirmedBlockCertificate};
+use linera_chain::types::Block;
 use linera_storage::Storage;
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -37,13 +36,13 @@ where
 #[derive(Debug)]
 struct ProcessedBlock {
     block: BlockId,
-    siblings: Vec<BlockId>,
     parent: Option<LiteBlockId>,
+    message_senders: Vec<BlockId>,
 }
 
 struct NodeVisitor {
     node: ProcessedBlock,
-    sibling_branch: usize,
+    sender_branch: usize,
 }
 
 impl<T> BlockProcessor<T>
@@ -64,14 +63,14 @@ where
 
     pub(super) async fn run_with_shutdown<F>(
         &mut self,
-        signal: F,
+        shutdown_signal: F,
         persistence_period: u16,
     ) -> Result<(), ExporterError>
     where
         F: IntoFuture<Output = ()>,
     {
-        let future = signal.into_future();
-        let mut pinned = Box::pin(future);
+        let shutdown_signal_future = shutdown_signal.into_future();
+        let mut pinned_shutdown_signal = Box::pin(shutdown_signal_future);
 
         let mut interval = interval(Duration::from_secs(persistence_period.into()));
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -81,13 +80,13 @@ where
 
                 biased;
 
-                _ = &mut pinned => break,
+                _ = &mut pinned_shutdown_signal => break,
 
                 _ = interval.tick() => self.storage.save().await?,
 
                 Some(next_block_notification) = self.queue_front.recv() => {
                     let walker = Walker::new(&mut self.storage);
-                    if let Err(_err) = walker.walk(next_block_notification.clone()).await {
+                    if let Err(_err) = walker.walk(next_block_notification).await {
                         // return the block to the back of the task queue to process again later
                         let _ = self.queue_rear.send(next_block_notification);
                     }
@@ -95,6 +94,8 @@ where
 
             }
         }
+
+        self.storage.save().await?;
 
         Ok(())
     }
@@ -112,6 +113,8 @@ where
         }
     }
 
+    // walks through the block's dependencies in a depth wise manner
+    // resolving, sorting and indexing all of them along the way.
     async fn walk(mut self, block: BlockId) -> Result<(), ExporterError> {
         if self.is_block_indexed(&block).await? {
             return Ok(());
@@ -135,20 +138,19 @@ where
                 }
             }
 
-            // resolve siblings
-            let sibling = node_visitor.node.siblings.get(node_visitor.sibling_branch);
-            if let Some(sibling) = sibling {
-                node_visitor.sibling_branch += 1;
-                if !self.is_block_indexed(sibling).await? {
-                    let sibling_node = self.get_processed_block_node(sibling).await?;
+            // resolve messages dependencies
+            let sender = node_visitor.next_sender();
+            if let Some(sender) = sender {
+                if !self.is_block_indexed(&sender).await? {
+                    let sending_node = self.get_processed_block_node(&sender).await?;
                     self.path.push(node_visitor);
-                    self.path.push(sibling_node);
+                    self.path.push(sending_node);
                     continue;
                 }
             }
 
-            let block_id = node_visitor.node.block.clone();
-            self.visited.insert(block_id.clone());
+            let block_id = node_visitor.node.block;
+            self.visited.insert(block_id);
             self.index_block(&block_id).await?;
         }
 
@@ -159,17 +161,10 @@ where
         &self,
         block_id: &BlockId,
     ) -> Result<NodeVisitor, ExporterError> {
-        let block = self.get_block(block_id.hash).await?;
-        let processed_block = ProcessedBlock::process_block(block_id.clone(), block.block());
+        let block = self.storage.get_block(block_id.hash).await?;
+        let processed_block = ProcessedBlock::process_block(*block_id, block.block());
         let node = NodeVisitor::new(processed_block);
         Ok(node)
-    }
-
-    async fn get_block(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
-        self.storage.get_block(hash).await
     }
 
     async fn is_block_indexed(&mut self, block_id: &BlockId) -> Result<bool, ExporterError> {
@@ -189,8 +184,8 @@ where
 impl NodeVisitor {
     fn new(processed_block: ProcessedBlock) -> Self {
         Self {
+            sender_branch: 0,
             node: processed_block,
-            sibling_branch: 0,
         }
     }
 
@@ -199,6 +194,15 @@ impl NodeVisitor {
             .parent
             .clone()
             .map(|lite| lite.with_chain_id(self.node.block.chain_id))
+    }
+
+    fn next_sender(&mut self) -> Option<BlockId> {
+        if let Some(block_id) = self.node.message_senders.get(self.sender_branch) {
+            self.sender_branch += 1;
+            return Some(*block_id);
+        }
+
+        None
     }
 }
 
@@ -215,7 +219,7 @@ impl ProcessedBlock {
                 )
             }),
             block: block_id,
-            siblings: block
+            message_senders: block
                 .body
                 .incoming_bundles
                 .iter()

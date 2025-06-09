@@ -18,10 +18,10 @@ pub(crate) enum ExporterError {
     BadNotification(BadNotificationKind),
 
     #[error("unable to load the exporter state")]
-    ViewError(ViewError),
+    StateError(ViewError),
 
     #[error("generic storage error: {0}")]
-    StorageError(#[from] ViewError),
+    ViewError(#[from] ViewError),
 
     #[error("block not processed by the block processor yet")]
     UnprocessedBlock,
@@ -58,7 +58,7 @@ impl From<BadNotificationKind> for ExporterError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub(crate) struct BlockId {
     pub hash: CryptoHash,
     pub chain_id: ChainId,

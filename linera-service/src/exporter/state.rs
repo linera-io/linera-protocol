@@ -1,12 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    marker::PhantomData,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
 };
 
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
@@ -19,7 +16,7 @@ use linera_views::{
     context::Context, log_view::LogView, map_view::MapView, register_view::RegisterView,
     views::ClonableView,
 };
-use serde::{de::Visitor, ser::SerializeSeq as _, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::common::{BlockId, ExporterError, LiteBlockId};
 
@@ -29,6 +26,7 @@ pub struct BlockExporterStateView<C> {
     /// The causal state.
     canonical_state: LogView<C, CryptoHash>,
     /// The chain status, by chain ID.
+    /// Tracks the highest block already processed with its hash.
     chain_states: MapView<C, ChainId, LiteBlockId>,
     /// The exporter state per destination.
     destination_states: RegisterView<C, DestinationStates>,
@@ -44,7 +42,7 @@ where
     ) -> Result<(Self, LogView<C, CryptoHash>, DestinationStates), ExporterError> {
         let mut view = BlockExporterStateView::load(context)
             .await
-            .map_err(ExporterError::ViewError)?;
+            .map_err(ExporterError::StateError)?;
         if view.destination_states.get().states.is_empty() {
             let states = DestinationStates::new(number_of_destinations);
             view.destination_states.set(states);
@@ -57,9 +55,9 @@ where
     }
 
     pub async fn index_block(&mut self, block: BlockId) -> Result<bool, ExporterError> {
-        if let Some(status) = self.chain_states.get_mut(&block.chain_id).await? {
-            if block.height > status.height {
-                *status = block.into();
+        if let Some(last_processed) = self.chain_states.get_mut(&block.chain_id).await? {
+            if block.height > last_processed.height {
+                *last_processed = block.into();
                 return Ok(true);
             }
 
@@ -88,8 +86,7 @@ where
         &self,
         chain_id: &ChainId,
     ) -> Result<Option<LiteBlockId>, ExporterError> {
-        let some = self.chain_states.get(chain_id).await?;
-        Ok(some)
+        Ok(self.chain_states.get(chain_id).await?)
     }
 
     pub fn set_destination_states(&mut self, destination_states: DestinationStates) {
@@ -110,24 +107,27 @@ impl Default for DestinationStates {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "DestinationStates")]
+struct SerializableDestinationStates {
+    states: Vec<u64>,
+}
+
 impl Serialize for DestinationStates {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let slice = self
+        let states = self
             .states
             .iter()
             .map(|x| x.load(std::sync::atomic::Ordering::Acquire))
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
+            .collect::<Vec<_>>();
 
-        let mut seq = serializer.serialize_seq(Some(slice.len()))?;
-        for item in slice {
-            seq.serialize_element(&item)?;
-        }
-
-        seq.end()
+        SerializableDestinationStates::serialize(
+            &SerializableDestinationStates { states },
+            serializer,
+        )
     }
 }
 
@@ -136,37 +136,13 @@ impl<'de> Deserialize<'de> for DestinationStates {
     where
         D: serde::Deserializer<'de>,
     {
-        struct DestinationStatesVisitor {
-            marker: PhantomData<DestinationStates>,
-        }
-
-        impl<'de> Visitor<'de> for DestinationStatesVisitor {
-            type Value = DestinationStates;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("an unsigned integer with 64 bits of entropy")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let mut items = Vec::new();
-                while let Some(item) = seq.next_element()? {
-                    items.push(AtomicU64::new(item));
-                }
-
-                let states: Arc<[AtomicU64]> = Arc::from(items);
-                let states = DestinationStates { states };
-                Ok(states)
-            }
-        }
-
-        let visitor = DestinationStatesVisitor {
-            marker: PhantomData,
-        };
-
-        deserializer.deserialize_seq(visitor)
+        let SerializableDestinationStates { states } =
+            SerializableDestinationStates::deserialize(deserializer)?;
+        let states = states
+            .iter()
+            .map(|state| AtomicU64::new(*state))
+            .collect::<Arc<_>>();
+        Ok(Self { states })
     }
 }
 
@@ -176,7 +152,7 @@ impl DestinationStates {
             .into_iter()
             .map(AtomicU64::new)
             .collect::<Vec<_>>();
-        let states: Arc<[AtomicU64]> = Arc::from(slice);
+        let states = Arc::from(slice);
         Self { states }
     }
 

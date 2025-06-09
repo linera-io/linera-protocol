@@ -267,16 +267,16 @@ pub struct LimitsConfig {
     /// of blocks queued up for exports per destination.
     pub work_queue_size: u16,
     /// Maximum weight of the blob cache in megabytes.
-    pub blob_cache_weight: u16,
+    pub blob_cache_weight_mb: u16,
     /// Estimated number of elements for the blob cache.
     pub blob_cache_items_capacity: u16,
     /// Maximum weight of the block cache in megabytes.
-    pub block_cache_weight: u16,
+    pub block_cache_weight_mb: u16,
     /// Estimated number of elements for the block cache.
     pub block_cache_items_capacity: u16,
     /// Maximum weight in megabytes for the combined
     /// cache, consisting of small miscellaneous items.
-    pub auxiliary_cache_size: u16,
+    pub auxiliary_cache_size_mb: u16,
 }
 
 impl Default for LimitsConfig {
@@ -284,11 +284,11 @@ impl Default for LimitsConfig {
         Self {
             persistence_period: 299,
             work_queue_size: 256,
-            blob_cache_weight: 1024,
+            blob_cache_weight_mb: 1024,
             blob_cache_items_capacity: 8192,
-            block_cache_weight: 1024,
+            block_cache_weight_mb: 1024,
             block_cache_items_capacity: 8192,
-            auxiliary_cache_size: 1024,
+            auxiliary_cache_size_mb: 1024,
         }
     }
 }
