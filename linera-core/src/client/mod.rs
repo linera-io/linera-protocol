@@ -472,7 +472,7 @@ impl<Env: Environment> Client<Env> {
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
             .await?
             .pop()
-            .unwrap();
+            .unwrap(); // Returns exactly as many blobs as passed-in IDs.
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
