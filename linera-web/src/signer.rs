@@ -5,7 +5,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSignature, CryptoHash, EvmPublicKey, EvmSignature, Signer},
+    crypto::{AccountSignature, CryptoHash, EvmSignature, Signer},
     identifiers::AccountOwner,
 };
 use wasm_bindgen::prelude::*;
@@ -88,19 +88,6 @@ impl Signer for JsSigner {
             .map_err(JsSignerError::from)?;
 
         Ok(serde_wasm_bindgen::from_value(js_bool).map_err(|_| JsSignerError::JsConversion)?)
-    }
-
-    async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Self::Error> {
-        let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
-        let js_public_key = self
-            .get_public_key(js_owner)
-            .await
-            .map_err(JsSignerError::from)?
-            .as_string()
-            .ok_or(JsSignerError::JsConversion)?;
-        let pk =
-            EvmPublicKey::from_str(&js_public_key).map_err(|_| JsSignerError::PublicKeyParse)?;
-        Ok(AccountPublicKey::EvmSecp256k1(pk))
     }
 
     async fn sign(

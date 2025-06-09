@@ -370,6 +370,12 @@ impl EvmSecretKey {
     pub fn generate_from<R: crate::crypto::CryptoRng>(rng: &mut R) -> Self {
         EvmSecretKey(SigningKey::random(rng))
     }
+
+    #[cfg(with_testing)]
+    /// Returns an EVM address for the public key.
+    pub fn address(&self) -> alloy_primitives::Address {
+        alloy_primitives::Address::from_private_key(&self.0)
+    }
 }
 
 impl EvmSignature {
@@ -399,6 +405,15 @@ impl EvmSignature {
         self.verify_inner::<T>(prehash, author)
     }
 
+    /// Checks a signature against a recovered public key.
+    pub fn check_with_recover<'de, T>(&self, value: &T) -> Result<(), CryptoError>
+    where
+        T: BcsSignable<'de> + fmt::Debug,
+    {
+        let prehash = CryptoHash::new(value).as_bytes().0;
+        let public_key = EvmPublicKey(self.0.recover_from_msg(prehash).unwrap());
+        self.verify_inner::<T>(prehash, &public_key)
+    }
     /// Verifies a batch of signatures.
     ///
     /// Returns an error on first failed signature.

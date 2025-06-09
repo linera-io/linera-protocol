@@ -9,8 +9,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{
-        AccountPublicKey, AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash,
-        Signer, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
+        AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash, Signer,
+        ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
@@ -208,10 +208,7 @@ pub struct MessageBundle {
 /// An earlier proposal that is being retried.
 pub enum OriginalProposal {
     /// A proposal in the fast round.
-    Fast {
-        public_key: AccountPublicKey,
-        signature: AccountSignature,
-    },
+    Fast(AccountSignature),
     /// A validated block certificate from an earlier round.
     Regular {
         certificate: LiteCertificate<'static>,
@@ -225,7 +222,6 @@ pub enum OriginalProposal {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
     pub content: ProposalContent,
-    pub public_key: AccountPublicKey,
     pub signature: AccountSignature,
     #[debug(skip_if = Option::is_none)]
     pub original_proposal: Option<OriginalProposal>,
@@ -510,11 +506,9 @@ impl BlockProposal {
             outcome: None,
         };
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
-        let public_key = signer.get_public_key(&owner).await?;
 
         Ok(Self {
             content,
-            public_key,
             signature,
             original_proposal: None,
         })
@@ -532,16 +526,11 @@ impl BlockProposal {
             outcome: None,
         };
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
-        let public_key = signer.get_public_key(&owner).await?;
 
         Ok(Self {
             content,
-            public_key,
             signature,
-            original_proposal: Some(OriginalProposal::Fast {
-                public_key: old_proposal.public_key,
-                signature: old_proposal.signature,
-            }),
+            original_proposal: Some(OriginalProposal::Fast(old_proposal.signature)),
         })
     }
 
@@ -561,17 +550,20 @@ impl BlockProposal {
         };
         let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
 
-        let public_key = signer.get_public_key(&owner).await?;
         Ok(Self {
             content,
-            public_key,
             signature,
             original_proposal: Some(OriginalProposal::Regular { certificate }),
         })
     }
 
+    /// Returns the `AccountOwner` that proposed the block.
+    pub fn owner(&self) -> AccountOwner {
+        self.signature.owner()
+    }
+
     pub fn check_signature(&self) -> Result<(), CryptoError> {
-        self.signature.verify(&self.content, self.public_key)
+        self.signature.verify(&self.content)
     }
 
     pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
@@ -598,9 +590,9 @@ impl BlockProposal {
     /// the outcome.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
         match (&self.original_proposal, &self.content.outcome) {
-            (None, None) | (Some(OriginalProposal::Fast { .. }), None) => {}
+            (None, None) | (Some(OriginalProposal::Fast(_)), None) => {}
             (None, Some(_))
-            | (Some(OriginalProposal::Fast { .. }), Some(_))
+            | (Some(OriginalProposal::Fast(_)), Some(_))
             | (Some(OriginalProposal::Regular { .. }), None) => {
                 return Err("Must contain a validation certificate if and only if \
                      it contains the execution outcome from a previous round");
@@ -754,11 +746,14 @@ mod signing {
         use std::str::FromStr;
 
         // Generated in MetaMask.
-        let secret_key = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
+        let secret_key = linera_base::crypto::EvmSecretKey::from_str(
+            "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66",
+        )
+        .unwrap();
 
-        let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(
-            linera_base::crypto::EvmSecretKey::from_str(secret_key).unwrap(),
-        );
+        let address = secret_key.address();
+
+        let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(secret_key);
 
         let proposed_block = ProposedBlock {
             chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
@@ -779,7 +774,10 @@ mod signing {
 
         // personal_sign of the `proposal_hash` done via MetaMask.
         // Wrap with proper variant so that bytes match (include the enum variant tag).
-        let metamask_signature = AccountSignature::EvmSecp256k1(EvmSignature::from_str("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap());
+        let metamask_signature = AccountSignature::EvmSecp256k1 {
+            signature: EvmSignature::from_str("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap(),
+            address,
+        };
 
         let signature = signer.sign(&proposal);
         assert_eq!(signature, metamask_signature);

@@ -160,13 +160,12 @@ where
         proposal.check_signature()?;
         let BlockProposal {
             content,
-            public_key,
             original_proposal,
-            signature: _,
+            signature,
         } = proposal;
         let block = &content.block;
 
-        let owner = AccountOwner::from(*public_key);
+        let owner = signature.owner();
         let chain = &self.0.chain;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
@@ -189,11 +188,8 @@ where
                 // Verify that this block has been validated by a quorum before.
                 certificate.check(committee)?;
             }
-            Some(OriginalProposal::Fast {
-                public_key,
-                signature,
-            }) => {
-                let super_owner = AccountOwner::from(*public_key);
+            Some(OriginalProposal::Fast(signature)) => {
+                let super_owner = signature.owner();
                 ensure!(
                     chain
                         .manager
@@ -213,7 +209,6 @@ where
                         round: Round::Fast,
                         outcome: None,
                     },
-                    public_key: *public_key,
                     signature: *signature,
                     original_proposal: None,
                 };

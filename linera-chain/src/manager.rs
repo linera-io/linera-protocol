@@ -309,7 +309,7 @@ where
                 // If the fast round has not timed out yet, only a super owner is allowed to open
                 // a later round by making a proposal.
                 ensure!(
-                    self.is_super(&proposal.public_key.into()) || !current_round.is_fast(),
+                    self.is_super(&proposal.owner()) || !current_round.is_fast(),
                     ChainError::WrongRound(current_round)
                 );
                 // After the fast round, proposals older than the current round are obsolete.
@@ -348,7 +348,7 @@ where
                     None => false,
                     Some(OriginalProposal::Regular { certificate }) =>
                         vote.round <= certificate.round,
-                    Some(OriginalProposal::Fast { .. }) => {
+                    Some(OriginalProposal::Fast(_)) => {
                         vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
                     }
                 },
@@ -472,13 +472,9 @@ where
             }
             // If this contains a proposal from the fast round, we consider that a locking block.
             // It is useful for clients synchronizing with us, so they can re-propose it.
-            Some(OriginalProposal::Fast {
-                public_key,
-                signature,
-            }) => {
+            Some(OriginalProposal::Fast(signature)) => {
                 if self.locking_block.get().is_none() {
                     let original_proposal = BlockProposal {
-                        public_key: *public_key,
                         signature: *signature,
                         ..proposal.clone()
                     };
@@ -607,7 +603,7 @@ where
     /// Returns whether the signer is a valid owner and allowed to propose a block in the
     /// proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> bool {
-        let owner = &proposal.public_key.into();
+        let owner = &proposal.owner();
         if self.ownership.get().super_owners.contains(owner) {
             return true;
         }

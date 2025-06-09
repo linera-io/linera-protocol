@@ -1025,7 +1025,7 @@ impl<Env: Environment> Client<Env> {
             }
         }
         for proposal in proposals {
-            let owner: AccountOwner = proposal.public_key.into();
+            let owner: AccountOwner = proposal.owner();
             if let Err(mut err) = self
                 .local_node
                 .handle_block_proposal(proposal.clone())
