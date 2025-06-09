@@ -1093,6 +1093,7 @@ where
         let Some((start, end)) = range.to_inclusive() else {
             return Ok(Vec::new());
         };
+        // Everything up to (excluding) next_height is in confirmed_log.
         let mut hashes = if let Ok(last_height) = next_height.try_sub_one() {
             let usize_start = usize::try_from(start)?;
             let usize_end = usize::try_from(end.min(last_height))?;
@@ -1100,6 +1101,7 @@ where
         } else {
             Vec::new()
         };
+        // Everything after (including) next_height in in preprocessed_blocks if we have it.
         for height in start.max(next_height).0..=end.0 {
             hashes.push(
                 self.preprocessed_blocks
@@ -1148,8 +1150,11 @@ where
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for (mut outbox, target) in outboxes.into_iter().zip(&targets) {
             if block_height > next_height {
-                // Find the hash of the block that was most recently added to the outbox.
+                // There may be a gap in the chain before this block. We can only add it to this
+                // outbox if the previous message to the same recipient has already been added.
                 let prev_hash = match outbox.next_height_to_schedule.get().try_sub_one().ok() {
+                    // The block with the last added message has already been executed; look up its
+                    // hash in the confirmed_log.
                     Some(height) if height < next_height => {
                         let index =
                             usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
@@ -1157,12 +1162,14 @@ where
                             ChainError::InternalError("missing entry in confirmed_log".into())
                         })?)
                     }
+                    // The block with last added message has not been executed yet. If we have it,
+                    // it's in preprocessed_blocks.
                     Some(height) => Some(self.preprocessed_blocks.get(&height).await?.ok_or_else(
                         || ChainError::InternalError("missing entry in preprocessed_blocks".into()),
                     )?),
-                    None => None,
+                    None => None, // No message to that sender was added yet.
                 };
-                // Schedule only if no block is missing that sent something to the same recipient.
+                // Only schedule if this block contains the next message for that recipient.
                 if prev_hash.as_ref() != block.body.previous_message_blocks.get(target) {
                     continue;
                 }
