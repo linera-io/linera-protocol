@@ -152,7 +152,7 @@ where
             .await;
         self.context.lock().await.update_wallet(&client).await?;
         let chain_id = match result? {
-            ClientOutcome::Committed((chain_id, _certificate)) => chain_id,
+            ClientOutcome::Committed((description, _certificate)) => description.id(),
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Err(Error::new(format!(
                     "This faucet is using a multi-owner chain and is not the leader right now. \

@@ -3026,7 +3026,8 @@ impl<Env: Environment> ChainClient<Env> {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ClientOutcome<(ChainId, ConfirmedBlockCertificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, ChainClientError>
+    {
         loop {
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
@@ -3041,21 +3042,22 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
             };
-            // The first message of the only operation created the new chain.
-            let chain_blob_id = certificate
+            // The only operation, i.e. the last transaction, created the new chain.
+            let chain_blob = certificate
                 .block()
-                .created_blob_ids()
-                .into_iter()
-                .next()
+                .body
+                .blobs
+                .last()
+                .and_then(|blobs| blobs.last())
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create a new chain"))?;
-            let chain_id = ChainId(chain_blob_id.hash);
+            let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
             // Add the new chain to the list of tracked chains
-            self.client.track_chain(chain_id);
+            self.client.track_chain(description.id());
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)
                 .await?;
-            return Ok(ClientOutcome::Committed((chain_id, certificate)));
+            return Ok(ClientOutcome::Committed((description, certificate)));
         }
     }
 
