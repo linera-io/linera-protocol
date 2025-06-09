@@ -11,7 +11,7 @@ use tokio::{
 };
 
 use crate::{
-    common::{BlockId, ExporterError, LiteBlockId},
+    common::{BlockId, ExporterError},
     storage::BlockProcessorStorage,
 };
 
@@ -36,13 +36,12 @@ where
 #[derive(Debug)]
 struct ProcessedBlock {
     block: BlockId,
-    parent: Option<LiteBlockId>,
-    message_senders: Vec<BlockId>,
+    dependencies: Vec<BlockId>,
 }
 
 struct NodeVisitor {
     node: ProcessedBlock,
-    sender_branch: usize,
+    next_dependency: usize,
 }
 
 impl<T> BlockProcessor<T>
@@ -127,26 +126,15 @@ where
                 continue;
             }
 
-            // resolve ancestors
-            let parent = node_visitor.get_parent();
-            if let Some(parent) = parent {
-                if !self.is_block_indexed(&parent).await? {
-                    let parent_node = self.get_processed_block_node(&parent).await?;
-                    self.path.push(node_visitor);
-                    self.path.push(parent_node);
-                    continue;
+            // resolve dependencies
+            if let Some(dependency) = node_visitor.next_dependency() {
+                self.path.push(node_visitor);
+                if !self.is_block_indexed(&dependency).await? {
+                    let dependency_node = self.get_processed_block_node(&dependency).await?;
+                    self.path.push(dependency_node);
                 }
-            }
 
-            // resolve messages dependencies
-            let sender = node_visitor.next_sender();
-            if let Some(sender) = sender {
-                if !self.is_block_indexed(&sender).await? {
-                    let sending_node = self.get_processed_block_node(&sender).await?;
-                    self.path.push(node_visitor);
-                    self.path.push(sending_node);
-                    continue;
-                }
+                continue;
             }
 
             let block_id = node_visitor.node.block;
@@ -184,21 +172,14 @@ where
 impl NodeVisitor {
     fn new(processed_block: ProcessedBlock) -> Self {
         Self {
-            sender_branch: 0,
+            next_dependency: 0,
             node: processed_block,
         }
     }
 
-    fn get_parent(&self) -> Option<BlockId> {
-        self.node
-            .parent
-            .clone()
-            .map(|lite| lite.with_chain_id(self.node.block.chain_id))
-    }
-
-    fn next_sender(&mut self) -> Option<BlockId> {
-        if let Some(block_id) = self.node.message_senders.get(self.sender_branch) {
-            self.sender_branch += 1;
+    fn next_dependency(&mut self) -> Option<BlockId> {
+        if let Some(block_id) = self.node.dependencies.get(self.next_dependency) {
+            self.next_dependency += 1;
             return Some(*block_id);
         }
 
@@ -208,23 +189,26 @@ impl NodeVisitor {
 
 impl ProcessedBlock {
     fn process_block(block_id: BlockId, block: &Block) -> Self {
+        let mut dependencies = Vec::new();
+        if let Some(parent_hash) = block.header.previous_block_hash {
+            let height = block_id
+                .height
+                .try_sub_one()
+                .expect("parent only exists if child's height is greater than zero");
+            let parent = BlockId::new(block_id.chain_id, parent_hash, height);
+            dependencies.push(parent);
+        }
+
+        let message_senders = block
+            .body
+            .incoming_bundles
+            .iter()
+            .map(BlockId::from_incoming_bundle);
+        dependencies.extend(message_senders);
+
         Self {
-            parent: block.header.previous_block_hash.map(|hash| {
-                LiteBlockId::new(
-                    block_id
-                        .height
-                        .try_sub_one()
-                        .expect("parent only exists if child's height is greater than zero"),
-                    hash,
-                )
-            }),
+            dependencies,
             block: block_id,
-            message_senders: block
-                .body
-                .incoming_bundles
-                .iter()
-                .map(BlockId::from_incoming_bundle)
-                .collect::<Vec<_>>(),
         }
     }
 }

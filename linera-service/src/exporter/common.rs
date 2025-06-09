@@ -93,14 +93,6 @@ impl LiteBlockId {
     pub(crate) fn new(height: BlockHeight, hash: CryptoHash) -> LiteBlockId {
         LiteBlockId { hash, height }
     }
-
-    pub(crate) fn with_chain_id(self, chain_id: ChainId) -> BlockId {
-        BlockId {
-            hash: self.hash,
-            chain_id,
-            height: self.height,
-        }
-    }
 }
 
 impl From<BlockId> for LiteBlockId {
