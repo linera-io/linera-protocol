@@ -745,7 +745,7 @@ mod signing {
         identifiers::ChainId,
     };
 
-    use crate::data_types::{ProposalContent, ProposedBlock};
+    use crate::data_types::{BlockProposal, ProposalContent, ProposedBlock};
 
     #[test]
     fn proposal_content_signing() {
@@ -758,6 +758,7 @@ mod signing {
         .unwrap();
 
         let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(secret_key);
+        let public_key = signer.public();
 
         let proposed_block = ProposedBlock {
             chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
@@ -782,5 +783,14 @@ mod signing {
 
         let signature = signer.sign(&proposal);
         assert_eq!(signature, metamask_signature);
+
+        assert_eq!(signature.owner(&proposal).unwrap(), public_key.into(),);
+
+        let block_proposal = BlockProposal {
+            content: proposal,
+            signature,
+            original_proposal: None,
+        };
+        assert_eq!(block_proposal.owner().unwrap(), public_key.into(),);
     }
 }
