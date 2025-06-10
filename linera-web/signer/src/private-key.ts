@@ -8,22 +8,22 @@ import { Signer } from "@linera/client";
  * It stores the private key directly in memory, which makes it unsuitable for
  * production environments due to security risks.
  * 
- * The `LocalSigner` uses an in-memory `ethers.Wallet` to sign messages following
+ * The `PrivateKeySigner` uses an in-memory `ethers.Wallet` to sign messages following
  * the EIP-191 scheme. It verifies that the provided owner matches the wallet
  * address before signing.
  * 
  * Supports key creation from both a raw private key and a mnemonic phrase.
  */
-export class LocalSigner implements Signer {
+export class PrivateKeySigner implements Signer {
   private wallet: Wallet;
 
   constructor(privateKeyHex: string) {
     this.wallet = new Wallet(privateKeyHex);
   }
 
-  static fromMnemonic(mnemonic: string): LocalSigner {
+  static fromMnemonic(mnemonic: string): PrivateKeySigner {
     const wallet = ethers.Wallet.fromPhrase(mnemonic);
-    return new LocalSigner(wallet.privateKey);
+    return new PrivateKeySigner(wallet.privateKey);
   }
 
   public address(): string {
