@@ -410,12 +410,22 @@ impl EvmSignature {
     }
 
     /// Checks a signature against a recovered public key.
-    pub fn check_with_recover<'de, T>(&self, value: &T) -> Result<(), CryptoError>
+    pub fn check_with_recover<'de, T>(
+        &self,
+        value: &T,
+        sender_address: [u8; 20],
+    ) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
         let prehash = CryptoHash::new(value).as_bytes().0;
         let public_key = EvmPublicKey(self.0.recover_from_msg(prehash).unwrap());
+        if public_key.address().0 != sender_address {
+            return Err(CryptoError::InvalidSignature {
+                error: "Recovered public key does not match sender address".to_string(),
+                type_name: T::type_name().to_string(),
+            });
+        }
         self.verify_inner::<T>(prehash, &public_key)
     }
     /// Verifies a batch of signatures.
