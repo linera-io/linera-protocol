@@ -441,6 +441,7 @@ impl EvmSignature {
         let public_key = EvmPublicKey(self.0.recover_from_msg(prehash).unwrap());
         self.verify_inner::<T>(prehash, public_key)
     }
+
     /// Verifies a batch of signatures.
     ///
     /// Returns an error on first failed signature.
