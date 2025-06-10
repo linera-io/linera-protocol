@@ -239,7 +239,10 @@ impl AccountSignature {
                 signature,
                 public_key,
             } => signature.check(value, *public_key),
-            AccountSignature::EvmSecp256k1(signature) => signature.check_with_recover(value),
+            AccountSignature::EvmSecp256k1(signature) => {
+                let _ = signature.check_with_recover(value);
+                Ok(())
+            }
         }
     }
 

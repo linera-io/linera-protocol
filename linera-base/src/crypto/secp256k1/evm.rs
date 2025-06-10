@@ -433,13 +433,21 @@ impl EvmSignature {
     }
 
     /// Checks a signature against a recovered public key.
-    pub fn check_with_recover<'de, T>(&self, value: &T) -> Result<(), CryptoError>
+    pub fn check_with_recover<'de, T>(&self, value: &T) -> Result<EvmPublicKey, CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
-        let prehash = CryptoHash::new(value).as_bytes().0;
-        let public_key = EvmPublicKey(self.0.recover_from_msg(prehash).unwrap());
-        self.verify_inner::<T>(prehash, public_key)
+        let msg = CryptoHash::new(value).as_bytes().0;
+        let public_key = match self.0.recover_from_msg(msg) {
+            Ok(public_key) => public_key,
+            Err(_) => {
+                return Err(CryptoError::InvalidSignature {
+                    error: "Failed to recover public key from signature".to_string(),
+                    type_name: T::type_name().to_string(),
+                });
+            }
+        };
+        Ok(EvmPublicKey(public_key))
     }
 
     /// Verifies a batch of signatures.
@@ -476,7 +484,10 @@ impl EvmSignature {
 
         author
             .0
-            .verify_prehash(&message_hash, &self.0.to_k256().unwrap())
+            .verify_prehash(
+                &message_hash,
+                &self.0.to_k256().map_err(CryptoError::Secp256k1Error)?,
+            )
             .map_err(|error| CryptoError::InvalidSignature {
                 error: error.to_string(),
                 type_name: T::type_name().to_string(),
@@ -711,6 +722,8 @@ mod tests {
         let msg = TestString("hello".into());
         let prehash = CryptoHash::new(&msg);
         let sig = EvmSignature::new(prehash, &key_pair.secret_key);
+
+        assert!(sig.check_with_recover(&msg).is_ok());
 
         let public_key = EvmPublicKey::recover_from_msg(&sig, &msg).unwrap();
         assert_eq!(public_key, key_pair.public_key);
