@@ -1,16 +1,16 @@
 import { Wallet, ethers } from "ethers";
 import { Signer } from "@linera/client";
 
-export class EmbeddedEIP191Signer implements Signer {
+export class LocalSigner implements Signer {
   private wallet: Wallet;
 
   constructor(privateKeyHex: string) {
     this.wallet = new Wallet(privateKeyHex);
   }
 
-  static fromMnemonic(mnemonic: string): EmbeddedEIP191Signer {
+  static fromMnemonic(mnemonic: string): LocalSigner {
     const wallet = ethers.Wallet.fromPhrase(mnemonic);
-    return new EmbeddedEIP191Signer(wallet.privateKey);
+    return new LocalSigner(wallet.privateKey);
   }
 
   public address(): string {
