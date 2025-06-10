@@ -520,7 +520,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
                     response.info.next_block_height, response.info.epoch,
                 );
                 if let Some(public_key) = public_key {
-                    if response.check(public_key).is_ok() {
+                    if response.check(*public_key).is_ok() {
                         info!("Signature for public key {public_key} is OK.");
                     } else {
                         return Err(error::Inner::InvalidSignature {

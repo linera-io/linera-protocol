@@ -300,7 +300,7 @@ impl ChainInfoResponse {
         self.signature = Some(ValidatorSignature::new(&*self.info, key_pair));
     }
 
-    pub fn check(&self, public_key: &ValidatorPublicKey) -> Result<(), CryptoError> {
+    pub fn check(&self, public_key: ValidatorPublicKey) -> Result<(), CryptoError> {
         match self.signature.as_ref() {
             Some(sig) => sig.check(&*self.info, public_key),
             None => Err(CryptoError::MissingValidatorSignature),

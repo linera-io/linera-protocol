@@ -1282,7 +1282,7 @@ where
 
     let (chain_info_response, _actions) =
         env.worker().handle_block_proposal(block_proposal).await?;
-    chain_info_response.check(&env.worker().public_key())?;
+    chain_info_response.check(env.worker().public_key())?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
@@ -1295,7 +1295,7 @@ where
         .worker()
         .handle_validated_certificate(validated_certificate)
         .await?;
-    chain_info_response.check(&env.worker().public_key())?;
+    chain_info_response.check(env.worker().public_key())?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
     assert!(chain.manager.validated_vote().is_none()); // Should be confirmed by now.
@@ -1338,7 +1338,7 @@ where
         .worker()
         .handle_block_proposal(block_proposal.clone())
         .await?;
-    response.check(&env.worker().public_key())?;
+    response.check(env.worker().public_key())?;
     let (replay_response, _actions) = env.worker().handle_block_proposal(block_proposal).await?;
     // Workaround lack of equality.
     assert_eq!(

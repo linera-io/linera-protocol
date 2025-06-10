@@ -401,7 +401,7 @@ impl EvmSignature {
     }
 
     /// Checks a signature.
-    pub fn check<'de, T>(&self, value: &T, author: &EvmPublicKey) -> Result<(), CryptoError>
+    pub fn check<'de, T>(&self, value: &T, author: EvmPublicKey) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
@@ -426,7 +426,7 @@ impl EvmSignature {
                 type_name: T::type_name().to_string(),
             });
         }
-        self.verify_inner::<T>(prehash, &public_key)
+        self.verify_inner::<T>(prehash, public_key)
     }
     /// Verifies a batch of signatures.
     ///
@@ -438,7 +438,7 @@ impl EvmSignature {
     {
         let prehash = CryptoHash::new(value).as_bytes().0;
         for (author, signature) in votes {
-            signature.verify_inner::<T>(prehash, author)?;
+            signature.verify_inner::<T>(prehash, *author)?;
         }
         Ok(())
     }
@@ -451,7 +451,7 @@ impl EvmSignature {
     fn verify_inner<'de, T>(
         &self,
         prehash: [u8; 32],
-        author: &EvmPublicKey,
+        author: EvmPublicKey,
     ) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
@@ -603,10 +603,10 @@ mod tests {
         let foo = Foo("hello".into());
 
         let s = EvmSignature::new(ts_cryptohash, &keypair1.secret_key);
-        assert!(s.check(&ts, &keypair1.public_key).is_ok());
-        assert!(s.check(&ts, &keypair2.public_key).is_err());
-        assert!(s.check(&tsx, &keypair1.public_key).is_err());
-        assert!(s.check(&foo, &keypair1.public_key).is_err());
+        assert!(s.check(&ts, keypair1.public_key).is_ok());
+        assert!(s.check(&ts, keypair2.public_key).is_err());
+        assert!(s.check(&tsx, keypair1.public_key).is_err());
+        assert!(s.check(&foo, keypair1.public_key).is_err());
     }
 
     #[test]

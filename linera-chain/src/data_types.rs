@@ -626,7 +626,7 @@ impl LiteVote {
     /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
         let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
-        Ok(self.signature.check(&hash_and_round, &self.public_key)?)
+        Ok(self.signature.check(&hash_and_round, self.public_key)?)
     }
 }
 
@@ -660,7 +660,7 @@ impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
         T: CertificateValue,
     {
         let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND);
-        signature.check(&hash_and_round, &public_key)?;
+        signature.check(&hash_and_round, public_key)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&public_key),

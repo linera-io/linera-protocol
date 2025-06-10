@@ -982,7 +982,7 @@ where
         let mut certificate = None;
         for validator in self.validator_clients.clone() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
-                if response.check(&validator.public_key).is_ok() {
+                if response.check(validator.public_key).is_ok() {
                     let ChainInfo {
                         mut requested_sent_certificate_hashes,
                         ..
@@ -1021,7 +1021,7 @@ where
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.info.manager.current_round == round
                     && response.info.next_block_height == block_height
-                    && response.check(&validator.public_key).is_ok()
+                    && response.check(validator.public_key).is_ok()
                 {
                     count += 1;
                 }

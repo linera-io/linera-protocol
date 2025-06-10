@@ -241,11 +241,11 @@ impl AccountSignature {
             AccountSignature::Ed25519 {
                 signature,
                 public_key,
-            } => signature.check(value, public_key),
+            } => signature.check(value, *public_key),
             AccountSignature::Secp256k1 {
                 signature,
                 public_key,
-            } => signature.check(value, public_key),
+            } => signature.check(value, *public_key),
             AccountSignature::EvmSecp256k1 { signature, address } => {
                 signature.check_with_recover(value, *address)
             }

@@ -310,7 +310,7 @@ impl Ed25519Signature {
     fn check_internal<'de, T>(
         &self,
         value: &T,
-        author: &Ed25519PublicKey,
+        author: Ed25519PublicKey,
     ) -> Result<(), dalek::SignatureError>
     where
         T: BcsSignable<'de>,
@@ -321,7 +321,7 @@ impl Ed25519Signature {
     }
 
     /// Checks a signature.
-    pub fn check<'de, T>(&self, value: &T, author: &Ed25519PublicKey) -> Result<(), CryptoError>
+    pub fn check<'de, T>(&self, value: &T, author: Ed25519PublicKey) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
@@ -450,10 +450,10 @@ mod tests {
         let foo = Foo("hello".into());
 
         let s = Ed25519Signature::new(&ts, &key1);
-        assert!(s.check(&ts, &addr1).is_ok());
-        assert!(s.check(&ts, &addr2).is_err());
-        assert!(s.check(&tsx, &addr1).is_err());
-        assert!(s.check(&foo, &addr1).is_err());
+        assert!(s.check(&ts, addr1).is_ok());
+        assert!(s.check(&ts, addr2).is_err());
+        assert!(s.check(&tsx, addr1).is_err());
+        assert!(s.check(&foo, addr1).is_err());
     }
 
     #[test]

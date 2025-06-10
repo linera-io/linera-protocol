@@ -155,7 +155,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         ensure!(
             proposed.is_none_or(|proposal| proposal.content.block.chain_id == chain_id)
                 && locking.is_none_or(|cert| cert.chain_id() == chain_id)
-                && response.check(&self.public_key).is_ok(),
+                && response.check(self.public_key).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
         Ok(response.info)
