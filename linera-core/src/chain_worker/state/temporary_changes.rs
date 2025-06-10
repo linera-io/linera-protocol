@@ -173,7 +173,7 @@ where
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.
         ensure!(
-            chain.manager.verify_owner(proposal)?,
+            chain.manager.verify_owner(&owner, proposal.content.round)?,
             WorkerError::InvalidOwner
         );
         match original_proposal {
@@ -188,7 +188,7 @@ where
                 certificate.check(committee)?;
             }
             Some(OriginalProposal::Fast(signature)) => {
-                let old_proposal = BlockProposal {
+                let original_proposal = BlockProposal {
                     content: ProposalContent {
                         block: proposal.content.block.clone(),
                         round: Round::Fast,
@@ -197,7 +197,7 @@ where
                     signature: *signature,
                     original_proposal: None,
                 };
-                let super_owner = signature.owner(&old_proposal.content)?;
+                let super_owner = original_proposal.owner()?;
                 ensure!(
                     chain
                         .manager
@@ -211,7 +211,7 @@ where
                     // Check the authentication of the operations in the new block.
                     ensure!(signer == super_owner, WorkerError::InvalidSigner(signer));
                 }
-                old_proposal.check_signature()?;
+                original_proposal.check_signature()?;
             }
         }
         // Check if the chain is ready for this new block proposal.

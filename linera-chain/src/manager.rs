@@ -602,31 +602,34 @@ where
 
     /// Returns whether the signer is a valid owner and allowed to propose a block in the
     /// proposal's round.
-    pub fn verify_owner(&self, proposal: &BlockProposal) -> Result<bool, CryptoError> {
-        let owner = &proposal.owner()?;
-        if self.ownership.get().super_owners.contains(owner) {
+    pub fn verify_owner(
+        &self,
+        proposal_owner: &AccountOwner,
+        proposal_round: Round,
+    ) -> Result<bool, CryptoError> {
+        if self.ownership.get().super_owners.contains(proposal_owner) {
             return Ok(true);
         }
-        Ok(match proposal.content.round {
+        Ok(match proposal_round {
             Round::Fast => {
                 false // Only super owners can propose in the first round.
             }
             Round::MultiLeader(_) => {
                 let ownership = self.ownership.get();
                 // Not in leader rotation mode; any owner is allowed to propose.
-                ownership.open_multi_leader_rounds || ownership.owners.contains_key(owner)
+                ownership.open_multi_leader_rounds || ownership.owners.contains_key(proposal_owner)
             }
             Round::SingleLeader(r) => {
                 let Some(index) = self.round_leader_index(r) else {
                     return Ok(false);
                 };
-                self.ownership.get().owners.keys().nth(index) == Some(owner)
+                self.ownership.get().owners.keys().nth(index) == Some(proposal_owner)
             }
             Round::Validator(r) => {
                 let Some(index) = self.fallback_round_leader_index(r) else {
                     return Ok(false);
                 };
-                self.fallback_owners.get().keys().nth(index) == Some(owner)
+                self.fallback_owners.get().keys().nth(index) == Some(proposal_owner)
             }
         })
     }
