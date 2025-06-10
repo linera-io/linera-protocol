@@ -466,6 +466,7 @@ impl<Env: Environment> Client<Env> {
             return Ok(bcs::from_bytes(blob.bytes())?);
         };
         // Recover history from the current validators, according to the admin chain.
+        self.synchronize_chain_state(self.admin_id).await?;
         let nodes = self.validator_nodes().await?;
         let blob = self
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
