@@ -158,7 +158,7 @@ where
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
         proposal.check_signature()?;
-        let owner = proposal.owner()?;
+        let owner = proposal.owner();
         let BlockProposal {
             content,
             original_proposal,
@@ -197,7 +197,7 @@ where
                     signature: *signature,
                     original_proposal: None,
                 };
-                let super_owner = original_proposal.owner()?;
+                let super_owner = original_proposal.owner();
                 ensure!(
                     chain
                         .manager

@@ -1025,9 +1025,7 @@ impl<Env: Environment> Client<Env> {
             }
         }
         for proposal in proposals {
-            let owner: AccountOwner = proposal
-                .owner()
-                .map_err(|err| ChainClientError::ChainError(ChainError::CryptoError(err)))?;
+            let owner: AccountOwner = proposal.owner();
             if let Err(mut err) = self
                 .local_node
                 .handle_block_proposal(proposal.clone())

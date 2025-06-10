@@ -232,11 +232,10 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
     type Error = GrpcProtoConversionError;
 
     fn try_from(block_proposal: BlockProposal) -> Result<Self, Self::Error> {
-        let owner = block_proposal.owner()?;
         Ok(Self {
             chain_id: Some(block_proposal.content.block.chain_id.into()),
             content: bincode::serialize(&block_proposal.content)?,
-            owner: Some(owner.try_into()?),
+            owner: Some(block_proposal.owner().try_into()?),
             signature: Some(block_proposal.signature.into()),
             original_proposal: block_proposal
                 .original_proposal

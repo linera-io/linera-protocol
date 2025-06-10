@@ -56,7 +56,7 @@ impl std::fmt::Debug for AccountOwner {
         match self {
             AccountOwner::Reserved(value) => write!(f, "Reserved({})", value),
             AccountOwner::Address32(address) => write!(f, "Address32({})", address),
-            AccountOwner::Address20(address) => write!(f, "Address20({})", hex::encode(&address)),
+            AccountOwner::Address20(address) => write!(f, "Address20({})", hex::encode(address)),
         }
     }
 }

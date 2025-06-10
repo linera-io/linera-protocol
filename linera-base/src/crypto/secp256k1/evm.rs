@@ -433,13 +433,17 @@ impl EvmSignature {
     }
 
     /// Checks a signature against a recovered public key.
-    pub fn check_with_recover<'de, T>(&self, value: &T) -> Result<EvmPublicKey, CryptoError>
+    pub fn check_with_recover<'de, T>(
+        &self,
+        value: &T,
+        sender_address: [u8; 20],
+    ) -> Result<EvmPublicKey, CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
         let msg = CryptoHash::new(value).as_bytes().0;
-        let public_key = match self.0.recover_from_msg(msg) {
-            Ok(public_key) => public_key,
+        let recovered_public_key = match self.0.recover_from_msg(msg) {
+            Ok(public_key) => EvmPublicKey(public_key),
             Err(_) => {
                 return Err(CryptoError::InvalidSignature {
                     error: "Failed to recover public key from signature".to_string(),
@@ -447,7 +451,13 @@ impl EvmSignature {
                 });
             }
         };
-        Ok(EvmPublicKey(public_key))
+        if recovered_public_key.address() != alloy_primitives::Address::new(sender_address) {
+            return Err(CryptoError::InvalidSignature {
+                error: "Recovered public key does not match sender address".to_string(),
+                type_name: T::type_name().to_string(),
+            });
+        }
+        Ok(recovered_public_key)
     }
 
     /// Verifies a batch of signatures.
@@ -719,11 +729,12 @@ mod tests {
             CryptoHash, TestString,
         };
         let key_pair = EvmKeyPair::generate();
+        let address = key_pair.public_key.address();
         let msg = TestString("hello".into());
         let prehash = CryptoHash::new(&msg);
         let sig = EvmSignature::new(prehash, &key_pair.secret_key);
 
-        assert!(sig.check_with_recover(&msg).is_ok());
+        assert!(sig.check_with_recover(&msg, address.0 .0).is_ok());
 
         let public_key = EvmPublicKey::recover_from_msg(&sig, &msg).unwrap();
         assert_eq!(public_key, key_pair.public_key);

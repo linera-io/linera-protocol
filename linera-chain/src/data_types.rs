@@ -9,7 +9,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{
-        AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash, EvmPublicKey, Signer,
+        AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash, Signer,
         ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
@@ -558,13 +558,11 @@ impl BlockProposal {
     }
 
     /// Returns the `AccountOwner` that proposed the block.
-    pub fn owner(&self) -> Result<AccountOwner, CryptoError> {
+    pub fn owner(&self) -> AccountOwner {
         match self.signature {
-            AccountSignature::Ed25519 { public_key, .. } => Ok(public_key.into()),
-            AccountSignature::Secp256k1 { public_key, .. } => Ok(public_key.into()),
-            AccountSignature::EvmSecp256k1(signature) => {
-                EvmPublicKey::recover_from_msg(&signature, &self.content).map(AccountOwner::from)
-            }
+            AccountSignature::Ed25519 { public_key, .. } => public_key.into(),
+            AccountSignature::Secp256k1 { public_key, .. } => public_key.into(),
+            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(address),
         }
     }
 
@@ -756,6 +754,7 @@ mod signing {
             "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66",
         )
         .unwrap();
+        let address = secret_key.address();
 
         let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(secret_key);
         let public_key = signer.public();
@@ -779,18 +778,22 @@ mod signing {
 
         // personal_sign of the `proposal_hash` done via MetaMask.
         // Wrap with proper variant so that bytes match (include the enum variant tag).
-        let metamask_signature = AccountSignature::EvmSecp256k1(EvmSignature::from_str("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap());
+        let signature = EvmSignature::from_str("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap();
+        let metamask_signature = AccountSignature::EvmSecp256k1 {
+            signature,
+            address: address.0 .0,
+        };
 
         let signature = signer.sign(&proposal);
         assert_eq!(signature, metamask_signature);
 
-        assert_eq!(signature.owner(&proposal).unwrap(), public_key.into(),);
+        assert_eq!(signature.owner(), public_key.into(),);
 
         let block_proposal = BlockProposal {
             content: proposal,
             signature,
             original_proposal: None,
         };
-        assert_eq!(block_proposal.owner().unwrap(), public_key.into(),);
+        assert_eq!(block_proposal.owner(), public_key.into(),);
     }
 }

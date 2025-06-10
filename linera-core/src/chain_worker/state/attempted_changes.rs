@@ -124,7 +124,7 @@ where
         &mut self,
         proposal: &BlockProposal,
     ) -> Result<Vec<Blob>, WorkerError> {
-        let owner = proposal.owner()?;
+        let owner = proposal.owner();
         let BlockProposal {
             content:
                 ProposalContent {
