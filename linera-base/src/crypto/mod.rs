@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 pub use signer::*;
 use thiserror::Error;
 
-use crate::identifiers::AccountOwner;
+use crate::{hex_debug, identifiers::AccountOwner};
 
 /// The public key of a validator.
 pub type ValidatorPublicKey = secp256k1::Secp256k1PublicKey;
@@ -106,6 +106,7 @@ pub enum AccountSignature {
         /// Signature of the value.
         signature: secp256k1::evm::EvmSignature,
         /// EVM address of the signer.
+        #[debug(with = "hex_debug")]
         address: [u8; 20],
     },
 }
@@ -249,7 +250,7 @@ impl AccountSignature {
                 signature,
                 address: sender_address,
             } => {
-                let _ = signature.check_with_recover(value, *sender_address);
+                signature.check_with_recover(value, *sender_address)?;
                 Ok(())
             }
         }
