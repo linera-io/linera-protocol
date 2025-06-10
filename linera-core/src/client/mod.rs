@@ -265,6 +265,8 @@ impl<Env: Environment> Client<Env> {
         match self.local_node.chain_info(chain_id).await {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                // Make sure the admin chain is up to date.
+                self.synchronize_chain_state(self.admin_id).await?;
                 // If the chain is missing then the error is a WorkerError
                 // and so a BlobsNotFound
                 self.update_local_node_with_blobs_from(blob_ids, validators)
