@@ -131,7 +131,7 @@ impl EvmPublicKey {
     where
         T: BcsSignable<'de>,
     {
-        let message = eip191_hash_message(CryptoHash::new(value).as_bytes().0).0;
+        let message = CryptoHash::new(value).as_bytes().0;
         let public_key =
             signature
                 .0
@@ -698,5 +698,20 @@ mod tests {
         let s = serde_json::to_string(&sig).unwrap();
         let sig2: EvmSignature = serde_json::from_str(&s).unwrap();
         assert_eq!(sig, sig2);
+    }
+
+    #[test]
+    fn public_key_recovery() {
+        use crate::crypto::{
+            secp256k1::evm::{EvmKeyPair, EvmPublicKey, EvmSignature},
+            CryptoHash, TestString,
+        };
+        let key_pair = EvmKeyPair::generate();
+        let msg = TestString("hello".into());
+        let prehash = CryptoHash::new(&msg);
+        let sig = EvmSignature::new(prehash, &key_pair.secret_key);
+
+        let public_key = EvmPublicKey::recover_from_msg(&sig, &msg).unwrap();
+        assert_eq!(public_key, key_pair.public_key);
     }
 }
