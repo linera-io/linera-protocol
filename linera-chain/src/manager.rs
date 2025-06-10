@@ -73,7 +73,7 @@ use std::collections::BTreeMap;
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
-    crypto::{AccountPublicKey, ValidatorSecretKey},
+    crypto::{AccountPublicKey, CryptoError, ValidatorSecretKey},
     data_types::{Blob, BlockHeight, Epoch, Round, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId},
@@ -309,7 +309,7 @@ where
                 // If the fast round has not timed out yet, only a super owner is allowed to open
                 // a later round by making a proposal.
                 ensure!(
-                    self.is_super(&proposal.owner()) || !current_round.is_fast(),
+                    self.is_super(&proposal.owner()?) || !current_round.is_fast(),
                     ChainError::WrongRound(current_round)
                 );
                 // After the fast round, proposals older than the current round are obsolete.
@@ -602,12 +602,12 @@ where
 
     /// Returns whether the signer is a valid owner and allowed to propose a block in the
     /// proposal's round.
-    pub fn verify_owner(&self, proposal: &BlockProposal) -> bool {
-        let owner = &proposal.owner();
+    pub fn verify_owner(&self, proposal: &BlockProposal) -> Result<bool, CryptoError> {
+        let owner = &proposal.owner()?;
         if self.ownership.get().super_owners.contains(owner) {
-            return true;
+            return Ok(true);
         }
-        match proposal.content.round {
+        Ok(match proposal.content.round {
             Round::Fast => {
                 false // Only super owners can propose in the first round.
             }
@@ -618,17 +618,17 @@ where
             }
             Round::SingleLeader(r) => {
                 let Some(index) = self.round_leader_index(r) else {
-                    return false;
+                    return Ok(false);
                 };
                 self.ownership.get().owners.keys().nth(index) == Some(owner)
             }
             Round::Validator(r) => {
                 let Some(index) = self.fallback_round_leader_index(r) else {
-                    return false;
+                    return Ok(false);
                 };
                 self.fallback_owners.get().keys().nth(index) == Some(owner)
             }
-        }
+        })
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every

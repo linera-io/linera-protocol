@@ -55,13 +55,8 @@ AccountSignature:
               TYPENAME: Secp256k1PublicKey
     2:
       EvmSecp256k1:
-        STRUCT:
-          - signature:
-              TYPENAME: EvmSignature
-          - address:
-              TUPLEARRAY:
-                CONTENT: U8
-                SIZE: 20
+        NEWTYPE:
+          TYPENAME: EvmSignature
 AdminOperation:
   ENUM:
     0:

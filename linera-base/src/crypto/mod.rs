@@ -11,7 +11,7 @@ mod secp256k1;
 mod signer;
 use std::{fmt::Display, io, num::ParseIntError, str::FromStr};
 
-use alloy_primitives::{Address, FixedBytes};
+use alloy_primitives::FixedBytes;
 use custom_debug_derive::Debug;
 pub use ed25519::{Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature};
 pub use hash::*;
@@ -103,12 +103,7 @@ pub enum AccountSignature {
     },
     /// EVM secp256k1 signature.
     // No public key b/c it can be recovered from the signature.
-    EvmSecp256k1 {
-        /// Signature of the value.
-        signature: secp256k1::evm::EvmSignature,
-        /// The EVM address of the signer.
-        address: [u8; 20],
-    },
+    EvmSecp256k1(secp256k1::evm::EvmSignature),
 }
 
 impl AccountSecretKey {
@@ -156,8 +151,7 @@ impl AccountSecretKey {
             }
             AccountSecretKey::EvmSecp256k1(secret) => {
                 let signature = secp256k1::evm::EvmSignature::new(CryptoHash::new(value), secret);
-                let address = Address::from_public_key(&secret.public().0).0 .0;
-                AccountSignature::EvmSecp256k1 { signature, address }
+                AccountSignature::EvmSecp256k1(signature)
             }
         }
     }
@@ -183,8 +177,7 @@ impl AccountSecretKey {
             }
             AccountSecretKey::EvmSecp256k1(secret) => {
                 let signature = secp256k1::evm::EvmSignature::sign_prehash(secret, value);
-                let address = Address::from_public_key(&secret.public().0).0 .0;
-                AccountSignature::EvmSecp256k1 { signature, address }
+                AccountSignature::EvmSecp256k1(signature)
             }
         }
     }
@@ -246,9 +239,7 @@ impl AccountSignature {
                 signature,
                 public_key,
             } => signature.check(value, *public_key),
-            AccountSignature::EvmSecp256k1 { signature, address } => {
-                signature.check_with_recover(value, *address)
-            }
+            AccountSignature::EvmSecp256k1(signature) => signature.check_with_recover(value),
         }
     }
 
@@ -263,11 +254,19 @@ impl AccountSignature {
     }
 
     /// Returns the AccountOwner of the account that signed the value.
-    pub fn owner(&self) -> AccountOwner {
+    ///
+    /// This function takes the value that was signed as an argument
+    /// to recover the public key from the signature.
+    pub fn owner<'de, T>(&self, value: &T) -> Result<AccountOwner, CryptoError>
+    where
+        T: BcsSignable<'de>,
+    {
         match self {
-            AccountSignature::Ed25519 { public_key, .. } => AccountOwner::from(*public_key),
-            AccountSignature::Secp256k1 { public_key, .. } => AccountOwner::from(*public_key),
-            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(*address),
+            AccountSignature::Ed25519 { public_key, .. } => Ok(AccountOwner::from(*public_key)),
+            AccountSignature::Secp256k1 { public_key, .. } => Ok(AccountOwner::from(*public_key)),
+            AccountSignature::EvmSecp256k1(signature) => {
+                EvmPublicKey::recover_from_msg(signature, value).map(AccountOwner::from)
+            }
         }
     }
 }

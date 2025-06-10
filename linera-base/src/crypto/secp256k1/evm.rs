@@ -119,6 +119,29 @@ impl EvmPublicKey {
     pub fn address(&self) -> alloy_primitives::Address {
         alloy_primitives::Address::from_public_key(&self.0)
     }
+
+    /// Recover the public key from the signature and the value.
+    ///
+    /// This function turns the `value` into a `CryptoHash`, then hashes it using EIP-191
+    /// and finally recovers the public key from the signature.
+    pub fn recover_from_msg<'de, T>(
+        signature: &EvmSignature,
+        value: &T,
+    ) -> Result<Self, CryptoError>
+    where
+        T: BcsSignable<'de>,
+    {
+        let message = eip191_hash_message(CryptoHash::new(value).as_bytes().0).0;
+        let public_key =
+            signature
+                .0
+                .recover_from_msg(message)
+                .map_err(|_| CryptoError::InvalidSignature {
+                    error: "Failed to recover public key from signature".to_string(),
+                    type_name: Self::type_name().to_string(),
+                })?;
+        Ok(EvmPublicKey(public_key))
+    }
 }
 
 impl fmt::Debug for EvmSecretKey {
@@ -410,22 +433,12 @@ impl EvmSignature {
     }
 
     /// Checks a signature against a recovered public key.
-    pub fn check_with_recover<'de, T>(
-        &self,
-        value: &T,
-        sender_address: [u8; 20],
-    ) -> Result<(), CryptoError>
+    pub fn check_with_recover<'de, T>(&self, value: &T) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
         let prehash = CryptoHash::new(value).as_bytes().0;
         let public_key = EvmPublicKey(self.0.recover_from_msg(prehash).unwrap());
-        if public_key.address().0 != sender_address {
-            return Err(CryptoError::InvalidSignature {
-                error: "Recovered public key does not match sender address".to_string(),
-                type_name: T::type_name().to_string(),
-            });
-        }
         self.verify_inner::<T>(prehash, public_key)
     }
     /// Verifies a batch of signatures.

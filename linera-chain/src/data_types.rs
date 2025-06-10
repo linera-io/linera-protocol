@@ -9,7 +9,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{
-        AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash, Signer,
+        AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash, EvmPublicKey, Signer,
         ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
@@ -558,8 +558,14 @@ impl BlockProposal {
     }
 
     /// Returns the `AccountOwner` that proposed the block.
-    pub fn owner(&self) -> AccountOwner {
-        self.signature.owner()
+    pub fn owner(&self) -> Result<AccountOwner, CryptoError> {
+        match self.signature {
+            AccountSignature::Ed25519 { public_key, .. } => Ok(public_key.into()),
+            AccountSignature::Secp256k1 { public_key, .. } => Ok(public_key.into()),
+            AccountSignature::EvmSecp256k1(signature) => {
+                EvmPublicKey::recover_from_msg(&signature, &self.content).map(AccountOwner::from)
+            }
+        }
     }
 
     pub fn check_signature(&self) -> Result<(), CryptoError> {
@@ -751,8 +757,6 @@ mod signing {
         )
         .unwrap();
 
-        let address = secret_key.address().0 .0;
-
         let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(secret_key);
 
         let proposed_block = ProposedBlock {
@@ -774,10 +778,7 @@ mod signing {
 
         // personal_sign of the `proposal_hash` done via MetaMask.
         // Wrap with proper variant so that bytes match (include the enum variant tag).
-        let metamask_signature = AccountSignature::EvmSecp256k1 {
-            signature: EvmSignature::from_str("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap(),
-            address,
-        };
+        let metamask_signature = AccountSignature::EvmSecp256k1(EvmSignature::from_str("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap());
 
         let signature = signer.sign(&proposal);
         assert_eq!(signature, metamask_signature);

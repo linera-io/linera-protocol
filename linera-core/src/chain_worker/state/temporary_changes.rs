@@ -158,14 +158,13 @@ where
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
         proposal.check_signature()?;
+        let owner = proposal.owner()?;
         let BlockProposal {
             content,
             original_proposal,
-            signature,
+            signature: _,
         } = proposal;
         let block = &content.block;
-
-        let owner = signature.owner();
         let chain = &self.0.chain;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
@@ -174,7 +173,7 @@ where
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.
         ensure!(
-            chain.manager.verify_owner(proposal),
+            chain.manager.verify_owner(proposal)?,
             WorkerError::InvalidOwner
         );
         match original_proposal {
@@ -189,7 +188,16 @@ where
                 certificate.check(committee)?;
             }
             Some(OriginalProposal::Fast(signature)) => {
-                let super_owner = signature.owner();
+                let old_proposal = BlockProposal {
+                    content: ProposalContent {
+                        block: proposal.content.block.clone(),
+                        round: Round::Fast,
+                        outcome: None,
+                    },
+                    signature: *signature,
+                    original_proposal: None,
+                };
+                let super_owner = signature.owner(&old_proposal.content)?;
                 ensure!(
                     chain
                         .manager
@@ -203,15 +211,6 @@ where
                     // Check the authentication of the operations in the new block.
                     ensure!(signer == super_owner, WorkerError::InvalidSigner(signer));
                 }
-                let old_proposal = BlockProposal {
-                    content: ProposalContent {
-                        block: proposal.content.block.clone(),
-                        round: Round::Fast,
-                        outcome: None,
-                    },
-                    signature: *signature,
-                    original_proposal: None,
-                };
                 old_proposal.check_signature()?;
             }
         }

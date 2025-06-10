@@ -124,6 +124,7 @@ where
         &mut self,
         proposal: &BlockProposal,
     ) -> Result<Vec<Blob>, WorkerError> {
+        let owner = proposal.owner()?;
         let BlockProposal {
             content:
                 ProposalContent {
@@ -132,10 +133,9 @@ where
                     outcome: _,
                 },
             original_proposal,
-            signature,
+            signature: _,
         } = proposal;
 
-        let owner = signature.owner();
         let mut maybe_blobs = self
             .state
             .maybe_get_required_blobs(proposal.required_blob_ids(), None)
