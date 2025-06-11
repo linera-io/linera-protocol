@@ -590,11 +590,14 @@ impl BlockProposal {
         )
     }
 
-    /// Checks that the public key matches the owner and that the optional certificate matches
-    /// the outcome.
+    /// Checks that the original proposal, if present, matches the new one and has a higher round.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
         match (&self.original_proposal, &self.content.outcome) {
-            (None, None) | (Some(OriginalProposal::Fast(_)), None) => {}
+            (None, None) => {}
+            (Some(OriginalProposal::Fast(_)), None) => ensure!(
+                self.content.round > Round::Fast,
+                "The new proposal's round must be greater than the original's"
+            ),
             (None, Some(_))
             | (Some(OriginalProposal::Fast(_)), Some(_))
             | (Some(OriginalProposal::Regular { .. }), None) => {
@@ -602,6 +605,10 @@ impl BlockProposal {
                      it contains the execution outcome from a previous round");
             }
             (Some(OriginalProposal::Regular { certificate }), Some(outcome)) => {
+                ensure!(
+                    self.content.round > certificate.round,
+                    "The new proposal's round must be greater than the original's"
+                );
                 let block = outcome.clone().with(self.content.block.clone());
                 let value = ValidatedBlock::new(block);
                 ensure!(

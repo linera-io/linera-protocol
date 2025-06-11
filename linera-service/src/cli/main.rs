@@ -145,7 +145,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id);
                 info!("Opening a new chain from existing chain {}", chain_id);
                 let time_start = Instant::now();
-                let (id, certificate) = context
+                let (description, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let ownership = ChainOwnership::single(new_owner);
                         let chain_client = chain_client.clone();
@@ -158,6 +158,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let timestamp = certificate.block().header.timestamp;
+                let id = description.id();
                 context
                     .update_wallet_for_new_chain(id, Some(new_owner), timestamp)
                     .await?;
@@ -190,7 +191,7 @@ impl Runnable for Job {
                 let ownership = ChainOwnership::try_from(ownership_config)?;
                 let application_permissions =
                     ApplicationPermissions::from(application_permissions_config);
-                let (id, certificate) = context
+                let (description, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let ownership = ownership.clone();
                         let application_permissions = application_permissions.clone();
@@ -203,6 +204,7 @@ impl Runnable for Job {
                     })
                     .await
                     .context("Failed to open chain")?;
+                let id = description.id();
                 // No owner. This chain can be assigned explicitly using the assign command.
                 let owner = None;
                 let timestamp = certificate.block().header.timestamp;

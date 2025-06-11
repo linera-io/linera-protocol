@@ -496,7 +496,7 @@ where
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     // Open the new chain.
-    let (new_id, certificate) = sender
+    let (new_description, certificate) = sender
         .open_chain(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
@@ -505,6 +505,7 @@ where
         .await
         .unwrap()
         .unwrap();
+    let new_id = new_description.id();
 
     assert_eq!(
         sender.chain_info().await?.next_block_height,
@@ -573,7 +574,7 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (new_id2, certificate) = parent
+    let (new_description2, certificate) = parent
         .open_chain(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
@@ -582,6 +583,7 @@ where
         .await
         .unwrap()
         .unwrap();
+    let new_id2 = new_description2.id();
     assert_eq!(new_id, new_id2);
     assert_eq!(
         sender.chain_info().await?.next_block_height,
@@ -657,11 +659,12 @@ where
     // Open the new chain. We are both regular and super owner.
     let ownership = ChainOwnership::single(new_public_key.into())
         .with_regular_owner(new_public_key.into(), 100);
-    let (new_id, creation_certificate) = sender
+    let (new_description, creation_certificate) = sender
         .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
         .await
         .unwrap()
         .unwrap();
+    let new_id = new_description.id();
     // Transfer after creating the chain.
     let transfer_certificate = sender
         .transfer_to_account(
