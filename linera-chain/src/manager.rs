@@ -610,16 +610,6 @@ where
         if self.ownership.get().super_owners.contains(proposal_owner) {
             return Ok(true);
         }
-        tracing::info!(
-            "Chain's super owners: {:?}, proposal_owner: {:?}",
-            self.ownership.get().super_owners,
-            proposal_owner
-        );
-        tracing::info!(
-            "Chain's owners: {:?}, proposal_owner: {:?}",
-            self.ownership.get().owners,
-            proposal_owner
-        );
 
         Ok(match proposal_round {
             Round::Fast => {
