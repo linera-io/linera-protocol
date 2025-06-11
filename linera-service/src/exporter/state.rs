@@ -48,6 +48,13 @@ where
             view.destination_states.set(states);
         }
 
+        ensure!(
+            view.destination_states.get().states.len() == number_of_destinations as usize,
+            ExporterError::GenericError(
+                "inconsistent number of destinations in the toml file".into()
+            )
+        );
+
         let states = view.destination_states.get().clone();
         let canonical_state = view.canonical_state.clone_unchecked()?;
 
@@ -56,7 +63,12 @@ where
 
     pub async fn index_block(&mut self, block: BlockId) -> Result<bool, ExporterError> {
         if let Some(last_processed) = self.chain_states.get_mut(&block.chain_id).await? {
-            if block.height > last_processed.height {
+            if block.height
+                == last_processed
+                    .height
+                    .try_add_one()
+                    .map_err(|e| ExporterError::GenericError(e.into()))?
+            {
                 *last_processed = block.into();
                 return Ok(true);
             }

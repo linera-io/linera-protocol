@@ -4,7 +4,7 @@
 use std::{
     future::{Future, IntoFuture},
     sync::Arc,
-    thread,
+    thread::{self, JoinHandle},
 };
 
 use block_processor::BlockProcessor;
@@ -25,7 +25,7 @@ use crate::{
 mod block_processor;
 mod validator_exporter;
 
-pub(crate) fn start_runloops<S, F>(
+pub(crate) fn start_block_processor_task<S, F>(
     storage: S,
     shutdown_signal: F,
     limits: LimitsConfig,
@@ -65,7 +65,7 @@ fn start_exporters<S, F>(
     clients_per_thread: usize,
     mut storage: ExporterStorage<S>,
     destination_config: DestinationConfig,
-) -> Result<(), ExporterError>
+) -> Result<Vec<JoinHandle<()>>, ExporterError>
 where
     S: Storage + Clone + Send + Sync + 'static,
     F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
@@ -75,7 +75,7 @@ where
         .destinations
         .len()
         .div_ceil(clients_per_thread);
-    let _threadpool = {
+    let threadpool = {
         let mut pool = Vec::new();
         for n in 0..number_of_threads {
             let moved_signal = shutdown_signal.clone();
@@ -109,7 +109,7 @@ where
         pool
     };
 
-    Ok(())
+    Ok(threadpool)
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -171,7 +171,7 @@ where
 
     let mut block_processor = BlockProcessor::new(block_processor_storage, queue_rear, queue_front);
 
-    start_exporters(
+    let _pool = start_exporters(
         shutdown_signal.clone(),
         options,
         limits.work_queue_size.into(),
@@ -182,7 +182,7 @@ where
     .unwrap();
 
     block_processor
-        .run_with_shutdown(shutdown_signal, limits.persistence_period)
+        .run_with_shutdown(shutdown_signal, limits.persistence_period_ms)
         .await
         .unwrap();
 

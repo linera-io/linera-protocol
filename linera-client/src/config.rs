@@ -260,9 +260,9 @@ impl Destination {
 /// on the resources used by the linera-exporter.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct LimitsConfig {
-    /// Time period in seconds between periodic persistence
+    /// Time period in milliseconds between periodic persistence
     /// to the shared storage.
-    pub persistence_period: u16,
+    pub persistence_period_ms: u32,
     /// Maximum size of the work queue i.e. maximum number
     /// of blocks queued up for exports per destination.
     pub work_queue_size: u16,
@@ -282,7 +282,7 @@ pub struct LimitsConfig {
 impl Default for LimitsConfig {
     fn default() -> Self {
         Self {
-            persistence_period: 299,
+            persistence_period_ms: 299 * 1000,
             work_queue_size: 256,
             blob_cache_weight_mb: 1024,
             blob_cache_items_capacity: 8192,

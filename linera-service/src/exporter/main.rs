@@ -17,7 +17,7 @@ use linera_service::{
 };
 use linera_storage::Storage;
 use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
-use runloops::start_runloops;
+use runloops::start_block_processor_task;
 use tokio_util::sync::CancellationToken;
 
 mod common;
@@ -34,6 +34,7 @@ mod storage;
 )]
 struct ExporterOptions {
     /// Path to the TOML file describing the configuration for the block exporter.
+    #[arg(long = "config_path")]
     config_path: PathBuf,
 
     /// Storage configuration for the blockchain history, chain states and binary blobs.
@@ -106,7 +107,7 @@ impl Runnable for ExporterContext {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-        let sender = start_runloops(
+        let sender = start_block_processor_task(
             storage,
             ExporterCancellationSignal::new(shutdown_notifier.clone()),
             self.config.limits,

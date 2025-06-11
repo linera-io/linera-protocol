@@ -388,11 +388,11 @@ impl Weighter<BlobId, Arc<Blob>> for BlobCacheWeighter {
 }
 
 impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>> for BlockCacheWeighter {
-    fn weight(&self, _key: &CryptoHash, val: &Arc<ConfirmedBlockCertificate>) -> u64 {
+    fn weight(&self, _key: &CryptoHash, _val: &Arc<ConfirmedBlockCertificate>) -> u64 {
         (size_of::<CryptoHash>()
             + 2 * size_of::<usize>()
             + size_of::<Arc<ConfirmedBlockCertificate>>()
-            + bcs::serialized_size(val).unwrap()) as u64
+            + 1_000_000) as u64 // maximum block size in testnet resource control policy
     }
 }
 

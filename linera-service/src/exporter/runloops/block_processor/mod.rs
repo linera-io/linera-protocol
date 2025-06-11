@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, future::IntoFuture, time::Duration};
+use std::{future::IntoFuture, time::Duration};
 
-use linera_chain::types::Block;
 use linera_storage::Storage;
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -12,8 +11,11 @@ use tokio::{
 
 use crate::{
     common::{BlockId, ExporterError},
+    runloops::block_processor::walker::Walker,
     storage::BlockProcessorStorage,
 };
+
+mod walker;
 
 pub(super) struct BlockProcessor<T>
 where
@@ -22,26 +24,6 @@ where
     storage: BlockProcessorStorage<T>,
     queue_rear: UnboundedSender<BlockId>,
     queue_front: UnboundedReceiver<BlockId>,
-}
-
-struct Walker<'a, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
-    path: Vec<NodeVisitor>,
-    visited: HashSet<BlockId>,
-    storage: &'a mut BlockProcessorStorage<S>,
-}
-
-#[derive(Debug)]
-struct ProcessedBlock {
-    block: BlockId,
-    dependencies: Vec<BlockId>,
-}
-
-struct NodeVisitor {
-    node: ProcessedBlock,
-    next_dependency: usize,
 }
 
 impl<T> BlockProcessor<T>
@@ -63,7 +45,7 @@ where
     pub(super) async fn run_with_shutdown<F>(
         &mut self,
         shutdown_signal: F,
-        persistence_period: u16,
+        persistence_period: u32,
     ) -> Result<(), ExporterError>
     where
         F: IntoFuture<Output = ()>,
@@ -71,8 +53,8 @@ where
         let shutdown_signal_future = shutdown_signal.into_future();
         let mut pinned_shutdown_signal = Box::pin(shutdown_signal_future);
 
-        let mut interval = interval(Duration::from_secs(persistence_period.into()));
-        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        let mut interval = interval(Duration::from_millis(persistence_period.into()));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {
             tokio::select! {
@@ -85,7 +67,7 @@ where
 
                 Some(next_block_notification) = self.queue_front.recv() => {
                     let walker = Walker::new(&mut self.storage);
-                    if let Err(_err) = walker.walk(next_block_notification).await {
+                    if let Err(ExporterError::ViewError(_)) = walker.walk(next_block_notification).await {
                         // return the block to the back of the task queue to process again later
                         let _ = self.queue_rear.send(next_block_notification);
                     }
@@ -97,119 +79,6 @@ where
         self.storage.save().await?;
 
         Ok(())
-    }
-}
-
-impl<'a, S> Walker<'a, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
-    fn new(storage: &'a mut BlockProcessorStorage<S>) -> Self {
-        Self {
-            path: Vec::new(),
-            visited: HashSet::new(),
-            storage,
-        }
-    }
-
-    // walks through the block's dependencies in a depth wise manner
-    // resolving, sorting and indexing all of them along the way.
-    async fn walk(mut self, block: BlockId) -> Result<(), ExporterError> {
-        if self.is_block_indexed(&block).await? {
-            return Ok(());
-        }
-
-        let node_visitor = self.get_processed_block_node(&block).await?;
-        self.path.push(node_visitor);
-        while let Some(mut node_visitor) = self.path.pop() {
-            if self.visited.contains(&node_visitor.node.block) {
-                continue;
-            }
-
-            // resolve dependencies
-            if let Some(dependency) = node_visitor.next_dependency() {
-                self.path.push(node_visitor);
-                if !self.is_block_indexed(&dependency).await? {
-                    let dependency_node = self.get_processed_block_node(&dependency).await?;
-                    self.path.push(dependency_node);
-                }
-
-                continue;
-            }
-
-            let block_id = node_visitor.node.block;
-            self.visited.insert(block_id);
-            self.index_block(&block_id).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn get_processed_block_node(
-        &self,
-        block_id: &BlockId,
-    ) -> Result<NodeVisitor, ExporterError> {
-        let block = self.storage.get_block(block_id.hash).await?;
-        let processed_block = ProcessedBlock::process_block(*block_id, block.block());
-        let node = NodeVisitor::new(processed_block);
-        Ok(node)
-    }
-
-    async fn is_block_indexed(&mut self, block_id: &BlockId) -> Result<bool, ExporterError> {
-        match self.storage.is_block_indexed(block_id).await {
-            Ok(ok) => Ok(ok),
-            Err(ExporterError::UnprocessedChain) => Ok(false),
-            Err(e) => Err(e),
-        }
-    }
-
-    async fn index_block(&mut self, block_id: &BlockId) -> Result<(), ExporterError> {
-        self.storage.index_block(block_id).await.unwrap();
-        Ok(())
-    }
-}
-
-impl NodeVisitor {
-    fn new(processed_block: ProcessedBlock) -> Self {
-        Self {
-            next_dependency: 0,
-            node: processed_block,
-        }
-    }
-
-    fn next_dependency(&mut self) -> Option<BlockId> {
-        if let Some(block_id) = self.node.dependencies.get(self.next_dependency) {
-            self.next_dependency += 1;
-            return Some(*block_id);
-        }
-
-        None
-    }
-}
-
-impl ProcessedBlock {
-    fn process_block(block_id: BlockId, block: &Block) -> Self {
-        let mut dependencies = Vec::new();
-        if let Some(parent_hash) = block.header.previous_block_hash {
-            let height = block_id
-                .height
-                .try_sub_one()
-                .expect("parent only exists if child's height is greater than zero");
-            let parent = BlockId::new(block_id.chain_id, parent_hash, height);
-            dependencies.push(parent);
-        }
-
-        let message_senders = block
-            .body
-            .incoming_bundles
-            .iter()
-            .map(BlockId::from_incoming_bundle);
-        dependencies.extend(message_senders);
-
-        Self {
-            dependencies,
-            block: block_id,
-        }
     }
 }
 
@@ -288,7 +157,7 @@ mod test {
         let mut chain_b = Vec::new();
 
         for i in 0..4 {
-            if 0 == i {
+            if i == 0 {
                 let block_a = ConfirmedBlock::new(
                     BlockExecutionOutcome::default().with(make_first_block(chain_id_a)),
                 );
