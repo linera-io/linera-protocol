@@ -193,7 +193,7 @@ pub enum WorkerError {
         computed: Box<BlockExecutionOutcome>,
         submitted: Box<BlockExecutionOutcome>,
     },
-    #[error("The timestamp of a Tick operation is in the future.")]
+    #[error("The block timestamp is in the future.")]
     InvalidTimestamp,
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
