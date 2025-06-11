@@ -499,7 +499,7 @@ EvmSignature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 64
+      SIZE: 65
 GenericApplicationId:
   ENUM:
     0:

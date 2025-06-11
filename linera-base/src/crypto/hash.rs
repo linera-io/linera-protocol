@@ -141,6 +141,12 @@ impl From<CryptoHash> for [u8; 32] {
     }
 }
 
+impl From<[u8; 32]> for CryptoHash {
+    fn from(bytes: [u8; 32]) -> Self {
+        CryptoHash(B256::from(bytes))
+    }
+}
+
 impl From<[u64; 4]> for CryptoHash {
     fn from(integers: [u64; 4]) -> Self {
         CryptoHash(crate::crypto::u64_array_to_be_bytes(integers).into())

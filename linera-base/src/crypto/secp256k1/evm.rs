@@ -32,7 +32,7 @@ const EVM_SECP256K1_SCHEME_LABEL: &str = "evm_secp256k1";
 const EVM_SECP256K1_PUBLIC_KEY_SIZE: usize = 33;
 
 /// Length of secp256k1 signature.
-const EVM_SECP256K1_SIGNATURE_SIZE: usize = 64;
+const EVM_SECP256K1_SIGNATURE_SIZE: usize = 65;
 
 /// A secp256k1 secret key.
 pub struct EvmSecretKey(pub SigningKey);
@@ -65,7 +65,7 @@ pub struct EvmKeyPair {
 
 /// A secp256k1 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub struct EvmSignature(pub(crate) Signature);
+pub struct EvmSignature(pub Signature);
 
 impl FromStr for EvmSignature {
     type Err = CryptoError;
@@ -73,8 +73,7 @@ impl FromStr for EvmSignature {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // If the string starts with "0x", we remove it before decoding.
         let bytes = hex::decode(s.strip_prefix("0x").unwrap_or(s))?;
-        let sig = Signature::from_erc2098(&bytes);
-        Ok(EvmSignature(sig))
+        Self::from_slice(&bytes)
     }
 }
 
@@ -413,12 +412,10 @@ impl EvmSignature {
 
     /// Computes a signature from a prehash.
     pub fn sign_prehash(secret: &EvmSecretKey, prehash: CryptoHash) -> Self {
-        use k256::ecdsa::signature::hazmat::PrehashSigner;
-
         let message = eip191_hash_message(prehash.as_bytes().0).0;
         let (signature, rid) = secret
             .0
-            .sign_prehash(&message)
+            .sign_prehash_recoverable(&message)
             .expect("Failed to sign prehashed data"); // NOTE: This is a critical error we don't control.
         EvmSignature((signature, rid).into())
     }
@@ -477,7 +474,7 @@ impl EvmSignature {
 
     /// Returns the byte representation of the signature.
     pub fn as_bytes(&self) -> [u8; EVM_SECP256K1_SIGNATURE_SIZE] {
-        self.0.as_erc2098()
+        self.0.as_bytes()
     }
 
     fn verify_inner<'de, T>(
@@ -508,14 +505,13 @@ impl EvmSignature {
     /// Expects the signature to be serialized in raw-bytes form.
     pub fn from_slice<A: AsRef<[u8]>>(bytes: A) -> Result<Self, CryptoError> {
         let bytes = bytes.as_ref();
-        if bytes.len() < 64 {
-            return Err(CryptoError::IncorrectSignatureBytes {
+        let sig = alloy_primitives::Signature::from_raw(bytes).map_err(|_| {
+            CryptoError::IncorrectSignatureBytes {
                 scheme: EVM_SECP256K1_SCHEME_LABEL,
                 len: bytes.len(),
                 expected: EVM_SECP256K1_SIGNATURE_SIZE,
-            });
-        }
-        let sig = alloy_primitives::Signature::from_erc2098(bytes);
+            }
+        })?;
         Ok(EvmSignature(sig))
     }
 }
@@ -583,7 +579,7 @@ mod serde_utils {
     #[serde_as]
     #[derive(Serialize, Deserialize)]
     #[serde(transparent)]
-    pub struct CompactSignature(#[serde_as(as = "[_; 64]")] pub [u8; EVM_SECP256K1_SIGNATURE_SIZE]);
+    pub struct CompactSignature(#[serde_as(as = "[_; 65]")] pub [u8; EVM_SECP256K1_SIGNATURE_SIZE]);
 
     #[serde_as]
     #[derive(Serialize, Deserialize)]
