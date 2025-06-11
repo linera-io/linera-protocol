@@ -147,6 +147,10 @@ mod test {
         Ok(())
     }
 
+    // A scenario to test topological sort with
+    // populates the storage with two chains each with height of four blocks
+    // blocks have a dependency with the blocks of the chains that came before 
+    // chronologically during creation
     async fn make_state<S: Storage>(storage: &S) -> (Vec<BlockId>, Vec<Vec<CryptoHash>>) {
         let mut notifications = Vec::new();
 
@@ -251,6 +255,10 @@ mod test {
         Ok(())
     }
 
+    // A scenario to test topological sort with
+    // populates the storage with three chains each with height of two blocks
+    // blocks have a dependency with the blocks of the chains that came before 
+    // chronologically during creation
     async fn make_state_2<S: Storage>(storage: &S) -> (BlockId, Vec<Vec<CryptoHash>>) {
         let chain_id_a = ChainId(CryptoHash::test_hash("0"));
         let chain_id_b = ChainId(CryptoHash::test_hash("1"));
