@@ -10,7 +10,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Epoch, Timestamp},
     ensure,
-    identifiers::{AccountOwner, ChainId},
+    identifiers::ChainId,
 };
 use linera_chain::{
     data_types::{
@@ -124,6 +124,7 @@ where
         &mut self,
         proposal: &BlockProposal,
     ) -> Result<Vec<Blob>, WorkerError> {
+        let owner = proposal.owner();
         let BlockProposal {
             content:
                 ProposalContent {
@@ -131,12 +132,10 @@ where
                     round,
                     outcome: _,
                 },
-            public_key,
             original_proposal,
             signature: _,
         } = proposal;
 
-        let owner = AccountOwner::from(*public_key);
         let mut maybe_blobs = self
             .state
             .maybe_get_required_blobs(proposal.required_blob_ids(), None)

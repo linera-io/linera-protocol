@@ -24,6 +24,8 @@ use serde::{Deserialize, Serialize};
 pub use signer::*;
 use thiserror::Error;
 
+use crate::{hex_debug, identifiers::AccountOwner};
+
 /// The public key of a validator.
 pub type ValidatorPublicKey = secp256k1::Secp256k1PublicKey;
 /// The private key of a validator.
@@ -86,11 +88,27 @@ pub enum AccountSecretKey {
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum AccountSignature {
     /// Ed25519 signature.
-    Ed25519(ed25519::Ed25519Signature),
+    Ed25519 {
+        /// Signature of the value.
+        signature: ed25519::Ed25519Signature,
+        /// Public key of the signer.
+        public_key: ed25519::Ed25519PublicKey,
+    },
     /// secp256k1 signature.
-    Secp256k1(secp256k1::Secp256k1Signature),
+    Secp256k1 {
+        /// Signature of the value.
+        signature: secp256k1::Secp256k1Signature,
+        /// Public key of the signer.
+        public_key: secp256k1::Secp256k1PublicKey,
+    },
     /// EVM secp256k1 signature.
-    EvmSecp256k1(secp256k1::evm::EvmSignature),
+    EvmSecp256k1 {
+        /// Signature of the value.
+        signature: secp256k1::evm::EvmSignature,
+        /// EVM address of the signer.
+        #[debug(with = "hex_debug")]
+        address: [u8; 20],
+    },
 }
 
 impl AccountSecretKey {
@@ -122,15 +140,24 @@ impl AccountSecretKey {
         match self {
             AccountSecretKey::Ed25519(secret) => {
                 let signature = Ed25519Signature::new(value, secret);
-                AccountSignature::Ed25519(signature)
+                let public_key = secret.public();
+                AccountSignature::Ed25519 {
+                    signature,
+                    public_key,
+                }
             }
             AccountSecretKey::Secp256k1(secret) => {
                 let signature = secp256k1::Secp256k1Signature::new(value, secret);
-                AccountSignature::Secp256k1(signature)
+                let public_key = secret.public();
+                AccountSignature::Secp256k1 {
+                    signature,
+                    public_key,
+                }
             }
             AccountSecretKey::EvmSecp256k1(secret) => {
                 let signature = secp256k1::evm::EvmSignature::new(CryptoHash::new(value), secret);
-                AccountSignature::EvmSecp256k1(signature)
+                let address: [u8; 20] = secret.address().into();
+                AccountSignature::EvmSecp256k1 { signature, address }
             }
         }
     }
@@ -140,15 +167,24 @@ impl AccountSecretKey {
         match self {
             AccountSecretKey::Ed25519(secret) => {
                 let signature = Ed25519Signature::sign_prehash(secret, value);
-                AccountSignature::Ed25519(signature)
+                let public_key = secret.public();
+                AccountSignature::Ed25519 {
+                    signature,
+                    public_key,
+                }
             }
             AccountSecretKey::Secp256k1(secret) => {
                 let signature = secp256k1::Secp256k1Signature::sign_prehash(secret, value);
-                AccountSignature::Secp256k1(signature)
+                let public_key = secret.public();
+                AccountSignature::Secp256k1 {
+                    signature,
+                    public_key,
+                }
             }
             AccountSecretKey::EvmSecp256k1(secret) => {
                 let signature = secp256k1::evm::EvmSignature::sign_prehash(secret, value);
-                AccountSignature::EvmSecp256k1(signature)
+                let address: [u8; 20] = secret.address().into();
+                AccountSignature::EvmSecp256k1 { signature, address }
             }
         }
     }
@@ -197,41 +233,25 @@ impl AccountPublicKey {
 
 impl AccountSignature {
     /// Verifies the signature for the `value` using the provided `public_key`.
-    pub fn verify<'de, T>(&self, value: &T, author: AccountPublicKey) -> Result<(), CryptoError>
+    pub fn verify<'de, T>(&self, value: &T) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + std::fmt::Debug,
     {
-        match (self, author) {
-            (AccountSignature::Ed25519(signature), AccountPublicKey::Ed25519(public_key)) => {
-                signature.check(value, public_key)
-            }
-            (AccountSignature::Secp256k1(signature), AccountPublicKey::Secp256k1(public_key)) => {
-                signature.check(value, &public_key)
-            }
-            (
-                AccountSignature::EvmSecp256k1(signature),
-                AccountPublicKey::EvmSecp256k1(public_key),
-            ) => signature.check(value, &public_key),
-            (AccountSignature::Ed25519(_), _) => {
-                let type_name = std::any::type_name::<T>();
-                Err(CryptoError::InvalidSignature {
-                    error: "invalid signature scheme. Expected Ed25519 signature.".to_string(),
-                    type_name: type_name.to_string(),
-                })
-            }
-            (AccountSignature::Secp256k1(_), _) => {
-                let type_name = std::any::type_name::<T>();
-                Err(CryptoError::InvalidSignature {
-                    error: "invalid signature scheme. Expected secp256k1 signature.".to_string(),
-                    type_name: type_name.to_string(),
-                })
-            }
-            (AccountSignature::EvmSecp256k1(_), _) => {
-                let type_name = std::any::type_name::<T>();
-                Err(CryptoError::InvalidSignature {
-                    error: "invalid signature scheme. Expected EvmSecp256k1 signature.".to_string(),
-                    type_name: type_name.to_string(),
-                })
+        match self {
+            AccountSignature::Ed25519 {
+                signature,
+                public_key,
+            } => signature.check(value, *public_key),
+            AccountSignature::Secp256k1 {
+                signature,
+                public_key,
+            } => signature.check(value, *public_key),
+            AccountSignature::EvmSecp256k1 {
+                signature,
+                address: sender_address,
+            } => {
+                signature.check_with_recover(value, *sender_address)?;
+                Ok(())
             }
         }
     }
@@ -244,6 +264,15 @@ impl AccountSignature {
     /// Parses the byte representation of the signature.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, CryptoError> {
         bcs::from_bytes(bytes).map_err(CryptoError::SignatureParseError)
+    }
+
+    /// Returns the AccountOwner of the account that signed the value.
+    pub fn owner(&self) -> AccountOwner {
+        match self {
+            AccountSignature::Ed25519 { public_key, .. } => AccountOwner::from(*public_key),
+            AccountSignature::Secp256k1 { public_key, .. } => AccountOwner::from(*public_key),
+            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(*address),
+        }
     }
 }
 
@@ -521,6 +550,7 @@ mod tests {
         roundtrip_test(AccountSecretKey::Secp256k1(
             Secp256k1KeyPair::generate().secret_key,
         ));
+        roundtrip_test(AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()));
     }
 
     #[test]

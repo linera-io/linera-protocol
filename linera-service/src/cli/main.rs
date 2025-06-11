@@ -8,7 +8,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
-    ops::Deref,
     path::PathBuf,
     process,
     sync::Arc,
@@ -1905,12 +1904,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                         println!("{chain_id}");
                     }
                 } else {
-                    wallet::pretty_print(
-                        &*options.wallet().await?,
-                        options.signer().await?.deref(),
-                        chain_ids,
-                    )
-                    .await;
+                    wallet::pretty_print(&*options.wallet().await?, chain_ids).await;
                 }
                 info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
                 Ok(0)

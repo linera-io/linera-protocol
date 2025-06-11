@@ -38,6 +38,7 @@ pub enum AccountOwner {
     /// 32-byte account address.
     Address32(CryptoHash),
     /// 20-byte account EVM-compatible address.
+    #[debug(with = "hex_debug")]
     Address20([u8; 20]),
 }
 

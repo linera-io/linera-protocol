@@ -158,15 +158,13 @@ where
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
         proposal.check_signature()?;
+        let owner = proposal.owner();
         let BlockProposal {
             content,
-            public_key,
             original_proposal,
             signature: _,
         } = proposal;
         let block = &content.block;
-
-        let owner = AccountOwner::from(*public_key);
         let chain = &self.0.chain;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
@@ -175,7 +173,7 @@ where
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.
         ensure!(
-            chain.manager.verify_owner(proposal),
+            chain.manager.verify_owner(&owner, proposal.content.round)?,
             WorkerError::InvalidOwner
         );
         match original_proposal {
@@ -189,11 +187,17 @@ where
                 // Verify that this block has been validated by a quorum before.
                 certificate.check(committee)?;
             }
-            Some(OriginalProposal::Fast {
-                public_key,
-                signature,
-            }) => {
-                let super_owner = AccountOwner::from(*public_key);
+            Some(OriginalProposal::Fast(signature)) => {
+                let original_proposal = BlockProposal {
+                    content: ProposalContent {
+                        block: proposal.content.block.clone(),
+                        round: Round::Fast,
+                        outcome: None,
+                    },
+                    signature: *signature,
+                    original_proposal: None,
+                };
+                let super_owner = original_proposal.owner();
                 ensure!(
                     chain
                         .manager
@@ -207,17 +211,7 @@ where
                     // Check the authentication of the operations in the new block.
                     ensure!(signer == super_owner, WorkerError::InvalidSigner(signer));
                 }
-                let old_proposal = BlockProposal {
-                    content: ProposalContent {
-                        block: proposal.content.block.clone(),
-                        round: Round::Fast,
-                        outcome: None,
-                    },
-                    public_key: *public_key,
-                    signature: *signature,
-                    original_proposal: None,
-                };
-                old_proposal.check_signature()?;
+                original_proposal.check_signature()?;
             }
         }
         // Check if the chain is ready for this new block proposal.

@@ -10,10 +10,7 @@ use std::error::Error as StdError;
 pub use in_mem::InMemorySigner;
 
 use super::CryptoHash;
-use crate::{
-    crypto::{AccountPublicKey, AccountSignature},
-    identifiers::AccountOwner,
-};
+use crate::{crypto::AccountSignature, identifiers::AccountOwner};
 
 cfg_if::cfg_if! {
     if #[cfg(web)] {
@@ -53,9 +50,6 @@ pub trait Signer {
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error>;
 
-    /// Returns the public key corresponding to the given `owner`.
-    async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Self::Error>;
-
     /// Returns whether the given `owner` is a known signer.
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error>;
 }
@@ -70,9 +64,9 @@ mod in_mem {
     use serde::{Deserialize, Serialize};
 
     #[cfg(with_getrandom)]
-    use crate::crypto::CryptoRng;
+    use crate::crypto::{AccountPublicKey, CryptoRng};
     use crate::{
-        crypto::{AccountPublicKey, AccountSecretKey, AccountSignature, CryptoHash, Signer},
+        crypto::{AccountSecretKey, AccountSignature, CryptoHash, Signer},
         identifiers::AccountOwner,
     };
 
@@ -199,18 +193,6 @@ mod in_mem {
             } else {
                 Err(Error::NoSuchOwner)
             }
-        }
-
-        /// Returns the public key corresponding to the given `owner`.
-        async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Error> {
-            Ok(self
-                .0
-                .read()
-                .unwrap()
-                .keys
-                .get(owner)
-                .ok_or(Error::NoSuchOwner)?
-                .public())
         }
 
         /// Returns whether the given `owner` is a known signer.
