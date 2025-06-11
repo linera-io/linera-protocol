@@ -28,8 +28,8 @@ use linera_base::{
     abi::Abi,
     crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
-        Round, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
+        ChainDescription, Epoch, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -260,25 +260,20 @@ impl<Env: Environment> Client<Env> {
     async fn fetch_chain_info(
         &self,
         chain_id: ChainId,
-        validators: &[RemoteNode<impl ValidatorNode>],
-    ) -> Result<Box<ChainInfo>, LocalNodeError> {
+        validators: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         match self.local_node.chain_info(chain_id).await {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                // Make sure the admin chain is up to date.
+                self.synchronize_chain_state(self.admin_id).await?;
                 // If the chain is missing then the error is a WorkerError
                 // and so a BlobsNotFound
-                // TODO(#2351): make sure the blobs are legitimate!
-                let blobs = RemoteNode::download_blobs(
-                    &blob_ids,
-                    validators,
-                    self.options.blob_download_timeout,
-                )
-                .await
-                .ok_or(LocalNodeError::BlobsNotFound(blob_ids))?;
-                self.local_node.storage_client().write_blobs(&blobs).await?;
-                self.local_node.chain_info(chain_id).await
+                self.update_local_node_with_blobs_from(blob_ids, validators)
+                    .await?;
+                Ok(self.local_node.chain_info(chain_id).await?)
             }
-            err => err,
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -286,7 +281,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip(self, validators))]
     async fn download_certificates(
         &self,
-        validators: &[RemoteNode<impl ValidatorNode>],
+        validators: &[RemoteNode<Env::ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
@@ -325,7 +320,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn download_certificates_from(
         &self,
-        remote_node: &RemoteNode<impl ValidatorNode>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
         stop: BlockHeight,
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
@@ -381,11 +376,19 @@ impl<Env: Environment> Client<Env> {
             let mut result = self.handle_certificate(certificate.clone()).await;
 
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                if let Some(blobs) = remote_node.try_download_blobs(blob_ids).await {
-                    // TODO(#2351): Don't store downloaded blobs without certificate.
-                    let _ = self.local_node.store_blobs(&blobs).await;
-                    result = self.handle_certificate(certificate.clone()).await;
-                }
+                future::try_join_all(blob_ids.iter().map(|blob_id| async move {
+                    let blob_certificate =
+                        remote_node.download_certificate_for_blob(*blob_id).await?;
+                    self.receive_sender_certificate(
+                        blob_certificate,
+                        ReceiveCertificateMode::NeedsCheck,
+                        None,
+                    )
+                    .await?;
+                    Result::<(), ChainClientError>::Ok(())
+                }))
+                .await?;
+                result = self.handle_certificate(certificate.clone()).await;
             }
 
             info = Some(result?.info);
@@ -450,10 +453,10 @@ impl<Env: Environment> Client<Env> {
 
     /// Ensures that the client has the `ChainDescription` blob corresponding to this
     /// client's `ChainId`.
-    pub async fn ensure_has_chain_description(
+    pub async fn get_chain_description(
         &self,
         chain_id: ChainId,
-    ) -> Result<Blob, ChainClientError> {
+    ) -> Result<ChainDescription, ChainClientError> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
         let blob = self
             .local_node
@@ -462,17 +465,17 @@ impl<Env: Environment> Client<Env> {
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
-            return Ok(blob);
+            return Ok(bcs::from_bytes(blob.bytes())?);
         };
         // Recover history from the current validators, according to the admin chain.
-        // TODO(#2351): make sure that the blob is legitimately created!
+        self.synchronize_chain_state(self.admin_id).await?;
         let nodes = self.validator_nodes().await?;
-        let blob =
-            RemoteNode::download_blob(&nodes, chain_desc_id, self.options.blob_download_timeout)
-                .await
-                .ok_or(LocalNodeError::BlobsNotFound(vec![chain_desc_id]))?;
-        self.local_node.storage_client().write_blob(&blob).await?;
-        Ok(blob)
+        let blob = self
+            .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
+            .await?
+            .pop()
+            .unwrap(); // Returns exactly as many blobs as passed-in IDs.
+        Ok(bcs::from_bytes(blob.bytes())?)
     }
 
     /// Updates the latest block and next block height and round information from the chain info.
@@ -792,13 +795,6 @@ impl<Env: Environment> Client<Env> {
         let remote_max_heights = Self::max_height_per_chain(&remote_log);
 
         // Obtain the next block height we need in the local node, for each chain.
-        // But first, ensure we have the chain descriptions!
-        future::try_join_all(
-            remote_max_heights
-                .keys()
-                .map(|chain| self.ensure_has_chain_description(*chain)),
-        )
-        .await?;
         let local_next_heights = self
             .local_node
             .next_block_heights(remote_max_heights.keys(), chain_worker_limit)
@@ -1065,8 +1061,11 @@ impl<Env: Environment> Client<Env> {
                         }
                     }
                     if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
-                        self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
-                            .await?;
+                        self.update_local_node_with_blobs_from(
+                            blob_ids.clone(),
+                            &[remote_node.clone()],
+                        )
+                        .await?;
                         // We found the missing blobs: retry.
                         if let Err(new_err) = self
                             .local_node
@@ -1120,17 +1119,40 @@ impl<Env: Environment> Client<Env> {
     async fn update_local_node_with_blobs_from(
         &self,
         blob_ids: Vec<BlobId>,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
-    ) -> Result<(), ChainClientError> {
+        remote_nodes: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<Vec<Blob>, ChainClientError> {
+        let timeout = self.options.blob_download_timeout;
         future::try_join_all(blob_ids.into_iter().map(|blob_id| async move {
-            let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
-            // This will download all ancestors of the certificate and process all of them locally.
-            self.receive_sender_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
-                .await
+            let mut stream = remote_nodes
+                .iter()
+                .zip(0..)
+                .map(|(remote_node, i)| async move {
+                    linera_base::time::timer::sleep(timeout * i * i).await;
+                    let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
+                    // This will download all ancestors of the certificate and process all of them locally.
+                    self.receive_sender_certificate(
+                        certificate,
+                        ReceiveCertificateMode::NeedsCheck,
+                        Some(vec![remote_node.clone()]),
+                    )
+                    .await?;
+                    let blob = self
+                        .local_node
+                        .storage_client()
+                        .read_blob(blob_id)
+                        .await?
+                        .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
+                    Result::<_, ChainClientError>::Ok(blob)
+                })
+                .collect::<FuturesUnordered<_>>();
+            while let Some(maybe_blob) = stream.next().await {
+                if let Ok(blob) = maybe_blob {
+                    return Ok(blob);
+                }
+            }
+            Err(LocalNodeError::BlobsNotFound(vec![blob_id]).into())
         }))
-        .await?;
-
-        Ok(())
+        .await
     }
 
     /// Downloads and processes confirmed block certificates that use the given blobs.
@@ -1672,6 +1694,11 @@ impl<Env: Environment> ChainClient<Env> {
             .await?;
         self.client.update_from_info(&response.info);
         Ok(response.info)
+    }
+
+    /// Returns the chain's description. Fetches it from the validators if necessary.
+    pub async fn get_chain_description(&self) -> Result<ChainDescription, ChainClientError> {
+        self.client.get_chain_description(self.chain_id).await
     }
 
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
@@ -3003,7 +3030,8 @@ impl<Env: Environment> ChainClient<Env> {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ClientOutcome<(ChainId, ConfirmedBlockCertificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, ChainClientError>
+    {
         loop {
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
@@ -3018,21 +3046,22 @@ impl<Env: Environment> ChainClient<Env> {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
             };
-            // The first message of the only operation created the new chain.
-            let chain_blob_id = certificate
+            // The only operation, i.e. the last transaction, created the new chain.
+            let chain_blob = certificate
                 .block()
-                .created_blob_ids()
-                .into_iter()
-                .next()
+                .body
+                .blobs
+                .last()
+                .and_then(|blobs| blobs.last())
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create a new chain"))?;
-            let chain_id = ChainId(chain_blob_id.hash);
+            let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
             // Add the new chain to the list of tracked chains
-            self.client.track_chain(chain_id);
+            self.client.track_chain(description.id());
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)
                 .await?;
-            return Ok(ClientOutcome::Committed((chain_id, certificate)));
+            return Ok(ClientOutcome::Committed((description, certificate)));
         }
     }
 
@@ -3433,9 +3462,9 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<Env::Storage>,
-    ) -> Option<BlockHeight> {
-        let info = self.local_chain_info(chain_id, local_node).await?;
-        Some(info.next_block_height)
+    ) -> BlockHeight {
+        let maybe_info = self.local_chain_info(chain_id, local_node).await;
+        maybe_info.map_or(BlockHeight::ZERO, |info| info.next_block_height)
     }
 
     #[instrument(level = "trace", skip(remote_node, local_node, notification))]
@@ -3447,14 +3476,7 @@ impl<Env: Environment> ChainClient<Env> {
     ) {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
-                if let Err(error) = self.client.ensure_has_chain_description(origin).await {
-                    error!(
-                        chain_id = %self.chain_id,
-                        "NewIncomingBundle: could not find blob for sender's chain: {error}"
-                    );
-                    return;
-                }
-                if self.local_next_block_height(origin, &mut local_node).await > Some(height) {
+                if self.local_next_block_height(origin, &mut local_node).await > height {
                     debug!(
                         chain_id = %self.chain_id,
                         "Accepting redundant notification for new message"
@@ -3471,7 +3493,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return;
                 }
-                if self.local_next_block_height(origin, &mut local_node).await <= Some(height) {
+                if self.local_next_block_height(origin, &mut local_node).await <= height {
                     error!(
                         chain_id = %self.chain_id,
                         "NewIncomingBundle: Fail to synchronize new message after notification"
@@ -3483,7 +3505,7 @@ impl<Env: Environment> ChainClient<Env> {
                 if self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await
-                    > Some(height)
+                    > height
                 {
                     debug!(
                         chain_id = %self.chain_id,
@@ -3505,7 +3527,7 @@ impl<Env: Environment> ChainClient<Env> {
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await;
-                if local_height <= Some(height) {
+                if local_height <= height {
                     error!("NewBlock: Fail to synchronize new block after notification");
                 }
             }

@@ -278,7 +278,7 @@ where
     ) -> Result<ChainId, Error> {
         let ownership = ChainOwnership::single(owner);
         let balance = balance.unwrap_or(Amount::ZERO);
-        let opened_chain_id = self
+        let description = self
             .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 async move {
@@ -291,7 +291,7 @@ where
                 }
             })
             .await?;
-        Ok(opened_chain_id)
+        Ok(description.id())
     }
 
     /// Creates (or activates) a new chain by installing the given authentication keys.
@@ -349,7 +349,7 @@ where
         };
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
-        let opened_chain_id = self
+        let description = self
             .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 let application_permissions = application_permissions.clone().unwrap_or_default();
@@ -363,7 +363,7 @@ where
                 }
             })
             .await?;
-        Ok(opened_chain_id)
+        Ok(description.id())
     }
 
     /// Closes the chain. Returns `None` if it was already closed.

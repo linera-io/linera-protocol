@@ -15,7 +15,7 @@ use futures::{
 use linera_base::{
     crypto::{CryptoHash, Signer},
     data_types::{ChainDescription, Timestamp},
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId},
+    identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
 };
 use linera_core::{
@@ -107,24 +107,6 @@ pub trait ClientContextExt: ClientContext {
             clients.push(self.make_chain_client(chain_id));
         }
         clients
-    }
-
-    async fn chain_description(&mut self, chain_id: ChainId) -> Result<ChainDescription, Error> {
-        let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-
-        let blob = match self.storage().read_blob(blob_id).await {
-            Ok(Some(blob)) => blob,
-            Ok(None) => {
-                // we're missing the blob describing the chain we're assigning - try to
-                // get it
-                self.client().ensure_has_chain_description(chain_id).await?
-            }
-            Err(err) => {
-                return Err(err.into());
-            }
-        };
-
-        Ok(bcs::from_bytes(blob.bytes())?)
     }
 }
 
