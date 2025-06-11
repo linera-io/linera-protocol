@@ -734,7 +734,7 @@ mod tests {
         let prehash = CryptoHash::new(&msg);
         let sig = EvmSignature::new(prehash, &key_pair.secret_key);
 
-        assert!(sig.check_with_recover(&msg, address.0 .0).is_ok());
+        sig.check_with_recover(&msg, address.0 .0).unwrap();
 
         let public_key = EvmPublicKey::recover_from_msg(&sig, &msg).unwrap();
         assert_eq!(public_key, key_pair.public_key);

@@ -787,7 +787,7 @@ mod signing {
         let signature = signer.sign(&proposal);
         assert_eq!(signature, metamask_signature);
 
-        assert_eq!(signature.owner(), public_key.into(),);
+        assert_eq!(signature.owner(), public_key.into());
 
         let block_proposal = BlockProposal {
             content: proposal,

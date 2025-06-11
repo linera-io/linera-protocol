@@ -30,7 +30,7 @@ use crate::{
 };
 
 /// An account owner.
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// Short addresses reserved for the protocol.
@@ -38,6 +38,7 @@ pub enum AccountOwner {
     /// 32-byte account address.
     Address32(CryptoHash),
     /// 20-byte account EVM-compatible address.
+    #[debug(with = "hex_debug")]
     Address20([u8; 20]),
 }
 
@@ -48,16 +49,6 @@ impl AccountOwner {
     /// Tests if the account is the chain address.
     pub fn is_chain(&self) -> bool {
         self == &AccountOwner::CHAIN
-    }
-}
-
-impl std::fmt::Debug for AccountOwner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AccountOwner::Reserved(value) => write!(f, "Reserved({})", value),
-            AccountOwner::Address32(address) => write!(f, "Address32({})", address),
-            AccountOwner::Address20(address) => write!(f, "Address20({})", hex::encode(address)),
-        }
     }
 }
 
