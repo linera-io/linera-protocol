@@ -120,7 +120,7 @@ impl EvmPublicKey {
         alloy_primitives::Address::from_public_key(&self.0)
     }
 
-    /// Recover the public key from the signature and the value.
+    /// Recovers the public key from the signature and the value.
     ///
     /// This function turns the `value` into a `CryptoHash`, then hashes it using EIP-191
     /// and finally recovers the public key from the signature.
