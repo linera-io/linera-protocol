@@ -778,7 +778,11 @@ mod signing {
 
         // personal_sign of the `proposal_hash` done via MetaMask.
         // Wrap with proper variant so that bytes match (include the enum variant tag).
-        let signature = EvmSignature::from_str("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap();
+        let signature = EvmSignature::from_str(
+            "f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b0\
+            4b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b",
+        )
+        .unwrap();
         let metamask_signature = AccountSignature::EvmSecp256k1 {
             signature,
             address: address.0 .0,
