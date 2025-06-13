@@ -1,10 +1,10 @@
 import { ethers } from "ethers";
-import { PrivateKeySigner } from "../src";
+import { PrivateKey } from "../src";
 
 test("constructs signer from mnemonic correctly", async () => {
   const phrase = "test test test test test test test test test test test junk";
 
-  const signer = PrivateKeySigner.fromMnemonic(phrase);
+  const signer = PrivateKey.fromMnemonic(phrase);
   const expectedWallet = ethers.Wallet.fromPhrase(phrase);
 
   // In Linera EIP-191 compatible wallet, the owner is the wallet address.
@@ -18,7 +18,7 @@ test("constructs signer from mnemonic correctly", async () => {
 test("signs message correctly", async () => {
   const secretKey =
     "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
-  const signer = new PrivateKeySigner(secretKey);
+  const signer = new PrivateKey(secretKey);
   const cryptoHash =
     "c520e2b24b05e70c39c36d4aa98e9129ac0079ea002d4c382e6996ea11946d1e";
   const owner = signer.address().toLowerCase();

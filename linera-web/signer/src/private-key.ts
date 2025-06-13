@@ -14,16 +14,16 @@ import { Signer } from "@linera/client";
  * 
  * Supports key creation from both a raw private key and a mnemonic phrase.
  */
-export class PrivateKeySigner implements Signer {
+export class PrivateKey implements Signer {
   private wallet: Wallet;
 
   constructor(privateKeyHex: string) {
     this.wallet = new Wallet(privateKeyHex);
   }
 
-  static fromMnemonic(mnemonic: string): PrivateKeySigner {
+  static fromMnemonic(mnemonic: string): PrivateKey {
     const wallet = ethers.Wallet.fromPhrase(mnemonic);
-    return new PrivateKeySigner(wallet.privateKey);
+    return new PrivateKey(wallet.privateKey);
   }
 
   public address(): string {
