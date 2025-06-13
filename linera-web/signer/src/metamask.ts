@@ -9,7 +9,24 @@ declare global {
   }
 }
 
-export class MetaMaskEIP191Signer implements Signer {
+/**
+ * A signer implementation that uses the MetaMask browser extension for signing.
+ * 
+ * This class relies on the global `window.ethereum` object injected by MetaMask
+ * and interacts with it using EIP-1193-compliant requests. It provides a secure
+ * mechanism for message signing through the user's MetaMask wallet.
+ * 
+ * ⚠️ WARNING: This signer requires MetaMask to be installed and unlocked in the browser.
+ * It will throw errors if MetaMask is unavailable, the user rejects a request, or
+ * if the requested signer is not among the connected accounts.
+ * 
+ * The `MetaMask` signer verifies that the connected account matches the specified
+ * owner address before signing a message. All messages are encoded as hexadecimal
+ * strings and signed using the `personal_sign` method.
+ * 
+ * Suitable for production use where MetaMask is the expected signer interface.
+ */
+export class MetaMask implements Signer {
   private provider: ethers.BrowserProvider;
 
   constructor() {
