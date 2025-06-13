@@ -13,7 +13,7 @@ declare global {
  * A signer implementation that uses the MetaMask browser extension for signing.
  * 
  * This class relies on the global `window.ethereum` object injected by MetaMask
- * and interacts with it using EIP-1193-compliant requests. It provides a secure
+ * and interacts with it using EIP-191-compliant requests. It provides a secure
  * mechanism for message signing through the user's MetaMask wallet.
  * 
  * ⚠️ WARNING: This signer requires MetaMask to be installed and unlocked in the browser.
