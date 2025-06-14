@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, str::FromStr};
+use std::{fmt, path::PathBuf, str::FromStr};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
@@ -15,24 +15,19 @@ use linera_storage_service::{
 };
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig};
+#[cfg(feature = "rocksdb")]
+use linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig};
 use linera_views::{
     memory::{MemoryStore, MemoryStoreConfig},
     store::{CommonStoreConfig, KeyValueStore},
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
-#[allow(unused_imports)]
-use {anyhow::bail, linera_views::store::AdminKeyValueStore as _};
 #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
 use {
     linera_storage::ChainStatesFirstAssignment,
     linera_views::backends::dual::{DualStore, DualStoreConfig},
     std::path::Path,
-};
-#[cfg(feature = "rocksdb")]
-use {
-    linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
-    std::path::PathBuf,
 };
 #[cfg(feature = "scylladb")]
 use {
@@ -526,7 +521,6 @@ pub trait RunnableWithStore {
 }
 
 impl StoreConfig {
-    #[allow(unused_variables)]
     pub async fn run_with_storage<Job>(
         self,
         wasm_runtime: Option<WasmRuntime>,
