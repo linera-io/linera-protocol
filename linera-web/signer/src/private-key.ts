@@ -8,7 +8,7 @@ import { Signer } from "@linera/client";
  * It stores the private key directly in memory, which makes it unsuitable for
  * production environments due to security risks.
  * 
- * The `PrivateKeySigner` uses an in-memory `ethers.Wallet` to sign messages following
+ * The `PrivateKey` uses an in-memory `ethers.Wallet` to sign messages following
  * the EIP-191 scheme. It verifies that the provided owner matches the wallet
  * address before signing.
  * 
