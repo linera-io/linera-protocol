@@ -719,11 +719,11 @@ impl LocalNet {
             namespace,
         };
 
-        let mut command = self.command_for_binary("linera-server").await?;
+        let mut command = self.command_for_binary("linera").await?;
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
         }
-        command.arg("initialize");
+        command.args(["storage", "initialize"]);
         command
             .args(["--storage", &storage.to_string()])
             .args(["--genesis", "genesis.json"])

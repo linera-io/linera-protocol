@@ -399,42 +399,6 @@ enum ServerCommand {
         testing_prng_seed: Option<u64>,
     },
 
-    /// Initialize the database
-    #[command(name = "initialize")]
-    Initialize {
-        /// Storage configuration for the blockchain history, chain states and binary blobs.
-        #[arg(long = "storage")]
-        storage_config: StorageConfigNamespace,
-
-        /// Path to the file describing the initial user chains (aka genesis state)
-        #[arg(long = "genesis")]
-        genesis_config_path: PathBuf,
-
-        /// The maximal number of simultaneous queries to the database
-        #[arg(long)]
-        max_concurrent_queries: Option<usize>,
-
-        /// The maximal number of stream queries to the database
-        #[arg(long, default_value = "10")]
-        max_stream_queries: usize,
-
-        /// The maximal memory used in the storage cache.
-        #[arg(long, default_value = "10000000")]
-        max_cache_size: usize,
-
-        /// The maximal size of an entry in the storage cache.
-        #[arg(long, default_value = "1000000")]
-        max_entry_size: usize,
-
-        /// The maximal number of entries in the storage cache.
-        #[arg(long, default_value = "1000")]
-        max_cache_entries: usize,
-
-        /// The replication factor for the storage.
-        #[arg(long, default_value = "1")]
-        storage_replication_factor: u32,
-    },
-
     /// Replaces the configurations of the shards by following the given template.
     #[command(name = "edit-shards")]
     EditShards {
@@ -513,7 +477,6 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
             .into()
         }
         ServerCommand::Generate { .. }
-        | ServerCommand::Initialize { .. }
         | ServerCommand::EditShards { .. } => "server".into(),
     }
 }
@@ -614,40 +577,6 @@ async fn run(options: ServerOptions) {
                     .expect("Unable to write committee description");
                 info!("Wrote committee config {}", committee.to_str().unwrap());
             }
-        }
-
-        ServerCommand::Initialize {
-            storage_config,
-            genesis_config_path,
-            max_concurrent_queries,
-            max_stream_queries,
-            max_cache_size,
-            max_entry_size,
-            max_cache_entries,
-            storage_replication_factor,
-        } => {
-            let genesis_config: GenesisConfig =
-                util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
-            let storage_cache_config = StorageCacheConfig {
-                max_cache_size,
-                max_entry_size,
-                max_cache_entries,
-            };
-            let common_config = CommonStoreConfig {
-                max_concurrent_queries,
-                max_stream_queries,
-                storage_cache_config,
-                replication_factor: storage_replication_factor,
-            };
-            let store_config = storage_config
-                .add_common_config(common_config)
-                .await
-                .unwrap();
-            tracing::info!(
-                "server::ServerCommand::Initialize, storage_config={:?}",
-                storage_config
-            );
-            store_config.initialize(&genesis_config).await.unwrap();
         }
 
         ServerCommand::EditShards {
