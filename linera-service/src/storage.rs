@@ -18,6 +18,7 @@ use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig};
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig};
 use linera_views::{
+    lru_caching::StorageCacheConfig,
     memory::{MemoryStore, MemoryStoreConfig},
     store::{CommonStoreConfig, KeyValueStore},
 };
@@ -35,6 +36,49 @@ use {
     std::num::NonZeroU16,
     tracing::debug,
 };
+
+#[derive(Clone, Debug, clap::Parser)]
+pub struct CommonStorageOptions {
+    /// The maximal number of simultaneous queries to the database
+    #[arg(long, global = true)]
+    pub storage_max_concurrent_queries: Option<usize>,
+
+    /// The maximal number of simultaneous stream queries to the database
+    #[arg(long, default_value = "10", global = true)]
+    pub storage_max_stream_queries: usize,
+
+    /// The maximal memory used in the storage cache.
+    #[arg(long, default_value = "10000000", global = true)]
+    pub storage_max_cache_size: usize,
+
+    /// The maximal size of an entry in the storage cache.
+    #[arg(long, default_value = "1000000", global = true)]
+    pub storage_max_entry_size: usize,
+
+    /// The maximal number of entries in the storage cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub storage_max_cache_entries: usize,
+
+    /// The replication factor for the keyspace
+    #[arg(long, default_value = "1", global = true)]
+    pub storage_replication_factor: u32,
+}
+
+impl CommonStorageOptions {
+    pub fn common_store_config(&self) -> CommonStoreConfig {
+        let storage_cache_config = StorageCacheConfig {
+            max_cache_size: self.storage_max_cache_size,
+            max_entry_size: self.storage_max_entry_size,
+            max_cache_entries: self.storage_max_cache_entries,
+        };
+        CommonStoreConfig {
+            storage_cache_config,
+            max_concurrent_queries: self.storage_max_concurrent_queries,
+            max_stream_queries: self.storage_max_stream_queries,
+            replication_factor: self.storage_replication_factor,
+        }
+    }
+}
 
 /// The configuration of the key value store in use.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -384,10 +428,11 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
 
 impl StorageConfigNamespace {
     /// The addition of the common config to get a full configuration
-    pub async fn add_common_config(
+    pub async fn add_common_storage_options(
         &self,
-        common_config: CommonStoreConfig,
+        options: &CommonStorageOptions,
     ) -> Result<StoreConfig, anyhow::Error> {
+        let common_config = options.common_store_config();
         let namespace = self.namespace.clone();
         match &self.storage_config {
             #[cfg(feature = "storage-service")]

@@ -18,9 +18,7 @@ use linera_base::{
     crypto::{CryptoRng, Ed25519SecretKey},
     listen_for_shutdown_signals,
 };
-use linera_client::config::{
-    CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig,
-};
+use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
 use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_persistent::{self as persistent, Persist};
@@ -36,11 +34,10 @@ use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::{
-    storage::{Runnable, StorageConfigNamespace},
+    storage::{CommonStorageOptions, Runnable, StorageConfigNamespace},
     util,
 };
 use linera_storage::Storage;
-use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -332,6 +329,10 @@ enum ServerCommand {
         #[arg(long = "storage")]
         storage_config: StorageConfigNamespace,
 
+        /// Common storage options.
+        #[command(flatten)]
+        common_storage_options: CommonStorageOptions,
+
         /// Configuration for cross-chain requests
         #[command(flatten)]
         cross_chain_config: CrossChainConfig,
@@ -356,30 +357,6 @@ enum ServerCommand {
         /// The maximal number of chains loaded in memory at a given time.
         #[arg(long, default_value = "400")]
         max_loaded_chains: NonZeroUsize,
-
-        /// The maximal number of simultaneous queries to the database
-        #[arg(long)]
-        max_concurrent_queries: Option<usize>,
-
-        /// The maximal number of stream queries to the database
-        #[arg(long, default_value = "10")]
-        max_stream_queries: usize,
-
-        /// The maximal memory used in the storage cache.
-        #[arg(long, default_value = "10000000")]
-        max_cache_size: usize,
-
-        /// The maximal size of an entry in the storage cache.
-        #[arg(long, default_value = "1000000")]
-        max_entry_size: usize,
-
-        /// The maximal number of entries in the storage cache.
-        #[arg(long, default_value = "1000")]
-        max_cache_entries: usize,
-
-        /// The replication factor for the storage.
-        #[arg(long, default_value = "1")]
-        storage_replication_factor: u32,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -476,8 +453,7 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
             }
             .into()
         }
-        ServerCommand::Generate { .. }
-        | ServerCommand::EditShards { .. } => "server".into(),
+        ServerCommand::Generate { .. } | ServerCommand::EditShards { .. } => "server".into(),
     }
 }
 
@@ -486,18 +462,13 @@ async fn run(options: ServerOptions) {
         ServerCommand::Run {
             server_config_path,
             storage_config,
+            common_storage_options,
             cross_chain_config,
             notification_config,
             shard,
             grace_period,
             wasm_runtime,
             max_loaded_chains,
-            max_concurrent_queries,
-            max_stream_queries,
-            max_cache_size,
-            max_entry_size,
-            max_cache_entries,
-            storage_replication_factor,
         } => {
             linera_version::VERSION_INFO.log();
 
@@ -513,19 +484,8 @@ async fn run(options: ServerOptions) {
                 max_loaded_chains,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
-            let storage_cache_config = StorageCacheConfig {
-                max_cache_size,
-                max_entry_size,
-                max_cache_entries,
-            };
-            let common_config = CommonStoreConfig {
-                max_concurrent_queries,
-                max_stream_queries,
-                storage_cache_config,
-                replication_factor: storage_replication_factor,
-            };
             let store_config = storage_config
-                .add_common_config(common_config)
+                .add_common_storage_options(&common_storage_options)
                 .await
                 .unwrap();
             store_config

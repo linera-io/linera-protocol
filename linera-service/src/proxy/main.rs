@@ -23,11 +23,10 @@ use linera_sdk::linera_base_types::Blob;
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::{
-    storage::{Runnable, StorageConfigNamespace},
+    storage::{CommonStorageOptions, Runnable, StorageConfigNamespace},
     util,
 };
 use linera_storage::Storage;
-use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
@@ -72,29 +71,9 @@ pub struct ProxyOptions {
     #[arg(long = "storage")]
     storage_config: StorageConfigNamespace,
 
-    /// The maximal number of simultaneous queries to the database
-    #[arg(long)]
-    max_concurrent_queries: Option<usize>,
-
-    /// The maximal number of stream queries to the database
-    #[arg(long, default_value = "10")]
-    max_stream_queries: usize,
-
-    /// The maximal memory used in the storage cache.
-    #[arg(long, default_value = "10000000")]
-    pub max_cache_size: usize,
-
-    /// The maximal size of an entry in the storage cache.
-    #[arg(long, default_value = "1000000")]
-    pub max_entry_size: usize,
-
-    /// The maximal number of entries in the storage cache.
-    #[arg(long, default_value = "1000")]
-    pub max_cache_entries: usize,
-
-    /// The replication factor for the keyspace
-    #[arg(long, default_value = "1")]
-    storage_replication_factor: u32,
+    /// Common storage options.
+    #[command(flatten)]
+    common_storage_options: CommonStorageOptions,
 
     /// Runs a specific proxy instance.
     #[arg(long)]
@@ -430,18 +409,10 @@ fn main() -> Result<()> {
 
 impl ProxyOptions {
     async fn run(&self) -> Result<()> {
-        let storage_cache_config = StorageCacheConfig {
-            max_cache_size: self.max_cache_size,
-            max_entry_size: self.max_entry_size,
-            max_cache_entries: self.max_cache_entries,
-        };
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: self.max_concurrent_queries,
-            max_stream_queries: self.max_stream_queries,
-            storage_cache_config,
-            replication_factor: self.storage_replication_factor,
-        };
-        let store_config = self.storage_config.add_common_config(common_config).await?;
+        let store_config = self
+            .storage_config
+            .add_common_storage_options(&self.common_storage_options)
+            .await?;
         store_config
             .run_with_storage(None, ProxyContext::from_options(self)?)
             .boxed()
