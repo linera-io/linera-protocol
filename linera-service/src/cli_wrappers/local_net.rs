@@ -40,7 +40,7 @@ use crate::{
     cli_wrappers::{
         ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
     },
-    storage::{StorageConfig, StorageConfigNamespace},
+    storage::{InnerStorageConfig, StorageConfig},
     util::ChildExt,
 };
 
@@ -64,14 +64,14 @@ pub async fn get_node_port() -> u16 {
 }
 
 #[cfg(with_testing)]
-async fn make_testing_config(database: Database) -> Result<StorageConfig> {
+async fn make_testing_config(database: Database) -> Result<InnerStorageConfig> {
     match database {
         Database::Service => {
             #[cfg(feature = "storage-service")]
             {
                 let endpoint = storage_service_test_endpoint()
                     .expect("Reading LINERA_STORAGE_SERVICE environment variable");
-                Ok(StorageConfig::Service { endpoint })
+                Ok(InnerStorageConfig::Service { endpoint })
             }
             #[cfg(not(feature = "storage-service"))]
             panic!("Database::Service is selected without the feature storage_service");
@@ -80,7 +80,7 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
             #[cfg(feature = "dynamodb")]
             {
                 let use_dynamodb_local = true;
-                Ok(StorageConfig::DynamoDb { use_dynamodb_local })
+                Ok(InnerStorageConfig::DynamoDb { use_dynamodb_local })
             }
             #[cfg(not(feature = "dynamodb"))]
             panic!("Database::DynamoDb is selected without the feature dynamodb");
@@ -89,7 +89,7 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
             #[cfg(feature = "scylladb")]
             {
                 let config = ScyllaDbStore::new_test_config().await?;
-                Ok(StorageConfig::ScyllaDb {
+                Ok(InnerStorageConfig::ScyllaDb {
                     uri: config.inner_config.uri,
                 })
             }
@@ -102,7 +102,7 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
                 let rocksdb_config = RocksDbStore::new_test_config().await?;
                 let scylla_config = ScyllaDbStore::new_test_config().await?;
                 let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
-                Ok(StorageConfig::DualRocksDbScyllaDb {
+                Ok(InnerStorageConfig::DualRocksDbScyllaDb {
                     path_with_guard: rocksdb_config.inner_config.path_with_guard,
                     spawn_mode,
                     uri: scylla_config.inner_config.uri,
@@ -114,21 +114,21 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
     }
 }
 
-pub enum StorageConfigBuilder {
+pub enum InnerStorageConfigBuilder {
     #[cfg(with_testing)]
     TestConfig,
     ExistingConfig {
-        storage_config: StorageConfig,
+        storage_config: InnerStorageConfig,
     },
 }
 
-impl StorageConfigBuilder {
+impl InnerStorageConfigBuilder {
     #[allow(unused_variables)]
-    pub async fn build(self, database: Database) -> Result<StorageConfig> {
+    pub async fn build(self, database: Database) -> Result<InnerStorageConfig> {
         match self {
             #[cfg(with_testing)]
-            StorageConfigBuilder::TestConfig => make_testing_config(database).await,
-            StorageConfigBuilder::ExistingConfig { storage_config } => Ok(storage_config),
+            InnerStorageConfigBuilder::TestConfig => make_testing_config(database).await,
+            InnerStorageConfigBuilder::ExistingConfig { storage_config } => Ok(storage_config),
         }
     }
 }
@@ -182,7 +182,7 @@ pub struct LocalNetConfig {
     pub num_proxies: usize,
     pub policy_config: ResourceControlPolicyConfig,
     pub cross_chain_config: CrossChainConfig,
-    pub storage_config_builder: StorageConfigBuilder,
+    pub storage_config_builder: InnerStorageConfigBuilder,
     pub path_provider: PathProvider,
     pub num_block_exporters: u32,
 }
@@ -197,9 +197,9 @@ pub struct LocalNet {
     num_shards: usize,
     validator_keys: BTreeMap<usize, (String, String)>,
     running_validators: BTreeMap<usize, Validator>,
-    initialized_validator_storages: BTreeMap<usize, StorageConfigNamespace>,
+    initialized_validator_storages: BTreeMap<usize, StorageConfig>,
     common_namespace: String,
-    common_storage_config: StorageConfig,
+    common_storage_config: InnerStorageConfig,
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
     num_block_exporters: u32,
@@ -285,7 +285,7 @@ impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = 4;
         let num_proxies = 1;
-        let storage_config_builder = StorageConfigBuilder::TestConfig;
+        let storage_config_builder = InnerStorageConfigBuilder::TestConfig;
         let path_provider = PathProvider::create_temporary_directory().unwrap();
         let internal = network.drop_tls();
         let external = network;
@@ -388,7 +388,7 @@ impl LocalNet {
         num_initial_validators: usize,
         num_proxies: usize,
         num_shards: usize,
-        common_storage_config: StorageConfig,
+        common_storage_config: InnerStorageConfig,
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
         num_block_exporters: u32,
@@ -713,9 +713,9 @@ impl LocalNet {
 
     async fn initialize_storage(&mut self, validator: usize) -> Result<()> {
         let namespace = format!("{}_server_{}_db", self.common_namespace, validator);
-        let storage_config = self.common_storage_config.clone();
-        let storage = StorageConfigNamespace {
-            storage_config,
+        let inner_storage_config = self.common_storage_config.clone();
+        let storage = StorageConfig {
+            inner_storage_config,
             namespace,
         };
 
@@ -744,7 +744,7 @@ impl LocalNet {
 
         // For the storage backends with a local directory, make sure that we don't reuse
         // the same directory for all the shards.
-        storage.storage_config.maybe_append_shard_path(shard)?;
+        storage.maybe_append_shard_path(shard)?;
 
         let mut command = self.command_for_binary("linera-server").await?;
         if let Ok(var) = env::var(SERVER_ENV) {

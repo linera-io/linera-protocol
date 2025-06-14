@@ -12,7 +12,7 @@ use linera_base::listen_for_shutdown_signals;
 use linera_client::config::BlockExporterConfig;
 use linera_rpc::NodeOptions;
 use linera_service::{
-    storage::{CommonStorageOptions, Runnable, StorageConfigNamespace},
+    storage::{CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
 use linera_storage::Storage;
@@ -38,7 +38,7 @@ struct ExporterOptions {
 
     /// Storage configuration for the blockchain history, chain states and binary blobs.
     #[arg(long = "storage")]
-    storage_config: StorageConfigNamespace,
+    storage_config: StorageConfig,
 
     /// Common storage options.
     #[command(flatten)]

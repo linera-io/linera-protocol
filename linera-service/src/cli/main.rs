@@ -50,7 +50,7 @@ use linera_service::{
     cli_wrappers::{self},
     node_service::NodeService,
     project::{self, Project},
-    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfigNamespace},
+    storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
     util, wallet,
 };
 use linera_storage::{DbStorage, Storage};
@@ -1431,7 +1431,7 @@ impl ClientOptions {
         Ok(config_dir)
     }
 
-    fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
+    fn storage_config(&self) -> Result<StorageConfig, Error> {
         if let Some(config) = &self.storage_config {
             return config.parse();
         }
@@ -1444,13 +1444,13 @@ impl ClientOptions {
             if #[cfg(feature = "rocksdb")] {
                 let spawn_mode =
                     linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
-                let storage_config = linera_service::storage::StorageConfig::RocksDb {
+                let inner_storage_config = linera_service::storage::InnerStorageConfig::RocksDb {
                     path: self.config_path()?.join("wallet.db"),
                     spawn_mode,
                 };
                 let namespace = "default".to_string();
-                Ok(StorageConfigNamespace {
-                    storage_config,
+                Ok(StorageConfig {
+                    inner_storage_config,
                     namespace,
                 })
             } else {

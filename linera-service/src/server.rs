@@ -34,7 +34,7 @@ use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::{
-    storage::{CommonStorageOptions, Runnable, StorageConfigNamespace},
+    storage::{CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
 use linera_storage::Storage;
@@ -327,7 +327,7 @@ enum ServerCommand {
 
         /// Storage configuration for the blockchain history, chain states and binary blobs.
         #[arg(long = "storage")]
-        storage_config: StorageConfigNamespace,
+        storage_config: StorageConfig,
 
         /// Common storage options.
         #[command(flatten)]

@@ -123,7 +123,7 @@ pub enum StoreConfig {
 /// The description of a storage implementation.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
-pub enum StorageConfig {
+pub enum InnerStorageConfig {
     /// The storage service description.
     #[cfg(feature = "storage-service")]
     Service {
@@ -167,30 +167,12 @@ pub enum StorageConfig {
     },
 }
 
-impl StorageConfig {
-    pub fn maybe_append_shard_path(&mut self, _shard: usize) -> std::io::Result<()> {
-        match self {
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard,
-                spawn_mode: _,
-                uri: _,
-            } => {
-                let shard_str = format!("shard_{}", _shard);
-                path_with_guard.path_buf.push(shard_str);
-                std::fs::create_dir_all(&path_with_guard.path_buf)
-            }
-            _ => Ok(()),
-        }
-    }
-}
-
 /// The description of a storage implementation.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
-pub struct StorageConfigNamespace {
-    /// The storage config
-    pub storage_config: StorageConfig,
+pub struct StorageConfig {
+    /// The inner storage config.
+    pub inner_storage_config: InnerStorageConfig,
     /// The namespace used
     pub namespace: String,
 }
@@ -207,7 +189,7 @@ const SCYLLA_DB: &str = "scylladb:";
 #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
 const DUAL_ROCKS_DB_SCYLLA_DB: &str = "dualrocksdbscylladb:";
 
-impl FromStr for StorageConfigNamespace {
+impl FromStr for StorageConfig {
     type Err = anyhow::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
@@ -216,9 +198,9 @@ impl FromStr for StorageConfigNamespace {
             if parts.len() == 1 {
                 let genesis_path = parts[0].to_string().into();
                 let namespace = DEFAULT_NAMESPACE.to_string();
-                let storage_config = StorageConfig::Memory { genesis_path };
-                return Ok(StorageConfigNamespace {
-                    storage_config,
+                let inner_storage_config = InnerStorageConfig::Memory { genesis_path };
+                return Ok(StorageConfig {
+                    inner_storage_config,
                     namespace,
                 });
             }
@@ -227,9 +209,9 @@ impl FromStr for StorageConfigNamespace {
             }
             let genesis_path = parts[0].to_string().into();
             let namespace = parts[1].to_string();
-            let storage_config = StorageConfig::Memory { genesis_path };
-            return Ok(StorageConfigNamespace {
-                storage_config,
+            let inner_storage_config = InnerStorageConfig::Memory { genesis_path };
+            return Ok(StorageConfig {
+                inner_storage_config,
                 namespace,
             });
         }
@@ -256,9 +238,9 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             endpoint.push_str(port);
             let endpoint = endpoint.to_string();
             let namespace = parts[3].to_string();
-            let storage_config = StorageConfig::Service { endpoint };
-            return Ok(StorageConfigNamespace {
-                storage_config,
+            let inner_storage_config = InnerStorageConfig::Service { endpoint };
+            return Ok(StorageConfig {
+                inner_storage_config,
                 namespace,
             });
         }
@@ -273,9 +255,9 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 let path = parts[0].to_string().into();
                 let namespace = DEFAULT_NAMESPACE.to_string();
                 let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
-                let storage_config = StorageConfig::RocksDb { path, spawn_mode };
-                return Ok(StorageConfigNamespace {
-                    storage_config,
+                let inner_storage_config = InnerStorageConfig::RocksDb { path, spawn_mode };
+                return Ok(StorageConfig {
+                    inner_storage_config,
                     namespace,
                 });
             }
@@ -292,9 +274,9 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 } else {
                     parts[2].to_string()
                 };
-                let storage_config = StorageConfig::RocksDb { path, spawn_mode };
-                return Ok(StorageConfigNamespace {
-                    storage_config,
+                let inner_storage_config = InnerStorageConfig::RocksDb { path, spawn_mode };
+                return Ok(StorageConfig {
+                    inner_storage_config,
                     namespace,
                 });
             }
@@ -317,9 +299,9 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     );
                 }
             };
-            let storage_config = StorageConfig::DynamoDb { use_dynamodb_local };
-            return Ok(StorageConfigNamespace {
-                storage_config,
+            let inner_storage_config = InnerStorageConfig::DynamoDb { use_dynamodb_local };
+            return Ok(StorageConfig {
+                inner_storage_config,
                 namespace,
             });
         }
@@ -363,10 +345,10 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }
             let uri = uri.unwrap_or("localhost:9042".to_string());
             let namespace = namespace.unwrap_or(DEFAULT_NAMESPACE.to_string());
-            let storage_config = StorageConfig::ScyllaDb { uri };
-            debug!("ScyllaDB connection info: {:?}", storage_config);
-            return Ok(StorageConfigNamespace {
-                storage_config,
+            let inner_storage_config = InnerStorageConfig::ScyllaDb { uri };
+            debug!("ScyllaDB connection info: {:?}", inner_storage_config);
+            return Ok(StorageConfig {
+                inner_storage_config,
                 namespace,
             });
         }
@@ -396,7 +378,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             let port = NonZeroU16::from_str(port_str)
                 .map_err(|_| anyhow!("Failed to find parse port {port_str} for {s}"))?;
             let uri = format!("{}:{}", &address, port);
-            let storage_config = StorageConfig::DualRocksDbScyllaDb {
+            let inner_storage_config = InnerStorageConfig::DualRocksDbScyllaDb {
                 path_with_guard,
                 spawn_mode,
                 uri,
@@ -406,8 +388,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             } else {
                 parts[5].to_string()
             };
-            return Ok(StorageConfigNamespace {
-                storage_config,
+            return Ok(StorageConfig {
+                inner_storage_config,
                 namespace,
             });
         }
@@ -426,7 +408,23 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
     }
 }
 
-impl StorageConfigNamespace {
+impl StorageConfig {
+    pub fn maybe_append_shard_path(&mut self, _shard: usize) -> std::io::Result<()> {
+        match &mut self.inner_storage_config {
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            InnerStorageConfig::DualRocksDbScyllaDb {
+                path_with_guard,
+                spawn_mode: _,
+                uri: _,
+            } => {
+                let shard_str = format!("shard_{}", _shard);
+                path_with_guard.path_buf.push(shard_str);
+                std::fs::create_dir_all(&path_with_guard.path_buf)
+            }
+            _ => Ok(()),
+        }
+    }
+
     /// The addition of the common config to get a full configuration
     pub async fn add_common_storage_options(
         &self,
@@ -434,9 +432,9 @@ impl StorageConfigNamespace {
     ) -> Result<StoreConfig, anyhow::Error> {
         let common_config = options.common_store_config();
         let namespace = self.namespace.clone();
-        match &self.storage_config {
+        match &self.inner_storage_config {
             #[cfg(feature = "storage-service")]
-            StorageConfig::Service { endpoint } => {
+            InnerStorageConfig::Service { endpoint } => {
                 let endpoint = endpoint.clone();
                 let inner_config = ServiceStoreInternalConfig {
                     endpoint,
@@ -448,7 +446,7 @@ impl StorageConfigNamespace {
                 };
                 Ok(StoreConfig::Service { config, namespace })
             }
-            StorageConfig::Memory { genesis_path } => {
+            InnerStorageConfig::Memory { genesis_path } => {
                 let config = MemoryStoreConfig {
                     common_config: common_config.reduced(),
                 };
@@ -460,24 +458,24 @@ impl StorageConfigNamespace {
                 })
             }
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb { path, spawn_mode } => {
+            InnerStorageConfig::RocksDb { path, spawn_mode } => {
                 let path_buf = path.to_path_buf();
                 let path_with_guard = PathWithGuard::new(path_buf);
                 let config = RocksDbStoreConfig::new(*spawn_mode, path_with_guard, common_config);
                 Ok(StoreConfig::RocksDb { config, namespace })
             }
             #[cfg(feature = "dynamodb")]
-            StorageConfig::DynamoDb { use_dynamodb_local } => {
+            InnerStorageConfig::DynamoDb { use_dynamodb_local } => {
                 let config = DynamoDbStoreConfig::new(*use_dynamodb_local, common_config);
                 Ok(StoreConfig::DynamoDb { config, namespace })
             }
             #[cfg(feature = "scylladb")]
-            StorageConfig::ScyllaDb { uri } => {
+            InnerStorageConfig::ScyllaDb { uri } => {
                 let config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
                 Ok(StoreConfig::ScyllaDb { config, namespace })
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb {
+            InnerStorageConfig::DualRocksDbScyllaDb {
                 path_with_guard,
                 spawn_mode,
                 uri,
@@ -498,33 +496,33 @@ impl StorageConfigNamespace {
     }
 }
 
-impl fmt::Display for StorageConfigNamespace {
+impl fmt::Display for StorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let namespace = &self.namespace;
-        match &self.storage_config {
+        match &self.inner_storage_config {
             #[cfg(feature = "storage-service")]
-            StorageConfig::Service { endpoint } => {
+            InnerStorageConfig::Service { endpoint } => {
                 write!(f, "service:tcp:{}:{}", endpoint, namespace)
             }
-            StorageConfig::Memory { genesis_path } => {
+            InnerStorageConfig::Memory { genesis_path } => {
                 write!(f, "memory:{}:{}", genesis_path.display(), namespace)
             }
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb { path, spawn_mode } => {
+            InnerStorageConfig::RocksDb { path, spawn_mode } => {
                 let spawn_mode = spawn_mode.to_string();
                 write!(f, "rocksdb:{}:{}:{}", path.display(), spawn_mode, namespace)
             }
             #[cfg(feature = "dynamodb")]
-            StorageConfig::DynamoDb { use_dynamodb_local } => match use_dynamodb_local {
+            InnerStorageConfig::DynamoDb { use_dynamodb_local } => match use_dynamodb_local {
                 true => write!(f, "dynamodb:{}:dynamodb_local", namespace),
                 false => write!(f, "dynamodb:{}:env", namespace),
             },
             #[cfg(feature = "scylladb")]
-            StorageConfig::ScyllaDb { uri } => {
+            InnerStorageConfig::ScyllaDb { uri } => {
                 write!(f, "scylladb:tcp:{}:{}", uri, namespace)
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb {
+            InnerStorageConfig::DualRocksDbScyllaDb {
                 path_with_guard,
                 spawn_mode,
                 uri,
@@ -696,50 +694,50 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
 #[test]
 fn test_memory_storage_config_from_str() {
     assert_eq!(
-        StorageConfigNamespace::from_str("memory:path/to/genesis.json").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::Memory {
+        StorageConfig::from_str("memory:path/to/genesis.json").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::Memory {
                 genesis_path: PathBuf::from("path/to/genesis.json")
             },
             namespace: DEFAULT_NAMESPACE.into()
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("memory:path/to/genesis.json:namespace").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::Memory {
+        StorageConfig::from_str("memory:path/to/genesis.json:namespace").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::Memory {
                 genesis_path: PathBuf::from("path/to/genesis.json")
             },
             namespace: "namespace".into()
         }
     );
-    assert!(StorageConfigNamespace::from_str("memory").is_err(),);
+    assert!(StorageConfig::from_str("memory").is_err(),);
 }
 
 #[cfg(feature = "storage-service")]
 #[test]
 fn test_shared_store_config_from_str() {
     assert_eq!(
-        StorageConfigNamespace::from_str("service:tcp:127.0.0.1:8942:linera").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::Service {
+        StorageConfig::from_str("service:tcp:127.0.0.1:8942:linera").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::Service {
                 endpoint: "127.0.0.1:8942".to_string()
             },
             namespace: "linera".into()
         }
     );
-    assert!(StorageConfigNamespace::from_str("service:tcp:127.0.0.1:8942").is_err());
-    assert!(StorageConfigNamespace::from_str("service:tcp:127.0.0.1:linera").is_err());
+    assert!(StorageConfig::from_str("service:tcp:127.0.0.1:8942").is_err());
+    assert!(StorageConfig::from_str("service:tcp:127.0.0.1:linera").is_err());
 }
 
 #[cfg(feature = "rocksdb")]
 #[test]
 fn test_rocks_db_storage_config_from_str() {
-    assert!(StorageConfigNamespace::from_str("rocksdb_foo.db").is_err());
+    assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
     assert_eq!(
-        StorageConfigNamespace::from_str("rocksdb:foo.db").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::RocksDb {
+        StorageConfig::from_str("rocksdb:foo.db").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::RocksDb {
                 path: "foo.db".into(),
                 spawn_mode: RocksDbSpawnMode::SpawnBlocking,
             },
@@ -747,9 +745,9 @@ fn test_rocks_db_storage_config_from_str() {
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("rocksdb:foo.db:block_in_place").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::RocksDb {
+        StorageConfig::from_str("rocksdb:foo.db:block_in_place").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::RocksDb {
                 path: "foo.db".into(),
                 spawn_mode: RocksDbSpawnMode::BlockInPlace,
             },
@@ -757,9 +755,9 @@ fn test_rocks_db_storage_config_from_str() {
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("rocksdb:foo.db:block_in_place:chosen_namespace").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::RocksDb {
+        StorageConfig::from_str("rocksdb:foo.db:block_in_place:chosen_namespace").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::RocksDb {
                 path: "foo.db".into(),
                 spawn_mode: RocksDbSpawnMode::BlockInPlace,
             },
@@ -772,73 +770,72 @@ fn test_rocks_db_storage_config_from_str() {
 #[test]
 fn test_aws_storage_config_from_str() {
     assert_eq!(
-        StorageConfigNamespace::from_str("dynamodb:table").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::DynamoDb {
+        StorageConfig::from_str("dynamodb:table").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::DynamoDb {
                 use_dynamodb_local: false
             },
             namespace: "table".to_string()
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("dynamodb:table:env").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::DynamoDb {
+        StorageConfig::from_str("dynamodb:table:env").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::DynamoDb {
                 use_dynamodb_local: false
             },
             namespace: "table".to_string()
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("dynamodb:table:dynamodb_local").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::DynamoDb {
+        StorageConfig::from_str("dynamodb:table:dynamodb_local").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::DynamoDb {
                 use_dynamodb_local: true
             },
             namespace: "table".to_string()
         }
     );
-    assert!(StorageConfigNamespace::from_str("dynamodb").is_err());
-    assert!(StorageConfigNamespace::from_str("dynamodb:").is_err());
-    assert!(StorageConfigNamespace::from_str("dynamodb:1").is_err());
-    assert!(StorageConfigNamespace::from_str("dynamodb:wrong:endpoint").is_err());
+    assert!(StorageConfig::from_str("dynamodb").is_err());
+    assert!(StorageConfig::from_str("dynamodb:").is_err());
+    assert!(StorageConfig::from_str("dynamodb:1").is_err());
+    assert!(StorageConfig::from_str("dynamodb:wrong:endpoint").is_err());
 }
 
 #[cfg(feature = "scylladb")]
 #[test]
 fn test_scylla_db_storage_config_from_str() {
     assert_eq!(
-        StorageConfigNamespace::from_str("scylladb:").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::ScyllaDb {
+        StorageConfig::from_str("scylladb:").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::ScyllaDb {
                 uri: "localhost:9042".to_string()
             },
             namespace: DEFAULT_NAMESPACE.to_string()
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("scylladb:tcp:db_hostname:230:table_other_storage")
-            .unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::ScyllaDb {
+        StorageConfig::from_str("scylladb:tcp:db_hostname:230:table_other_storage").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::ScyllaDb {
                 uri: "db_hostname:230".to_string()
             },
             namespace: "table_other_storage".to_string()
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("scylladb:tcp:db_hostname:230").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::ScyllaDb {
+        StorageConfig::from_str("scylladb:tcp:db_hostname:230").unwrap(),
+        StorageConfig {
+            inner_storage_config: InnerStorageConfig::ScyllaDb {
                 uri: "db_hostname:230".to_string()
             },
             namespace: DEFAULT_NAMESPACE.to_string()
         }
     );
-    assert!(StorageConfigNamespace::from_str("scylladb:-10").is_err());
-    assert!(StorageConfigNamespace::from_str("scylladb:70000").is_err());
-    assert!(StorageConfigNamespace::from_str("scylladb:230:234").is_err());
-    assert!(StorageConfigNamespace::from_str("scylladb:tcp:address1").is_err());
-    assert!(StorageConfigNamespace::from_str("scylladb:tcp:address1:tcp:/address2").is_err());
-    assert!(StorageConfigNamespace::from_str("scylladb:wrong").is_err());
+    assert!(StorageConfig::from_str("scylladb:-10").is_err());
+    assert!(StorageConfig::from_str("scylladb:70000").is_err());
+    assert!(StorageConfig::from_str("scylladb:230:234").is_err());
+    assert!(StorageConfig::from_str("scylladb:tcp:address1").is_err());
+    assert!(StorageConfig::from_str("scylladb:tcp:address1:tcp:/address2").is_err());
+    assert!(StorageConfig::from_str("scylladb:wrong").is_err());
 }
