@@ -656,7 +656,7 @@ fn test_memory_storage_config_from_str() {
             storage_config: StorageConfig::Memory {
                 genesis_path: PathBuf::from("path/to/genesis.json")
             },
-            namespace: "".into()
+            namespace: DEFAULT_NAMESPACE.into()
         }
     );
     assert_eq!(
