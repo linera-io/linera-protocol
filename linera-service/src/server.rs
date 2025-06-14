@@ -340,10 +340,6 @@ enum ServerCommand {
         #[command(flatten)]
         notification_config: NotificationConfig,
 
-        /// Path to the file describing the initial user chains (aka genesis state)
-        #[arg(long = "genesis")]
-        genesis_config_path: PathBuf,
-
         /// Runs a specific shard (from 0 to shards-1)
         #[arg(long)]
         shard: Option<usize>,
@@ -529,7 +525,6 @@ async fn run(options: ServerOptions) {
             storage_config,
             cross_chain_config,
             notification_config,
-            genesis_config_path,
             shard,
             grace_period,
             wasm_runtime,
@@ -543,8 +538,6 @@ async fn run(options: ServerOptions) {
         } => {
             linera_version::VERSION_INFO.log();
 
-            let genesis_config: GenesisConfig =
-                util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
             let server_config: ValidatorServerConfig =
                 util::read_json(&server_config_path).expect("Failed to read server config");
 
@@ -573,7 +566,7 @@ async fn run(options: ServerOptions) {
                 .await
                 .unwrap();
             store_config
-                .run_with_storage(&genesis_config, wasm_runtime, job)
+                .run_with_storage(wasm_runtime, job)
                 .boxed()
                 .await
                 .unwrap()

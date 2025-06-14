@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use exporter_service::ExporterContext;
 use futures::FutureExt;
-use linera_client::config::{BlockExporterConfig, GenesisConfig};
+use linera_client::config::BlockExporterConfig;
 use linera_sdk::views::ViewError;
-use linera_service::{storage::StorageConfigNamespace, util};
+use linera_service::storage::StorageConfigNamespace;
 use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 
 #[allow(dead_code)]
@@ -68,10 +68,6 @@ struct ExporterOptions {
     /// The maximal number of entries in the storage cache.
     #[arg(long, default_value = "1000")]
     max_cache_entries: usize,
-
-    /// Path to the file describing the initial user chains (aka genesis state)
-    #[arg(long = "genesis")]
-    genesis_config_path: PathBuf,
 }
 
 fn main() -> Result<()> {
@@ -108,8 +104,6 @@ impl ExporterOptions {
             }
         };
 
-        let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;
-
         let future = async {
             let context =
                 ExporterContext::new(config.id, config.service_config, config.destination_config);
@@ -118,10 +112,7 @@ impl ExporterOptions {
                 .add_common_config(common_config)
                 .await
                 .unwrap();
-            storage_config
-                .run_with_storage(&genesis_config, None, context)
-                .boxed()
-                .await
+            storage_config.run_with_storage(None, context).boxed().await
         };
 
         let runtime = runtime_builder.enable_all().build()?;

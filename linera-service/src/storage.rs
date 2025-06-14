@@ -529,7 +529,6 @@ impl StoreConfig {
     #[allow(unused_variables)]
     pub async fn run_with_storage<Job>(
         self,
-        genesis_config: &GenesisConfig,
         wasm_runtime: Option<WasmRuntime>,
         job: Job,
     ) -> Result<Job::Output, anyhow::Error>
