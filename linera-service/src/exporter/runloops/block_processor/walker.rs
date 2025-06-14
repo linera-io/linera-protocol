@@ -29,8 +29,8 @@ where
         }
     }
 
-    // walks through the block's dependencies in a depth wise manner
-    // resolving, sorting and indexing all of them along the way.
+    /// Walks through the block's dependencies in a depth wise manner
+    /// resolving, sorting and indexing all of them along the way.
     pub(super) async fn walk(mut self, block: BlockId) -> Result<(), ExporterError> {
         if self.is_block_indexed(&block).await? {
             return Ok(());

@@ -23,9 +23,8 @@ use crate::common::{BlockId, ExporterError, LiteBlockId};
 /// State of the linera exporter as a view.
 #[derive(Debug, RootView, ClonableView)]
 pub struct BlockExporterStateView<C> {
-    /// The causal state.
+    /// Ordered collection of block hashes from all microchains, as indexed by the exporter.
     canonical_state: LogView<C, CryptoHash>,
-    /// The chain status, by chain ID.
     /// Tracks the highest block already processed with its hash.
     chain_states: MapView<C, ChainId, LiteBlockId>,
     /// The exporter state per destination.

@@ -67,6 +67,9 @@ where
 
                 Some(next_block_notification) = self.queue_front.recv() => {
                     let walker = Walker::new(&mut self.storage);
+                    // this error variant is safe to retry as this block is already confirmed so this error will
+                    // orignate from things like missing dependencies or io error.
+                    // Other error variants are either safe to skip or unreachable.
                     if let Err(ExporterError::ViewError(_)) = walker.walk(next_block_notification).await {
                         // return the block to the back of the task queue to process again later
                         let _ = self.queue_rear.send(next_block_notification);

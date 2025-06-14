@@ -117,7 +117,7 @@ mod test {
         let port = get_free_port().await?;
         let endpoint = format!("127.0.0.1:{port}");
         let cancellation_token = CancellationToken::new();
-        let (tx, _rx) = unbounded_channel();
+        let (tx, mut rx) = unbounded_channel();
         let server = ExporterService::new(tx);
         let server_handle = tokio::spawn(server.run(cancellation_token.clone(), port));
         LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
@@ -136,6 +136,13 @@ mod test {
             .notify(Request::new(request.try_into().unwrap()))
             .await
             .is_ok());
+
+        let expected_block_id =
+            BlockId::new(ChainId::default(), CryptoHash::test_hash("s"), 4.into());
+        assert!(rx
+            .recv()
+            .await
+            .is_some_and(|block_id| block_id == expected_block_id));
 
         cancellation_token.cancel();
         assert!(server_handle.await.is_ok());
