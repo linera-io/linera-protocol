@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A crate for safe and ergonomic pin-projection."><title>pin_project - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pin_project" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pin_project/index.html">pin_<wbr>project</a><span class="version">1.1.10</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#examples" title="Examples">Examples</a></li><li><a href="#related-projects" title="Related Projects">Related Projects</a></li></ul><h3><a href="#traits">Crate Items</a></h3><ul class="block"><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#attributes" title="Attribute Macros">Attribute Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>pin_project</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/pin_project/lib.rs.html#3-350">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><!-- Note: Document from sync-markdown-to-rustdoc:start through sync-markdown-to-rustdoc:end
+     is synchronized from README.md. Any changes to that range are not preserved. -->
+<!-- tidy:sync-markdown-to-rustdoc:start -->
+<p>A crate for safe and ergonomic <a href="https://doc.rust-lang.org/std/pin/index.html#projections-and-structural-pinning">pin-projection</a>.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>Add this to your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+pin-project = &quot;1&quot;</code></pre></div><h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p><a href="attr.pin_project.html" title="attr pin_project::pin_project"><code>#[pin_project]</code></a> attribute creates projection types
+covering all the fields of struct or enum.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::pin::Pin;
+
+<span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project]
+</span><span class="kw">struct </span>Struct&lt;T, U&gt; {
+    <span class="attr">#[pin]
+    </span>pinned: T,
+    unpinned: U,
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; Struct&lt;T, U&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="kw">let </span>this = <span class="self">self</span>.project();
+        <span class="kw">let _</span>: Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; = this.pinned; <span class="comment">// Pinned reference to the field
+        </span><span class="kw">let _</span>: <span class="kw-2">&amp;mut </span>U = this.unpinned; <span class="comment">// Normal reference to the field
+    </span>}
+}</code></pre></div>
+<p><a href="https://github.com/taiki-e/pin-project/blob/HEAD/examples/struct-default-expanded.rs"><em>code like this will be generated</em></a></p>
+<p>To use <code>#[pin_project]</code> on enums, you need to name the projection type
+returned from the method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::pin::Pin;
+
+<span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project(project = EnumProj)]
+</span><span class="kw">enum </span>Enum&lt;T, U&gt; {
+    Pinned(<span class="attr">#[pin] </span>T),
+    Unpinned(U),
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; Enum&lt;T, U&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="kw">match </span><span class="self">self</span>.project() {
+            EnumProj::Pinned(x) =&gt; {
+                <span class="kw">let _</span>: Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; = x;
+            }
+            EnumProj::Unpinned(y) =&gt; {
+                <span class="kw">let _</span>: <span class="kw-2">&amp;mut </span>U = y;
+            }
+        }
+    }
+}</code></pre></div>
+<p><a href="https://github.com/taiki-e/pin-project/blob/HEAD/examples/enum-default-expanded.rs"><em>code like this will be generated</em></a></p>
+<p>See <a href="attr.pin_project.html" title="attr pin_project::pin_project"><code>#[pin_project]</code></a> attribute for more details, and
+see <a href="https://github.com/taiki-e/pin-project/blob/HEAD/examples/README.md">examples</a> directory for more examples and generated code.</p>
+<h3 id="related-projects"><a class="doc-anchor" href="#related-projects">§</a>Related Projects</h3>
+<ul>
+<li><a href="https://github.com/taiki-e/pin-project-lite">pin-project-lite</a>: A lightweight version of pin-project written with declarative macros.</li>
+</ul>
+<!-- tidy:sync-markdown-to-rustdoc:end --></div></details><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.UnsafeUnpin.html" title="trait pin_project::UnsafeUnpin">Unsafe<wbr>Unpin</a></dt><dd>A trait used for custom implementations of <a href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a>.</dd></dl><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><dl class="item-table"><dt><a class="attr" href="attr.pin_project.html" title="attr pin_project::pin_project">pin_<wbr>project</a></dt><dd>An attribute that creates projection types covering all the fields of
+struct or enum.</dd><dt><a class="attr" href="attr.pinned_drop.html" title="attr pin_project::pinned_drop">pinned_<wbr>drop</a></dt><dd>An attribute used for custom implementations of [<code>Drop</code>].</dd></dl></section></div></main></body></html>

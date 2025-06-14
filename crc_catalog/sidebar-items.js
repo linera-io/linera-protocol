@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["algorithm","poly"],"struct":["Algorithm"],"trait":["Width"]};

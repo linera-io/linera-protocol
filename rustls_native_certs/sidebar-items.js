@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ErrorKind"],"fn":["load_native_certs"],"struct":["CertificateResult","Error"]};
