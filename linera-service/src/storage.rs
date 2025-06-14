@@ -54,6 +54,7 @@ pub enum StoreConfig {
     Memory {
         config: MemoryStoreConfig,
         namespace: String,
+        genesis_path: PathBuf,
     },
     /// The RocksDB key value store
     #[cfg(feature = "rocksdb")]
@@ -91,7 +92,11 @@ pub enum StorageConfig {
         endpoint: String,
     },
     /// The memory description.
-    Memory,
+    Memory {
+        /// The path to the genesis configuration. This is needed because we reinitialize
+        /// memory databases from the genesis config everytime.
+        genesis_path: PathBuf,
+    },
     /// The RocksDB description.
     #[cfg(feature = "rocksdb")]
     RocksDb {
@@ -151,8 +156,7 @@ pub struct StorageConfigNamespace {
     pub namespace: String,
 }
 
-const MEMORY: &str = "memory";
-const MEMORY_EXT: &str = "memory:";
+const MEMORY: &str = "memory:";
 #[cfg(feature = "storage-service")]
 const STORAGE_SERVICE: &str = "service:";
 #[cfg(feature = "rocksdb")]
@@ -168,17 +172,23 @@ impl FromStr for StorageConfigNamespace {
     type Err = anyhow::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        if input == MEMORY {
-            let namespace = DEFAULT_NAMESPACE.to_string();
-            let storage_config = StorageConfig::Memory;
-            return Ok(StorageConfigNamespace {
-                storage_config,
-                namespace,
-            });
-        }
-        if let Some(s) = input.strip_prefix(MEMORY_EXT) {
-            let namespace = s.to_string();
-            let storage_config = StorageConfig::Memory;
+        if let Some(s) = input.strip_prefix(MEMORY) {
+            let parts = s.split(':').collect::<Vec<_>>();
+            if parts.len() == 1 {
+                let genesis_path = parts[0].to_string().into();
+                let namespace = DEFAULT_NAMESPACE.to_string();
+                let storage_config = StorageConfig::Memory { genesis_path };
+                return Ok(StorageConfigNamespace {
+                    storage_config,
+                    namespace,
+                });
+            }
+            if parts.len() != 2 {
+                bail!("We should have one genesis config path and one optional namespace");
+            }
+            let genesis_path = parts[0].to_string().into();
+            let namespace = parts[1].to_string();
+            let storage_config = StorageConfig::Memory { genesis_path };
             return Ok(StorageConfigNamespace {
                 storage_config,
                 namespace,
@@ -398,11 +408,16 @@ impl StorageConfigNamespace {
                 };
                 Ok(StoreConfig::Service { config, namespace })
             }
-            StorageConfig::Memory => {
+            StorageConfig::Memory { genesis_path } => {
                 let config = MemoryStoreConfig {
                     common_config: common_config.reduced(),
                 };
-                Ok(StoreConfig::Memory { config, namespace })
+                let genesis_path = genesis_path.clone();
+                Ok(StoreConfig::Memory {
+                    config,
+                    namespace,
+                    genesis_path,
+                })
             }
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path, spawn_mode } => {
@@ -451,8 +466,8 @@ impl fmt::Display for StorageConfigNamespace {
             StorageConfig::Service { endpoint } => {
                 write!(f, "service:tcp:{}:{}", endpoint, namespace)
             }
-            StorageConfig::Memory => {
-                write!(f, "memory:{}", namespace)
+            StorageConfig::Memory { genesis_path } => {
+                write!(f, "memory:{}:{}", genesis_path.display(), namespace)
             }
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path, spawn_mode } => {
@@ -522,7 +537,11 @@ impl StoreConfig {
         Job: Runnable,
     {
         match self {
-            StoreConfig::Memory { config, namespace } => {
+            StoreConfig::Memory {
+                config,
+                namespace,
+                genesis_path,
+            } => {
                 let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
                 let mut storage = DbStorage::<MemoryStore, _>::maybe_create_and_connect(
                     &store_config,
@@ -530,6 +549,7 @@ impl StoreConfig {
                     wasm_runtime,
                 )
                 .await?;
+                let genesis_config = crate::util::read_json::<GenesisConfig>(genesis_path)?;
                 // Memory storage must be initialized every time.
                 genesis_config.initialize_storage(&mut storage).await?;
                 Ok(job.run(storage).await)
@@ -638,26 +658,24 @@ impl RunnableWithStore for InitializeStorageJob<'_> {
 #[test]
 fn test_memory_storage_config_from_str() {
     assert_eq!(
-        StorageConfigNamespace::from_str("memory:").unwrap(),
+        StorageConfigNamespace::from_str("memory:path/to/genesis.json").unwrap(),
         StorageConfigNamespace {
-            storage_config: StorageConfig::Memory,
+            storage_config: StorageConfig::Memory {
+                genesis_path: PathBuf::from("path/to/genesis.json")
+            },
             namespace: "".into()
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("memory").unwrap(),
+        StorageConfigNamespace::from_str("memory:path/to/genesis.json:namespace").unwrap(),
         StorageConfigNamespace {
-            storage_config: StorageConfig::Memory,
-            namespace: DEFAULT_NAMESPACE.into()
+            storage_config: StorageConfig::Memory {
+                genesis_path: PathBuf::from("path/to/genesis.json")
+            },
+            namespace: "namespace".into()
         }
     );
-    assert_eq!(
-        StorageConfigNamespace::from_str("memory:table_linera").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::Memory,
-            namespace: DEFAULT_NAMESPACE.into()
-        }
-    );
+    assert!(StorageConfigNamespace::from_str("memory").is_err(),);
 }
 
 #[cfg(feature = "storage-service")]

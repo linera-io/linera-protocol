@@ -88,7 +88,7 @@ impl StorageConfigProvider {
 
     pub fn database(&self) -> anyhow::Result<Database> {
         match self.storage.storage_config {
-            StorageConfig::Memory => anyhow::bail!("Not possible to work with memory"),
+            StorageConfig::Memory { .. } => anyhow::bail!("Not possible to work with memory"),
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { .. } => anyhow::bail!("Not possible to work with RocksDB"),
             #[cfg(feature = "storage-service")]
