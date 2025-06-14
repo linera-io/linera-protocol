@@ -30,7 +30,4 @@ node_modules
 # Web client and signer are supposed to be used
 # as a library, so we don't want to
 # include their lock files.
-linera-web/package-lock.json
-linera-web/pnpm-lock.json
-linera-web/signer/package-lock.json
-linera-web/signer/pnpm-lock.json
+linera-web/**/*-lock.json
