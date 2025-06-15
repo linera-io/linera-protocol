@@ -119,7 +119,10 @@ where
 
                     Err(NodeError::BlobsNotFound(blobs)) => self.upload_blobs(blobs).await?,
 
-                    Err(e) => Err(e)?,
+                    Err(e) => {
+                        tracing::error!("error {} when resolving block with hash: {}", e, hash);
+                        Err(e)?
+                    }
                 }
             }
 
