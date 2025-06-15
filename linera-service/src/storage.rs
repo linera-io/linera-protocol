@@ -450,15 +450,14 @@ impl StorageConfig {
             }
             #[cfg(feature = "storage-service")]
             InnerStorageConfig::Service { endpoint } => {
-                let common_config = options.common_store_config();
-                let endpoint = endpoint.clone();
                 let inner_config = ServiceStoreInternalConfig {
-                    endpoint,
-                    common_config: common_config.reduced(),
+                    endpoint: endpoint.clone(),
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                    max_stream_queries: options.storage_max_stream_queries,
                 };
                 let config = ServiceStoreConfig {
                     inner_config,
-                    storage_cache_config: common_config.storage_cache_config,
+                    storage_cache_config: options.storage_cache_config(),
                 };
                 Ok(StoreConfig::Service { config, namespace })
             }
