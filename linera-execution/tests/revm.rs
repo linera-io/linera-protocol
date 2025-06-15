@@ -328,3 +328,142 @@ async fn test_terminate_query_by_lack_of_fuel() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_basic_evm_features() -> anyhow::Result<()> {
+    let module = load_solidity_example("tests/fixtures/evm_basic_check.sol")?;
+
+    sol! {
+        function failing_function();
+        function test_precompile_sha256();
+    function check_contract_address(address evm_address);
+    }
+
+    let constructor_argument = Vec::<u8>::new();
+    let constructor_argument = serde_json::to_string(&constructor_argument)?.into_bytes();
+    let instantiation_argument = Vec::<u8>::new();
+    let instantiation_argument = serde_json::to_string(&instantiation_argument)?.into_bytes();
+    let state = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        ..Default::default()
+    };
+    let (mut app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
+    app_desc.parameters = constructor_argument;
+    let chain_id = app_desc.creator_chain_id;
+    let mut view = state
+        .into_view_with(chain_id, ExecutionRuntimeConfig::default())
+        .await;
+    let app_id = From::from(&app_desc);
+    let app_desc_blob_id = Blob::new_application_description(&app_desc).id();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let contract = EvmContractModule::Revm {
+        module: module.clone(),
+    };
+    view.context()
+        .extra()
+        .user_contracts()
+        .insert(app_id, contract.clone().into());
+
+    let service = EvmServiceModule::Revm { module };
+    view.context()
+        .extra()
+        .user_services()
+        .insert(app_id, service.into());
+
+    view.simulate_instantiation(
+        contract.into(),
+        Timestamp::from(2),
+        app_desc,
+        instantiation_argument,
+        contract_blob,
+        service_blob,
+    )
+    .await?;
+
+    let operation_context = OperationContext {
+        chain_id,
+        height: BlockHeight(0),
+        round: Some(0),
+        authenticated_signer: None,
+        authenticated_caller_id: None,
+        timestamp: Default::default(),
+    };
+
+    let policy = ResourceControlPolicy {
+        evm_fuel_unit: Amount::from_attos(1),
+        maximum_evm_fuel_per_block: 20000,
+        ..ResourceControlPolicy::default()
+    };
+    let mut controller =
+        ResourceController::new(Arc::new(policy), ResourceTracker::default(), None);
+    let mut txn_tracker = TransactionTracker::new_replaying_blobs([
+        app_desc_blob_id,
+        contract_blob_id,
+        service_blob_id,
+    ]);
+    let query_context = QueryContext {
+        chain_id,
+        next_block_height: BlockHeight(0),
+        local_time: Timestamp::from(0),
+    };
+
+    // Trying a failing function, should be an error
+    let operation = failing_functionCall {};
+    let bytes = operation.abi_encode();
+    let operation = Operation::User {
+        application_id: app_id,
+        bytes,
+    };
+    let result = view
+        .execute_operation(
+            operation_context,
+            operation,
+            &mut txn_tracker,
+            &mut controller,
+        )
+        .await;
+    assert!(result.is_err());
+
+    // Trying a call to an ethereum precompile function
+    let query = test_precompile_sha256Call {};
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
+    let bytes = serde_json::to_vec(&query)?;
+
+    let query = Query::User {
+        application_id: app_id,
+        bytes,
+    };
+
+    let result = view.query_application(query_context, query, None).await?;
+
+    let QueryResponse::User(result) = result.response else {
+        anyhow::bail!("Wrong QueryResponse result");
+    };
+    let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
+    assert_eq!(read_evm_u64_entry(result), 0);
+
+    // Testing that the created contract has the right address
+    let evm_address = app_id.evm_address();
+    let query = check_contract_addressCall { evm_address };
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
+    let bytes = serde_json::to_vec(&query)?;
+
+    let query = Query::User {
+        application_id: app_id,
+        bytes,
+    };
+
+    let result = view.query_application(query_context, query, None).await?;
+
+    let QueryResponse::User(result) = result.response else {
+        anyhow::bail!("Wrong QueryResponse result");
+    };
+    let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
+    assert_eq!(read_evm_u64_entry(result), 49);
+
+    Ok(())
+}
