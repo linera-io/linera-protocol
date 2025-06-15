@@ -450,9 +450,8 @@ impl StorageConfig {
                 Ok(StoreConfig::Service { config, namespace })
             }
             InnerStorageConfig::Memory { genesis_path } => {
-                let common_config = options.common_store_config();
                 let config = MemoryStoreConfig {
-                    common_config: common_config.reduced(),
+                    max_stream_queries: options.storage_max_stream_queries,
                 };
                 let genesis_path = genesis_path.clone();
                 Ok(StoreConfig::Memory {
@@ -593,9 +592,8 @@ impl StoreConfig {
                 namespace,
                 genesis_path,
             } => {
-                let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
                 let mut storage = DbStorage::<MemoryStore, _>::maybe_create_and_connect(
-                    &store_config,
+                    &config,
                     &namespace,
                     wasm_runtime,
                 )

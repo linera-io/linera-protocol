@@ -19,28 +19,16 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
     store::{
-        AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
-        WithError, WritableKeyValueStore,
+        AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
     },
 };
 
 /// The initial configuration of the system
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MemoryStoreConfig {
-    /// The common configuration of the key value store
-    pub common_config: CommonStoreInternalConfig,
-}
-
-impl MemoryStoreConfig {
-    /// Creates a `MemoryStoreConfig`. `max_concurrent_queries`, `cache_size` and `replication_factor` are not used.
-    pub fn new(max_stream_queries: usize) -> Self {
-        let common_config = CommonStoreInternalConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            replication_factor: 1,
-        };
-        Self { common_config }
-    }
+    /// The number of streams used for the async streams.
+    pub max_stream_queries: usize,
 }
 
 /// The number of streams for the test
@@ -64,7 +52,7 @@ impl MemoryStores {
         root_key: &[u8],
         kill_on_drop: bool,
     ) -> Result<MemoryStore, MemoryStoreError> {
-        let max_stream_queries = config.common_config.max_stream_queries;
+        let max_stream_queries = config.max_stream_queries;
         let Some(stores) = self.stores.get_mut(namespace) else {
             return Err(MemoryStoreError::NamespaceNotFound);
         };
@@ -279,14 +267,10 @@ impl MemoryStore {
 
     /// Creates a `MemoryStore` from a number of queries and a namespace.
     pub fn new(max_stream_queries: usize, namespace: &str) -> Result<Self, MemoryStoreError> {
-        let common_config = CommonStoreInternalConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            replication_factor: 1,
-        };
-        let config = MemoryStoreConfig { common_config };
-        let kill_on_drop = false;
-        MemoryStore::sync_maybe_create_and_connect(&config, namespace, kill_on_drop)
+        let config = MemoryStoreConfig { max_stream_queries };
+        MemoryStore::sync_maybe_create_and_connect(
+            &config, namespace, /* kill_on_drop */ false,
+        )
     }
 
     /// Creates a `MemoryStore` from a number of queries and a namespace for testing.
@@ -295,14 +279,8 @@ impl MemoryStore {
         max_stream_queries: usize,
         namespace: &str,
     ) -> Result<Self, MemoryStoreError> {
-        let common_config = CommonStoreInternalConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            replication_factor: 1,
-        };
-        let config = MemoryStoreConfig { common_config };
-        let kill_on_drop = true;
-        MemoryStore::sync_maybe_create_and_connect(&config, namespace, kill_on_drop)
+        let config = MemoryStoreConfig { max_stream_queries };
+        MemoryStore::sync_maybe_create_and_connect(&config, namespace, /* kill_on_drop */ true)
     }
 }
 
@@ -317,24 +295,16 @@ impl AdminKeyValueStore for MemoryStore {
         let mut memory_stores = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
-        let kill_on_drop = false;
-        memory_stores.sync_connect(config, namespace, &[], kill_on_drop)
+        memory_stores.sync_connect(config, namespace, &[], /* kill_on_drop */ false)
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
         let max_stream_queries = self.max_stream_queries;
-        let common_config = CommonStoreInternalConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            replication_factor: 1,
-        };
-        let config = MemoryStoreConfig { common_config };
+        let config = MemoryStoreConfig { max_stream_queries };
         let mut memory_stores = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
-        let kill_on_drop = self.kill_on_drop;
-        let namespace = &self.namespace;
-        memory_stores.sync_connect(&config, namespace, root_key, kill_on_drop)
+        memory_stores.sync_connect(&config, &self.namespace, root_key, self.kill_on_drop)
     }
 
     async fn list_all(_config: &Self::Config) -> Result<Vec<String>, MemoryStoreError> {
@@ -385,12 +355,7 @@ impl AdminKeyValueStore for MemoryStore {
 impl TestKeyValueStore for MemoryStore {
     async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
         let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
-        let common_config = CommonStoreInternalConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            replication_factor: 1,
-        };
-        Ok(MemoryStoreConfig { common_config })
+        Ok(MemoryStoreConfig { max_stream_queries })
     }
 }
 
