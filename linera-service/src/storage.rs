@@ -34,7 +34,7 @@ use {
 };
 #[cfg(feature = "scylladb")]
 use {
-    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };
@@ -492,8 +492,16 @@ impl StorageConfig {
             }
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { uri } => {
-                let common_config = options.common_store_config();
-                let config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let inner_config = ScyllaDbStoreInternalConfig {
+                    uri: uri.clone(),
+                    max_stream_queries: options.storage_max_stream_queries,
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                    replication_factor: options.storage_replication_factor,
+                };
+                let config = ScyllaDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
                 Ok(StoreConfig::ScyllaDb { config, namespace })
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -513,8 +521,17 @@ impl StorageConfig {
                     storage_cache_config: options.storage_cache_config(),
                 };
 
-                let common_config = options.common_store_config();
-                let second_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let inner_config = ScyllaDbStoreInternalConfig {
+                    uri: uri.clone(),
+                    max_stream_queries: options.storage_max_stream_queries,
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                    replication_factor: options.storage_replication_factor,
+                };
+                let second_config = ScyllaDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
+
                 let config = DualStoreConfig {
                     first_config,
                     second_config,
