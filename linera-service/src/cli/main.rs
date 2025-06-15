@@ -1296,13 +1296,9 @@ impl ClientOptions {
         let store_config = storage_config
             .add_common_config(self.common_config())
             .await?;
-        let genesis_config = self.wallet().await?.genesis_config().clone();
-        let output = Box::pin(store_config.run_with_storage(
-            &genesis_config,
-            self.wasm_runtime.with_wasm_default(),
-            job,
-        ))
-        .await?;
+        let output =
+            Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
+                .await?;
         Ok(output)
     }
 
