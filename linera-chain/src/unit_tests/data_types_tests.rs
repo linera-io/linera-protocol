@@ -140,3 +140,13 @@ fn test_certificates() {
         .is_none());
     assert!(builder.append(v3.public_key, v3.signature).is_err());
 }
+
+#[test]
+fn round_ordering() {
+    assert!(Round::Fast < Round::MultiLeader(0));
+    assert!(Round::MultiLeader(1) < Round::MultiLeader(2));
+    assert!(Round::MultiLeader(2) < Round::SingleLeader(0));
+    assert!(Round::SingleLeader(1) < Round::SingleLeader(2));
+    assert!(Round::SingleLeader(2) < Round::Validator(0));
+    assert!(Round::Validator(1) < Round::Validator(2))
+}

@@ -366,7 +366,7 @@ impl Secp256k1Signature {
     }
 
     /// Checks a signature.
-    pub fn check<'de, T>(&self, value: &T, author: &Secp256k1PublicKey) -> Result<(), CryptoError>
+    pub fn check<'de, T>(&self, value: &T, author: Secp256k1PublicKey) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
@@ -384,7 +384,7 @@ impl Secp256k1Signature {
     {
         let prehash = CryptoHash::new(value).as_bytes().0;
         for (author, signature) in votes {
-            signature.verify_inner::<T>(prehash, author)?;
+            signature.verify_inner::<T>(prehash, *author)?;
         }
         Ok(())
     }
@@ -397,7 +397,7 @@ impl Secp256k1Signature {
     fn verify_inner<'de, T>(
         &self,
         prehash: [u8; 32],
-        author: &Secp256k1PublicKey,
+        author: Secp256k1PublicKey,
     ) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
@@ -517,10 +517,10 @@ mod tests {
         let foo = Foo("hello".into());
 
         let s = Secp256k1Signature::new(&ts, &keypair1.secret_key);
-        assert!(s.check(&ts, &keypair1.public_key).is_ok());
-        assert!(s.check(&ts, &keypair2.public_key).is_err());
-        assert!(s.check(&tsx, &keypair1.public_key).is_err());
-        assert!(s.check(&foo, &keypair1.public_key).is_err());
+        assert!(s.check(&ts, keypair1.public_key).is_ok());
+        assert!(s.check(&ts, keypair2.public_key).is_err());
+        assert!(s.check(&tsx, keypair1.public_key).is_err());
+        assert!(s.check(&foo, keypair1.public_key).is_err());
     }
 
     #[test]

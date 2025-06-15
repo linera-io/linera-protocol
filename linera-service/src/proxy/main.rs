@@ -9,7 +9,7 @@ use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
 use linera_base::listen_for_shutdown_signals;
-use linera_client::config::{GenesisConfig, ValidatorServerConfig};
+use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
 use linera_rpc::{
     config::{
@@ -91,10 +91,6 @@ pub struct ProxyOptions {
     /// The maximal number of entries in the storage cache.
     #[arg(long, default_value = "1000")]
     pub max_cache_entries: usize,
-
-    /// Path to the file describing the initial user chains (aka genesis state)
-    #[arg(long = "genesis")]
-    genesis_config_path: PathBuf,
 
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
@@ -445,10 +441,9 @@ impl ProxyOptions {
             storage_cache_config,
             replication_factor: self.storage_replication_factor,
         };
-        let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;
         let store_config = self.storage_config.add_common_config(common_config).await?;
         store_config
-            .run_with_storage(&genesis_config, None, ProxyContext::from_options(self)?)
+            .run_with_storage(None, ProxyContext::from_options(self)?)
             .boxed()
             .await?
     }

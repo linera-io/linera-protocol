@@ -1,16 +1,29 @@
 import { Wallet, ethers } from "ethers";
 import { Signer } from "@linera/client";
 
-export class EmbeddedEIP191Signer implements Signer {
+/**
+ * A signer implementation that holds the private key in memory.
+ * 
+ * ⚠️ WARNING: This class is intended **only for testing or development** purposes.
+ * It stores the private key directly in memory, which makes it unsuitable for
+ * production environments due to security risks.
+ * 
+ * The `PrivateKey` signer uses an in-memory `ethers.Wallet` to sign messages following
+ * the EIP-191 scheme. It verifies that the provided owner matches the wallet
+ * address before signing.
+ * 
+ * Supports key creation from both a raw private key and a mnemonic phrase.
+ */
+export class PrivateKey implements Signer {
   private wallet: Wallet;
 
   constructor(privateKeyHex: string) {
     this.wallet = new Wallet(privateKeyHex);
   }
 
-  static fromMnemonic(mnemonic: string): EmbeddedEIP191Signer {
+  static fromMnemonic(mnemonic: string): PrivateKey {
     const wallet = ethers.Wallet.fromPhrase(mnemonic);
-    return new EmbeddedEIP191Signer(wallet.privateKey);
+    return new PrivateKey(wallet.privateKey);
   }
 
   public address(): string {

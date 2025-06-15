@@ -211,9 +211,6 @@ message BlockProposal {
   // bincode-encoded content
   bytes content = 2;
 
-  // Byte-encoded public key
-  AccountPublicKey public_key = 3;
-
   // Byte-encoded owner
   AccountOwner owner = 4;
 

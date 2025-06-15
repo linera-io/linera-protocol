@@ -5,7 +5,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSignature, CryptoHash, EvmPublicKey, EvmSignature, Signer},
+    crypto::{AccountSignature, CryptoHash, EvmSignature, Signer},
     identifiers::AccountOwner,
 };
 use wasm_bindgen::prelude::*;
@@ -20,6 +20,7 @@ pub enum JsSignerError {
     PublicKeyParse = 2,
     JsConversion = 3,
     UnexpectedSignatureFormat = 4,
+    InvalidAccountOwnerType = 5,
     Unknown = 9,
 }
 
@@ -32,6 +33,12 @@ impl Display for JsSignerError {
             JsSignerError::JsConversion => write!(f, "Error converting JS value"),
             JsSignerError::UnexpectedSignatureFormat => {
                 write!(f, "Unexpected signature format received from JS")
+            }
+            JsSignerError::InvalidAccountOwnerType => {
+                write!(
+                    f,
+                    "Invalid account owner type provided. Expected AccountOwner::Address20"
+                )
             }
             JsSignerError::Unknown => write!(f, "An unknown error occurred"),
         }
@@ -47,6 +54,7 @@ impl From<JsValue> for JsSignerError {
                 2 => JsSignerError::PublicKeyParse,
                 3 => JsSignerError::JsConversion,
                 4 => JsSignerError::UnexpectedSignatureFormat,
+                5 => JsSignerError::InvalidAccountOwnerType,
                 _ => JsSignerError::Unknown,
             }
         } else {
@@ -90,24 +98,15 @@ impl Signer for JsSigner {
         Ok(serde_wasm_bindgen::from_value(js_bool).map_err(|_| JsSignerError::JsConversion)?)
     }
 
-    async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Self::Error> {
-        let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
-        let js_public_key = self
-            .get_public_key(js_owner)
-            .await
-            .map_err(JsSignerError::from)?
-            .as_string()
-            .ok_or(JsSignerError::JsConversion)?;
-        let pk =
-            EvmPublicKey::from_str(&js_public_key).map_err(|_| JsSignerError::PublicKeyParse)?;
-        Ok(AccountPublicKey::EvmSecp256k1(pk))
-    }
-
     async fn sign(
         &self,
         owner: &AccountOwner,
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error> {
+        let address = match owner {
+            AccountOwner::Address20(address) => *address,
+            _ => return Err(JsSignerError::InvalidAccountOwnerType),
+        };
         let js_owner = JsValue::from_str(&owner.to_string());
         // Pass CryptoHash without serializing as that adds bytes
         // to the serialized value which we don't want for signing.
@@ -120,6 +119,6 @@ impl Signer for JsSigner {
             .ok_or(JsSignerError::JsConversion)?;
         let signature = EvmSignature::from_str(&js_signature)
             .map_err(|_| JsSignerError::UnexpectedSignatureFormat)?;
-        Ok(AccountSignature::EvmSecp256k1(signature))
+        Ok(AccountSignature::EvmSecp256k1 { signature, address })
     }
 }

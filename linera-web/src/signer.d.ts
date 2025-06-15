@@ -13,14 +13,6 @@ export interface Signer {
   sign(owner: string, value: Uint8Array): Promise<string>;
 
   /**
-   * Retrieves the public key corresponding to the private key associated with the specified EVM address.
-   *
-   * @param owner - The EVM address for which to retrieve the public key.
-   * @returns A promise that resolves to the public key as a hexadecimal string.
-   */
-  getPublicKey(owner: string): Promise<string>;
-
-  /**
    * Checks whether the instance holds a key whose associated address matches the given EVM address.
    *
    * @param owner - The EVM address to check for.

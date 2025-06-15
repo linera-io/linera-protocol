@@ -10,7 +10,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Epoch, Timestamp},
     ensure,
-    identifiers::{AccountOwner, ChainId},
+    identifiers::ChainId,
 };
 use linera_chain::{
     data_types::{
@@ -124,6 +124,7 @@ where
         &mut self,
         proposal: &BlockProposal,
     ) -> Result<Vec<Blob>, WorkerError> {
+        let owner = proposal.owner();
         let BlockProposal {
             content:
                 ProposalContent {
@@ -131,12 +132,10 @@ where
                     round,
                     outcome: _,
                 },
-            public_key,
             original_proposal,
             signature: _,
         } = proposal;
 
-        let owner = AccountOwner::from(*public_key);
         let mut maybe_blobs = self
             .state
             .maybe_get_required_blobs(proposal.required_blob_ids(), None)
@@ -305,7 +304,6 @@ where
             return Ok((info, actions));
         }
         let local_time = self.state.storage.clock().current_time();
-        // TODO(#2351): This sets the committee and then checks that committee's signatures.
         self.state.ensure_is_active().await?;
         // Verify the certificate.
         let (epoch, committee) = self.state.chain.current_committee()?;
@@ -321,7 +319,7 @@ where
         let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
         let blobs_result = self
             .state
-            .get_required_blobs(block.required_blob_ids(), &created_blobs)
+            .get_required_blobs(required_blob_ids.iter().copied(), &created_blobs)
             .await
             .map(|blobs| blobs.into_values().collect::<Vec<_>>());
 
@@ -432,7 +430,7 @@ where
         let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
         let blobs_result = self
             .state
-            .get_required_blobs(block.required_blob_ids(), &created_blobs)
+            .get_required_blobs(required_blob_ids.iter().copied(), &created_blobs)
             .await
             .map(|blobs| blobs.into_values().collect::<Vec<_>>());
 

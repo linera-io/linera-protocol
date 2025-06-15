@@ -155,7 +155,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         ensure!(
             proposed.is_none_or(|proposal| proposal.content.block.chain_id == chain_id)
                 && locking.is_none_or(|cert| cert.chain_id() == chain_id)
-                && response.check(&self.public_key).is_ok(),
+                && response.check(self.public_key).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
         Ok(response.info)
@@ -229,20 +229,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
             .map(|blob| self.node.handle_pending_blob(chain_id, blob.into_content()));
         try_join_all(tasks).await?;
         Ok(())
-    }
-
-    /// Tries to download the given blobs from this node. Returns `None` if not all could be found.
-    #[instrument(level = "trace")]
-    pub(crate) async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Option<Vec<Blob>> {
-        let mut stream = blob_ids
-            .iter()
-            .map(|blob_id| self.try_download_blob(*blob_id))
-            .collect::<FuturesUnordered<_>>();
-        let mut blobs = Vec::new();
-        while let Some(maybe_blob) = stream.next().await {
-            blobs.push(maybe_blob?);
-        }
-        Some(blobs)
     }
 
     #[instrument(level = "trace")]

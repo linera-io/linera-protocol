@@ -5,14 +5,10 @@ use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table,
 };
-use linera_base::{crypto::Signer, identifiers::ChainId};
+use linera_base::identifiers::ChainId;
 pub use linera_client::wallet::*;
 
-pub async fn pretty_print(
-    wallet: &Wallet,
-    signer: &impl Signer,
-    chain_ids: impl IntoIterator<Item = ChainId>,
-) {
+pub async fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId>) {
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -31,7 +27,6 @@ pub async fn pretty_print(
             chain_id,
             user_chain,
             Some(chain_id) == wallet.default,
-            signer,
         )
         .await;
     }
@@ -43,7 +38,6 @@ async fn update_table_with_chain(
     chain_id: ChainId,
     user_chain: &UserChain,
     is_default_chain: bool,
-    signer: &impl Signer,
 ) {
     let chain_id_cell = if is_default_chain {
         Cell::new(format!("{}", chain_id)).fg(Color::Green)
@@ -51,25 +45,13 @@ async fn update_table_with_chain(
         Cell::new(format!("{}", chain_id))
     };
     let account_owner = user_chain.owner;
-    let account_pub_key = match account_owner {
-        Some(owner) => signer
-            .get_public_key(&owner)
-            .await
-            .map(Some)
-            .expect("We should get a public key for owned chain."),
-        None => None,
-    };
     table.add_row(vec![
         chain_id_cell,
         Cell::new(format!(
-            r#"Public Key:         {}
-AccountOwner:       {}
+            r#"AccountOwner:       {}
 Block Hash:         {}
 Timestamp:          {}
 Next Block Height:  {}"#,
-            account_pub_key
-                .map(|kp| kp.to_string())
-                .unwrap_or_else(|| "-".to_string()),
             account_owner
                 .as_ref()
                 .map(|o| o.to_string())

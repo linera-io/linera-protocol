@@ -16,7 +16,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_client::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext, ClientContextExt as _},
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
@@ -151,8 +151,8 @@ where
             )
             .await;
         self.context.lock().await.update_wallet(&client).await?;
-        let chain_id = match result? {
-            ClientOutcome::Committed((chain_id, _certificate)) => chain_id,
+        let description = match result? {
+            ClientOutcome::Committed((description, _certificate)) => description,
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Err(Error::new(format!(
                     "This faucet is using a multi-owner chain and is not the leader right now. \
@@ -161,12 +161,7 @@ where
                 )));
             }
         };
-        Ok(self
-            .context
-            .lock()
-            .await
-            .chain_description(chain_id)
-            .await?)
+        Ok(description)
     }
 }
 /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
