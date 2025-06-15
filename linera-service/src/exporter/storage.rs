@@ -72,12 +72,12 @@ where
             CanonicalState::new((limits.auxiliary_cache_size_mb / 3).into(), state_context);
         let blobs_cache = Arc::new(FifoCache::with_weighter(
             limits.blob_cache_items_capacity as usize,
-            (limits.blob_cache_weight as u64) * 1024 * 1024,
+            (limits.blob_cache_weight_mb as u64) * 1024 * 1024,
             CacheWeighter::default(),
         ));
         let blocks_cache = Arc::new(FifoCache::with_weighter(
             limits.block_cache_items_capacity as usize,
-            (limits.block_cache_weight as u64) * 1024 * 1024,
+            (limits.block_cache_weight_mb as u64) * 1024 * 1024,
             CacheWeighter::default(),
         ));
 
@@ -219,7 +219,7 @@ where
             .build();
 
         let blob_state_cache_capacity =
-            ((limits.auxiliary_cache_size / 3) as u64 * 1024 * 1024) / (size_of::<BlobId>() as u64);
+            ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024) / (size_of::<BlobId>() as u64);
         let blob_state_cache = LfuCache::builder()
             .max_capacity(blob_state_cache_capacity)
             .build();

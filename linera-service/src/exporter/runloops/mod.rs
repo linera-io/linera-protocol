@@ -137,7 +137,7 @@ async fn start_exporter_tasks<S, F>(
     for (id, destination) in destinations {
         spawn_exporter_task_on_set(
             &mut set,
-            signal.clone(),
+            shutdown_signal.clone(),
             id,
             options,
             work_queue_size,
@@ -244,7 +244,7 @@ mod test {
     use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
 
-    use super::start_runloops;
+    use super::start_block_processor_task;
     use crate::{
         common::CanonicalBlock,
         state::BlockExporterStateView,
@@ -276,9 +276,9 @@ mod test {
         // make some blocks
         let (notification, state) = make_simple_state_with_blobs(&storage).await;
 
-        let notifier = start_runloops(
-            signal,
+        let notifier = start_block_processor_task(
             storage,
+            signal,
             LimitsConfig::default(),
             NodeOptions {
                 send_timeout: Duration::from_millis(4000),
@@ -330,9 +330,9 @@ mod test {
 
         let (notification, _state) = make_simple_state_with_blobs(&storage).await;
 
-        let notifier = start_runloops(
-            signal,
+        let notifier = start_block_processor_task(
             storage.clone(),
+            signal,
             LimitsConfig {
                 persistence_period_ms: 3000,
                 ..Default::default()
@@ -380,9 +380,9 @@ mod test {
         let signal = ExporterCancellationSignal::new(child.clone());
 
         // restart
-        let _notifier = start_runloops(
-            signal,
+        let _notifier = start_block_processor_task(
             storage.clone(),
+            signal,
             LimitsConfig {
                 persistence_period_ms: 3000,
                 ..Default::default()

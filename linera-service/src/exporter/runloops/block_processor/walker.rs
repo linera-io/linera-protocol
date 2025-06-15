@@ -102,9 +102,8 @@ where
         }
     }
 
-    async fn index_block(&mut self, block_id: &BlockId) -> Result<(), ExporterError> {
-        self.storage.index_block(block_id).await.unwrap();
-        Ok(())
+    async fn index_block(&mut self, block_id: &BlockId) -> Result<bool, ExporterError> {
+        self.storage.index_block(block_id).await
     }
 
     async fn is_blob_indexed(&mut self, blob_id: BlobId) -> Result<bool, ExporterError> {
@@ -168,7 +167,7 @@ impl ProcessedBlock {
             dependencies,
             block: block_id,
             blobs: block.required_blob_ids().into_iter().collect(),
-            native_blobs: block.created_blob_ids().into_iter().collect(),
+            native_blobs: block.block().created_blob_ids().into_iter().collect(),
         }
     }
 }

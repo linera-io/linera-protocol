@@ -1075,7 +1075,7 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
         tls: TlsConfig::ClearText,
         kind: DestinationKind::Validator,
         endpoint: "127.0.0.1".to_owned(),
-        port: LocalNet::proxy_port(1) as u16,
+        port: LocalNet::proxy_public_port(1, 0) as u16,
     };
 
     let destination_config = DestinationConfig {
