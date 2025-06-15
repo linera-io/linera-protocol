@@ -262,7 +262,7 @@ enum ServiceStoreServerOptions {
         #[arg(long)]
         endpoint: String,
         /// Preferred buffer size for async streams.
-        #[arg(long)]
+        #[arg(long, default_value = "10")]
         max_stream_queries: usize,
     },
 
@@ -282,16 +282,16 @@ enum ServiceStoreServerOptions {
         #[arg(long)]
         max_concurrent_queries: Option<usize>,
         /// Preferred buffer size for async streams.
-        #[arg(long)]
+        #[arg(long, default_value = "10")]
         max_stream_queries: usize,
         /// The maximum size of the cache, in bytes (keys size + value sizes)
-        #[arg(long)]
+        #[arg(long, default_value = "10000000")]
         max_cache_size: usize,
         /// The maximum size of an entry size, in bytes
-        #[arg(long)]
+        #[arg(long, default_value = "1000000")]
         max_entry_size: usize,
         /// The maximum number of entries in the cache.
-        #[arg(long)]
+        #[arg(long, default_value = "1000")]
         max_cache_entries: usize,
     },
 }
