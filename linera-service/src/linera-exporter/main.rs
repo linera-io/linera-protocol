@@ -8,8 +8,7 @@ use exporter_service::ExporterContext;
 use futures::FutureExt;
 use linera_client::config::BlockExporterConfig;
 use linera_sdk::views::ViewError;
-use linera_service::storage::StorageConfigNamespace;
-use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
+use linera_service::storage::{CommonStorageOptions, StorageConfig};
 
 #[allow(dead_code)]
 mod exporter_service;
@@ -43,31 +42,15 @@ struct ExporterOptions {
 
     /// Storage configuration for the blockchain history, chain states and binary blobs.
     #[arg(long = "storage")]
-    storage_config: StorageConfigNamespace,
+    storage_config: StorageConfig,
+
+    /// Common storage options.
+    #[command(flatten)]
+    common_storage_options: CommonStorageOptions,
 
     /// The number of Tokio worker threads to use.
     #[arg(long)]
     tokio_threads: Option<usize>,
-
-    /// The maximal number of simultaneous queries to the database
-    #[arg(long)]
-    max_concurrent_queries: Option<usize>,
-
-    /// The maximal number of stream queries to the database
-    #[arg(long, default_value = "10")]
-    max_stream_queries: usize,
-
-    /// The maximal memory used in the storage cache.
-    #[arg(long, default_value = "10000000")]
-    max_cache_size: usize,
-
-    /// The maximal size of an entry in the storage cache.
-    #[arg(long, default_value = "1000000")]
-    max_entry_size: usize,
-
-    /// The maximal number of entries in the storage cache.
-    #[arg(long, default_value = "1000")]
-    max_cache_entries: usize,
 }
 
 fn main() -> Result<()> {
@@ -83,18 +66,6 @@ impl ExporterOptions {
         let config: BlockExporterConfig =
             toml::from_str(&config_string).expect("Invalid configuration file format");
 
-        let storage_cache_config = StorageCacheConfig {
-            max_cache_size: self.max_cache_size,
-            max_entry_size: self.max_entry_size,
-            max_cache_entries: self.max_cache_entries,
-        };
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: self.max_concurrent_queries,
-            max_stream_queries: self.max_stream_queries,
-            storage_cache_config,
-            replication_factor: 1,
-        };
-
         let mut runtime_builder = match self.tokio_threads {
             None | Some(1) => tokio::runtime::Builder::new_current_thread(),
             Some(worker_threads) => {
@@ -107,12 +78,12 @@ impl ExporterOptions {
         let future = async {
             let context =
                 ExporterContext::new(config.id, config.service_config, config.destination_config);
-            let storage_config = self
+            let store_config = self
                 .storage_config
-                .add_common_config(common_config)
+                .add_common_storage_options(&self.common_storage_options)
                 .await
                 .unwrap();
-            storage_config.run_with_storage(None, context).boxed().await
+            store_config.run_with_storage(None, context).boxed().await
         };
 
         let runtime = runtime_builder.enable_all().build()?;

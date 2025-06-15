@@ -47,10 +47,7 @@ use crate::{
     common::{get_uleb128_size, get_upper_bound_option},
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingConfig, LruCachingStore},
-    store::{
-        AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
-    },
+    store::{AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError},
     value_splitting::{ValueSplittingError, ValueSplittingStore},
     FutureSyncExt as _,
 };
@@ -725,8 +722,12 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
 pub struct ScyllaDbStoreInternalConfig {
     /// The URL to which the requests have to be sent
     pub uri: String,
-    /// The common configuration of the key value store
-    common_config: CommonStoreInternalConfig,
+    /// Maximum number of concurrent database queries allowed for this client.
+    pub max_concurrent_queries: Option<usize>,
+    /// Preferred buffer size for async streams.
+    pub max_stream_queries: usize,
+    /// The replication factor.
+    pub replication_factor: u32,
 }
 
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
@@ -745,10 +746,9 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let store = ScyllaDbClient::new(session, namespace).await?;
         let store = Arc::new(store);
         let semaphore = config
-            .common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
-        let max_stream_queries = config.common_config.max_stream_queries;
+        let max_stream_queries = config.max_stream_queries;
         let root_key = get_big_root_key(&[]);
         Ok(Self {
             store,
@@ -901,7 +901,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
                     'class' : 'NetworkTopologyStrategy', \
                     'replication_factor' : {} \
                 }}",
-                KEYSPACE, config.common_config.replication_factor
+                KEYSPACE, config.replication_factor
             ))
             .await?;
         session
@@ -980,24 +980,17 @@ impl ScyllaDbStoreInternal {
     }
 }
 
-/// We limit the number of connections that can be done for tests.
-#[cfg(with_testing)]
-const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
-
-/// The number of connections in the stream is limited for tests.
-#[cfg(with_testing)]
-const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
-
 #[cfg(with_testing)]
 impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
     async fn new_test_config() -> Result<ScyllaDbStoreInternalConfig, ScyllaDbStoreInternalError> {
+        // TODO(#4114): Read the port from an environment variable.
         let uri = "localhost:9042".to_string();
-        let common_config = CommonStoreInternalConfig {
-            max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
-            max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+        Ok(ScyllaDbStoreInternalConfig {
+            uri,
+            max_concurrent_queries: Some(10),
+            max_stream_queries: 10,
             replication_factor: 1,
-        };
-        Ok(ScyllaDbStoreInternalConfig { uri, common_config })
+        })
     }
 }
 
@@ -1018,20 +1011,6 @@ pub type ScyllaDbStore =
 
 /// The `ScyllaDbStoreConfig` input type
 pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
-
-impl ScyllaDbStoreConfig {
-    /// Creates a `ScyllaDbStoreConfig` from the inputs.
-    pub fn new(uri: String, common_config: crate::store::CommonStoreConfig) -> ScyllaDbStoreConfig {
-        let inner_config = ScyllaDbStoreInternalConfig {
-            uri,
-            common_config: common_config.reduced(),
-        };
-        ScyllaDbStoreConfig {
-            inner_config,
-            storage_cache_config: common_config.storage_cache_config,
-        }
-    }
-}
 
 /// The combined error type for the `ScyllaDbStore`.
 pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;

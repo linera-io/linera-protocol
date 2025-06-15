@@ -19,10 +19,7 @@ use linera_views::store::TestKeyValueStore;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingStore,
-    store::{
-        AdminKeyValueStore, CommonStoreInternalConfig, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
-    },
+    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     FutureSyncExt,
 };
 use serde::de::DeserializeOwned;
@@ -430,11 +427,10 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceStoreError> {
         let semaphore = config
-            .common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let namespace = bcs::to_bytes(namespace)?;
-        let max_stream_queries = config.common_config.max_stream_queries;
+        let max_stream_queries = config.max_stream_queries;
         let mut start_key = vec![KeyPrefix::Key as u8];
         start_key.extend(&namespace);
         let prefix_len = namespace.len() + 1;
@@ -557,15 +553,10 @@ impl TestKeyValueStore for ServiceStoreClientInternal {
 pub fn service_config_from_endpoint(
     endpoint: &str,
 ) -> Result<ServiceStoreInternalConfig, ServiceStoreError> {
-    let common_config = CommonStoreInternalConfig {
+    Ok(ServiceStoreInternalConfig {
+        endpoint: endpoint.to_string(),
         max_concurrent_queries: None,
         max_stream_queries: 100,
-        replication_factor: 1,
-    };
-    let endpoint = endpoint.to_string();
-    Ok(ServiceStoreInternalConfig {
-        endpoint,
-        common_config,
     })
 }
 
