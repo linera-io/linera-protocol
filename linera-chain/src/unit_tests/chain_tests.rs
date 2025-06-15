@@ -32,7 +32,7 @@ use linera_execution::{
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
     memory::MemoryStore,
-    views::{View, ViewError},
+    views::View,
 };
 use test_case::test_case;
 
@@ -43,13 +43,7 @@ use crate::{
     ChainError, ChainExecutionContext, ChainStateView,
 };
 
-impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>>
-where
-    MemoryContext<TestExecutionRuntimeContext>:
-        linera_views::context::Context + Clone + Send + Sync + 'static,
-    ViewError:
-        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::context::Context>::Error>,
-{
+impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
     pub async fn new(chain_id: ChainId) -> Self {
         let exec_runtime_context =
             TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());
@@ -73,7 +67,6 @@ impl TestEnvironment {
         )]);
         let config = InitialChainConfig {
             ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
-            admin_id: None,
             epoch: Epoch::ZERO,
             committees: iter::once((
                 Epoch::ZERO,
@@ -145,10 +138,6 @@ impl TestEnvironment {
             parent: self.admin_id(),
             block_height: BlockHeight(height),
             chain_index: 0,
-        };
-        let config = InitialChainConfig {
-            admin_id: Some(self.admin_id()),
-            ..config
         };
         let description = ChainDescription::new(origin, config, Timestamp::from(0));
         self.created_descriptions

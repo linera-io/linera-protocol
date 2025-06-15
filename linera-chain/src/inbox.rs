@@ -1,9 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
-
 use async_graphql::SimpleObject;
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight},
@@ -16,7 +13,8 @@ use linera_views::{
     context::Context,
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{ClonableView, View, ViewError},
+    views::{ClonableView, View},
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -28,30 +26,30 @@ use crate::{data_types::MessageBundle, ChainError};
 mod inbox_tests;
 
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec},
-    prometheus::HistogramVec,
-};
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static INBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "inbox_size",
-        "Inbox size",
-        &[],
-        exponential_bucket_interval(1.0, 2_000_000.0),
-    )
-});
+    use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec};
+    use prometheus::HistogramVec;
 
-#[cfg(with_metrics)]
-static REMOVED_BUNDLES: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "removed_bundles",
-        "Number of bundles removed by anticipation",
-        &[],
-        exponential_bucket_interval(1.0, 10_000.0),
-    )
-});
+    pub static INBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "inbox_size",
+            "Inbox size",
+            &[],
+            exponential_bucket_interval(1.0, 2_000_000.0),
+        )
+    });
+
+    pub static REMOVED_BUNDLES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "removed_bundles",
+            "Number of bundles removed by anticipation",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
+        )
+    });
+}
 
 /// The state of an inbox.
 /// * An inbox is used to track bundles received and executed locally.
@@ -222,7 +220,7 @@ where
             );
             self.added_bundles.delete_front();
             #[cfg(with_metrics)]
-            INBOX_SIZE
+            metrics::INBOX_SIZE
                 .with_label_values(&[])
                 .observe(self.added_bundles.count() as f64);
             tracing::trace!("Skipping previously received bundle {:?}", previous_bundle);
@@ -244,7 +242,7 @@ where
                 );
                 self.added_bundles.delete_front();
                 #[cfg(with_metrics)]
-                INBOX_SIZE
+                metrics::INBOX_SIZE
                     .with_label_values(&[])
                     .observe(self.added_bundles.count() as f64);
                 tracing::trace!("Consuming bundle {:?}", bundle);
@@ -254,7 +252,7 @@ where
                 tracing::trace!("Marking bundle as expected: {:?}", bundle);
                 self.removed_bundles.push_back(bundle.clone());
                 #[cfg(with_metrics)]
-                REMOVED_BUNDLES
+                metrics::REMOVED_BUNDLES
                     .with_label_values(&[])
                     .observe(self.removed_bundles.count() as f64);
                 false
@@ -293,7 +291,7 @@ where
                     );
                     self.removed_bundles.delete_front();
                     #[cfg(with_metrics)]
-                    REMOVED_BUNDLES
+                    metrics::REMOVED_BUNDLES
                         .with_label_values(&[])
                         .observe(self.removed_bundles.count() as f64);
                 } else {
@@ -313,7 +311,7 @@ where
                 // Otherwise, schedule the messages for execution.
                 self.added_bundles.push_back(bundle);
                 #[cfg(with_metrics)]
-                INBOX_SIZE
+                metrics::INBOX_SIZE
                     .with_label_values(&[])
                     .observe(self.added_bundles.count() as f64);
                 true

@@ -9,19 +9,19 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
 };
-use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
+use linera_core::{
+    client::{BlanketMessagePolicy, ChainClientOptions, MessagePolicy},
+    node::CrossChainMessageDelivery,
+    DEFAULT_GRACE_PERIOD,
+};
 use linera_execution::ResourceControlPolicy;
 
-#[cfg(any(with_indexed_db, not(with_persist)))]
-use crate::wallet::Wallet;
-use crate::{persistent, util};
+use crate::util;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("no wallet found")]
-    NonexistentWallet,
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("persistence error: {0}")]
@@ -31,10 +31,10 @@ pub enum Error {
 }
 
 #[cfg(feature = "fs")]
-util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
+util::impl_from_dynamic!(Error:Persistence, linera_persistent::file::Error);
 
-#[cfg(with_indexed_db)]
-util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
+#[cfg(web)]
+util::impl_from_dynamic!(Error:Persistence, linera_persistent::indexed_db::Error);
 
 util::impl_from_infallible!(Error);
 
@@ -116,21 +116,22 @@ pub struct ClientContextOptions {
     pub blob_download_timeout: Duration,
 }
 
-#[cfg(with_indexed_db)]
 impl ClientContextOptions {
-    pub async fn wallet(&self) -> Result<persistent::IndexedDb<Wallet>, Error> {
-        persistent::IndexedDb::read("linera-wallet")
-            .await?
-            .ok_or(Error::NonexistentWallet)
-    }
-}
-
-#[cfg(not(with_persist))]
-impl ClientContextOptions {
-    pub async fn wallet(&self) -> Result<persistent::Memory<Wallet>, Error> {
-        #![allow(unreachable_code)]
-        let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `indexed-db` features");
-        Ok(persistent::Memory::new(_wallet))
+    /// Creates [`ChainClientOptions`] with the corresponding values.
+    pub fn to_chain_client_options(&self) -> ChainClientOptions {
+        let message_policy = MessagePolicy::new(
+            self.blanket_message_policy,
+            self.restrict_chain_ids_to.clone(),
+        );
+        let cross_chain_message_delivery =
+            CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
+        ChainClientOptions {
+            max_pending_message_bundles: self.max_pending_message_bundles,
+            message_policy,
+            cross_chain_message_delivery,
+            grace_period: self.grace_period,
+            blob_download_timeout: self.blob_download_timeout,
+        }
     }
 }
 

@@ -34,7 +34,8 @@ use linera_views::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         span_random_reordering_put_delete,
     },
-    views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
+    views::{CryptoHashRootView, HashableView, Hasher, RootView, View},
+    ViewError,
 };
 use rand::{Rng, RngCore};
 
@@ -59,7 +60,7 @@ pub struct StateView<C> {
 
 #[allow(async_fn_in_trait)]
 pub trait StateStorage {
-    type Context: Context<Extra = usize, Error: Send + Sync> + Clone + Send + Sync + 'static;
+    type Context: Context<Extra = usize> + 'static;
 
     async fn new() -> Self;
 
@@ -165,7 +166,7 @@ impl StateStorage for RocksDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -193,7 +194,7 @@ impl StateStorage for ScyllaDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -221,7 +222,7 @@ impl StateStorage for DynamoDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -309,7 +310,6 @@ async fn test_store<S>(
 ) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStorage,
-    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let default_hash = {
         let view = store.load(1).await?;
@@ -764,7 +764,6 @@ async fn test_views_in_dynamo_db() -> Result<()> {
 async fn test_store_rollback_kernel<S>(store: &mut S) -> Result<()>
 where
     S: StateStorage,
-    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     {
         let mut view = store.load(1).await?;
@@ -916,7 +915,6 @@ async fn compute_hash_unordered_put_view<S>(
 ) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStorage,
-    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await?;
     for key_value in key_value_vector {
@@ -947,7 +945,6 @@ async fn compute_hash_unordered_putdelete_view<S>(
 ) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStorage,
-    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await?;
     for operation in operations {
@@ -991,7 +988,6 @@ async fn compute_hash_ordered_view<S>(
 ) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
     S: StateStorage,
-    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await?;
     for key_value in key_value_vector {
@@ -1067,7 +1063,6 @@ async fn check_hash_memoization_persistence<S>(
 ) -> Result<()>
 where
     S: StateStorage,
-    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let mut hash = {
         let view = store.load(1).await?;
@@ -1160,7 +1155,6 @@ async fn check_hash_memoization_persistence_large() -> Result<()> {
 async fn check_large_write<S>(store: &mut S, vector: Vec<u8>) -> Result<()>
 where
     S: StateStorage,
-    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let hash1 = {
         let mut view = store.load(1).await?;

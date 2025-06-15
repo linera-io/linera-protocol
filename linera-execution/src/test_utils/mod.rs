@@ -22,10 +22,7 @@ use linera_base::{
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
-use linera_views::{
-    context::Context,
-    views::{View, ViewError},
-};
+use linera_views::{context::Context, views::View, ViewError};
 use proptest::{prelude::any, strategy::Strategy};
 use serde::{Deserialize, Serialize};
 
@@ -55,14 +52,6 @@ pub fn dummy_chain_description_with_ownership_and_balance(
     )]);
     let origin = ChainOrigin::Root(index);
     let config = InitialChainConfig {
-        admin_id: if index == 0 {
-            None
-        } else {
-            Some(
-                dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance)
-                    .id(),
-            )
-        },
         application_permissions: Default::default(),
         balance,
         committees,

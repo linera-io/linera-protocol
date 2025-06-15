@@ -80,13 +80,13 @@ impl BaseKey {
 
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
-pub trait Context: Clone {
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
+pub trait Context: Clone
+where
+    crate::ViewError: From<Self::Error>,
+{
     /// The type of the key-value store used by this context.
-    type Store: ReadableKeyValueStore
-        + WritableKeyValueStore
-        + WithError<Error = Self::Error>
-        + Send
-        + Sync;
+    type Store: ReadableKeyValueStore + WritableKeyValueStore + WithError<Error = Self::Error>;
 
     /// User-provided data to be carried along.
     type Extra: Clone + Send + Sync;
@@ -156,7 +156,7 @@ impl<E, S> ViewContext<E, S> {
 impl<E, S> Context for ViewContext<E, S>
 where
     E: Clone + Send + Sync,
-    S: ReadableKeyValueStore + WritableKeyValueStore + Clone + Send + Sync,
+    S: ReadableKeyValueStore + WritableKeyValueStore + Clone,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {
     type Extra = E;

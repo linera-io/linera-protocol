@@ -139,12 +139,12 @@ impl ConfirmedBlock {
     }
 
     /// Returns a blob state that applies to all blobs used by this block.
-    pub fn to_blob_state(&self) -> BlobState {
+    pub fn to_blob_state(&self, is_stored_block: bool) -> BlobState {
         BlobState {
-            last_used_by: self.0.hash(),
+            last_used_by: is_stored_block.then_some(self.0.hash()),
             chain_id: self.chain_id(),
             block_height: self.height(),
-            epoch: self.epoch(),
+            epoch: is_stored_block.then_some(self.epoch()),
         }
     }
 }
@@ -509,6 +509,15 @@ impl Block {
     /// Returns reference to the outgoing messages in the block.
     pub fn messages(&self) -> &Vec<Vec<OutgoingMessage>> {
         &self.body.messages
+    }
+
+    /// Returns all recipients of messages in this block.
+    pub fn recipients(&self) -> BTreeSet<ChainId> {
+        self.body
+            .messages
+            .iter()
+            .flat_map(|messages| messages.iter().map(|message| message.destination))
+            .collect()
     }
 
     /// Returns whether there are any oracle responses in this block.

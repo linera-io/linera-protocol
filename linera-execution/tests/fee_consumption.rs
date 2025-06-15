@@ -20,7 +20,7 @@ use linera_execution::{
         SystemExecutionState,
     },
     ContractRuntime, ExecutionError, Message, MessageContext, ResourceControlPolicy,
-    ResourceController, TransactionTracker,
+    ResourceController, ResourceTracker, TransactionTracker,
 };
 use test_case::test_case;
 
@@ -251,11 +251,11 @@ async fn test_fee_consumption(
     } else {
         None
     };
-    let mut controller = ResourceController {
-        policy: Arc::new(prices),
-        account: authenticated_signer,
-        ..ResourceController::default()
-    };
+    let mut controller = ResourceController::new(
+        Arc::new(prices),
+        ResourceTracker::default(),
+        authenticated_signer,
+    );
 
     for spend in &spends {
         oracle_responses.extend(spend.expected_oracle_responses());

@@ -4,8 +4,6 @@
 // `tracing::instrument` is not compatible with this nightly Clippy lint
 #![allow(unknown_lints)]
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     fmt::Debug,
     marker::PhantomData,
@@ -21,9 +19,7 @@ use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
-    config::{
-        ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
-    },
+    config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
     grpc::{
         api::{
             self,
@@ -52,48 +48,47 @@ use tonic::{
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-};
 
 #[cfg(with_metrics)]
 use crate::prometheus_server;
 
 #[cfg(with_metrics)]
-static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "proxy_request_latency",
-        "Proxy request latency",
-        &[],
-        linear_bucket_interval(1.0, 50.0, 2000.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> =
-    LazyLock::new(|| register_int_counter_vec("proxy_request_count", "Proxy request count", &[]));
+    use linera_base::prometheus_util::{
+        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
-#[cfg(with_metrics)]
-static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "proxy_request_success",
-        "Proxy request success",
-        &["method_name"],
-    )
-});
+    pub static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "proxy_request_latency",
+            "Proxy request latency",
+            &[],
+            linear_bucket_interval(1.0, 50.0, 2000.0),
+        )
+    });
+    pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
+    });
 
-#[cfg(with_metrics)]
-static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "proxy_request_error",
-        "Proxy request error",
-        &["method_name"],
-    )
-});
+    pub static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "proxy_request_success",
+            "Proxy request success",
+            &["method_name"],
+        )
+    });
+
+    pub static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "proxy_request_error",
+            "Proxy request error",
+            &["method_name"],
+        )
+    });
+}
 
 #[derive(Clone)]
 pub struct PrometheusMetricsMiddlewareLayer;
@@ -132,10 +127,10 @@ where
             let response = future.await?;
             #[cfg(with_metrics)]
             {
-                PROXY_REQUEST_LATENCY
+                metrics::PROXY_REQUEST_LATENCY
                     .with_label_values(&[])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
-                PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
+                metrics::PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
             }
             Ok(response)
         }
@@ -147,12 +142,12 @@ where
 pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 
 struct GrpcProxyInner<S> {
-    public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
     worker_connection_pool: GrpcConnectionPool,
     notifier: ChannelNotifier<Result<Notification, Status>>,
     tls: TlsConfig,
     storage: S,
+    id: usize,
 }
 
 impl<S> GrpcProxy<S>
@@ -160,15 +155,14 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     pub fn new(
-        public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
         connect_timeout: Duration,
         timeout: Duration,
         tls: TlsConfig,
         storage: S,
+        id: usize,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
-            public_config,
             internal_config,
             worker_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)
@@ -176,6 +170,7 @@ where
             notifier: ChannelNotifier::default(),
             tls,
             storage,
+            id,
         }))
     }
 
@@ -185,20 +180,28 @@ where
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
     }
 
+    fn config(&self) -> &ProxyConfig {
+        self.0
+            .internal_config
+            .proxies
+            .get(self.0.id)
+            .expect("No proxy config provided.")
+    }
+
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
         NotifierServiceServer::new(self.clone())
     }
 
     fn public_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().public_port))
     }
 
     fn metrics_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.metrics_port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().metrics_port))
     }
 
     fn internal_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().private_port))
     }
 
     fn shard_for(&self, proxyable: &impl GrpcProxyable) -> Option<ShardConfig> {
@@ -318,14 +321,16 @@ where
         match result {
             Ok(chain_info_result) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_SUCCESS
+                metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&[method_name])
                     .inc();
                 Ok(chain_info_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_ERROR.with_label_values(&[method_name]).inc();
+                metrics::PROXY_REQUEST_ERROR
+                    .with_label_values(&[method_name])
+                    .inc();
                 Err(status)
             }
         }
@@ -334,9 +339,7 @@ where
     /// Returns the appropriate gRPC status for the given [`ViewError`].
     fn error_to_status(err: ViewError) -> Status {
         let mut status = match &err {
-            ViewError::TooLargeValue | ViewError::BcsError(_) => {
-                Status::invalid_argument(err.to_string())
-            }
+            ViewError::BcsError(_) => Status::invalid_argument(err.to_string()),
             ViewError::StoreError { .. }
             | ViewError::TokioJoinError(_)
             | ViewError::TryLockError(_)
@@ -347,8 +350,6 @@ where
                 Status::out_of_range(err.to_string())
             }
             ViewError::NotFound(_)
-            | ViewError::BlobsNotFound(_)
-            | ViewError::EventsNotFound(_)
             | ViewError::CannotAcquireCollectionEntry
             | ViewError::MissingEntries => Status::not_found(err.to_string()),
         };
@@ -476,9 +477,7 @@ where
             .read_network_description()
             .await
             .map_err(Self::error_to_status)?
-            .ok_or(Status::not_found(
-                "Cannot find network description in the database",
-            ))?;
+            .ok_or_else(|| Status::not_found("Cannot find network description in the database"))?;
         Ok(Response::new(description.into()))
     }
 
@@ -507,6 +506,7 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Self::error_to_status)?;
+        let blob = blob.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
 
@@ -520,14 +520,14 @@ where
         match client.download_pending_blob(inner).await {
             Ok(blob_result) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_SUCCESS
+                metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&["download_pending_blob"])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_ERROR
+                metrics::PROXY_REQUEST_ERROR
                     .with_label_values(&["download_pending_blob"])
                     .inc();
                 Err(status)
@@ -545,14 +545,14 @@ where
         match client.handle_pending_blob(inner).await {
             Ok(blob_result) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_SUCCESS
+                metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&["handle_pending_blob"])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_ERROR
+                metrics::PROXY_REQUEST_ERROR
                     .with_label_values(&["handle_pending_blob"])
                     .inc();
                 Err(status)
@@ -628,7 +628,12 @@ where
             .read_blob_state(blob_id)
             .await
             .map_err(Self::error_to_status)?;
-        Ok(Response::new(blob_state.last_used_by.into()))
+        let blob_state =
+            blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+        let last_used_by = blob_state
+            .last_used_by
+            .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+        Ok(Response::new(last_used_by.into()))
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]

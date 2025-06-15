@@ -6,7 +6,7 @@ use std::{env, sync::Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::Amount;
-use linera_client::persistent::{self, Persist};
+use linera_persistent::{self as persistent, Persist};
 use tempfile::{tempdir, TempDir};
 
 use super::{

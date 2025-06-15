@@ -16,10 +16,8 @@ use async_lock::{Semaphore, SemaphoreGuard};
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::{
-        batch_write_item::BatchWriteItemError,
         create_table::CreateTableError,
         delete_table::DeleteTableError,
-        describe_table::DescribeTableError,
         get_item::GetItemError,
         list_tables::ListTablesError,
         query::{QueryError, QueryOutput},
@@ -33,7 +31,7 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use aws_smithy_types::error::operation::BuildError;
-use futures::future::{join_all, FutureExt as _};
+use futures::future::join_all;
 use linera_base::ensure;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -52,6 +50,7 @@ use crate::{
         KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
+    FutureSyncExt as _,
 };
 
 /// Name of the environment variable with the address to a DynamoDB local instance.
@@ -60,7 +59,7 @@ const DYNAMODB_LOCAL_ENDPOINT: &str = "DYNAMODB_LOCAL_ENDPOINT";
 /// Gets the AWS configuration from the environment
 async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
-        .boxed()
+        .boxed_sync()
         .await;
     Ok((&base_config).into())
 }
@@ -73,7 +72,7 @@ fn get_endpoint_address() -> Option<String> {
 async fn get_dynamodb_local_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError>
 {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
-        .boxed()
+        .boxed_sync()
         .await;
     let endpoint_address = get_endpoint_address().unwrap();
     let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
@@ -368,7 +367,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(store)
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreInternalError> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreInternalError> {
         let client = self.client.clone();
         let namespace = self.namespace.clone();
         let semaphore = self.semaphore.clone();
@@ -393,7 +392,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                 .list_tables()
                 .set_exclusive_start_table_name(start_table)
                 .send()
-                .boxed()
+                .boxed_sync()
                 .await?;
             if let Some(namespaces_blk) = response.table_names {
                 namespaces.extend(namespaces_blk);
@@ -432,7 +431,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                 .delete_table()
                 .table_name(&table)
                 .send()
-                .boxed()
+                .boxed_sync()
                 .await?;
         }
         Ok(())
@@ -450,7 +449,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .table_name(namespace)
             .set_key(Some(key_db))
             .send()
-            .boxed()
+            .boxed_sync()
             .await;
         let Err(error) = response else {
             return Ok(true);
@@ -512,7 +511,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                     .build()?,
             )
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
         Ok(())
     }
@@ -527,7 +526,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .delete_table()
             .table_name(namespace)
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
         Ok(())
     }
@@ -615,7 +614,7 @@ impl DynamoDbStoreInternal {
             .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
             .set_exclusive_start_key(start_key_map)
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
         Ok(response)
     }
@@ -631,7 +630,7 @@ impl DynamoDbStoreInternal {
             .table_name(&self.namespace)
             .set_key(Some(key_db))
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
 
         match response.item {
@@ -655,7 +654,7 @@ impl DynamoDbStoreInternal {
             .set_key(Some(key_db))
             .projection_expression(PARTITION_ATTRIBUTE)
             .send()
-            .boxed()
+            .boxed_sync()
             .await?;
 
         Ok(response.item.is_some())
@@ -960,7 +959,7 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
                 .transact_write_items()
                 .set_transact_items(Some(builder.transactions))
                 .send()
-                .boxed()
+                .boxed_sync()
                 .await?;
         }
         let mut builder = TransactionBuilder::new(&self.start_key);
@@ -976,7 +975,7 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
                 .transact_write_items()
                 .set_transact_items(Some(builder.transactions))
                 .send()
-                .boxed()
+                .boxed_sync()
                 .await?;
         }
         Ok(())
@@ -1006,10 +1005,6 @@ pub enum DynamoDbStoreInternalError {
     #[error(transparent)]
     Get(#[from] Box<SdkError<GetItemError>>),
 
-    /// An error occurred while writing a batch of items.
-    #[error(transparent)]
-    BatchWriteItem(#[from] Box<SdkError<BatchWriteItemError>>),
-
     /// An error occurred while writing a transaction of items.
     #[error(transparent)]
     TransactWriteItem(#[from] Box<SdkError<TransactWriteItemsError>>),
@@ -1025,10 +1020,6 @@ pub enum DynamoDbStoreInternalError {
     /// An error occurred while listing tables
     #[error(transparent)]
     ListTables(#[from] Box<SdkError<ListTablesError>>),
-
-    /// An error occurred while describing tables
-    #[error(transparent)]
-    DescribeTables(#[from] Box<SdkError<DescribeTableError>>),
 
     /// The transact maximum size is `MAX_TRANSACT_WRITE_ITEM_SIZE`.
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
@@ -1049,10 +1040,6 @@ pub enum DynamoDbStoreInternalError {
     /// Key prefixes have to be of non-zero length.
     #[error("The key_prefix must be of strictly positive length")]
     ZeroLengthKeyPrefix,
-
-    /// The recovery failed.
-    #[error("The DynamoDB database recovery failed")]
-    DatabaseRecoveryFailed,
 
     /// The journal is not coherent
     #[error(transparent)]

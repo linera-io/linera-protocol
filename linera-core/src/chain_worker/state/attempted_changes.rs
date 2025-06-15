@@ -340,12 +340,11 @@ where
         }
 
         // Update the blob state with last used certificate hash.
-        let blob_state = certificate.value().to_blob_state();
-        let overwrite = blobs_result.is_ok(); // Overwrite only if we wrote the certificate.
+        let blob_state = certificate.value().to_blob_state(blobs_result.is_ok());
         let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
         self.state
             .storage
-            .maybe_write_blob_states(&blob_ids, blob_state, overwrite)
+            .maybe_write_blob_states(&blob_ids, blob_state)
             .await?;
         let mut blobs = blobs_result?
             .into_iter()
@@ -413,6 +412,53 @@ where
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
 
         Ok((info, actions))
+    }
+
+    /// Stores a block's blobs, and adds its messages to the outbox where possible.
+    /// Does not execute the block.
+    pub(super) async fn preprocess_certificate(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Result<NetworkActions, WorkerError> {
+        let block = certificate.block();
+        // Check that the chain is active and ready for this confirmation.
+        let tip = self.state.chain.tip_state.get().clone();
+        if tip.next_block_height > block.header.height {
+            // We already processed this block.
+            return self.state.create_network_actions().await;
+        }
+
+        let required_blob_ids = block.required_blob_ids();
+        let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
+        let blobs_result = self
+            .state
+            .get_required_blobs(block.required_blob_ids(), &created_blobs)
+            .await
+            .map(|blobs| blobs.into_values().collect::<Vec<_>>());
+
+        if let Ok(blobs) = &blobs_result {
+            self.state
+                .storage
+                .write_blobs_and_certificate(blobs, &certificate)
+                .await?;
+        }
+
+        // Update the blob state with last used certificate hash.
+        let blob_state = certificate.value().to_blob_state(blobs_result.is_ok());
+        let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
+        self.state
+            .storage
+            .maybe_write_blob_states(&blob_ids, blob_state)
+            .await?;
+        blobs_result?;
+        // Update the outboxes.
+        self.state
+            .chain
+            .preprocess_block(certificate.value())
+            .await?;
+        // Persist chain.
+        self.save().await?;
+        self.state.create_network_actions().await
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given

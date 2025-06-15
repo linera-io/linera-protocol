@@ -20,20 +20,14 @@ mod wasmer;
 mod wasmtime;
 
 use linera_base::data_types::Bytecode;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use thiserror::Error;
 use wasm_instrument::{gas_metering, parity_wasm};
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
-    },
-    prometheus::HistogramVec,
-    std::sync::LazyLock,
-};
 
 pub use self::{
     entrypoints::{ContractEntrypoints, ServiceEntrypoints},
@@ -45,24 +39,30 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "wasm_contract_instantiation_latency",
-        "Wasm contract instantiation latency",
-        &[],
-        exponential_bucket_latencies(1.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "wasm_service_instantiation_latency",
-        "Wasm service instantiation latency",
-        &[],
-        exponential_bucket_latencies(1.0),
-    )
-});
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    pub static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "wasm_contract_instantiation_latency",
+            "Wasm contract instantiation latency",
+            &[],
+            exponential_bucket_latencies(1.0),
+        )
+    });
+
+    pub static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "wasm_service_instantiation_latency",
+            "Wasm service instantiation latency",
+            &[],
+            exponential_bucket_latencies(1.0),
+        )
+    });
+}
 
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
@@ -114,7 +114,7 @@ impl UserContractModule for WasmContractModule {
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
         #[cfg(with_metrics)]
-        let _instantiation_latency = CONTRACT_INSTANTIATION_LATENCY.measure_latency();
+        let _instantiation_latency = metrics::CONTRACT_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserContractInstance = match self {
             #[cfg(with_wasmtime)]
@@ -177,7 +177,7 @@ impl UserServiceModule for WasmServiceModule {
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError> {
         #[cfg(with_metrics)]
-        let _instantiation_latency = SERVICE_INSTANTIATION_LATENCY.measure_latency();
+        let _instantiation_latency = metrics::SERVICE_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserServiceInstance = match self {
             #[cfg(with_wasmtime)]
@@ -307,7 +307,7 @@ pub enum WasmExecutionError {
     LoadServiceModule(#[source] anyhow::Error),
     #[error("Failed to instrument Wasm module to add fuel metering")]
     InstrumentModule,
-    #[error("Invalid Wasm module")]
+    #[error("Invalid Wasm module: {0}")]
     InvalidBytecode(#[from] wasm_instrument::parity_wasm::SerializationError),
     #[cfg(with_wasmer)]
     #[error("Failed to instantiate Wasm module: {_0}")]

@@ -18,13 +18,12 @@ use crate::{
     queue_view::QueueView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, RootView, ViewError},
+    views::{ClonableView, RootView},
+    ViewError,
 };
 
 /// A [`View`][`crate::views::View`] to be used in test cases.
-pub trait TestView:
-    RootView<MemoryContext<()>> + ClonableView<MemoryContext<()>> + Send + Sync + 'static
-{
+pub trait TestView: RootView<Context = MemoryContext<()>> + ClonableView {
     /// Representation of the view's state.
     type State: Debug + Eq + Send;
 

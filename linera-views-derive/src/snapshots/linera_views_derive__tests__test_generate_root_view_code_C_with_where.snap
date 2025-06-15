@@ -1,0 +1,22 @@
+---
+source: linera-views-derive/src/lib.rs
+expression: pretty(generate_root_view_code(input))
+---
+impl<C, MyParam> linera_views::views::RootView for TestView<C, MyParam>
+where
+    MyParam: Send + Sync + 'static,
+    Self: linera_views::views::View,
+{
+    async fn save(&mut self) -> Result<(), linera_views::ViewError> {
+        use linera_views::{
+            context::Context, batch::Batch, store::WritableKeyValueStore as _,
+            views::View,
+        };
+        let mut batch = Batch::new();
+        self.flush(&mut batch)?;
+        if !batch.is_empty() {
+            self.context().store().write_batch(batch).await?;
+        }
+        Ok(())
+    }
+}

@@ -4,17 +4,17 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::{self, Display},
+    fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    str::FromStr,
 };
 
 #[cfg(with_revm)]
 use alloy_primitives::{Address, B256};
 use anyhow::{anyhow, Context};
-use async_graphql::SimpleObject;
+use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
+use derive_more::{Display, FromStr};
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -84,13 +84,13 @@ impl Account {
     }
 }
 
-impl Display for Account {
+impl fmt::Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.chain_id, self.owner)
     }
 }
 
-impl FromStr for Account {
+impl std::str::FromStr for Account {
     type Err = anyhow::Error;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
@@ -169,13 +169,28 @@ pub enum BlobType {
     ChainDescription,
 }
 
-impl Display for BlobType {
+impl BlobType {
+    /// Returns whether the blob is of [`BlobType::Committee`] variant.
+    pub fn is_committee_blob(&self) -> bool {
+        match self {
+            BlobType::Data
+            | BlobType::ContractBytecode
+            | BlobType::ServiceBytecode
+            | BlobType::EvmBytecode
+            | BlobType::ApplicationDescription
+            | BlobType::ChainDescription => false,
+            BlobType::Committee => true,
+        }
+    }
+}
+
+impl fmt::Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl FromStr for BlobType {
+impl std::str::FromStr for BlobType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -201,14 +216,14 @@ impl BlobId {
     }
 }
 
-impl Display for BlobId {
+impl fmt::Display for BlobId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.blob_type, self.hash)?;
         Ok(())
     }
 }
 
-impl FromStr for BlobId {
+impl std::str::FromStr for BlobId {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -324,6 +339,33 @@ pub enum GenericApplicationId {
     User(ApplicationId),
 }
 
+impl fmt::Display for GenericApplicationId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GenericApplicationId::System => Display::fmt("System", f),
+            GenericApplicationId::User(application_id) => {
+                Display::fmt("User:", f)?;
+                Display::fmt(&application_id, f)
+            }
+        }
+    }
+}
+
+impl std::str::FromStr for GenericApplicationId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "System" {
+            return Ok(GenericApplicationId::System);
+        }
+        if let Some(result) = s.strip_prefix("User:") {
+            let application_id = ApplicationId::from_str(result)?;
+            return Ok(GenericApplicationId::User(application_id));
+        }
+        Err(anyhow!("Invalid parsing of GenericApplicationId"))
+    }
+}
+
 impl GenericApplicationId {
     /// Returns the `ApplicationId`, or `None` if it is `System`.
     pub fn user_application_id(&self) -> Option<&ApplicationId> {
@@ -420,6 +462,21 @@ where
     }
 }
 
+impl fmt::Display for StreamName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Display::fmt(&hex::encode(&self.0), f)
+    }
+}
+
+impl std::str::FromStr for StreamName {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let vec = hex::decode(s)?;
+        Ok(StreamName(vec))
+    }
+}
+
 /// An event stream ID.
 #[derive(
     Clone,
@@ -435,7 +492,9 @@ where
     WitStore,
     WitType,
     SimpleObject,
+    InputObject,
 )]
+#[graphql(input_name = "StreamIdInput")]
 pub struct StreamId {
     /// The application that can add events to this stream.
     pub application_id: GenericApplicationId,
@@ -449,6 +508,56 @@ impl StreamId {
         StreamId {
             application_id: GenericApplicationId::System,
             stream_name: name.into(),
+        }
+    }
+}
+
+/// The result of an `events_from_index`.
+#[derive(
+    Debug,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Clone,
+    Hash,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    SimpleObject,
+)]
+pub struct IndexAndEvent {
+    /// The index of the found event.
+    pub index: u32,
+    /// The event being returned.
+    pub event: Vec<u8>,
+}
+
+impl fmt::Display for StreamId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.application_id, f)?;
+        Display::fmt(":", f)?;
+        Display::fmt(&self.stream_name, f)
+    }
+}
+
+impl std::str::FromStr for StreamId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts = s.rsplit_once(":");
+        if let Some((part0, part1)) = parts {
+            let application_id =
+                GenericApplicationId::from_str(part0).context("Invalid GenericApplicationId!")?;
+            let stream_name = StreamName::from_str(part1).context("Invalid StreamName!")?;
+            Ok(StreamId {
+                application_id,
+                stream_name,
+            })
+        } else {
+            Err(anyhow!("Invalid blob ID: {}", s))
         }
     }
 }
@@ -869,7 +978,7 @@ impl<'de> Deserialize<'de> for AccountOwner {
     }
 }
 
-impl Display for AccountOwner {
+impl fmt::Display for AccountOwner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AccountOwner::Reserved(value) => {
@@ -883,7 +992,7 @@ impl Display for AccountOwner {
     }
 }
 
-impl FromStr for AccountOwner {
+impl std::str::FromStr for AccountOwner {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -912,13 +1021,13 @@ impl FromStr for AccountOwner {
     }
 }
 
-impl Display for ChainId {
+impl fmt::Display for ChainId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, f)
     }
 }
 
-impl FromStr for ChainId {
+impl std::str::FromStr for ChainId {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -986,6 +1095,7 @@ mod tests {
     use super::{AccountOwner, BlobType};
     use crate::{
         data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
+        identifiers::{ApplicationId, CryptoHash, GenericApplicationId, StreamId, StreamName},
         ownership::ChainOwnership,
     };
 
@@ -994,7 +1104,6 @@ mod tests {
     fn chain_id_computing() {
         let example_chain_origin = ChainOrigin::Root(0);
         let example_chain_config = InitialChainConfig {
-            admin_id: None,
             epoch: Epoch::ZERO,
             ownership: ChainOwnership::single(AccountOwner::Reserved(0)),
             balance: Amount::ZERO,
@@ -1008,7 +1117,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "0e94923a8f72ef1d0e69e6958e655002f2b1883bac9a67a4704d2f4125825217"
+            "4423610c1010c31be88bc6cc041a9c1063d58062e9d748c1552a1e75e7ea13a9"
         );
     }
 
@@ -1052,5 +1161,42 @@ mod tests {
             "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
         )
         .is_err());
+    }
+
+    #[test]
+    fn stream_name() {
+        let vec = vec![32, 54, 120, 234];
+        let stream_name1 = StreamName(vec);
+        let stream_name2 = StreamName::from_str(&format!("{stream_name1}")).unwrap();
+        assert_eq!(stream_name1, stream_name2);
+    }
+
+    fn test_generic_application_id(application_id: GenericApplicationId) {
+        let application_id2 = GenericApplicationId::from_str(&format!("{application_id}")).unwrap();
+        assert_eq!(application_id, application_id2);
+    }
+
+    #[test]
+    fn generic_application_id() {
+        test_generic_application_id(GenericApplicationId::System);
+        let hash = CryptoHash::test_hash("test case");
+        let application_id = ApplicationId::new(hash);
+        test_generic_application_id(GenericApplicationId::User(application_id));
+    }
+
+    #[test]
+    fn stream_id() {
+        let hash = CryptoHash::test_hash("test case");
+        let application_id = ApplicationId::new(hash);
+        let application_id = GenericApplicationId::User(application_id);
+        let vec = vec![32, 54, 120, 234];
+        let stream_name = StreamName(vec);
+
+        let stream_id1 = StreamId {
+            application_id,
+            stream_name,
+        };
+        let stream_id2 = StreamId::from_str(&format!("{stream_id1}")).unwrap();
+        assert_eq!(stream_id1, stream_id2);
     }
 }

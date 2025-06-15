@@ -6,7 +6,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, parse_quote, ItemStruct, Type, TypePath};
+use syn::{parse_macro_input, parse_quote, ItemStruct, Type};
 
 #[derive(Debug, deluxe::ParseAttributes)]
 #[deluxe(attributes(view))]
@@ -14,18 +14,14 @@ struct StructAttrs {
     context: Option<syn::Type>,
 }
 
-struct ContextAndConstraints<'a> {
-    context: syn::Type,
-    context_constraints: Vec<syn::WherePredicate>,
+struct Constraints<'a> {
     input_constraints: Vec<&'a syn::WherePredicate>,
     impl_generics: syn::ImplGenerics<'a>,
     type_generics: syn::TypeGenerics<'a>,
 }
 
-impl<'a> ContextAndConstraints<'a> {
+impl<'a> Constraints<'a> {
     fn get(item: &'a syn::ItemStruct) -> Self {
-        let attrs: StructAttrs = deluxe::parse_attributes(item).unwrap();
-
         let (impl_generics, type_generics, maybe_where_clause) = item.generics.split_for_impl();
         let input_constraints = maybe_where_clause
             .map(|w| w.predicates.iter())
@@ -33,30 +29,7 @@ impl<'a> ContextAndConstraints<'a> {
             .flatten()
             .collect();
 
-        let (context, context_constraints) = if let Some(context) = attrs.context {
-            (context, vec![])
-        } else {
-            let first_type_param = item
-                .generics
-                .type_params()
-                .map(|param| &param.ident)
-                .next()
-                .expect("no context provided and no type parameters");
-            let context = Type::Path(TypePath {
-                qself: None,
-                path: first_type_param.clone().into(),
-            });
-
-            let constraints = vec![parse_quote! {
-                #context: linera_views::context::Context + Send + Sync + Clone + 'static
-            }];
-
-            (context, constraints)
-        };
-
         Self {
-            context,
-            context_constraints,
             input_constraints,
             impl_generics,
             type_generics,
@@ -75,14 +48,25 @@ fn get_extended_entry(e: Type) -> TokenStream2 {
 }
 
 fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
-    let ContextAndConstraints {
-        context,
-        context_constraints,
+    let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = ContextAndConstraints::get(&input);
+    } = Constraints::get(&input);
+
+    let attrs: StructAttrs = deluxe::parse_attributes(&input).unwrap();
+    let context = attrs.context.unwrap_or_else(|| {
+        let ident = &input
+            .generics
+            .type_params()
+            .next()
+            .expect("no `context` given and no type parameters")
+            .ident;
+        parse_quote! { #ident }
+    });
+
     let struct_name = &input.ident;
+    let field_types: Vec<_> = input.fields.iter().map(|field| &field.ty).collect();
 
     let mut name_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
@@ -93,15 +77,12 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut num_init_keys_quotes = Vec::new();
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
-    let mut field_constraints = vec![];
     for (idx, e) in input.fields.iter().enumerate() {
         let name = e.ident.clone().unwrap();
-        let ty = &e.ty;
         let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let g = get_extended_entry(e.ty.clone());
         name_quotes.push(quote! { #name });
-        field_constraints.push(quote! { #ty: linera_views::views::View<#context> });
         rollback_quotes.push(quote! { self.#name.rollback(); });
         flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
         test_flush_quotes.push(quote! { #test_flush_ident });
@@ -147,35 +128,36 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     };
 
     quote! {
-        impl #impl_generics linera_views::views::View<#context> for #struct_name #type_generics
+        impl #impl_generics linera_views::views::View for #struct_name #type_generics
         where
+            #context: linera_views::context::Context,
             #(#input_constraints,)*
-            #(#context_constraints,)*
-            #(#field_constraints,)*
-            Self: Send + Sync,
+            #(#field_types: linera_views::views::View<Context = #context>,)*
         {
-            const NUM_INIT_KEYS: usize = #(#num_init_keys_quotes)+*;
+            const NUM_INIT_KEYS: usize = #(<#field_types as linera_views::views::View>::NUM_INIT_KEYS)+*;
+
+            type Context = #context;
 
             fn context(&self) -> &#context {
                 use linera_views::views::View;
                 self.#first_name_quote.context()
             }
 
-            fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
+            fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
                 use linera_views::context::Context as _;
                 let mut keys = Vec::new();
                 #(#pre_load_keys_quotes)*
                 Ok(keys)
             }
 
-            fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::views::ViewError> {
+            fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::ViewError> {
                 use linera_views::context::Context as _;
                 let mut pos = 0;
                 #(#post_load_keys_quotes)*
                 Ok(Self {#(#name_quotes),*})
             }
 
-            async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
+            async fn load(context: #context) -> Result<Self, linera_views::ViewError> {
                 use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
                 #load_metrics
                 if Self::NUM_INIT_KEYS == 0 {
@@ -197,7 +179,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 false
             }
 
-            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::views::ViewError> {
+            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
                 use linera_views::views::View;
                 #(#flush_quotes)*
                 Ok( #(#test_flush_quotes)&&* )
@@ -211,21 +193,12 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
 }
 
 fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
-    let ContextAndConstraints {
-        context,
-        context_constraints,
+    let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = ContextAndConstraints::get(&input);
+    } = Constraints::get(&input);
     let struct_name = &input.ident;
-    let mut flushes = Vec::new();
-    let mut deletes = Vec::new();
-    for e in &input.fields {
-        let name = e.ident.clone().unwrap();
-        flushes.push(quote! { self.#name.flush(&mut batch)?; });
-        deletes.push(quote! { self.#name.delete(batch); });
-    }
 
     let increment_counter = if cfg!(feature = "metrics") {
         quote! {
@@ -241,17 +214,16 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     };
 
     quote! {
-        impl #impl_generics linera_views::views::RootView<#context> for #struct_name #type_generics
+        impl #impl_generics linera_views::views::RootView for #struct_name #type_generics
         where
             #(#input_constraints,)*
-            #(#context_constraints,)*
-            Self: Send + Sync,
+            Self: linera_views::views::View,
         {
-            async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
+            async fn save(&mut self) -> Result<(), linera_views::ViewError> {
                 use linera_views::{context::Context, batch::Batch, store::WritableKeyValueStore as _, views::View};
                 #increment_counter
                 let mut batch = Batch::new();
-                #(#flushes)*
+                self.flush(&mut batch)?;
                 if !batch.is_empty() {
                     self.context().store().write_batch(batch).await?;
                 }
@@ -261,28 +233,15 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn hash_view_constraints(input: &ItemStruct, context: &syn::Type) -> Vec<syn::WherePredicate> {
-    input
-        .fields
-        .iter()
-        .map(|field| {
-            let ty = &field.ty;
-            parse_quote! { #ty: linera_views::views::HashableView<#context> }
-        })
-        .collect()
-}
-
 fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
-    let ContextAndConstraints {
-        context,
-        context_constraints,
+    let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = ContextAndConstraints::get(&input);
+    } = Constraints::get(&input);
     let struct_name = &input.ident;
-    let hash_constraints = hash_view_constraints(&input, &context);
 
+    let field_types = input.fields.iter().map(|field| &field.ty);
     let mut field_hashes_mut = Vec::new();
     let mut field_hashes = Vec::new();
     for e in &input.fields {
@@ -292,16 +251,15 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     }
 
     quote! {
-        impl #impl_generics linera_views::views::HashableView<#context> for #struct_name #type_generics
+        impl #impl_generics linera_views::views::HashableView for #struct_name #type_generics
         where
+            #(#field_types: linera_views::views::HashableView,)*
             #(#input_constraints,)*
-            #(#context_constraints,)*
-            #(#hash_constraints,)*
-            Self: Send + Sync,
+            Self: linera_views::views::View,
         {
             type Hasher = linera_views::sha3::Sha3_256;
 
-            async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
+            async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::ViewError> {
                 use linera_views::views::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
@@ -309,7 +267,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
                 Ok(hasher.finalize())
             }
 
-            async fn hash(&self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
+            async fn hash(&self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::ViewError> {
                 use linera_views::views::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
@@ -321,26 +279,23 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
 }
 
 fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
-    let ContextAndConstraints {
-        context,
-        context_constraints,
+    let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = ContextAndConstraints::get(&input);
-    let hash_constraints = hash_view_constraints(&input, &context);
+    } = Constraints::get(&input);
+    let field_types = input.fields.iter().map(|field| &field.ty);
     let struct_name = &input.ident;
     let hash_type = syn::Ident::new(&format!("{struct_name}Hash"), Span::call_site());
     quote! {
-        impl #impl_generics linera_views::views::CryptoHashView<#context>
+        impl #impl_generics linera_views::views::CryptoHashView
         for #struct_name #type_generics
         where
+            #(#field_types: linera_views::views::HashableView,)*
             #(#input_constraints,)*
-            #(#context_constraints,)*
-            #(#hash_constraints,)*
-            Self: Send + Sync,
+            Self: linera_views::views::View,
         {
-            async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+            async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::{
                     batch::Batch,
@@ -356,7 +311,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
                 Ok(CryptoHash::new(&#hash_type(hash)))
             }
 
-            async fn crypto_hash_mut(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+            async fn crypto_hash_mut(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::{
                     batch::Batch,
@@ -376,13 +331,11 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
 }
 
 fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
-    let ContextAndConstraints {
-        context,
-        context_constraints,
+    let Constraints {
         input_constraints,
         impl_generics,
         type_generics,
-    } = ContextAndConstraints::get(&input);
+    } = Constraints::get(&input);
     let struct_name = &input.ident;
 
     let mut clone_constraints = vec![];
@@ -391,19 +344,18 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
     for field in &input.fields {
         let name = &field.ident;
         let ty = &field.ty;
-        clone_constraints.push(quote! { #ty: ClonableView<#context> });
+        clone_constraints.push(quote! { #ty: ClonableView });
         clone_fields.push(quote! { #name: self.#name.clone_unchecked()? });
     }
 
     quote! {
-        impl #impl_generics linera_views::views::ClonableView<#context> for #struct_name #type_generics
+        impl #impl_generics linera_views::views::ClonableView for #struct_name #type_generics
         where
-            #(#context_constraints,)*
             #(#input_constraints,)*
             #(#clone_constraints,)*
-            Self: Send + Sync,
+            Self: linera_views::views::View,
         {
-            fn clone_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
+            fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
                 Ok(Self {
                     #(#clone_fields,)*
                 })

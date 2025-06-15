@@ -11,14 +11,14 @@ use std::{
 
 use linera_base::vm::VmRuntime;
 use linera_views::common::from_bytes_option;
-use revm::{
-    db::AccountState,
-    primitives::{keccak256, state::AccountInfo},
-    Database, DatabaseCommit, DatabaseRef,
-};
-use revm_primitives::{address, Address, BlobExcessGasAndPrice, BlockEnv, EvmState, B256, U256};
+use revm::{primitives::keccak256, Database, DatabaseCommit, DatabaseRef};
+use revm_context::BlockEnv;
+use revm_context_interface::block::BlobExcessGasAndPrice;
+use revm_database::{AccountState, DBErrorMarker};
+use revm_primitives::{address, Address, B256, U256};
+use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError};
+use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -41,6 +41,8 @@ const SSTORE_COST_RESET: u64 = 2900;
 /// The refund from releasing data.
 const SSTORE_REFUND_RELEASE: u64 = 4800;
 
+/// The number of key writes, reads, release, and no change in EVM has to be accounted for.
+/// Then we remove those costs from the final bill.
 #[derive(Clone, Default)]
 pub(crate) struct StorageStats {
     key_no_operation: u64,
@@ -65,9 +67,16 @@ impl StorageStats {
     }
 }
 
+/// This is the encapsulation of the `Runtime` corresponding to the contract.
 pub(crate) struct DatabaseRuntime<Runtime> {
+    /// This is the storage statistics of the read/write in order to adjust gas costs.
     storage_stats: Arc<Mutex<StorageStats>>,
+    /// This is the EVM address of the contract.
+    /// At the creation, is is set to `Address::ZERO` and then later set to the correct value.
+    pub contract_address: Address,
+    /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
+    /// The uncommited changes to the contract.
     pub changes: EvmState,
 }
 
@@ -75,6 +84,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     fn clone(&self) -> Self {
         Self {
             storage_stats: self.storage_stats.clone(),
+            contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
         }
@@ -96,7 +106,13 @@ pub enum KeyCategory {
     Storage,
 }
 
-impl<Runtime> DatabaseRuntime<Runtime> {
+fn application_id_to_address(application_id: ApplicationId) -> Address {
+    let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
+    let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
+    Address::from_slice(&application_id[0..20])
+}
+
+impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     /// Encode the `index` of the EVM storage associated to the smart contract
     /// in a linera key.
     fn get_linera_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
@@ -110,7 +126,7 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         if address == &Address::ZERO {
             return Some(KeyTag::NullAddress as u8);
         }
-        if address == &Address::ZERO.create(0) {
+        if address == &self.contract_address {
             return Some(KeyTag::ContractAddress as u8);
         }
         None
@@ -119,8 +135,12 @@ impl<Runtime> DatabaseRuntime<Runtime> {
     /// Creates a new `DatabaseRuntime`.
     pub fn new(runtime: Runtime) -> Self {
         let storage_stats = StorageStats::default();
+        // We cannot acquire a lock on runtime here.
+        // So, we set the contract_address to a default value
+        // and update it later.
         Self {
             storage_stats: Arc::new(Mutex::new(storage_stats)),
+            contract_address: Address::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
         }
@@ -138,6 +158,8 @@ impl<Runtime> DatabaseRuntime<Runtime> {
     }
 }
 
+impl DBErrorMarker for ExecutionError {}
+
 impl<Runtime> Database for DatabaseRuntime<Runtime>
 where
     Runtime: BaseRuntime,
@@ -148,10 +170,7 @@ where
         self.basic_ref(address)
     }
 
-    fn code_by_hash(
-        &mut self,
-        _code_hash: B256,
-    ) -> Result<revm::primitives::Bytecode, ExecutionError> {
+    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Functionality code_by_hash not implemented");
     }
 
@@ -192,14 +211,11 @@ where
         let key_info = vec![val, KeyCategory::AccountInfo as u8];
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
-        let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
+        let account_info = from_bytes_option::<AccountInfo>(&result)?;
         Ok(account_info)
     }
 
-    fn code_by_hash_ref(
-        &self,
-        _code_hash: B256,
-    ) -> Result<revm::primitives::Bytecode, ExecutionError> {
+    fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Functionality code_by_hash_ref not implemented");
     }
 
@@ -228,7 +244,7 @@ where
             let promise = runtime.read_value_bytes_new(key)?;
             runtime.read_value_bytes_wait(&promise)
         }?;
-        Ok(from_bytes_option::<U256, ViewError>(&result)?.unwrap_or_default())
+        Ok(from_bytes_option::<U256>(&result)?.unwrap_or_default())
     }
 
     fn block_hash_ref(&self, number: u64) -> Result<B256, ExecutionError> {
@@ -272,8 +288,8 @@ where
                     } else {
                         let promise = runtime.read_value_bytes_new(key_state.clone())?;
                         let result = runtime.read_value_bytes_wait(&promise)?;
-                        let account_state = from_bytes_option::<AccountState, ViewError>(&result)?
-                            .unwrap_or_default();
+                        let account_state =
+                            from_bytes_option::<AccountState>(&result)?.unwrap_or_default();
                         if account_state.is_storage_cleared() {
                             AccountState::StorageCleared
                         } else {
@@ -325,6 +341,26 @@ impl<Runtime> DatabaseRuntime<Runtime>
 where
     Runtime: BaseRuntime,
 {
+    /// Reads the nonce of the user
+    pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
+        let account_info = self.basic_ref(*address)?;
+        Ok(match account_info {
+            None => 0,
+            Some(account_info) => account_info.nonce,
+        })
+    }
+
+    /// Sets the EVM contract address from the value Address::ZERO.
+    /// The value is set from the `ApplicationId`.
+    pub fn set_contract_address(&mut self) -> Result<(), ExecutionError> {
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let application_id = runtime.application_id()?;
+        self.contract_address = application_id_to_address(application_id);
+        Ok(())
+    }
+
+    /// Checks if the contract is already initialized. It is possible
+    /// that the constructor has not yet been called.
     pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
         let mut keys = Vec::new();
         for key_tag in [KeyTag::NullAddress, KeyTag::ContractAddress] {
@@ -341,21 +377,22 @@ where
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         // The block height being used
         let block_height_linera = runtime.block_height()?;
-        let block_height_evm = U256::from(block_height_linera.0);
+        let block_height_evm = block_height_linera.0;
         // This is the receiver address of all the gas spent in the block.
         let beneficiary = address!("00000000000000000000000000000000000000bb");
         // The difficulty which is no longer relevant after The Merge.
         let difficulty = U256::ZERO;
-        // Set up in the next section.
-        let gas_limit = U256::MAX;
+        // We do not have access to the Resources so we keep it to the maximum
+        // and the control is done elsewhere.
+        let gas_limit = u64::MAX;
         // The timestamp. Both the EVM and Linera use the same UNIX epoch.
         // But the Linera epoch is in microseconds since the start and the
         // Ethereum epoch is in seconds
         let timestamp_linera = runtime.read_system_timestamp()?;
-        let timestamp_evm = U256::from(timestamp_linera.micros() / 1_000_000);
+        let timestamp_evm = timestamp_linera.micros() / 1_000_000;
         // The basefee is the minimum feee for executing. We have no such
         // concept in Linera
-        let basefee = U256::ZERO;
+        let basefee = 0;
         let chain_id = runtime.chain_id()?;
         let entry = format!("{}{}", chain_id, block_height_linera);
         // The randomness beacon being used.
@@ -369,7 +406,7 @@ where
         let blob_excess_gas_and_price = Some(entry);
         Ok(BlockEnv {
             number: block_height_evm,
-            coinbase: beneficiary,
+            beneficiary,
             difficulty,
             gas_limit,
             timestamp: timestamp_evm,
@@ -395,7 +432,7 @@ where
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         // We use the gas_limit from the runtime
         let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
-        block_env.gas_limit = U256::from(gas_limit);
+        block_env.gas_limit = gas_limit;
         Ok(block_env)
     }
 }
@@ -406,7 +443,7 @@ where
 {
     pub fn get_service_block_env(&self) -> Result<BlockEnv, ExecutionError> {
         let mut block_env = self.get_block_env()?;
-        block_env.gas_limit = U256::from(EVM_SERVICE_GAS_LIMIT);
+        block_env.gas_limit = EVM_SERVICE_GAS_LIMIT;
         Ok(block_env)
     }
 }

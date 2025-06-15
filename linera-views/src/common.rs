@@ -13,7 +13,7 @@ use std::{
 
 use serde::de::DeserializeOwned;
 
-use crate::views::ViewError;
+use crate::ViewError;
 
 #[doc(hidden)]
 pub type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;
@@ -74,9 +74,8 @@ impl DeletionSet {
 pub(crate) fn get_upper_bound_option(key_prefix: &[u8]) -> Option<Vec<u8>> {
     let len = key_prefix.len();
     for i in (0..len).rev() {
-        let val = key_prefix[i];
-        if val < u8::MAX {
-            let mut upper_bound = key_prefix[0..i + 1].to_vec();
+        if key_prefix[i] < u8::MAX {
+            let mut upper_bound = key_prefix[0..=i].to_vec();
             upper_bound[i] += 1;
             return Some(upper_bound);
         }
@@ -102,28 +101,23 @@ pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8
 }
 
 /// Deserializes an optional vector of `u8`
-pub fn from_bytes_option<V: DeserializeOwned, E>(key_opt: &Option<Vec<u8>>) -> Result<Option<V>, E>
-where
-    E: From<bcs::Error>,
-{
-    match key_opt {
-        Some(bytes) => {
-            let value = bcs::from_bytes(bytes)?;
-            Ok(Some(value))
-        }
-        None => Ok(None),
+pub fn from_bytes_option<V: DeserializeOwned>(
+    key_opt: &Option<Vec<u8>>,
+) -> Result<Option<V>, bcs::Error> {
+    if let Some(bytes) = key_opt {
+        Ok(Some(bcs::from_bytes(bytes)?))
+    } else {
+        Ok(None)
     }
 }
 
-pub(crate) fn from_bytes_option_or_default<V: DeserializeOwned + Default, E>(
+pub(crate) fn from_bytes_option_or_default<V: DeserializeOwned + Default>(
     key_opt: &Option<Vec<u8>>,
-) -> Result<V, E>
-where
-    E: From<bcs::Error>,
-{
-    match key_opt {
-        Some(bytes) => Ok(bcs::from_bytes(bytes)?),
-        None => Ok(V::default()),
+) -> Result<V, bcs::Error> {
+    if let Some(bytes) = key_opt {
+        Ok(bcs::from_bytes(bytes)?)
+    } else {
+        Ok(V::default())
     }
 }
 

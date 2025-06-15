@@ -15,12 +15,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
-    types::{Block, GenericCertificate, LiteCertificate},
+    types::{Block, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{committee::Committee, Query, QueryOutcome};
+use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use thiserror::Error;
 use tokio::sync::OwnedRwLockReadGuard;
 use tracing::{instrument, warn};
@@ -55,15 +55,15 @@ pub enum LocalNodeError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
 
-    #[error("Local node operation failed: {0}")]
+    #[error("Worker operation failed: {0}")]
     WorkerError(WorkerError),
 
     #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
     CannotReadLocalBlob { chain_id: ChainId, blob_id: BlobId },
 
-    #[error("The local node doesn't have an active chain {0:?}")]
+    #[error("The local node doesn't have an active chain {0}")]
     InactiveChain(ChainId),
 
     #[error("The chain info response received from the local node is invalid")]
@@ -78,15 +78,6 @@ impl From<WorkerError> for LocalNodeError {
         match error {
             WorkerError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
             error => LocalNodeError::WorkerError(error),
-        }
-    }
-}
-
-impl From<ViewError> for LocalNodeError {
-    fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
-            error => LocalNodeError::ViewError(error),
         }
     }
 }
@@ -134,6 +125,20 @@ where
         .await?)
     }
 
+    /// Preprocesses a block without executing it.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn preprocess_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        notifier: &impl Notifier,
+    ) -> Result<(), LocalNodeError> {
+        self.node
+            .state
+            .fully_preprocess_certificate_with_notifications(certificate, notifier)
+            .await?;
+        Ok(())
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_chain_info_query(
         &self,
@@ -143,34 +148,19 @@ where
         let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage,
-{
     #[instrument(level = "trace", skip_all)]
     pub fn new(state: WorkerState<S>) -> Self {
         Self {
             node: Arc::new(LocalNode { state }),
         }
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage + Clone,
-{
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn storage_client(&self) -> S {
         self.node.state.storage_client().clone()
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
     #[instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(
         &self,
@@ -192,6 +182,31 @@ where
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         let storage = self.storage_client();
         Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
+    }
+
+    /// Reads blob states from storage
+    pub async fn read_blob_states_from_storage(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<BlobState>, LocalNodeError> {
+        let storage = self.storage_client();
+        let mut blobs_not_found = Vec::new();
+        let mut blob_states = Vec::new();
+        for (blob_state, blob_id) in storage
+            .read_blob_states(blob_ids)
+            .await?
+            .into_iter()
+            .zip(blob_ids)
+        {
+            match blob_state {
+                None => blobs_not_found.push(*blob_id),
+                Some(blob_state) => blob_states.push(blob_state),
+            }
+        }
+        if !blobs_not_found.is_empty() {
+            return Err(LocalNodeError::BlobsNotFound(blobs_not_found));
+        }
+        Ok(blob_states)
     }
 
     /// Looks for the specified blobs in the local chain manager's locking blobs.
@@ -307,8 +322,14 @@ where
         let futures = chain_ids
             .into_iter()
             .map(|chain_id| async move {
-                let local_info = self.chain_info(*chain_id).await?;
-                Ok::<_, LocalNodeError>((*chain_id, local_info.next_block_height))
+                let chain = self.chain_state_view(*chain_id).await?;
+                let mut next_height = chain.tip_state.get().next_block_height;
+                // TODO(#3969): This is not great for performance, but the whole function will
+                // probably go away with #3969 anyway.
+                while chain.preprocessed_blocks.contains_key(&next_height).await? {
+                    next_height.try_add_assign_one()?;
+                }
+                Ok::<_, LocalNodeError>((*chain_id, next_height))
             })
             .collect::<Vec<_>>();
         stream::iter(futures)

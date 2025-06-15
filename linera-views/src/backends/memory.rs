@@ -321,7 +321,7 @@ impl AdminKeyValueStore for MemoryStore {
         memory_stores.sync_connect(config, namespace, &[], kill_on_drop)
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
         let max_stream_queries = self.max_stream_queries;
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
@@ -411,10 +411,6 @@ pub enum MemoryStoreError {
     /// Serialization error with BCS.
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
-
-    /// The value is too large for the `MemoryStore`
-    #[error("The value is too large for the MemoryStore")]
-    TooLargeValue,
 
     /// The namespace does not exist
     #[error("The namespace does not exist")]

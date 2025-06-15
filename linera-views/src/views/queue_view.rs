@@ -1,21 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     collections::{vec_deque::IterMut, VecDeque},
     ops::Range,
 };
 
-use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-    },
-    prometheus::HistogramVec,
-};
+use linera_base::prometheus_util::MeasureLatency as _;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
@@ -27,15 +20,22 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-/// The runtime of hash computation
-static QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "queue_view_hash_runtime",
-        "QueueView hash runtime",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The runtime of hash computation
+    pub static QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "queue_view_hash_runtime",
+            "QueueView hash runtime",
+            &[],
+            exponential_bucket_latencies(5.0),
+        )
+    });
+}
 
 /// Key tags to create the sub-keys of a `QueueView` on top of the base key.
 #[repr(u8)]
@@ -56,13 +56,14 @@ pub struct QueueView<C, T> {
     new_back_values: VecDeque<T>,
 }
 
-impl<C, T> View<C> for QueueView<C, T>
+impl<C, T> View for QueueView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    T: Send + Sync + Serialize,
+    C: Context,
+    T: Serialize + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = 1;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -154,10 +155,9 @@ where
     }
 }
 
-impl<C, T> ClonableView<C> for QueueView<C, T>
+impl<C, T> ClonableView for QueueView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -183,8 +183,7 @@ impl<C, T> QueueView<C, T> {
 
 impl<'a, C, T> QueueView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
@@ -454,10 +453,9 @@ where
     }
 }
 
-impl<C, T> HashableView<C> for QueueView<C, T>
+impl<C, T> HashableView for QueueView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
@@ -468,7 +466,7 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = QUEUE_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::QUEUE_VIEW_HASH_RUNTIME.measure_latency();
         let elements = self.elements().await?;
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;
@@ -503,7 +501,6 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C: Context, T: async_graphql::OutputType> QueueView<C, T>
     where
-        C: Send + Sync,
         T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
     {
         async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {

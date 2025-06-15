@@ -10,7 +10,7 @@ use linera_base::{
 };
 use linera_core::test_utils::{ChainClient, MemoryStorageBuilder, StorageBuilder, TestBuilder};
 use linera_execution::system::Recipient;
-use linera_storage::{
+use linera_storage::metrics::{
     READ_CERTIFICATE_COUNTER, READ_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
 };
 use linera_views::metrics::{LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
@@ -26,13 +26,13 @@ where
     B: StorageBuilder + Default,
 {
     let storage_builder = B::default();
-    let mut signer = InMemorySigner::new(None);
+    let signer = InMemorySigner::new(None);
     // Criterion doesn't allow setup functions to be async, but it runs them inside an async
     // context. But our setup uses async functions:
     let handle = runtime::Handle::current();
     let _guard = handle.enter();
     futures::executor::block_on(async move {
-        let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
+        let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
             .await
             .unwrap();
         let chain1 = builder

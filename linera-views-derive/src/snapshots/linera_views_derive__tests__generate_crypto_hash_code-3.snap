@@ -2,19 +2,19 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_crypto_hash_code(input))
 ---
-impl linera_views::views::CryptoHashView<CustomContext> for TestView
+impl linera_views::views::CryptoHashView for TestView
 where
-    RegisterView<CustomContext, usize>: linera_views::views::HashableView<CustomContext>,
+    RegisterView<CustomContext, usize>: linera_views::views::HashableView,
     CollectionView<
         CustomContext,
         usize,
         RegisterView<CustomContext, usize>,
-    >: linera_views::views::HashableView<CustomContext>,
-    Self: Send + Sync,
+    >: linera_views::views::HashableView,
+    Self: linera_views::views::View,
 {
     async fn crypto_hash(
         &self,
-    ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+    ) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
         use linera_base::crypto::{BcsHashable, CryptoHash};
         use linera_views::{
             batch::Batch, generic_array::GenericArray,
@@ -30,7 +30,7 @@ where
     }
     async fn crypto_hash_mut(
         &mut self,
-    ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+    ) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
         use linera_base::crypto::{BcsHashable, CryptoHash};
         use linera_views::{
             batch::Batch, generic_array::GenericArray,

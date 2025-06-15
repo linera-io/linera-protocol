@@ -17,7 +17,8 @@ use linera_base::{
 use linera_views::{
     context::{Context, MemoryContext},
     random::generate_test_namespace,
-    views::{CryptoHashView, View, ViewError},
+    views::{CryptoHashView, View},
+    ViewError,
 };
 
 use super::{dummy_chain_description, MockApplication, RegisterMockApplication};
@@ -55,7 +56,7 @@ impl SystemExecutionState {
         let ownership = description.config().ownership.clone();
         let balance = description.config().balance;
         let epoch = description.config().epoch;
-        let admin_id = Some(description.config().admin_id.unwrap_or(description.id()));
+        let admin_id = Some(dummy_chain_description(0).id());
         let committees = description
             .config()
             .committees

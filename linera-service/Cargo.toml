@@ -89,21 +89,23 @@ linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
 linera-faucet-client.workspace = true
 linera-faucet-server.workspace = true
+linera-persistent = { version = "0.15.0", path = "../linera-persistent" }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 linera-sdk = { workspace = true }
 linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
-mini-moka = { workspace = true }
+mini-moka.workspace = true
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
 prost = { workspace = true }
-quick_cache = { workspace = true }
+quick_cache.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
+serde-command-opts.workspace = true
 serde_json.workspace = true
 stdext = { workspace = true, optional = true }
 tempfile.workspace = true
@@ -160,7 +162,7 @@ tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [[bin]]
 name = "linera"
-path = "src/linera/main.rs"
+path = "src/cli/main.rs"
 
 [[bin]]
 name = "linera-server"
@@ -181,7 +183,7 @@ required-features = ["benchmark"]
 
 [[bin]]
 name = "linera-exporter"
-path = "src/linera-exporter/main.rs"
+path = "src/exporter/main.rs"
 
 [[bench]]
 name = "transfers"

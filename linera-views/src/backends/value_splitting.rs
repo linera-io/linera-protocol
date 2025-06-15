@@ -73,7 +73,7 @@ where
 
 impl<K> ReadableKeyValueStore for ValueSplittingStore<K>
 where
-    K: ReadableKeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore,
     K::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
@@ -235,7 +235,7 @@ where
 
 impl<K> WritableKeyValueStore for ValueSplittingStore<K>
 where
-    K: WritableKeyValueStore + Send + Sync,
+    K: WritableKeyValueStore,
     K::Error: 'static,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
@@ -280,7 +280,7 @@ where
 
 impl<K> AdminKeyValueStore for ValueSplittingStore<K>
 where
-    K: AdminKeyValueStore + Send + Sync,
+    K: AdminKeyValueStore,
     K::Error: 'static,
 {
     type Config = K::Config;
@@ -294,8 +294,8 @@ where
         Ok(Self { store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.clone_with_root_key(root_key)?;
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.open_exclusive(root_key)?;
         Ok(Self { store })
     }
 
@@ -330,7 +330,7 @@ where
 #[cfg(with_testing)]
 impl<K> TestKeyValueStore for ValueSplittingStore<K>
 where
-    K: TestKeyValueStore + Send + Sync,
+    K: TestKeyValueStore,
     K::Error: 'static,
 {
     async fn new_test_config() -> Result<K::Config, Self::Error> {
@@ -454,10 +454,9 @@ impl WritableKeyValueStore for LimitedTestMemoryStore {
     const MAX_VALUE_SIZE: usize = 100;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
-        ensure!(
-            batch.check_value_size(Self::MAX_VALUE_SIZE),
-            MemoryStoreError::TooLargeValue
-        );
+        if !batch.check_value_size(Self::MAX_VALUE_SIZE) {
+            panic!("The batch size is not adequate for this test");
+        }
         self.store.write_batch(batch).await
     }
 

@@ -65,8 +65,8 @@ where
     pub async fn load(store: S) -> Result<Self, IndexerError> {
         let root_key = "indexer".as_bytes().to_vec();
         let store = store
-            .clone_with_root_key(&root_key)
-            .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
+            .open_exclusive(&root_key)
+            .map_err(|_e| IndexerError::OpenExclusiveError)?;
         let context = ViewContext::create_root_context(store, ())
             .await
             .map_err(|e| IndexerError::ViewError(e.into()))?;

@@ -1,15 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
+use linera_base::{
+    crypto::ValidatorPublicKey, data_types::NetworkDescription, identifiers::ChainId,
+};
 use linera_core::node::NodeError;
-use linera_storage::NetworkDescription;
+use linera_persistent as persistent;
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 
 #[cfg(feature = "benchmark")]
 use crate::benchmark::BenchmarkError;
-use crate::{persistent, util};
+use crate::util;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -25,7 +27,7 @@ pub(crate) enum Inner {
     #[error("persistence error: {0}")]
     Persistence(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("view error: {0}")]
-    View(#[from] linera_views::views::ViewError),
+    View(#[from] linera_views::ViewError),
     #[error("non-existent chain: {0:?}")]
     NonexistentChain(linera_base::identifiers::ChainId),
     #[error("no keypair found for chain: {0:?}")]
@@ -76,5 +78,5 @@ thiserror_context::impl_context!(Error(Inner));
 util::impl_from_dynamic!(Inner:Persistence, persistent::memory::Error);
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Inner:Persistence, persistent::file::Error);
-#[cfg(with_indexed_db)]
+#[cfg(web)]
 util::impl_from_dynamic!(Inner:Persistence, persistent::indexed_db::Error);

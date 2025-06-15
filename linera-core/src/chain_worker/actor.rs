@@ -121,6 +121,13 @@ where
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
+    /// Preprocess a block without executing it.
+    PreprocessCertificate {
+        certificate: ConfirmedBlockCertificate,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<NetworkActions, WorkerError>>,
+    },
+
     /// Process a cross-chain update.
     ProcessCrossChainUpdate {
         origin: ChainId,
@@ -181,7 +188,7 @@ where
     /// Runs the [`ChainWorkerActor`], first by loading the chain state from `storage` then
     /// handling all `incoming_requests` as they arrive.
     ///
-    /// If loading the chain state fails the next request will receive the error reported by the
+    /// If loading the chain state fails, the next request will receive the error reported by the
     /// `storage`, and the actor will then try again to load the state.
     #[expect(clippy::too_many_arguments)]
     pub async fn run(
@@ -392,6 +399,12 @@ where
                         .await,
                 )
                 .is_ok(),
+            ChainWorkerRequest::PreprocessCertificate {
+                certificate,
+                callback,
+            } => callback
+                .send(self.worker.preprocess_certificate(certificate).await)
+                .is_ok(),
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
                 bundles,
@@ -478,6 +491,9 @@ where
                 callback.send(Err(error)).is_ok()
             }
             ChainWorkerRequest::ProcessConfirmedBlock { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::PreprocessCertificate { callback, .. } => {
                 callback.send(Err(error)).is_ok()
             }
             ChainWorkerRequest::ProcessCrossChainUpdate { callback, .. } => {

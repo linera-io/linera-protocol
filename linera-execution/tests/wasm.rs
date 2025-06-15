@@ -82,11 +82,8 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let amount = Amount::from_tokens(1);
     *view.system.balance.get_mut() = amount;
-    let mut controller = ResourceController {
-        policy: Arc::new(policy),
-        tracker: ResourceTracker::default(),
-        account: None,
-    };
+    let mut controller =
+        ResourceController::new(Arc::new(policy), ResourceTracker::default(), None);
 
     for (index, increment) in increments.iter().enumerate() {
         let mut txn_tracker = TransactionTracker::new_replaying_blobs(if index == 0 {

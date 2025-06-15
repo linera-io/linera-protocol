@@ -35,21 +35,20 @@ enum KeyTag {
     Hash,
 }
 
-impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
+impl<W: HashableView, O> View for WrappedHashableContainerView<W::Context, W, O>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    W: HashableView<C> + Send + Sync,
+    W: HashableView<Hasher: Hasher<Output = O>>,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
-    W::Hasher: Hasher<Output = O>,
 {
     const NUM_INIT_KEYS: usize = 1 + W::NUM_INIT_KEYS;
 
-    fn context(&self) -> &C {
+    type Context = W::Context;
+
+    fn context(&self) -> &Self::Context {
         self.inner.context()
     }
 
-    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+    fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut v = vec![context.base_key().base_tag(KeyTag::Hash as u8)];
         let base_key = context.base_key().base_tag(KeyTag::Inner as u8);
         let context = context.clone_with_base_key(base_key);
@@ -57,7 +56,7 @@ where
         Ok(v)
     }
 
-    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+    fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let base_key = context.base_key().base_tag(KeyTag::Inner as u8);
         let context = context.clone_with_base_key(base_key);
@@ -73,7 +72,7 @@ where
         })
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    async fn load(context: Self::Context) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
         let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
@@ -120,11 +119,9 @@ where
     }
 }
 
-impl<C, W, O> ClonableView<C> for WrappedHashableContainerView<C, W, O>
+impl<W, O> ClonableView for WrappedHashableContainerView<W::Context, W, O>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    W: HashableView<C> + ClonableView<C> + Send + Sync,
+    W: HashableView + ClonableView,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
@@ -138,11 +135,9 @@ where
     }
 }
 
-impl<C, W, O> HashableView<C> for WrappedHashableContainerView<C, W, O>
+impl<W, O> HashableView for WrappedHashableContainerView<W::Context, W, O>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    W: HashableView<C> + Send + Sync,
+    W: HashableView,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
@@ -199,7 +194,7 @@ mod graphql {
 
     impl<C, W, O> async_graphql::OutputType for WrappedHashableContainerView<C, W, O>
     where
-        C: Context + Send + Sync,
+        C: Context,
         W: async_graphql::OutputType + Send + Sync,
         O: Send + Sync,
     {

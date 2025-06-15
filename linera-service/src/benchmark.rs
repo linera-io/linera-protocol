@@ -40,7 +40,7 @@ enum Args {
         transactions: usize,
 
         /// The faucet (which implicitly defines the network)
-        #[arg(long = "faucet", default_value = "http://faucet.devnet.linera.net")]
+        #[arg(long = "faucet")]
         faucet: String,
 
         /// The seed for the PRNG determining the pattern of transactions.

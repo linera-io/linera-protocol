@@ -162,37 +162,32 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub(crate) async fn try_query_certificates_from(
+    pub(crate) async fn query_certificates_from(
         &self,
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
-    ) -> Result<Option<Vec<ConfirmedBlockCertificate>>, NodeError> {
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         tracing::debug!(name = ?self.public_key, ?chain_id, ?start, ?limit, "Querying certificates");
         let range = BlockHeightRange {
             start,
             limit: Some(limit),
         };
         let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
-        match self.handle_chain_info_query(query).await {
-            Ok(info) => {
-                let certificates = self
-                    .node
-                    .download_certificates(info.requested_sent_certificate_hashes)
-                    .await?
-                    .into_iter()
-                    .map(|c| {
-                        ConfirmedBlockCertificate::try_from(c)
-                            .map_err(|_| NodeError::InvalidChainInfoResponse)
-                    })
-                    .collect::<Result<_, _>>()?;
-                Ok(Some(certificates))
-            }
-            Err(error) => {
-                tracing::warn!("Failed to query certificates: {error}");
-                Ok(None)
-            }
-        }
+        let info = self.handle_chain_info_query(query).await?;
+        self.node
+            .download_certificates(info.requested_sent_certificate_hashes)
+            .await?
+            .into_iter()
+            .map(|c| {
+                ensure!(
+                    c.inner().chain_id() == chain_id,
+                    NodeError::UnexpectedCertificateValue
+                );
+                ConfirmedBlockCertificate::try_from(c)
+                    .map_err(|_| NodeError::InvalidChainInfoResponse)
+            })
+            .collect()
     }
 
     #[instrument(level = "trace")]

@@ -25,7 +25,7 @@ use crate::{
         TestBucketQueueView, TestCollectionView, TestLogView, TestMapView, TestQueueView,
         TestRegisterView, TestSetView, TestView,
     },
-    views::{HashableView, View, ViewError},
+    views::{HashableView, View},
 };
 #[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
 use crate::{context::ViewContext, random::generate_test_namespace, store::AdminKeyValueStore};
@@ -63,7 +63,6 @@ pub enum Operation {
 async fn run_test_queue_operations_test_cases<C>(mut contexts: C) -> Result<(), anyhow::Error>
 where
     C: TestContextFactory,
-    ViewError: From<<C::Context as Context>::Error>,
 {
     use self::Operation::*;
 
@@ -133,8 +132,7 @@ async fn run_test_queue_operations<C>(
     context: C,
 ) -> Result<(), anyhow::Error>
 where
-    C: Context<Error: Send + Sync> + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
+    C: Context + 'static,
 {
     let mut expected_state = VecDeque::new();
     let mut queue = QueueView::load(context.clone()).await?;
@@ -168,8 +166,7 @@ async fn check_queue_state<C>(
     expected_state: &VecDeque<usize>,
 ) -> Result<(), anyhow::Error>
 where
-    C: Context<Error: Send + Sync> + Clone + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
 {
     let count = expected_state.len();
 
@@ -188,7 +185,7 @@ fn check_contents(contents: Vec<usize>, expected: &VecDeque<usize>) {
 }
 
 trait TestContextFactory {
-    type Context: Context<Error: Send + Sync> + Clone + Send + Sync + 'static;
+    type Context: Context + 'static;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error>;
 }
@@ -503,10 +500,7 @@ async fn test_flushing_cleared_view<V: TestView>(_view_type: PhantomData<V>) -> 
 }
 
 /// Saves a [`View`] into the [`MemoryContext<()>`] storage simulation.
-async fn save_view<C>(context: &C, view: &mut impl View<C>) -> anyhow::Result<()>
-where
-    C: Context<Error: Send + Sync>,
-{
+async fn save_view<V: View>(context: &V::Context, view: &mut V) -> anyhow::Result<()> {
     let mut batch = Batch::new();
     view.flush(&mut batch)?;
     context.store().write_batch(batch).await?;
@@ -519,10 +513,9 @@ async fn populate_reentrant_collection_view<C, Key, Value>(
     entries: impl IntoIterator<Item = (Key, Value)>,
 ) -> anyhow::Result<()>
 where
-    C: Context + Send + Sync,
+    C: Context,
     Key: Serialize + DeserializeOwned + Clone + Debug + Default + Send + Sync,
     Value: Serialize + DeserializeOwned + Default + Send + Sync,
-    ViewError: From<C::Error>,
 {
     for (key, value) in entries {
         let mut entry = collection.try_load_entry_mut(&key).await?;

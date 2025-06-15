@@ -28,7 +28,7 @@ wasmer = [
     "linera-storage/wasmer",
 ]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
-fs = ["fs-err", "fs4", "linera-execution/fs"]
+fs = ["fs-err", "fs4", "linera-execution/fs", "linera-persistent/fs"]
 metrics = [
     "linera-base/metrics",
     "linera-chain/metrics",
@@ -41,30 +41,29 @@ web = [
     "dep:web-sys",
     "dep:wasm-bindgen-futures",
     "linera-base/web",
-    "linera-storage/web",
+    "linera-execution/web",
     "linera-chain/web",
     "linera-client/web",
     "linera-core/web",
-    "linera-views/web",
-    "linera-execution/web",
+    "linera-persistent/indexed-db",
     "linera-rpc/web",
+    "linera-storage/web",
+    "linera-views/web",
 ]
 indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]
 web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
-async-trait.workspace = true
 bcs.workspace = true
-cfg-if.workspace = true
 clap.workspace = true
 crossbeam-channel = { workspace = true, optional = true }
-derive_more = { workspace = true, features = ["deref", "deref_mut"] }
 futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
+linera-persistent = { version = "0.15.0", path = "../linera-persistent" }
 linera-rpc.workspace = true
 linera-sdk = { workspace = true, optional = true }
 linera-storage.workspace = true
@@ -74,7 +73,6 @@ num-format = { workspace = true, optional = true }
 prometheus-parse = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 serde.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
 thiserror-context.workspace = true
 tokio.workspace = true

@@ -2,17 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ops::{Bound, Range, RangeBounds};
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 
-use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-    },
-    prometheus::HistogramVec,
-};
+use linera_base::prometheus_util::MeasureLatency as _;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
@@ -24,15 +17,22 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-/// The runtime of hash computation
-static LOG_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "log_view_hash_runtime",
-        "LogView hash runtime",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The runtime of hash computation
+    pub static LOG_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "log_view_hash_runtime",
+            "LogView hash runtime",
+            &[],
+            exponential_bucket_latencies(5.0),
+        )
+    });
+}
 
 /// Key tags to create the sub-keys of a `LogView` on top of the base key.
 #[repr(u8)]
@@ -52,13 +52,14 @@ pub struct LogView<C, T> {
     new_values: Vec<T>,
 }
 
-impl<C, T> View<C> for LogView<C, T>
+impl<C, T> View for LogView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = 1;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -128,10 +129,9 @@ where
     }
 }
 
-impl<C, T> ClonableView<C> for LogView<C, T>
+impl<C, T> ClonableView for LogView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -192,9 +192,8 @@ where
 
 impl<C, T> LogView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    T: Clone + DeserializeOwned + Serialize + Send,
+    C: Context,
+    T: Clone + DeserializeOwned + Serialize + Send + Sync,
 {
     /// Reads the logged value with the given index (including staged ones).
     /// ```rust
@@ -349,10 +348,9 @@ where
     }
 }
 
-impl<C, T> HashableView<C> for LogView<C, T>
+impl<C, T> HashableView for LogView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
@@ -363,7 +361,7 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = LOG_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::LOG_VIEW_HASH_RUNTIME.measure_latency();
         let elements = self.read(..).await?;
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;
@@ -398,7 +396,6 @@ mod graphql {
     #[async_graphql::Object(cache_control(no_cache), name_type)]
     impl<C: Context, T: async_graphql::OutputType> LogView<C, T>
     where
-        C: Send + Sync,
         T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
     {
         async fn entries(

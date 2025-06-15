@@ -2,10 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    error::Error,
-};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
@@ -105,21 +102,23 @@ impl ProposedBlock {
             .sum()
     }
 
-    /// Returns an iterator over all transactions, by index.
-    pub fn transactions(&self) -> impl Iterator<Item = (u32, Transaction<'_>)> {
+    /// Returns an iterator over all transactions.
+    ///
+    /// First incoming bundles, then operations.
+    pub fn transactions(&self) -> impl Iterator<Item = Transaction<'_>> {
         let bundles = self
             .incoming_bundles
             .iter()
             .map(Transaction::ReceiveMessages);
         let operations = self.operations.iter().map(Transaction::ExecuteOperation);
-        (0u32..).zip(bundles.chain(operations))
+        bundles.chain(operations)
     }
 
     pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
         let size = bcs::serialized_size(self)?;
         ensure!(
             size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
-            ChainError::BlockProposalTooLarge
+            ChainError::BlockProposalTooLarge(size)
         );
         Ok(())
     }
@@ -499,12 +498,12 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub async fn new_initial(
+    pub async fn new_initial<S: Signer + ?Sized>(
         owner: AccountOwner,
         round: Round,
         block: ProposedBlock,
-        signer: &(impl Signer + ?Sized),
-    ) -> Result<Self, Box<dyn Error>> {
+        signer: &S,
+    ) -> Result<Self, S::Error> {
         let content = ProposalContent {
             round,
             block,
@@ -521,12 +520,12 @@ impl BlockProposal {
         })
     }
 
-    pub async fn new_retry_fast(
+    pub async fn new_retry_fast<S: Signer + ?Sized>(
         owner: AccountOwner,
         round: Round,
         old_proposal: BlockProposal,
-        signer: &(impl Signer + ?Sized),
-    ) -> Result<Self, Box<dyn Error>> {
+        signer: &S,
+    ) -> Result<Self, S::Error> {
         let content = ProposalContent {
             round,
             block: old_proposal.content.block,
@@ -546,12 +545,12 @@ impl BlockProposal {
         })
     }
 
-    pub async fn new_retry_regular(
+    pub async fn new_retry_regular<S: Signer>(
         owner: AccountOwner,
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
-        signer: &(impl Signer + ?Sized),
-    ) -> Result<Self, Box<dyn Error>> {
+        signer: &S,
+    ) -> Result<Self, S::Error> {
         let certificate = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
         let (block, outcome) = block.into_proposal();
@@ -755,10 +754,10 @@ mod signing {
         use std::str::FromStr;
 
         // Generated in MetaMask.
-        let pk = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
+        let secret_key = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
 
         let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(
-            linera_base::crypto::EvmSecretKey::from_str(pk).unwrap(),
+            linera_base::crypto::EvmSecretKey::from_str(secret_key).unwrap(),
         );
 
         let proposed_block = ProposedBlock {

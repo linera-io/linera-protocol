@@ -33,20 +33,12 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-    std::sync::LazyLock,
-};
 
 use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
@@ -61,42 +53,47 @@ use crate::{
 mod worker_tests;
 
 #[cfg(with_metrics)]
-static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "num_rounds_in_certificate",
-        "Number of rounds in certificate",
-        &["certificate_value", "round_type"],
-        exponential_bucket_interval(0.1, 50.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "num_rounds_in_block_proposal",
-        "Number of rounds in block proposal",
-        &["round_type"],
-        exponential_bucket_interval(0.1, 50.0),
-    )
-});
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
-#[cfg(with_metrics)]
-static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
-    LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
+    pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_rounds_in_certificate",
+            "Number of rounds in certificate",
+            &["certificate_value", "round_type"],
+            exponential_bucket_interval(0.1, 50.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
-});
+    pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_rounds_in_block_proposal",
+            "Number of rounds in block proposal",
+            &["round_type"],
+            exponential_bucket_interval(0.1, 50.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "certificates_signed",
-        "Number of confirmed block certificates signed by each validator",
-        &["validator_name"],
-    )
-});
+    pub static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
+
+    pub static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
+    });
+
+    pub static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "certificates_signed",
+            "Number of confirmed block certificates signed by each validator",
+            &["validator_name"],
+        )
+    });
+}
 
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.
 #[derive(Default, Debug)]
@@ -153,7 +150,7 @@ pub enum WorkerError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
 
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
@@ -206,6 +203,16 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    #[error("confirmed_log entry at height {height} for chain {chain_id:8} not found")]
+    ConfirmedLogEntryNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
+    #[error("preprocessed_blocks entry at height {height} for chain {chain_id:8} not found")]
+    PreprocessedBlocksEntryNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
     #[error("The worker is too busy to handle new chains")]
@@ -224,7 +231,6 @@ impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: ChainError) -> Self {
         match chain_error {
-            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             ChainError::ExecutionError(execution_error, context) => {
                 if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
                     Self::BlobsNotFound(blob_ids)
@@ -236,15 +242,6 @@ impl From<ChainError> for WorkerError {
                 }
             }
             error => Self::ChainError(Box::new(error)),
-        }
-    }
-}
-
-impl From<ViewError> for WorkerError {
-    fn from(view_error: ViewError) -> Self {
-        match view_error {
-            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::ViewError(error),
         }
     }
 }
@@ -593,7 +590,7 @@ where
             .await?;
 
         #[cfg(with_metrics)]
-        NUM_BLOCKS.with_label_values(&[]).inc();
+        metrics::NUM_BLOCKS.with_label_values(&[]).inc();
 
         Ok((response, actions))
     }
@@ -821,7 +818,7 @@ where
             })
             .await?;
         #[cfg(with_metrics)]
-        NUM_ROUNDS_IN_BLOCK_PROPOSAL
+        metrics::NUM_ROUNDS_IN_BLOCK_PROPOSAL
             .with_label_values(&[round.type_name()])
             .observe(round.number() as f64);
         Ok(response)
@@ -870,20 +867,20 @@ where
                 + certificate.block().body.operations.len())
                 as u64;
 
-            NUM_ROUNDS_IN_CERTIFICATE
+            metrics::NUM_ROUNDS_IN_CERTIFICATE
                 .with_label_values(&[
                     certificate.inner().to_log_str(),
                     certificate.round.type_name(),
                 ])
                 .observe(certificate.round.number() as f64);
             if confirmed_transactions > 0 {
-                TRANSACTION_COUNT
+                metrics::TRANSACTION_COUNT
                     .with_label_values(&[])
                     .inc_by(confirmed_transactions);
             }
 
             for (validator_name, _) in certificate.signatures() {
-                CERTIFICATES_SIGNED
+                metrics::CERTIFICATES_SIGNED
                     .with_label_values(&[&validator_name.to_string()])
                     .inc();
             }
@@ -891,6 +888,45 @@ where
 
         self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await
+    }
+
+    /// Preprocesses a block without executing it. This does not update the execution state, but
+    /// can create cross-chain messages and store blobs. It also does _not_ check the signatures;
+    /// the caller is responsible for checking them using the correct committee.
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.block().header.chain_id),
+        height = %certificate.block().header.height,
+    ))]
+    pub async fn fully_preprocess_certificate_with_notifications(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        notifier: &impl Notifier,
+    ) -> Result<(), WorkerError> {
+        trace!("{} <-- {:?} (preprocess)", self.nickname, certificate);
+
+        let notifications = (*notifier).clone();
+        let this = self.clone();
+        linera_base::task::spawn(async move {
+            let actions = this
+                .query_chain_worker(certificate.block().header.chain_id, move |callback| {
+                    ChainWorkerRequest::PreprocessCertificate {
+                        certificate,
+                        callback,
+                    }
+                })
+                .await?;
+            notifications.notify(&actions.notifications);
+            let mut requests = VecDeque::from(actions.cross_chain_requests);
+            while let Some(request) = requests.pop_front() {
+                let actions = this.handle_cross_chain_request(request).await?;
+                requests.extend(actions.cross_chain_requests);
+                notifications.notify(&actions.notifications);
+            }
+            Ok(())
+        })
+        .await
+        .unwrap_or_else(|_| Err(WorkerError::JoinError))
     }
 
     /// Processes a validated block certificate.
@@ -914,7 +950,7 @@ where
         #[cfg(with_metrics)]
         {
             if !_duplicated {
-                NUM_ROUNDS_IN_CERTIFICATE
+                metrics::NUM_ROUNDS_IN_CERTIFICATE
                     .with_label_values(&[cert_str, round.type_name()])
                     .observe(round.number() as f64);
             }

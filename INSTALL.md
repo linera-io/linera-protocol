@@ -1,6 +1,12 @@
-# Installation for Mac OS (Intel / M1 / M2)
+# Installation
 
-## Basics
+Make sure to have enough free disk space for Rust compilation.
+
+Windows users should use [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) and follow instructions for Linux.
+
+## Installation for Mac OS (Intel / M1 / M2)
+
+### Basics
 
 * Xcode command line tools
     - `xcode-select --install`
@@ -15,23 +21,20 @@
 * Protoc
     - `brew install protobuf`
 
-## Services
-
-* https://aws.amazon.com/cli/
-* https://docs.docker.com/desktop/mac/install/
-
-## Additional tooling required by tests
+### Additional tooling required by tests
 
 * `brew install jq`
 * `cargo install cargo-rdme`
 * `cargo install taplo-cli`
 * `cargo install cargo-all-features`
 * `cargo install cargo-machete`
+* https://docs.docker.com/desktop/mac/install/
 
-# Installation for Linux
+## Installation for Linux
 
-## Basics
+### Basics
 
+* [Git](https://git-scm.com/downloads)
 * Rust
     - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
     - `rustup target add wasm32-unknown-unknown`
@@ -42,20 +45,16 @@
 
 Alternatively, we have added experimental Nix support (see `flake.nix`).
 
-## Services
-
-* https://aws.amazon.com/cli/
-* https://docs.docker.com/engine/install/
-
-## Additional tooling
+### Additional tooling required by tests
 
 * `sudo apt-get install jq`
 * `cargo install cargo-rdme`
 * `cargo install taplo-cli`
 * `cargo install cargo-all-features`
 * `cargo install cargo-machete`
+* https://docs.docker.com/engine/install/
 
-# Installation using Nix
+## Installation using Nix
 
 Alternatively, this repository contains a Nix flake that can be used
 to prepare a reproducible development environment on Nix-enabled

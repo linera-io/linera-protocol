@@ -13,7 +13,7 @@ on:
       - 'kubernetes/**'
   workflow_dispatch:
 
-# This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
+# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
   cancel-in-progress: true
@@ -37,7 +37,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-node@v3
+    - uses: actions/setup-node@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Check toolchain symlinks
       run: |

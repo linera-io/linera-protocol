@@ -55,12 +55,9 @@ pub struct QueueStateView<C> {
     pub queue: QueueView<C, u8>,
 }
 
-pub async fn performance_queue_view<S: TestKeyValueStore + Clone + Sync + 'static>(
+pub async fn performance_queue_view<S: TestKeyValueStore + Clone + 'static>(
     iterations: u64,
-) -> Duration
-where
-    S::Error: Send + Sync,
-{
+) -> Duration {
     let store = S::new_test_store().await.unwrap();
     let context = ViewContext::<(), S>::create_root_context(store, ())
         .await
@@ -135,12 +132,9 @@ pub struct BucketQueueStateView<C> {
     pub queue: BucketQueueView<C, u8, 100>,
 }
 
-pub async fn performance_bucket_queue_view<S: TestKeyValueStore + Clone + Sync + 'static>(
+pub async fn performance_bucket_queue_view<S: TestKeyValueStore + Clone + 'static>(
     iterations: u64,
-) -> Duration
-where
-    S::Error: Send + Sync,
-{
+) -> Duration {
     let store = S::new_test_store().await.unwrap();
     let context = ViewContext::<(), S>::create_root_context(store, ())
         .await

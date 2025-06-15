@@ -32,10 +32,6 @@ pub struct CrossChainConfig {
     /// Drop cross-chain messages randomly at the given rate (0 <= rate < 1) (meant for testing).
     #[arg(long = "cross-chain-sender-failure-rate", default_value = "0.0")]
     pub(crate) sender_failure_rate: f32,
-
-    /// How many concurrent tasks to spawn for cross-chain message handling RPCs.
-    #[arg(long = "cross-chain-max-tasks", default_value = "10")]
-    pub(crate) max_concurrent_tasks: usize,
 }
 
 impl Default for CrossChainConfig {
@@ -57,8 +53,6 @@ impl CrossChainConfig {
             self.sender_delay_ms.to_string(),
             "--cross-chain-sender-failure-rate".to_string(),
             self.sender_failure_rate.to_string(),
-            "--cross-chain-max-tasks".to_string(),
-            self.max_concurrent_tasks.to_string(),
         ]
     }
 }
@@ -90,6 +84,30 @@ impl ShardConfig {
 
     pub fn http_address(&self) -> String {
         format!("http://{}:{}", self.host, self.port)
+    }
+}
+
+/// The network configuration of a proxy.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProxyConfig {
+    /// The hostname (e.g., an IP address).
+    pub host: String,
+    /// The public facing port. Receives incoming connections from clients.
+    pub public_port: u16,
+    /// The private port. Used for communicating with shards.
+    pub private_port: u16,
+    /// The port on which metrics are served.
+    pub metrics_port: u16,
+}
+
+impl ProxyConfig {
+    pub fn internal_address(&self, protocol: &NetworkProtocol) -> String {
+        format!(
+            "{}://{}:{}",
+            protocol.scheme(),
+            self.host,
+            self.private_port
+        )
     }
 }
 
@@ -131,21 +149,17 @@ pub type ValidatorPublicNetworkConfig = ValidatorPublicNetworkPreConfig<NetworkP
 pub struct ValidatorInternalNetworkPreConfig<P> {
     /// The public key of the validator.
     pub public_key: ValidatorPublicKey,
-    /// The network protocol to use for all shards.
+    /// The network protocol to use internally.
     pub protocol: P,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
     pub shards: Vec<ShardConfig>,
-    /// The host name of the proxy on the internal network (IP or hostname).
-    pub host: String,
-    /// The port the proxy listens on the internal network.
-    pub port: u16,
     /// The server configurations for the linera-exporter.
     /// They can be used as optional locations to forward notifications to destinations other than
     /// the proxy, by the workers.
     pub block_exporters: Vec<ExporterServiceConfig>,
-    /// The port of the proxy's metrics endpoint.
-    pub metrics_port: u16,
+    /// The available proxies.
+    pub proxies: Vec<ProxyConfig>,
 }
 
 impl<P> ValidatorInternalNetworkPreConfig<P> {
@@ -154,19 +168,13 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
             public_key: self.public_key,
             protocol,
             shards: self.shards.clone(),
-            host: self.host.clone(),
-            port: self.port,
             block_exporters: self.block_exporters.clone(),
-            metrics_port: self.metrics_port,
+            proxies: self.proxies.clone(),
         }
     }
 }
 
 impl ValidatorInternalNetworkConfig {
-    pub fn proxy_address(&self) -> String {
-        format!("{}://{}:{}", self.protocol.scheme(), self.host, self.port)
-    }
-
     pub fn exporter_addresses(&self) -> Vec<String> {
         self.block_exporters
             .iter()

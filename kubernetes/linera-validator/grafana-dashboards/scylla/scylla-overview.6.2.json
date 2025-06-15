@@ -1,0 +1,4418 @@
+{
+    "annotations": {
+      "class": "default_annotations",
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "enable": false,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        },
+        {
+          "class": "annotation_restart",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": true,
+          "expr": "resets(scylla_gossip_heart_beat{cluster=\"$cluster\"}[$__rate_interval])>0",
+          "hide": false,
+          "iconColor": "rgba(255, 96, 96, 1)",
+          "limit": 100,
+          "name": "node_restart",
+          "showIn": 0,
+          "tagKeys": "instance,dc,cluster",
+          "tags": [],
+          "titleFormat": "restart",
+          "type": "tags"
+        },
+        {
+          "class": "annotation_stall",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": false,
+          "expr": "changes(scylla_stall_detector_reported{cluster=\"$cluster\"}[$__rate_interval])>0",
+          "hide": false,
+          "iconColor": "rgba(255, 96, 96, 1)",
+          "limit": 100,
+          "name": "stall detector",
+          "showIn": 0,
+          "tagKeys": "dc,instance,shard",
+          "tags": [],
+          "titleFormat": "Stall found",
+          "type": "tags"
+        },
+        {
+          "class": "annotation_schema_changed",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": false,
+          "expr": "changes(scylla_database_schema_changed{cluster=\"$cluster\"}[$__rate_interval])>0",
+          "hide": false,
+          "iconColor": "rgba(255, 96, 96, 1)",
+          "limit": 100,
+          "name": "Schema Changed",
+          "showIn": 0,
+          "tagKeys": "instance,dc,cluster",
+          "tags": [],
+          "titleFormat": "schema changed",
+          "type": "tags"
+        },
+        {
+          "class": "annotation_manager_task",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": true,
+          "expr": "scylla_manager_task_active_count{type=~\"repair|backup\",cluster=\"$cluster\"}>0",
+          "hide": false,
+          "iconColor": "#73BF69",
+          "limit": 100,
+          "name": "Task",
+          "showIn": 0,
+          "tagKeys": "type",
+          "tags": [],
+          "titleFormat": "Running",
+          "type": "tags"
+        },
+        {
+          "class": "annotation_hints_writes",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": false,
+          "expr": "changes(scylla_hints_manager_written{cluster=\"$cluster\"}[$__rate_interval])>0",
+          "hide": false,
+          "iconColor": "rgb(255, 176, 0, 128)",
+          "limit": 100,
+          "name": "Hints Write",
+          "showIn": 0,
+          "tagKeys": "instance,dc,cluster",
+          "tags": [],
+          "titleFormat": "Hints write",
+          "type": "tags"
+        },
+        {
+          "class": "annotation_hints_sent",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": false,
+          "expr": "changes(scylla_hints_manager_sent{cluster=\"$cluster\"}[$__rate_interval])>0",
+          "hide": false,
+          "iconColor": "rgb(50, 176, 0, 128)",
+          "limit": 100,
+          "name": "Hints Sent",
+          "showIn": 0,
+          "tagKeys": "instance,dc,cluster",
+          "tags": [],
+          "titleFormat": "Hints Sent",
+          "type": "tags"
+        },
+        {
+          "class": "mv_building",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": true,
+          "expr": "sum(scylla_view_builder_builds_in_progress{cluster=\"$cluster\"})>0",
+          "hide": false,
+          "iconColor": "rgb(50, 176, 0, 128)",
+          "limit": 100,
+          "name": "MV",
+          "showIn": 0,
+          "tagKeys": "instance,dc,cluster",
+          "tags": [],
+          "titleFormat": "Materialized View built",
+          "type": "tags"
+        },
+        {
+          "class": "ops_annotation",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": true,
+          "expr": "10*min(scylla_node_ops_finished_percentage{cluster=\"$cluster\"}) by (ops, dc,instance) < 10",
+          "hide": false,
+          "iconColor": "rgb(50, 176, 0, 128)",
+          "limit": 100,
+          "name": "ops",
+          "showIn": 0,
+          "tagKeys": "ops,dc,instance",
+          "tags": [],
+          "titleFormat": "Operation",
+          "type": "tags"
+        },
+        {
+          "class": "stream_annotation",
+          "dashversion": [
+            ">5.2",
+            ">2023.1"
+          ],
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "enable": true,
+          "expr": "10*min(scylla_streaming_finished_percentage{cluster=\"$cluster\"}) by (ops, dc,instance) < 10",
+          "hide": false,
+          "iconColor": "rgb(50, 176, 0, 128)",
+          "limit": 100,
+          "name": "streaming",
+          "showIn": 0,
+          "tagKeys": "ops,dc,instance",
+          "tags": [],
+          "titleFormat": "Streaming",
+          "type": "tags"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "links": [
+      {
+        "asDropdown": true,
+        "icon": "external link",
+        "includeVars": true,
+        "keepTime": true,
+        "tags": [],
+        "type": "dashboards"
+      }
+    ],
+    "liveNow": false,
+    "panels": [
+      {
+        "collapsed": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "panels": [],
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "title": "Cluster overview $cluster",
+        "type": "row"
+      },
+      {
+        "class": "text_panel",
+        "dashproductreject": "no-version-check",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 1,
+          "w": 9,
+          "x": 0,
+          "y": 1
+        },
+        "id": 2,
+        "links": [],
+        "mode": "html",
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "<img src=\"https://repositories.scylladb.com/scylla/imgversion/$monitoring_version/scylla-monitoring\">",
+          "mode": "html"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "type": "text"
+      },
+      {
+        "class": "text_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 1,
+          "w": 4,
+          "x": 9,
+          "y": 1
+        },
+        "id": 3,
+        "links": [],
+        "mode": "html",
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "# ",
+          "mode": "markdown"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "type": "text"
+      },
+      {
+        "class": "text_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 1,
+          "w": 4,
+          "x": 13,
+          "y": 1
+        },
+        "id": 4,
+        "links": [],
+        "mode": "html",
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "# ",
+          "mode": "markdown"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "type": "text"
+      },
+      {
+        "class": "text_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 1,
+          "w": 7,
+          "x": 17,
+          "y": 1
+        },
+        "id": 5,
+        "links": [],
+        "mode": "html",
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "# ",
+          "mode": "markdown"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "type": "text"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "The number of nodes configured in the cluster.",
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 0,
+          "y": 2
+        },
+        "id": 6,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "count(scylla_scylladb_current_version{job=\"scylla\", cluster=\"$cluster\"})",
+            "intervalFactor": 1,
+            "legendFormat": "Total Nodes",
+            "refId": "A",
+            "step": 40
+          }
+        ],
+        "title": "# Nodes",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "The number of unreachable nodes.\nUsually because a machine is down or unreachable.",
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 2,
+          "y": 2
+        },
+        "id": 7,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "(count(scrape_samples_scraped{job=\"scylla\", cluster=\"$cluster\"}==0) OR vector(0))",
+            "intervalFactor": 1,
+            "legendFormat": "Offline ",
+            "refId": "A",
+            "step": 20
+          }
+        ],
+        "title": "Unreachable",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "The number of joining and leaving nodes.\nThe number of nodes that are up but not actively part of the cluster, either because they are still joining or because they are leaving.",
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 4,
+          "y": 2
+        },
+        "id": 8,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "count(scylla_node_operation_mode{cluster=\"$cluster\"}!=3)OR vector(0)",
+            "intervalFactor": 1,
+            "legendFormat": "Offline ",
+            "refId": "A",
+            "step": 20
+          }
+        ],
+        "thresholds": "1,2",
+        "title": "Inactive",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [],
+            "noValue": " Offline",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 0
+                }
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byFrameRefID",
+                "options": "A"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "0": {
+                          "index": 2,
+                          "text": "Online"
+                        },
+                        "1": {
+                          "index": 3,
+                          "text": "Repair"
+                        },
+                        "2": {
+                          "index": 4,
+                          "text": "Backup"
+                        },
+                        "3": {
+                          "index": 1,
+                          "text": "Backup Repair"
+                        },
+                        "-1": {
+                          "index": 0,
+                          "text": "Offline"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byFrameRefID",
+                "options": "B"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "percent"
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "0": {
+                          "index": 0,
+                          "text": " "
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 3,
+          "x": 6,
+          "y": 2
+        },
+        "id": 9,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "percentChangeColorMode": "standard",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "showPercentChange": false,
+          "textMode": "value",
+          "wideLayout": true
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "(max(scylla_manager_scheduler_run_indicator{type=~\"repair\",cluster=\"$cluster\"}) or on() vector(0)) + (max(scylla_manager_scheduler_run_indicator{type=~\"backup\",cluster=\"$cluster\"})*2 or on() vector(0)) + (sum(scylla_manager_server_current_version{}) or on() vector(-1))",
+            "intervalFactor": 1,
+            "refId": "A",
+            "step": 40
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "(avg(scylla_manager_repair_progress{cluster=\"$cluster\", job=\"scylla_manager\"}) * max(scylla_manager_scheduler_run_indicator{type=\"repair\",cluster=\"$cluster\"})) or on ()  (100*avg(manager:backup_progress{cluster=\"$cluster\"}) * max(scylla_manager_scheduler_run_indicator{type=\"backup\",cluster=\"$cluster\"})) or on () vector(0)",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "",
+            "refId": "B"
+          }
+        ],
+        "title": "Manager",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Average Write Latency",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 0,
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 50000
+                }
+              ]
+            },
+            "unit": "µs"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 9,
+          "y": 2
+        },
+        "id": 10,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(wlatencya{by=\"cluster\", cluster=~\"$cluster|^$\",scheduling_group_name=~\"$sg\"}>0)",
+            "instant": true,
+            "intervalFactor": 1,
+            "legendFormat": "",
+            "refId": "A",
+            "step": 4
+          }
+        ],
+        "title": "Avg Write",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "99% write Latency",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 0,
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 100000
+                }
+              ]
+            },
+            "unit": "µs"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 11,
+          "y": 2
+        },
+        "id": 11,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "wlatencyp99{by=\"cluster\", cluster=~\"$cluster|^$\",scheduling_group_name=~\"$sg\"}>0",
+            "instant": true,
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}}",
+            "refId": "A",
+            "step": 4
+          }
+        ],
+        "title": "99% Write",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Average Read Latency",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 0,
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 50000
+                }
+              ]
+            },
+            "unit": "µs"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 13,
+          "y": 2
+        },
+        "id": 12,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(rlatencya{by=\"cluster\", cluster=~\"$cluster|^$\",scheduling_group_name=~\"$sg\"}>0)",
+            "instant": true,
+            "intervalFactor": 1,
+            "legendFormat": "",
+            "refId": "A",
+            "step": 4
+          }
+        ],
+        "title": "Avg Read",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "99% read Latency",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 0,
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 100000
+                }
+              ]
+            },
+            "unit": "µs"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 15,
+          "y": 2
+        },
+        "id": 13,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rlatencyp99{by=\"cluster\", cluster=~\"$cluster|^$\",scheduling_group_name=~\"$sg\"}>0",
+            "instant": true,
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}}",
+            "refId": "A",
+            "step": 4
+          }
+        ],
+        "title": "99% Read",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 1,
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "si:"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 3,
+          "x": 17,
+          "y": 2
+        },
+        "id": 14,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "sum(rate(scylla_transport_requests_served{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) + (sum(rate(scylla_thrift_served{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) or on() vector(0))",
+            "instant": true,
+            "intervalFactor": 1,
+            "refId": "A",
+            "step": 40
+          }
+        ],
+        "title": "Requests/s",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "The percentage of the time during which Scylla utilized the CPU. Note that because Scylla does busy polling for some time before going idle, CPU utilization as seen by the operating system may be much higher. Your system is not yet CPU-bottlenecked until this metric is high.",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 0,
+            "mappings": [],
+            "max": 100,
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "percent"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 20,
+          "y": 2
+        },
+        "id": 15,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(scylla_reactor_utilization{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"} )",
+            "instant": true,
+            "intervalFactor": 1,
+            "legendFormat": "",
+            "refId": "A",
+            "step": 4
+          }
+        ],
+        "title": "Load",
+        "type": "stat"
+      },
+      {
+        "class": "small_stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "The rate of timeouts (read and write).\n\nTimeouts are an indication of an overloaded system",
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 2,
+          "x": 22,
+          "y": 2
+        },
+        "id": 16,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "(sum(rate(scylla_storage_proxy_coordinator_write_timeouts{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]|$^\"}[$__rate_interval])) or on() vector(0)) + (sum(rate(scylla_storage_proxy_coordinator_read_timeouts{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]|$^\"}[$__rate_interval])) or on() vector(0))",
+            "instant": true,
+            "intervalFactor": 1,
+            "refId": "A",
+            "step": 40
+          }
+        ],
+        "title": "Timeouts",
+        "type": "stat"
+      },
+      {
+        "class": "alert_table",
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 0,
+          "y": 6
+        },
+        "id": 42,
+        "options": {
+          "alertInstanceLabelFilter": "job!=\"scylla_manager\"",
+          "alertName": "",
+          "dashboardAlerts": false,
+          "groupBy": [],
+          "groupMode": "default",
+          "maxItems": 20,
+          "sortOrder": 3,
+          "stateFilter": {
+            "error": true,
+            "firing": true,
+            "noData": false,
+            "normal": false,
+            "pending": false
+          },
+          "viewMode": "list"
+        },
+        "span": 4,
+        "targets": [
+          {
+            "datasource": {
+              "type": "datasource",
+              "uid": "grafana"
+            },
+            "refId": "A"
+          }
+        ],
+        "title": "Active Alerts",
+        "type": "alertlist"
+      },
+      {
+        "class": "ops_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Write attempts - include all writes that reached the coordinator node, even if they will eventually fail",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 8,
+          "y": 6
+        },
+        "id": 17,
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_write_latency_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) or on ([[by]]) $func(rate(scylla_storage_proxy_coordinator_write_latency_summary_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval]))",
+            "intervalFactor": 1,
+            "legendFormat": "Writes",
+            "refId": "A",
+            "step": 1
+          }
+        ],
+        "title": "Writes",
+        "type": "timeseries"
+      },
+      {
+        "class": "us_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "µs"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 12,
+          "y": 6
+        },
+        "id": 18,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "wlatencyp95{by=\"cluster\", cluster=\"$cluster\",scheduling_group_name=~\"$sg\"}>0",
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}} 95%",
+            "refId": "A",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "wlatencyp99{by=\"cluster\", cluster=\"$cluster\",scheduling_group_name=~\"$sg\"}>0",
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}} 99%",
+            "refId": "B",
+            "step": 1
+          }
+        ],
+        "title": "Write Latencies",
+        "type": "timeseries"
+      },
+      {
+        "class": "ops_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Read attempts - include all reads that reached the coordinator node, even if they will eventually fail",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 16,
+          "y": 6
+        },
+        "id": 19,
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_read_latency_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) or on ([[by]]) $func(rate(scylla_storage_proxy_coordinator_read_latency_summary_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval]))",
+            "intervalFactor": 1,
+            "legendFormat": "Reads",
+            "refId": "A",
+            "step": 1
+          }
+        ],
+        "title": "Reads",
+        "type": "timeseries"
+      },
+      {
+        "class": "us_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "µs"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 20,
+          "y": 6
+        },
+        "id": 20,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rlatencyp95{by=\"cluster\", cluster=\"$cluster\",scheduling_group_name=~\"$sg\"}>0",
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}} {{instance}} {{shard}} 95%",
+            "refId": "A",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rlatencyp99{by=\"cluster\", cluster=\"$cluster\",scheduling_group_name=~\"$sg\"}>0",
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}} 99%",
+            "refId": "B",
+            "step": 1
+          }
+        ],
+        "title": "Read Latencies",
+        "type": "timeseries"
+      },
+      {
+        "collapsed": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 12
+        },
+        "id": 21,
+        "panels": [],
+        "repeat": "dc",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "type": "row"
+      },
+      {
+        "class": "plain_text",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 2,
+          "w": 24,
+          "x": 0,
+          "y": 13
+        },
+        "id": 22,
+        "links": [],
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "<h1 style=\"color:#5780C1; border-bottom: 3px solid #5780C1;\">Information for $dc</h1>",
+          "mode": "html"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "style": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "transparent": true,
+        "type": "text"
+      },
+      {
+        "class": "vertical_lcd",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 0,
+            "mappings": [],
+            "max": 100,
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "orange",
+                  "value": 85
+                }
+              ]
+            },
+            "unit": "percent"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 1,
+          "x": 0,
+          "y": 15
+        },
+        "id": 23,
+        "options": {
+          "displayMode": "lcd",
+          "minVizHeight": 10,
+          "minVizWidth": 0,
+          "orientation": "vertical",
+          "reduceOptions": {
+            "calcs": [
+              "last"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "showUnfilled": true,
+          "valueMode": "color"
+        },
+        "pluginVersion": "10.1.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(scylla_reactor_utilization{instance=~\"[[node]]\",cluster=~\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"} )",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "",
+            "refId": "A"
+          }
+        ],
+        "title": "Load",
+        "type": "bargauge"
+      },
+      {
+        "class": "bytes_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "The average Disk usage per [[by]].\n\n The dashed line represent the total size.",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "bytes"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byFrameRefID",
+                "options": "B"
+              },
+              "properties": [
+                {
+                  "id": "custom.lineStyle",
+                  "value": {
+                    "dash": [
+                      10,
+                      10
+                    ],
+                    "fill": "dash"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 3,
+          "x": 1,
+          "y": 15
+        },
+        "id": 24,
+        "links": [],
+        "options": {
+          "class": "desc_tooltip_options",
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "span": 5,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "Avg(node_filesystem_size_bytes{mountpoint=\"$mount_point\", dc=~\"$dc\", instance=~\"$node\"}) by ([[by]])-avg(node_filesystem_avail_bytes{mountpoint=\"$mount_point\",  dc=~\"$dc\", instance=~\"$node\"}) by ([[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "Avg Usage {{instance}} {{shard}}",
+            "metric": "",
+            "refId": "A",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(node_filesystem_size_bytes{mountpoint=\"$mount_point\", dc=~\"$dc\", instance=~\"$node\"}) by ([[by]])",
+            "interval": "",
+            "legendFormat": "Size {{instance}} {{shard}}",
+            "refId": "B"
+          }
+        ],
+        "title": "Average Disk Usage",
+        "type": "timeseries"
+      },
+      {
+        "class": "graph_panel_int",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Holds the number of currently active compactions.",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 4,
+          "y": 15
+        },
+        "id": 25,
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(scylla_compaction_manager_compactions{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}) by ([[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "",
+            "metric": "",
+            "refId": "A",
+            "step": 1
+          }
+        ],
+        "title": "Running Compactions",
+        "type": "timeseries"
+      },
+      {
+        "class": "ops_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "The Hits and Misses",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 8,
+          "y": 15
+        },
+        "id": 26,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 3,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_cache_row_hits{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "Hit {{instance}} {{shard}}",
+            "refId": "A",
+            "step": 10
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_cache_row_misses{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "Misses {{instance}} {{shard}}",
+            "refId": "B",
+            "step": 10
+          }
+        ],
+        "title": "Cache Hits/Misses",
+        "type": "timeseries"
+      },
+      {
+        "class": "small_nodes_table",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "cellOptions": {
+                "type": "auto"
+              },
+              "filterable": true,
+              "inspect": false
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "orange",
+                  "value": 85
+                }
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Value #B"
+              },
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "mode": "lcd",
+                    "type": "gauge"
+                  }
+                },
+                {
+                  "id": "min",
+                  "value": 0
+                },
+                {
+                  "id": "max",
+                  "value": 101
+                },
+                {
+                  "id": "displayName",
+                  "value": "Load"
+                },
+                {
+                  "id": "custom.width",
+                  "value": 120
+                },
+                {
+                  "id": "custom.filterable",
+                  "value": false
+                },
+                {
+                  "id": "decimals",
+                  "value": 0
+                },
+                {
+                  "id": "unit",
+                  "value": "percent"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "svr"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 90
+                },
+                {
+                  "id": "displayName",
+                  "value": "Version"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "instance"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 120
+                },
+                {
+                  "id": "links",
+                  "value": [
+                    {
+                      "title": "Detailed view",
+                      "url": "/d/detailed-[[dash_version]]/detailed?refresh=30s&orgId=1&var-by=instance&var-node=${__data.fields[0]}&from=${__from}&to=${__to}"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Value #A"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 105
+                },
+                {
+                  "id": "displayName",
+                  "value": "Status"
+                },
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "type": "color-text"
+                  }
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "yellow",
+                        "value": null
+                      },
+                      {
+                        "color": "rgb(87, 128, 193)",
+                        "value": 3
+                      },
+                      {
+                        "color": "red",
+                        "value": 4
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "custom.align",
+                  "value": "center"
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "1": {
+                          "text": "Starting"
+                        },
+                        "2": {
+                          "text": "Joining"
+                        },
+                        "3": {
+                          "text": "Normal"
+                        },
+                        "4": {
+                          "text": "Leaving"
+                        },
+                        "5": {
+                          "text": "Decommissioned"
+                        },
+                        "6": {
+                          "text": "Draining"
+                        },
+                        "7": {
+                          "text": "Drained"
+                        },
+                        "8": {
+                          "text": "Moving"
+                        },
+                        "9": {
+                          "text": "Split-Cluster"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Value #C"
+              },
+              "properties": [
+                {
+                  "id": "links",
+                  "value": [
+                    {
+                      "title": "OS Information Dashboard, an Error indicates there are OS related errors",
+                      "url": "/d/OS-[[dash_version]]/os-metrics?refresh=30s&orgId=1&var-by=instance&var-node=${__data.fields[0]}&from=${__from}&to=${__to}"
+                    }
+                  ]
+                },
+                {
+                  "id": "custom.width",
+                  "value": 90
+                },
+                {
+                  "id": "custom.filterable",
+                  "value": true
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "0": {
+                          "text": "OS Info"
+                        }
+                      },
+                      "type": "value"
+                    },
+                    {
+                      "options": {
+                        "from": 0,
+                        "result": {
+                          "text": "OS Errors"
+                        },
+                        "to": 100000
+                      },
+                      "type": "range"
+                    }
+                  ]
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "rgb(87, 128, 193)",
+                        "value": null
+                      },
+                      {
+                        "color": "dark-orange",
+                        "value": 0.001
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "type": "color-text"
+                  }
+                },
+                {
+                  "id": "custom.align",
+                  "value": "left"
+                },
+                {
+                  "id": "displayName",
+                  "value": "OS"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Value #D"
+              },
+              "properties": [
+                {
+                  "id": "links",
+                  "value": [
+                    {
+                      "title": "Cordinator and Replica node errors",
+                      "url": "/d/detailed-[[dash_version]]/detailed?refresh=30s&orgId=1&var-by=instance&var-node=${__data.fields[0]}&from=${__from}&to=${__to}"
+                    }
+                  ]
+                },
+                {
+                  "id": "custom.width",
+                  "value": 80
+                },
+                {
+                  "id": "custom.filterable",
+                  "value": true
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "0": {
+                          "text": ""
+                        },
+                        "1": {
+                          "text": "Errors"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "rgb(87, 128, 193)",
+                        "value": null
+                      },
+                      {
+                        "color": "dark-orange",
+                        "value": 0.001
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "type": "color-text"
+                  }
+                },
+                {
+                  "id": "custom.align",
+                  "value": "left"
+                },
+                {
+                  "id": "displayName",
+                  "value": " "
+                }
+              ]
+            },
+            {
+              "dashversion": [
+                ">5.2",
+                ">2023.1"
+              ],
+              "matcher": {
+                "id": "byName",
+                "options": "Value #G"
+              },
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "mode": "lcd",
+                    "type": "gauge"
+                  }
+                },
+                {
+                  "id": "min",
+                  "value": 0
+                },
+                {
+                  "id": "max",
+                  "value": 101
+                },
+                {
+                  "id": "displayName",
+                  "value": "Streaming"
+                },
+                {
+                  "id": "custom.width",
+                  "value": 90
+                },
+                {
+                  "id": "custom.filterable",
+                  "value": false
+                },
+                {
+                  "id": "decimals",
+                  "value": 0
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "unit",
+                  "value": "percent"
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 17,
+          "w": 10,
+          "x": 14,
+          "y": 15
+        },
+        "id": 27,
+        "options": {
+          "cellHeight": "sm",
+          "footer": {
+            "countRows": false,
+            "fields": "",
+            "reducer": [
+              "sum"
+            ],
+            "show": false
+          },
+          "showHeader": true
+        },
+        "pluginVersion": "10.1.1",
+        "span": 8,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "0*scylla_scylladb_current_version{cluster=\"$cluster\", dc=~\"$dc\"} + on (instance) group_left() (scylla_node_operation_mode{cluster=\"$cluster\", dc=~\"$dc\"}!= 3 or on (instance) ((scylla_gossip_live{cluster=\"$cluster\", dc=~\"$dc\"}+1<  bool scalar(count(scylla_node_operation_mode{cluster=\"$cluster\"}==3)))*6 + 3))",
+            "format": "table",
+            "hide": false,
+            "instant": true,
+            "interval": "",
+            "intervalFactor": 1,
+            "legendFormat": "",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(scylla_reactor_utilization{cluster=~\"$cluster\", dc=~\"$dc\"} ) by (instance)",
+            "format": "table",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "",
+            "refId": "B"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "sum(rate(scylla_reactor_aio_errors{cluster=~\"$cluster\", dc=~\"$dc\"}[$__rate_interval])) by (instance)",
+            "format": "table",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "",
+            "refId": "C"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "sum(scylla_errors:nodes_total{cluster=~\"$cluster\", dc=~\"$dc\"}) by (instance) >bool 0",
+            "format": "table",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "",
+            "refId": "D"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "(sum(scylla_cql:non_system_prepared1m{cluster=~\"$cluster\", dc=~\"$dc\"}) by (instance) >bool 1) + (sum(rate(scylla_cql_reverse_queries{cluster=~\"$cluster\", dc=~\"$dc\"}[$__rate_interval])) by(instance) >bool 1) + (sum(scylla_cql:non_paged_no_system1m{cluster=~\"$cluster\", dc=~\"$dc\"}) by (instance) >bool 1)",
+            "format": "table",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "",
+            "refId": "E"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "sum(scylla_gossip_live{cluster=\"$cluster\"})by (instance)",
+            "format": "table",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "",
+            "refId": "F"
+          },
+          {
+            "dashversion": [
+              ">5.2",
+              ">2023.1"
+            ],
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "(min(scylla_streaming_finished_percentage{cluster=\"$cluster\", dc=~\"$dc\"}*100) by (instance) < 100) or on (instance)  0*sum(scylla_scylladb_current_version{cluster=\"$cluster\", dc=~\"$dc\"}) by (instance)",
+            "format": "table",
+            "instant": true,
+            "interval": "",
+            "legendFormat": "",
+            "refId": "G"
+          }
+        ],
+        "title": "Nodes",
+        "transformations": [
+          {
+            "id": "filterFieldsByName",
+            "options": {
+              "include": {
+                "names": [
+                  "instance",
+                  "svr",
+                  "Value #A",
+                  "Value #B",
+                  "Value #C",
+                  "Value #D",
+                  "Value #E",
+                  "Value #F",
+                  "Value #G"
+                ]
+              }
+            }
+          },
+          {
+            "id": "seriesToColumns",
+            "options": {
+              "byField": "instance"
+            }
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {
+                "Value #A": 5,
+                "Value #B": 7,
+                "Value #C": 3,
+                "Value #D": 1,
+                "Value #E": 2,
+                "Value #F": 6,
+                "Value #G": 8,
+                "instance": 0,
+                "svr": 4
+              },
+              "renameByName": {}
+            }
+          }
+        ],
+        "type": "table"
+      },
+      {
+        "class": "ops_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Write attempts - include all writes that reached the coordinator node, even if they will eventually fail",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 0,
+          "y": 21
+        },
+        "id": 28,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {
+            "alias": "1 Day Ago",
+            "dashLength": 4,
+            "dashes": true
+          },
+          {
+            "alias": "1 Week Ago",
+            "dashLength": 2,
+            "dashes": true
+          }
+        ],
+        "span": 3,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_write_latency_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]]) or on([[by]]) $func(rate(scylla_storage_proxy_coordinator_write_latency_summary_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "Writes {{instance}} {{shard}}",
+            "refId": "A",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_write_latency_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval] offset 1d)) or on ([[by]]) $func(rate(scylla_storage_proxy_coordinator_write_latency_summary_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval] offset 1d))",
+            "interval": "",
+            "intervalFactor": 1,
+            "legendFormat": "1 Day Ago",
+            "refId": "B",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_write_latency_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval] offset 1w)) or on ([[by]]) $func(rate(scylla_storage_proxy_coordinator_write_latency_summary_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval] offset 1w))",
+            "interval": "",
+            "intervalFactor": 1,
+            "legendFormat": "1 Week Ago",
+            "refId": "C",
+            "step": 1
+          }
+        ],
+        "title": "Writes",
+        "type": "timeseries"
+      },
+      {
+        "class": "us_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "µs"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 6,
+          "y": 21
+        },
+        "id": 29,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(wlatencyp95{by=\"[[by]]\", instance=~\"[[node]]|^$\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]|$^\",scheduling_group_name=~\"$sg\"}>0) by (scheduling_group_name, [[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}} 95% {{instance}} {{shard}}",
+            "refId": "A",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(wlatencyp99{by=\"[[by]]\", instance=~\"[[node]]|^$\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]|$^\",scheduling_group_name=~\"$sg\"}>0) by (scheduling_group_name, [[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}} 99% {{instance}} {{shard}}",
+            "refId": "B",
+            "step": 1
+          }
+        ],
+        "title": "Write Latencies",
+        "type": "timeseries"
+      },
+      {
+        "class": "ops_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Requests that Scylla tried to write but timed out. Timeouts are counted in the node that received the request (the coordinator), not at the replicas.",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 10,
+          "y": 21
+        },
+        "id": 30,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_write_timeouts{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]|$^\"}[$__rate_interval])) by ([[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "Writes {{instance}} {{shard}}",
+            "refId": "A",
+            "step": 10
+          }
+        ],
+        "title": "Write Timeouts by [[by]]",
+        "type": "timeseries"
+      },
+      {
+        "class": "ops_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Read attempts - include all reads that reached the coordinator node, even if they will eventually fail",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 0,
+          "y": 27
+        },
+        "id": 31,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {
+            "alias": "1 Day Ago",
+            "dashLength": 4,
+            "dashes": true
+          },
+          {
+            "alias": "1 Week Ago",
+            "dashLength": 2,
+            "dashes": true
+          }
+        ],
+        "span": 3,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_read_latency_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\",scheduling_group_name=~\"$sg\"}[$__rate_interval])) by ([[by]]) or on([[by]]) $func(rate(scylla_storage_proxy_coordinator_read_latency_summary_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\",scheduling_group_name=~\"$sg\"}[$__rate_interval])) by ([[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "Reads {{instance}} {{shard}}",
+            "refId": "A",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_read_latency_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\",scheduling_group_name=~\"$sg\"}[$__rate_interval] offset 1d)) or on ([[by]]) $func(rate(scylla_storage_proxy_coordinator_read_latency_summary_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\",scheduling_group_name=~\"$sg\"}[$__rate_interval] offset 1d))",
+            "intervalFactor": 1,
+            "legendFormat": "1 Day Ago",
+            "refId": "B",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "$func(rate(scylla_storage_proxy_coordinator_read_latency_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\",scheduling_group_name=~\"$sg\"}[$__rate_interval] offset 1w)) or on ([[by]]) $func(rate(scylla_storage_proxy_coordinator_read_latency_summary_count{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\",scheduling_group_name=~\"$sg\"}[$__rate_interval] offset 1w))",
+            "intervalFactor": 1,
+            "legendFormat": "1 Week Ago",
+            "refId": "C",
+            "step": 1
+          }
+        ],
+        "title": "Reads",
+        "type": "timeseries"
+      },
+      {
+        "class": "us_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "µs"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 6,
+          "y": 27
+        },
+        "id": 32,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(rlatencyp95{by=\"[[by]]\", instance=~\"[[node]]|^$\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]|$^\",scheduling_group_name=~\"$sg\"}>0) by(scheduling_group_name, [[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}} 95% {{instance}} {{shard}}",
+            "refId": "A",
+            "step": 1
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "avg(rlatencyp99{by=\"[[by]]\", instance=~\"[[node]]|^$\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]|$^\",scheduling_group_name=~\"$sg\"}>0) by(scheduling_group_name, [[by]])",
+            "intervalFactor": 1,
+            "legendFormat": "{{scheduling_group_name}} 99% {{instance}} {{shard}}",
+            "refId": "B",
+            "step": 1
+          }
+        ],
+        "title": "Read Latencies",
+        "type": "timeseries"
+      },
+      {
+        "class": "ops_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "Requests that Scylla tried to read but timed out. Timeouts are counted in the node that received the request (the coordinator), not at the replicas.",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 4,
+          "x": 10,
+          "y": 27
+        },
+        "id": 33,
+        "legend": {
+          "alignAsTable": false,
+          "avg": false,
+          "class": "show_legend",
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 2,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "($func(rate(scylla_storage_proxy_coordinator_read_timeouts{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]]) or vector(0))+on([[by]]) ($func(rate(scylla_storage_proxy_coordinator_cas_read_timeouts{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]]) or vector(0))+on([[by]]) ($func(rate(scylla_storage_proxy_coordinator_range_timeouts{instance=~\"[[node]]\",cluster=\"$cluster\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]]) or vector(0))",
+            "intervalFactor": 1,
+            "legendFormat": "Read {{instance}} {{shard}}",
+            "refId": "A",
+            "step": 10
+          }
+        ],
+        "title": "Read Timeouts by [[by]]",
+        "type": "timeseries"
+      },
+      {
+        "class": "plain_text",
+        "dashproductreject": "no-version-check",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 1,
+          "w": 10,
+          "x": 14,
+          "y": 32
+        },
+        "id": 34,
+        "links": [],
+        "mode": "html",
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "<img src=\"https://repositories.scylladb.com/scylla/imgversion/$all_scyllas_versions/scylla\"></img>",
+          "mode": "html"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "style": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "transparent": true,
+        "type": "text"
+      },
+      {
+        "class": "plain_text",
+        "dashproduc": "no-version-check",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 1,
+          "w": 10,
+          "x": 14,
+          "y": 33
+        },
+        "id": 35,
+        "links": [],
+        "mode": "html",
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "",
+          "mode": "html"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "style": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "transparent": true,
+        "type": "text"
+      },
+      {
+        "collapsed": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 34
+        },
+        "id": 36,
+        "panels": [],
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "type": "row"
+      },
+      {
+        "class": "collapsible_row_panel",
+        "collapsed": false,
+        "dashproductreject": "no-your-pannels",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 35
+        },
+        "id": 37,
+        "panels": [],
+        "repeat": "",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "title": "Your panels",
+        "type": "row"
+      },
+      {
+        "class": "plain_text",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 2,
+          "w": 24,
+          "x": 0,
+          "y": 36
+        },
+        "id": 38,
+        "links": [],
+        "mode": "html",
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "<h1 style=\"color:#5780C1; border-bottom: 3px solid #5780C1;\">Your Panels</h1>",
+          "mode": "html"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "style": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "transparent": true,
+        "type": "text"
+      },
+      {
+        "class": "user_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "This graph panel was left empty on purpose for ad-hoc usage. Change it when needed. Pay attention that changes to the panel will not be saved.\n\nIf you do need a panel that can be saved, create a new dashboard, or edit the panel inside the json file",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 0,
+          "y": 38
+        },
+        "id": 39,
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 6,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "title": "Your Graph here",
+        "type": "timeseries"
+      },
+      {
+        "class": "user_panel",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "description": "This graph panel was left empty on purpose for ad-hoc usage. Change it when needed. Pay attention that changes to the panel will not be saved.\n\nIf you do need a panel that can be saved, create a new dashboard, or edit the panel inside the json file",
+        "editable": true,
+        "error": false,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "axisSoftMin": 0,
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "si:ops/s"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 12,
+          "y": 38
+        },
+        "id": 40,
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "maxHeight": 600,
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "seriesOverrides": [
+          {}
+        ],
+        "span": 6,
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "title": "Your Graph here",
+        "type": "timeseries"
+      },
+      {
+        "class": "plain_text",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 3,
+          "w": 24,
+          "x": 0,
+          "y": 44
+        },
+        "id": 41,
+        "links": [],
+        "mode": "html",
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "<div style=\"color:#5780C1; border-bottom: 0px solid #5780C1;\">Scylla Monitoring version - 4.9.4</div> <div style=\"\"><a href=\"https://github.com/scylladb/scylla-monitoring/issues/new?body=scylla-version%3D[[scylla_version]]%0Amonitoring-version%3D[[monitoring_version]]%0Adashboard%3D${__dashboard.uid}\" target=\"_blank\">\n<input title=\"Report an issue with Scylla Monitoring\" type=\"button\" style=\"background-color:#306EE6;color:white;border-radius: 15px;font-size:14px;line-height:22px;padding:2px\" value=\"&nbsp;Report an issue on this page&nbsp;\"></a>&nbsp;&nbsp;&nbsp;&nbsp;<a href=\"/render/d/${__dashboard.uid}?orgId=1&from=${__from}&to=${__to}&width=1600&height=-1&kiosk\" target=\"_blank\" download=\"dashboard_${__dashboard.uid}-${__from:date:iso}.png\"><input title=\"Make a Screenshot\" type=\"button\" style=\"background-color:#306EE6;color:white;border-radius: 15px;font-size:14px;line-height:22px;padding:2px\" value=\"&nbsp;&nbsp;&nbsp;Screenshot&nbsp;&nbsp;&nbsp;\"></input></a></span></div>",
+          "mode": "html"
+        },
+        "pluginVersion": "10.1.1",
+        "span": 12,
+        "style": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "refId": "A"
+          }
+        ],
+        "transparent": true,
+        "type": "text"
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": [
+      "6.2"
+    ],
+    "templating": {
+      "list": [
+        {
+          "class": "by_template_var",
+          "current": {
+            "tags": [],
+            "text": "DC",
+            "value": "dc"
+          },
+          "hide": 0,
+          "includeAll": false,
+          "label": "by",
+          "multi": false,
+          "name": "by",
+          "options": [
+            {
+              "selected": false,
+              "text": "Cluster",
+              "value": "cluster"
+            },
+            {
+              "selected": true,
+              "text": "DC",
+              "value": "dc"
+            },
+            {
+              "selected": false,
+              "text": "Instance",
+              "value": "instance"
+            },
+            {
+              "selected": false,
+              "text": "instance,shard",
+              "value": "instance,shard"
+            }
+          ],
+          "query": "Cluster : cluster,DC : dc, Instance : instance, Shard : instance\\,shard",
+          "skipUrlSync": false,
+          "type": "custom"
+        },
+        {
+          "class": "template_variable_single",
+          "current": {
+            "selected": false,
+            "text": "scylla",
+            "value": "scylla"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": false,
+          "label": "cluster",
+          "multi": false,
+          "name": "cluster",
+          "options": [],
+          "query": "label_values(scylla_reactor_utilization, cluster)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 1,
+          "tagValuesQuery": "",
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        },
+        {
+          "allValue": ".*",
+          "class": "template_variable_all",
+          "current": {
+            "selected": true,
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": true,
+          "label": "dc",
+          "multi": true,
+          "name": "dc",
+          "options": [],
+          "query": "label_values(scylla_reactor_utilization{cluster=~\"$cluster\"}, dc)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 1,
+          "tagValuesQuery": "",
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        },
+        {
+          "allValue": ".*",
+          "class": "template_variable_all",
+          "current": {
+            "selected": true,
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": true,
+          "label": "node",
+          "multi": true,
+          "name": "node",
+          "options": [],
+          "query": "label_values(scylla_reactor_utilization{cluster=\"$cluster\", dc=~\"$dc\"}, instance)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 1,
+          "tagValuesQuery": "",
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        },
+        {
+          "allValue": ".+",
+          "class": "template_variable_all",
+          "current": {
+            "selected": true,
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": true,
+          "label": "shard",
+          "multi": true,
+          "name": "shard",
+          "options": [],
+          "query": "label_values(scylla_reactor_utilization{cluster=\"$cluster\"},shard)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 3,
+          "tagValuesQuery": "",
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        },
+        {
+          "class": "template_variable_single",
+          "current": {
+            "selected": false,
+            "text": "/mnt/disks/raid",
+            "value": "/mnt/disks/raid"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": false,
+          "label": "Mount path",
+          "multi": false,
+          "name": "mount_point",
+          "options": [],
+          "query": "node_filesystem_avail_bytes",
+          "refresh": 2,
+          "regex": "/mountpoint=\"([^\"]*)\".*/",
+          "skipUrlSync": false,
+          "sort": 0,
+          "tagValuesQuery": "",
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        },
+        {
+          "allValue": ".*",
+          "class": "template_variable_all",
+          "current": {
+            "selected": true,
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": true,
+          "label": "SG",
+          "multi": true,
+          "name": "sg",
+          "options": [],
+          "query": "label_values(scylla_scheduler_runtime_ms{cluster=~\"$cluster\", group!~\"atexit|gossip|mem_compaction|memtable|streaming|background_reclaim|compaction|main|memtable_to_cache\"},group)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 3,
+          "tagValuesQuery": "",
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        },
+        {
+          "class": "aggregation_function",
+          "current": {
+            "tags": [],
+            "text": "sum",
+            "value": "sum"
+          },
+          "hide": 0,
+          "includeAll": false,
+          "label": "Function",
+          "multi": false,
+          "name": "func",
+          "options": [
+            {
+              "selected": true,
+              "text": "sum",
+              "value": "sum"
+            },
+            {
+              "selected": false,
+              "text": "avg",
+              "value": "avg"
+            },
+            {
+              "selected": false,
+              "text": "max",
+              "value": "max"
+            },
+            {
+              "selected": false,
+              "text": "min",
+              "value": "min"
+            },
+            {
+              "selected": false,
+              "text": "stddev",
+              "value": "stddev"
+            },
+            {
+              "selected": false,
+              "text": "stdvar",
+              "value": "stdvar"
+            }
+          ],
+          "query": "sum,avg,max,min,stddev,stdvar",
+          "skipUrlSync": false,
+          "type": "custom"
+        },
+        {
+          "class": "template_variable_custom",
+          "current": {
+            "text": "6-2",
+            "value": "6-2"
+          },
+          "hide": 2,
+          "includeAll": false,
+          "multi": false,
+          "name": "dash_version",
+          "options": [
+            {
+              "selected": true,
+              "text": "6-2",
+              "value": "6-2"
+            }
+          ],
+          "query": "6-2",
+          "skipUrlSync": false,
+          "type": "custom"
+        },
+        {
+          "allValue": ".*",
+          "class": "template_variable_all",
+          "current": {
+            "selected": true,
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "definition": "",
+          "hide": 2,
+          "includeAll": true,
+          "multi": true,
+          "name": "all_scyllas_versions",
+          "options": [],
+          "query": "label_values(scylla_scylladb_current_version{cluster=\"$cluster\"}, version)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 1,
+          "tagValuesQuery": "",
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        },
+        {
+          "allValue": ".*",
+          "class": "template_variable_all",
+          "current": {
+            "selected": true,
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "definition": "query_result(count(up{job=\"scylla\"}) by (dc))",
+          "hide": 2,
+          "includeAll": true,
+          "multi": true,
+          "name": "count_dc",
+          "options": [],
+          "query": {
+            "query": "query_result(count(up{job=\"scylla\"}) by (dc))",
+            "refId": "StandardVariableQuery"
+          },
+          "refresh": 2,
+          "regex": "/(?<dc>\\{dc=\"[^\"]+\".* \\d+) .*/",
+          "skipUrlSync": false,
+          "sort": 1,
+          "tagValuesQuery": "",
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        },
+        {
+          "class": "template_variable_custom",
+          "current": {
+            "text": "6.2",
+            "value": "6.2"
+          },
+          "hide": 2,
+          "includeAll": false,
+          "multi": false,
+          "name": "scylla_version",
+          "options": [
+            {
+              "selected": true,
+              "text": "6.2",
+              "value": "6.2"
+            }
+          ],
+          "query": "6.2",
+          "skipUrlSync": false,
+          "type": "custom"
+        },
+        {
+          "class": "monitor_version_var",
+          "current": {
+            "text": "4.9.4",
+            "value": "4.9.4"
+          },
+          "hide": 2,
+          "includeAll": false,
+          "multi": false,
+          "name": "monitoring_version",
+          "options": [
+            {
+              "selected": true,
+              "text": "4.9.4",
+              "value": "4.9.4"
+            }
+          ],
+          "query": "4.9.4",
+          "skipUrlSync": false,
+          "type": "custom"
+        }
+      ]
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "now": true,
+      "refresh_intervals": [
+        "5s",
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ],
+      "time_options": [
+        "5m",
+        "15m",
+        "1h",
+        "6h",
+        "12h",
+        "24h",
+        "2d",
+        "7d",
+        "30d"
+      ]
+    },
+    "timezone": "browser",
+    "title": "Overview",
+    "uid": "overview-6-2",
+    "version": 1,
+    "weekStart": ""
+  }

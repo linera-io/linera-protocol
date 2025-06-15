@@ -7,7 +7,6 @@ use std::{
     fmt,
     hash::Hash,
     mem,
-    ops::Range,
 };
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
@@ -317,8 +316,10 @@ where
                         .node
                         .missing_blob_ids(mem::take(&mut blob_ids))
                         .await?;
-                    let local_storage = self.local_node.storage_client();
-                    let blob_states = local_storage.read_blob_states(&missing_blob_ids).await?;
+                    let blob_states = self
+                        .local_node
+                        .read_blob_states_from_storage(&missing_blob_ids)
+                        .await?;
                     let mut chain_heights = BTreeMap::new();
                     for blob_state in blob_states {
                         let block_chain_id = blob_state.chain_id;
@@ -352,12 +353,11 @@ where
         let remote_info = self.remote_node.handle_chain_info_query(query).await?;
         let initial_block_height = remote_info.next_block_height;
         // Obtain the missing blocks and the manager state from the local node.
-        let range: Range<usize> =
-            initial_block_height.try_into()?..target_block_height.try_into()?;
+        let range = initial_block_height..target_block_height;
         let (keys, timeout) = {
             let chain = self.local_node.chain_state_view(chain_id).await?;
             (
-                chain.confirmed_log.read(range).await?,
+                chain.block_hashes(range).await?,
                 chain.manager.timeout.get().clone(),
             )
         };

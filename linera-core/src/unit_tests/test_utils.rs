@@ -5,7 +5,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     num::NonZeroUsize,
     sync::Arc,
-    time::Duration,
     vec,
 };
 
@@ -29,7 +28,7 @@ use linera_chain::{
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
-use linera_storage::{DbStorage, NetworkDescription, Storage, TestClock};
+use linera_storage::{DbStorage, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
@@ -49,14 +48,13 @@ use {
 };
 
 use crate::{
-    client::Client,
+    client::{ChainClientOptions, Client},
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    updater::DEFAULT_GRACE_PERIOD,
     worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
 };
 
@@ -178,6 +176,17 @@ where
             name: "test network".to_string(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: Timestamp::default(),
+            admin_chain_id: self
+                .client
+                .lock()
+                .await
+                .state
+                .storage_client()
+                .read_network_description()
+                .await
+                .unwrap()
+                .unwrap()
+                .admin_chain_id,
         })
     }
 
@@ -502,6 +511,10 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Into::into);
+        let blob = match blob {
+            Ok(blob) => blob.ok_or(NodeError::BlobsNotFound(vec![blob_id])),
+            Err(error) => Err(error),
+        };
         sender.send(blob.map(|blob| blob.into_content()))
     }
 
@@ -573,13 +586,21 @@ where
         sender: oneshot::Sender<Result<CryptoHash, NodeError>>,
     ) -> Result<(), Result<CryptoHash, NodeError>> {
         let validator = self.client.lock().await;
-        let certificate_hash = validator
+        let blob_state = validator
             .state
             .storage_client()
             .read_blob_state(blob_id)
             .await
-            .map(|blob_state| blob_state.last_used_by)
             .map_err(Into::into);
+        let certificate_hash = match blob_state {
+            Err(err) => Err(err),
+            Ok(blob_state) => match blob_state {
+                None => Err(NodeError::BlobsNotFound(vec![blob_id])),
+                Some(blob_state) => blob_state
+                    .last_used_by
+                    .ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
+            },
+        };
 
         sender.send(certificate_hash)
     }
@@ -659,16 +680,17 @@ where
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
 #[allow(dead_code)]
-pub struct TestBuilder<'a, B: StorageBuilder> {
+pub struct TestBuilder<B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
     admin_description: Option<ChainDescription>,
+    network_description: Option<NetworkDescription>,
     genesis_storage_builder: GenesisStorageBuilder,
     validator_clients: Vec<LocalValidatorClient<B::Storage>>,
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
     pub chain_owners: BTreeMap<ChainId, AccountOwner>,
-    pub signer: &'a mut InMemorySigner,
+    pub signer: InMemorySigner,
 }
 
 #[async_trait]
@@ -712,9 +734,10 @@ impl GenesisStorageBuilder {
     }
 }
 
-pub type ChainClient<S> = crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
+pub type ChainClient<S> =
+    crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>, InMemorySigner>>;
 
-impl<'signer, B> TestBuilder<'signer, B>
+impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
 {
@@ -722,7 +745,7 @@ where
         mut storage_builder: B,
         count: usize,
         with_faulty_validators: usize,
-        signer: &'signer mut InMemorySigner,
+        mut signer: InMemorySigner,
     ) -> Result<Self, anyhow::Error> {
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -765,6 +788,7 @@ where
             storage_builder,
             initial_committee,
             admin_description: None,
+            network_description: None,
             genesis_storage_builder: GenesisStorageBuilder::default(),
             validator_clients,
             validator_storages,
@@ -817,11 +841,6 @@ where
         let public_key = self.signer.generate_new();
         let open_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(public_key.into()),
-            admin_id: if index == 0 {
-                None
-            } else {
-                Some(self.admin_id())
-            },
             epoch: Epoch(0),
             committees,
             balance,
@@ -830,6 +849,13 @@ where
         let description = ChainDescription::new(origin, open_chain_config, Timestamp::from(0));
         if index == 0 {
             self.admin_description = Some(description.clone());
+            self.network_description = Some(NetworkDescription {
+                admin_chain_id: description.id(),
+                // dummy values to fill the description
+                genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                genesis_timestamp: Timestamp::from(0),
+                name: "test network".to_string(),
+            });
         }
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder
@@ -839,6 +865,10 @@ where
                 .validator_storages
                 .get_mut(&validator.public_key)
                 .unwrap();
+            storage
+                .write_network_description(self.network_description.as_ref().unwrap())
+                .await
+                .expect("writing the NetworkDescription should succeed");
             if validator.fault_type().await == FaultType::Malicious {
                 let origin = description.origin();
                 let config = InitialChainConfig {
@@ -896,10 +926,12 @@ where
     }
 
     pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
-        Ok(self
-            .genesis_storage_builder
-            .build(self.storage_builder.build().await?)
-            .await)
+        let storage = self.storage_builder.build().await?;
+        storage
+            .write_network_description(self.network_description.as_ref().unwrap())
+            .await
+            .expect("writing the NetworkDescription should succeed");
+        Ok(self.genesis_storage_builder.build(storage).await)
     }
 
     pub async fn make_client(
@@ -912,32 +944,26 @@ where
         // the rest by asking validators.
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
-        let builder = Arc::new(Client::new(
+        let client = Arc::new(Client::new(
             crate::environment::Impl {
                 network: self.make_node_provider(),
                 storage,
+                signer: self.signer.clone(),
             },
-            Box::new(self.signer.clone()),
-            10,
             self.admin_id(),
-            CrossChainMessageDelivery::NonBlocking,
             false,
             [chain_id],
             format!("Client node for {:.8}", chain_id),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ChainClientOptions::test_default(),
         ));
-        Ok(builder
-            .create_chain_client(
-                chain_id,
-                block_hash,
-                Timestamp::from(0),
-                block_height,
-                None,
-                self.chain_owners.get(&chain_id).copied(),
-            )
-            .await?)
+        Ok(client.create_chain_client(
+            chain_id,
+            block_hash,
+            block_height,
+            None,
+            self.chain_owners.get(&chain_id).copied(),
+        ))
     }
 
     /// Tries to find a (confirmation) certificate for the given chain_id and block height.

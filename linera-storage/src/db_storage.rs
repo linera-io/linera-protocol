@@ -1,16 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, Epoch, TimeDelta, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, EventId},
+    data_types::{Blob, NetworkDescription, TimeDelta, Timestamp},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
 };
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
@@ -21,10 +21,10 @@ use linera_execution::{
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
-    batch::Batch,
     context::ViewContext,
     store::{AdminKeyValueStore, KeyIterable as _, KeyValueStore},
-    views::{View, ViewError},
+    views::View,
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
@@ -33,231 +33,218 @@ use {
     linera_views::{random::generate_test_namespace, store::TestKeyValueStore},
     std::{cmp::Reverse, collections::BTreeMap},
 };
+
+use crate::{ChainRuntimeContext, Clock, Storage};
+
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
+pub mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
         exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
-        MeasureLatency,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-};
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
-use crate::{ChainRuntimeContext, Clock, NetworkDescription, Storage};
+    /// The metric counting how often a blob is tested for existence from storage
+    pub(super) static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "contains_blob",
+            "The metric counting how often a blob is tested for existence from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a blob is tested for existence from storage
-#[cfg(with_metrics)]
-static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "contains_blob",
-        "The metric counting how often a blob is tested for existence from storage",
-        &[],
-    )
-});
+    /// The metric counting how often multiple blobs are tested for existence from storage
+    pub(super) static CONTAINS_BLOBS_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "contains_blobs",
+            "The metric counting how often multiple blobs are tested for existence from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often multiple blobs are tested for existence from storage
-#[cfg(with_metrics)]
-static CONTAINS_BLOBS_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "contains_blobs",
-        "The metric counting how often multiple blobs are tested for existence from storage",
-        &[],
-    )
-});
+    /// The metric counting how often a blob state is tested for existence from storage
+    pub(super) static CONTAINS_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "contains_blob_state",
+            "The metric counting how often a blob state is tested for existence from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a blob state is tested for existence from storage
-#[cfg(with_metrics)]
-static CONTAINS_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "contains_blob_state",
-        "The metric counting how often a blob state is tested for existence from storage",
-        &[],
-    )
-});
+    /// The metric counting how often a certificate is tested for existence from storage.
+    pub(super) static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "contains_certificate",
+            "The metric counting how often a certificate is tested for existence from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a certificate is tested for existence from storage.
-#[cfg(with_metrics)]
-static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "contains_certificate",
-        "The metric counting how often a certificate is tested for existence from storage",
-        &[],
-    )
-});
+    /// The metric counting how often a hashed certificate value is read from storage.
+    #[doc(hidden)]
+    pub static READ_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "read_confirmed_block",
+            "The metric counting how often a hashed confirmed block is read from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a hashed certificate value is read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static READ_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "read_confirmed_block",
-        "The metric counting how often a hashed confirmed block is read from storage",
-        &[],
-    )
-});
+    /// The metric counting how often a blob is read from storage.
+    #[doc(hidden)]
+    pub static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "read_blob",
+            "The metric counting how often a blob is read from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a blob is read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "read_blob",
-        "The metric counting how often a blob is read from storage",
-        &[],
-    )
-});
+    /// The metric counting how often a blob state is read from storage.
+    #[doc(hidden)]
+    pub static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "read_blob_state",
+            "The metric counting how often a blob state is read from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a blob state is read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "read_blob_state",
-        "The metric counting how often a blob state is read from storage",
-        &[],
-    )
-});
+    /// The metric counting how often blob states are read from storage.
+    #[doc(hidden)]
+    pub static READ_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "read_blob_states",
+            "The metric counting how often blob states are read from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often blob states are read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static READ_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "read_blob_states",
-        "The metric counting how often blob states are read from storage",
-        &[],
-    )
-});
+    /// The metric counting how often a blob is written to storage.
+    #[doc(hidden)]
+    pub static WRITE_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "write_blob",
+            "The metric counting how often a blob is written to storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a blob is written to storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static WRITE_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "write_blob",
-        "The metric counting how often a blob is written to storage",
-        &[],
-    )
-});
+    /// The metric counting how often a certificate is read from storage.
+    #[doc(hidden)]
+    pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "read_certificate",
+            "The metric counting how often a certificate is read from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a certificate is read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "read_certificate",
-        "The metric counting how often a certificate is read from storage",
-        &[],
-    )
-});
+    /// The metric counting how often certificates are read from storage.
+    #[doc(hidden)]
+    pub static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "read_certificates",
+            "The metric counting how often certificate are read from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often certificates are read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "read_certificates",
-        "The metric counting how often certificate are read from storage",
-        &[],
-    )
-});
+    /// The metric counting how often a certificate is written to storage.
+    #[doc(hidden)]
+    pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "write_certificate",
+            "The metric counting how often a certificate is written to storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often a certificate is written to storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "write_certificate",
-        "The metric counting how often a certificate is written to storage",
-        &[],
-    )
-});
+    /// The latency to load a chain state.
+    #[doc(hidden)]
+    pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "load_chain_latency",
+            "The latency to load a chain state",
+            &[],
+            exponential_bucket_latencies(10.0),
+        )
+    });
 
-/// The latency to load a chain state.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "load_chain_latency",
-        "The latency to load a chain state",
-        &[],
-        exponential_bucket_latencies(10.0),
-    )
-});
+    /// The metric counting how often an event is read from storage.
+    #[doc(hidden)]
+    pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "read_event",
+            "The metric counting how often an event is read from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often an event is read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "read_event",
-        "The metric counting how often an event is read from storage",
-        &[],
-    )
-});
+    /// The metric counting how often an event is tested for existence from storage
+    pub(super) static CONTAINS_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "contains_event",
+            "The metric counting how often an event is tested for existence from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often an event is tested for existence from storage
-#[cfg(with_metrics)]
-static CONTAINS_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "contains_event",
-        "The metric counting how often an event is tested for existence from storage",
-        &[],
-    )
-});
+    /// The metric counting how often an event is written to storage.
+    #[doc(hidden)]
+    pub static WRITE_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "write_event",
+            "The metric counting how often an event is written to storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often an event is written to storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static WRITE_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "write_event",
-        "The metric counting how often an event is written to storage",
-        &[],
-    )
-});
+    /// The metric counting how often the network description is read from storage.
+    #[doc(hidden)]
+    pub static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "network_description",
+            "The metric counting how often the network description is read from storage",
+            &[],
+        )
+    });
 
-/// The metric counting how often the network description is read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "network_description",
-        "The metric counting how often the network description is read from storage",
-        &[],
-    )
-});
-
-/// The metric counting how often the network description is written to storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "write_event",
-        "The metric counting how often the network description is written to storage",
-        &[],
-    )
-});
-
-trait BatchExt {
-    fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError>;
-
-    fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError>;
-
-    fn add_certificate(&mut self, certificate: &ConfirmedBlockCertificate)
-        -> Result<(), ViewError>;
-
-    fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError>;
-
-    fn add_network_description(
-        &mut self,
-        information: &NetworkDescription,
-    ) -> Result<(), ViewError>;
+    /// The metric counting how often the network description is written to storage.
+    #[doc(hidden)]
+    pub static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "write_network_description",
+            "The metric counting how often the network description is written to storage",
+            &[],
+        )
+    });
 }
 
-impl BatchExt for Batch {
+#[derive(Default)]
+struct Batch {
+    key_value_bytes: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+impl Batch {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
+        self.key_value_bytes.push((key, value));
+    }
+
+    fn put_key_value<T: Serialize>(&mut self, key: Vec<u8>, value: &T) -> Result<(), ViewError> {
+        let bytes = bcs::to_bytes(value)?;
+        self.key_value_bytes.push((key, bytes));
+        Ok(())
+    }
+
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
+        metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
         self.put_key_value_bytes(blob_key.to_vec(), blob.bytes().to_vec());
         Ok(())
@@ -274,7 +261,9 @@ impl BatchExt for Batch {
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
+        metrics::WRITE_CERTIFICATE_COUNTER
+            .with_label_values(&[])
+            .inc();
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
@@ -285,7 +274,7 @@ impl BatchExt for Batch {
 
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
+        metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
         self.put_key_value_bytes(event_key.to_vec(), value);
         Ok(())
@@ -296,7 +285,9 @@ impl BatchExt for Batch {
         information: &NetworkDescription,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        WRITE_NETWORK_DESCRIPTION.with_label_values(&[]).inc();
+        metrics::WRITE_NETWORK_DESCRIPTION
+            .with_label_values(&[])
+            .inc();
         let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
         self.put_key_value(key, information)?;
         Ok(())
@@ -328,6 +319,7 @@ enum BaseKey {
 
 const INDEX_CHAIN_ID: u8 = 0;
 const INDEX_BLOB_ID: u8 = 3;
+const INDEX_EVENT_ID: u8 = 5;
 const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
 const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 
@@ -335,15 +327,24 @@ const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 mod tests {
     use linera_base::{
         crypto::CryptoHash,
-        identifiers::{BlobId, BlobType, ChainId},
+        identifiers::{
+            ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
+            StreamName,
+        },
     };
 
     use crate::db_storage::{
-        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID,
+        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID, INDEX_EVENT_ID,
     };
 
+    // Several functionalities of the storage rely on the way that the serialization
+    // is done. Thus we need to check that the serialization works in the way that
+    // we expect.
+
+    // The listing of the blobs in `list_blob_ids` depends on the serialization
+    // of `BaseKey::Blob`.
     #[test]
-    fn test_base_key_serialization() {
+    fn test_basekey_blob_serialization() {
         let hash = CryptoHash::default();
         let blob_type = BlobType::default();
         let blob_id = BlobId::new(hash, blob_type);
@@ -353,14 +354,45 @@ mod tests {
         assert_eq!(key.len(), 1 + BLOB_ID_LENGTH);
     }
 
+    // The listing of the chains in `list_chain_ids` depends on the serialization
+    // of `BaseKey::ChainState`.
     #[test]
-    fn test_chain_id_serialization() {
+    fn test_basekey_chainstate_serialization() {
         let hash = CryptoHash::default();
         let chain_id = ChainId(hash);
         let base_key = BaseKey::ChainState(chain_id);
         let key = bcs::to_bytes(&base_key).expect("a key");
         assert_eq!(key[0], INDEX_CHAIN_ID);
         assert_eq!(key.len(), 1 + CHAIN_ID_LENGTH);
+    }
+
+    // The listing of the events in `read_events_from_index` depends on the
+    // serialization of `BaseKey::Event`.
+    #[test]
+    fn test_basekey_event_serialization() {
+        let hash = CryptoHash::test_hash("49");
+        let chain_id = ChainId(hash);
+        let application_description_hash = CryptoHash::test_hash("42");
+        let application_id = ApplicationId::new(application_description_hash);
+        let application_id = GenericApplicationId::User(application_id);
+        let stream_name = StreamName(bcs::to_bytes("linera_stream").unwrap());
+        let stream_id = StreamId {
+            application_id,
+            stream_name,
+        };
+        let mut prefix = vec![INDEX_EVENT_ID];
+        prefix.extend(bcs::to_bytes(&chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(&stream_id).unwrap());
+
+        let index = 1567;
+        let event_id = EventId {
+            chain_id,
+            stream_id,
+            index,
+        };
+        let base_key = BaseKey::Event(event_id);
+        let key = bcs::to_bytes(&base_key).unwrap();
+        assert!(key.starts_with(&prefix));
     }
 }
 
@@ -515,7 +547,7 @@ where
         chain_id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, ViewError> {
         #[cfg(with_metrics)]
-        let _metric = LOAD_CHAIN_LATENCY.measure_latency();
+        let _metric = metrics::LOAD_CHAIN_LATENCY.measure_latency();
         let runtime_context = ChainRuntimeContext {
             storage: self.clone(),
             chain_id,
@@ -524,7 +556,7 @@ where
             user_services: self.user_services.clone(),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
@@ -533,7 +565,7 @@ where
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
-        CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
+        metrics::CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
     }
 
@@ -551,7 +583,7 @@ where
             }
         }
         #[cfg(with_metrics)]
-        CONTAINS_BLOBS_COUNTER.with_label_values(&[]).inc();
+        metrics::CONTAINS_BLOBS_COUNTER.with_label_values(&[]).inc();
         Ok(missing_blobs)
     }
 
@@ -559,7 +591,9 @@ where
         let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
-        CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
+        metrics::CONTAINS_BLOB_STATE_COUNTER
+            .with_label_values(&[])
+            .inc();
         Ok(test)
     }
 
@@ -567,18 +601,19 @@ where
         let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         let maybe_value = self.store.read_value::<ConfirmedBlock>(&block_key).await?;
         #[cfg(with_metrics)]
-        READ_CONFIRMED_BLOCK_COUNTER.with_label_values(&[]).inc();
+        metrics::READ_CONFIRMED_BLOCK_COUNTER
+            .with_label_values(&[])
+            .inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value)
     }
 
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
-        READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_bytes = maybe_blob_bytes.ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?;
-        Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
+        metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
+        Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
@@ -591,7 +626,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
         let maybe_blob_bytes = self.store.read_multi_values_bytes(blob_keys).await?;
         #[cfg(with_metrics)]
-        READ_BLOB_COUNTER
+        metrics::READ_BLOB_COUNTER
             .with_label_values(&[])
             .inc_by(blob_ids.len() as u64);
 
@@ -604,17 +639,20 @@ where
             .collect())
     }
 
-    async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
+    async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
+        let blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
-        READ_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
-        let blob_state = maybe_blob_state
-            .ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id))?;
+        metrics::READ_BLOB_STATE_COUNTER
+            .with_label_values(&[])
+            .inc();
         Ok(blob_state)
     }
 
-    async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError> {
+    async fn read_blob_states(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<BlobState>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -622,19 +660,14 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
             .collect::<Result<_, _>>()?;
-        let maybe_blob_states = self
+        let blob_states = self
             .store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
         #[cfg(with_metrics)]
-        READ_BLOB_STATES_COUNTER.with_label_values(&[]).inc();
-        let blob_states = maybe_blob_states
-            .into_iter()
-            .zip(blob_ids)
-            .map(|(blob_state, blob_id)| {
-                blob_state.ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id))
-            })
-            .collect::<Result<_, _>>()?;
+        metrics::READ_BLOB_STATES_COUNTER
+            .with_label_values(&[])
+            .inc_by(blob_ids.len() as u64);
         Ok(blob_states)
     }
 
@@ -663,36 +696,13 @@ where
         Ok(())
     }
 
-    async fn maybe_write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: BlobState,
-    ) -> Result<Epoch, ViewError> {
-        let current_blob_state = self.read_blob_state(blob_id).await;
-        let (should_write, latest_epoch) = match current_blob_state {
-            Ok(current_blob_state) => (
-                current_blob_state.epoch < blob_state.epoch,
-                current_blob_state.epoch.max(blob_state.epoch),
-            ),
-            Err(ViewError::NotFound(_)) => (true, blob_state.epoch),
-            Err(err) => return Err(err),
-        };
-
-        if should_write {
-            self.write_blob_state(blob_id, &blob_state).await?;
-        }
-
-        Ok(latest_epoch)
-    }
-
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
-        overwrite: bool,
-    ) -> Result<Vec<Epoch>, ViewError> {
+    ) -> Result<(), ViewError> {
         if blob_ids.is_empty() {
-            return Ok(Vec::new());
+            return Ok(());
         }
         let blob_state_keys = blob_ids
             .iter()
@@ -702,36 +712,22 @@ where
             .store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
-        let mut latest_epochs = Vec::new();
         let mut batch = Batch::new();
-        let mut need_write = false;
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
-            let (should_write, latest_epoch) = match maybe_blob_state {
-                None => (true, blob_state.epoch),
-                Some(current_blob_state) => (
-                    overwrite && current_blob_state.epoch < blob_state.epoch,
-                    current_blob_state.epoch.max(blob_state.epoch),
-                ),
-            };
-            if should_write {
-                batch.add_blob_state(*blob_id, &blob_state)?;
-                need_write = true;
+            match maybe_blob_state {
+                None => {
+                    batch.add_blob_state(*blob_id, &blob_state)?;
+                }
+                Some(state) => {
+                    if state.epoch < blob_state.epoch {
+                        batch.add_blob_state(*blob_id, &blob_state)?;
+                    }
+                }
             }
-            latest_epochs.push(latest_epoch);
         }
-        if need_write {
-            self.write_batch(batch).await?;
-        }
-        Ok(latest_epochs)
-    }
-
-    async fn write_blob_state(
-        &self,
-        blob_id: BlobId,
-        blob_state: &BlobState,
-    ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        batch.add_blob_state(blob_id, blob_state)?;
+        // We tolerate race conditions because two active chains are likely to
+        // be both from the latest epoch, and otherwise failing to pick the
+        // more recent blob state has limited impact.
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -783,7 +779,9 @@ where
         let keys = Self::get_keys_for_certificates(&[hash])?;
         let results = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
-        CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
+        metrics::CONTAINS_CERTIFICATE_COUNTER
+            .with_label_values(&[])
+            .inc();
         Ok(results[0] && results[1])
     }
 
@@ -795,7 +793,9 @@ where
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
-            READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
+            metrics::READ_CERTIFICATE_COUNTER
+                .with_label_values(&[])
+                .inc();
         }
         let values = values?;
         Self::deserialize_certificate(&values, hash)
@@ -813,7 +813,9 @@ where
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
-            READ_CERTIFICATES_COUNTER.with_label_values(&[]).inc();
+            metrics::READ_CERTIFICATES_COUNTER
+                .with_label_values(&[])
+                .inc_by(hashes.len() as u64);
         }
         let values = values?;
         let mut certificates = Vec::new();
@@ -824,20 +826,50 @@ where
         Ok(certificates)
     }
 
-    async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+    async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
-        let maybe_value = self.store.read_value_bytes(&event_key).await?;
+        let event = self.store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
-        READ_EVENT_COUNTER.with_label_values(&[]).inc();
-        maybe_value.ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))
+        metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
+        Ok(event)
     }
 
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
         let exists = self.store.contains_key(&event_key).await?;
         #[cfg(with_metrics)]
-        CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
+        metrics::CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(exists)
+    }
+
+    async fn read_events_from_index(
+        &self,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>, ViewError> {
+        let mut prefix = vec![INDEX_EVENT_ID];
+        prefix.extend(bcs::to_bytes(chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(stream_id).unwrap());
+        let mut keys = Vec::new();
+        let mut indices = Vec::new();
+        for short_key in self.store.find_keys_by_prefix(&prefix).await?.iterator() {
+            let short_key = short_key?;
+            let index = bcs::from_bytes::<u32>(short_key)?;
+            if index >= start_index {
+                let mut key = prefix.clone();
+                key.extend(short_key);
+                keys.push(key);
+                indices.push(index);
+            }
+        }
+        let values = self.store.read_multi_values_bytes(keys).await?;
+        let mut returned_values = Vec::new();
+        for (index, value) in indices.into_iter().zip(values) {
+            let event = value.unwrap();
+            returned_values.push(IndexAndEvent { index, event });
+        }
+        Ok(returned_values)
     }
 
     async fn write_events(
@@ -855,7 +887,9 @@ where
         let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
         let maybe_value = self.store.read_value(&key).await?;
         #[cfg(with_metrics)]
-        READ_NETWORK_DESCRIPTION.with_label_values(&[]).inc();
+        metrics::READ_NETWORK_DESCRIPTION
+            .with_label_values(&[])
+            .inc();
         Ok(maybe_value)
     }
 
@@ -878,7 +912,7 @@ where
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
         let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.open_exclusive(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
 }
@@ -919,8 +953,23 @@ where
         Ok(certificate)
     }
 
+    async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {
+        let mut batch = linera_views::batch::Batch::new();
+        batch.put_key_value_bytes(key, bytes);
+        store.write_batch(batch).await?;
+        Ok(())
+    }
+
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.store.write_batch(batch).await?;
+        if batch.key_value_bytes.is_empty() {
+            return Ok(());
+        }
+        let mut futures = Vec::new();
+        for (key, bytes) in batch.key_value_bytes.into_iter() {
+            let store = self.store.clone();
+            futures.push(async move { Self::write_entry(&store, key, bytes).await });
+        }
+        futures::future::try_join_all(futures).await?;
         Ok(())
     }
 

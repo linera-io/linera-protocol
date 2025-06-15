@@ -533,9 +533,6 @@ InitialChainConfig:
   STRUCT:
     - ownership:
         TYPENAME: ChainOwnership
-    - admin_id:
-        OPTION:
-          TYPENAME: ChainId
     - epoch:
         TYPENAME: Epoch
     - committees:
@@ -642,6 +639,8 @@ NetworkDescription:
         TYPENAME: CryptoHash
     - genesis_timestamp:
         TYPENAME: Timestamp
+    - admin_chain_id:
+        TYPENAME: ChainId
 NodeError:
   ENUM:
     0:
@@ -692,48 +691,44 @@ NodeError:
     10:
       MissingVoteInValidatorResponse: UNIT
     11:
-      InactiveLocalChain:
-        NEWTYPE:
-          TYPENAME: ChainId
-    12:
       InvalidChainInfoResponse: UNIT
-    13:
+    12:
       UnexpectedCertificateValue: UNIT
-    14:
+    13:
       InvalidDecoding: UNIT
-    15:
+    14:
       UnexpectedMessage: UNIT
-    16:
+    15:
       GrpcError:
         STRUCT:
           - error: STR
-    17:
+    16:
       ClientIoError:
         STRUCT:
           - error: STR
-    18:
+    17:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    19:
+    18:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    20:
+    19:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    21:
+    20:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    22:
+    21:
       DuplicatesInBlobsNotFound: UNIT
-    23:
+    22:
       UnexpectedEntriesInBlobsNotFound: UNIT
-    24:
+    23:
       EmptyBlobsNotFound: UNIT
-    25:
+    24:
       ResponseHandlingError:
         STRUCT:
           - error: STR

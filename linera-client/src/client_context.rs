@@ -3,29 +3,27 @@
 
 #[cfg(with_testing)]
 use std::num::NonZeroUsize;
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
-use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{CryptoHash, Signer, ValidatorPublicKey},
-    data_types::{BlockHeight, ChainDescription, Timestamp},
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
+    crypto::{CryptoHash, ValidatorPublicKey},
+    data_types::{BlockHeight, Timestamp},
+    identifiers::{Account, AccountOwner, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
-    client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
+    client::{ChainClient, Client},
     data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
-    node::{CrossChainMessageDelivery, ValidatorNode},
+    node::ValidatorNode,
     Environment, JoinSetExt as _,
 };
+use linera_persistent::{Persist, PersistExt as _};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
-use linera_storage::Storage;
 use linera_version::VersionInfo;
-use linera_views::views::ViewError;
 use thiserror_context::Context;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
@@ -57,12 +55,8 @@ use {
     std::{fs, path::PathBuf},
 };
 
-#[cfg(web)]
-use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
-#[cfg(not(web))]
-use crate::persistent::{Persist, PersistExt as _};
 use crate::{
-    chain_listener,
+    chain_listener::{self, ClientContext as _, ClientContextExt as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
     error, util,
     wallet::{UserChain, Wallet},
@@ -77,15 +71,11 @@ pub struct ClientContext<Env: Environment, W> {
     pub retry_delay: Duration,
     pub max_retries: u32,
     pub chain_listeners: JoinSet,
-    pub blanket_message_policy: BlanketMessagePolicy,
-    pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 }
 
-#[cfg_attr(not(web), async_trait)]
-#[cfg_attr(web, async_trait(?Send))]
 impl<Env: Environment, W> chain_listener::ClientContext for ClientContext<Env, W>
 where
-    W: Persist<Target = Wallet> + Sync + 'static,
+    W: Persist<Target = Wallet>,
 {
     type Environment = Env;
 
@@ -97,11 +87,7 @@ where
         self.client.storage_client()
     }
 
-    async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
-        self.make_chain_client(chain_id).await
-    }
-
-    fn client(&self) -> &Client<Env> {
+    fn client(&self) -> &Arc<Client<Env>> {
         &self.client
     }
 
@@ -120,24 +106,19 @@ where
     }
 }
 
-impl<S, W> ClientContext<linera_core::environment::Impl<S, NodeProvider>, W>
+impl<S, Si, W> ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>
 where
     S: linera_core::environment::Storage,
+    Si: linera_core::environment::Signer,
     W: Persist<Target = Wallet>,
 {
-    pub fn new(
-        storage: S,
-        options: ClientContextOptions,
-        wallet: W,
-        signer: Box<dyn Signer>,
-    ) -> Self {
+    pub fn new(storage: S, options: ClientContextOptions, wallet: W, signer: Si) -> Self {
         let node_provider = NodeProvider::new(NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
         });
-        let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
             0 => "Client node".to_string(),
@@ -148,17 +129,14 @@ where
             linera_core::environment::Impl {
                 network: node_provider,
                 storage,
+                signer,
             },
-            signer,
-            options.max_pending_message_bundles,
             wallet.genesis_admin_chain(),
-            delivery,
             options.long_lived_services,
             chain_ids,
             name,
             options.max_loaded_chains,
-            options.grace_period,
-            options.blob_download_timeout,
+            options.to_chain_client_options(),
         );
 
         ClientContext {
@@ -169,14 +147,12 @@ where
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
             chain_listeners: JoinSet::default(),
-            blanket_message_policy: options.blanket_message_policy,
-            restrict_chain_ids_to: options.restrict_chain_ids_to,
         }
     }
 
     #[cfg(with_testing)]
-    pub fn new_test_client_context(storage: S, wallet: W, signer: Box<dyn Signer>) -> Self {
-        use linera_core::DEFAULT_GRACE_PERIOD;
+    pub fn new_test_client_context(storage: S, wallet: W, signer: Si) -> Self {
+        use linera_core::{client::ChainClientOptions, node::CrossChainMessageDelivery};
 
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
@@ -188,7 +164,6 @@ where
             retry_delay,
             max_retries,
         };
-        let delivery = CrossChainMessageDelivery::new(true);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
             0 => "Client node".to_string(),
@@ -199,17 +174,17 @@ where
             linera_core::environment::Impl {
                 storage,
                 network: NodeProvider::new(node_options),
+                signer,
             },
-            signer,
-            10,
             wallet.genesis_admin_chain(),
-            delivery,
             false,
             chain_ids,
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            ChainClientOptions {
+                cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
+                ..ChainClientOptions::test_default()
+            },
         );
 
         ClientContext {
@@ -220,16 +195,11 @@ where
             retry_delay,
             max_retries,
             chain_listeners: JoinSet::default(),
-            blanket_message_policy: BlanketMessagePolicy::Accept,
-            restrict_chain_ids_to: None,
         }
     }
 }
 
-impl<Env: Environment, W> ClientContext<Env, W>
-where
-    W: Persist<Target = Wallet>,
-{
+impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
     /// Returns a reference to the wallet.
     pub fn wallet(&self) -> &Wallet {
         &self.wallet
@@ -269,51 +239,6 @@ where
             .expect("No non-admin chain specified in wallet with no non-admin chain")
     }
 
-    pub async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
-        // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain: UserChain = match self.wallet.get(chain_id) {
-            Some(chain) => chain.clone(),
-            None => UserChain::make_other(chain_id, Timestamp::from(0)),
-        };
-
-        self.make_chain_client_internal(
-            chain_id,
-            chain.block_hash,
-            chain.timestamp,
-            chain.next_block_height,
-            chain.pending_proposal,
-            chain.owner,
-        )
-        .await
-    }
-
-    async fn make_chain_client_internal(
-        &self,
-        chain_id: ChainId,
-        block_hash: Option<CryptoHash>,
-        timestamp: Timestamp,
-        next_block_height: BlockHeight,
-        pending_proposal: Option<PendingProposal>,
-        preferred_owner: Option<AccountOwner>,
-    ) -> Result<ChainClient<Env>, Error> {
-        let mut chain_client = self
-            .client
-            .create_chain_client(
-                chain_id,
-                block_hash,
-                timestamp,
-                next_block_height,
-                pending_proposal,
-                preferred_owner,
-            )
-            .await?;
-        chain_client.options_mut().message_policy = MessagePolicy::new(
-            self.blanket_message_policy,
-            self.restrict_chain_ids_to.clone(),
-        );
-        Ok(chain_client)
-    }
-
     pub fn make_node_provider(&self) -> NodeProvider {
         NodeProvider::new(self.make_node_options())
     }
@@ -338,7 +263,12 @@ where
         &mut self,
         client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
-        self.wallet.as_mut().update_from_state(client);
+        let info = client.chain_info().await?;
+        let client_owner = client.preferred_owner();
+        let pending_proposal = client.pending_proposal().clone();
+        self.wallet
+            .as_mut()
+            .update_from_info(pending_proposal, client_owner, &info);
         self.save_wallet().await
     }
 
@@ -408,28 +338,6 @@ where
                 return Ok(certificates);
             }
         }
-    }
-
-    // TODO(#2351): this calls `ensure_has_chain_description`.
-    pub async fn chain_description(
-        &mut self,
-        chain_id: ChainId,
-    ) -> Result<ChainDescription, Error> {
-        let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-
-        let blob = match self.client.storage_client().read_blob(blob_id).await {
-            Ok(blob) => blob,
-            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
-                // we're missing the blob describing the chain we're assigning - try to
-                // get it
-                self.client.ensure_has_chain_description(chain_id).await?
-            }
-            Err(err) => {
-                return Err(err.into());
-            }
-        };
-
-        Ok(bcs::from_bytes(blob.bytes())?)
     }
 
     pub async fn assign_new_chain_to_key(
@@ -503,7 +411,7 @@ where
         ownership_config: ChainOwnershipConfig,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id).await?;
+        let chain_client = self.make_chain_client(chain_id);
         info!(
             ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
             "Changing ownership of a chain"
@@ -536,7 +444,7 @@ where
         preferred_owner: AccountOwner,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let mut chain_client = self.make_chain_client(chain_id).await?;
+        let mut chain_client = self.make_chain_client(chain_id);
         let old_owner = chain_client.preferred_owner();
         info!(%chain_id, ?old_owner, %preferred_owner, "Changing preferred owner for chain");
         chain_client.set_preferred_owner(preferred_owner);
@@ -781,8 +689,8 @@ where
             .wallet
             .default_chain()
             .expect("should have default chain");
-        let default_chain_client = self.make_chain_client(default_chain_id).await?;
-        let (epoch, committee) = default_chain_client.latest_committee().await?;
+        let default_chain_client = self.make_chain_client(default_chain_id);
+        let (epoch, committee) = default_chain_client.admin_committee().await?;
         let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
             key_pairs,
             transactions_per_block,
@@ -821,7 +729,12 @@ where
 
             info!("Updating wallet from chain clients...");
             for chain_client in chain_clients.values() {
-                self.wallet.as_mut().update_from_state(chain_client);
+                let info = chain_client.chain_info().await?;
+                let client_owner = chain_client.preferred_owner();
+                let pending_proposal = chain_client.pending_proposal().clone();
+                self.wallet
+                    .as_mut()
+                    .update_from_info(pending_proposal, client_owner, &info);
             }
             self.save_wallet().await?;
         }
@@ -832,11 +745,7 @@ where
     async fn process_inboxes_and_force_validator_updates(&mut self) {
         let mut chain_clients = vec![];
         for chain_id in &self.wallet.owned_chain_ids() {
-            chain_clients.push(
-                self.make_chain_client(*chain_id)
-                    .await
-                    .expect("chains in the wallet must exist"),
-            );
+            chain_clients.push(self.make_chain_client(*chain_id));
         }
 
         let mut join_set = task::JoinSet::new();
@@ -883,6 +792,7 @@ where
         ),
         Error,
     > {
+        use linera_base::identifiers::BlobType;
         let mut benchmark_chains = HashMap::new();
         let mut chain_clients = HashMap::new();
         let start = Instant::now();
@@ -897,7 +807,7 @@ where
                 .get(chain_id)
                 .and_then(|chain| chain.owner)
                 .unwrap();
-            let chain_client = self.make_chain_client(chain_id).await?;
+            let chain_client = self.make_chain_client(chain_id);
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
@@ -922,7 +832,7 @@ where
         let operations_per_block = 900; // Over this we seem to hit the block size limits.
 
         let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
-        let default_chain_client = self.make_chain_client(default_chain_id).await?;
+        let default_chain_client = self.make_chain_client(default_chain_id);
 
         for i in (0..num_chains_to_create).step_by(operations_per_block) {
             let num_new_chains = operations_per_block.min(num_chains_to_create - i);
@@ -947,16 +857,13 @@ where
                 benchmark_chains.insert(chain_id, pub_key.into());
                 self.client.track_chain(chain_id);
 
-                let mut chain_client = self
-                    .make_chain_client_internal(
-                        chain_id,
-                        None,
-                        certificate.block().header.timestamp,
-                        BlockHeight::ZERO,
-                        None,
-                        Some(pub_key.into()),
-                    )
-                    .await?;
+                let mut chain_client = self.client.create_chain_client(
+                    chain_id,
+                    None,
+                    BlockHeight::ZERO,
+                    None,
+                    Some(pub_key.into()),
+                );
                 chain_client.set_preferred_owner(pub_key.into());
                 chain_client.process_inbox().await?;
                 chain_clients.insert(chain_id, chain_client);
@@ -1032,7 +939,7 @@ where
                 )
             })
             .collect();
-        let chain_client = self.make_chain_client(default_chain_id).await?;
+        let chain_client = self.make_chain_client(default_chain_id);
         // Put at most 1000 fungible token operations in each block.
         for operation_chunk in operations.chunks(1000) {
             chain_client

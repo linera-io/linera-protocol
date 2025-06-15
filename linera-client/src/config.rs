@@ -6,7 +6,10 @@ use std::{collections::BTreeMap, iter::IntoIterator};
 
 use linera_base::{
     crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
+    data_types::{
+        Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, NetworkDescription,
+        Timestamp,
+    },
     identifiers::ChainId,
     ownership::ChainOwnership,
 };
@@ -14,10 +17,11 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
+use linera_persistent as persistent;
 use linera_rpc::config::{
     ExporterServiceConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };
-use linera_storage::{NetworkDescription, Storage};
+use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -30,12 +34,14 @@ pub enum Error {
     Persistence(Box<dyn std::error::Error + Send + Sync>),
     #[error("storage is already initialized: {0:?}")]
     StorageIsAlreadyInitialized(NetworkDescription),
+    #[error("no admin chain configured")]
+    NoAdminChain,
 }
 
-use crate::{persistent, util};
+use crate::util;
 
 util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
-#[cfg(with_indexed_db)]
+#[cfg(web)]
 util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
@@ -98,7 +104,6 @@ impl BcsSignable<'_> for GenesisConfig {}
 fn make_chain(
     committee: &Committee,
     index: u32,
-    admin_id: Option<ChainId>,
     public_key: AccountPublicKey,
     balance: Amount,
     timestamp: Timestamp,
@@ -111,7 +116,6 @@ fn make_chain(
     .collect();
     let origin = ChainOrigin::Root(index);
     let config = InitialChainConfig {
-        admin_id,
         application_permissions: Default::default(),
         balance,
         committees: committees.clone(),
@@ -132,14 +136,7 @@ impl GenesisConfig {
         admin_balance: Amount,
     ) -> Self {
         let committee = committee.into_committee(policy);
-        let admin_chain = make_chain(
-            &committee,
-            0,
-            None,
-            admin_public_key,
-            admin_balance,
-            timestamp,
-        );
+        let admin_chain = make_chain(&committee, 0, admin_public_key, admin_balance, timestamp);
         Self {
             committee,
             timestamp,
@@ -156,7 +153,6 @@ impl GenesisConfig {
         let description = make_chain(
             &self.committee,
             self.chains.len() as u32,
-            Some(self.admin_id()),
             public_key,
             balance,
             self.timestamp,
@@ -184,18 +180,14 @@ impl GenesisConfig {
         {
             return Err(Error::StorageIsAlreadyInitialized(description));
         }
-        for description in &self.chains {
-            storage.create_chain(description.clone()).await?;
-        }
-        let network_description = NetworkDescription {
-            name: self.network_name.clone(),
-            genesis_config_hash: CryptoHash::new(self),
-            genesis_timestamp: self.timestamp,
-        };
+        let network_description = self.network_description();
         storage
             .write_network_description(&network_description)
             .await
             .map_err(linera_chain::ChainError::from)?;
+        for description in &self.chains {
+            storage.create_chain(description.clone()).await?;
+        }
         Ok(())
     }
 
@@ -208,6 +200,7 @@ impl GenesisConfig {
             name: self.network_name.clone(),
             genesis_config_hash: CryptoHash::new(self),
             genesis_timestamp: self.timestamp,
+            admin_chain_id: self.admin_id(),
         }
     }
 }
@@ -284,35 +277,35 @@ impl Destination {
 /// on the resources used by the linera-exporter.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct LimitsConfig {
-    /// Time period in seconds between periodic persistence
+    /// Time period in milliseconds between periodic persistence
     /// to the shared storage.
-    pub persistence_period: u16,
+    pub persistence_period_ms: u32,
     /// Maximum size of the work queue i.e. maximum number
     /// of blocks queued up for exports per destination.
     pub work_queue_size: u16,
     /// Maximum weight of the blob cache in megabytes.
-    pub blob_cache_weight: u16,
+    pub blob_cache_weight_mb: u16,
     /// Estimated number of elements for the blob cache.
     pub blob_cache_items_capacity: u16,
     /// Maximum weight of the block cache in megabytes.
-    pub block_cache_weight: u16,
+    pub block_cache_weight_mb: u16,
     /// Estimated number of elements for the block cache.
     pub block_cache_items_capacity: u16,
     /// Maximum weight in megabytes for the combined
     /// cache, consisting of small miscellaneous items.
-    pub auxiliary_cache_size: u16,
+    pub auxiliary_cache_size_mb: u16,
 }
 
 impl Default for LimitsConfig {
     fn default() -> Self {
         Self {
-            persistence_period: 299,
+            persistence_period_ms: 299 * 1000,
             work_queue_size: 256,
-            blob_cache_weight: 1024,
+            blob_cache_weight_mb: 1024,
             blob_cache_items_capacity: 8192,
-            block_cache_weight: 1024,
+            block_cache_weight_mb: 1024,
             block_cache_items_capacity: 8192,
-            auxiliary_cache_size: 1024,
+            auxiliary_cache_size_mb: 1024,
         }
     }
 }

@@ -2,16 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(with_metrics)]
-use std::sync::LazyLock;
-
+use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-    },
-    prometheus::HistogramVec,
-};
 
 use crate::{
     batch::Batch,
@@ -19,19 +11,27 @@ use crate::{
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View},
+    ViewError,
 };
 
 #[cfg(with_metrics)]
-/// The runtime of hash computation
-static REGISTER_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "register_view_hash_runtime",
-        "RegisterView hash runtime",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The runtime of hash computation
+    pub static REGISTER_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "register_view_hash_runtime",
+            "RegisterView hash runtime",
+            &[],
+            exponential_bucket_latencies(5.0),
+        )
+    });
+}
 
 /// A view that supports modifying a single value of type `T`.
 #[derive(Debug)]
@@ -42,13 +42,14 @@ pub struct RegisterView<C, T> {
     update: Option<Box<T>>,
 }
 
-impl<C, T> View<C> for RegisterView<C, T>
+impl<C, T> View for RegisterView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = 1;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -110,10 +111,9 @@ where
     }
 }
 
-impl<C, T> ClonableView<C> for RegisterView<C, T>
+impl<C, T> ClonableView for RegisterView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -203,17 +203,16 @@ where
 
     fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = REGISTER_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::REGISTER_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(self.get())?;
         Ok(hasher.finalize())
     }
 }
 
-impl<C, T> HashableView<C> for RegisterView<C, T>
+impl<C, T> HashableView for RegisterView<C, T>
 where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
+    C: Context,
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
@@ -231,6 +230,7 @@ where
 pub type HashedRegisterView<C, T> =
     WrappedHashableContainerView<C, RegisterView<C, T>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 
@@ -239,7 +239,7 @@ mod graphql {
 
     impl<C, T> async_graphql::OutputType for RegisterView<C, T>
     where
-        C: Context + Send + Sync,
+        C: Context,
         T: async_graphql::OutputType + Send + Sync,
     {
         fn type_name() -> Cow<'static, str> {

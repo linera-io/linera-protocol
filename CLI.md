@@ -22,13 +22,14 @@ This document contains the help content for the `linera` command-line program.
 * [`linera sync-validator`↴](#linera-sync-validator)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
-* [`linera finalize-committee`↴](#linera-finalize-committee)
+* [`linera revoke-epochs`↴](#linera-revoke-epochs)
 * [`linera resource-control-policy`↴](#linera-resource-control-policy)
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
 * [`linera service`↴](#linera-service)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-module`↴](#linera-publish-module)
+* [`linera list-events-from-index`↴](#linera-list-events-from-index)
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera read-data-blob`↴](#linera-read-data-blob)
 * [`linera create-application`↴](#linera-create-application)
@@ -85,13 +86,14 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `sync-validator` — Synchronizes a validator with the local state of chains
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
-* `finalize-committee` — Deprecates all committees except the last one
+* `revoke-epochs` — Deprecates all committees up to and including the specified one
 * `resource-control-policy` — View or update the resource control policy
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
+* `list-events-from-index` — Print events from a specific chain and stream from a specified index
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
 * `create-application` — Create an application
@@ -459,11 +461,15 @@ Remove a validator (admin only)
 
 
 
-## `linera finalize-committee`
+## `linera revoke-epochs`
 
-Deprecates all committees except the last one
+Deprecates all committees up to and including the specified one
 
-**Usage:** `linera finalize-committee`
+**Usage:** `linera revoke-epochs <EPOCH>`
+
+###### **Arguments:**
+
+* `<EPOCH>`
 
 
 
@@ -648,6 +654,25 @@ Publish module
 * `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
 
   Default value: `wasm`
+
+
+
+## `linera list-events-from-index`
+
+Print events from a specific chain and stream from a specified index
+
+**Usage:** `linera list-events-from-index [OPTIONS] --stream-id <STREAM_ID> [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
+
+###### **Options:**
+
+* `--stream-id <STREAM_ID>` — The stream being considered
+* `--start-index <START_INDEX>` — Index of the message to start with
+
+  Default value: `0`
 
 
 
@@ -836,11 +861,15 @@ Request a new chain from a faucet and add it to the wallet
 
 Add a new followed chain (i.e. a chain without keypair) to the wallet
 
-**Usage:** `linera wallet follow-chain <CHAIN_ID>`
+**Usage:** `linera wallet follow-chain [OPTIONS] <CHAIN_ID>`
 
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — The chain ID
+
+###### **Options:**
+
+* `--sync` — Synchronize the new chain and download all its blocks from the validators
 
 
 
@@ -993,9 +1022,6 @@ Start a Local Linera Network
 * `--cross-chain-sender-failure-rate <SENDER_FAILURE_RATE>` — Drop cross-chain messages randomly at the given rate (0 <= rate < 1) (meant for testing)
 
   Default value: `0.0`
-* `--cross-chain-max-tasks <MAX_CONCURRENT_TASKS>` — How many concurrent tasks to spawn for cross-chain message handling RPCs
-
-  Default value: `10`
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--path <PATH>` — Run with a specific path where the wallet and validator input files are. If none, then a temporary directory is created
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either `grpc` or `grpcs`

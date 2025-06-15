@@ -3,17 +3,13 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 #[cfg(not(web))]
 use std::time::Duration;
 
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::{
-    exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
-};
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Timestamp,
@@ -24,8 +20,6 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
-#[cfg(with_metrics)]
-use prometheus::HistogramVec;
 use reqwest::{header::HeaderMap, Client, Url};
 
 use crate::{
@@ -37,26 +31,32 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-/// Histogram of the latency to load a contract bytecode.
-static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "load_contract_latency",
-        "Load contract latency",
-        &[],
-        exponential_bucket_latencies(250.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-/// Histogram of the latency to load a service bytecode.
-static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "load_service_latency",
-        "Load service latency",
-        &[],
-        exponential_bucket_latencies(250.0),
-    )
-});
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// Histogram of the latency to load a contract bytecode.
+    pub static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "load_contract_latency",
+            "Load contract latency",
+            &[],
+            exponential_bucket_latencies(250.0),
+        )
+    });
+
+    /// Histogram of the latency to load a service bytecode.
+    pub static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "load_service_latency",
+            "Load service latency",
+            &[],
+            exponential_bucket_latencies(250.0),
+        )
+    });
+}
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
 
@@ -71,18 +71,14 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserContractCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
-        let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
+        let _latency = metrics::LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
         let description = match txn_tracker.created_blobs().get(&blob_id) {
             Some(description) => {
                 let blob = description.clone();
                 bcs::from_bytes(blob.bytes())?
             }
-            None => {
-                self.system
-                    .describe_application(id, Some(txn_tracker))
-                    .await?
-            }
+            None => self.system.describe_application(id, txn_tracker).await?,
         };
         let code = self
             .context()
@@ -95,15 +91,12 @@ where
     pub(crate) async fn load_service(
         &mut self,
         id: ApplicationId,
-        txn_tracker: Option<&mut TransactionTracker>,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserServiceCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
-        let _latency = LOAD_SERVICE_LATENCY.measure_latency();
+        let _latency = metrics::LOAD_SERVICE_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
-        let description = match txn_tracker
-            .as_ref()
-            .and_then(|tracker| tracker.created_blobs().get(&blob_id))
-        {
+        let description = match txn_tracker.created_blobs().get(&blob_id) {
             Some(description) => {
                 let blob = description.clone();
                 bcs::from_bytes(blob.bytes())?
@@ -141,7 +134,7 @@ where
                 callback,
                 mut txn_tracker,
             } => {
-                let (code, description) = self.load_service(id, Some(&mut txn_tracker)).await?;
+                let (code, description) = self.load_service(id, &mut txn_tracker).await?;
                 callback.respond((code, description, txn_tracker))
             }
 
@@ -422,7 +415,10 @@ where
                         .await?
                         .track_blob_read(blob.bytes().len() as u64)?;
                 }
-                let is_new = self.system.blob_used(None, blob_id).await?;
+                let is_new = self
+                    .system
+                    .blob_used(&mut TransactionTracker::default(), blob_id)
+                    .await?;
                 callback.respond((blob, is_new))
             }
 
@@ -435,7 +431,11 @@ where
                         .await?
                         .track_blob_read(0)?;
                 }
-                callback.respond(self.system.blob_used(None, blob_id).await?)
+                callback.respond(
+                    self.system
+                        .blob_used(&mut TransactionTracker::default(), blob_id)
+                        .await?,
+                )
             }
 
             NextEventIndex {
@@ -452,8 +452,9 @@ where
             }
 
             ReadEvent { event_id, callback } => {
-                let event_value = self.context().extra().get_event(event_id).await?;
-                callback.respond(event_value);
+                let event = self.context().extra().get_event(event_id.clone()).await?;
+                let event = event.ok_or(ExecutionError::EventsNotFound(vec![event_id]))?;
+                callback.respond(event);
             }
 
             SubscribeToEvents {
