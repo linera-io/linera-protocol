@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Always","OnSuccess","OnUnwind"],"fn":["guard","guard_on_success","guard_on_unwind"],"macro":["defer","defer_on_success","defer_on_unwind"],"struct":["ScopeGuard"],"trait":["Strategy"]};

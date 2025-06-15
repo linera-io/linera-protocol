@@ -1,0 +1,1 @@
+searchState.loadedDescShard("enum_ordinalize_derive", 0, "Enum Ordinalize Derive")

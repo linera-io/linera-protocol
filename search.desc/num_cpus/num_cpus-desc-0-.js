@@ -1,0 +1,1 @@
+searchState.loadedDescShard("num_cpus", 0, "A crate with utilities to determine the number of CPUs …\nReturns the number of available CPUs of the current system.\nReturns the number of physical cores of the current system.")
