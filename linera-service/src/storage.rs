@@ -88,17 +88,17 @@ impl CommonStorageOptions {
 /// The configuration of the key value store in use.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum StoreConfig {
-    /// The storage service key-value store
-    #[cfg(feature = "storage-service")]
-    Service {
-        config: ServiceStoreConfig,
-        namespace: String,
-    },
     /// The memory key value store
     Memory {
         config: MemoryStoreConfig,
         namespace: String,
         genesis_path: PathBuf,
+    },
+    /// The storage service key-value store
+    #[cfg(feature = "storage-service")]
+    Service {
+        config: ServiceStoreConfig,
+        namespace: String,
     },
     /// The RocksDB key value store
     #[cfg(feature = "rocksdb")]
@@ -129,17 +129,17 @@ pub enum StoreConfig {
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum InnerStorageConfig {
-    /// The storage service description.
-    #[cfg(feature = "storage-service")]
-    Service {
-        /// The endpoint used.
-        endpoint: String,
-    },
     /// The memory description.
     Memory {
         /// The path to the genesis configuration. This is needed because we reinitialize
         /// memory databases from the genesis config everytime.
         genesis_path: PathBuf,
+    },
+    /// The storage service description.
+    #[cfg(feature = "storage-service")]
+    Service {
+        /// The endpoint used.
+        endpoint: String,
     },
     /// The RocksDB description.
     #[cfg(feature = "rocksdb")]
@@ -437,6 +437,17 @@ impl StorageConfig {
     ) -> Result<StoreConfig, anyhow::Error> {
         let namespace = self.namespace.clone();
         match &self.inner_storage_config {
+            InnerStorageConfig::Memory { genesis_path } => {
+                let config = MemoryStoreConfig {
+                    max_stream_queries: options.storage_max_stream_queries,
+                };
+                let genesis_path = genesis_path.clone();
+                Ok(StoreConfig::Memory {
+                    config,
+                    namespace,
+                    genesis_path,
+                })
+            }
             #[cfg(feature = "storage-service")]
             InnerStorageConfig::Service { endpoint } => {
                 let common_config = options.common_store_config();
@@ -450,17 +461,6 @@ impl StorageConfig {
                     storage_cache_config: common_config.storage_cache_config,
                 };
                 Ok(StoreConfig::Service { config, namespace })
-            }
-            InnerStorageConfig::Memory { genesis_path } => {
-                let config = MemoryStoreConfig {
-                    max_stream_queries: options.storage_max_stream_queries,
-                };
-                let genesis_path = genesis_path.clone();
-                Ok(StoreConfig::Memory {
-                    config,
-                    namespace,
-                    genesis_path,
-                })
             }
             #[cfg(feature = "rocksdb")]
             InnerStorageConfig::RocksDb { path, spawn_mode } => {
