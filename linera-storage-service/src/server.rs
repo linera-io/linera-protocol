@@ -8,11 +8,15 @@ use linera_storage_service::common::{KeyPrefix, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
     memory::MemoryStore,
-    store::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
+    store::{ReadableKeyValueStore, WritableKeyValueStore},
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
-    rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    lru_caching::StorageCacheConfig,
+    rocks_db::{
+        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
+        RocksDbStoreInternalConfig,
+    },
     store::AdminKeyValueStore as _,
 };
 use serde::Serialize;
@@ -251,17 +255,44 @@ impl ServiceStoreServer {
 enum ServiceStoreServerOptions {
     #[command(name = "memory")]
     Memory {
-        #[arg(long = "endpoint")]
+        /// The storage namespace.
+        #[arg(long, default_value = "linera_storage_service")]
+        namespace: String,
+        /// The storage service address.
+        #[arg(long)]
         endpoint: String,
+        /// The number of streams used for the async streams.
+        #[arg(long)]
+        max_stream_queries: usize,
     },
 
     #[cfg(with_rocksdb)]
     #[command(name = "rocksdb")]
     RocksDb {
-        #[arg(long = "path")]
-        path: String,
-        #[arg(long = "endpoint")]
+        /// The storage namespace.
+        #[arg(long, default_value = "linera_storage_service")]
+        namespace: String,
+        /// The storage service address.
+        #[arg(long)]
         endpoint: String,
+        /// Path to the rocksdb database.
+        #[arg(long)]
+        path: String,
+        /// The number of concurrent to a database
+        #[arg(long)]
+        max_concurrent_queries: Option<usize>,
+        /// The number of streams used for the async streams.
+        #[arg(long)]
+        max_stream_queries: usize,
+        /// The maximum size of the cache, in bytes (keys size + value sizes)
+        #[arg(long)]
+        max_cache_size: usize,
+        /// The maximum size of an entry size, in bytes
+        #[arg(long)]
+        max_entry_size: usize,
+        /// The maximum number of entries in the cache.
+        #[arg(long)]
+        max_cache_entries: usize,
     },
 }
 
@@ -596,22 +627,47 @@ async fn main() {
         .init();
 
     let options = <ServiceStoreServerOptions as clap::Parser>::parse();
-    let common_config = CommonStoreConfig::default();
-    let namespace = "linera_storage_service";
     let (store, endpoint) = match options {
-        ServiceStoreServerOptions::Memory { endpoint } => {
-            let store = MemoryStore::new(common_config.max_stream_queries, namespace).unwrap();
+        ServiceStoreServerOptions::Memory {
+            namespace,
+            endpoint,
+            max_stream_queries,
+        } => {
+            let store = MemoryStore::new(max_stream_queries, &namespace).unwrap();
             let store = ServiceStoreServerInternal::Memory(store);
             (store, endpoint)
         }
+
         #[cfg(with_rocksdb)]
-        ServiceStoreServerOptions::RocksDb { path, endpoint } => {
+        ServiceStoreServerOptions::RocksDb {
+            namespace,
+            endpoint,
+            path,
+            max_stream_queries,
+            max_concurrent_queries,
+            max_cache_size,
+            max_entry_size,
+            max_cache_entries,
+        } => {
             let path_buf = path.into();
             let path_with_guard = PathWithGuard::new(path_buf);
-            // The server is run in multi-threaded mode so we can use the block_in_place.
             let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
-            let config = RocksDbStoreConfig::new(spawn_mode, path_with_guard, common_config);
-            let store = RocksDbStore::maybe_create_and_connect(&config, namespace)
+            let inner_config = RocksDbStoreInternalConfig {
+                spawn_mode,
+                path_with_guard,
+                max_stream_queries,
+                max_concurrent_queries,
+            };
+            let storage_cache_config = StorageCacheConfig {
+                max_cache_size,
+                max_entry_size,
+                max_cache_entries,
+            };
+            let config = RocksDbStoreConfig {
+                inner_config,
+                storage_cache_config,
+            };
+            let store = RocksDbStore::maybe_create_and_connect(&config, &namespace)
                 .await
                 .expect("store");
             let store = ServiceStoreServerInternal::RocksDb(store);

@@ -29,8 +29,8 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
-        AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
-        WithError, WritableKeyValueStore,
+        AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
@@ -272,9 +272,11 @@ pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
     pub path_with_guard: PathWithGuard,
     /// The chosen spawn mode
-    spawn_mode: RocksDbSpawnMode,
-    /// The common configuration of the key value store
-    common_config: CommonStoreInternalConfig,
+    pub spawn_mode: RocksDbSpawnMode,
+    /// The number of concurrent to a database
+    pub max_concurrent_queries: Option<usize>,
+    /// The number of streams used for the async streams.
+    pub max_stream_queries: usize,
 }
 
 impl RocksDbStoreInternal {
@@ -298,7 +300,7 @@ impl RocksDbStoreInternal {
         let mut path_with_guard = config.path_with_guard.clone();
         path_buf.push(namespace);
         path_with_guard.path_buf = path_buf.clone();
-        let max_stream_queries = config.common_config.max_stream_queries;
+        let max_stream_queries = config.max_stream_queries;
         let spawn_mode = config.spawn_mode;
         if !std::path::Path::exists(&path_buf) {
             std::fs::create_dir(path_buf.clone())?;
@@ -576,16 +578,14 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 impl TestKeyValueStore for RocksDbStoreInternal {
     async fn new_test_config() -> Result<RocksDbStoreInternalConfig, RocksDbStoreInternalError> {
         let path_with_guard = PathWithGuard::new_testing();
-        let common_config = CommonStoreInternalConfig {
-            max_concurrent_queries: None,
-            max_stream_queries: TEST_ROCKS_DB_MAX_STREAM_QUERIES,
-            replication_factor: 1,
-        };
         let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
+        let max_concurrent_queries = None;
+        let max_stream_queries = TEST_ROCKS_DB_MAX_STREAM_QUERIES;
         Ok(RocksDbStoreInternalConfig {
             path_with_guard,
             spawn_mode,
-            common_config,
+            max_concurrent_queries,
+            max_stream_queries,
         })
     }
 }
@@ -685,22 +685,3 @@ pub type RocksDbStoreError = ValueSplittingError<RocksDbStoreInternalError>;
 
 /// The composed config type for the `RocksDbStore`
 pub type RocksDbStoreConfig = LruCachingConfig<RocksDbStoreInternalConfig>;
-
-impl RocksDbStoreConfig {
-    /// Creates a new `RocksDbStoreConfig` from the input.
-    pub fn new(
-        spawn_mode: RocksDbSpawnMode,
-        path_with_guard: PathWithGuard,
-        common_config: crate::store::CommonStoreConfig,
-    ) -> RocksDbStoreConfig {
-        let inner_config = RocksDbStoreInternalConfig {
-            path_with_guard,
-            spawn_mode,
-            common_config: common_config.reduced(),
-        };
-        RocksDbStoreConfig {
-            inner_config,
-            storage_cache_config: common_config.storage_cache_config,
-        }
-    }
-}

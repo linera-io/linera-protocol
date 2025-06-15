@@ -16,7 +16,9 @@ use linera_storage_service::{
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig, DynamoDbStoreInternalConfig};
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig};
+use linera_views::rocks_db::{
+    PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig, RocksDbStoreInternalConfig,
+};
 use linera_views::{
     lru_caching::StorageCacheConfig,
     memory::{MemoryStore, MemoryStoreConfig},
@@ -462,10 +464,17 @@ impl StorageConfig {
             }
             #[cfg(feature = "rocksdb")]
             InnerStorageConfig::RocksDb { path, spawn_mode } => {
-                let common_config = options.common_store_config();
-                let path_buf = path.to_path_buf();
-                let path_with_guard = PathWithGuard::new(path_buf);
-                let config = RocksDbStoreConfig::new(*spawn_mode, path_with_guard, common_config);
+                let path_with_guard = PathWithGuard::new(path.to_path_buf());
+                let inner_config = RocksDbStoreInternalConfig {
+                    spawn_mode: *spawn_mode,
+                    path_with_guard,
+                    max_stream_queries: options.storage_max_stream_queries,
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                };
+                let config = RocksDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
                 Ok(StoreConfig::RocksDb { config, namespace })
             }
             #[cfg(feature = "dynamodb")]
@@ -493,12 +502,18 @@ impl StorageConfig {
                 spawn_mode,
                 uri,
             } => {
+                let inner_config = RocksDbStoreInternalConfig {
+                    spawn_mode: *spawn_mode,
+                    path_with_guard: path_with_guard.clone(),
+                    max_stream_queries: options.storage_max_stream_queries,
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                };
+                let first_config = RocksDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
+
                 let common_config = options.common_store_config();
-                let first_config = RocksDbStoreConfig::new(
-                    *spawn_mode,
-                    path_with_guard.clone(),
-                    common_config.clone(),
-                );
                 let second_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
                 let config = DualStoreConfig {
                     first_config,
