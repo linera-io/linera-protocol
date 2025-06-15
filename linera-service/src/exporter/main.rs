@@ -9,7 +9,7 @@ use common::{ExporterCancellationSignal, ExporterError};
 use exporter_service::ExporterService;
 use futures::FutureExt;
 use linera_base::listen_for_shutdown_signals;
-use linera_client::config::{BlockExporterConfig, GenesisConfig};
+use linera_client::config::BlockExporterConfig;
 use linera_rpc::NodeOptions;
 use linera_service::{
     storage::{Runnable, StorageConfigNamespace},
