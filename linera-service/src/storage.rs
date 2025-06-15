@@ -22,7 +22,7 @@ use linera_views::rocks_db::{
 use linera_views::{
     lru_caching::StorageCacheConfig,
     memory::{MemoryStore, MemoryStoreConfig},
-    store::{CommonStoreConfig, KeyValueStore},
+    store::KeyValueStore,
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -72,15 +72,6 @@ impl CommonStorageOptions {
             max_cache_size: self.storage_max_cache_size,
             max_entry_size: self.storage_max_entry_size,
             max_cache_entries: self.storage_max_cache_entries,
-        }
-    }
-
-    pub fn common_store_config(&self) -> CommonStoreConfig {
-        CommonStoreConfig {
-            storage_cache_config: self.storage_cache_config(),
-            max_concurrent_queries: self.storage_max_concurrent_queries,
-            max_stream_queries: self.storage_max_stream_queries,
-            replication_factor: self.storage_replication_factor,
         }
     }
 }

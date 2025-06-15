@@ -5,62 +5,11 @@
 
 use std::{fmt::Debug, future::Future};
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 
 #[cfg(with_testing)]
 use crate::random::generate_test_namespace;
-use crate::{
-    batch::Batch,
-    common::from_bytes_option,
-    lru_caching::{StorageCacheConfig, DEFAULT_STORAGE_CACHE_CONFIG},
-    ViewError,
-};
-
-/// The common initialization parameters for the `KeyValueStore`
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CommonStoreInternalConfig {
-    /// Maximum number of concurrent database queries allowed for this client.
-    pub max_concurrent_queries: Option<usize>,
-    /// Preferred buffer size for async streams.
-    pub max_stream_queries: usize,
-    /// The replication factor for the keyspace
-    pub replication_factor: u32,
-}
-
-/// The common initialization parameters for the `KeyValueStore`
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CommonStoreConfig {
-    /// Maximum number of concurrent database queries allowed for this client.
-    pub max_concurrent_queries: Option<usize>,
-    /// Preferred buffer size for async streams.
-    pub max_stream_queries: usize,
-    /// The cache size being used.
-    pub storage_cache_config: StorageCacheConfig,
-    /// The replication factor for the keyspace
-    pub replication_factor: u32,
-}
-
-impl CommonStoreConfig {
-    /// Gets the reduced `CommonStoreInternalConfig`.
-    pub fn reduced(&self) -> CommonStoreInternalConfig {
-        CommonStoreInternalConfig {
-            max_concurrent_queries: self.max_concurrent_queries,
-            max_stream_queries: self.max_stream_queries,
-            replication_factor: self.replication_factor,
-        }
-    }
-}
-
-impl Default for CommonStoreConfig {
-    fn default() -> Self {
-        CommonStoreConfig {
-            max_concurrent_queries: None,
-            max_stream_queries: 10,
-            storage_cache_config: DEFAULT_STORAGE_CACHE_CONFIG,
-            replication_factor: 1,
-        }
-    }
-}
+use crate::{batch::Batch, common::from_bytes_option, ViewError};
 
 /// The error type for the key-value stores.
 pub trait KeyValueStoreError:
