@@ -278,9 +278,6 @@ enum ServiceStoreServerOptions {
         /// Path to the rocksdb database.
         #[arg(long)]
         path: String,
-        /// Maximum number of concurrent database queries allowed for this client.
-        #[arg(long)]
-        max_concurrent_queries: Option<usize>,
         /// Preferred buffer size for async streams.
         #[arg(long, default_value = "10")]
         max_stream_queries: usize,
@@ -644,7 +641,6 @@ async fn main() {
             endpoint,
             path,
             max_stream_queries,
-            max_concurrent_queries,
             max_cache_size,
             max_entry_size,
             max_cache_entries,
@@ -656,7 +652,6 @@ async fn main() {
                 spawn_mode,
                 path_with_guard,
                 max_stream_queries,
-                max_concurrent_queries,
             };
             let storage_cache_config = StorageCacheConfig {
                 max_cache_size,

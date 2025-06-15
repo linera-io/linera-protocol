@@ -273,8 +273,6 @@ pub struct RocksDbStoreInternalConfig {
     pub path_with_guard: PathWithGuard,
     /// The chosen spawn mode
     pub spawn_mode: RocksDbSpawnMode,
-    /// Maximum number of concurrent database queries allowed for this client.
-    pub max_concurrent_queries: Option<usize>,
     /// Preferred buffer size for async streams.
     pub max_stream_queries: usize,
 }
@@ -579,12 +577,10 @@ impl TestKeyValueStore for RocksDbStoreInternal {
     async fn new_test_config() -> Result<RocksDbStoreInternalConfig, RocksDbStoreInternalError> {
         let path_with_guard = PathWithGuard::new_testing();
         let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
-        let max_concurrent_queries = None;
         let max_stream_queries = TEST_ROCKS_DB_MAX_STREAM_QUERIES;
         Ok(RocksDbStoreInternalConfig {
             path_with_guard,
             spawn_mode,
-            max_concurrent_queries,
             max_stream_queries,
         })
     }

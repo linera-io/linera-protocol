@@ -459,7 +459,6 @@ impl StorageConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard,
                     max_stream_queries: options.storage_max_stream_queries,
-                    max_concurrent_queries: options.storage_max_concurrent_queries,
                 };
                 let config = RocksDbStoreConfig {
                     inner_config,
@@ -504,7 +503,6 @@ impl StorageConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard: path_with_guard.clone(),
                     max_stream_queries: options.storage_max_stream_queries,
-                    max_concurrent_queries: options.storage_max_concurrent_queries,
                 };
                 let first_config = RocksDbStoreConfig {
                     inner_config,

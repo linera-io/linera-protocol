@@ -68,7 +68,6 @@ impl RocksDbRunner {
             spawn_mode,
             path_with_guard,
             max_stream_queries: config.client.max_stream_queries,
-            max_concurrent_queries: config.client.max_concurrent_queries,
         };
         let store_config = RocksDbStoreConfig {
             inner_config,
