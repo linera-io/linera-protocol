@@ -3,8 +3,6 @@
 
 use std::{future::IntoFuture, time::Duration};
 
-use linera_base::{crypto::CryptoHash, identifiers::BlobId};
-use linera_chain::types::{Block, ConfirmedBlockCertificate};
 use linera_storage::Storage;
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -12,7 +10,7 @@ use tokio::{
 };
 
 use crate::{
-    common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
+    common::{BlockId, ExporterError},
     runloops::block_processor::walker::Walker,
     storage::BlockProcessorStorage,
 };
@@ -69,12 +67,25 @@ where
 
                 Some(next_block_notification) = self.queue_front.recv() => {
                     let walker = Walker::new(&mut self.storage);
-                    // this error variant is safe to retry as this block is already confirmed so this error will
-                    // orignate from things like missing dependencies or io error.
-                    // Other error variants are either safe to skip or unreachable.
-                    if let Err(ExporterError::ViewError(_)) = walker.walk(next_block_notification).await {
-                        // return the block to the back of the task queue to process again later
-                        let _ = self.queue_rear.send(next_block_notification);
+                    match walker.walk(next_block_notification).await {
+                        Ok(_) => {},
+
+                        // this error variant is safe to retry as this block is already confirmed so this error will
+                        // orignate from things like missing dependencies or io error.
+                        // Other error variants are either safe to skip or unreachable.
+                        Err(ExporterError::ViewError(_)) => {
+                            // return the block to the back of the task queue to process again later
+                            let _ = self.queue_rear.send(next_block_notification);
+                        },
+
+                        Err(e @ (ExporterError::UnprocessedChain
+                                | ExporterError::BadInitialization
+                                | ExporterError::ChainAlreadyExists(_))
+                            ) => {
+                            tracing::error!("error {:?} when resolving block with hash: {}", e, next_block_notification.hash)
+                        },
+
+                        Err(e) => unreachable!("unexpected error: {:?}", e),
                     }
                 },
 
@@ -327,6 +338,152 @@ mod test {
 
     #[tokio::test]
     async fn test_topological_sort_3() -> anyhow::Result<()> {
+        let (tx, rx) = unbounded_channel();
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let (block_processor_storage, exporter_storage) =
+            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+        let mut block_processor = BlockProcessor::new(block_processor_storage, tx.clone(), rx);
+        let token = CancellationToken::new();
+        let signal = ExporterCancellationSignal::new(token.clone());
+        let (block_id, state) = make_state_3(&storage).await;
+        let _ = tx.send(block_id);
+
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(10)) => {},
+            _ = block_processor.run_with_shutdown(signal, 5) => {},
+        }
+
+        for (index, expected_hash) in state.iter().enumerate() {
+            let sorted_hash = exporter_storage.get_block_with_blob_ids(index).await?.0.hash();
+            assert_eq!(*expected_hash, sorted_hash);
+        }
+
+        Ok(())
+    }
+
+    // a simple single chain scenario with four blocks
+    async fn make_state_3<S: Storage>(storage: &S) -> (BlockId, Vec<CryptoHash>) {
+        let chain_id = ChainId(CryptoHash::test_hash("0"));
+
+        let mut chain = Vec::new();
+
+        for i in 0..4 {
+            if i == 0 {
+                let block = ConfirmedBlock::new(
+                    BlockExecutionOutcome::default().with(make_first_block(chain_id)),
+                );
+                chain.push(block);
+                continue;
+            }
+
+            let block = ConfirmedBlock::new(
+                BlockExecutionOutcome::default().with(make_child_block(chain.last().unwrap())),
+            );
+
+            chain.push(block);
+        }
+
+        let notification = BlockId::from_confirmed_block(chain.last().unwrap());
+
+        for block in &chain {
+            let cert = ConfirmedBlockCertificate::new(block.clone(), Round::Fast, vec![]);
+            storage
+                .write_blobs_and_certificate(&[], &cert)
+                .await
+                .unwrap();
+        }
+
+        (
+            notification,
+            chain.iter().map(|block| block.inner().hash()).collect(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_topological_sort_4() -> anyhow::Result<()> {
+        let (tx, rx) = unbounded_channel();
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let (block_processor_storage, exporter_storage) =
+            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+        let mut block_processor = BlockProcessor::new(block_processor_storage, tx.clone(), rx);
+        let token = CancellationToken::new();
+        let signal = ExporterCancellationSignal::new(token.clone());
+        let (block_id, state) = make_state_4(&storage).await;
+        let _ = tx.send(block_id);
+
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(10)) => {},
+            _ = block_processor.run_with_shutdown(signal, 5) => {},
+        }
+
+        for (index, expected_hash) in state.iter().enumerate() {
+            let sorted_hash = exporter_storage.get_block_with_blob_ids(index).await?.0.hash();
+            assert_eq!(*expected_hash, sorted_hash);
+        }
+
+        Ok(())
+    }
+
+    // a simple single chain scenario with four blocks
+    // a message to the same chain is sent from the second
+    // block and reacieved by the last block.
+    async fn make_state_4<S: Storage>(storage: &S) -> (BlockId, Vec<CryptoHash>) {
+        let chain_id = ChainId(CryptoHash::test_hash("0"));
+
+        let mut chain = Vec::new();
+
+        for i in 0..4 {
+            if i == 0 {
+                let block = ConfirmedBlock::new(
+                    BlockExecutionOutcome::default().with(make_first_block(chain_id)),
+                );
+                chain.push(block);
+                continue;
+            }
+
+            let block = if i == 3 {
+                let sender_block = chain.get(1).expect("we are at height 4");
+                let incoming_bundle = IncomingBundle {
+                    origin: chain_id,
+                    bundle: MessageBundle {
+                        height: sender_block.height(),
+                        timestamp: Timestamp::now(),
+                        certificate_hash: sender_block.inner().hash(),
+                        transaction_index: 0,
+                        messages: vec![],
+                    },
+                    action: MessageAction::Accept,
+                };
+                ConfirmedBlock::new(BlockExecutionOutcome::default().with(
+                    make_child_block(chain.last().unwrap()).with_incoming_bundle(incoming_bundle),
+                ))
+            } else {
+                ConfirmedBlock::new(
+                    BlockExecutionOutcome::default().with(make_child_block(chain.last().unwrap())),
+                )
+            };
+
+            chain.push(block);
+        }
+
+        let notification = BlockId::from_confirmed_block(chain.last().unwrap());
+
+        for block in &chain {
+            let cert = ConfirmedBlockCertificate::new(block.clone(), Round::Fast, vec![]);
+            storage
+                .write_blobs_and_certificate(&[], &cert)
+                .await
+                .unwrap();
+        }
+
+        (
+            notification,
+            chain.iter().map(|block| block.inner().hash()).collect(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_topological_sort_5() -> anyhow::Result<()> {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let (block_processor_storage, exporter_storage) =

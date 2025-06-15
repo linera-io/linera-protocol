@@ -621,7 +621,6 @@ impl LocalNet {
             .await?
             .arg(format!("server_{}.json", validator))
             .args(["--storage", &storage.to_string()])
-            .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
         let port = Self::proxy_public_port(validator, 0);
@@ -658,7 +657,6 @@ impl LocalNet {
             .await?
             .args(["--config_path", &config_path])
             .args(["--storage", &storage.to_string()])
-            .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
         match self.network.internal {
@@ -790,7 +788,6 @@ impl LocalNet {
             .args(["--storage", &storage.to_string()])
             .args(["--server", &format!("server_{}.json", validator)])
             .args(["--shard", &shard.to_string()])
-            .args(["--genesis", "genesis.json"])
             .args(self.cross_chain_config.to_args());
         let child = command.spawn_into()?;
 

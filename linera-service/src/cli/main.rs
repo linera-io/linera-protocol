@@ -8,7 +8,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
-    ops::Deref,
     path::PathBuf,
     process,
     sync::Arc,
@@ -146,7 +145,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id);
                 info!("Opening a new chain from existing chain {}", chain_id);
                 let time_start = Instant::now();
-                let (id, certificate) = context
+                let (description, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let ownership = ChainOwnership::single(new_owner);
                         let chain_client = chain_client.clone();
@@ -159,6 +158,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let timestamp = certificate.block().header.timestamp;
+                let id = description.id();
                 context
                     .update_wallet_for_new_chain(id, Some(new_owner), timestamp)
                     .await?;
@@ -191,7 +191,7 @@ impl Runnable for Job {
                 let ownership = ChainOwnership::try_from(ownership_config)?;
                 let application_permissions =
                     ApplicationPermissions::from(application_permissions_config);
-                let (id, certificate) = context
+                let (description, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let ownership = ownership.clone();
                         let application_permissions = application_permissions.clone();
@@ -204,6 +204,7 @@ impl Runnable for Job {
                     })
                     .await
                     .context("Failed to open chain")?;
+                let id = description.id();
                 // No owner. This chain can be assigned explicitly using the assign command.
                 let owner = None;
                 let timestamp = certificate.block().header.timestamp;
@@ -1295,13 +1296,9 @@ impl ClientOptions {
         let store_config = storage_config
             .add_common_config(self.common_config())
             .await?;
-        let genesis_config = self.wallet().await?.genesis_config().clone();
-        let output = Box::pin(store_config.run_with_storage(
-            &genesis_config,
-            self.wasm_runtime.with_wasm_default(),
-            job,
-        ))
-        .await?;
+        let output =
+            Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
+                .await?;
         Ok(output)
     }
 
@@ -1903,12 +1900,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                         println!("{chain_id}");
                     }
                 } else {
-                    wallet::pretty_print(
-                        &*options.wallet().await?,
-                        options.signer().await?.deref(),
-                        chain_ids,
-                    )
-                    .await;
+                    wallet::pretty_print(&*options.wallet().await?, chain_ids).await;
                 }
                 info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
                 Ok(0)

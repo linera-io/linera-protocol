@@ -1,1 +1,2 @@
-export * from "./in-memory";
+export * from "./private-key";
+export * from "./metamask";

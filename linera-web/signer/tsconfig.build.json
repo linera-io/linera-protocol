@@ -5,7 +5,8 @@
     "noEmit": false,
     "declaration": true,
     "declarationMap": true,
-    "emitDeclarationOnly": false
+    "emitDeclarationOnly": false,
+    "skipLibCheck": true
   },
   "exclude": ["tests", "*/*.test.ts"]
 }

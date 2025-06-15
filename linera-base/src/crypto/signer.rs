@@ -1,19 +1,44 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/*!
+An interface for cryptographic signers that can be used by the Linera client to sign blocks.
+*/
+
+use std::error::Error as StdError;
+
 pub use in_mem::InMemorySigner;
 
 use super::CryptoHash;
-use crate::{
-    crypto::{AccountPublicKey, AccountSignature},
-    identifiers::AccountOwner,
-};
+use crate::{crypto::AccountSignature, identifiers::AccountOwner};
+
+cfg_if::cfg_if! {
+    if #[cfg(web)] {
+        #[doc(hidden)]
+        pub trait TaskSendable {}
+        impl<T> TaskSendable for T {}
+    } else {
+        #[doc(hidden)]
+        pub trait TaskSendable: Send + Sync {}
+        impl<T: Send + Sync> TaskSendable for T {}
+    }
+}
+
+/// Errors that can be returned from signers.
+pub trait Error: StdError + TaskSendable {}
+impl<T: StdError + TaskSendable> Error for T {}
+
+impl StdError for Box<dyn Error + '_> {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        (**self).source()
+    }
+}
 
 /// A trait for signing keys.
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait Signer {
     /// The type of errors arising from operations on this `Signer`.
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error: Error;
 
     /// Creates a signature for the given `value` using the provided `owner`.
     // DEV: We sign `CryptoHash` type, rather than `&[u8]` to make sure we don't sign
@@ -24,9 +49,6 @@ pub trait Signer {
         owner: &AccountOwner,
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error>;
-
-    /// Returns the public key corresponding to the given `owner`.
-    async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Self::Error>;
 
     /// Returns whether the given `owner` is a known signer.
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error>;
@@ -42,9 +64,9 @@ mod in_mem {
     use serde::{Deserialize, Serialize};
 
     #[cfg(with_getrandom)]
-    use crate::crypto::CryptoRng;
+    use crate::crypto::{AccountPublicKey, CryptoRng};
     use crate::{
-        crypto::{AccountPublicKey, AccountSecretKey, AccountSignature, CryptoHash, Signer},
+        crypto::{AccountSecretKey, AccountSignature, CryptoHash, Signer},
         identifiers::AccountOwner,
     };
 
@@ -171,18 +193,6 @@ mod in_mem {
             } else {
                 Err(Error::NoSuchOwner)
             }
-        }
-
-        /// Returns the public key corresponding to the given `owner`.
-        async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Error> {
-            Ok(self
-                .0
-                .read()
-                .unwrap()
-                .keys
-                .get(owner)
-                .ok_or(Error::NoSuchOwner)?
-                .public())
         }
 
         /// Returns whether the given `owner` is a known signer.

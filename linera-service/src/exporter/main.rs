@@ -9,7 +9,7 @@ use common::{ExporterCancellationSignal, ExporterError};
 use exporter_service::ExporterService;
 use futures::FutureExt;
 use linera_base::listen_for_shutdown_signals;
-use linera_client::config::{BlockExporterConfig, GenesisConfig};
+use linera_client::config::BlockExporterConfig;
 use linera_rpc::NodeOptions;
 use linera_service::{
     storage::{Runnable, StorageConfigNamespace},
@@ -87,10 +87,6 @@ struct ExporterOptions {
     /// The maximal number of entries in the storage cache.
     #[arg(long, default_value = "1000")]
     max_cache_entries: usize,
-
-    /// Path to the file describing the initial user chains (aka genesis state)
-    #[arg(long = "genesis")]
-    genesis_config_path: PathBuf,
 }
 
 struct ExporterContext {
@@ -174,18 +170,13 @@ impl ExporterOptions {
             replication_factor: 1,
         };
 
-        let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;
-
         let future = async {
             let storage_config = self
                 .storage_config
                 .add_common_config(common_config)
                 .await
                 .unwrap();
-            storage_config
-                .run_with_storage(&genesis_config, None, context)
-                .boxed()
-                .await
+            storage_config.run_with_storage(None, context).boxed().await
         };
 
         let runtime = tokio::runtime::Builder::new_current_thread()

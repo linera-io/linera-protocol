@@ -41,16 +41,27 @@ AccountSignature:
   ENUM:
     0:
       Ed25519:
-        NEWTYPE:
-          TYPENAME: Ed25519Signature
+        STRUCT:
+          - signature:
+              TYPENAME: Ed25519Signature
+          - public_key:
+              TYPENAME: Ed25519PublicKey
     1:
       Secp256k1:
-        NEWTYPE:
-          TYPENAME: Secp256k1Signature
+        STRUCT:
+          - signature:
+              TYPENAME: Secp256k1Signature
+          - public_key:
+              TYPENAME: Secp256k1PublicKey
     2:
       EvmSecp256k1:
-        NEWTYPE:
-          TYPENAME: EvmSignature
+        STRUCT:
+          - signature:
+              TYPENAME: EvmSignature
+          - address:
+              TUPLEARRAY:
+                CONTENT: U8
+                SIZE: 20
 AdminOperation:
   ENUM:
     0:
@@ -224,8 +235,6 @@ BlockProposal:
   STRUCT:
     - content:
         TYPENAME: ProposalContent
-    - public_key:
-        TYPENAME: AccountPublicKey
     - signature:
         TYPENAME: AccountSignature
     - original_proposal:
@@ -490,7 +499,7 @@ EvmSignature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 64
+      SIZE: 65
 GenericApplicationId:
   ENUM:
     0:
@@ -782,11 +791,8 @@ OriginalProposal:
   ENUM:
     0:
       Fast:
-        STRUCT:
-          - public_key:
-              TYPENAME: AccountPublicKey
-          - signature:
-              TYPENAME: AccountSignature
+        NEWTYPE:
+          TYPENAME: AccountSignature
     1:
       Regular:
         STRUCT:

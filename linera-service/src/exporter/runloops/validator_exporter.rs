@@ -123,6 +123,7 @@ where
 
             match dispatch!(method, log = block_id, (*block).clone(), delivery) {
                 Ok(_) => {}
+
                 Err(NodeError::BlobsNotFound(blobs_to_maybe_send)) => {
                     let blobs = blobs_ids
                         .into_iter()
@@ -131,7 +132,11 @@ where
                     let method = |blobs| self.upload_blobs(blobs);
                     dispatch!(method, log = blobs, blobs)?;
                 }
-                Err(e) => Err(e)?,
+
+                Err(e) => {
+                    tracing::error!("error {} when resolving block with hash: {:#?}", e, block_id);
+                    Err(e)?
+                }
             }
 
             self.storage.increment_destination(self.destination_id);

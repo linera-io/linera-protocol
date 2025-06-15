@@ -56,7 +56,7 @@ use {
 };
 
 use crate::{
-    chain_listener::{self, ClientContext as _, ClientContextExt as _},
+    chain_listener::{self, ClientContext as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
     error, util,
     wallet::{UserChain, Wallet},
@@ -346,7 +346,8 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         owner: AccountOwner,
     ) -> Result<(), Error> {
         self.client.track_chain(chain_id);
-        let chain_description = self.chain_description(chain_id).await?;
+        let client = self.make_chain_client(chain_id);
+        let chain_description = client.get_chain_description().await?;
         let config = chain_description.config();
 
         if !config.ownership.verify_owner(&owner) {
@@ -520,7 +521,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
                     response.info.next_block_height, response.info.epoch,
                 );
                 if let Some(public_key) = public_key {
-                    if response.check(public_key).is_ok() {
+                    if response.check(*public_key).is_ok() {
                         info!("Signature for public key {public_key} is OK.");
                     } else {
                         return Err(error::Inner::InvalidSignature {

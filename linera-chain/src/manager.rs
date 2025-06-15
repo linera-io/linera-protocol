@@ -73,7 +73,7 @@ use std::collections::BTreeMap;
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
-    crypto::{AccountPublicKey, ValidatorSecretKey},
+    crypto::{AccountPublicKey, CryptoError, ValidatorSecretKey},
     data_types::{Blob, BlockHeight, Epoch, Round, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId},
@@ -309,7 +309,7 @@ where
                 // If the fast round has not timed out yet, only a super owner is allowed to open
                 // a later round by making a proposal.
                 ensure!(
-                    self.is_super(&proposal.public_key.into()) || !current_round.is_fast(),
+                    self.is_super(&proposal.owner()) || !current_round.is_fast(),
                     ChainError::WrongRound(current_round)
                 );
                 // After the fast round, proposals older than the current round are obsolete.
@@ -348,7 +348,7 @@ where
                     None => false,
                     Some(OriginalProposal::Regular { certificate }) =>
                         vote.round <= certificate.round,
-                    Some(OriginalProposal::Fast { .. }) => {
+                    Some(OriginalProposal::Fast(_)) => {
                         vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
                     }
                 },
@@ -472,13 +472,9 @@ where
             }
             // If this contains a proposal from the fast round, we consider that a locking block.
             // It is useful for clients synchronizing with us, so they can re-propose it.
-            Some(OriginalProposal::Fast {
-                public_key,
-                signature,
-            }) => {
+            Some(OriginalProposal::Fast(signature)) => {
                 if self.locking_block.get().is_none() {
                     let original_proposal = BlockProposal {
-                        public_key: *public_key,
                         signature: *signature,
                         ..proposal.clone()
                     };
@@ -606,33 +602,37 @@ where
 
     /// Returns whether the signer is a valid owner and allowed to propose a block in the
     /// proposal's round.
-    pub fn verify_owner(&self, proposal: &BlockProposal) -> bool {
-        let owner = &proposal.public_key.into();
-        if self.ownership.get().super_owners.contains(owner) {
-            return true;
+    pub fn verify_owner(
+        &self,
+        proposal_owner: &AccountOwner,
+        proposal_round: Round,
+    ) -> Result<bool, CryptoError> {
+        if self.ownership.get().super_owners.contains(proposal_owner) {
+            return Ok(true);
         }
-        match proposal.content.round {
+
+        Ok(match proposal_round {
             Round::Fast => {
                 false // Only super owners can propose in the first round.
             }
             Round::MultiLeader(_) => {
                 let ownership = self.ownership.get();
                 // Not in leader rotation mode; any owner is allowed to propose.
-                ownership.open_multi_leader_rounds || ownership.owners.contains_key(owner)
+                ownership.open_multi_leader_rounds || ownership.owners.contains_key(proposal_owner)
             }
             Round::SingleLeader(r) => {
                 let Some(index) = self.round_leader_index(r) else {
-                    return false;
+                    return Ok(false);
                 };
-                self.ownership.get().owners.keys().nth(index) == Some(owner)
+                self.ownership.get().owners.keys().nth(index) == Some(proposal_owner)
             }
             Round::Validator(r) => {
                 let Some(index) = self.fallback_round_leader_index(r) else {
-                    return false;
+                    return Ok(false);
                 };
-                self.fallback_owners.get().keys().nth(index) == Some(owner)
+                self.fallback_owners.get().keys().nth(index) == Some(proposal_owner)
             }
-        }
+        })
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every

@@ -1,6 +1,6 @@
 {
   "name": "@linera/signer",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Implementations of Signer interface for the Linera blockchain",
   "files": [
     "dist"
@@ -10,13 +10,14 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
     "test": "jest",
     "prepare": "npm run build"
   },
   "dependencies": {
-    "@linera/client": "file:../",
-    "ethers": "^6.14.3",
-    "@metamask/providers": "^22.1.0"
+    "@linera/client": "workspace:*",
+    "@metamask/providers": "^22.1.0",
+    "ethers": "^6.14.3"
   },
   "keywords": [],
   "author": "Linera <contact@linera.io>",
@@ -24,6 +25,7 @@
   "homepage": "https://github.com/linera-io/linera-protocol/linera-web/signer/#readme",
   "devDependencies": {
     "@types/jest": "^29.5.14",
+    "@types/node": "^24.0.1",
     "@types/readable-stream": "^4.0.21",
     "jest": "^29.7.0",
     "ts-jest": "^29.3.4",

@@ -278,21 +278,21 @@ where
 
     // Handling the message causes an oracle request to the counter service, so no fast blocks
     // are allowed.
-    let receiver_key = receiver.public_key().await.unwrap();
+    let receiver_key = receiver.identity().await.unwrap();
 
     receiver
         .change_ownership(ChainOwnership::multiple(
-            [(receiver_key.into(), 100)],
+            [(receiver_key, 100)],
             100,
             TimeoutConfig::default(),
         ))
         .await
         .unwrap();
 
-    let creator_key = creator.public_key().await.unwrap();
+    let creator_key = creator.identity().await.unwrap();
     creator
         .change_ownership(ChainOwnership::multiple(
-            [(creator_key.into(), 100)],
+            [(creator_key, 100)],
             100,
             TimeoutConfig::default(),
         ))
