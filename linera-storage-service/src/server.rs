@@ -261,7 +261,7 @@ enum ServiceStoreServerOptions {
         /// The storage service address.
         #[arg(long)]
         endpoint: String,
-        /// The number of streams used for the async streams.
+        /// Preferred buffer size for async streams.
         #[arg(long)]
         max_stream_queries: usize,
     },
@@ -278,10 +278,10 @@ enum ServiceStoreServerOptions {
         /// Path to the rocksdb database.
         #[arg(long)]
         path: String,
-        /// The number of concurrent to a database
+        /// Maximum number of concurrent database queries allowed for this client.
         #[arg(long)]
         max_concurrent_queries: Option<usize>,
-        /// The number of streams used for the async streams.
+        /// Preferred buffer size for async streams.
         #[arg(long)]
         max_stream_queries: usize,
         /// The maximum size of the cache, in bytes (keys size + value sizes)

@@ -321,9 +321,9 @@ pub struct DynamoDbStoreInternal {
 pub struct DynamoDbStoreInternalConfig {
     /// Whether to use DynamoDB local or not.
     pub use_dynamodb_local: bool,
-    /// The number of concurrent to a database
+    /// Maximum number of concurrent database queries allowed for this client.
     pub max_concurrent_queries: Option<usize>,
-    /// The number of streams used for the async streams.
+    /// Preferred buffer size for async streams.
     pub max_stream_queries: usize,
 }
 

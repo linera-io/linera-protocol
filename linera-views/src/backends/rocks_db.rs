@@ -273,9 +273,9 @@ pub struct RocksDbStoreInternalConfig {
     pub path_with_guard: PathWithGuard,
     /// The chosen spawn mode
     pub spawn_mode: RocksDbSpawnMode,
-    /// The number of concurrent to a database
+    /// Maximum number of concurrent database queries allowed for this client.
     pub max_concurrent_queries: Option<usize>,
-    /// The number of streams used for the async streams.
+    /// Preferred buffer size for async streams.
     pub max_stream_queries: usize,
 }
 

@@ -27,7 +27,7 @@ use crate::{
 /// The initial configuration of the system
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MemoryStoreConfig {
-    /// The number of streams used for the async streams.
+    /// Preferred buffer size for async streams.
     pub max_stream_queries: usize,
 }
 
