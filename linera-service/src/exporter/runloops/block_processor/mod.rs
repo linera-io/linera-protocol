@@ -354,7 +354,11 @@ mod test {
         }
 
         for (index, expected_hash) in state.iter().enumerate() {
-            let sorted_hash = exporter_storage.get_block_with_blob_ids(index).await?.0.hash();
+            let sorted_hash = exporter_storage
+                .get_block_with_blob_ids(index)
+                .await?
+                .0
+                .hash();
             assert_eq!(*expected_hash, sorted_hash);
         }
 
@@ -417,7 +421,11 @@ mod test {
         }
 
         for (index, expected_hash) in state.iter().enumerate() {
-            let sorted_hash = exporter_storage.get_block_with_blob_ids(index).await?.0.hash();
+            let sorted_hash = exporter_storage
+                .get_block_with_blob_ids(index)
+                .await?
+                .0
+                .hash();
             assert_eq!(*expected_hash, sorted_hash);
         }
 

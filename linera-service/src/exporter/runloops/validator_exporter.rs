@@ -134,7 +134,11 @@ where
                 }
 
                 Err(e) => {
-                    tracing::error!("error {} when resolving block with hash: {:#?}", e, block_id);
+                    tracing::error!(
+                        "error {} when resolving block with hash: {:#?}",
+                        e,
+                        block_id
+                    );
                     Err(e)?
                 }
             }

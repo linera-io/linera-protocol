@@ -212,14 +212,15 @@ where
         let (view, canonical_state, destination_states) =
             BlockExporterStateView::initiate(context, number_of_destinaions).await?;
 
-        let chain_states_cache_capacity = ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024)
-            / (size_of::<CryptoHash>() + size_of::<LiteBlockId>()) as u64;
+        let chain_states_cache_capacity =
+            ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024)
+                / (size_of::<CryptoHash>() + size_of::<LiteBlockId>()) as u64;
         let chain_states_cache = LfuCache::builder()
             .max_capacity(chain_states_cache_capacity)
             .build();
 
-        let blob_state_cache_capacity =
-            ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024) / (size_of::<BlobId>() as u64);
+        let blob_state_cache_capacity = ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024)
+            / (size_of::<BlobId>() as u64);
         let blob_state_cache = LfuCache::builder()
             .max_capacity(blob_state_cache_capacity)
             .build();
@@ -280,9 +281,7 @@ where
             ExporterError::BadInitialization
         );
 
-        self.exporter_state_view
-            .initialize_chain(*block_id)
-            .await?;
+        self.exporter_state_view.initialize_chain(*block_id).await?;
         self.chain_states_cache
             .insert(block_id.chain_id, (*block_id).into());
 
@@ -295,11 +294,7 @@ where
             return Ok(true);
         }
 
-        if self
-            .exporter_state_view
-            .index_block(block_id.clone())
-            .await?
-        {
+        if self.exporter_state_view.index_block(*block_id).await? {
             self.chain_states_cache
                 .insert(block_id.chain_id, (*block_id).into());
             return Ok(true);

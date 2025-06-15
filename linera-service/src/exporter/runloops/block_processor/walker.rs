@@ -7,7 +7,11 @@ use linera_base::identifiers::BlobId;
 use linera_chain::types::{CertificateValue, ConfirmedBlock};
 use linera_storage::Storage;
 
-use crate::{common::{BlockId, CanonicalBlock}, storage::BlockProcessorStorage, ExporterError};
+use crate::{
+    common::{BlockId, CanonicalBlock},
+    storage::BlockProcessorStorage,
+    ExporterError,
+};
 
 pub(super) struct Walker<'a, S>
 where
@@ -68,7 +72,6 @@ where
                 }
             }
 
-
             let block_id = node_visitor.node.block;
             if self.index_block(&block_id).await? {
                 let block_to_push = CanonicalBlock::new(block_id.hash, &blobs_to_send);
@@ -78,7 +81,7 @@ where
                 }
             }
 
-            self.visited.insert(block_id.clone());
+            self.visited.insert(block_id);
         }
 
         Ok(())
