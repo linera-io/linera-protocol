@@ -47,7 +47,12 @@ dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
 scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
 kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 remote-net = []
-metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics", "linera-faucet-server/metrics"]
+metrics = [
+    "prometheus",
+    "linera-base/metrics",
+    "linera-client/metrics",
+    "linera-faucet-server/metrics",
+]
 storage-service = ["linera-storage-service"]
 
 [dependencies]

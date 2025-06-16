@@ -20,7 +20,7 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
-#[cfg(with_metrics)]
+#[cfg(feature = "metrics")]
 use linera_metrics::prometheus_server;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
@@ -187,7 +187,7 @@ where
     config: ChainListenerConfig,
     storage: <C::Environment as linera_core::Environment>::Storage,
     port: NonZeroU16,
-    #[cfg(with_metrics)]
+    #[cfg(feature = "metrics")]
     metrics_port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
@@ -207,7 +207,7 @@ where
             config: self.config.clone(),
             storage: self.storage.clone(),
             port: self.port,
-            #[cfg(with_metrics)]
+            #[cfg(feature = "metrics")]
             metrics_port: self.metrics_port,
             amount: self.amount,
             end_timestamp: self.end_timestamp,
@@ -219,7 +219,7 @@ where
 
 pub struct FaucetConfig {
     pub port: NonZeroU16,
-    #[cfg(with_metrics)]
+    #[cfg(feature = "metrics")]
     pub metrics_port: NonZeroU16,
     pub chain_id: ChainId,
     pub amount: Amount,
@@ -250,7 +250,7 @@ where
             config: config.chain_listener_config,
             storage,
             port: config.port,
-            #[cfg(with_metrics)]
+            #[cfg(feature = "metrics")]
             metrics_port: config.metrics_port,
             amount: config.amount,
             end_timestamp: config.end_timestamp,
@@ -276,7 +276,7 @@ where
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
 
-    #[cfg(with_metrics)]
+    #[cfg(feature = "metrics")]
     fn metrics_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.metrics_port.get()))
     }
@@ -287,7 +287,7 @@ where
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
-        #[cfg(with_metrics)]
+        #[cfg(feature = "metrics")]
         prometheus_server::start_metrics(self.metrics_address(), cancellation_token.clone());
 
         let app = Router::new()
