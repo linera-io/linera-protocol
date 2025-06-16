@@ -146,4 +146,4 @@ We welcome contributions from the community! If you'd like to contribute to the 
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-For detailed guidelines, see our [contribution guide](https://github.com/linera-io/linera-protocol/blob/main/CONTRIBUTING.md).
+For detailed guidelines, see our [contribution guide](CONTRIBUTING.md).
