@@ -1004,7 +1004,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera set-preferred-owner` for `chain_id`.
-    pub async fn set_preffered_owner(
+    pub async fn set_preferred_owner(
         &self,
         chain_id: ChainId,
         owner: Option<AccountOwner>,

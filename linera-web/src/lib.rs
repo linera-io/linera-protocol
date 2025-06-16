@@ -199,6 +199,8 @@ impl Client {
             .genesis_config()
             .initialize_storage(&mut storage)
             .await?;
+        // The `Arc` here is useless, but it is required by the `ChainListener` API.
+        #[expect(clippy::arc_with_non_send_sync)]
         let client_context = Arc::new(AsyncMutex::new(ClientContext::new(
             storage.clone(),
             OPTIONS,

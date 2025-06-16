@@ -280,13 +280,12 @@ where
             block_id.height == BlockHeight::ZERO,
             ExporterError::BadInitialization
         );
-
         self.exporter_state_view.initialize_chain(*block_id).await?;
         self.chain_states_cache
             .insert(block_id.chain_id, (*block_id).into());
 
         Ok(())
-    }
+    }   
 
     pub(super) async fn index_block(&mut self, block_id: &BlockId) -> Result<bool, ExporterError> {
         if block_id.height == BlockHeight::ZERO {
@@ -461,7 +460,7 @@ impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>> for BlockCacheWeighter
     }
 }
 
-impl Weighter<usize, CanonicalBlock> for CacheWeighter<usize, CanonicalBlock> {
+impl Weighter<usize, CanonicalBlock> for CanonicalStateCacheWeighter {
     fn weight(&self, _key: &usize, val: &CanonicalBlock) -> u64 {
         (size_of::<usize>() + bcs::serialized_size(val).unwrap()) as u64
     }

@@ -248,9 +248,10 @@ jobs:
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Compile `linera-web` for the browser
-      run:  |
+    - name: Check `linera-web` for the browser
+      run: |
         cd linera-web
+        cargo clippy
         cargo build
     - name: Install chromedriver
       uses: nanasess/setup-chromedriver@v2

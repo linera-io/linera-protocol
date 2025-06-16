@@ -309,3 +309,14 @@ impl Default for LimitsConfig {
         }
     }
 }
+
+impl Destination {
+    pub fn address(&self) -> String {
+        let tls = match self.tls {
+            TlsConfig::ClearText => "http",
+            TlsConfig::Tls => "https",
+        };
+
+        format!("{}://{}:{}", tls, self.endpoint, self.port)
+    }
+}
