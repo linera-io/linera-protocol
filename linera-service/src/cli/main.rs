@@ -107,7 +107,7 @@ impl Runnable for Job {
             } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -142,7 +142,7 @@ impl Runnable for Job {
                 signer.persist().await?;
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -186,7 +186,7 @@ impl Runnable for Job {
             } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -236,7 +236,7 @@ impl Runnable for Job {
             } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -246,7 +246,7 @@ impl Runnable for Job {
             SetPreferredOwner { chain_id, owner } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -259,7 +259,7 @@ impl Runnable for Job {
             } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -292,7 +292,7 @@ impl Runnable for Job {
             CloseChain { chain_id } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -324,7 +324,7 @@ impl Runnable for Job {
             LocalBalance { account } => {
                 let context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -341,7 +341,7 @@ impl Runnable for Job {
             QueryBalance { account } => {
                 let context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -361,7 +361,7 @@ impl Runnable for Job {
             SyncBalance { account } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -385,7 +385,7 @@ impl Runnable for Job {
             Sync { chain_id } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -405,7 +405,7 @@ impl Runnable for Job {
             ProcessInbox { chain_id } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -429,7 +429,7 @@ impl Runnable for Job {
             } => {
                 let context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -472,7 +472,7 @@ impl Runnable for Job {
             QueryValidators { chain_id } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -536,7 +536,7 @@ impl Runnable for Job {
             } => {
                 let context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -561,7 +561,7 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 let context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -758,7 +758,7 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -803,7 +803,7 @@ impl Runnable for Job {
 
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -866,7 +866,7 @@ impl Runnable for Job {
             Watch { chain_id, raw } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -891,7 +891,7 @@ impl Runnable for Job {
             Service { config, port } => {
                 let context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -913,7 +913,7 @@ impl Runnable for Job {
             } => {
                 let context = ClientContext::new(
                     storage.clone(),
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -953,7 +953,7 @@ impl Runnable for Job {
             } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -979,7 +979,7 @@ impl Runnable for Job {
             } => {
                 let context = ClientContext::new(
                     storage.clone(),
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -998,7 +998,7 @@ impl Runnable for Job {
             } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -1019,7 +1019,7 @@ impl Runnable for Job {
             ReadDataBlob { hash, reader } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -1043,7 +1043,7 @@ impl Runnable for Job {
             } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -1099,7 +1099,7 @@ impl Runnable for Job {
             } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -1144,7 +1144,7 @@ impl Runnable for Job {
             Assign { owner, chain_id } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -1175,7 +1175,7 @@ impl Runnable for Job {
                 } => {
                     let mut context = ClientContext::new(
                         storage,
-                        options.context.clone(),
+                        options.context_options.clone(),
                         wallet,
                         signer.into_value(),
                     );
@@ -1227,7 +1227,7 @@ impl Runnable for Job {
             RetryPendingBlock { chain_id } => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -1260,7 +1260,7 @@ impl Runnable for Job {
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -1294,7 +1294,7 @@ impl Runnable for Job {
             }) => {
                 let mut context = ClientContext::new(
                     storage,
-                    options.context.clone(),
+                    options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
@@ -1337,7 +1337,7 @@ impl Runnable for Job {
 struct ClientOptions {
     /// Common options.
     #[command(flatten)]
-    context: ClientContextOptions,
+    context_options: ClientContextOptions,
 
     /// Storage configuration for the blockchain history.
     #[arg(long = "storage", global = true)]
@@ -1411,7 +1411,7 @@ impl ClientOptions {
     }
 
     fn suffix(&self) -> String {
-        self.context
+        self.context_options
             .with_wallet
             .as_ref()
             .map(|x| format!("_{}", x))
@@ -1460,7 +1460,7 @@ impl ClientOptions {
     }
 
     fn wallet_path(&self) -> Result<PathBuf, Error> {
-        if let Some(path) = &self.context.wallet_state_path {
+        if let Some(path) = &self.context_options.wallet_state_path {
             return Ok(path.clone());
         }
         let suffix = self.suffix();
@@ -1473,7 +1473,7 @@ impl ClientOptions {
     }
 
     fn keystore_path(&self) -> Result<PathBuf, Error> {
-        if let Some(path) = &self.context.keystore_path {
+        if let Some(path) = &self.context_options.keystore_path {
             return Ok(path.clone());
         }
         let suffix = self.suffix();
@@ -1626,7 +1626,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let span = tracing::info_span!("linera::main");
-    if let Some(wallet_id) = &options.context.with_wallet {
+    if let Some(wallet_id) = &options.context_options.with_wallet {
         span.record("wallet_id", wallet_id);
     }
 
