@@ -3313,7 +3313,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "description": "The avarage batch size of BatchWriteItem",
+        "description": "The average batch size of BatchWriteItem",
         "editable": true,
         "error": false,
         "fieldConfig": {
@@ -3635,7 +3635,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "description": "The avarage batch size of BatchGetItem",
+        "description": "The average batch size of BatchGetItem",
         "editable": true,
         "error": false,
         "fieldConfig": {
