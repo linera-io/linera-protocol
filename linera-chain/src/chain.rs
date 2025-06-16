@@ -28,7 +28,7 @@ use linera_views::{
     context::Context,
     log_view::LogView,
     map_view::MapView,
-    reentrant_collection_view::ReentrantCollectionView,
+    reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
     set_view::SetView,
     store::ReadableKeyValueStore as _,
@@ -278,6 +278,8 @@ where
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
+    /// Outboxes with at least one pending message. This allows us to avoid loading all outboxes.
+    pub nonempty_outboxes: RegisterView<C, BTreeSet<ChainId>>,
 
     /// Blocks that have been verified but not executed yet, and that may not be contiguous.
     pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
@@ -414,20 +416,21 @@ where
                 .outbox_counters
                 .get_mut()
                 .get_mut(&update)
-                .expect("message counter should be present");
-            *counter = counter
-                .checked_sub(1)
-                .expect("message counter should not underflow");
+                .ok_or_else(|| {
+                    ChainError::InternalError("message counter should be present".into())
+                })?;
+            *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
             if *counter == 0 {
                 // Important for the test in `all_messages_delivered_up_to`.
                 self.outbox_counters.get_mut().remove(&update);
             }
         }
-        // If the outbox is empty and not ahead of the tip of executed blocks, remove it.
-        if outbox.queue.count() == 0
-            && *outbox.next_height_to_schedule.get() <= self.tip_state.get().next_block_height
-        {
-            self.outboxes.remove_entry(target)?;
+        if outbox.queue.count() == 0 {
+            self.nonempty_outboxes.get_mut().remove(target);
+            // If the outbox is empty and not ahead of the executed blocks, remove it.
+            if *outbox.next_height_to_schedule.get() <= self.tip_state.get().next_block_height {
+                self.outboxes.remove_entry(target)?;
+            }
         }
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
@@ -700,6 +703,21 @@ where
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
         Ok(())
+    }
+
+    /// Returns the chain IDs of all recipients for which a message is waiting in the outbox.
+    pub fn nonempty_outbox_chain_ids(&self) -> Vec<ChainId> {
+        self.nonempty_outboxes.get().iter().copied().collect()
+    }
+
+    /// Returns the outboxes for the given targets, or an error if any of them are missing.
+    pub async fn load_outboxes(
+        &self,
+        targets: &[ChainId],
+    ) -> Result<Vec<ReadGuardedView<OutboxStateView<C>>>, ChainError> {
+        let vec_of_options = self.outboxes.try_load_entries(targets).await?;
+        let optional_vec = vec_of_options.into_iter().collect::<Option<Vec<_>>>();
+        optional_vec.ok_or_else(|| ChainError::InternalError("Missing outboxes".into()))
     }
 
     /// Executes a block: first the incoming messages, then the main operation.
@@ -1152,6 +1170,7 @@ where
 
         // Update the outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
+        let nonempty_outboxes = self.nonempty_outboxes.get_mut();
         let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for (mut outbox, target) in outboxes.into_iter().zip(&targets) {
@@ -1182,6 +1201,7 @@ where
             }
             if outbox.schedule_message(block_height)? {
                 *outbox_counters.entry(block_height).or_default() += 1;
+                nonempty_outboxes.insert(*target);
             }
         }
 
