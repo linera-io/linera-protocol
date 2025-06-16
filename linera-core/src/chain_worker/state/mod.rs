@@ -448,16 +448,15 @@ where
     /// Loads pending cross-chain requests.
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
-        let mut targets = self.chain.outboxes.indices().await?;
+        let mut targets = self.chain.nonempty_outbox_chain_ids();
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
             let tracked_chains = tracked_chains
                 .read()
                 .expect("Panics should not happen while holding a lock to `tracked_chains`");
             targets.retain(|target| tracked_chains.contains(target));
         }
-        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
+        let outboxes = self.chain.load_outboxes(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
-            let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
             let heights = outbox.queue.elements().await?;
             heights_by_recipient.insert(target, heights);
         }
@@ -539,14 +538,13 @@ where
         let Some(tracked_chains) = self.tracked_chains.as_ref() else {
             return Ok(false);
         };
-        let mut targets = self.chain.outboxes.indices().await?;
+        let mut targets = self.chain.nonempty_outbox_chain_ids();
         {
             let tracked_chains = tracked_chains.read().unwrap();
             targets.retain(|target| tracked_chains.contains(target));
         }
-        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
+        let outboxes = self.chain.load_outboxes(&targets).await?;
         for outbox in outboxes {
-            let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
             let front = outbox.queue.front();
             if front.is_some_and(|key| *key <= height) {
                 return Ok(false);
