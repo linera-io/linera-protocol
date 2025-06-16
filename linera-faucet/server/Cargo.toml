@@ -14,7 +14,6 @@ edition.workspace = true
 [package.metadata.cargo-machete]
 ignored = ["prometheus"]
 
-
 [features]
 metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
 
