@@ -3,7 +3,7 @@
 
 use linera_views::{
     lru_caching::StorageCacheConfig,
-    scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    scylla_db::{ScyllaDbClientConfig, ScyllaDbStore, ScyllaDbStoreConfig},
     store::{AdminKeyValueStore, CommonStoreConfig},
 };
 
@@ -64,7 +64,11 @@ impl ScyllaDbRunner {
             replication_factor: config.client.replication_factor,
         };
         let namespace = config.client.table.clone();
-        let store_config = ScyllaDbStoreConfig::new(config.client.uri.clone(), common_config);
+        let store_config = ScyllaDbStoreConfig::new(
+            config.client.uri.clone(),
+            common_config,
+            ScyllaDbClientConfig::default(),
+        );
         let store = ScyllaDbStore::connect(&store_config, &namespace).await?;
         Self::new(config, store).await
     }

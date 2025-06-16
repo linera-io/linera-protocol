@@ -31,7 +31,7 @@ use {
 };
 #[cfg(feature = "scylladb")]
 use {
-    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    linera_views::scylla_db::{ScyllaDbClientConfig, ScyllaDbStore, ScyllaDbStoreConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };
@@ -428,7 +428,11 @@ impl StorageConfigNamespace {
             }
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri } => {
-                let config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let config = ScyllaDbStoreConfig::new(
+                    uri.to_string(),
+                    common_config,
+                    ScyllaDbClientConfig::default(),
+                );
                 Ok(StoreConfig::ScyllaDb { config, namespace })
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -442,7 +446,11 @@ impl StorageConfigNamespace {
                     path_with_guard.clone(),
                     common_config.clone(),
                 );
-                let second_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let second_config = ScyllaDbStoreConfig::new(
+                    uri.to_string(),
+                    common_config,
+                    ScyllaDbClientConfig::default(),
+                );
                 let config = DualStoreConfig {
                     first_config,
                     second_config,
