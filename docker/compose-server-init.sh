@@ -11,9 +11,8 @@ while true; do
     exit 0
   elif [ $status -eq 1 ]; then
     echo "Database does not exist, attempting to initialize..."
-    if ./linera-server initialize \
-      --storage $storage \
-      --genesis /config/genesis.json; then
+    if ./linera storage initialize --storage $storage --genesis /config/genesis.json
+    then
       echo "Initialization successful."
       exit 0
     else
