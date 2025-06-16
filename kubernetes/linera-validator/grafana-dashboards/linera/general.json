@@ -2858,7 +2858,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(rate(container_memory_failures_total{container=\"scylla\"}[60s])) by (failure_type)",
+          "expr": "sum by(failure_type) (rate(container_memory_failures_total{container=\"scylla\", failure_type!=\"pgfault\"}[60s]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -3407,8 +3407,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
