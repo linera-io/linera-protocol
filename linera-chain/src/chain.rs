@@ -423,6 +423,12 @@ where
                 self.outbox_counters.get_mut().remove(&update);
             }
         }
+        // If the outbox is empty and not ahead of the tip of executed blocks, remove it.
+        if outbox.queue.count() == 0
+            && *outbox.next_height_to_schedule.get() <= self.tip_state.get().next_block_height
+        {
+            self.outboxes.remove_entry(target)?;
+        }
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
