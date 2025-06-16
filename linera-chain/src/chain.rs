@@ -11,17 +11,17 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
+        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
         BlockHeightRangeBounds as _, Epoch, OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, MessageId},
+    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext,
-    Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
-    ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
+    OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController, ResourceTracker,
+    ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     bucket_queue_view::BucketQueueView,
@@ -40,8 +40,7 @@ use crate::{
     block::{Block, ConfirmedBlock},
     block_tracker::BlockExecutionTracker,
     data_types::{
-        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        PostedMessage, ProposedBlock, Transaction,
+        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageBundle, ProposedBlock,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -750,69 +749,8 @@ where
         )?;
 
         for transaction in block.transactions() {
-            let chain_execution_context =
-                block_execution_tracker.chain_execution_context(&transaction);
-            let mut txn_tracker = block_execution_tracker.new_transaction_tracker()?;
-            match transaction {
-                Transaction::ReceiveMessages(incoming_bundle) => {
-                    block_execution_tracker
-                        .resource_controller_mut()
-                        .track_block_size_of(&incoming_bundle)
-                        .with_execution_context(chain_execution_context)?;
-                    for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
-                        Box::pin(Self::execute_message_in_block(
-                            chain,
-                            message_id,
-                            posted_message,
-                            incoming_bundle,
-                            block,
-                            round,
-                            &mut txn_tracker,
-                            block_execution_tracker.resource_controller_mut(),
-                        ))
-                        .await?;
-                    }
-                }
-                Transaction::ExecuteOperation(operation) => {
-                    block_execution_tracker
-                        .resource_controller_mut()
-                        .with_state(&mut chain.system)
-                        .await?
-                        .track_block_size_of(&operation)
-                        .with_execution_context(chain_execution_context)?;
-                    #[cfg(with_metrics)]
-                    let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
-                    let context = OperationContext {
-                        chain_id: block.chain_id,
-                        height: block.height,
-                        round,
-                        authenticated_signer: block.authenticated_signer,
-                        authenticated_caller_id: None,
-                        timestamp: block.timestamp,
-                    };
-                    Box::pin(chain.execute_operation(
-                        context,
-                        operation.clone(),
-                        &mut txn_tracker,
-                        block_execution_tracker.resource_controller_mut(),
-                    ))
-                    .await
-                    .with_execution_context(chain_execution_context)?;
-                    block_execution_tracker
-                        .resource_controller_mut()
-                        .with_state(&mut chain.system)
-                        .await?
-                        .track_operation(operation)
-                        .with_execution_context(chain_execution_context)?;
-                }
-            }
-
-            let txn_outcome = txn_tracker
-                .into_outcome()
-                .with_execution_context(chain_execution_context)?;
-
             block_execution_tracker
-                .process_txn_outcome(&txn_outcome, &mut chain.system, chain_execution_context)
+                .execute_transaction(transaction, round, chain)
                 .await?;
         }
 
@@ -957,81 +895,6 @@ where
         }
         self.process_outgoing_messages(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
-        Ok(())
-    }
-
-    /// Executes a message as part of an incoming bundle in a block.
-    #[expect(clippy::too_many_arguments)]
-    async fn execute_message_in_block(
-        chain: &mut ExecutionStateView<C>,
-        message_id: MessageId,
-        posted_message: &PostedMessage,
-        incoming_bundle: &IncomingBundle,
-        block: &ProposedBlock,
-        round: Option<u32>,
-        txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<AccountOwner>>,
-    ) -> Result<(), ChainError> {
-        #[cfg(with_metrics)]
-        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency();
-        let context = MessageContext {
-            chain_id: block.chain_id,
-            is_bouncing: posted_message.is_bouncing(),
-            height: block.height,
-            round,
-            message_id,
-            authenticated_signer: posted_message.authenticated_signer,
-            refund_grant_to: posted_message.refund_grant_to,
-            timestamp: block.timestamp,
-        };
-        let mut grant = posted_message.grant;
-        match incoming_bundle.action {
-            MessageAction::Accept => {
-                let chain_execution_context =
-                    ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
-                // Once a chain is closed, accepting incoming messages is not allowed.
-                ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
-
-                Box::pin(chain.execute_message(
-                    context,
-                    posted_message.message.clone(),
-                    (grant > Amount::ZERO).then_some(&mut grant),
-                    txn_tracker,
-                    resource_controller,
-                ))
-                .await
-                .with_execution_context(chain_execution_context)?;
-                chain
-                    .send_refund(context, grant, txn_tracker)
-                    .await
-                    .with_execution_context(chain_execution_context)?;
-            }
-            MessageAction::Reject => {
-                // If rejecting a message fails, the entire block proposal should be
-                // scrapped.
-                ensure!(
-                    !posted_message.is_protected() || *chain.system.closed.get(),
-                    ChainError::CannotRejectMessage {
-                        chain_id: block.chain_id,
-                        origin: incoming_bundle.origin,
-                        posted_message: Box::new(posted_message.clone()),
-                    }
-                );
-                if posted_message.is_tracked() {
-                    // Bounce the message.
-                    chain
-                        .bounce_message(context, grant, posted_message.message.clone(), txn_tracker)
-                        .await
-                        .with_execution_context(ChainExecutionContext::Block)?;
-                } else {
-                    // Nothing to do except maybe refund the grant.
-                    chain
-                        .send_refund(context, grant, txn_tracker)
-                        .await
-                        .with_execution_context(ChainExecutionContext::Block)?;
-                }
-            }
-        }
         Ok(())
     }
 
