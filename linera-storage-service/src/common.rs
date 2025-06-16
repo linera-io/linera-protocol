@@ -4,10 +4,7 @@
 use std::path::PathBuf;
 
 use linera_base::command::resolve_binary;
-use linera_views::{
-    lru_caching::LruCachingConfig,
-    store::{CommonStoreInternalConfig, KeyValueStoreError},
-};
+use linera_views::{lru_caching::LruCachingConfig, store::KeyValueStoreError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tonic::Status;
@@ -85,8 +82,10 @@ pub fn storage_service_test_endpoint() -> Result<String, ServiceStoreError> {
 pub struct ServiceStoreInternalConfig {
     /// The endpoint used by the shared store
     pub endpoint: String,
-    /// The common configuration code
-    pub common_config: CommonStoreInternalConfig,
+    /// Maximum number of concurrent database queries allowed for this client.
+    pub max_concurrent_queries: Option<usize>,
+    /// Preferred buffer size for async streams.
+    pub max_stream_queries: usize,
 }
 
 /// The config type
