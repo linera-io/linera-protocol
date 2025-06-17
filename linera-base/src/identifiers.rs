@@ -938,7 +938,7 @@ impl<A> ApplicationId<A> {
         *self.application_description_hash.as_bytes()
     }
 
-    /// Returns whether the application_id is the one of an EVM application.
+    /// Returns whether the `ApplicationId` is the one of an EVM application.
     pub fn is_evm(&self) -> bool {
         let bytes = self.application_description_hash.as_bytes();
         let bytes = bytes.0.as_ref();
