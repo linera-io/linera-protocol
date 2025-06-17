@@ -1232,6 +1232,7 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
         .await?;
     let evm_contract2 = application_id2.evm_address();
     assert_ne!(application_id1, application_id2);
+    assert_ne!(evm_contract1, evm_contract2);
     tracing::info!("test_evm_msg_sender, step 3");
     tracing::info!("test_evm_msg_sender, evm_contract1={evm_contract1:?}");
     tracing::info!("test_evm_msg_sender, evm_contract2={evm_contract2:?}");
@@ -1249,14 +1250,15 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
         .await?;
     tracing::info!("test_evm_msg_sender, step 4");
 
-
+/*
     let mutation = check_msg_senderCall { remote_address: owner };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
     tracing::info!("test_evm_msg_sender, step 5");
+*/
 
-    let mutation = remote_checkCall { remote_address: evm_contract1 };
+    let mutation = remote_checkCall { remote_address: evm_contract2 };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application2.run_json_query(mutation).await?;
@@ -1267,6 +1269,7 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     net.ensure_is_running().await?;
     net.terminate().await?;
 
+    assert!(false);
     Ok(())
 }
 
