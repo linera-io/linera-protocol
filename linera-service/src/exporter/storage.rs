@@ -16,9 +16,7 @@ use linera_sdk::{
     views::{View, ViewError},
 };
 use linera_storage::Storage;
-use linera_views::{
-    batch::Batch, context::Context, log_view::LogView, views::ClonableView,
-};
+use linera_views::{batch::Batch, context::Context, log_view::LogView, views::ClonableView};
 use mini_moka::unsync::Cache as LfuCache;
 use quick_cache::{sync::Cache as FifoCache, Weighter};
 
@@ -268,12 +266,7 @@ where
             .set_destination_states(self.shared_storage.destination_states.clone());
         self.exporter_state_view.flush(&mut batch)?;
         self.exporter_state_view.rollback();
-        if let Err(e) = self
-            .exporter_state_view
-            .context()
-            .write_batch(batch)
-            .await
-        {
+        if let Err(e) = self.exporter_state_view.context().write_batch(batch).await {
             Err(ExporterError::ViewError(e.into()))?;
         };
 

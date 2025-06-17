@@ -20,7 +20,7 @@ use linera_execution::{
     ResourceControlPolicy,
 };
 use linera_rpc::config::{
-    ExporterServiceConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig
+    ExporterServiceConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};

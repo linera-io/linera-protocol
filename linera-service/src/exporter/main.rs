@@ -178,7 +178,10 @@ impl ExporterOptions {
                 .add_common_config(common_config)
                 .await
                 .unwrap();
-            storage_config.run_with_storage(&genesis_config,None, context).boxed().await
+            storage_config
+                .run_with_storage(&genesis_config, None, context)
+                .boxed()
+                .await
         };
 
         let runtime = tokio::runtime::Builder::new_current_thread()
