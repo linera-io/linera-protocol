@@ -334,14 +334,10 @@ where
     pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let evm_address = runtime.application_id()?.evm_address();
-        let mut keys = Vec::new();
-        for address in [Address::ZERO, evm_address] {
-            let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, &address);
-            keys.push(key_info);
-        }
-        let promise = runtime.contains_keys_new(keys)?;
-        let result = runtime.contains_keys_wait(&promise)?;
-        Ok(result[0] && result[1])
+        let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, &evm_address);
+        let promise = runtime.contains_key_new(key_info)?;
+        let result = runtime.contains_key_wait(&promise)?;
+        Ok(result)
     }
 
     pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {

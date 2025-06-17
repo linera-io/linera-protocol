@@ -465,7 +465,7 @@ type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<R
 // functionalities accessed from the EVM.
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-// This is the zero address of the contract
+// This is the zero address used for service calls
 const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
 
 fn address_to_user_application_id(address: Address) -> ApplicationId {
@@ -1223,7 +1223,9 @@ where
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
-        if !self.db.is_initialized()? {
+        let test = self.db.is_initialized()?;
+        tracing::info!("init_transact_commit, test={test}");
+        if !test {
             tracing::info!("init_transact_commit, calling initialize_contract");
             self.initialize_contract()?;
         }
@@ -1257,7 +1259,7 @@ where
             return Ok(Address::from(address));
         };
         // For process_streams, none are set
-        Ok(Address::ZERO)
+        Ok(ZERO_ADDRESS)
     }
 
     fn transact_commit(
@@ -1275,8 +1277,7 @@ where
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
         };
-        let mut caller = self.get_msg_address()?;
-        caller = Address::ZERO;
+        let caller = self.get_msg_address()?;
         tracing::info!("transact_commit, caller={caller:?}");
         tracing::info!("transact_commit, contract_address={:?}", self.db.contract_address);
         let block_env = self.db.get_contract_block_env()?;
@@ -1284,7 +1285,7 @@ where
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
-        let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
+        let nonce = self.db.get_nonce(&caller)?;
         let result = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1405,7 +1406,9 @@ where
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
-        if !self.db.is_initialized()? {
+        let test = self.db.is_initialized()?;
+        tracing::info!("init_transact, test={test}");
+        if !test {
             let changes = {
                 let mut vec_init = self.module.clone();
                 let constructor_argument = self.db.constructor_argument()?;
@@ -1439,9 +1442,9 @@ where
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
         };
-        let caller = Address::ZERO;
+        let caller = ZERO_ADDRESS;
         tracing::info!("transact, caller={caller:?}");
-        let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
+        let nonce = self.db.get_nonce(&caller)?;
         let result_state = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1467,6 +1470,7 @@ where
                     kind,
                     data,
                     nonce,
+                    caller,
                     gas_limit: EVM_SERVICE_GAS_LIMIT,
                     ..TxEnv::default()
                 },
