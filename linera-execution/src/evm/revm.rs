@@ -1128,14 +1128,14 @@ where
             ensure_message_length(operation.len(), 28)?;
             let caller = Address::from_slice(&operation[4..24]);
             forbid_execute_operation_origin(&operation[24..28])?;
-            tracing::info!("execute_operation, before init_transact_commit(A)");
+            tracing::info!("execute_operation, before init_transact_commit(A), caller={caller:?}");
             let result = self.init_transact_commit(operation[24..].to_vec(), caller)?;
             result.interpreter_result_and_logs()?
         } else {
             let caller = self.get_msg_address()?;
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
-            tracing::info!("execute_operation, before init_transact_commit(B)");
+            tracing::info!("execute_operation, before init_transact_commit(B), caller={caller:?}");
             let result = self.init_transact_commit(operation, caller)?;
             result.output_and_logs()
         };

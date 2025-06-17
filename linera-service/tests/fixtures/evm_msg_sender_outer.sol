@@ -6,13 +6,7 @@ interface CheckMsgSender {
     function check_msg_sender(address address2) external;
 }
 
-
-contract ContractCheck {
-    function check_msg_sender(address address2) external {
-        address address1 = msg.sender;
-//        require(address1 == address2);
-    }
-
+contract OuterContractCheck {
     function remote_check(address remote_address) external {
         CheckMsgSender externalContract = CheckMsgSender(remote_address);
         address local_address = address(this);
