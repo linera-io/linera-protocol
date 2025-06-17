@@ -24,7 +24,9 @@ pub struct Wallet {
 impl Extend<UserChain> for Wallet {
     fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
         for chain in chains.into_iter() {
-            self.insert(chain);
+            if !self.chains.contains_key(&chain.chain_id) {
+                self.insert(chain);
+            }
         }
     }
 }
