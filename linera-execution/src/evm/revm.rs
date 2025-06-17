@@ -635,17 +635,14 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Cont
         is_static: bool,
         gas_limit: u64,
     ) -> Result<Option<InterpreterResult>, String> {
-        tracing::info!("ContractPrecompile::run, address={address:?}");
         if address == &PRECOMPILE_ADDRESS {
             let input = get_precompile_argument(context, &inputs.input);
             let output = Self::call_or_fail(&input, context)
                 .map_err(|error| format!("ContractPrecompile error: {error}"))?;
             return get_precompile_output(output, gas_limit);
         }
-        let result = self.inner
-            .run(context, address, inputs, is_static, gas_limit);
-        tracing::info!("ContractPrecompile::run, result={result:?}");
-        result
+        self.inner
+            .run(context, address, inputs, is_static, gas_limit)
     }
 
     fn warm_addresses(&self) -> Box<impl Iterator<Item = Address>> {
@@ -924,7 +921,6 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
-        tracing::info!("CallInterceptorContract, inputs={inputs:?}");
         let result = self.call_or_fail(context, inputs);
         map_result_call_outcome(result)
     }
@@ -941,9 +937,6 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         // --- Call to the PRECOMPILE smart contract.
         // --- Call to the EVM smart contract itself
         // --- Call to other EVM smart contract
-        tracing::info!("call_or_fail, step 1");
-        tracing::info!("call_or_fail, inputs.target_address={:?}", inputs.target_address);
-        tracing::info!("call_or_fail, self.contract_address={:?}", self.contract_address);
         if self.precompile_addresses.contains(&inputs.target_address)
             || inputs.target_address == self.contract_address
         {
@@ -951,22 +944,18 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             // The EVM smart contract is being called
             return Ok(None);
         }
-        tracing::info!("call_or_fail, step 2");
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
         let argument = get_call_contract_argument(context, &inputs);
         let authenticated = true;
-        tracing::info!("call_or_fail, step 3");
         let result = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.try_call_application(authenticated, target, argument)?
         };
-        tracing::info!("call_or_fail, step 4");
         let call_outcome = CallOutcome {
             result: get_interpreter_result(&result, inputs)?,
             memory_offset: inputs.return_memory_offset.clone(),
         };
-        tracing::info!("call_or_fail, step 5");
         Ok(Some(call_outcome))
     }
 }
@@ -1128,14 +1117,12 @@ where
             ensure_message_length(operation.len(), 28)?;
             let caller = Address::from_slice(&operation[4..24]);
             forbid_execute_operation_origin(&operation[24..28])?;
-            tracing::info!("execute_operation, before init_transact_commit(A), caller={caller:?}");
             let result = self.init_transact_commit(operation[24..].to_vec(), caller)?;
             result.interpreter_result_and_logs()?
         } else {
             let caller = self.get_msg_address()?;
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
-            tracing::info!("execute_operation, before init_transact_commit(B), caller={caller:?}");
             let result = self.init_transact_commit(operation, caller)?;
             result.output_and_logs()
         };
@@ -1247,13 +1234,9 @@ where
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
-        let test = self.db.is_initialized()?;
-        tracing::info!("init_transact_commit, test={test}");
-        if !test {
-            tracing::info!("init_transact_commit, before initialize_contract");
+        if !self.db.is_initialized()? {
             self.initialize_contract(caller)?;
         }
-        tracing::info!("init_transact_commit, before transact_commit");
         self.transact_commit(EvmTxKind::Call, vec, caller)
     }
 
@@ -1272,14 +1255,12 @@ where
     fn get_msg_address(&self) -> Result<Address, ExecutionError> {
         let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
         let application_id = runtime.authenticated_caller_id()?;
-        tracing::info!("get_msg_address, application_id={application_id:?}");
         if let Some(application_id) = application_id {
             if application_id.is_evm() {
                 return Ok(application_id.evm_address());
             }
         };
         let account_owner = runtime.authenticated_signer()?;
-        tracing::info!("get_msg_address, account_owner={account_owner:?}");
         if let Some(AccountOwner::Address20(address)) = account_owner {
             return Ok(Address::from(address));
         };
@@ -1292,7 +1273,6 @@ where
         input: Vec<u8>,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        tracing::info!("transact_commit, caller={caller:?}");
         let data = Bytes::from(input);
         let kind = match ch {
             EvmTxKind::Create => TxKind::Create,

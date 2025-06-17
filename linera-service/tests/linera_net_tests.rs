@@ -713,25 +713,21 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
         .make_application(&chain, &nest_application_id)
         .await?;
 
-    /*
     let query = nest_get_valueCall {};
     let query = query.abi_encode();
     let query = EvmQuery::Query(query);
     let result = nest_application.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_counter_value);
-*/
 
     let mutation = nest_incrementCall { input: increment };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     nest_application.run_json_query(mutation).await?;
 
-    /*
     let result = nest_application.run_json_query(query).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_counter_value + increment);
-    */
 
     node_service.ensure_is_running()?;
 
@@ -1191,7 +1187,6 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
         panic!("The owner should be of the form Some(Address20(...))");
     };
     let owner = Address::from(address);
-    tracing::info!("test_evm_msg_sender, account_owner={account_owner:?}");
     let chain = client.load_wallet()?.default_chain().unwrap();
 
 
@@ -1199,7 +1194,6 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
         function check_msg_sender(address remote_address);
         function remote_check(address remote_address);
     }
-    tracing::info!("test_evm_msg_sender, step 1");
 
     let instantiation_argument = Vec::new();
     let constructor_argument = Vec::new();
@@ -1219,7 +1213,6 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
     let evm_contract_inner = application_id_inner.evm_address();
-    tracing::info!("test_evm_msg_sender, step 2");
 
     // Creating the outer EVM contract
 
@@ -1235,10 +1228,6 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
             None,
         )
         .await?;
-    let evm_contract_outer = application_id_outer.evm_address();
-    tracing::info!("test_evm_msg_sender, step 3");
-    tracing::info!("test_evm_msg_sender, evm_contract_inner={evm_contract_inner:?}");
-    tracing::info!("test_evm_msg_sender, evm_contract_outer={evm_contract_outer:?}");
 
     // Making the check
 
@@ -1251,28 +1240,22 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     let application_outer = node_service
         .make_application(&chain, &application_id_outer)
         .await?;
-    tracing::info!("test_evm_msg_sender, step 4");
 
-    /*
     let mutation = check_msg_senderCall { remote_address: owner };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application_inner.run_json_query(mutation).await?;
-    tracing::info!("test_evm_msg_sender, step 5");
-    */
 
     let mutation = remote_checkCall { remote_address: evm_contract_inner };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application_outer.run_json_query(mutation).await?;
-    tracing::info!("test_evm_msg_sender, step 6");
 
     node_service.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
 
-    assert!(false);
     Ok(())
 }
 
