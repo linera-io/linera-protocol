@@ -7,7 +7,7 @@
 #[cfg(with_testing)]
 use std::ops;
 use std::{
-    collections::BTreeMap,
+    collections::BTreeSet,
     fmt::{self, Display},
     fs,
     hash::Hash,
@@ -834,8 +834,8 @@ pub struct InitialChainConfig {
     pub ownership: ChainOwnership,
     /// The epoch in which the chain is created.
     pub epoch: Epoch,
-    /// Serialized committees corresponding to epochs.
-    pub committees: BTreeMap<Epoch, Vec<u8>>,
+    /// Set of epochs active at the time of creation of the chain.
+    pub active_epochs: BTreeSet<Epoch>,
     /// The initial chain balance.
     pub balance: Amount,
     /// The initial application permissions.

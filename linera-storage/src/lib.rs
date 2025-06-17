@@ -7,31 +7,35 @@
 
 mod db_storage;
 
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, NetworkDescription,
-        TimeDelta, Timestamp,
+        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch,
+        NetworkDescription, TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
+use linera_execution::{
+    committee::Committee, system::EPOCH_STREAM_NAME, BlobState, ExecutionError,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode, UserServiceCode,
+    WasmRuntime,
+};
 #[cfg(with_revm)]
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
-};
-use linera_execution::{
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode,
-    UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
@@ -172,6 +176,44 @@ pub trait Storage: Sized {
         &self,
         information: &NetworkDescription,
     ) -> Result<(), ViewError>;
+
+    /// Returns a map of the committees for the given epochs.
+    async fn committees_for(
+        &self,
+        mut epochs: BTreeSet<Epoch>,
+    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
+        let admin_chain_id = self
+            .read_network_description()
+            .await?
+            .ok_or_else(|| ViewError::NotFound("NetworkDescription not found".to_owned()))?
+            .admin_chain_id;
+        let epoch_creation_events = self
+            .read_events_from_index(&admin_chain_id, &StreamId::system(EPOCH_STREAM_NAME), 0)
+            .await?;
+        let mut result = BTreeMap::new();
+        for index_and_event in epoch_creation_events {
+            let epoch = Epoch::from(index_and_event.index);
+            if !epochs.remove(&epoch) {
+                continue;
+            }
+            let blob_hash = bcs::from_bytes::<CryptoHash>(&index_and_event.event)?;
+            let blob_id = BlobId::new(blob_hash, BlobType::Committee);
+            let committee_blob = self
+                .read_blob(blob_id)
+                .await?
+                .ok_or_else(|| ViewError::NotFound(format!("Blob not found: {}", blob_id)))?;
+            let committee: Committee = bcs::from_bytes(committee_blob.bytes())?;
+            result.insert(epoch, committee);
+        }
+        if epochs.is_empty() {
+            Ok(result)
+        } else {
+            Err(ViewError::NotFound(format!(
+                "Committees for epochs not found: {:?}",
+                epochs
+            )))
+        }
+    }
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
     ///
@@ -392,6 +434,13 @@ where
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         self.storage.read_network_description().await
+    }
+
+    async fn committees_for(
+        &self,
+        epochs: BTreeSet<Epoch>,
+    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
+        self.storage.committees_for(epochs).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

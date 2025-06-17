@@ -18,13 +18,13 @@ use linera_base::{
         ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
     },
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, EventId, ModuleId, StreamId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    system::Recipient,
+    system::{Recipient, EPOCH_STREAM_NAME},
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
     Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation, TestExecutionRuntimeContext,
@@ -61,18 +61,10 @@ struct TestEnvironment {
 
 impl TestEnvironment {
     fn new() -> Self {
-        let committee = Committee::make_simple(vec![(
-            ValidatorPublicKey::test_key(1),
-            AccountPublicKey::test_key(1),
-        )]);
         let config = InitialChainConfig {
             ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
             epoch: Epoch::ZERO,
-            committees: iter::once((
-                Epoch::ZERO,
-                bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-            ))
-            .collect(),
+            active_epochs: iter::once(Epoch::ZERO).collect(),
             balance: Amount::from_tokens(10),
             application_permissions: Default::default(),
         };
@@ -155,25 +147,26 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
     // The size of the executed valid block below.
     let maximum_block_size = 260;
 
-    let mut config = env.make_open_chain_config();
-    config.committees.insert(
-        Epoch(0),
-        bcs::to_bytes(&Committee::new(
-            BTreeMap::from([(
-                ValidatorPublicKey::test_key(1),
-                ValidatorState {
-                    network_address: ValidatorPublicKey::test_key(1).to_string(),
-                    votes: 1,
-                    account_public_key: AccountPublicKey::test_key(1),
-                },
-            )]),
-            ResourceControlPolicy {
-                maximum_block_size,
-                ..ResourceControlPolicy::default()
+    let committee = Committee::new(
+        BTreeMap::from([(
+            ValidatorPublicKey::test_key(1),
+            ValidatorState {
+                network_address: ValidatorPublicKey::test_key(1).to_string(),
+                votes: 1,
+                account_public_key: AccountPublicKey::test_key(1),
             },
-        ))
-        .expect("serializing a committee should not fail"),
+        )]),
+        ResourceControlPolicy {
+            maximum_block_size,
+            ..ResourceControlPolicy::default()
+        },
     );
+    let committee_blob = Blob::new_committee(
+        bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
+    );
+
+    let mut config = env.make_open_chain_config();
+    config.active_epochs.insert(Epoch(0));
 
     let chain_desc = env.make_child_chain_description_with_config(3, config);
     let chain_id = chain_desc.id();
@@ -186,6 +179,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
         .unwrap();
 
     let mut chain = ChainStateView::new(chain_id).await;
+    chain.context().extra().add_blobs([committee_blob]).await?;
     chain
         .context()
         .extra()
@@ -277,6 +271,22 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .user_contracts()
         .insert(another_app_id, application.clone().into());
 
+    let committee = Committee::new(
+        BTreeMap::from([(
+            ValidatorPublicKey::test_key(1),
+            ValidatorState {
+                network_address: ValidatorPublicKey::test_key(1).to_string(),
+                votes: 1,
+                account_public_key: AccountPublicKey::test_key(1),
+            },
+        )]),
+        ResourceControlPolicy::default(),
+    );
+    let committee_blob = Blob::new_committee(
+        bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
+    );
+
+    extra.add_blobs([committee_blob]).await?;
     extra.add_blobs(env.description_blobs()).await?;
     extra
         .add_blobs([
@@ -696,25 +706,30 @@ async fn prepare_test_with_dummy_mock_application(
     let time = Timestamp::from(0);
 
     let mut config = env.make_open_chain_config();
-    config.committees.insert(
-        Epoch(0),
-        bcs::to_bytes(&Committee::new(
-            BTreeMap::from([(
-                ValidatorPublicKey::test_key(1),
-                ValidatorState {
-                    network_address: ValidatorPublicKey::test_key(1).to_string(),
-                    votes: 1,
-                    account_public_key: AccountPublicKey::test_key(1),
-                },
-            )]),
-            policy,
-        ))
-        .expect("serializing a committee should not fail"),
+    let committee = Committee::new(
+        BTreeMap::from([(
+            ValidatorPublicKey::test_key(1),
+            ValidatorState {
+                network_address: ValidatorPublicKey::test_key(1).to_string(),
+                votes: 1,
+                account_public_key: AccountPublicKey::test_key(1),
+            },
+        )]),
+        policy,
     );
+    config.active_epochs.insert(Epoch(0));
+
+    let committee_blob = Blob::new_committee(bcs::to_bytes(&committee).unwrap());
 
     let chain_desc = env.make_child_chain_description_with_config(3, config);
     let chain_id = chain_desc.id();
     let mut chain = ChainStateView::new(chain_id).await;
+
+    chain
+        .context()
+        .extra()
+        .add_blobs([committee_blob.clone()])
+        .await?;
 
     chain
         .context()
@@ -729,6 +744,17 @@ async fn prepare_test_with_dummy_mock_application(
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
+    // make sure the epoch is published
+    extra
+        .add_events([(
+            EventId {
+                chain_id: env.admin_id(),
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                index: 0,
+            },
+            bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+        )])
+        .await?;
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
@@ -737,6 +763,7 @@ async fn prepare_test_with_dummy_mock_application(
         .insert(application_id, application.clone().into());
     extra
         .add_blobs([
+            committee_blob,
             contract_blob,
             service_blob,
             Blob::new_application_description(&app_description),

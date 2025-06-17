@@ -19,13 +19,13 @@ use linera_base::{
         Amount, ApplicationPermissions, Blob, BlobContent, ChainDescription, ChainOrigin, Epoch,
         InitialChainConfig, NetworkDescription, Timestamp,
     },
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, EventId, ModuleId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::Committee,
-    system::{AdminOperation, OpenChainConfig, SystemOperation},
+    system::{AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME},
     ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
@@ -101,12 +101,7 @@ impl TestValidator {
 
         let new_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(key_pair.public().into()),
-            committees: [(
-                epoch,
-                bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),
-            )]
-            .into_iter()
-            .collect(),
+            active_epochs: [epoch].into_iter().collect(),
             epoch,
             balance: Amount::from_tokens(1_000_000),
             application_permissions: ApplicationPermissions::default(),
@@ -126,6 +121,25 @@ impl TestValidator {
             .write_network_description(&network_description)
             .await
             .unwrap();
+        let committee_blob = Blob::new_committee(
+            bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
+        );
+        storage
+            .write_blob(&committee_blob)
+            .await
+            .expect("writing a blob should succeed");
+        storage
+            .write_events([(
+                EventId {
+                    chain_id: admin_chain_id,
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                    index: 0,
+                },
+                bcs::to_bytes(&committee_blob.id().hash)
+                    .expect("serializing a hash should succeed"),
+            )])
+            .await
+            .expect("writing events should succeed");
         worker
             .storage_client()
             .create_chain(description.clone())
@@ -314,22 +328,15 @@ impl TestValidator {
             .get(&admin_id)
             .expect("Admin chain should be created when the `TestValidator` is constructed");
 
-        let (epoch, committee) = self.committee.lock().await.clone();
+        let (epoch, _) = self.committee.lock().await.clone();
 
         let open_chain_config = OpenChainConfig {
             ownership: ChainOwnership::single(owner),
             balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };
-        let new_chain_config = open_chain_config.init_chain_config(
-            epoch,
-            [(
-                epoch,
-                bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),
-            )]
-            .into_iter()
-            .collect(),
-        );
+        let new_chain_config =
+            open_chain_config.init_chain_config(epoch, [epoch].into_iter().collect());
 
         let certificate = admin_chain
             .add_block(|block| {

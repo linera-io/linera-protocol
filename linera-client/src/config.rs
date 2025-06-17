@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, iter::IntoIterator};
+use std::iter::IntoIterator;
 
 use linera_base::{
     crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
@@ -102,23 +102,16 @@ pub struct GenesisConfig {
 impl BcsSignable<'_> for GenesisConfig {}
 
 fn make_chain(
-    committee: &Committee,
     index: u32,
     public_key: AccountPublicKey,
     balance: Amount,
     timestamp: Timestamp,
 ) -> ChainDescription {
-    let committees: BTreeMap<_, _> = [(
-        Epoch::ZERO,
-        bcs::to_bytes(committee).expect("serializing a committee should not fail"),
-    )]
-    .into_iter()
-    .collect();
     let origin = ChainOrigin::Root(index);
     let config = InitialChainConfig {
         application_permissions: Default::default(),
         balance,
-        committees: committees.clone(),
+        active_epochs: [Epoch::ZERO].into_iter().collect(),
         epoch: Epoch::ZERO,
         ownership: ChainOwnership::single(public_key.into()),
     };
@@ -136,7 +129,7 @@ impl GenesisConfig {
         admin_balance: Amount,
     ) -> Self {
         let committee = committee.into_committee(policy);
-        let admin_chain = make_chain(&committee, 0, admin_public_key, admin_balance, timestamp);
+        let admin_chain = make_chain(0, admin_public_key, admin_balance, timestamp);
         Self {
             committee,
             timestamp,
@@ -151,7 +144,6 @@ impl GenesisConfig {
         balance: Amount,
     ) -> ChainDescription {
         let description = make_chain(
-            &self.committee,
             self.chains.len() as u32,
             public_key,
             balance,

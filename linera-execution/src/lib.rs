@@ -22,7 +22,13 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{any::Any, fmt, str::FromStr, sync::Arc};
+use std::{
+    any::Any,
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    str::FromStr,
+    sync::Arc,
+};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -65,6 +71,7 @@ pub use crate::wasm::{
     ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
+    committee::Committee,
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
@@ -400,6 +407,11 @@ pub trait ExecutionRuntimeContext {
     async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+
+    async fn committees_for(
+        &self,
+        epochs: BTreeSet<Epoch>,
+    ) -> Result<BTreeMap<Epoch, Committee>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1084,6 +1096,25 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             genesis_timestamp: Timestamp::from(0),
             name: "dummy network description".to_string(),
         }))
+    }
+
+    async fn committees_for(
+        &self,
+        epochs: BTreeSet<Epoch>,
+    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
+        let committee_blob_bytes = self
+            .blobs
+            .iter()
+            .find(|item| item.key().blob_type == BlobType::Committee)
+            .ok_or_else(|| ViewError::NotFound("committee not found".to_owned()))?
+            .value()
+            .bytes()
+            .to_vec();
+        let committee: Committee = bcs::from_bytes(&committee_blob_bytes)?;
+        Ok(epochs
+            .into_iter()
+            .map(|epoch| (epoch, committee.clone()))
+            .collect())
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

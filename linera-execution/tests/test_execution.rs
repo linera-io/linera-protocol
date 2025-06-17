@@ -1159,7 +1159,9 @@ async fn test_open_chain() -> anyhow::Result<()> {
         ValidatorPublicKey::test_key(0),
         AccountPublicKey::test_key(0),
     )]);
-    let committees = BTreeMap::from([(Epoch::ZERO, bcs::to_bytes(&committee)?)]);
+    let committee_blob = Blob::new_committee(
+        bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
+    );
     let chain_key = AccountPublicKey::test_key(1);
     let ownership = ChainOwnership::single(chain_key.into());
     let child_ownership = ChainOwnership::single(AccountPublicKey::test_key(2).into());
@@ -1170,7 +1172,10 @@ async fn test_open_chain() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
     view.context()
         .extra()
-        .add_blobs([Blob::new_chain_description(&root_description)])
+        .add_blobs([
+            committee_blob.clone(),
+            Blob::new_chain_description(&root_description),
+        ])
         .await?;
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
@@ -1236,7 +1241,6 @@ async fn test_open_chain() -> anyhow::Result<()> {
         .expect("should deserialize a chain description");
     assert_eq!(created_description.config().balance, Amount::ONE);
     assert_eq!(created_description.config().ownership, child_ownership);
-    assert_eq!(created_description.config().committees, committees);
 
     // Initialize the child chain using the new blob.
     let mut child_view = SystemExecutionState::default()
@@ -1245,7 +1249,10 @@ async fn test_open_chain() -> anyhow::Result<()> {
     child_view
         .context()
         .extra()
-        .add_blobs([Blob::new_chain_description(&child_description)])
+        .add_blobs([
+            committee_blob.clone(),
+            Blob::new_chain_description(&child_description),
+        ])
         .await?;
     child_view
         .system
@@ -1256,12 +1263,8 @@ async fn test_open_chain() -> anyhow::Result<()> {
     assert_eq!(*child_view.system.ownership.get(), child_ownership);
     assert_eq!(
         *child_view.system.committees.get(),
-        committees
+        [(Epoch::ZERO, committee)]
             .into_iter()
-            .map(|(epoch, serialized_committee)| (
-                epoch,
-                bcs::from_bytes::<Committee>(&serialized_committee).unwrap()
-            ))
             .collect::<BTreeMap<_, _>>()
     );
     assert_eq!(
