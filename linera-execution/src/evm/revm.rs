@@ -946,7 +946,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
-        let argument = get_call_contract_argument(context, &inputs);
+        let argument = get_call_contract_argument(context, inputs);
         let authenticated = true;
         let result = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");

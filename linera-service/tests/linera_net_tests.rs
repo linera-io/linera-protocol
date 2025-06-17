@@ -1169,12 +1169,9 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::{sol, SolCall};
     use alloy_primitives::Address;
-    use linera_base::{
-        identifiers::AccountOwner,
-        vm::EvmQuery,
-    };
+    use alloy_sol_types::{sol, SolCall};
+    use linera_base::{identifiers::AccountOwner, vm::EvmQuery};
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1188,7 +1185,6 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     };
     let owner = Address::from(address);
     let chain = client.load_wallet()?.default_chain().unwrap();
-
 
     sol! {
         function check_msg_sender(address remote_address);
@@ -1241,12 +1237,16 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
         .make_application(&chain, &application_id_outer)
         .await?;
 
-    let mutation = check_msg_senderCall { remote_address: owner };
+    let mutation = check_msg_senderCall {
+        remote_address: owner,
+    };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application_inner.run_json_query(mutation).await?;
 
-    let mutation = remote_checkCall { remote_address: evm_contract_inner };
+    let mutation = remote_checkCall {
+        remote_address: evm_contract_inner,
+    };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application_outer.run_json_query(mutation).await?;
