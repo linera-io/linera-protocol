@@ -768,8 +768,8 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Downloads and processes all confirmed block certificates that sent any message to this
-    /// chain, including their ancestors.
+    /// Downloads and preprocesses all confirmed block certificates that sent any message to this
+    /// chain.
     #[instrument(level = "trace", skip(self))]
     async fn synchronize_received_certificates_from_validator(
         &self,
@@ -792,12 +792,12 @@ impl<Env: Environment> Client<Env> {
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
         let remote_log = info.requested_received_log;
-        let remote_max_heights = Self::max_height_per_chain(&remote_log);
+        let remote_heights = Self::heights_per_chain(&remote_log);
 
         // Obtain the next block height we need in the local node, for each chain.
         let local_next_heights = self
             .local_node
-            .next_block_heights(remote_max_heights.keys(), chain_worker_limit)
+            .next_outbox_heights(remote_heights.keys(), chain_worker_limit, chain_id)
             .await?;
 
         // We keep track of the height we've successfully downloaded and checked, per chain.
@@ -806,15 +806,17 @@ impl<Env: Environment> Client<Env> {
         // put all their sent messages into the inbox.
         let mut other_sender_chains = Vec::new();
 
-        let certificate_hashes = future::try_join_all(remote_max_heights.into_iter().filter_map(
-            |(sender_chain_id, remote_height)| {
-                let local_next = *local_next_heights.get(&sender_chain_id)?;
+        let certificate_hashes = future::try_join_all(remote_heights.into_iter().filter_map(
+            |(sender_chain_id, remote_heights)| {
+                let height0 = *remote_heights.first()?;
+                let local_next = (*local_next_heights.get(&sender_chain_id)?).max(height0);
                 if let Ok(height) = local_next.try_sub_one() {
                     downloaded_heights.insert(sender_chain_id, height);
                 }
 
-                let Some(diff) = remote_height.0.checked_sub(local_next.0) else {
-                    // Our highest, locally-known block is higher than any block height
+                let height1 = *remote_heights.last()?;
+                let Some(diff) = height1.0.checked_sub(local_next.0) else {
+                    // Our highest, locally executed block is higher than any block height
                     // from the current batch. Skip this batch, but remember to wait for
                     // the messages to be delivered to the inboxes.
                     other_sender_chains.push(sender_chain_id);
@@ -823,19 +825,60 @@ impl<Env: Environment> Client<Env> {
 
                 // Find the hashes of the blocks we need.
                 let range = BlockHeightRange::multi(local_next, diff.saturating_add(1));
-                Some(remote_node.fetch_sent_certificate_hashes(sender_chain_id, range))
+                Some(async move {
+                    let hashes = remote_node
+                        .fetch_sent_certificate_hashes(sender_chain_id, range)
+                        .await?;
+                    Ok::<_, ChainClientError>(
+                        remote_heights
+                            .into_iter()
+                            .map(move |h| hashes[(h.0 - local_next.0) as usize]),
+                    )
+                })
             },
         ))
         .await?
         .into_iter()
         .flatten()
-        .collect();
+        .collect::<Vec<_>>();
+
+        let local_certificates =
+            future::try_join_all(certificate_hashes.iter().map(|hash| async move {
+                match self.storage_client().read_certificate(*hash).await {
+                    Ok(certificate) => Ok(Some(certificate)),
+                    Err(ViewError::NotFound(_)) => Ok(None),
+                    Err(error) => Err(error),
+                }
+            }))
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let local_certificate_hashes = local_certificates
+            .iter()
+            .map(|cert| cert.hash())
+            .collect::<HashSet<_>>();
 
         // Download the block certificates.
         let remote_certificates = remote_node
-            .download_certificates(certificate_hashes)
+            .download_certificates(
+                certificate_hashes
+                    .into_iter()
+                    .filter(|hash| !local_certificate_hashes.contains(hash))
+                    .collect(),
+            )
             .await?;
         let mut certificates_by_height_by_chain = BTreeMap::new();
+
+        for confirmed_block_certificate in local_certificates {
+            let block_header = &confirmed_block_certificate.inner().block().header;
+            let sender_chain_id = block_header.chain_id;
+            let height = block_header.height;
+            certificates_by_height_by_chain
+                .entry(sender_chain_id)
+                .or_insert_with(BTreeMap::new)
+                .insert(height, confirmed_block_certificate);
+        }
 
         // Check the signatures and keep only the ones that are valid.
         for confirmed_block_certificate in remote_certificates {
@@ -863,7 +906,7 @@ impl<Env: Environment> Client<Env> {
                     certificates_by_height_by_chain
                         .entry(sender_chain_id)
                         .or_insert_with(BTreeMap::new)
-                        .insert(height, confirmed_block_certificate.clone());
+                        .insert(height, confirmed_block_certificate);
                 }
             }
         }
@@ -881,10 +924,9 @@ impl<Env: Environment> Client<Env> {
         }
 
         for (sender_chain_id, certs) in &mut certificates_by_height_by_chain {
-            if !certs
+            if certs
                 .values()
-                .last()
-                .is_some_and(|cert| cert.block().recipients().contains(&chain_id))
+                .any(|cert| !cert.block().recipients().contains(&chain_id))
             {
                 warn!(
                     "Skipping received certificates from chain {sender_chain_id:.8}:
@@ -931,15 +973,17 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Given a set of chain ID-block height pairs, returns a map that assigns to each chain ID
-    /// the highest height seen.
-    fn max_height_per_chain(remote_log: &[ChainAndHeight]) -> BTreeMap<ChainId, BlockHeight> {
+    /// the set of heights. The returned map contains no empty values.
+    fn heights_per_chain(
+        remote_log: &[ChainAndHeight],
+    ) -> BTreeMap<ChainId, BTreeSet<BlockHeight>> {
         remote_log.iter().fold(
-            BTreeMap::<ChainId, BlockHeight>::new(),
+            BTreeMap::<ChainId, BTreeSet<_>>::new(),
             |mut chain_to_info, entry| {
                 chain_to_info
                     .entry(entry.chain_id)
-                    .and_modify(|h| *h = entry.height.max(*h))
-                    .or_insert(entry.height);
+                    .or_default()
+                    .insert(entry.height);
                 chain_to_info
             },
         )
