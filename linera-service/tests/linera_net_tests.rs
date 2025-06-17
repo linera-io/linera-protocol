@@ -1168,6 +1168,115 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
+async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_sol_types::{sol, SolCall};
+    use alloy_primitives::Address;
+    use linera_base::{
+        identifiers::AccountOwner,
+        vm::EvmQuery,
+    };
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use linera_sdk::abis::evm::EvmAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let account_owner = client.get_owner();
+    let Some(AccountOwner::Address20(address)) = account_owner else {
+        panic!("The owner should be of the form Some(Address20(...))");
+    };
+    let owner = Address::from(address);
+    tracing::info!("test_evm_msg_sender, account_owner={account_owner:?}");
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+
+    let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_check_msg_sender.sol")?;
+    sol! {
+        function check_msg_sender(address remote_address);
+        function remote_check(address remote_address);
+    }
+    tracing::info!("test_evm_msg_sender, step 1");
+
+    let instantiation_argument = Vec::new();
+    // Creating the inner EVM contract
+
+    let constructor_argument1 = vec![23];
+    let application_id1 = client
+        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+            evm_contract.clone(),
+            evm_contract.clone(),
+            VmRuntime::Evm,
+            &constructor_argument1,
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+    let evm_contract1 = application_id1.evm_address();
+    tracing::info!("test_evm_msg_sender, step 2");
+
+    // Creating the outer EVM contract
+
+    let constructor_argument2 = vec![93];
+    let application_id2 = client
+        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+            evm_contract.clone(),
+            evm_contract,
+            VmRuntime::Evm,
+            &constructor_argument2,
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+    let evm_contract2 = application_id2.evm_address();
+    assert_ne!(application_id1, application_id2);
+    tracing::info!("test_evm_msg_sender, step 3");
+    tracing::info!("test_evm_msg_sender, evm_contract1={evm_contract1:?}");
+    tracing::info!("test_evm_msg_sender, evm_contract2={evm_contract2:?}");
+
+    // Making the check
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let application1 = node_service
+        .make_application(&chain, &application_id1)
+        .await?;
+    let application2 = node_service
+        .make_application(&chain, &application_id2)
+        .await?;
+    tracing::info!("test_evm_msg_sender, step 4");
+
+
+    let mutation = check_msg_senderCall { remote_address: owner };
+    let mutation = mutation.abi_encode();
+    let mutation = EvmQuery::Mutation(mutation);
+    application1.run_json_query(mutation).await?;
+    tracing::info!("test_evm_msg_sender, step 5");
+
+    let mutation = remote_checkCall { remote_address: evm_contract1 };
+    let mutation = mutation.abi_encode();
+    let mutation = EvmQuery::Mutation(mutation);
+    application2.run_json_query(mutation).await?;
+    tracing::info!("test_evm_msg_sender, step 6");
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall};

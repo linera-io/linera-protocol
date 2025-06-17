@@ -914,6 +914,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
+        tracing::info!("CallInterceptorContract, inputs={inputs:?}");
         let result = self.call_or_fail(context, inputs);
         map_result_call_outcome(result)
     }
@@ -1240,16 +1241,17 @@ where
     fn get_msg_address(&self) -> Result<Address, ExecutionError> {
         let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
         let application_id = runtime.authenticated_caller_id()?;
+        tracing::info!("get_msg_address, application_id={application_id:?}");
         if let Some(application_id) = application_id {
             if application_id.is_evm() {
                 return Ok(application_id.evm_address());
             }
         };
         let account_owner = runtime.authenticated_signer()?;
+        tracing::info!("get_msg_address, account_owner={account_owner:?}");
         if let Some(AccountOwner::Address20(address)) = account_owner {
             return Ok(Address::from(address));
         };
-        // For process_streams, none are set
         Ok(ZERO_ADDRESS)
     }
 
@@ -1269,6 +1271,7 @@ where
             precompile_addresses: precompile_addresses(),
         };
         let caller = self.get_msg_address()?;
+        tracing::info!("transact_commit, caller={caller:?}");
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
