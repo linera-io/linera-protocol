@@ -389,7 +389,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         )
         .await?;
 
-
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 

@@ -1092,7 +1092,6 @@ where
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
-        tracing::info!("revm :: instantiate");
         self.initialize_contract()?;
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
             let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
@@ -1105,7 +1104,6 @@ where
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
-        tracing::info!("revm :: execute_operation");
         ensure_message_length(operation.len(), 4)?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
@@ -1125,7 +1123,6 @@ where
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
-        tracing::info!("revm :: execute_message");
         ensure_selector_presence(
             &self.module,
             EXECUTE_MESSAGE_SELECTOR,
@@ -1137,7 +1134,6 @@ where
 
     fn process_streams(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
-        tracing::info!("revm :: process_streams");
         let operation = get_revm_process_streams_bytes(streams);
         ensure_selector_presence(
             &self.module,
@@ -1223,13 +1219,9 @@ where
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
-        let test = self.db.is_initialized()?;
-        tracing::info!("init_transact_commit, test={test}");
-        if !test {
-            tracing::info!("init_transact_commit, calling initialize_contract");
+        if !self.db.is_initialized()? {
             self.initialize_contract()?;
         }
-        tracing::info!("init_transact_commit, calling transact_commit");
         self.transact_commit(EvmTxKind::Call, vec)
     }
 
@@ -1238,7 +1230,6 @@ where
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        tracing::info!("initialize_contract, calling transact_commit");
         let result = self.transact_commit(EvmTxKind::Create, vec_init)?;
         result
             .check_contract_initialization(self.db.contract_address)
@@ -1278,8 +1269,6 @@ where
             precompile_addresses: precompile_addresses(),
         };
         let caller = self.get_msg_address()?;
-        tracing::info!("transact_commit, caller={caller:?}");
-        tracing::info!("transact_commit, contract_address={:?}", self.db.contract_address);
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
@@ -1384,12 +1373,10 @@ where
         // Also, for handle_query, we do not have associated costs.
         // More generally, there is gas costs associated to service operation.
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
-            tracing::info!("handle_query, calling init_transact(A)");
             let result = self.init_transact(query[4..].to_vec())?;
             let (_gas_final, answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
-            tracing::info!("handle_query, calling init_transact(B)");
             let result = self.init_transact(query)?;
             let (_gas_final, output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
@@ -1406,14 +1393,11 @@ where
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
-        let test = self.db.is_initialized()?;
-        tracing::info!("init_transact, test={test}");
-        if !test {
+        if !self.db.is_initialized()? {
             let changes = {
                 let mut vec_init = self.module.clone();
                 let constructor_argument = self.db.constructor_argument()?;
                 vec_init.extend_from_slice(&constructor_argument);
-                tracing::info!("init_transact, calling transact for creating the contract");
                 let (result, changes) = self.transact(TxKind::Create, vec_init)?;
                 result
                     .check_contract_initialization(self.db.contract_address)
@@ -1425,7 +1409,6 @@ where
         ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
         let kind = TxKind::Call(self.db.contract_address);
-        tracing::info!("init_transact, calling transact for doing a calling");
         let (execution_result, _) = self.transact(kind, vec)?;
         Ok(execution_result)
     }
@@ -1443,7 +1426,6 @@ where
             precompile_addresses: precompile_addresses(),
         };
         let caller = ZERO_ADDRESS;
-        tracing::info!("transact, caller={caller:?}");
         let nonce = self.db.get_nonce(&caller)?;
         let result_state = {
             let ctx: revm_context::Context<

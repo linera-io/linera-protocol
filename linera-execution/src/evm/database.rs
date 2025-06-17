@@ -155,7 +155,6 @@ where
     type Error = ExecutionError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
-        tracing::info!("database :: basic, address={address:?}");
         self.basic_ref(address)
     }
 
@@ -164,7 +163,6 @@ where
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, ExecutionError> {
-        tracing::info!("database :: storage, address={address:?} index={index:?}");
         self.storage_ref(address, index)
     }
 
@@ -189,7 +187,6 @@ where
     type Error = ExecutionError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
-        tracing::info!("database :: basic_ref, address={address:?}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(Some(account.info.clone()));
@@ -207,7 +204,6 @@ where
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
-        tracing::info!("database :: storage_ref, address={address:?} index={index:?}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(match account.storage.get(&index) {
@@ -243,7 +239,6 @@ where
 {
     /// Effectively commits changes to storage.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
-        tracing::info!("database :: commit_changes");
         let mut storage_stats = self
             .storage_stats
             .lock()
@@ -251,8 +246,6 @@ where
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let mut batch = Batch::new();
         for (address, account) in &self.changes {
-//            tracing::info!("database :: address={address:?} account={account:?}");
-            tracing::info!("database :: address={address:?}");
             if !account.is_touched() {
                 continue;
             }
@@ -282,7 +275,6 @@ where
                 };
                 batch.put_key_value(key_state, &account_state)?;
                 for (index, value) in &account.storage {
-                    tracing::info!("database :: index={index:?} value={value:?}");
                     if value.present_value() == value.original_value() {
                         storage_stats.key_no_operation += 1;
                     } else {
