@@ -348,6 +348,13 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     let (mut net, client) = config.instantiate().await?;
 
+    let account_owner = client.keygen().await?;
+    tracing::info!("test_evm_end_to_end_counter, account_owner={account_owner:?}");
+    let account_owner = client.keygen().await?;
+    tracing::info!("test_evm_end_to_end_counter, account_owner={account_owner:?}");
+    let account_owner = client.keygen().await?;
+    tracing::info!("test_evm_end_to_end_counter, account_owner={account_owner:?}");
+
     sol! {
         struct ConstructorArgs {
             uint64 initial_value;
@@ -365,6 +372,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let increment = 5;
 
     let chain = client.load_wallet()?.default_chain().unwrap();
+    tracing::info!("test_evm_end_to_end_counter, chain={chain:?}");
 
     let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_example_counter.sol")?;
 
@@ -380,6 +388,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
             None,
         )
         .await?;
+
 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;

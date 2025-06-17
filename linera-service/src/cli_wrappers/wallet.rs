@@ -1478,6 +1478,8 @@ impl<A> ApplicationWrapper<A> {
 
         for i in 0.. {
             let client = reqwest_client();
+            tracing::info!("run_json_query,   uri={}", self.uri);
+            tracing::info!("run_json_query, query={}", serde_json::to_string(&query)?);
             let result = client.post(&self.uri).json(&query).send().await;
             let response = match result {
                 Ok(response) => response,

@@ -92,14 +92,6 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
 }
 
 #[repr(u8)]
-enum KeyTag {
-    /// Key prefix for the storage of the zero contract.
-    NullAddress,
-    /// Key prefix for the storage of the contract address.
-    ContractAddress,
-}
-
-#[repr(u8)]
 pub enum KeyCategory {
     AccountInfo,
     AccountState,
@@ -115,21 +107,17 @@ fn application_id_to_address(application_id: ApplicationId) -> Address {
 impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     /// Encode the `index` of the EVM storage associated to the smart contract
     /// in a linera key.
-    fn get_linera_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
-        let mut key = vec![val, KeyCategory::Storage as u8];
+    fn get_linera_key(key_prefix: &[u8], index: U256) -> Result<Vec<u8>, ExecutionError> {
+        let mut key = key_prefix.to_vec();
         bcs::serialize_into(&mut key, &index)?;
         Ok(key)
     }
 
     /// Returns the tag associated to the contract.
-    fn get_contract_address_key(&self, address: &Address) -> Option<u8> {
-        if address == &Address::ZERO {
-            return Some(KeyTag::NullAddress as u8);
-        }
-        if address == &self.contract_address {
-            return Some(KeyTag::ContractAddress as u8);
-        }
-        None
+    fn get_address_key(&self, prefix: u8, address: &Address) -> Vec<u8> {
+        let mut key = vec![prefix];
+        key.extend(address.to_vec());
+        key
     }
 
     /// Creates a new `DatabaseRuntime`.
@@ -167,6 +155,7 @@ where
     type Error = ExecutionError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
+        tracing::info!("database :: basic, address={address:?}");
         self.basic_ref(address)
     }
 
@@ -175,6 +164,7 @@ where
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, ExecutionError> {
+        tracing::info!("database :: storage, address={address:?} index={index:?}");
         self.storage_ref(address, index)
     }
 
@@ -199,16 +189,13 @@ where
     type Error = ExecutionError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
+        tracing::info!("database :: basic_ref, address={address:?}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let val = self.get_contract_address_key(&address);
-        let Some(val) = val else {
-            return Ok(Some(AccountInfo::default()));
-        };
-        let key_info = vec![val, KeyCategory::AccountInfo as u8];
+        let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, &address);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo>(&result)?;
@@ -220,6 +207,7 @@ where
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
+        tracing::info!("database :: storage_ref, address={address:?} index={index:?}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(match account.storage.get(&index) {
@@ -227,11 +215,8 @@ where
                 Some(slot) => slot.present_value(),
             });
         }
-        let val = self.get_contract_address_key(&address);
-        let Some(val) = val else {
-            panic!("There is no storage associated to externally owned account");
-        };
-        let key = Self::get_linera_key(val, index)?;
+        let key_prefix = self.get_address_key(KeyCategory::Storage as u8, &address);
+        let key = Self::get_linera_key(&key_prefix, index)?;
         {
             let mut storage_stats = self
                 .storage_stats
@@ -258,80 +243,65 @@ where
 {
     /// Effectively commits changes to storage.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
+        tracing::info!("database :: commit_changes");
         let mut storage_stats = self
             .storage_stats
             .lock()
             .expect("The lock should be possible");
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let mut batch = Batch::new();
-        let mut list_new_balances = Vec::new();
         for (address, account) in &self.changes {
+//            tracing::info!("database :: address={address:?} account={account:?}");
+            tracing::info!("database :: address={address:?}");
             if !account.is_touched() {
                 continue;
             }
-            let val = self.get_contract_address_key(address);
-            if let Some(val) = val {
-                let key_prefix = vec![val, KeyCategory::Storage as u8];
-                let key_info = vec![val, KeyCategory::AccountInfo as u8];
-                let key_state = vec![val, KeyCategory::AccountState as u8];
-                if account.is_selfdestructed() {
-                    batch.delete_key_prefix(key_prefix);
-                    batch.put_key_value(key_info, &AccountInfo::default())?;
-                    batch.put_key_value(key_state, &AccountState::NotExisting)?;
+            let key_prefix = self.get_address_key(KeyCategory::Storage as u8, address);
+            let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, address);
+            let key_state = self.get_address_key(KeyCategory::AccountState as u8, address);
+            if account.is_selfdestructed() {
+                batch.delete_key_prefix(key_prefix);
+                batch.put_key_value(key_info, &AccountInfo::default())?;
+                batch.put_key_value(key_state, &AccountState::NotExisting)?;
+            } else {
+                let is_newly_created = account.is_created();
+                batch.put_key_value(key_info, &account.info)?;
+                let account_state = if is_newly_created {
+                    batch.delete_key_prefix(key_prefix.clone());
+                    AccountState::StorageCleared
                 } else {
-                    let is_newly_created = account.is_created();
-                    batch.put_key_value(key_info, &account.info)?;
-
-                    let account_state = if is_newly_created {
-                        batch.delete_key_prefix(key_prefix);
+                    let promise = runtime.read_value_bytes_new(key_state.clone())?;
+                    let result = runtime.read_value_bytes_wait(&promise)?;
+                    let account_state =
+                        from_bytes_option::<AccountState>(&result)?.unwrap_or_default();
+                    if account_state.is_storage_cleared() {
                         AccountState::StorageCleared
                     } else {
-                        let promise = runtime.read_value_bytes_new(key_state.clone())?;
-                        let result = runtime.read_value_bytes_wait(&promise)?;
-                        let account_state =
-                            from_bytes_option::<AccountState>(&result)?.unwrap_or_default();
-                        if account_state.is_storage_cleared() {
-                            AccountState::StorageCleared
+                        AccountState::Touched
+                    }
+                };
+                batch.put_key_value(key_state, &account_state)?;
+                for (index, value) in &account.storage {
+                    tracing::info!("database :: index={index:?} value={value:?}");
+                    if value.present_value() == value.original_value() {
+                        storage_stats.key_no_operation += 1;
+                    } else {
+                        let key = Self::get_linera_key(&key_prefix, *index)?;
+                        if value.original_value() == U256::ZERO {
+                            batch.put_key_value(key, &value.present_value())?;
+                            storage_stats.key_set += 1;
+                        } else if value.present_value() == U256::ZERO {
+                            batch.delete_key(key);
+                            storage_stats.key_release += 1;
                         } else {
-                            AccountState::Touched
-                        }
-                    };
-                    batch.put_key_value(key_state, &account_state)?;
-                    for (index, value) in &account.storage {
-                        if value.present_value() == value.original_value() {
-                            storage_stats.key_no_operation += 1;
-                        } else {
-                            let key = Self::get_linera_key(val, *index)?;
-                            if value.original_value() == U256::ZERO {
-                                batch.put_key_value(key, &value.present_value())?;
-                                storage_stats.key_set += 1;
-                            } else if value.present_value() == U256::ZERO {
-                                batch.delete_key(key);
-                                storage_stats.key_release += 1;
-                            } else {
-                                batch.put_key_value(key, &value.present_value())?;
-                                storage_stats.key_reset += 1;
-                            }
+                            batch.put_key_value(key, &value.present_value())?;
+                            storage_stats.key_reset += 1;
                         }
                     }
-                }
-            } else {
-                if !account.storage.is_empty() {
-                    panic!("For user account, storage must be empty");
-                }
-                // TODO(#3756): Implement EVM transfers within Linera.
-                // The only allowed operations are the ones for the
-                // account balances.
-                if account.info.balance != U256::ZERO {
-                    let new_balance = (address, account.info.balance);
-                    list_new_balances.push(new_balance);
                 }
             }
         }
         runtime.write_batch(batch)?;
-        if !list_new_balances.is_empty() {
-            panic!("The conversion Ethereum address / Linera address is not yet implemented");
-        }
         self.changes.clear();
         Ok(())
     }
@@ -362,12 +332,13 @@ where
     /// Checks if the contract is already initialized. It is possible
     /// that the constructor has not yet been called.
     pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
-        let mut keys = Vec::new();
-        for key_tag in [KeyTag::NullAddress, KeyTag::ContractAddress] {
-            let key = vec![key_tag as u8, KeyCategory::AccountInfo as u8];
-            keys.push(key);
-        }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let evm_address = runtime.application_id()?.evm_address();
+        let mut keys = Vec::new();
+        for address in [Address::ZERO, evm_address] {
+            let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, &address);
+            keys.push(key_info);
+        }
         let promise = runtime.contains_keys_new(keys)?;
         let result = runtime.contains_keys_wait(&promise)?;
         Ok(result[0] && result[1])

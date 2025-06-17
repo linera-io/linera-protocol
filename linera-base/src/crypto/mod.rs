@@ -195,10 +195,16 @@ impl AccountSecretKey {
         AccountSecretKey::Ed25519(Ed25519SecretKey::generate())
     }
 
-    #[cfg(with_getrandom)]
+    #[cfg(all(with_getrandom, not(feature = "revm")))]
     /// Generates a new key pair from the given RNG. Use with care.
     pub fn generate_from<R: CryptoRng>(rng: &mut R) -> Self {
         AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(rng))
+    }
+
+    #[cfg(all(with_getrandom, feature = "revm"))]
+    /// Generates a new key pair from the given RNG. Use with care.
+    pub fn generate_from<R: CryptoRng>(rng: &mut R) -> Self {
+        AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate_from(rng))
     }
 }
 

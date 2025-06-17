@@ -245,7 +245,6 @@ impl<Env: Environment> Client<Env> {
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
             e.insert(ChainClientState::new(pending_proposal));
         }
-
         ChainClient {
             client: self.clone(),
             chain_id,
