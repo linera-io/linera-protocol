@@ -1477,7 +1477,10 @@ pub enum ChainClientError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    #[error("Unexpected quorum: got {hash}, {round}, expected {expected_hash}, {expected_round}")]
+    #[error(
+        "Unexpected quorum: validators voted for block {hash} in {round}, \
+         expected block {expected_hash} in {expected_round}"
+    )]
     UnexpectedQuorum {
         hash: CryptoHash,
         round: Round,
