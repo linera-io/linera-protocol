@@ -285,7 +285,7 @@ where
             .insert(block_id.chain_id, (*block_id).into());
 
         Ok(())
-    }   
+    }
 
     pub(super) async fn index_block(&mut self, block_id: &BlockId) -> Result<bool, ExporterError> {
         if block_id.height == BlockHeight::ZERO {
