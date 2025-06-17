@@ -5051,7 +5051,6 @@ dependencies = [
  "async-tungstenite",
  "axum 0.8.4",
  "base64 0.22.1",
- "bcs",
  "bincode",
  "call-evm-counter",
  "cargo_toml",
