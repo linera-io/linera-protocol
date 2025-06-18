@@ -865,19 +865,10 @@ impl<Env: Environment> Client<Env> {
         let local_certificates = self
             .storage_client()
             .read_certificates(certificate_hashes.clone())
-            .await?;
-        let (local_certificates, invalid_certificates) = local_certificates
+            .await?
             .into_iter()
-            .zip(certificate_hashes.clone())
-            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
-                Some(cert) => itertools::Either::Left(cert),
-                None => itertools::Either::Right(hash),
-            });
-        if !invalid_certificates.is_empty() {
-            return Err(ChainClientError::ReadCertificatesError(
-                invalid_certificates,
-            ));
-        }
+            .flatten()
+            .collect::<Vec<_>>();
         let local_certificate_hashes = local_certificates
             .iter()
             .map(|cert| cert.hash())
