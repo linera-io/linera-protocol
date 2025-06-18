@@ -14,7 +14,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use dashmap::{mapref::entry::Entry, DashMap};
+use dashmap::DashMap;
 use futures::{future::join_all, StreamExt as _};
 use linera_base::ensure;
 use scylla::{
@@ -240,48 +240,44 @@ impl ScyllaDbClient {
         &self,
         num_markers: usize,
     ) -> Result<PreparedStatement, ScyllaDbStoreInternalError> {
-        let entry = self.multi_key_values.entry(num_markers);
-        match entry {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let markers = std::iter::repeat_n("?", num_markers)
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let prepared_statement = self
-                    .session
-                    .prepare(format!(
-                        "SELECT k,v FROM {}.{} WHERE root_key = ? AND k IN ({})",
-                        KEYSPACE, self.namespace, markers
-                    ))
-                    .await?;
-                entry.insert(prepared_statement.clone());
-                Ok(prepared_statement)
-            }
+        if let Some(prepared_statement) = self.multi_key_values.get(&num_markers) {
+            return Ok(prepared_statement.clone());
         }
+        let markers = std::iter::repeat_n("?", num_markers)
+            .collect::<Vec<_>>()
+            .join(",");
+        let prepared_statement = self
+            .session
+            .prepare(format!(
+                "SELECT k,v FROM {}.{} WHERE root_key = ? AND k IN ({})",
+                KEYSPACE, self.namespace, markers
+            ))
+            .await?;
+        self.multi_key_values
+            .insert(num_markers, prepared_statement.clone());
+        Ok(prepared_statement)
     }
 
     async fn get_multi_keys_statement(
         &self,
         num_markers: usize,
     ) -> Result<PreparedStatement, ScyllaDbStoreInternalError> {
-        let entry = self.multi_keys.entry(num_markers);
-        match entry {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let markers = std::iter::repeat_n("?", num_markers)
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let prepared_statement = self
-                    .session
-                    .prepare(format!(
-                        "SELECT k FROM {}.{} WHERE root_key = ? AND k IN ({})",
-                        KEYSPACE, self.namespace, markers
-                    ))
-                    .await?;
-                entry.insert(prepared_statement.clone());
-                Ok(prepared_statement)
-            }
-        }
+        if let Some(prepared_statement) = self.multi_keys.get(&num_markers) {
+            return Ok(prepared_statement.clone());
+        };
+        let markers = std::iter::repeat_n("?", num_markers)
+            .collect::<Vec<_>>()
+            .join(",");
+        let prepared_statement = self
+            .session
+            .prepare(format!(
+                "SELECT k FROM {}.{} WHERE root_key = ? AND k IN ({})",
+                KEYSPACE, self.namespace, markers
+            ))
+            .await?;
+        self.multi_keys
+            .insert(num_markers, prepared_statement.clone());
+        Ok(prepared_statement)
     }
 
     fn check_key_size(key: &[u8]) -> Result<(), ScyllaDbStoreInternalError> {
