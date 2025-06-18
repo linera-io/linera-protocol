@@ -117,6 +117,7 @@ use test_case::test_case;
 #[test_case(
     vec![
         FeeSpend::QueryServiceOracle,
+        FeeSpend::Runtime(32),
     ],
     Amount::from_tokens(2),
     Some(Amount::from_tokens(1)),
@@ -128,6 +129,7 @@ use test_case::test_case;
         FeeSpend::QueryServiceOracle,
         FeeSpend::QueryServiceOracle,
         FeeSpend::QueryServiceOracle,
+        FeeSpend::Runtime(96),
     ],
     Amount::from_tokens(2),
     Some(Amount::from_tokens(1)),
@@ -143,6 +145,7 @@ use test_case::test_case;
         FeeSpend::QueryServiceOracle,
         FeeSpend::Fuel(57),
         FeeSpend::QueryServiceOracle,
+        FeeSpend::Runtime(96),
     ],
     Amount::from_tokens(2),
     Some(Amount::from_tokens(1_000)),
@@ -210,7 +213,7 @@ async fn test_fee_consumption(
         evm_fuel_unit: Amount::from_tokens(2),
         read_operation: Amount::from_tokens(3),
         write_operation: Amount::from_tokens(5),
-        byte_runtime: Amount::from_nanos(1),
+        byte_runtime: Amount::from_millis(1),
         byte_read: Amount::from_tokens(7),
         byte_written: Amount::from_tokens(11),
         byte_stored: Amount::from_tokens(13),
@@ -308,8 +311,10 @@ async fn test_fee_consumption(
         None => {
             let (expected_chain_balance, expected_owner_balance) = if chain_balance >= consumed_fees
             {
+                println!("Case A");
                 (chain_balance.saturating_sub(consumed_fees), owner_balance)
             } else {
+                println!("Case B");
                 let Some(owner_balance) = owner_balance else {
                     panic!("execution should have failed earlier");
                 };
@@ -331,8 +336,10 @@ async fn test_fee_consumption(
         }
         Some(initial_grant) => {
             let (expected_grant, expected_owner_balance) = if initial_grant >= consumed_fees {
+                println!("Case C");
                 (initial_grant.saturating_sub(consumed_fees), owner_balance)
             } else {
+                println!("Case D");
                 let Some(owner_balance) = owner_balance else {
                     panic!("execution should have failed earlier");
                 };
@@ -367,13 +374,15 @@ pub enum FeeSpend {
     QueryServiceOracle,
     /// Performs an HTTP request.
     HttpRequest,
+    /// Byte from runtime.
+    Runtime(u32),
 }
 
 impl FeeSpend {
     /// Returns the [`OracleResponse`]s necessary for executing this runtime operation.
     pub fn expected_oracle_responses(&self) -> Vec<OracleResponse> {
         match self {
-            FeeSpend::Fuel(_) | FeeSpend::Read(_, _) => vec![],
+            FeeSpend::Fuel(_) | FeeSpend::Read(_, _) | FeeSpend::Runtime(_) => vec![],
             FeeSpend::QueryServiceOracle => {
                 vec![OracleResponse::Service(vec![])]
             }
@@ -395,6 +404,7 @@ impl FeeSpend {
             }
             FeeSpend::QueryServiceOracle => policy.service_as_oracle_query,
             FeeSpend::HttpRequest => policy.http_request,
+            FeeSpend::Runtime(bytes) => policy.byte_runtime.saturating_mul(*bytes as u128),
         }
     }
 
@@ -402,6 +412,7 @@ impl FeeSpend {
     pub fn execute(self, runtime: &mut impl ContractRuntime) -> Result<(), ExecutionError> {
         match self {
             FeeSpend::Fuel(units) => runtime.consume_fuel(units, VmRuntime::Wasm),
+            FeeSpend::Runtime(_bytes) => Ok(()),
             FeeSpend::Read(key, value) => {
                 let promise = runtime.read_value_bytes_new(key)?;
                 let response = runtime.read_value_bytes_wait(&promise)?;
