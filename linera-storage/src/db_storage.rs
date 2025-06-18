@@ -946,11 +946,13 @@ where
         };
         let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
         let value = bcs::from_bytes::<ConfirmedBlock>(value_bytes)?;
-        let value_hash = value.hash();
-        if value_hash != hash {
-            return Ok(None);
+        if value.hash() != hash {
+            return Err(ViewError::InconsistentEntries);
         }
-        Ok(cert.with_value(value))
+        let certificate = cert
+            .with_value(value)
+            .ok_or(ViewError::InconsistentEntries)?;
+        Ok(Some(certificate))
     }
 
     async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {

@@ -343,6 +343,7 @@ where
             ViewError::StoreError { .. }
             | ViewError::TokioJoinError(_)
             | ViewError::TryLockError(_)
+            | ViewError::InconsistentEntries
             | ViewError::PostLoadValuesError
             | ViewError::IoError(_) => Status::internal(err.to_string()),
             ViewError::KeyTooLong | ViewError::ArithmeticError(_) => {
