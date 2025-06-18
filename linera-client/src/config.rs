@@ -33,7 +33,7 @@ pub enum Error {
     #[error("persistence error: {0}")]
     Persistence(Box<dyn std::error::Error + Send + Sync>),
     #[error("storage is already initialized: {0:?}")]
-    StorageIsAlreadyInitialized(NetworkDescription),
+    StorageIsAlreadyInitialized(Box<NetworkDescription>),
     #[error("no admin chain configured")]
     NoAdminChain,
 }
@@ -170,7 +170,7 @@ impl GenesisConfig {
             .await
             .map_err(linera_chain::ChainError::from)?
         {
-            return Err(Error::StorageIsAlreadyInitialized(description));
+            return Err(Error::StorageIsAlreadyInitialized(Box::new(description)));
         }
         let network_description = self.network_description();
         storage
