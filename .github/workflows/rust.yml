@@ -7,13 +7,6 @@ on:
   pull_request:
     branches:
       - "**"
-    paths-ignore:
-      - 'CONTRIBUTING.md'
-      - 'INSTALL.md'
-      - 'docker/**'
-      - 'docker_scylla/**'
-      - 'configuration/**'
-      - 'kubernetes/**'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests
@@ -42,7 +35,29 @@ permissions:
   contents: read
 
 jobs:
+  # paths-ignore within a pull_request doesn't work well with merge_group, so we need to use a custom filter.
+  changed-files:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.files-changed.outputs.paths }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Filter paths
+        uses: dorny/paths-filter@v3
+        id: files-changed
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            paths:
+              - '!docker/**'
+              - '!docker_scylla/**'
+              - '!configuration/**'
+              - '!kubernetes/**'
+              - '!CONTRIBUTING.md'
+              - '!INSTALL.md'
   remote-net-test:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest-8-cores
     timeout-minutes: 40
 
@@ -73,6 +88,8 @@ jobs:
         cargo test -p linera-service remote_net_grpc --features remote-net
 
   execution-wasmtime-test:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -84,6 +101,8 @@ jobs:
         cargo test --locked -p linera-execution --features wasmtime
 
   metrics-test:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -95,6 +114,8 @@ jobs:
         cargo test --locked -p linera-base --features metrics
 
   wasm-application-test:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -111,6 +132,8 @@ jobs:
         cargo test --locked
 
   default-features-and-witty-integration-test:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest-8-cores
     timeout-minutes: 40
 
@@ -133,6 +156,8 @@ jobs:
         cargo test -p linera-witty --features wasmer,wasmtime
 
   check-outdated-cli-md:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -153,6 +178,8 @@ jobs:
         fi
 
   benchmark-test:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -172,6 +199,8 @@ jobs:
         cargo test --locked -p linera-service --features benchmark,storage-service benchmark
 
   ethereum-tests:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -217,6 +246,8 @@ jobs:
         cargo test evm --features revm,storage-service
 
   storage-service-tests:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
     steps:
@@ -236,6 +267,8 @@ jobs:
         cargo test --features storage-service -- storage_service --nocapture
 
   web:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -265,6 +298,8 @@ jobs:
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
 
   check-wit-files:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -274,6 +309,8 @@ jobs:
         cargo run --bin wit-generator -- -c
 
   lint-unexpected-chain-load-operations:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
@@ -284,6 +321,8 @@ jobs:
         ./scripts/check_chain_loads.sh
 
   lint-check-copyright-headers:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
@@ -299,6 +338,8 @@ jobs:
         | xargs -0 scripts/target/release/check_copyright_header
 
   lint-cargo-machete:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
@@ -316,6 +357,8 @@ jobs:
         cargo machete
 
   lint-cargo-fmt:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
@@ -330,6 +373,8 @@ jobs:
         cargo fmt -- --check
 
   lint-taplo-fmt:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -342,6 +387,8 @@ jobs:
       run: taplo fmt --check --diff
 
   lint-check-for-outdated-readme:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -369,6 +416,8 @@ jobs:
         done
 
   lint-wasm-applications:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -392,6 +441,8 @@ jobs:
         cargo fmt -- --check
 
   lint-cargo-clippy:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -416,6 +467,8 @@ jobs:
           -p linera-views
 
   lint-cargo-doc:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -434,6 +487,8 @@ jobs:
         cargo doc --locked --all-features
 
   lint-check-linera-service-graphql-schema:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
