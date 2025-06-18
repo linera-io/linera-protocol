@@ -126,14 +126,6 @@ where
         };
         let admin_description = ChainDescription::new(origin, config, Timestamp::from(0));
         let committee_blob = Blob::new_committee(bcs::to_bytes(&committee).unwrap());
-        let committee_events = [(
-            EventId {
-                chain_id: admin_description.id(),
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                index: 0,
-            },
-            bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-        )];
         storage
             .write_blob(&Blob::new_chain_description(&admin_description))
             .await
@@ -143,14 +135,11 @@ where
             .await
             .expect("writing a blob should succeed");
         storage
-            .write_events(committee_events.clone())
-            .await
-            .expect("writing events should succeed");
-        storage
             .write_network_description(&NetworkDescription {
                 admin_chain_id: admin_description.id(),
                 genesis_config_hash: CryptoHash::test_hash("genesis config"),
                 genesis_timestamp: Timestamp::from(0),
+                genesis_committee_blob_hash: committee_blob.id().hash,
                 name: "test network".to_string(),
             })
             .await

@@ -897,6 +897,8 @@ pub struct NetworkDescription {
     pub genesis_config_hash: CryptoHash,
     /// Genesis timestamp.
     pub genesis_timestamp: Timestamp,
+    /// Hash of the blob containing the genesis committee.
+    pub genesis_committee_blob_hash: CryptoHash,
     /// The chain ID of the admin chain.
     pub admin_chain_id: ChainId,
 }

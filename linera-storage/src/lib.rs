@@ -182,27 +182,37 @@ pub trait Storage: Sized {
         &self,
         mut epochs: BTreeSet<Epoch>,
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        let admin_chain_id = self
+        let read_committee = async |committee_hash| -> Result<Committee, ViewError> {
+            let blob_id = BlobId::new(committee_hash, BlobType::Committee);
+            let committee_blob = self
+                .read_blob(blob_id)
+                .await?
+                .ok_or_else(|| ViewError::NotFound(format!("Blob not found: {}", blob_id)))?;
+            Ok(bcs::from_bytes(committee_blob.bytes())?)
+        };
+
+        let network_description = self
             .read_network_description()
             .await?
-            .ok_or_else(|| ViewError::NotFound("NetworkDescription not found".to_owned()))?
-            .admin_chain_id;
+            .ok_or_else(|| ViewError::NotFound("NetworkDescription not found".to_owned()))?;
+        let admin_chain_id = network_description.admin_chain_id;
         let epoch_creation_events = self
             .read_events_from_index(&admin_chain_id, &StreamId::system(EPOCH_STREAM_NAME), 0)
             .await?;
         let mut result = BTreeMap::new();
+        // special case: the genesis epoch is stored in the NetworkDescription
+        if epochs.remove(&Epoch::ZERO) {
+            let genesis_committee =
+                read_committee(network_description.genesis_committee_blob_hash).await?;
+            result.insert(Epoch::ZERO, genesis_committee);
+        }
         for index_and_event in epoch_creation_events {
             let epoch = Epoch::from(index_and_event.index);
             if !epochs.remove(&epoch) {
                 continue;
             }
             let blob_hash = bcs::from_bytes::<CryptoHash>(&index_and_event.event)?;
-            let blob_id = BlobId::new(blob_hash, BlobType::Committee);
-            let committee_blob = self
-                .read_blob(blob_id)
-                .await?
-                .ok_or_else(|| ViewError::NotFound(format!("Blob not found: {}", blob_id)))?;
-            let committee: Committee = bcs::from_bytes(committee_blob.bytes())?;
+            let committee = read_committee(blob_hash).await?;
             result.insert(epoch, committee);
         }
         if epochs.is_empty() {

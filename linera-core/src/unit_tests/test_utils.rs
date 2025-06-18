@@ -17,7 +17,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, InMemorySigner, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
-    identifiers::{AccountOwner, BlobId, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, BlobId, ChainId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -27,9 +27,7 @@ use linera_chain::{
         LiteCertificate, Timeout, ValidatedBlock,
     },
 };
-use linera_execution::{
-    committee::Committee, system::EPOCH_STREAM_NAME, ResourceControlPolicy, WasmRuntime,
-};
+use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
 use linera_storage::{DbStorage, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;
@@ -174,21 +172,22 @@ where
     }
 
     async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
+        let storage_network_description = self
+            .client
+            .lock()
+            .await
+            .state
+            .storage_client()
+            .read_network_description()
+            .await
+            .unwrap()
+            .unwrap();
         Ok(NetworkDescription {
             name: "test network".to_string(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: Timestamp::default(),
-            admin_chain_id: self
-                .client
-                .lock()
-                .await
-                .state
-                .storage_client()
-                .read_network_description()
-                .await
-                .unwrap()
-                .unwrap()
-                .admin_chain_id,
+            genesis_committee_blob_hash: storage_network_description.genesis_committee_blob_hash,
+            admin_chain_id: storage_network_description.admin_chain_id,
         })
     }
 
@@ -843,6 +842,7 @@ where
             application_permissions: ApplicationPermissions::default(),
         };
         let description = ChainDescription::new(origin, open_chain_config, Timestamp::from(0));
+        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee).unwrap());
         if index == 0 {
             self.admin_description = Some(description.clone());
             self.network_description = Some(NetworkDescription {
@@ -850,6 +850,7 @@ where
                 // dummy values to fill the description
                 genesis_config_hash: CryptoHash::test_hash("genesis config"),
                 genesis_timestamp: Timestamp::from(0),
+                genesis_committee_blob_hash: committee_blob.id().hash,
                 name: "test network".to_string(),
             });
         }
@@ -858,15 +859,6 @@ where
             .add(description.clone(), public_key);
 
         let network_description = self.network_description.as_ref().unwrap();
-        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee).unwrap());
-        let committee_events = [(
-            EventId {
-                chain_id: network_description.admin_chain_id,
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: 0,
-            },
-            bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-        )];
 
         for validator in &self.validator_clients {
             let storage = self
@@ -881,10 +873,6 @@ where
                 .write_blob(&committee_blob)
                 .await
                 .expect("writing a blob should succeed");
-            storage
-                .write_events(committee_events.clone())
-                .await
-                .expect("writing events should succeed");
             if validator.fault_type().await == FaultType::Malicious {
                 let origin = description.origin();
                 let config = InitialChainConfig {
@@ -945,14 +933,6 @@ where
         let storage = self.storage_builder.build().await?;
         let network_description = self.network_description.as_ref().unwrap();
         let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee).unwrap());
-        let committee_events = [(
-            EventId {
-                chain_id: network_description.admin_chain_id,
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: 0,
-            },
-            bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-        )];
         storage
             .write_network_description(network_description)
             .await
@@ -961,10 +941,6 @@ where
             .write_blob(&committee_blob)
             .await
             .expect("writing a blob should succeed");
-        storage
-            .write_events(committee_events.clone())
-            .await
-            .expect("writing events should succeed");
         Ok(self.genesis_storage_builder.build(storage).await)
     }
 

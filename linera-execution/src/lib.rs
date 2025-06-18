@@ -1094,6 +1094,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             admin_chain_id: dummy_chain_description(0).id(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: Timestamp::from(0),
+            genesis_committee_blob_hash: CryptoHash::test_hash("genesis committee"),
             name: "dummy network description".to_string(),
         }))
     }

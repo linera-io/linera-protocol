@@ -645,6 +645,8 @@ NetworkDescription:
         TYPENAME: CryptoHash
     - genesis_timestamp:
         TYPENAME: Timestamp
+    - genesis_committee_blob_hash:
+        TYPENAME: CryptoHash
     - admin_chain_id:
         TYPENAME: ChainId
 NodeError:

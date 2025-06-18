@@ -19,13 +19,13 @@ use linera_base::{
         Amount, ApplicationPermissions, Blob, BlobContent, ChainDescription, ChainOrigin, Epoch,
         InitialChainConfig, NetworkDescription, Timestamp,
     },
-    identifiers::{AccountOwner, ApplicationId, ChainId, EventId, ModuleId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::Committee,
-    system::{AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME},
+    system::{AdminOperation, OpenChainConfig, SystemOperation},
     ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
@@ -111,35 +111,25 @@ impl TestValidator {
         let description = ChainDescription::new(origin, new_chain_config, Timestamp::from(0));
         let admin_chain_id = description.id();
 
+        let committee_blob = Blob::new_committee(
+            bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
+        );
+
         let network_description = NetworkDescription {
             name: "Test network".to_string(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: description.timestamp(),
+            genesis_committee_blob_hash: committee_blob.id().hash,
             admin_chain_id,
         };
         storage
             .write_network_description(&network_description)
             .await
             .unwrap();
-        let committee_blob = Blob::new_committee(
-            bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
-        );
         storage
             .write_blob(&committee_blob)
             .await
             .expect("writing a blob should succeed");
-        storage
-            .write_events([(
-                EventId {
-                    chain_id: admin_chain_id,
-                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                    index: 0,
-                },
-                bcs::to_bytes(&committee_blob.id().hash)
-                    .expect("serializing a hash should succeed"),
-            )])
-            .await
-            .expect("writing events should succeed");
         worker
             .storage_client()
             .create_chain(description.clone())

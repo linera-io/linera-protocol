@@ -7,7 +7,7 @@ use std::iter::IntoIterator;
 use linera_base::{
     crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
-        Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, NetworkDescription,
+        Amount, Blob, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, NetworkDescription,
         Timestamp,
     },
     identifiers::ChainId,
@@ -174,6 +174,10 @@ impl GenesisConfig {
         }
         let network_description = self.network_description();
         storage
+            .write_blob(&self.committee_blob())
+            .await
+            .map_err(linera_chain::ChainError::from)?;
+        storage
             .write_network_description(&network_description)
             .await
             .map_err(linera_chain::ChainError::from)?;
@@ -187,11 +191,18 @@ impl GenesisConfig {
         CryptoHash::new(self)
     }
 
+    pub fn committee_blob(&self) -> Blob {
+        Blob::new_committee(
+            bcs::to_bytes(&self.committee).expect("serializing a committee should succeed"),
+        )
+    }
+
     pub fn network_description(&self) -> NetworkDescription {
         NetworkDescription {
             name: self.network_name.clone(),
             genesis_config_hash: CryptoHash::new(self),
             genesis_timestamp: self.timestamp,
+            genesis_committee_blob_hash: self.committee_blob().id().hash,
             admin_chain_id: self.admin_id(),
         }
     }
