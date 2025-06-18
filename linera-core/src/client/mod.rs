@@ -340,7 +340,23 @@ impl<Env: Environment> Client<Env> {
                 next_height = next_height.try_add_one()?;
             }
         }
-        for certificate in self.storage_client().read_certificates(hashes).await? {
+        let certificates = self
+            .storage_client()
+            .read_certificates(hashes.clone())
+            .await?;
+        let (certificates, invalid_certificates) = certificates
+            .into_iter()
+            .zip(hashes)
+            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
+                Some(cert) => itertools::Either::Left(cert),
+                None => itertools::Either::Right(hash),
+            });
+        if !invalid_certificates.is_empty() {
+            return Err(ChainClientError::ReadCertificatesError(
+                invalid_certificates,
+            ));
+        }
+        for certificate in certificates {
             last_info = Some(self.handle_certificate(Box::new(certificate)).await?.info);
         }
         // Now download the rest in batches from the remote node.
@@ -846,18 +862,22 @@ impl<Env: Environment> Client<Env> {
         .flatten()
         .collect::<Vec<_>>();
 
-        let local_certificates =
-            future::try_join_all(certificate_hashes.iter().map(|hash| async move {
-                match self.storage_client().read_certificate(*hash).await {
-                    Ok(certificate) => Ok(Some(certificate)),
-                    Err(ViewError::NotFound(_)) => Ok(None),
-                    Err(error) => Err(error),
-                }
-            }))
-            .await?
+        let local_certificates = self
+            .storage_client()
+            .read_certificates(certificate_hashes.clone())
+            .await?;
+        let (local_certificates, invalid_certificates) = local_certificates
             .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+            .zip(certificate_hashes.clone())
+            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
+                Some(cert) => itertools::Either::Left(cert),
+                None => itertools::Either::Right(hash),
+            });
+        if !invalid_certificates.is_empty() {
+            return Err(ChainClientError::ReadCertificatesError(
+                invalid_certificates,
+            ));
+        }
         let local_certificate_hashes = local_certificates
             .iter()
             .map(|cert| cert.hash())

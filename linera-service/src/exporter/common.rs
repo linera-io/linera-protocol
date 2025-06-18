@@ -17,8 +17,11 @@ pub(crate) enum ExporterError {
     #[error("received an invalid notification.")]
     BadNotification(BadNotificationKind),
 
-    #[error("unable to load the exporter state")]
+    #[error("unable to load the exporter state: {0}")]
     StateError(ViewError),
+
+    #[error("Missing or invalid certificate: {0}")]
+    ReadCertificateError(CryptoHash),
 
     #[error("generic storage error: {0}")]
     ViewError(#[from] ViewError),
