@@ -26,6 +26,7 @@ ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
 ARG build_features=scylladb,metrics
+ARG rustflags="-C force-frame-pointers=yes"
 
 FROM rust:1.74-slim-bookworm AS builder
 ARG git_commit
@@ -33,6 +34,7 @@ ARG target
 ARG build_flag
 ARG build_folder
 ARG build_features
+ARG rustflags
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -68,6 +70,7 @@ COPY scripts scripts
 COPY rust-toolchain* Cargo.* ./
 
 ENV GIT_COMMIT=${git_commit}
+ENV RUSTFLAGS=${rustflags}
 
 RUN cargo build ${build_flag:+"$build_flag"} \
     --target "$target" \
