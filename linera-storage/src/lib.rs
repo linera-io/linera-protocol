@@ -13,7 +13,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use dashmap::{mapref::entry::Entry, DashMap};
+use dashmap::DashMap;
 use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
@@ -456,28 +456,26 @@ where
         &self,
         description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
-        match self.user_contracts.entry(description.into()) {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let contract = self.storage.load_contract(description).await?;
-                entry.insert(contract.clone());
-                Ok(contract)
-            }
+        let application_id = description.into();
+        if let Some(contract) = self.user_contracts.get(&application_id) {
+            return Ok(contract.clone());
         }
+        let contract = self.storage.load_contract(description).await?;
+        self.user_contracts.insert(application_id, contract.clone());
+        Ok(contract)
     }
 
     async fn get_user_service(
         &self,
         description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
-        match self.user_services.entry(description.into()) {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let service = self.storage.load_service(description).await?;
-                entry.insert(service.clone());
-                Ok(service)
-            }
+        let application_id = description.into();
+        if let Some(service) = self.user_services.get(&application_id) {
+            return Ok(service.clone());
         }
+        let service = self.storage.load_service(description).await?;
+        self.user_services.insert(application_id, service.clone());
+        Ok(service)
     }
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
