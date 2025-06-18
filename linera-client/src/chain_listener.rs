@@ -124,8 +124,12 @@ impl<C: ClientContext> ChainListener<C> {
     }
 
     /// Runs the chain listener.
-    pub async fn run(self) {
-        let chain_ids = {
+    ///
+    /// Starts listening to all chains in the wallet, or the given ones, if specified.
+    pub async fn run(self, chain_ids: Option<Vec<ChainId>>) {
+        let chain_ids = if let Some(chain_ids) = chain_ids {
+            BTreeSet::from_iter(chain_ids)
+        } else {
             let guard = self.context.lock().await;
             let mut chain_ids = BTreeSet::from_iter(guard.wallet().chain_ids());
             chain_ids.insert(guard.wallet().genesis_admin_chain());

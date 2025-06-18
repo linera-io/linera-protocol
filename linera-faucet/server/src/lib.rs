@@ -377,8 +377,12 @@ where
         info!("GraphiQL IDE: http://localhost:{}", port);
 
         let context = Arc::clone(&self.context);
+        let chain_ids = vec![
+            context.lock().await.wallet().genesis_admin_chain(),
+            self.main_chain_id,
+        ];
         let listener = ChainListener::new(self.config.clone(), context, self.storage.clone());
-        listener.run().await;
+        listener.run(Some(chain_ids)).await;
 
         axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?,
