@@ -194,7 +194,7 @@ pub enum NodeError {
     #[error("Worker error: {error}")]
     WorkerError { error: String },
 
-    #[error("The certificates are missing or inconsistent: {error}")]
+    #[error("Missing certificates: {error}")]
     ReadCertificatesError { error: String },
 
     // This error must be normalized during conversions.

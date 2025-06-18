@@ -149,7 +149,7 @@ pub enum WorkerError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("The certificates are missing or inconsistent: {0:?}")]
+    #[error("Certificates are in confirmed_log but not in storage: {0:?}")]
     ReadCertificatesError(Vec<CryptoHash>),
 
     #[error(transparent)]

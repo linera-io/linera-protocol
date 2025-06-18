@@ -1471,7 +1471,7 @@ pub enum ChainClientError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 
-    #[error("The certificates are missing or inconsistent: {0:?}")]
+    #[error("Missing certificates: {0:?}")]
     ReadCertificatesError(Vec<CryptoHash>),
 
     #[error("JSON (de)serialization error: {0}")]

@@ -946,9 +946,7 @@ where
         };
         let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
         let value = bcs::from_bytes::<ConfirmedBlock>(value_bytes)?;
-        if value.hash() != hash {
-            return Err(ViewError::InconsistentEntries);
-        }
+        assert_eq!(value.hash(), hash);
         let certificate = cert
             .with_value(value)
             .ok_or(ViewError::InconsistentEntries)?;

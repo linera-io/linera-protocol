@@ -20,7 +20,7 @@ pub(crate) enum ExporterError {
     #[error("unable to load the exporter state: {0}")]
     StateError(ViewError),
 
-    #[error("Missing or invalid certificate: {0}")]
+    #[error("Missing certificate: {0}")]
     ReadCertificateError(CryptoHash),
 
     #[error("generic storage error: {0}")]
