@@ -3640,7 +3640,12 @@ impl<Env: Environment> ChainClient<Env> {
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
         let notifications = self.subscribe().await?;
         let (abortable_notifications, abort) = stream::abortable(self.subscribe().await?);
-        if let Err(error) = self.synchronize_from_validators().await {
+        let sync_result = if self.is_tracked() {
+            self.synchronize_from_validators().await
+        } else {
+            self.synchronize_chain_state(self.chain_id).await
+        };
+        if let Err(error) = sync_result {
             error!("Failed to synchronize from validators: {}", error);
         }
 
