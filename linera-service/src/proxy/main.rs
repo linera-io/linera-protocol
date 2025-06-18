@@ -342,7 +342,9 @@ where
                 let certificates = self.storage.read_certificates(hashes.clone()).await?;
                 let certificates = match ResultReadCertificates::new(certificates, hashes) {
                     ResultReadCertificates::Certificates(certificates) => certificates,
-                    ResultReadCertificates::InvalidHashes(hashes) => bail!("Missing certificates: {hashes:?}"),
+                    ResultReadCertificates::InvalidHashes(hashes) => {
+                        bail!("Missing certificates: {hashes:?}")
+                    }
                 };
                 Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))
             }

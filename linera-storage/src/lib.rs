@@ -401,7 +401,10 @@ pub enum ResultReadCertificates {
 
 impl ResultReadCertificates {
     /// Creating the processed read certificates.
-    pub fn new(certificates: Vec<Option<ConfirmedBlockCertificate>>, hashes: Vec<CryptoHash>) -> Self {
+    pub fn new(
+        certificates: Vec<Option<ConfirmedBlockCertificate>>,
+        hashes: Vec<CryptoHash>,
+    ) -> Self {
         let (certificates, invalid_hashes) = certificates
             .into_iter()
             .zip(hashes)

@@ -605,7 +605,9 @@ where
                 .map_err(Self::view_error_to_status)?;
             let certificates = match ResultReadCertificates::new(certificates, batch.to_vec()) {
                 ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => return Err(Status::not_found(format!("{:?}", hashes))),
+                ResultReadCertificates::InvalidHashes(hashes) => {
+                    return Err(Status::not_found(format!("{:?}", hashes)))
+                }
             };
             for certificate in certificates {
                 if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {

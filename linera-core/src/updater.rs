@@ -367,7 +367,9 @@ where
             let certificates = storage.read_certificates(keys.clone()).await?;
             let certificates = match ResultReadCertificates::new(certificates, keys) {
                 ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => return Err(ChainClientError::ReadCertificatesError(hashes)),
+                ResultReadCertificates::InvalidHashes(hashes) => {
+                    return Err(ChainClientError::ReadCertificatesError(hashes))
+                }
             };
             for certificate in certificates {
                 self.send_confirmed_certificate(certificate, delivery)

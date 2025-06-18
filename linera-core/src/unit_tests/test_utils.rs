@@ -585,15 +585,13 @@ where
 
         let certificates = match certificates {
             Err(error) => Err(error),
-            Ok(certificates) => {
-                match ResultReadCertificates::new(certificates, hashes) {
-                    ResultReadCertificates::Certificates(certificates) => Ok(certificates),
-                    ResultReadCertificates::InvalidHashes(hashes) => {
-                        let error = format!("{:?}", hashes);
-                        Err(NodeError::ReadCertificatesError { error })
-                    }
+            Ok(certificates) => match ResultReadCertificates::new(certificates, hashes) {
+                ResultReadCertificates::Certificates(certificates) => Ok(certificates),
+                ResultReadCertificates::InvalidHashes(hashes) => {
+                    let error = format!("{:?}", hashes);
+                    Err(NodeError::ReadCertificatesError { error })
                 }
-            }
+            },
         };
 
         sender.send(certificates)

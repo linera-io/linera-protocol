@@ -504,7 +504,9 @@ where
         let certificates = self.storage.read_certificates(hashes.clone()).await?;
         let certificates = match ResultReadCertificates::new(certificates, hashes) {
             ResultReadCertificates::Certificates(certificates) => certificates,
-            ResultReadCertificates::InvalidHashes(hashes) => return Err(WorkerError::ReadCertificatesError(hashes)),
+            ResultReadCertificates::InvalidHashes(hashes) => {
+                return Err(WorkerError::ReadCertificatesError(hashes))
+            }
         };
         let certificates = heights
             .into_iter()

@@ -345,7 +345,9 @@ impl<Env: Environment> Client<Env> {
             .await?;
         let certificates = match ResultReadCertificates::new(certificates, hashes) {
             ResultReadCertificates::Certificates(certificates) => certificates,
-            ResultReadCertificates::InvalidHashes(hashes) => return Err(ChainClientError::ReadCertificatesError(hashes)),
+            ResultReadCertificates::InvalidHashes(hashes) => {
+                return Err(ChainClientError::ReadCertificatesError(hashes))
+            }
         };
         for certificate in certificates {
             last_info = Some(self.handle_certificate(Box::new(certificate)).await?.info);
@@ -3828,10 +3830,13 @@ impl<Env: Environment> ChainClient<Env> {
             .storage_client()
             .read_certificates(missing_certificate_hashes.clone())
             .await?;
-        let certificates = match ResultReadCertificates::new(certificates, missing_certificate_hashes) {
-            ResultReadCertificates::Certificates(certificates) => certificates,
-            ResultReadCertificates::InvalidHashes(hashes) => return Err(ChainClientError::ReadCertificatesError(hashes)),
-        };
+        let certificates =
+            match ResultReadCertificates::new(certificates, missing_certificate_hashes) {
+                ResultReadCertificates::Certificates(certificates) => certificates,
+                ResultReadCertificates::InvalidHashes(hashes) => {
+                    return Err(ChainClientError::ReadCertificatesError(hashes))
+                }
+            };
         for certificate in certificates {
             remote_node
                 .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
