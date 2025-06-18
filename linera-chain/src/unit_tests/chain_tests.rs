@@ -18,13 +18,13 @@ use linera_base::{
         ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
     },
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, EventId, ModuleId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    system::{Recipient, EPOCH_STREAM_NAME},
+    system::Recipient,
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
     Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation, TestExecutionRuntimeContext,
@@ -744,17 +744,6 @@ async fn prepare_test_with_dummy_mock_application(
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
-    // make sure the epoch is published
-    extra
-        .add_events([(
-            EventId {
-                chain_id: env.admin_id(),
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: 0,
-            },
-            bcs::to_bytes(&committee_blob.id().hash).unwrap(),
-        )])
-        .await?;
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
