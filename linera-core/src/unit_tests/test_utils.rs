@@ -14,7 +14,6 @@ use futures::{
     lock::{Mutex, MutexGuard},
     Future,
 };
-use itertools::Itertools;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, InMemorySigner, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
@@ -29,7 +28,7 @@ use linera_chain::{
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
-use linera_storage::{DbStorage, Storage, TestClock};
+use linera_storage::{DbStorage, ResultReadCertificates, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
@@ -587,20 +586,12 @@ where
         let certificates = match certificates {
             Err(error) => Err(error),
             Ok(certificates) => {
-                let (certificates, invalid_certificates) = certificates
-                    .into_iter()
-                    .zip(hashes)
-                    .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| {
-                        match certificate {
-                            Some(cert) => itertools::Either::Left(cert),
-                            None => itertools::Either::Right(hash),
-                        }
-                    });
-                if invalid_certificates.is_empty() {
-                    Ok(certificates)
-                } else {
-                    let error = format!("{:?}", invalid_certificates);
-                    Err(NodeError::ReadCertificatesError { error })
+                match ResultReadCertificates::new(certificates, hashes) {
+                    ResultReadCertificates::Certificates(certificates) => Ok(certificates),
+                    ResultReadCertificates::InvalidHashes(hashes) => {
+                        let error = format!("{:?}", hashes);
+                        Err(NodeError::ReadCertificatesError { error })
+                    }
                 }
             }
         };

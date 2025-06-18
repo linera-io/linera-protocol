@@ -16,7 +16,6 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
-use itertools::Itertools;
 use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
@@ -38,7 +37,7 @@ use linera_rpc::{
     },
 };
 use linera_sdk::{linera_base_types::Blob, views::ViewError};
-use linera_storage::Storage;
+use linera_storage::{ResultReadCertificates, Storage};
 use prost::Message;
 use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -603,18 +602,10 @@ where
                 .read_certificates(batch.to_vec())
                 .await
                 .map_err(Self::view_error_to_status)?;
-            let (certificates, invalid_certificates) = certificates
-                .into_iter()
-                .zip(batch.to_vec())
-                .partition_map::<Vec<_>, Vec<_>, _, _, _>(
-                    |(certificate, hash)| match certificate {
-                        Some(cert) => itertools::Either::Left(cert),
-                        None => itertools::Either::Right(hash),
-                    },
-                );
-            if !invalid_certificates.is_empty() {
-                return Err(Status::not_found(format!("{:?}", invalid_certificates)));
-            }
+            let certificates = match ResultReadCertificates::new(certificates, batch.to_vec()) {
+                ResultReadCertificates::Certificates(certificates) => certificates,
+                ResultReadCertificates::InvalidHashes(hashes) => return Err(Status::not_found(format!("{:?}", hashes))),
+            };
             for certificate in certificates {
                 if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
                     returned_certificates.push(linera_chain::types::Certificate::from(certificate));

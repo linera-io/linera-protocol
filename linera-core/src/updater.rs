@@ -10,7 +10,6 @@ use std::{
 };
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
-use itertools::Itertools;
 use linera_base::{
     data_types::{BlockHeight, Round},
     identifiers::{BlobId, ChainId},
@@ -21,7 +20,7 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::committee::Committee;
-use linera_storage::Storage;
+use linera_storage::{ResultReadCertificates, Storage};
 use thiserror::Error;
 
 use crate::{
@@ -366,20 +365,10 @@ where
             // Send the requested certificates in order.
             let storage = self.local_node.storage_client();
             let certificates = storage.read_certificates(keys.clone()).await?;
-            let (certificates, invalid_certificates) = certificates
-                .into_iter()
-                .zip(keys)
-                .partition_map::<Vec<_>, Vec<_>, _, _, _>(
-                    |(certificate, hash)| match certificate {
-                        Some(cert) => itertools::Either::Left(cert),
-                        None => itertools::Either::Right(hash),
-                    },
-                );
-            if !invalid_certificates.is_empty() {
-                return Err(ChainClientError::ReadCertificatesError(
-                    invalid_certificates,
-                ));
-            }
+            let certificates = match ResultReadCertificates::new(certificates, keys) {
+                ResultReadCertificates::Certificates(certificates) => certificates,
+                ResultReadCertificates::InvalidHashes(hashes) => return Err(ChainClientError::ReadCertificatesError(hashes)),
+            };
             for certificate in certificates {
                 self.send_confirmed_certificate(certificate, delivery)
                     .await?;

@@ -22,7 +22,6 @@ use futures::{
     future::{self, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
-use itertools::Itertools;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -60,7 +59,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::{Clock as _, Storage as _};
+use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use linera_views::ViewError;
 use rand::prelude::SliceRandom as _;
 use serde::{Deserialize, Serialize};
@@ -344,18 +343,10 @@ impl<Env: Environment> Client<Env> {
             .storage_client()
             .read_certificates(hashes.clone())
             .await?;
-        let (certificates, invalid_certificates) = certificates
-            .into_iter()
-            .zip(hashes)
-            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
-                Some(cert) => itertools::Either::Left(cert),
-                None => itertools::Either::Right(hash),
-            });
-        if !invalid_certificates.is_empty() {
-            return Err(ChainClientError::ReadCertificatesError(
-                invalid_certificates,
-            ));
-        }
+        let certificates = match ResultReadCertificates::new(certificates, hashes) {
+            ResultReadCertificates::Certificates(certificates) => certificates,
+            ResultReadCertificates::InvalidHashes(hashes) => return Err(ChainClientError::ReadCertificatesError(hashes)),
+        };
         for certificate in certificates {
             last_info = Some(self.handle_certificate(Box::new(certificate)).await?.info);
         }
@@ -3837,18 +3828,10 @@ impl<Env: Environment> ChainClient<Env> {
             .storage_client()
             .read_certificates(missing_certificate_hashes.clone())
             .await?;
-        let (certificates, invalid_certificates) = certificates
-            .into_iter()
-            .zip(missing_certificate_hashes)
-            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
-                Some(cert) => itertools::Either::Left(cert),
-                None => itertools::Either::Right(hash),
-            });
-        if !invalid_certificates.is_empty() {
-            return Err(ChainClientError::ReadCertificatesError(
-                invalid_certificates,
-            ));
-        }
+        let certificates = match ResultReadCertificates::new(certificates, missing_certificate_hashes) {
+            ResultReadCertificates::Certificates(certificates) => certificates,
+            ResultReadCertificates::InvalidHashes(hashes) => return Err(ChainClientError::ReadCertificatesError(hashes)),
+        };
         for certificate in certificates {
             remote_node
                 .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
