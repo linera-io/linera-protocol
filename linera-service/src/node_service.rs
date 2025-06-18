@@ -844,7 +844,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
         ChainListener::new(self.config, Arc::clone(&self.context), self.storage.clone())
-            .run()
+            .run(None)
             .await;
         let serve_fut = axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
