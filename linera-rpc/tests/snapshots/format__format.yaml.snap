@@ -736,8 +736,17 @@ NodeError:
     22:
       UnexpectedEntriesInBlobsNotFound: UNIT
     23:
-      EmptyBlobsNotFound: UNIT
+      UnexpectedCertificates:
+        STRUCT:
+          - returned:
+              SEQ:
+                TYPENAME: CryptoHash
+          - requested:
+              SEQ:
+                TYPENAME: CryptoHash
     24:
+      EmptyBlobsNotFound: UNIT
+    25:
       ResponseHandlingError:
         STRUCT:
           - error: STR

@@ -291,7 +291,19 @@ impl<N: ValidatorNode> RemoteNode<N> {
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        self.node.download_certificates(hashes).await
+        let certificates = self.node.download_certificates(hashes.clone()).await?;
+        let returned = certificates
+            .iter()
+            .map(ConfirmedBlockCertificate::hash)
+            .collect();
+        ensure!(
+            returned == hashes,
+            NodeError::UnexpectedCertificates {
+                returned,
+                requested: hashes
+            }
+        );
+        Ok(certificates)
     }
 
     /// Downloads a blob, but does not verify if it has actually been published and
