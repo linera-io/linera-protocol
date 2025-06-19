@@ -33,7 +33,7 @@ pub struct ResourceControlPolicy {
     pub read_operation: Amount,
     /// The price of one write operation.
     pub write_operation: Amount,
-    /// The price of one byte from runtime operation.
+    /// The price of accessing one byte from the runtime.
     pub byte_runtime: Amount,
     /// The price of reading a byte.
     pub byte_read: Amount,

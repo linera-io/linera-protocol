@@ -311,10 +311,8 @@ async fn test_fee_consumption(
         None => {
             let (expected_chain_balance, expected_owner_balance) = if chain_balance >= consumed_fees
             {
-                println!("Case A");
                 (chain_balance.saturating_sub(consumed_fees), owner_balance)
             } else {
-                println!("Case B");
                 let Some(owner_balance) = owner_balance else {
                     panic!("execution should have failed earlier");
                 };
@@ -336,10 +334,8 @@ async fn test_fee_consumption(
         }
         Some(initial_grant) => {
             let (expected_grant, expected_owner_balance) = if initial_grant >= consumed_fees {
-                println!("Case C");
                 (initial_grant.saturating_sub(consumed_fees), owner_balance)
             } else {
-                println!("Case D");
                 let Some(owner_balance) = owner_balance else {
                     panic!("execution should have failed earlier");
                 };
