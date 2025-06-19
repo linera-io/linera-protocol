@@ -971,3 +971,25 @@ impl EthereumTrackerApp {
         self.0.mutate(mutation).await.unwrap();
     }
 }
+
+#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_linera_exporter(database: Database, network: Network) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig {
+        num_initial_validators: 1,
+        num_shards: 1,
+        num_block_exporters: 1,
+        ..LocalNetConfig::new_test(database, network)
+    };
+
+    let (_net, client) = config.instantiate().await?;
+    let chain = client.default_chain().expect("Client has no default chain");
+    client
+        .transfer_with_silent_logs(1.into(), chain, chain)
+        .await
+}

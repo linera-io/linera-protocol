@@ -55,6 +55,7 @@ async-lock.workspace = true
 async-trait.workspace = true
 async-tungstenite.workspace = true
 axum = { workspace = true, features = ["ws"] }
+bincode.workspace = true
 cargo_toml.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
@@ -64,6 +65,8 @@ colored.workspace = true
 comfy-table.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
+custom_debug_derive.workspace = true
+dashmap.workspace = true
 dirs.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
@@ -86,10 +89,12 @@ linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
+mini-moka.workspace = true
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
 prost = { workspace = true }
+quick_cache.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
@@ -123,6 +128,8 @@ counter.workspace = true
 counter-no-graphql.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
+custom_debug_derive.workspace = true
+dashmap.workspace = true
 ethereum-tracker.workspace = true
 fungible.workspace = true
 linera-base = { workspace = true, features = ["test"] }
@@ -168,6 +175,10 @@ path = "src/schema_export.rs"
 name = "linera-benchmark"
 path = "src/benchmark.rs"
 required-features = ["benchmark"]
+
+[[bin]]
+name = "linera-exporter"
+path = "src/exporter/main.rs"
 
 [[bench]]
 name = "transfers"
