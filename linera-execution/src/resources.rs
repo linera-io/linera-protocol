@@ -64,6 +64,9 @@ pub const RUNTIME_CHAIN_ID_SIZE: u32 = 32;
 /// The runtime size of a `Timestamp`.
 pub const RUNTIME_TIMESTAMP_SIZE: u32 = 8;
 
+/// The runtime size of the weight of an owner.
+pub const RUNTIME_OWNER_WEIGHT_SIZE: u32 = 8;
+
 /// The runtime constant part size of the `ChainOwnership`.
 /// It does not correspond exactly to the memory size of the `ChainOwnership`.
 pub const RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE: u32 = 4 + 4 * 8;
@@ -79,7 +82,7 @@ mod tests {
 
     use crate::resources::{
         RUNTIME_AMOUNT_SIZE, RUNTIME_APPLICATION_ID_SIZE, RUNTIME_BLOCK_HEIGHT_SIZE,
-        RUNTIME_CHAIN_ID_SIZE, RUNTIME_TIMESTAMP_SIZE,
+        RUNTIME_CHAIN_ID_SIZE, RUNTIME_OWNER_WEIGHT_SIZE, RUNTIME_TIMESTAMP_SIZE,
     };
 
     #[test]
@@ -92,6 +95,7 @@ mod tests {
         assert_eq!(RUNTIME_BLOCK_HEIGHT_SIZE as usize, size_of::<BlockHeight>());
         assert_eq!(RUNTIME_CHAIN_ID_SIZE as usize, size_of::<ChainId>());
         assert_eq!(RUNTIME_TIMESTAMP_SIZE as usize, size_of::<Timestamp>());
+        assert_eq!(RUNTIME_OWNER_WEIGHT_SIZE as usize, size_of::<u64>());
     }
 }
 
@@ -385,7 +389,7 @@ where
             size += account_owner.size();
         }
         for account_owner in chain_ownership.owners.keys() {
-            size += account_owner.size() + RUNTIME_BLOCK_HEIGHT_SIZE;
+            size += account_owner.size() + RUNTIME_OWNER_WEIGHT_SIZE;
         }
         size += RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE;
         self.track_size_runtime_operations(size)

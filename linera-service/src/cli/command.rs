@@ -330,7 +330,7 @@ pub enum ClientCommand {
         #[arg(long)]
         write_operation: Option<Amount>,
 
-        /// Set the price per byte obtained from runtime.
+        /// Set the price per byte read from runtime.
         #[arg(long)]
         byte_runtime: Option<Amount>,
 

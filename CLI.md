@@ -485,7 +485,7 @@ View or update the resource control policy
 * `--evm-fuel-unit <EVM_FUEL_UNIT>` — Set the price per unit of EVM fuel
 * `--read-operation <READ_OPERATION>` — Set the price per read operation
 * `--write-operation <WRITE_OPERATION>` — Set the price per write operation
-* `--byte-runtime <BYTE_RUNTIME>` — Set the price per byte obtained from runtime
+* `--byte-runtime <BYTE_RUNTIME>` — Set the price per byte read from runtime
 * `--byte-read <BYTE_READ>` — Set the price per byte read
 * `--byte-written <BYTE_WRITTEN>` — Set the price per byte written
 * `--blob-read <BLOB_READ>` — Set the base price to read a blob
