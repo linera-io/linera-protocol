@@ -3,8 +3,8 @@
 
 use linera_views::{
     lru_caching::StorageCacheConfig,
-    scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
-    store::{AdminKeyValueStore, CommonStoreConfig},
+    scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
+    store::AdminKeyValueStore,
 };
 
 use crate::{
@@ -57,14 +57,17 @@ impl ScyllaDbRunner {
             max_entry_size: config.client.max_entry_size,
             max_cache_entries: config.client.max_cache_entries,
         };
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: config.client.max_concurrent_queries,
+        let inner_config = ScyllaDbStoreInternalConfig {
+            uri: config.client.uri.clone(),
             max_stream_queries: config.client.max_stream_queries,
-            storage_cache_config,
+            max_concurrent_queries: config.client.max_concurrent_queries,
             replication_factor: config.client.replication_factor,
         };
+        let store_config = ScyllaDbStoreConfig {
+            inner_config,
+            storage_cache_config,
+        };
         let namespace = config.client.table.clone();
-        let store_config = ScyllaDbStoreConfig::new(config.client.uri.clone(), common_config);
         let store = ScyllaDbStore::connect(&store_config, &namespace).await?;
         Self::new(config, store).await
     }

@@ -45,7 +45,9 @@ type JsResult<T> = Result<T, JsError>;
 async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore as WithError>::Error>
 {
     linera_storage::DbStorage::maybe_create_and_connect(
-        &linera_views::memory::MemoryStoreConfig::new(1),
+        &linera_views::memory::MemoryStoreConfig {
+            max_stream_queries: 1,
+        },
         "linera",
         Some(linera_execution::WasmRuntime::Wasmer),
     )
@@ -199,6 +201,8 @@ impl Client {
             .genesis_config()
             .initialize_storage(&mut storage)
             .await?;
+        // The `Arc` here is useless, but it is required by the `ChainListener` API.
+        #[expect(clippy::arc_with_non_send_sync)]
         let client_context = Arc::new(AsyncMutex::new(ClientContext::new(
             storage.clone(),
             OPTIONS,

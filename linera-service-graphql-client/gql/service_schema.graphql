@@ -361,6 +361,10 @@ type ChainStateExtendedView {
 	"""
 	outboxCounters: JSONObject!
 	"""
+	Outboxes with at least one pending message. This allows us to avoid loading all outboxes.
+	"""
+	nonemptyOutboxes: [ChainId!]!
+	"""
 	Blocks that have been verified but not executed yet, and that may not be contiguous.
 	"""
 	preprocessedBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!

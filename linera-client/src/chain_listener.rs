@@ -311,11 +311,6 @@ impl<C: ClientContext> ChainListener<C> {
         }
         let client = self.context.lock().await.make_chain_client(chain_id);
         let (listener, abort_handle, notification_stream) = client.listen().await?;
-        if client.is_tracked() {
-            client.synchronize_from_validators().await?;
-        } else {
-            client.synchronize_chain_state(chain_id).await?;
-        }
         let join_handle = linera_base::task::spawn(listener.in_current_span());
         let listening_client =
             ListeningClient::new(client, abort_handle, join_handle, notification_stream);

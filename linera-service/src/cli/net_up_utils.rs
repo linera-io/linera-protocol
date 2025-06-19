@@ -22,15 +22,15 @@ use {
 
 use crate::{
     cli_wrappers::{
-        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+        local_net::{Database, InnerStorageConfigBuilder, LocalNetConfig, PathProvider},
         ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
     },
-    storage::{StorageConfig, StorageConfigNamespace},
+    storage::{InnerStorageConfig, StorageConfig},
 };
 
 struct StorageConfigProvider {
-    /// The `StorageConfig` and the namespace
-    pub storage: StorageConfigNamespace,
+    /// The storage config.
+    config: StorageConfig,
     #[cfg(feature = "storage-service")]
     _service_guard: Option<StorageServiceGuard>,
 }
@@ -45,16 +45,16 @@ impl StorageConfigProvider {
                 let service = StorageService::new(&service_endpoint, binary);
                 let _service_guard = service.run().await?;
                 let _service_guard = Some(_service_guard);
-                let storage_config = StorageConfig::Service {
+                let inner_storage_config = InnerStorageConfig::Service {
                     endpoint: service_endpoint,
                 };
                 let namespace = "table_default".to_string();
-                let storage = StorageConfigNamespace {
-                    storage_config,
+                let config = StorageConfig {
+                    inner_storage_config,
                     namespace,
                 };
                 Ok(StorageConfigProvider {
-                    storage,
+                    config,
                     _service_guard,
                 })
             }
@@ -64,41 +64,43 @@ impl StorageConfigProvider {
             }
             #[cfg(feature = "storage-service")]
             Some(storage) => {
-                let storage = StorageConfigNamespace::from_str(storage)?;
+                let config = StorageConfig::from_str(storage)?;
                 Ok(StorageConfigProvider {
-                    storage,
+                    config,
                     _service_guard: None,
                 })
             }
             #[cfg(not(feature = "storage-service"))]
             Some(storage) => {
-                let storage = StorageConfigNamespace::from_str(storage)?;
-                Ok(StorageConfigProvider { storage })
+                let config = StorageConfig::from_str(storage)?;
+                Ok(StorageConfigProvider { config })
             }
         }
     }
 
-    pub fn storage_config(&self) -> StorageConfig {
-        self.storage.storage_config.clone()
+    pub fn inner_storage_config(&self) -> &InnerStorageConfig {
+        &self.config.inner_storage_config
     }
 
-    pub fn namespace(&self) -> String {
-        self.storage.namespace.clone()
+    pub fn namespace(&self) -> &str {
+        &self.config.namespace
     }
 
     pub fn database(&self) -> anyhow::Result<Database> {
-        match self.storage.storage_config {
-            StorageConfig::Memory { .. } => anyhow::bail!("Not possible to work with memory"),
+        match self.config.inner_storage_config {
+            InnerStorageConfig::Memory { .. } => anyhow::bail!("Not possible to work with memory"),
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb { .. } => anyhow::bail!("Not possible to work with RocksDB"),
+            InnerStorageConfig::RocksDb { .. } => {
+                anyhow::bail!("Not possible to work with RocksDB")
+            }
             #[cfg(feature = "storage-service")]
-            StorageConfig::Service { .. } => Ok(Database::Service),
+            InnerStorageConfig::Service { .. } => Ok(Database::Service),
             #[cfg(feature = "dynamodb")]
-            StorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
+            InnerStorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
             #[cfg(feature = "scylladb")]
-            StorageConfig::ScyllaDb { .. } => Ok(Database::ScyllaDb),
+            InnerStorageConfig::ScyllaDb { .. } => Ok(Database::ScyllaDb),
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb { .. } => Ok(Database::DualRocksDbScyllaDb),
+            InnerStorageConfig::DualRocksDbScyllaDb { .. } => Ok(Database::DualRocksDbScyllaDb),
         }
     }
 }
@@ -194,10 +196,10 @@ pub async fn handle_net_up_service(
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
     let storage = StorageConfigProvider::new(storage).await?;
-    let storage_config = storage.storage_config();
-    let namespace = storage.namespace();
+    let storage_config = storage.inner_storage_config().clone();
+    let namespace = storage.namespace().to_string();
     let database = storage.database()?;
-    let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
+    let storage_config_builder = InnerStorageConfigBuilder::ExistingConfig { storage_config };
     let external = match external_protocol.as_str() {
         "grpc" => Network::Grpc,
         "grpcs" => Network::Grpcs,

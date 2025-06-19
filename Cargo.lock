@@ -5930,6 +5930,7 @@ dependencies = [
  "linera-views",
  "log",
  "nonzero_lit",
+ "num-traits",
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "tokio-util",

@@ -47,18 +47,14 @@ impl Display for JsSignerError {
 
 impl From<JsValue> for JsSignerError {
     fn from(value: JsValue) -> Self {
-        if let Some(fnum) = value.as_f64() {
-            match fnum as u8 {
-                0 => JsSignerError::MissingKey,
-                1 => JsSignerError::SigningError,
-                2 => JsSignerError::PublicKeyParse,
-                3 => JsSignerError::JsConversion,
-                4 => JsSignerError::UnexpectedSignatureFormat,
-                5 => JsSignerError::InvalidAccountOwnerType,
-                _ => JsSignerError::Unknown,
-            }
-        } else {
-            JsSignerError::Unknown
+        match value.as_f64().and_then(num_traits::cast) {
+            Some(0u8) => JsSignerError::MissingKey,
+            Some(1) => JsSignerError::SigningError,
+            Some(2) => JsSignerError::PublicKeyParse,
+            Some(3) => JsSignerError::JsConversion,
+            Some(4) => JsSignerError::UnexpectedSignatureFormat,
+            Some(5) => JsSignerError::InvalidAccountOwnerType,
+            _ => JsSignerError::Unknown,
         }
     }
 }
@@ -95,7 +91,7 @@ impl Signer for JsSigner {
             .await
             .map_err(JsSignerError::from)?;
 
-        Ok(serde_wasm_bindgen::from_value(js_bool).map_err(|_| JsSignerError::JsConversion)?)
+        serde_wasm_bindgen::from_value(js_bool).map_err(|_| JsSignerError::JsConversion)
     }
 
     async fn sign(

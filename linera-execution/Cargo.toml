@@ -26,6 +26,7 @@ revm = [
     "dep:alloy-sol-types",
     "dep:hex",
     "dep:tempfile",
+    "linera-base/revm",
 ]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
