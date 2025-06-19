@@ -5326,7 +5326,6 @@ dependencies = [
  "futures",
  "graphql-ws-client",
  "graphql_client",
- "hyper 0.14.32",
  "linera-base",
  "linera-chain",
  "linera-core",

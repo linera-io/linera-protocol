@@ -60,9 +60,6 @@ pub enum LocalNodeError {
     #[error("Worker operation failed: {0}")]
     WorkerError(WorkerError),
 
-    #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
-    CannotReadLocalBlob { chain_id: ChainId, blob_id: BlobId },
-
     #[error("The local node doesn't have an active chain {0}")]
     InactiveChain(ChainId),
 
