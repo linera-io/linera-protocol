@@ -1,0 +1,63 @@
+# To build and push this image:
+#   * Create a buildx builder instance (if you don't have one already):
+#       docker buildx create --name my-buildx-builder --driver docker-container --use
+#   * Build the image:
+#       docker buildx build --platform linux/amd64,linux/arm64 -t us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest -f docker/debug/Dockerfile.debug . --push
+#
+# To use this, given a running container that contains a pod you're interested in debugging (let's
+# call it `shards-0`), and a container within that pod (let's call it `linera-server`), do the following:
+#   * For debugging a local kind cluster:
+#       1) Connect to the cluster:
+#           - For a kind cluster with id for example `97461`, run:
+#               kubectl config use-context kind-97461
+#       2) Pull the docker image, if you don't have it locally:
+#           docker pull us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest
+#       3) Load the image into the kind cluster:
+#           kind load docker-image --name 97461 us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest
+#       4) Create a debugging container that shares the same processes as the pod you're interested in debugging, and get a shell into it:
+#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=IfNotPresent --profile=sysadmin -- bash
+
+#   * For debugging a GCP cluster:
+#       1) Connect to the cluster:
+#           - Let's say we're trying to connect to the cluster `testnet-babbage-validator-1-cluster`
+#             in region `us-east1-b`. Run:
+#               gcloud container clusters get-credentials testnet-babbage-validator-1-cluster --region us-east1-b
+#       2) Create a debugging container that shares the same processes as the pod you're interested in debugging, and get a shell into it:
+#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=Always --profile=sysadmin -- bash
+# 
+# You should now have a shell in this debugging container, with all the different debugging tools
+# installed below, but without bloating the production Docker image.
+
+FROM debian:latest
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN echo deb http://cloudfront.debian.net/debian sid main >> /etc/apt/sources.list
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        bpfcc-tools kmod clang llvm gdb heaptrack netcat-openbsd openssl ca-certificates \
+        linux-perf bpftrace libbpf-tools linux-base man-db manpages manpages-dev locales tcpdump \
+        sysstat htop lsof strace net-tools iproute2 iputils-ping dnsutils \
+        traceroute nmap curl wget git vim nano less grep sed gawk \
+        procps util-linux python3 python3-pip sudo file coreutils && \
+    apt-get install -y --no-install-recommends -t sid \
+        python3-bpfcc libbpfcc libbpfcc-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/memleak_translate.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/memleak_translate.sh
+
+ARG GRPCURL_VERSION=v1.9.3
+
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+        amd64) suf=linux_x86_64 ;; \
+        arm64) suf=linux_arm64  ;; \
+        armhf) suf=linux_armv7  ;; \
+        *)     echo "unsupported arch $arch"; exit 1 ;; \
+    esac; \
+    curl -fL "https://github.com/fullstorydev/grpcurl/releases/download/${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION#v}_${suf}.tar.gz" \
+    | tar -xzC /usr/local/bin grpcurl
+
+ENTRYPOINT ["/bin/bash"]
