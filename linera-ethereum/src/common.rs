@@ -33,9 +33,6 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     ParseIntError(#[from] ParseIntError),
 
-    #[error("Failed to deploy the smart contract")]
-    DeployError,
-
     #[error("Unsupported Ethereum type")]
     UnsupportedEthereumTypeError,
 

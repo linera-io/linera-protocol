@@ -245,8 +245,6 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Module ID {0:?} is invalid")]
     InvalidModuleId(ModuleId),
-    #[error("AccountOwner is None")]
-    OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(ApplicationId),
     #[error("Failed to make network reqwest: {0}")]
@@ -328,8 +326,6 @@ pub enum ExecutionError {
     BalanceOverflow,
     #[error("Chain balance underflow")]
     BalanceUnderflow,
-    #[error("Cannot decrease the chain's timestamp")]
-    TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<ApplicationId>),
     #[error("No recorded response for oracle query")]
