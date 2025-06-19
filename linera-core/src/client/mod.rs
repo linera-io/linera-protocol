@@ -1000,6 +1000,7 @@ impl<Env: Environment> Client<Env> {
 
         let (_, committee) = self.admin_committee().await?;
         let validators = self.make_nodes(&committee)?;
+        Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
         communicate_with_quorum(
             &validators,
             &committee,
@@ -3640,7 +3641,12 @@ impl<Env: Environment> ChainClient<Env> {
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
         let notifications = self.subscribe().await?;
         let (abortable_notifications, abort) = stream::abortable(self.subscribe().await?);
-        if let Err(error) = self.synchronize_from_validators().await {
+        let sync_result = if self.is_tracked() {
+            self.synchronize_from_validators().await
+        } else {
+            self.synchronize_chain_state(self.chain_id).await
+        };
+        if let Err(error) = sync_result {
             error!("Failed to synchronize from validators: {}", error);
         }
 
