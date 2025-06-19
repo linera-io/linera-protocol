@@ -148,25 +148,11 @@ impl<Env: Environment> Benchmark<Env> {
             info!("Exiting bps control task");
         });
 
-        let (bps_tasks_logger_sender, mut bps_tasks_logger_receiver) = mpsc::channel(num_chains);
-        let bps_tasks_logger_task = task::spawn(async move {
-            let mut tasks_running = 0;
-            while let Some(()) = bps_tasks_logger_receiver.recv().await {
-                tasks_running += 1;
-                info!("{}/{} tasks ready to start", tasks_running, num_chains);
-                if tasks_running == num_chains {
-                    info!("All tasks are ready to start");
-                    break;
-                }
-            }
-        });
-
         let mut join_set = task::JoinSet::<Result<(), BenchmarkError>>::new();
         for (chain_id, operations, chain_owner) in blocks_infos {
             let shutdown_notifier_clone = shutdown_notifier.clone();
             let committee = committee.clone();
             let chain_client = chain_clients[&chain_id].clone();
-            let bps_tasks_logger_sender = bps_tasks_logger_sender.clone();
             let barrier_clone = barrier.clone();
             let bps_count_clone = bps_count.clone();
             let notifier_clone = notifier.clone();
@@ -182,7 +168,6 @@ impl<Env: Environment> Benchmark<Env> {
                         shutdown_notifier_clone,
                         bps_count_clone,
                         committee,
-                        bps_tasks_logger_sender,
                         barrier_clone,
                         notifier_clone,
                     ))
@@ -200,7 +185,6 @@ impl<Env: Environment> Benchmark<Env> {
         let metrics_watcher =
             Self::create_metrics_watcher(health_check_endpoints, shutdown_notifier.clone()).await?;
 
-        bps_tasks_logger_task.await?;
         join_set
             .join_all()
             .await
@@ -470,12 +454,10 @@ impl<Env: Environment> Benchmark<Env> {
         shutdown_notifier: CancellationToken,
         bps_count: Arc<AtomicUsize>,
         committee: Committee,
-        bps_tasks_logger_sender: mpsc::Sender<()>,
         barrier: Arc<Barrier>,
         notifier: Arc<Notify>,
     ) -> Result<(), BenchmarkError> {
         let chain_id = chain_client.chain_id();
-        bps_tasks_logger_sender.send(()).await?;
         barrier.wait().await;
         info!(
             "Starting benchmark at target BPS of {:?}, for chain {:?}",
