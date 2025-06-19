@@ -143,6 +143,7 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     /// The server configurations for the linera-exporter.
     /// They can be used as optional locations to forward notifications to destinations other than
     /// the proxy, by the workers.
+    #[serde(default)]
     pub block_exporters: Vec<ExporterServiceConfig>,
     /// The port of the proxy's metrics endpoint.
     pub metrics_port: u16,
