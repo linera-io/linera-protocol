@@ -187,7 +187,7 @@ pub trait Storage: Sized {
             let committee_blob = self
                 .read_blob(blob_id)
                 .await?
-                .ok_or_else(|| ViewError::NotFound(format!("Blob not found: {}", blob_id)))?;
+                .ok_or_else(|| ViewError::NotFound(format!("blob {}", blob_id)))?;
             Ok(bcs::from_bytes(committee_blob.bytes())?)
         };
 
@@ -196,9 +196,6 @@ pub trait Storage: Sized {
             .await?
             .ok_or_else(|| ViewError::NotFound("NetworkDescription not found".to_owned()))?;
         let admin_chain_id = network_description.admin_chain_id;
-        let epoch_creation_events = self
-            .read_events_from_index(&admin_chain_id, &StreamId::system(EPOCH_STREAM_NAME), 0)
-            .await?;
         let mut result = BTreeMap::new();
         // special case: the genesis epoch is stored in the NetworkDescription
         if epochs.remove(&Epoch::ZERO) {
@@ -206,15 +203,36 @@ pub trait Storage: Sized {
                 read_committee(network_description.genesis_committee_blob_hash).await?;
             result.insert(Epoch::ZERO, genesis_committee);
         }
-        for index_and_event in epoch_creation_events {
-            let epoch = Epoch::from(index_and_event.index);
-            if !epochs.remove(&epoch) {
-                continue;
-            }
-            let blob_hash = bcs::from_bytes::<CryptoHash>(&index_and_event.event)?;
-            let committee = read_committee(blob_hash).await?;
+
+        let start_index = epochs.first().unwrap_or(&Epoch::ZERO).0;
+        let epoch_creation_events = self
+            .read_events_from_index(
+                &admin_chain_id,
+                &StreamId::system(EPOCH_STREAM_NAME),
+                start_index,
+            )
+            .await?;
+
+        let epochs_and_committees = futures::future::try_join_all(
+            epoch_creation_events
+                .into_iter()
+                .filter_map(|index_and_event| {
+                    let epoch = Epoch::from(index_and_event.index);
+                    let maybe_blob_hash = bcs::from_bytes::<CryptoHash>(&index_and_event.event);
+                    epochs.contains(&epoch).then_some((epoch, maybe_blob_hash))
+                })
+                .map(|(epoch, maybe_blob_hash)| async move {
+                    let committee = read_committee(maybe_blob_hash?).await?;
+                    Result::<_, ViewError>::Ok((epoch, committee))
+                }),
+        )
+        .await?;
+
+        for (epoch, committee) in epochs_and_committees {
+            epochs.remove(&epoch);
             result.insert(epoch, committee);
         }
+
         if epochs.is_empty() {
             Ok(result)
         } else {

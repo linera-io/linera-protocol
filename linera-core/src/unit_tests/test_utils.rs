@@ -172,7 +172,7 @@ where
     }
 
     async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
-        let storage_network_description = self
+        Ok(self
             .client
             .lock()
             .await
@@ -180,15 +180,10 @@ where
             .storage_client()
             .read_network_description()
             .await
-            .unwrap()
-            .unwrap();
-        Ok(NetworkDescription {
-            name: "test network".to_string(),
-            genesis_config_hash: CryptoHash::test_hash("genesis config"),
-            genesis_timestamp: Timestamp::default(),
-            genesis_committee_blob_hash: storage_network_description.genesis_committee_blob_hash,
-            admin_chain_id: storage_network_description.admin_chain_id,
-        })
+            .transpose()
+            .ok_or(NodeError::ViewError {
+                error: "missing NetworkDescription".to_owned(),
+            })??)
     }
 
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {

@@ -46,7 +46,7 @@ pub enum ViewError {
 
     /// The entry does not exist in memory
     // FIXME(#148): This belongs to a future `linera_storage::StoreError`.
-    #[error("entry does not exist in memory: {0}")]
+    #[error("entry does not exist in storage: {0}")]
     NotFound(String),
 
     /// The database is corrupt: Entries don't have the expected hash.

@@ -138,15 +138,7 @@ impl TestEnvironment {
     }
 }
 
-#[tokio::test]
-async fn test_block_size_limit() -> anyhow::Result<()> {
-    let mut env = TestEnvironment::new();
-
-    let time = Timestamp::from(0);
-
-    // The size of the executed valid block below.
-    let maximum_block_size = 260;
-
+fn committee_blob(policy: ResourceControlPolicy) -> Blob {
     let committee = Committee::new(
         BTreeMap::from([(
             ValidatorPublicKey::test_key(1),
@@ -156,14 +148,19 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
                 account_public_key: AccountPublicKey::test_key(1),
             },
         )]),
-        ResourceControlPolicy {
-            maximum_block_size,
-            ..ResourceControlPolicy::default()
-        },
+        policy,
     );
-    let committee_blob = Blob::new_committee(
-        bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
-    );
+    Blob::new_committee(bcs::to_bytes(&committee).expect("serializing a committee should succeed"))
+}
+
+#[tokio::test]
+async fn test_block_size_limit() -> anyhow::Result<()> {
+    let mut env = TestEnvironment::new();
+
+    let time = Timestamp::from(0);
+
+    // The size of the executed valid block below.
+    let maximum_block_size = 260;
 
     let mut config = env.make_open_chain_config();
     config.active_epochs.insert(Epoch(0));
@@ -179,7 +176,15 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
         .unwrap();
 
     let mut chain = ChainStateView::new(chain_id).await;
-    chain.context().extra().add_blobs([committee_blob]).await?;
+    let policy = ResourceControlPolicy {
+        maximum_block_size,
+        ..ResourceControlPolicy::default()
+    };
+    chain
+        .context()
+        .extra()
+        .add_blobs([committee_blob(policy)])
+        .await?;
     chain
         .context()
         .extra()
@@ -271,22 +276,9 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .user_contracts()
         .insert(another_app_id, application.clone().into());
 
-    let committee = Committee::new(
-        BTreeMap::from([(
-            ValidatorPublicKey::test_key(1),
-            ValidatorState {
-                network_address: ValidatorPublicKey::test_key(1).to_string(),
-                votes: 1,
-                account_public_key: AccountPublicKey::test_key(1),
-            },
-        )]),
-        ResourceControlPolicy::default(),
-    );
-    let committee_blob = Blob::new_committee(
-        bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
-    );
-
-    extra.add_blobs([committee_blob]).await?;
+    extra
+        .add_blobs([committee_blob(Default::default())])
+        .await?;
     extra.add_blobs(env.description_blobs()).await?;
     extra
         .add_blobs([
@@ -706,20 +698,9 @@ async fn prepare_test_with_dummy_mock_application(
     let time = Timestamp::from(0);
 
     let mut config = env.make_open_chain_config();
-    let committee = Committee::new(
-        BTreeMap::from([(
-            ValidatorPublicKey::test_key(1),
-            ValidatorState {
-                network_address: ValidatorPublicKey::test_key(1).to_string(),
-                votes: 1,
-                account_public_key: AccountPublicKey::test_key(1),
-            },
-        )]),
-        policy,
-    );
     config.active_epochs.insert(Epoch(0));
 
-    let committee_blob = Blob::new_committee(bcs::to_bytes(&committee).unwrap());
+    let committee_blob = committee_blob(policy);
 
     let chain_desc = env.make_child_chain_description_with_config(3, config);
     let chain_id = chain_desc.id();
