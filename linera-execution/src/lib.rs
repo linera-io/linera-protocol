@@ -1112,6 +1112,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .bytes()
             .to_vec();
         let committee: Committee = bcs::from_bytes(&committee_blob_bytes)?;
+        // TODO(#4146): this currently assigns the first found committee to all epochs,
+        // which should be fine for the tests we have at the moment, but might not be in
+        // the future.
         Ok(epochs
             .into_iter()
             .map(|epoch| (epoch, committee.clone()))
