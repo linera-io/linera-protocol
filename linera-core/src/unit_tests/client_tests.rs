@@ -548,11 +548,11 @@ where
     let new_chain_config = InitialChainConfig {
         ownership: ChainOwnership::single(new_public_key.into()),
         epoch: Epoch::ZERO,
-        committees: builder
+        active_epochs: builder
             .admin_description()
             .unwrap()
             .config()
-            .committees
+            .active_epochs
             .clone(),
         balance: Amount::ZERO,
         application_permissions: Default::default(),

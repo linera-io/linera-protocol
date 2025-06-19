@@ -172,22 +172,18 @@ where
     }
 
     async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
-        Ok(NetworkDescription {
-            name: "test network".to_string(),
-            genesis_config_hash: CryptoHash::test_hash("genesis config"),
-            genesis_timestamp: Timestamp::default(),
-            admin_chain_id: self
-                .client
-                .lock()
-                .await
-                .state
-                .storage_client()
-                .read_network_description()
-                .await
-                .unwrap()
-                .unwrap()
-                .admin_chain_id,
-        })
+        Ok(self
+            .client
+            .lock()
+            .await
+            .state
+            .storage_client()
+            .read_network_description()
+            .await
+            .transpose()
+            .ok_or(NodeError::ViewError {
+                error: "missing NetworkDescription".to_owned(),
+            })??)
     }
 
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
@@ -832,21 +828,16 @@ where
             Box::pin(self.add_root_chain(0, Amount::ZERO)).await?;
         }
         let origin = ChainOrigin::Root(index);
-        let mut committees = BTreeMap::new();
-        committees.insert(
-            Epoch(0),
-            bcs::to_bytes(&self.initial_committee)
-                .expect("Serializing a committee should not fail!"),
-        );
         let public_key = self.signer.generate_new();
         let open_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(public_key.into()),
             epoch: Epoch(0),
-            committees,
+            active_epochs: [Epoch(0)].into_iter().collect(),
             balance,
             application_permissions: ApplicationPermissions::default(),
         };
         let description = ChainDescription::new(origin, open_chain_config, Timestamp::from(0));
+        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee).unwrap());
         if index == 0 {
             self.admin_description = Some(description.clone());
             self.network_description = Some(NetworkDescription {
@@ -854,21 +845,29 @@ where
                 // dummy values to fill the description
                 genesis_config_hash: CryptoHash::test_hash("genesis config"),
                 genesis_timestamp: Timestamp::from(0),
+                genesis_committee_blob_hash: committee_blob.id().hash,
                 name: "test network".to_string(),
             });
         }
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder
             .add(description.clone(), public_key);
+
+        let network_description = self.network_description.as_ref().unwrap();
+
         for validator in &self.validator_clients {
             let storage = self
                 .validator_storages
                 .get_mut(&validator.public_key)
                 .unwrap();
             storage
-                .write_network_description(self.network_description.as_ref().unwrap())
+                .write_network_description(network_description)
                 .await
                 .expect("writing the NetworkDescription should succeed");
+            storage
+                .write_blob(&committee_blob)
+                .await
+                .expect("writing a blob should succeed");
             if validator.fault_type().await == FaultType::Malicious {
                 let origin = description.origin();
                 let config = InitialChainConfig {
@@ -927,10 +926,16 @@ where
 
     pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
         let storage = self.storage_builder.build().await?;
+        let network_description = self.network_description.as_ref().unwrap();
+        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee).unwrap());
         storage
-            .write_network_description(self.network_description.as_ref().unwrap())
+            .write_network_description(network_description)
             .await
             .expect("writing the NetworkDescription should succeed");
+        storage
+            .write_blob(&committee_blob)
+            .await
+            .expect("writing a blob should succeed");
         Ok(self.genesis_storage_builder.build(storage).await)
     }
 

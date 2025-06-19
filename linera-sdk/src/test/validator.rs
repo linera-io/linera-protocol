@@ -101,12 +101,7 @@ impl TestValidator {
 
         let new_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(key_pair.public().into()),
-            committees: [(
-                epoch,
-                bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),
-            )]
-            .into_iter()
-            .collect(),
+            active_epochs: [epoch].into_iter().collect(),
             epoch,
             balance: Amount::from_tokens(1_000_000),
             application_permissions: ApplicationPermissions::default(),
@@ -116,16 +111,25 @@ impl TestValidator {
         let description = ChainDescription::new(origin, new_chain_config, Timestamp::from(0));
         let admin_chain_id = description.id();
 
+        let committee_blob = Blob::new_committee(
+            bcs::to_bytes(&committee).expect("serializing a committee should succeed"),
+        );
+
         let network_description = NetworkDescription {
             name: "Test network".to_string(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: description.timestamp(),
+            genesis_committee_blob_hash: committee_blob.id().hash,
             admin_chain_id,
         };
         storage
             .write_network_description(&network_description)
             .await
             .unwrap();
+        storage
+            .write_blob(&committee_blob)
+            .await
+            .expect("writing a blob should succeed");
         worker
             .storage_client()
             .create_chain(description.clone())
@@ -314,22 +318,15 @@ impl TestValidator {
             .get(&admin_id)
             .expect("Admin chain should be created when the `TestValidator` is constructed");
 
-        let (epoch, committee) = self.committee.lock().await.clone();
+        let (epoch, _) = self.committee.lock().await.clone();
 
         let open_chain_config = OpenChainConfig {
             ownership: ChainOwnership::single(owner),
             balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };
-        let new_chain_config = open_chain_config.init_chain_config(
-            epoch,
-            [(
-                epoch,
-                bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),
-            )]
-            .into_iter()
-            .collect(),
-        );
+        let new_chain_config =
+            open_chain_config.init_chain_config(epoch, [epoch].into_iter().collect());
 
         let certificate = admin_chain
             .add_block(|block| {

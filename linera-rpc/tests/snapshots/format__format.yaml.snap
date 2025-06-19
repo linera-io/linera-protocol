@@ -544,12 +544,9 @@ InitialChainConfig:
         TYPENAME: ChainOwnership
     - epoch:
         TYPENAME: Epoch
-    - committees:
-        MAP:
-          KEY:
-            TYPENAME: Epoch
-          VALUE:
-            SEQ: U8
+    - active_epochs:
+        SEQ:
+          TYPENAME: Epoch
     - balance:
         TYPENAME: Amount
     - application_permissions:
@@ -648,6 +645,8 @@ NetworkDescription:
         TYPENAME: CryptoHash
     - genesis_timestamp:
         TYPENAME: Timestamp
+    - genesis_committee_blob_hash:
+        TYPENAME: CryptoHash
     - admin_chain_id:
         TYPENAME: ChainId
 NodeError:

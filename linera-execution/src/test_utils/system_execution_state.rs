@@ -21,7 +21,10 @@ use linera_views::{
     ViewError,
 };
 
-use super::{dummy_chain_description, MockApplication, RegisterMockApplication};
+use super::{
+    dummy_chain_description, dummy_committees, AccountPublicKey, MockApplication,
+    RegisterMockApplication, ValidatorPublicKey,
+};
 use crate::{
     committee::Committee, execution::UserAction, ApplicationDescription, ExecutionError,
     ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, OperationContext,
@@ -57,25 +60,13 @@ impl SystemExecutionState {
         let balance = description.config().balance;
         let epoch = description.config().epoch;
         let admin_id = Some(dummy_chain_description(0).id());
-        let committees = description
-            .config()
-            .committees
-            .iter()
-            .map(|(epoch, serialized_committee)| {
-                (
-                    *epoch,
-                    bcs::from_bytes::<Committee>(serialized_committee)
-                        .expect("should correctly deserialize a committee"),
-                )
-            })
-            .collect();
         SystemExecutionState {
             epoch,
             description: Some(description),
             admin_id,
             ownership,
             balance,
-            committees,
+            committees: dummy_committees(),
             ..SystemExecutionState::default()
         }
     }

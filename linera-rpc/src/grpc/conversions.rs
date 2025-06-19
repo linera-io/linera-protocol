@@ -148,6 +148,7 @@ impl From<NetworkDescription> for api::NetworkDescription {
             name,
             genesis_config_hash,
             genesis_timestamp,
+            genesis_committee_blob_hash,
             admin_chain_id,
         }: NetworkDescription,
     ) -> Self {
@@ -156,6 +157,7 @@ impl From<NetworkDescription> for api::NetworkDescription {
             genesis_config_hash: Some(genesis_config_hash.into()),
             genesis_timestamp: genesis_timestamp.micros(),
             admin_chain_id: Some(admin_chain_id.into()),
+            genesis_committee_blob_hash: Some(genesis_committee_blob_hash.into()),
         }
     }
 }
@@ -168,6 +170,7 @@ impl TryFrom<api::NetworkDescription> for NetworkDescription {
             name,
             genesis_config_hash,
             genesis_timestamp,
+            genesis_committee_blob_hash,
             admin_chain_id,
         }: api::NetworkDescription,
     ) -> Result<Self, Self::Error> {
@@ -176,6 +179,7 @@ impl TryFrom<api::NetworkDescription> for NetworkDescription {
             genesis_config_hash: try_proto_convert(genesis_config_hash)?,
             genesis_timestamp: genesis_timestamp.into(),
             admin_chain_id: try_proto_convert(admin_chain_id)?,
+            genesis_committee_blob_hash: try_proto_convert(genesis_committee_blob_hash)?,
         })
     }
 }

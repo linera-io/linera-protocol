@@ -808,23 +808,26 @@ impl<Env: Environment> Client<Env> {
 
         let certificate_hashes = future::try_join_all(remote_heights.into_iter().filter_map(
             |(sender_chain_id, remote_heights)| {
-                let height0 = *remote_heights.first()?;
-                let local_next = (*local_next_heights.get(&sender_chain_id)?).max(height0);
+                let local_next = *local_next_heights.get(&sender_chain_id)?;
                 if let Ok(height) = local_next.try_sub_one() {
                     downloaded_heights.insert(sender_chain_id, height);
                 }
-
-                let height1 = *remote_heights.last()?;
-                let Some(diff) = height1.0.checked_sub(local_next.0) else {
+                let remote_heights = remote_heights
+                    .into_iter()
+                    .filter(|h| *h >= local_next)
+                    .collect::<Vec<_>>();
+                if remote_heights.is_empty() {
                     // Our highest, locally executed block is higher than any block height
                     // from the current batch. Skip this batch, but remember to wait for
                     // the messages to be delivered to the inboxes.
                     other_sender_chains.push(sender_chain_id);
                     return None;
                 };
+                let height0 = *remote_heights.first()?;
+                let height1 = *remote_heights.last()?;
 
                 // Find the hashes of the blocks we need.
-                let range = BlockHeightRange::multi(local_next, diff.saturating_add(1));
+                let range = BlockHeightRange::multi(height0, height1.0 + 1 - height0.0);
                 Some(async move {
                     let hashes = remote_node
                         .fetch_sent_certificate_hashes(sender_chain_id, range)
@@ -832,7 +835,7 @@ impl<Env: Environment> Client<Env> {
                     Ok::<_, ChainClientError>(
                         remote_heights
                             .into_iter()
-                            .map(move |h| hashes[(h.0 - local_next.0) as usize]),
+                            .filter_map(move |h| hashes.get((h.0 - height0.0) as usize).copied()),
                     )
                 })
             },

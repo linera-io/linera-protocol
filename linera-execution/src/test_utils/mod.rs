@@ -37,25 +37,29 @@ use crate::{
     TestExecutionRuntimeContext,
 };
 
+pub fn dummy_committee() -> Committee {
+    Committee::make_simple(vec![(
+        ValidatorPublicKey::test_key(0),
+        AccountPublicKey::test_key(0),
+    )])
+}
+
+pub fn dummy_committees() -> BTreeMap<Epoch, Committee> {
+    let committee = dummy_committee();
+    BTreeMap::from([(Epoch::ZERO, committee)])
+}
+
 pub fn dummy_chain_description_with_ownership_and_balance(
     index: u32,
     ownership: ChainOwnership,
     balance: Amount,
 ) -> ChainDescription {
-    let committee = Committee::make_simple(vec![(
-        ValidatorPublicKey::test_key(index as u8),
-        AccountPublicKey::test_key(2 * (index % 128) as u8),
-    )]);
-    let committees = BTreeMap::from([(
-        Epoch::ZERO,
-        bcs::to_bytes(&committee).expect("serializing a committee shouldn't fail"),
-    )]);
     let origin = ChainOrigin::Root(index);
     let config = InitialChainConfig {
         application_permissions: Default::default(),
         balance,
-        committees,
         epoch: Epoch::ZERO,
+        active_epochs: [Epoch::ZERO].into_iter().collect(),
         ownership,
     };
     ChainDescription::new(origin, config, Timestamp::default())
