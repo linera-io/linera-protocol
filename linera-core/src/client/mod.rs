@@ -1000,6 +1000,7 @@ impl<Env: Environment> Client<Env> {
 
         let (_, committee) = self.admin_committee().await?;
         let validators = self.make_nodes(&committee)?;
+        Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
         communicate_with_quorum(
             &validators,
             &committee,
