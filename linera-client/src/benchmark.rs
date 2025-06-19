@@ -31,18 +31,10 @@ const LATENCY_METRIC_PREFIX: &str = "linera_proxy_request_latency";
 
 #[derive(Debug, thiserror::Error)]
 pub enum BenchmarkError {
-    #[error("Proxy of validator {0} unhealthy! Latency p99 is too high: {1} ms")]
-    ProxyUnhealthy(String, f64),
     #[error("Failed to send message: {0}")]
     CrossbeamSendError(#[from] crossbeam_channel::SendError<()>),
     #[error("Failed to join task: {0}")]
     JoinError(#[from] task::JoinError),
-    #[error("Failed to parse validator metrics port: {0}")]
-    ParseValidatorMetricsPort(#[from] std::num::ParseIntError),
-    #[error("Failed to parse validator metrics address: {0}")]
-    ParseValidatorMetricsAddress(String),
-    #[error("Local node error: {0}")]
-    LocalNode(#[from] linera_core::local_node::LocalNodeError),
     #[error("Chain client error: {0}")]
     ChainClient(#[from] linera_core::client::ChainClientError),
     #[error("Current histogram count is less than previous histogram count")]
@@ -55,8 +47,6 @@ pub enum BenchmarkError {
     IncompleteHistogramData,
     #[error("Could not compute quantile")]
     CouldNotComputeQuantile,
-    #[error("Bucket count is 0")]
-    BucketCountIsZero,
     #[error("Bucket boundaries do not match: {0} vs {1}")]
     BucketBoundariesDoNotMatch(f64, f64),
     #[error("Reqwest error: {0}")]
