@@ -561,9 +561,9 @@ where
             Err(error) => Err(error),
             Ok(entry) => match entry {
                 Some(certificate) => Ok(certificate),
-                None => Err(NodeError::ReadCertificatesError {
-                    error: hash.to_string(),
-                }),
+                None => {
+                    panic!("Missing certificate: {hash}");
+                }
             },
         };
 
@@ -588,8 +588,7 @@ where
             Ok(certificates) => match ResultReadCertificates::new(certificates, hashes) {
                 ResultReadCertificates::Certificates(certificates) => Ok(certificates),
                 ResultReadCertificates::InvalidHashes(hashes) => {
-                    let error = format!("{:?}", hashes);
-                    Err(NodeError::ReadCertificatesError { error })
+                    panic!("Missing certificates: {:?}", hashes)
                 }
             },
         };
