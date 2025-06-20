@@ -209,7 +209,7 @@ where
 
 impl<A, S> ValidatorUpdater<A, S>
 where
-    A: ValidatorNode + Clone + Sync + 'static,
+    A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
     async fn send_confirmed_certificate(

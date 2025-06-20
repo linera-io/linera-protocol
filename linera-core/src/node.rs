@@ -103,12 +103,15 @@ pub trait ValidatorNode {
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
     /// Uploads the blobs to the validator.
-    fn upload_blobs(&self, blobs: Vec<Blob>) -> impl futures::Future<Output = Result<(), NodeError>>
-    where
-        Self: Sync,
-    {
-        async {
-            let tasks = blobs.into_iter().map(|blob| self.upload_blob(blob.into()));
+    fn upload_blobs(
+        &self,
+        blobs: Vec<Blob>,
+    ) -> impl futures::Future<Output = Result<(), NodeError>> {
+        let tasks: Vec<_> = blobs
+            .into_iter()
+            .map(|blob| self.upload_blob(blob.into()))
+            .collect();
+        async move {
             futures::future::try_join_all(tasks).await?;
             Ok(())
         }
