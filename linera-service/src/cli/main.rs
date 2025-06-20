@@ -789,7 +789,8 @@ impl Runnable for Job {
             #[cfg(feature = "benchmark")]
             Benchmark(benchmark_config) => {
                 let BenchmarkCommand {
-                    num_chains,
+                    dont_use_cross_chain_messages,
+                    num_chain_groups,
                     tokens_per_chain,
                     transactions_per_block,
                     fungible_application_id,
@@ -800,8 +801,20 @@ impl Runnable for Job {
                     confirm_before_start,
                     runtime_in_seconds,
                 } = benchmark_config;
+                let num_chain_groups = num_chain_groups.unwrap_or(num_cpus::get());
+                assert!(
+                    num_chain_groups > 0,
+                    "Number of chain groups must be greater than 0"
+                );
+                assert!(
+                    transactions_per_block > 0,
+                    "Number of transactions per block must be greater than 0"
+                );
+                assert!(bps > 0, "BPS must be greater than 0");
+                let num_chains_per_chain_group = if dont_use_cross_chain_messages { 1 } else { 2 };
+
                 let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
-                    .take(num_chains)
+                    .take(num_chain_groups * num_chains_per_chain_group)
                     .collect();
                 signer.persist().await?;
 
@@ -811,20 +824,10 @@ impl Runnable for Job {
                     wallet,
                     signer.into_value(),
                 );
-                assert!(num_chains > 0, "Number of chains must be greater than 0");
-                assert!(
-                    transactions_per_block > 0,
-                    "Number of transactions per block must be greater than 0"
-                );
-                assert!(bps > 0, "BPS must be greater than 0");
-                assert!(
-                    bps >= num_chains,
-                    "BPS must be greater than or equal to the number of chains"
-                );
-
                 let (chain_clients, epoch, blocks_infos, committee) = context
                     .prepare_for_benchmark(
-                        num_chains,
+                        num_chain_groups,
+                        num_chains_per_chain_group,
                         transactions_per_block,
                         tokens_per_chain,
                         fungible_application_id,
@@ -849,7 +852,7 @@ impl Runnable for Job {
                 }
 
                 linera_client::benchmark::Benchmark::run_benchmark(
-                    num_chains,
+                    num_chain_groups,
                     transactions_per_block,
                     bps,
                     chain_clients.clone(),
