@@ -801,6 +801,15 @@ impl Runnable for Job {
                     confirm_before_start,
                     runtime_in_seconds,
                 } = benchmark_config;
+                assert!(
+                    options.context_options.max_pending_message_bundles >= transactions_per_block,
+                    "max_pending_message_bundles must be set to at least the same as the \
+                     number of transactions per block ({transactions_per_block}) for benchmarking",
+                );
+                assert!(
+                    options.context_options.wait_for_outgoing_messages,
+                    "wait_for_outgoing_messages must be set to true for benchmarking",
+                );
                 let num_chain_groups = num_chain_groups.unwrap_or(num_cpus::get());
                 assert!(
                     num_chain_groups > 0,
@@ -824,7 +833,7 @@ impl Runnable for Job {
                     wallet,
                     signer.into_value(),
                 );
-                let (chain_clients, epoch, blocks_infos, committee) = context
+                let (chain_clients, blocks_infos, committee) = context
                     .prepare_for_benchmark(
                         num_chain_groups,
                         num_chains_per_chain_group,
@@ -856,7 +865,6 @@ impl Runnable for Job {
                     transactions_per_block,
                     bps,
                     chain_clients.clone(),
-                    epoch,
                     blocks_infos,
                     committee,
                     health_check_endpoints,
@@ -2143,6 +2151,7 @@ Make sure to use a Linera client compatible with this network.
                             "50".to_string(),
                             "--tokio-blocking-threads".to_string(),
                             "10000".to_string(),
+                            "--wait-for-outgoing-messages".to_string(),
                         ],
                     )))
                 })

@@ -193,16 +193,40 @@ impl ClientWrapper {
         Ok(())
     }
 
-    async fn command_with_envs(&self, envs: &[(&str, &str)]) -> Result<Command> {
+    async fn command_with_envs_and_arguments(
+        &self,
+        envs: &[(&str, &str)],
+        arguments: impl IntoIterator<Item = Cow<'_, str>>,
+    ) -> Result<Command> {
         let mut command = self.command_binary().await?;
         command.current_dir(self.path_provider.path());
         for (key, value) in envs {
             command.env(key, value);
         }
-        for argument in self.command_arguments() {
+        for argument in arguments {
             command.arg(&*argument);
         }
         Ok(command)
+    }
+
+    async fn command_with_envs(&self, envs: &[(&str, &str)]) -> Result<Command> {
+        self.command_with_envs_and_arguments(envs, self.command_arguments())
+            .await
+    }
+
+    #[cfg(feature = "benchmark")]
+    async fn command_with_arguments(
+        &self,
+        arguments: impl IntoIterator<Item = Cow<'_, str>>,
+    ) -> Result<Command> {
+        self.command_with_envs_and_arguments(
+            &[(
+                "RUST_LOG",
+                &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+            )],
+            arguments,
+        )
+        .await
     }
 
     async fn command(&self) -> Result<Command> {
@@ -213,8 +237,7 @@ impl ClientWrapper {
         .await
     }
 
-    /// Returns an iterator over the arguments that should be added to all command invocations.
-    fn command_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> + '_ {
+    fn required_command_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> + '_ {
         [
             "--wallet".into(),
             self.wallet.as_str().into(),
@@ -222,8 +245,6 @@ impl ClientWrapper {
             self.keystore.as_str().into(),
             "--storage".into(),
             self.storage.as_str().into(),
-            "--max-pending-message-bundles".into(),
-            self.max_pending_message_bundles.to_string().into(),
             "--send-timeout-ms".into(),
             "500000".into(),
             "--recv-timeout-ms".into(),
@@ -231,6 +252,14 @@ impl ClientWrapper {
         ]
         .into_iter()
         .chain(self.extra_args.iter().map(|s| s.as_str().into()))
+    }
+
+    /// Returns an iterator over the arguments that should be added to all command invocations.
+    fn command_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> + '_ {
+        self.required_command_arguments().chain([
+            "--max-pending-message-bundles".into(),
+            self.max_pending_message_bundles.to_string().into(),
+        ])
     }
 
     /// Returns the [`Command`] instance configured to run the appropriate binary.
@@ -649,7 +678,7 @@ impl ClientWrapper {
 
     #[cfg(feature = "benchmark")]
     fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
-        let args = to_args(&args)?
+        let formatted_args = to_args(&args)?
             .chunks_exact(2)
             .flat_map(|pair| {
                 let option = format!("--{}", pair[0]);
@@ -660,7 +689,14 @@ impl ClientWrapper {
                 }
             })
             .collect::<Vec<_>>();
-        command.arg("benchmark").args(args);
+        command
+            // For benchmarks, we need to enforce a large enough max pending message bundles.
+            .args([
+                "--max-pending-message-bundles",
+                &args.transactions_per_block.to_string(),
+            ])
+            .arg("benchmark")
+            .args(formatted_args);
         Ok(())
     }
 
@@ -670,14 +706,18 @@ impl ClientWrapper {
         args: BenchmarkCommand,
         envs: &[(&str, &str)],
     ) -> Result<Command> {
-        let mut command = self.command_with_envs(envs).await?;
+        let mut command = self
+            .command_with_envs_and_arguments(envs, self.required_command_arguments())
+            .await?;
         Self::benchmark_command_internal(&mut command, args)?;
         Ok(command)
     }
 
     #[cfg(feature = "benchmark")]
     async fn benchmark_command(&self, args: BenchmarkCommand) -> Result<Command> {
-        let mut command = self.command().await?;
+        let mut command = self
+            .command_with_arguments(self.required_command_arguments())
+            .await?;
         Self::benchmark_command_internal(&mut command, args)?;
         Ok(command)
     }
