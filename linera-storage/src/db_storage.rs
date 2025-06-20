@@ -597,14 +597,13 @@ where
         Ok(test)
     }
 
-    async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError> {
+    async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<Option<ConfirmedBlock>, ViewError> {
         let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
-        let maybe_value = self.store.read_value::<ConfirmedBlock>(&block_key).await?;
+        let value = self.store.read_value(&block_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
             .inc();
-        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value)
     }
 
@@ -675,7 +674,7 @@ where
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<ConfirmedBlock>, ViewError> {
+    ) -> Result<Option<Vec<ConfirmedBlock>>, ViewError> {
         let mut hash = Some(from);
         let mut values = Vec::new();
         for _ in 0..limit {
@@ -683,10 +682,13 @@ where
                 break;
             };
             let value = self.read_confirmed_block(next_hash).await?;
+            let Some(value) = value else {
+                return Ok(None);
+            };
             hash = value.block().header.previous_block_hash;
             values.push(value);
         }
-        Ok(values)
+        Ok(Some(values))
     }
 
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
