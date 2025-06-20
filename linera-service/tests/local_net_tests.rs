@@ -954,6 +954,8 @@ async fn test_sync_child_chain(config: LocalNetConfig) -> Result<()> {
             .await?;
     }
 
+    // Create a second child chain at a point in the sender chain the stopped validator
+    // won't be aware of.
     let (second_child_chain, _) = client
         .open_chain(sender_chain, None, Amount::from_tokens(1000))
         .await?;
@@ -978,18 +980,20 @@ async fn test_sync_child_chain(config: LocalNetConfig) -> Result<()> {
         .await?;
     assert_eq!(state_before_sync.info.next_block_height, BlockHeight::ZERO);
 
-    // Synchronize the validator
+    // Synchronize the second chain without synchronizing the parent chain.
     let validator_address = net.validator_address(LAGGING_VALIDATOR_INDEX);
     client
         .sync_validator([&second_child_chain], validator_address)
         .await
         .expect("Missing lagging validator name");
 
+    // The parent chain should remain out of sync.
     let state_after_sync = lagging_validator
         .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
         .await?;
     assert_eq!(state_after_sync.info.next_block_height, BlockHeight::ZERO);
 
+    // But the second child chain should be synchronized properly.
     let second_chain_state_after_sync = lagging_validator
         .handle_chain_info_query(ChainInfoQuery::new(second_child_chain))
         .await?;
