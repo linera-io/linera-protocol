@@ -3798,15 +3798,20 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         remote_node: Env::ValidatorNode,
     ) -> Result<(), ChainClientError> {
-        let validator_chain_state = remote_node
+        let validator_next_block_height = match remote_node
             .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
-            .await?;
+            .await
+        {
+            Ok(info) => info.info.next_block_height.0,
+            Err(NodeError::BlobsNotFound(_)) => 0,
+            Err(err) => return Err(err.into()),
+        };
         let local_chain_state = self.chain_info().await?;
 
         let Some(missing_certificate_count) = local_chain_state
             .next_block_height
             .0
-            .checked_sub(validator_chain_state.info.next_block_height.0)
+            .checked_sub(validator_next_block_height)
             .filter(|count| *count > 0)
         else {
             debug!("Validator is up-to-date with local state");
@@ -3838,9 +3843,35 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             };
         for certificate in certificates {
-            remote_node
-                .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
-                .await?;
+            match remote_node
+                .handle_confirmed_certificate(
+                    certificate.clone(),
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await
+            {
+                Ok(_) => (),
+                Err(NodeError::BlobsNotFound(missing_blob_ids)) => {
+                    // Upload the missing blobs we have and retry.
+                    let maybe_missing_blobs: Vec<_> = self
+                        .client
+                        .storage_client()
+                        .read_blobs(&missing_blob_ids)
+                        .await?;
+                    let tasks = maybe_missing_blobs
+                        .into_iter()
+                        .flatten()
+                        .map(|blob| remote_node.upload_blob(blob.into()));
+                    futures::future::try_join_all(tasks).await?;
+                    remote_node
+                        .handle_confirmed_certificate(
+                            certificate,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await?;
+                }
+                Err(err) => return Err(err.into()),
+            }
         }
 
         Ok(())
