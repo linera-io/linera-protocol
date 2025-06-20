@@ -28,7 +28,7 @@ use linera_chain::{
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
-use linera_storage::{DbStorage, Storage, TestClock};
+use linera_storage::{DbStorage, ResultReadCertificates, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
@@ -557,6 +557,16 @@ where
             .await
             .map_err(Into::into);
 
+        let certificate = match certificate {
+            Err(error) => Err(error),
+            Ok(entry) => match entry {
+                Some(certificate) => Ok(certificate),
+                None => {
+                    panic!("Missing certificate: {hash}");
+                }
+            },
+        };
+
         sender.send(certificate)
     }
 
@@ -569,9 +579,19 @@ where
         let certificates = validator
             .state
             .storage_client()
-            .read_certificates(hashes)
+            .read_certificates(hashes.clone())
             .await
             .map_err(Into::into);
+
+        let certificates = match certificates {
+            Err(error) => Err(error),
+            Ok(certificates) => match ResultReadCertificates::new(certificates, hashes) {
+                ResultReadCertificates::Certificates(certificates) => Ok(certificates),
+                ResultReadCertificates::InvalidHashes(hashes) => {
+                    panic!("Missing certificates: {:?}", hashes)
+                }
+            },
+        };
 
         sender.send(certificates)
     }

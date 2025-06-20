@@ -35,6 +35,7 @@ bcs.workspace = true
 cfg-if.workspace = true
 dashmap.workspace = true
 futures.workspace = true
+itertools.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true

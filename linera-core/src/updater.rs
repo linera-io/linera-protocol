@@ -20,7 +20,7 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::committee::Committee;
-use linera_storage::Storage;
+use linera_storage::{ResultReadCertificates, Storage};
 use thiserror::Error;
 
 use crate::{
@@ -364,9 +364,16 @@ where
         if !keys.is_empty() {
             // Send the requested certificates in order.
             let storage = self.local_node.storage_client();
-            let certs = storage.read_certificates(keys.into_iter()).await?;
-            for cert in certs {
-                self.send_confirmed_certificate(cert, delivery).await?;
+            let certificates = storage.read_certificates(keys.clone()).await?;
+            let certificates = match ResultReadCertificates::new(certificates, keys) {
+                ResultReadCertificates::Certificates(certificates) => certificates,
+                ResultReadCertificates::InvalidHashes(hashes) => {
+                    return Err(ChainClientError::ReadCertificatesError(hashes))
+                }
+            };
+            for certificate in certificates {
+                self.send_confirmed_certificate(certificate, delivery)
+                    .await?;
             }
         }
         if let Some(cert) = timeout {

@@ -26,7 +26,7 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
-use linera_storage::{Clock as _, Storage};
+use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::views::ClonableView;
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
 
@@ -501,7 +501,13 @@ where
                     })?,
             );
         }
-        let certificates = self.storage.read_certificates(hashes).await?;
+        let certificates = self.storage.read_certificates(hashes.clone()).await?;
+        let certificates = match ResultReadCertificates::new(certificates, hashes) {
+            ResultReadCertificates::Certificates(certificates) => certificates,
+            ResultReadCertificates::InvalidHashes(hashes) => {
+                return Err(WorkerError::ReadCertificatesError(hashes))
+            }
+        };
         let certificates = heights
             .into_iter()
             .zip(certificates)

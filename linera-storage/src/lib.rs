@@ -14,6 +14,7 @@ use std::{
 
 use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
+use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
@@ -140,13 +141,13 @@ pub trait Storage: Sized {
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError>;
+    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
+    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
 
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
@@ -390,6 +391,33 @@ pub trait Storage: Sized {
         &self,
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError>;
+}
+
+/// The result of processing the obtained read certificates.
+pub enum ResultReadCertificates {
+    Certificates(Vec<ConfirmedBlockCertificate>),
+    InvalidHashes(Vec<CryptoHash>),
+}
+
+impl ResultReadCertificates {
+    /// Creating the processed read certificates.
+    pub fn new(
+        certificates: Vec<Option<ConfirmedBlockCertificate>>,
+        hashes: Vec<CryptoHash>,
+    ) -> Self {
+        let (certificates, invalid_hashes) = certificates
+            .into_iter()
+            .zip(hashes)
+            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
+                Some(cert) => itertools::Either::Left(cert),
+                None => itertools::Either::Right(hash),
+            });
+        if invalid_hashes.is_empty() {
+            Self::Certificates(certificates)
+        } else {
+            Self::InvalidHashes(invalid_hashes)
+        }
+    }
 }
 
 /// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.

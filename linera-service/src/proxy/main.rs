@@ -26,7 +26,7 @@ use linera_service::{
     storage::{CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
-use linera_storage::Storage;
+use linera_storage::{ResultReadCertificates, Storage};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
@@ -339,7 +339,13 @@ where
                 Box::new(self.storage.read_confirmed_block(*hash).await?),
             ))),
             DownloadCertificates(hashes) => {
-                let certificates = self.storage.read_certificates(hashes).await?;
+                let certificates = self.storage.read_certificates(hashes.clone()).await?;
+                let certificates = match ResultReadCertificates::new(certificates, hashes) {
+                    ResultReadCertificates::Certificates(certificates) => certificates,
+                    ResultReadCertificates::InvalidHashes(hashes) => {
+                        bail!("Missing certificates: {hashes:?}")
+                    }
+                };
                 Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))
             }
             BlobLastUsedBy(blob_id) => {

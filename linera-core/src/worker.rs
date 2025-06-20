@@ -149,6 +149,9 @@ pub enum WorkerError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
+    #[error("Certificates are in confirmed_log but not in storage: {0:?}")]
+    ReadCertificatesError(Vec<CryptoHash>),
+
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
 

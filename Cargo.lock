@@ -5639,6 +5639,7 @@ dependencies = [
  "cfg_aliases",
  "dashmap 5.5.3",
  "futures",
+ "itertools 0.14.0",
  "linera-base",
  "linera-chain",
  "linera-execution",
