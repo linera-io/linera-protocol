@@ -221,7 +221,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     for i in 0.. {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         let result = storage.read_certificate(certificate.hash()).await?;
-        if result == Some(certificate.clone()) {
+        if result.as_ref() == Some(&certificate) {
             break;
         }
         if i == 5 {
