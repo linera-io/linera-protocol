@@ -798,6 +798,7 @@ impl Runnable for Job {
                     health_check_endpoints,
                     wrap_up_max_in_flight,
                     confirm_before_start,
+                    runtime_in_seconds,
                 } = benchmark_config;
                 let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
                     .take(num_chains)
@@ -815,13 +816,11 @@ impl Runnable for Job {
                     transactions_per_block > 0,
                     "Number of transactions per block must be greater than 0"
                 );
-                if let Some(bps) = bps {
-                    assert!(bps > 0, "BPS must be greater than 0");
-                    assert!(
-                        bps >= num_chains,
-                        "BPS must be greater than or equal to the number of chains"
-                    );
-                }
+                assert!(bps > 0, "BPS must be greater than 0");
+                assert!(
+                    bps >= num_chains,
+                    "BPS must be greater than or equal to the number of chains"
+                );
 
                 let (chain_clients, epoch, blocks_infos, committee) = context
                     .prepare_for_benchmark(
@@ -858,6 +857,7 @@ impl Runnable for Job {
                     blocks_infos,
                     committee,
                     health_check_endpoints,
+                    runtime_in_seconds,
                 )
                 .await?;
 
