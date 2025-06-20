@@ -34,7 +34,7 @@
           ];
           shellHook = ''
             # For rust-analyzer 'hover' tooltips to work.
-            export PATH=$PWD/target/debug:~/.cargo/bin:$PATH
+            export PATH=$PWD/target/debug:$PATH:~/.cargo/bin
             export RUST_SRC_PATH="${linera'.RUST_SRC_PATH}"
             export LIBCLANG_PATH="${linera'.LIBCLANG_PATH}"
             export ROCKSDB_LIB_DIR="${linera'.ROCKSDB_LIB_DIR}";
