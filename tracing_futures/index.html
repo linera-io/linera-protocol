@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Futures compatibility for `tracing`."><title>tracing_futures - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tracing_futures" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tracing_futures/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tracing_futures/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../tracing_futures/index.html">tracing_<wbr>futures</a><span class="version">0.2.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#feature-flags" title="Feature flags">Feature flags</a><ul><li><a href="#supported-rust-versions" title="Supported Rust Versions">Supported Rust Versions</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>tracing_futures</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/tracing_futures/lib.rs.html#1-707">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Futures compatibility for <a href="https://crates.io/crates/tracing"><code>tracing</code></a>.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p><a href="https://crates.io/crates/tracing"><code>tracing</code></a> is a framework for instrumenting Rust programs to collect
+structured, event-based diagnostic information. This crate provides utilities
+for using <code>tracing</code> to instrument asynchronous code written using futures and
+async/await.</p>
+<p>The crate provides the following traits:</p>
+<ul>
+<li>
+<p><a href="trait.Instrument.html"><code>Instrument</code></a> allows a <code>tracing</code> <a href="https://docs.rs/tracing/latest/tracing/span/index.html">span</a> to be attached to a future, sink,
+stream, or executor.</p>
+</li>
+<li>
+<p><a href="trait.WithSubscriber.html"><code>WithSubscriber</code></a> allows a <code>tracing</code> <a href="https://docs.rs/tracing/latest/tracing/subscriber/index.html"><code>Subscriber</code></a> to be attached to a
+future, sink, stream, or executor.</p>
+</li>
+</ul>
+<p><em>Compiler support: <a href="#supported-rust-versions">requires <code>rustc</code> 1.42+</a></em></p>
+<h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature flags</h2>
+<p>This crate provides a number of feature flags that enable compatibility
+features with other crates in the asynchronous ecosystem:</p>
+<ul>
+<li>
+<p><code>tokio</code>: Enables compatibility with the <code>tokio</code> crate, including
+<a href="trait.Instrument.html"><code>Instrument</code></a> and <a href="trait.WithSubscriber.html"><code>WithSubscriber</code></a> implementations for
+<code>tokio::executor::Executor</code>, <code>tokio::runtime::Runtime</code>, and
+<code>tokio::runtime::current_thread</code>. Enabled by default.</p>
+</li>
+<li>
+<p><code>tokio-executor</code>: Enables compatibility with the <code>tokio-executor</code>
+crate, including <a href="trait.Instrument.html"><code>Instrument</code></a> and <a href="trait.WithSubscriber.html"><code>WithSubscriber</code></a>
+implementations for types implementing <code>tokio_executor::Executor</code>.
+This is intended primarily for use in crates which depend on
+<code>tokio-executor</code> rather than <code>tokio</code>; in general the <code>tokio</code> feature
+should be used instead.</p>
+</li>
+<li>
+<p><code>std-future</code>: Enables compatibility with <code>std::future::Future</code>.</p>
+</li>
+<li>
+<p><code>futures-01</code>: Enables compatibility with version 0.1.x of the <a href="https://crates.io/crates/futures"><code>futures</code></a>
+crate.</p>
+</li>
+<li>
+<p><code>futures-03</code>: Enables compatibility with version 0.3.x of the <code>futures</code>
+crate’s <code>Spawn</code> and <code>LocalSpawn</code> traits.</p>
+</li>
+<li>
+<p><code>tokio-alpha</code>: Enables compatibility with <code>tokio</code> 0.2’s alpha releases,
+including the <code>tokio</code> 0.2 <code>Executor</code> and <code>TypedExecutor</code> traits.</p>
+</li>
+<li>
+<p><code>std</code>: Depend on the Rust standard library.</p>
+<p><code>no_std</code> users may disable this feature with <code>default-features = false</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+tracing-futures = { version = &quot;0.2.5&quot;, default-features = false }</code></pre></div></li>
+</ul>
+<p>The <code>tokio</code>, <code>std-future</code> and <code>std</code> features are enabled by default.</p>
+<h3 id="supported-rust-versions"><a class="doc-anchor" href="#supported-rust-versions">§</a>Supported Rust Versions</h3>
+<p>Tracing is built against the latest stable release. The minimum supported
+version is 1.42. The current Tracing version is not guaranteed to build on
+Rust versions earlier than the minimum supported version.</p>
+<p>Tracing follows the same compiler support policies as the rest of the Tokio
+project. The current stable Rust compiler and the three most recent minor
+versions before it will always be supported. For example, if the current
+stable compiler version is 1.45, the minimum supported version will not be
+increased past 1.42, three minor versions prior. Increasing the minimum
+supported compiler version is not considered a semver breaking change as
+long as doing so complies with this policy.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="executor/index.html" title="mod tracing_futures::executor">executor</a></dt><dd>Implementations for <code>Instrument</code>ed future executors.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Instrumented.html" title="struct tracing_futures::Instrumented">Instrumented</a></dt><dd>A future, stream, sink, or executor that has been instrumented with a <code>tracing</code> span.</dd><dt><a class="struct" href="struct.WithDispatch.html" title="struct tracing_futures::WithDispatch">With<wbr>Dispatch</a></dt><dd>A future, stream, sink, or executor that has been instrumented with a
+<code>tracing</code> subscriber.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Instrument.html" title="trait tracing_futures::Instrument">Instrument</a></dt><dd>Extension trait allowing futures, streams, sinks, and executors to be
+instrumented with a <code>tracing</code> <a href="https://docs.rs/tracing/latest/tracing/span/index.html">span</a>.</dd><dt><a class="trait" href="trait.WithSubscriber.html" title="trait tracing_futures::WithSubscriber">With<wbr>Subscriber</a></dt><dd>Extension trait allowing futures, streams, and sinks to be instrumented with
+a <code>tracing</code> <a href="https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html"><code>Subscriber</code></a>.</dd></dl></section></div></main></body></html>

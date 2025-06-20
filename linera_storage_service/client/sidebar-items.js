@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["service_config_from_endpoint","storage_service_check_absence","storage_service_check_validity"],"struct":["ServiceStoreClientInternal"],"type":["ServiceStoreClient"]};

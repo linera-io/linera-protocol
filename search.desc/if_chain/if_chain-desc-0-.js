@@ -1,0 +1,1 @@
+searchState.loadedDescShard("if_chain", 0, "This crate provides a single macro called <code>if_chain!</code>.\nMacro for writing nested <code>if let</code> expressions.")

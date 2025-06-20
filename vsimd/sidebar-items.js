@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["dispatch","impl_alsw","is_isa_type","is_pod_type","item_group","matches_isa","shared_docs","simd256_vop"],"mod":["alsw","ascii","bswap","hex","isa","mask","native","pod","table","tools","vector"],"trait":["SIMD128","SIMD256","SIMD64","Scalable"]};

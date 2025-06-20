@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wasmtime_asm_macros", 0, "This crate defines a macro named <code>asm_func!</code> which is …")

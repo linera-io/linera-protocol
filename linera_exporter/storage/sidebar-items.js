@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BlockProcessorStorage","CacheWeighter","CanonicalState","ExporterStorage","SharedStorage"],"type":["BlobCacheWeighter","BlockCacheWeighter"]};
