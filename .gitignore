@@ -16,8 +16,8 @@
 .idea/
 
 # VSCode
-.vscode
-/.direnv
+.vscode/
+.direnv/
 
 # Cursor
 .cursor
