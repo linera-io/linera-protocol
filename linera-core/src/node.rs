@@ -9,7 +9,7 @@ use futures::stream::LocalBoxStream as BoxStream;
 use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, BlobContent, BlockHeight, NetworkDescription},
+    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -101,6 +101,18 @@ pub trait ValidatorNode {
     // Uploads a blob. Returns an error if the validator has not seen a
     // certificate using this blob.
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
+
+    /// Uploads the blobs to the validator.
+    fn upload_blobs(&self, blobs: Vec<Blob>) -> impl futures::Future<Output = Result<(), NodeError>>
+    where
+        Self: Sync,
+    {
+        async {
+            let tasks = blobs.into_iter().map(|blob| self.upload_blob(blob.into()));
+            futures::future::try_join_all(tasks).await?;
+            Ok(())
+        }
+    }
 
     /// Downloads a blob. Returns an error if the validator does not have the blob.
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;

@@ -209,7 +209,7 @@ where
 
 impl<A, S> ValidatorUpdater<A, S>
 where
-    A: ValidatorNode + Clone + 'static,
+    A: ValidatorNode + Clone + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
     async fn send_confirmed_certificate(
@@ -229,7 +229,7 @@ where
                 // The certificate is confirmed, so the blobs must be in storage.
                 let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
                 let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
-                self.remote_node.upload_blobs(blobs.clone()).await?;
+                self.remote_node.node.upload_blobs(blobs.clone()).await?;
                 self.remote_node
                     .handle_confirmed_certificate(certificate, delivery)
                     .await

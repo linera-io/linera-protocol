@@ -3853,16 +3853,15 @@ impl<Env: Environment> ChainClient<Env> {
                 Ok(_) => (),
                 Err(NodeError::BlobsNotFound(missing_blob_ids)) => {
                     // Upload the missing blobs we have and retry.
-                    let maybe_missing_blobs: Vec<_> = self
+                    let missing_blobs: Vec<_> = self
                         .client
                         .storage_client()
                         .read_blobs(&missing_blob_ids)
-                        .await?;
-                    let tasks = maybe_missing_blobs
+                        .await?
                         .into_iter()
                         .flatten()
-                        .map(|blob| remote_node.upload_blob(blob.into()));
-                    futures::future::try_join_all(tasks).await?;
+                        .collect();
+                    remote_node.upload_blobs(missing_blobs).await?;
                     remote_node
                         .handle_confirmed_certificate(
                             certificate,
