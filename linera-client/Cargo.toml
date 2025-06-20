@@ -16,7 +16,6 @@ test = ["linera-views/test", "linera-execution/test"]
 benchmark = [
     "linera-base/test",
     "dep:linera-sdk",
-    "dep:crossbeam-channel",
     "dep:num-format",
     "dep:reqwest",
     "dep:anyhow",
@@ -58,7 +57,6 @@ web-default = ["web", "wasmer", "indexed-db"]
 anyhow = { workspace = true, optional = true }
 bcs.workspace = true
 clap.workspace = true
-crossbeam-channel = { workspace = true, optional = true }
 futures.workspace = true
 hdrhistogram = { workspace = true, optional = true }
 linera-base.workspace = true

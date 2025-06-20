@@ -102,7 +102,6 @@ comfy-table = "7.1.0"
 console_error_panic_hook = "0.1.7"
 convert_case = "0.6.0"
 criterion = { version = "0.5.1", default-features = false }
-crossbeam-channel = "0.5.14"
 custom_debug_derive = "0.6.1"
 dashmap = "5.5.3"
 deluxe = "0.5.0"

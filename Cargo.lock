@@ -5091,7 +5091,6 @@ dependencies = [
  "cfg_aliases",
  "clap",
  "counter",
- "crossbeam-channel",
  "crowd-funding",
  "ethereum-tracker",
  "flarch",
