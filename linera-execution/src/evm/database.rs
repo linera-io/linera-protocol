@@ -76,7 +76,7 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     pub contract_address: Address,
     /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
-    /// The uncommited changes to the contract.
+    /// The uncommitted changes to the contract.
     pub changes: EvmState,
 }
 
