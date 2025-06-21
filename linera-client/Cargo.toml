@@ -21,6 +21,7 @@ benchmark = [
     "dep:reqwest",
     "dep:anyhow",
     "dep:prometheus-parse",
+    "dep:hdrhistogram",
 ]
 wasmer = [
     "linera-core/wasmer",
@@ -59,6 +60,7 @@ bcs.workspace = true
 clap.workspace = true
 crossbeam-channel = { workspace = true, optional = true }
 futures.workspace = true
+hdrhistogram = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
