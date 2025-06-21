@@ -1020,6 +1020,10 @@ input ResourceControlPolicy {
 	"""
 	writeOperation: Amount!
 	"""
+	The price of accessing one byte from the runtime.
+	"""
+	byteRuntime: Amount!
+	"""
 	The price of reading a byte.
 	"""
 	byteRead: Amount!

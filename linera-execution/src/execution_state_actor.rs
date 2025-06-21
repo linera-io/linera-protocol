@@ -74,10 +74,7 @@ where
         let _latency = metrics::LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
         let description = match txn_tracker.created_blobs().get(&blob_id) {
-            Some(description) => {
-                let blob = description.clone();
-                bcs::from_bytes(blob.bytes())?
-            }
+            Some(blob) => bcs::from_bytes(blob.bytes())?,
             None => self.system.describe_application(id, txn_tracker).await?,
         };
         let code = self
@@ -97,10 +94,7 @@ where
         let _latency = metrics::LOAD_SERVICE_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
         let description = match txn_tracker.created_blobs().get(&blob_id) {
-            Some(description) => {
-                let blob = description.clone();
-                bcs::from_bytes(blob.bytes())?
-            }
+            Some(blob) => bcs::from_bytes(blob.bytes())?,
             None => self.system.describe_application(id, txn_tracker).await?,
         };
         let code = self

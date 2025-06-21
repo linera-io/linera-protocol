@@ -330,6 +330,10 @@ pub enum ClientCommand {
         #[arg(long)]
         write_operation: Option<Amount>,
 
+        /// Set the price per byte read from runtime.
+        #[arg(long)]
+        byte_runtime: Option<Amount>,
+
         /// Set the price per byte read.
         #[arg(long)]
         byte_read: Option<Amount>,
@@ -516,6 +520,11 @@ pub enum ClientCommand {
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         write_operation_price: Option<Amount>,
+
+        /// Set the price per byte read from runtime.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        byte_runtime_price: Option<Amount>,
 
         /// Set the price per byte read.
         /// (This will overwrite value from `--policy-config`)
