@@ -207,16 +207,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificate)
     }
 
-    /// Uploads the blobs to the validator.
-    #[instrument(level = "trace")]
-    pub(crate) async fn upload_blobs(&self, blobs: Vec<Blob>) -> Result<(), NodeError> {
-        let tasks = blobs
-            .into_iter()
-            .map(|blob| self.node.upload_blob(blob.into()));
-        try_join_all(tasks).await?;
-        Ok(())
-    }
-
     /// Sends a pending validated block's blobs to the validator.
     #[instrument(level = "trace")]
     pub(crate) async fn send_pending_blobs(

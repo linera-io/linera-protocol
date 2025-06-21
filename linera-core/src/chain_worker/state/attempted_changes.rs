@@ -303,12 +303,28 @@ where
             let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
             return Ok((info, actions));
         }
-        let local_time = self.state.storage.clock().current_time();
-        self.state.ensure_is_active().await?;
-        // Verify the certificate.
-        let (epoch, committee) = self.state.chain.current_committee()?;
-        check_block_epoch(epoch, chain_id, block.header.epoch)?;
-        certificate.check(committee)?;
+
+        if height == BlockHeight::ZERO {
+            // For the initial proposal on a chain, we read the committee directly from
+            // storage. If the certificate is good for this committee, we will accept it -
+            // which will later allow us to also accept the chain description blob.
+            let epoch = block.header.epoch;
+            let committees = self
+                .state
+                .storage
+                .committees_for([epoch].into_iter().collect())
+                .await?;
+            let committee = committees
+                .get(&epoch)
+                .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;
+            certificate.check(committee)?;
+        } else {
+            self.state.ensure_is_active().await?;
+            // Verify the certificate.
+            let (epoch, committee) = self.state.chain.current_committee()?;
+            check_block_epoch(epoch, chain_id, block.header.epoch)?;
+            certificate.check(committee)?;
+        }
         // This should always be true for valid certificates.
         ensure!(
             tip.block_hash == block.header.previous_block_hash,
@@ -354,7 +370,19 @@ where
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
 
+        // If height is zero, we haven't initialized the chain state or verified the epoch before -
+        // do it now.
+        // This will fail if the chain description blob is still missing - but that's alright,
+        // because we already wrote the blob state above, so the client can now upload the
+        // blob, which will get accepted, and retry.
+        if height == BlockHeight::ZERO {
+            self.state.ensure_is_active().await?;
+            let (epoch, _) = self.state.chain.current_committee()?;
+            check_block_epoch(epoch, chain_id, block.header.epoch)?;
+        }
+
         // Execute the block and update inboxes.
+        let local_time = self.state.storage.clock().current_time();
         let chain = &mut self.state.chain;
         chain
             .remove_bundles_from_inboxes(block.header.timestamp, &block.body.incoming_bundles)

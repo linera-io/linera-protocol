@@ -178,6 +178,8 @@ pub enum WorkerError {
         chain_epoch: Epoch,
         epoch: Epoch,
     },
+    #[error("Proposal on chain {chain_id:} claims an unknown epoch {epoch:}")]
+    UnknownEpoch { chain_id: ChainId, epoch: Epoch },
 
     // Other server-side errors
     #[error("Invalid cross-chain request")]
