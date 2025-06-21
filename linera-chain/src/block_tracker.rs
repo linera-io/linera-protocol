@@ -34,7 +34,7 @@ use crate::{
 pub struct BlockExecutionTracker<'resources, 'blobs> {
     chain_id: ChainId,
     block_height: BlockHeight,
-    timestmap: Timestamp,
+    timestamp: Timestamp,
     authenticated_signer: Option<AccountOwner>,
     resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
     local_time: Timestamp,
@@ -82,7 +82,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         Ok(Self {
             chain_id: proposal.chain_id,
             block_height: proposal.height,
-            timestmap: proposal.timestamp,
+            timestamp: proposal.timestamp,
             authenticated_signer: proposal.authenticated_signer,
             resource_controller,
             local_time,
@@ -146,7 +146,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     round,
                     authenticated_signer: self.authenticated_signer,
                     authenticated_caller_id: None,
-                    timestamp: self.timestmap,
+                    timestamp: self.timestamp,
                 };
                 Box::pin(chain.execute_operation(
                     context,
@@ -208,7 +208,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             message_id,
             authenticated_signer: posted_message.authenticated_signer,
             refund_grant_to: posted_message.refund_grant_to,
-            timestamp: self.timestmap,
+            timestamp: self.timestamp,
         };
         let mut grant = posted_message.grant;
         match incoming_bundle.action {
