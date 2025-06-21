@@ -6,7 +6,10 @@ use std::sync::{
     Arc,
 };
 
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    data_types::BlockHeight,
+    identifiers::{BlobId, ChainId},
+};
 use linera_client::config::DestinationId;
 use linera_sdk::{
     ensure,
@@ -14,17 +17,21 @@ use linera_sdk::{
 };
 use linera_views::{
     context::Context, log_view::LogView, map_view::MapView, register_view::RegisterView,
-    views::ClonableView,
+    set_view::SetView, views::ClonableView,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::common::{BlockId, ExporterError, LiteBlockId};
+use crate::common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId};
 
 /// State of the linera exporter as a view.
 #[derive(Debug, RootView, ClonableView)]
 pub struct BlockExporterStateView<C> {
     /// Ordered collection of block hashes from all microchains, as indexed by the exporter.
-    canonical_state: LogView<C, CryptoHash>,
+    canonical_state: LogView<C, CanonicalBlock>,
+    /// The global blob state.
+    /// These blobs have been seen, processed
+    /// and indexed by the exporter at least once.
+    blob_state: SetView<C, BlobId>,
     /// Tracks the highest block already processed with its hash.
     chain_states: MapView<C, ChainId, LiteBlockId>,
     /// The exporter state per destination.
@@ -38,7 +45,7 @@ where
     pub async fn initiate(
         context: C,
         number_of_destinations: u16,
-    ) -> Result<(Self, LogView<C, CryptoHash>, DestinationStates), ExporterError> {
+    ) -> Result<(Self, LogView<C, CanonicalBlock>, DestinationStates), ExporterError> {
         let mut view = BlockExporterStateView::load(context)
             .await
             .map_err(ExporterError::StateError)?;
@@ -58,6 +65,10 @@ where
         let canonical_state = view.canonical_state.clone_unchecked()?;
 
         Ok((view, canonical_state, states))
+    }
+
+    pub fn index_blob(&mut self, blob: BlobId) -> Result<(), ExporterError> {
+        Ok(self.blob_state.insert(&blob)?)
     }
 
     pub async fn index_block(&mut self, block: BlockId) -> Result<bool, ExporterError> {
@@ -98,6 +109,10 @@ where
         chain_id: &ChainId,
     ) -> Result<Option<LiteBlockId>, ExporterError> {
         Ok(self.chain_states.get(chain_id).await?)
+    }
+
+    pub async fn is_blob_indexed(&self, blob: BlobId) -> Result<bool, ExporterError> {
+        Ok(self.blob_state.contains(&blob).await?)
     }
 
     pub fn set_destination_states(&mut self, destination_states: DestinationStates) {

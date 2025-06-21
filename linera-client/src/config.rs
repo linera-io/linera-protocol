@@ -246,16 +246,33 @@ pub struct Destination {
     pub endpoint: String,
     /// The port number of the target destination.
     pub port: u16,
+    /// The description for the gRPC based destination.
+    /// Discriminates the export mode and the client to use.
+    pub kind: DestinationKind,
+}
+
+/// The description for the gRPC based destination.
+/// Discriminates the export mode and the client to use.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
+pub enum DestinationKind {
+    /// The indexer description.
+    Indexer,
+    /// The validator description.
+    Validator,
 }
 
 impl Destination {
-    pub fn address(&self) -> String {
+    pub fn indexer_address(&self) -> String {
         let tls = match self.tls {
             TlsConfig::ClearText => "http",
             TlsConfig::Tls => "https",
         };
 
         format!("{}://{}:{}", tls, self.endpoint, self.port)
+    }
+
+    pub fn validator_address(&self) -> String {
+        format!("{}:{}:{}", "grpc", self.endpoint, self.port)
     }
 }
 
@@ -293,5 +310,16 @@ impl Default for LimitsConfig {
             block_cache_items_capacity: 8192,
             auxiliary_cache_size_mb: 1024,
         }
+    }
+}
+
+impl Destination {
+    pub fn address(&self) -> String {
+        let tls = match self.tls {
+            TlsConfig::ClearText => "http",
+            TlsConfig::Tls => "https",
+        };
+
+        format!("{}://{}:{}", tls, self.endpoint, self.port)
     }
 }

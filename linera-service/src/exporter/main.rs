@@ -25,6 +25,9 @@ mod runloops;
 mod state;
 mod storage;
 
+#[cfg(test)]
+mod test_utils;
+
 /// Options for running the linera block exporter.
 #[derive(clap::Parser, Debug, Clone)]
 #[command(
@@ -110,8 +113,8 @@ impl ExporterContext {
     ) -> ExporterContext {
         Self {
             config,
-            clients_per_thread,
             node_options,
+            clients_per_thread,
         }
     }
 }

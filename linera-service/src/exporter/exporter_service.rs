@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
-
 use async_trait::async_trait;
 use linera_core::worker::Reason;
 use linera_rpc::grpc::api::{
@@ -14,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::info;
 
-use crate::common::{BadNotificationKind, BlockId, ExporterError};
+use crate::common::{get_address, BadNotificationKind, BlockId, ExporterError};
 
 pub(crate) struct ExporterService {
     block_processor_sender: UnboundedSender<BlockId>,
@@ -96,10 +94,6 @@ fn parse_notification(notification: Notification) -> core::result::Result<BlockI
     Err(BadNotificationKind::InvalidReason { inner: None })?
 }
 
-fn get_address(port: u16) -> SocketAddr {
-    SocketAddr::from(([0, 0, 0, 0], port))
-}
-
 #[cfg(test)]
 mod test {
 
@@ -111,9 +105,8 @@ mod test {
 
     use super::*;
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_notification_server() -> anyhow::Result<()> {
-        linera_base::tracing::init("linera-exporter");
         let port = get_free_port().await?;
         let endpoint = format!("127.0.0.1:{port}");
         let cancellation_token = CancellationToken::new();
