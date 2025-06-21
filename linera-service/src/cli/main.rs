@@ -824,7 +824,7 @@ impl Runnable for Job {
                     wallet,
                     signer.into_value(),
                 );
-                let (chain_clients, epoch, blocks_infos, committee) = context
+                let (chain_clients, blocks_infos, committee) = context
                     .prepare_for_benchmark(
                         num_chain_groups,
                         num_chains_per_chain_group,
@@ -856,7 +856,6 @@ impl Runnable for Job {
                     transactions_per_block,
                     bps,
                     chain_clients.clone(),
-                    epoch,
                     blocks_infos,
                     committee,
                     health_check_endpoints,
