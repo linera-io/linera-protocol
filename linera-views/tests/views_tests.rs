@@ -19,7 +19,6 @@ use linera_views::{
     },
     collection_view::HashedCollectionView,
     context::{Context, MemoryContext, ViewContext},
-    key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
     lru_caching::{LruCachingMemoryStore, LruCachingStore, DEFAULT_STORAGE_CACHE_CONFIG},
     map_view::{ByteMapView, HashedMapView},
@@ -55,7 +54,6 @@ pub struct StateView<C> {
     >,
     pub collection3: HashedCollectionView<C, String, HashedQueueView<C, u64>>,
     pub collection4: HashedReentrantCollectionView<C, String, HashedQueueView<C, u64>>,
-    pub key_value_store: KeyValueStoreView<C>,
 }
 
 #[allow(async_fn_in_trait)]
@@ -78,32 +76,6 @@ impl StateStorage for MemoryTestStorage {
     async fn new() -> Self {
         let store = MemoryStore::new_test_store().await.unwrap();
         MemoryTestStorage {
-            accessed_chains: BTreeSet::new(),
-            store,
-        }
-    }
-
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
-        self.accessed_chains.insert(id);
-        let base_key = bcs::to_bytes(&id)?;
-        let store = self.store.clone();
-        let context = Self::Context::new_unsafe(store, base_key, id);
-        StateView::load(context).await
-    }
-}
-
-pub struct KeyValueStoreTestStorage {
-    accessed_chains: BTreeSet<usize>,
-    store: ViewContainer<MemoryContext<()>>,
-}
-
-impl StateStorage for KeyValueStoreTestStorage {
-    type Context = ViewContext<usize, ViewContainer<MemoryContext<()>>>;
-
-    async fn new() -> Self {
-        let context = MemoryContext::new_for_testing(());
-        let store = ViewContainer::new(context).await.unwrap();
-        KeyValueStoreTestStorage {
             accessed_chains: BTreeSet::new(),
             store,
         }
@@ -678,25 +650,6 @@ async fn test_views_in_memory() -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-async fn test_views_in_key_value_store_view_memory_param(config: &TestConfig) -> Result<()> {
-    tracing::warn!(
-        "Testing config {:?} with key_value_store_view on memory",
-        config
-    );
-    let mut store = KeyValueStoreTestStorage::new().await;
-    test_store(&mut store, config).await?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_views_in_key_value_store_view_memory() -> Result<()> {
-    for config in TestConfig::samples() {
-        test_views_in_key_value_store_view_memory_param(&config).await?;
-    }
-    Ok(())
-}
-
 #[cfg(with_rocksdb)]
 #[cfg(test)]
 async fn test_views_in_rocks_db_param(config: &TestConfig) -> Result<()> {
@@ -923,7 +876,6 @@ where
         let key_str = format!("{:?}", &key);
         let value_usize = (*value.first().unwrap()) as usize;
         view.map.insert(&key_str, value_usize)?;
-        view.key_value_store.insert(key, value).await?;
         {
             let subview = view.collection.load_entry_mut(&key_str).await?;
             subview.push(value_usize as u32);
@@ -958,7 +910,6 @@ where
                 tmp += first_value_u64;
                 view.x1.set(tmp);
                 view.map.insert(&key_str, first_value_usize)?;
-                view.key_value_store.insert(key, value).await?;
                 {
                     let subview = view.collection.load_entry_mut(&key_str).await?;
                     subview.push(first_value as u32);
@@ -967,7 +918,6 @@ where
             Delete { key } => {
                 let key_str = format!("{:?}", &key);
                 view.map.remove(&key_str)?;
-                view.key_value_store.remove(key).await?;
             }
             DeletePrefix { key_prefix: _ } => {}
         }
@@ -1084,9 +1034,6 @@ where
             view.queue.push_back(pair1_first_u8 as u64);
             view.map.insert(&str0, pair1_first_u8 as usize)?;
             view.map.insert(&str1, pair0_first_u8 as usize)?;
-            view.key_value_store
-                .insert(pair.0.clone(), pair.1.clone())
-                .await?;
             if choice == 0 {
                 view.rollback();
                 let hash_new = view.hash().await?;
