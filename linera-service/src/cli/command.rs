@@ -687,6 +687,11 @@ pub enum ClientCommand {
         #[arg(long, default_value = "8080")]
         port: NonZeroU16,
 
+        /// The port for prometheus to scrape.
+        #[cfg(with_metrics)]
+        #[arg(long, default_value = "9090")]
+        metrics_port: NonZeroU16,
+
         /// The number of tokens to send to each new chain.
         #[arg(long)]
         amount: Amount,
