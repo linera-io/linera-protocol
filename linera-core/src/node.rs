@@ -250,6 +250,11 @@ pub enum NodeError {
     DuplicatesInBlobsNotFound,
     #[error("Node returned a BlobsNotFound error with unexpected blob IDs")]
     UnexpectedEntriesInBlobsNotFound,
+    #[error("Node returned certificates {returned:?}, but we requested {requested:?}")]
+    UnexpectedCertificates {
+        returned: Vec<CryptoHash>,
+        requested: Vec<CryptoHash>,
+    },
     #[error("Node returned a BlobsNotFound error with an empty list of missing blob IDs")]
     EmptyBlobsNotFound,
     #[error("Local error handling validator response: {error}")]
