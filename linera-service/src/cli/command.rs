@@ -23,7 +23,7 @@ use linera_rpc::config::CrossChainConfig;
 use serde::Serialize;
 
 #[cfg(feature = "benchmark")]
-const DEFAULT_NUM_CHAINS: usize = 10;
+const DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP: usize = 10;
 #[cfg(feature = "benchmark")]
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
 #[cfg(feature = "benchmark")]
@@ -38,9 +38,14 @@ const DEFAULT_BPS: usize = 10;
 #[derive(Clone, Serialize, clap::Args)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkCommand {
-    /// How many chains to use for the benchmark
-    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS)]
-    pub num_chains: usize,
+    /// How many chains to use in each of the chain groups. One tokio task will be created per chain
+    /// group, for sending block proposals.
+    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP)]
+    pub num_chains_per_chain_group: usize,
+
+    /// How many chain groups to use. If not provided, the number of CPUs will be used.
+    #[arg(long)]
+    pub num_chain_groups: Option<usize>,
 
     /// How many tokens to assign to each newly created chain.
     /// These need to cover the transaction fees per chain for the benchmark.
@@ -93,7 +98,8 @@ pub struct BenchmarkCommand {
 impl Default for BenchmarkCommand {
     fn default() -> Self {
         Self {
-            num_chains: DEFAULT_NUM_CHAINS,
+            num_chains_per_chain_group: DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP,
+            num_chain_groups: None,
             tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
             transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
             wrap_up_max_in_flight: DEFAULT_WRAP_UP_MAX_IN_FLIGHT,
