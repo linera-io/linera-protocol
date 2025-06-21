@@ -103,6 +103,9 @@ pub trait ValidatorNode {
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
     /// Uploads the blobs to the validator.
+    // Unfortunately, this doesn't compile as an async function: async functions in traits
+    // don't play well with default implementations, apparently.
+    // See also https://github.com/rust-lang/impl-trait-utils/issues/17
     fn upload_blobs(
         &self,
         blobs: Vec<Blob>,
