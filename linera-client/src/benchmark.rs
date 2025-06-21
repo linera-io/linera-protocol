@@ -1,7 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, iter, sync::Arc};
+use std::{
+    collections::HashMap,
+    iter,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use linera_base::{
     data_types::{Amount, Epoch},
@@ -19,8 +26,7 @@ use linera_sdk::abis::fungible;
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
 use tokio::{
-    runtime::Handle,
-    sync::{mpsc, Barrier},
+    sync::{mpsc, Barrier, Notify},
     task, time,
 };
 use tokio_util::sync::CancellationToken;
@@ -86,143 +92,109 @@ impl<Env: Environment> Benchmark<Env> {
         committee: Committee,
         health_check_endpoints: Option<String>,
     ) -> Result<(), BenchmarkError> {
+        let bps_count = Arc::new(AtomicUsize::new(0));
+        let notifier = Arc::new(Notify::new());
+        let barrier = Arc::new(Barrier::new(num_chains + 1));
+
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-        let handle = Handle::current();
-        // The bps control task will control the BPS from the threads. `crossbeam_channel` is used
-        // for two reasons:
-        // 1. it allows bounded channels with zero sized buffers.
-        // 2. it blocks the current thread if the message can't be sent, which is exactly
-        //    what we want to happen here. `tokio::sync::mpsc` doesn't do that. `std::sync::mpsc`
-        //    does, but it is slower than `crossbeam_channel`.
-        // Number 1 is the main reason. `tokio::sync::mpsc` doesn't allow 0 sized buffers.
-        // With a channel with a buffer of size 1 or larger, even if we have already reached
-        // the desired BPS, the tasks would continue sending block proposals until the channel's
-        // buffer is filled, which would cause us to not properly control the BPS rate.
-        let (sender, receiver) = crossbeam_channel::bounded(0);
-        let bps_control_task = task::spawn_blocking(move || {
-            handle.block_on(async move {
-                let mut recv_count = 0;
-                let mut start = time::Instant::now();
-                while let Ok(()) = receiver.recv() {
-                    recv_count += 1;
-                    if recv_count == num_chains {
-                        let elapsed = start.elapsed();
-                        if let Some(bps) = bps {
-                            let tps =
-                                (bps * transactions_per_block).to_formatted_string(&Locale::en);
-                            let bps = bps.to_formatted_string(&Locale::en);
-                            if elapsed > time::Duration::from_secs(1) {
-                                warn!(
-                                    "Failed to achieve {} BPS/{} TPS in {} ms",
-                                    bps,
-                                    tps,
-                                    elapsed.as_millis(),
-                                );
-                            } else {
-                                time::sleep(time::Duration::from_secs(1) - elapsed).await;
-                                info!(
-                                    "Achieved {} BPS/{} TPS in {} ms",
-                                    bps,
-                                    tps,
-                                    elapsed.as_millis(),
-                                );
-                            }
-                        } else {
-                            let achieved_bps = num_chains as f64 / elapsed.as_secs_f64();
-                            info!(
-                                "Achieved {} BPS/{} TPS in {} ms",
-                                achieved_bps,
-                                achieved_bps * transactions_per_block as f64,
-                                elapsed.as_millis(),
-                            );
-                        }
-
-                        recv_count = 0;
-                        start = time::Instant::now();
-                    }
+        let shutdown_notifier_clone = shutdown_notifier.clone();
+        let bps_count_clone = bps_count.clone();
+        let notifier_clone = notifier.clone();
+        let barrier_clone = barrier.clone();
+        // The bps control task will control the BPS from the threads.
+        let bps_control_task = task::spawn(async move {
+            barrier_clone.wait().await;
+            let mut one_second_interval = time::interval(time::Duration::from_secs(1));
+            loop {
+                if shutdown_notifier_clone.is_cancelled() {
+                    info!("Shutdown signal received in bps control task");
+                    break;
                 }
-
-                info!("Exiting logging task...");
-            })
-        });
-
-        let (bps_tasks_logger_sender, mut bps_tasks_logger_receiver) = mpsc::channel(num_chains);
-        let bps_tasks_logger_task = task::spawn(async move {
-            let mut tasks_running = 0;
-            while let Some(()) = bps_tasks_logger_receiver.recv().await {
-                tasks_running += 1;
-                info!("{}/{} tasks ready to start", tasks_running, num_chains);
-                if tasks_running == num_chains {
-                    info!("All tasks are ready to start");
+                one_second_interval.tick().await;
+                let current_bps_count = bps_count_clone.swap(0, Ordering::Relaxed);
+                notifier_clone.notify_waiters();
+                let formatted_current_bps = current_bps_count.to_formatted_string(&Locale::en);
+                let formatted_current_tps =
+                    (current_bps_count * transactions_per_block).to_formatted_string(&Locale::en);
+                if let Some(bps) = bps {
+                    let formatted_tps_goal =
+                        (bps * transactions_per_block).to_formatted_string(&Locale::en);
+                    let formatted_bps_goal = bps.to_formatted_string(&Locale::en);
+                    if current_bps_count >= bps {
+                        info!(
+                            "Achieved {} BPS/{} TPS",
+                            formatted_bps_goal, formatted_tps_goal
+                        );
+                    } else {
+                        warn!(
+                            "Failed to achieve {} BPS/{} TPS, only achieved {} BPS/{} TPS",
+                            formatted_bps_goal,
+                            formatted_tps_goal,
+                            formatted_current_bps,
+                            formatted_current_tps,
+                        );
+                    }
+                } else {
+                    info!(
+                        "Achieved {} BPS/{} TPS",
+                        formatted_current_bps, formatted_current_tps,
+                    );
                     break;
                 }
             }
+
+            info!("Exiting bps control task");
         });
 
-        let mut bps_remainder = bps.unwrap_or_default() % num_chains;
-        let bps_share = bps.map(|bps| bps / num_chains);
-
-        let barrier = Arc::new(Barrier::new(num_chains));
         let mut join_set = task::JoinSet::<Result<(), BenchmarkError>>::new();
         for (chain_id, operations, chain_owner) in blocks_infos {
-            let bps_share = if bps_remainder > 0 {
-                bps_remainder -= 1;
-                bps_share.map(|share| share + 1)
-            } else {
-                bps_share
-            };
-
-            let shutdown_notifier = shutdown_notifier.clone();
-            let sender = sender.clone();
-            let handle = Handle::current();
+            let shutdown_notifier_clone = shutdown_notifier.clone();
             let committee = committee.clone();
             let chain_client = chain_clients[&chain_id].clone();
-            let bps_tasks_logger_sender = bps_tasks_logger_sender.clone();
-            let inner_barrier = barrier.clone();
+            let barrier_clone = barrier.clone();
+            let bps_count_clone = bps_count.clone();
+            let notifier_clone = notifier.clone();
             chain_client.process_inbox().await?;
-            join_set.spawn_blocking(move || {
-                handle.block_on(
-                    async move {
-                        Box::pin(Self::run_benchmark_internal(
-                            chain_owner,
-                            bps_share,
-                            operations,
-                            epoch,
-                            chain_client,
-                            shutdown_notifier,
-                            sender,
-                            committee,
-                            bps_tasks_logger_sender,
-                            inner_barrier,
-                        ))
-                        .await?;
+            join_set.spawn(
+                async move {
+                    Box::pin(Self::run_benchmark_internal(
+                        chain_owner,
+                        bps,
+                        operations,
+                        epoch,
+                        chain_client,
+                        shutdown_notifier_clone,
+                        bps_count_clone,
+                        committee,
+                        barrier_clone,
+                        notifier_clone,
+                    ))
+                    .await?;
 
-                        Ok(())
-                    }
-                    .instrument(tracing::info_span!(
-                        "benchmark_chain_id",
-                        chain_id = format!("{:?}", chain_id)
-                    )),
-                )
-            });
+                    Ok(())
+                }
+                .instrument(tracing::info_span!(
+                    "benchmark_chain_id",
+                    chain_id = format!("{:?}", chain_id)
+                )),
+            );
         }
 
         let metrics_watcher =
             Self::create_metrics_watcher(health_check_endpoints, shutdown_notifier.clone()).await?;
+
         join_set
             .join_all()
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
-        drop(sender);
         info!("All benchmark tasks completed");
         bps_control_task.await?;
         if let Some(metrics_watcher) = metrics_watcher {
             metrics_watcher.await??;
         }
-        bps_tasks_logger_task.await?;
 
         Ok(())
     }
@@ -480,19 +452,17 @@ impl<Env: Environment> Benchmark<Env> {
         epoch: Epoch,
         chain_client: ChainClient<Env>,
         shutdown_notifier: CancellationToken,
-        sender: crossbeam_channel::Sender<()>,
+        bps_count: Arc<AtomicUsize>,
         committee: Committee,
-        bps_tasks_logger_sender: mpsc::Sender<()>,
         barrier: Arc<Barrier>,
+        notifier: Arc<Notify>,
     ) -> Result<(), BenchmarkError> {
         let chain_id = chain_client.chain_id();
-        bps_tasks_logger_sender.send(()).await?;
         barrier.wait().await;
         info!(
             "Starting benchmark at target BPS of {:?}, for chain {:?}",
             bps, chain_id
         );
-        let mut num_sent_proposals = 0;
         loop {
             if shutdown_notifier.is_cancelled() {
                 info!("Shutdown signal received, stopping benchmark");
@@ -509,14 +479,12 @@ impl<Env: Environment> Benchmark<Env> {
                 .await
                 .map_err(BenchmarkError::ChainClient)?;
 
-            num_sent_proposals += 1;
+            let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
             if let Some(bps) = bps {
-                if num_sent_proposals == bps {
-                    sender.send(())?;
-                    num_sent_proposals = 0;
+                if current_bps_count >= bps {
+                    notifier.notified().await;
                 }
             } else {
-                sender.send(())?;
                 break;
             }
         }
