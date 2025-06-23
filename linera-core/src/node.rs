@@ -109,15 +109,12 @@ pub trait ValidatorNode {
     fn upload_blobs(
         &self,
         blobs: Vec<Blob>,
-    ) -> impl futures::Future<Output = Result<(), NodeError>> {
+    ) -> impl futures::Future<Output = Result<Vec<BlobId>, NodeError>> {
         let tasks: Vec<_> = blobs
             .into_iter()
             .map(|blob| self.upload_blob(blob.into()))
             .collect();
-        async move {
-            futures::future::try_join_all(tasks).await?;
-            Ok(())
-        }
+        futures::future::try_join_all(tasks)
     }
 
     /// Downloads a blob. Returns an error if the validator does not have the blob.
