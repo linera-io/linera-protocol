@@ -3465,7 +3465,8 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         hash: CryptoHash,
     ) -> Result<ConfirmedBlock, ChainClientError> {
-        let block = self.client
+        let block = self
+            .client
             .storage_client()
             .read_confirmed_block(hash)
             .await?;
@@ -3488,7 +3489,8 @@ impl<Env: Environment> ChainClient<Env> {
         from: CryptoHash,
         limit: u32,
     ) -> Result<Vec<ConfirmedBlock>, ChainClientError> {
-        let blocks = self.client
+        let blocks = self
+            .client
             .storage_client()
             .read_confirmed_blocks_downward(from, limit)
             .await?;

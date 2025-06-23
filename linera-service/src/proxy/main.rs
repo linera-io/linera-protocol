@@ -338,7 +338,9 @@ where
             DownloadConfirmedBlock(hash) => {
                 let block = self.storage.read_confirmed_block(*hash).await?;
                 let block = block.ok_or_else(|| anyhow!("Missing confirmed block {hash}"))?;
-                Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(block))))
+                Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
+                    block,
+                ))))
             }
             DownloadCertificates(hashes) => {
                 let certificates = self.storage.read_certificates(hashes.clone()).await?;

@@ -238,7 +238,10 @@ impl<C: ClientContext> ChainListener<C> {
     /// If any new chains were created by the given block, and we have a key pair for them,
     /// add them to the wallet and start listening for notifications.
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
-        let block = self.storage.read_confirmed_block(hash).await?
+        let block = self
+            .storage
+            .read_confirmed_block(hash)
+            .await?
             .ok_or(ChainClientError::MissingConfirmedBlock(hash))?
             .into_block();
         let blobs = block.created_blobs().into_iter();

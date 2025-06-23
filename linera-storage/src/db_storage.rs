@@ -597,7 +597,10 @@ where
         Ok(test)
     }
 
-    async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<Option<ConfirmedBlock>, ViewError> {
+    async fn read_confirmed_block(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Option<ConfirmedBlock>, ViewError> {
         let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         let value = self.store.read_value(&block_key).await?;
         #[cfg(with_metrics)]
