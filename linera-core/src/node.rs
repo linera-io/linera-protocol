@@ -9,7 +9,7 @@ use futures::stream::LocalBoxStream as BoxStream;
 use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, BlobContent, BlockHeight, NetworkDescription},
+    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -101,6 +101,21 @@ pub trait ValidatorNode {
     // Uploads a blob. Returns an error if the validator has not seen a
     // certificate using this blob.
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
+
+    /// Uploads the blobs to the validator.
+    // Unfortunately, this doesn't compile as an async function: async functions in traits
+    // don't play well with default implementations, apparently.
+    // See also https://github.com/rust-lang/impl-trait-utils/issues/17
+    fn upload_blobs(
+        &self,
+        blobs: Vec<Blob>,
+    ) -> impl futures::Future<Output = Result<Vec<BlobId>, NodeError>> {
+        let tasks: Vec<_> = blobs
+            .into_iter()
+            .map(|blob| self.upload_blob(blob.into()))
+            .collect();
+        futures::future::try_join_all(tasks)
+    }
 
     /// Downloads a blob. Returns an error if the validator does not have the blob.
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
