@@ -96,6 +96,7 @@ impl<Env: Environment> Benchmark<Env> {
         committee: Committee,
         health_check_endpoints: Option<String>,
         runtime_in_seconds: Option<u64>,
+        delay_between_chain_groups_ms: Option<u64>,
     ) -> Result<(), BenchmarkError> {
         let bps_count = Arc::new(AtomicUsize::new(0));
         let notifier = Arc::new(Notify::new());
@@ -146,6 +147,7 @@ impl<Env: Environment> Benchmark<Env> {
                         barrier_clone,
                         notifier_clone,
                         runtime_control_sender_clone,
+                        delay_between_chain_groups_ms,
                     ))
                     .await?;
 
@@ -563,8 +565,15 @@ impl<Env: Environment> Benchmark<Env> {
         barrier: Arc<Barrier>,
         notifier: Arc<Notify>,
         runtime_control_sender: Option<mpsc::Sender<()>>,
+        delay_between_chain_groups_ms: Option<u64>,
     ) -> Result<(), BenchmarkError> {
         barrier.wait().await;
+        if let Some(delay_between_chain_groups_ms) = delay_between_chain_groups_ms {
+            time::sleep(time::Duration::from_millis(
+                (chain_group_index as u64) * delay_between_chain_groups_ms,
+            ))
+            .await;
+        }
         info!("Starting benchmark for chain group {:?}", chain_group_index);
 
         if let Some(runtime_control_sender) = runtime_control_sender {
