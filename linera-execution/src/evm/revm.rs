@@ -889,16 +889,9 @@ fn get_argument<Ctx: ContextTr>(context: &mut Ctx, argument: &mut Vec<u8>, input
     };
 }
 
-fn get_call_contract_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInputs) -> Vec<u8> {
-    let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
-    argument.extend(inputs.caller.as_slice());
+fn get_call_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInputs) -> Vec<u8> {
+    let mut argument = INTERPRETER_RESULT_SELECTOR.to_vec();
     get_argument(context, &mut argument, &inputs.input);
-    argument
-}
-
-fn get_call_service_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
-    let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
-    get_argument(context, &mut argument, input);
     argument
 }
 
@@ -946,7 +939,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
-        let argument = get_call_contract_argument(context, inputs);
+        let argument = get_call_argument(context, inputs);
         let authenticated = true;
         let result = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
@@ -1019,7 +1012,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
-        let argument = get_call_service_argument(context, &inputs.input);
+        let argument = get_call_argument(context, inputs);
         let result = {
             let evm_query = EvmQuery::Query(argument);
             let evm_query = serde_json::to_vec(&evm_query)?;
@@ -1113,14 +1106,13 @@ where
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
+        let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 28)?;
-            let caller = Address::from_slice(&operation[4..24]);
-            forbid_execute_operation_origin(&operation[24..28])?;
-            let result = self.init_transact_commit(operation[24..].to_vec(), caller)?;
+            forbid_execute_operation_origin(&operation[4..8])?;
+            let result = self.init_transact_commit(operation[4..].to_vec(), caller)?;
             result.interpreter_result_and_logs()?
         } else {
-            let caller = self.get_msg_address()?;
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
             let result = self.init_transact_commit(operation, caller)?;
