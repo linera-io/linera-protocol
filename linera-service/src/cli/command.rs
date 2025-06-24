@@ -90,6 +90,14 @@ pub struct BenchmarkCommand {
     /// it is interrupted.
     #[arg(long)]
     pub runtime_in_seconds: Option<u64>,
+
+    /// The delay between chain groups, in milliseconds. For example, if set to 200ms, the first
+    /// chain group will start, then the second will start 200 ms after the first one, the third
+    /// 200 ms after the second one, and so on.
+    /// This is used for slowly ramping up the TPS, so we don't pound the validators with the full
+    /// TPS all at once.
+    #[arg(long)]
+    pub delay_between_chain_groups_ms: Option<u64>,
 }
 
 #[cfg(feature = "benchmark")]
@@ -107,6 +115,7 @@ impl Default for BenchmarkCommand {
             health_check_endpoints: None,
             confirm_before_start: false,
             runtime_in_seconds: None,
+            delay_between_chain_groups_ms: None,
         }
     }
 }

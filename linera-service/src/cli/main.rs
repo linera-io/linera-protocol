@@ -800,6 +800,7 @@ impl Runnable for Job {
                     wrap_up_max_in_flight,
                     confirm_before_start,
                     runtime_in_seconds,
+                    delay_between_chain_groups_ms,
                 } = benchmark_config;
                 assert!(
                     options.context_options.max_pending_message_bundles >= transactions_per_block,
@@ -869,6 +870,7 @@ impl Runnable for Job {
                     committee,
                     health_check_endpoints,
                     runtime_in_seconds,
+                    delay_between_chain_groups_ms,
                 )
                 .await?;
 
