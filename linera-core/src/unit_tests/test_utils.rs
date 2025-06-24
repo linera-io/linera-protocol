@@ -753,6 +753,27 @@ impl GenesisStorageBuilder {
 pub type ChainClient<S> =
     crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>, InMemorySigner>>;
 
+impl<S: Storage + Clone + Send + Sync + 'static> ChainClient<S> {
+    /// Reads the hashed certificate values in descending order from the given hash.
+    pub async fn read_confirmed_blocks_downward(
+        &self,
+        from: CryptoHash,
+        limit: u32,
+    ) -> anyhow::Result<Vec<ConfirmedBlock>> {
+        let mut hash = Some(from);
+        let mut values = Vec::new();
+        for _ in 0..limit {
+            let Some(next_hash) = hash else {
+                break;
+            };
+            let value = self.read_confirmed_block(next_hash).await?;
+            hash = value.block().header.previous_block_hash;
+            values.push(value);
+        }
+        Ok(values)
+    }
+}
+
 impl<B> TestBuilder<B>
 where
     B: StorageBuilder,

@@ -3483,20 +3483,6 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(())
     }
 
-    #[instrument(level = "trace", skip(from, limit))]
-    pub async fn read_confirmed_blocks_downward(
-        &self,
-        from: CryptoHash,
-        limit: u32,
-    ) -> Result<Vec<ConfirmedBlock>, ChainClientError> {
-        let blocks = self
-            .client
-            .storage_client()
-            .read_confirmed_blocks_downward(from, limit)
-            .await?;
-        blocks.ok_or(ChainClientError::MissingConfirmedBlock(from))
-    }
-
     #[instrument(level = "trace", skip(local_node))]
     async fn local_chain_info(
         &self,

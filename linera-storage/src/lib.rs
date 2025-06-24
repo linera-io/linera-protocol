@@ -106,13 +106,6 @@ pub trait Storage: Sized {
         blob_ids: &[BlobId],
     ) -> Result<Vec<Option<BlobState>>, ViewError>;
 
-    /// Reads the hashed certificate values in descending order from the given hash.
-    async fn read_confirmed_blocks_downward(
-        &self,
-        from: CryptoHash,
-        limit: u32,
-    ) -> Result<Option<Vec<ConfirmedBlock>>, ViewError>;
-
     /// Writes the given blob.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
 

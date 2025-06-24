@@ -673,27 +673,6 @@ where
         Ok(blob_states)
     }
 
-    async fn read_confirmed_blocks_downward(
-        &self,
-        from: CryptoHash,
-        limit: u32,
-    ) -> Result<Option<Vec<ConfirmedBlock>>, ViewError> {
-        let mut hash = Some(from);
-        let mut values = Vec::new();
-        for _ in 0..limit {
-            let Some(next_hash) = hash else {
-                break;
-            };
-            let value = self.read_confirmed_block(next_hash).await?;
-            let Some(value) = value else {
-                return Ok(None);
-            };
-            hash = value.block().header.previous_block_hash;
-            values.push(value);
-        }
-        Ok(Some(values))
-    }
-
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.add_blob(blob)?;
