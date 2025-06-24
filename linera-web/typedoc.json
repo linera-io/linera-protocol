@@ -1,0 +1,4 @@
+{
+    "entryPoints": ["dist/linera_web.d.ts"],
+    "excludeNotDocumented": true
+}
