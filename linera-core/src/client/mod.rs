@@ -9,7 +9,7 @@ use std::{
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use chain_client_state::ChainClientState;
@@ -1981,7 +1981,8 @@ impl<Env: Environment> ChainClient<Env> {
         operations: &[Operation],
         incoming_bundles: &[IncomingBundle],
         super_owner: AccountOwner,
-    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
+    ) -> Result<(u64, u64, u64, u64), ChainClientError> {
+        let creating_proposal_start = Instant::now();
         let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(incoming_bundles, info.timestamp);
         let proposed_block = ProposedBlock {
@@ -2004,16 +2005,31 @@ impl<Env: Environment> ChainClient<Env> {
             .await
             .map_err(ChainClientError::signer_failure)?,
         );
+        let creating_proposal_ms = creating_proposal_start.elapsed().as_millis() as u64;
+        let stage_block_execution_start = Instant::now();
         let block = self
             .client
             .local_node
             .stage_block_execution(proposed_block, None, Vec::new())
             .await?
             .0;
+        let stage_block_execution_ms = stage_block_execution_start.elapsed().as_millis() as u64;
+        let creating_confirmed_block_start = Instant::now();
         let value = ConfirmedBlock::new(block);
+        let creating_confirmed_block_ms =
+            creating_confirmed_block_start.elapsed().as_millis() as u64;
+        let submitting_block_proposal_start = Instant::now();
         self.client
             .submit_block_proposal(committee, proposal, value)
-            .await
+            .await?;
+        let submitting_block_proposal_ms =
+            submitting_block_proposal_start.elapsed().as_millis() as u64;
+        Ok((
+            creating_proposal_ms,
+            stage_block_execution_ms,
+            creating_confirmed_block_ms,
+            submitting_block_proposal_ms,
+        ))
     }
 
     /// Attempts to update all validators about the local chain.
