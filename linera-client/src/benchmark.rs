@@ -10,6 +10,7 @@ use std::{
     },
 };
 
+use hdrhistogram::Histogram;
 use linera_base::{
     data_types::{Amount, Epoch},
     identifiers::{AccountOwner, ApplicationId, ChainId},
@@ -66,7 +67,13 @@ pub enum BenchmarkError {
     #[error("Unexpected empty bucket")]
     UnexpectedEmptyBucket,
     #[error("Failed to send message: {0}")]
-    TokioSendError(#[from] mpsc::error::SendError<()>),
+    TokioSendUnitError(#[from] mpsc::error::SendError<()>),
+    #[error("Failed to create histogram: {0}")]
+    HistogramCreationError(#[from] hdrhistogram::CreationError),
+    #[error("Failed to record histogram: {0}")]
+    HistogramRecordError(#[from] hdrhistogram::RecordError),
+    #[error("Failed to send message: {0}")]
+    TokioSendU64Error(#[from] mpsc::error::SendError<u64>),
 }
 
 #[derive(Debug)]
@@ -148,12 +155,46 @@ impl<Env: Environment> Benchmark<Env> {
             info!("Exiting bps control task");
         });
 
+        let shutdown_notifier_clone = shutdown_notifier.clone();
+        let (block_time_quantiles_sender, mut block_time_quantiles_receiver) =
+            mpsc::unbounded_channel();
+        let block_time_quantiles_task: task::JoinHandle<Result<(), BenchmarkError>> =
+            task::spawn(async move {
+                let mut block_time_histogram = Histogram::<u64>::new(2)?;
+                let mut block_time_quantiles_timer = Instant::now();
+
+                while let Some(block_time) = block_time_quantiles_receiver.recv().await {
+                    if shutdown_notifier_clone.is_cancelled() {
+                        info!("Shutdown signal received on block time quantiles task");
+                        break;
+                    }
+
+                    block_time_histogram.record(block_time)?;
+
+                    // Print block time quantiles every 5 seconds.
+                    if block_time_quantiles_timer.elapsed().as_secs() >= 5 {
+                        for quantile in [0.99, 0.95, 0.90, 0.50] {
+                            info!(
+                                "Block time p{}: {} ms",
+                                (quantile * 100.0) as usize,
+                                block_time_histogram.value_at_quantile(quantile)
+                            );
+                        }
+                        block_time_quantiles_timer = Instant::now();
+                    }
+                }
+
+                info!("Exiting block time quantiles task");
+                Ok(())
+            });
+
         let mut join_set = task::JoinSet::<Result<(), BenchmarkError>>::new();
         for (chain_id, operations, chain_owner) in blocks_infos {
             let shutdown_notifier_clone = shutdown_notifier.clone();
             let committee = committee.clone();
             let chain_client = chain_clients[&chain_id].clone();
             let barrier_clone = barrier.clone();
+            let block_time_quantiles_sender = block_time_quantiles_sender.clone();
             let bps_count_clone = bps_count.clone();
             let notifier_clone = notifier.clone();
             chain_client.process_inbox().await?;
@@ -168,6 +209,7 @@ impl<Env: Environment> Benchmark<Env> {
                         shutdown_notifier_clone,
                         bps_count_clone,
                         committee,
+                        block_time_quantiles_sender,
                         barrier_clone,
                         notifier_clone,
                     ))
@@ -195,6 +237,8 @@ impl<Env: Environment> Benchmark<Env> {
         if let Some(metrics_watcher) = metrics_watcher {
             metrics_watcher.await??;
         }
+        drop(block_time_quantiles_sender);
+        block_time_quantiles_task.await??;
 
         Ok(())
     }
@@ -454,6 +498,7 @@ impl<Env: Environment> Benchmark<Env> {
         shutdown_notifier: CancellationToken,
         bps_count: Arc<AtomicUsize>,
         committee: Committee,
+        block_time_quantiles_sender: mpsc::UnboundedSender<u64>,
         barrier: Arc<Barrier>,
         notifier: Arc<Notify>,
     ) -> Result<(), BenchmarkError> {
@@ -469,6 +514,7 @@ impl<Env: Environment> Benchmark<Env> {
                 break;
             }
 
+            let start = Instant::now();
             chain_client
                 .submit_fast_block_proposal(&committee, epoch, &operations, signer)
                 .await
@@ -478,6 +524,11 @@ impl<Env: Environment> Benchmark<Env> {
                 .communicate_chain_updates(&committee)
                 .await
                 .map_err(BenchmarkError::ChainClient)?;
+            if let Err(e) = block_time_quantiles_sender.send(start.elapsed().as_millis() as u64) {
+                // The quantiles task might receive the shutdown signal first and exit before this
+                // one receives it.
+                warn!("Failed to send block time quantiles: {}", e);
+            }
 
             let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
             if let Some(bps) = bps {
