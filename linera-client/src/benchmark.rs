@@ -12,7 +12,7 @@ use std::{
 
 use hdrhistogram::Histogram;
 use linera_base::{
-    data_types::{Amount, Epoch},
+    data_types::Amount,
     identifiers::{AccountOwner, ApplicationId, ChainId},
     listen_for_shutdown_signals,
     time::Instant,
@@ -27,7 +27,7 @@ use linera_sdk::abis::fungible;
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
 use tokio::{
-    sync::{mpsc, Barrier},
+    sync::{mpsc, Barrier, Notify},
     task, time,
 };
 use tokio_util::sync::CancellationToken;
@@ -38,8 +38,6 @@ const LATENCY_METRIC_PREFIX: &str = "linera_proxy_request_latency";
 
 #[derive(Debug, thiserror::Error)]
 pub enum BenchmarkError {
-    #[error("Failed to send message: {0}")]
-    CrossbeamSendError(#[from] crossbeam_channel::SendError<()>),
     #[error("Failed to join task: {0}")]
     JoinError(#[from] task::JoinError),
     #[error("Chain client error: {0}")]
@@ -66,13 +64,13 @@ pub enum BenchmarkError {
     NoDataYetForP99Calculation,
     #[error("Unexpected empty bucket")]
     UnexpectedEmptyBucket,
-    #[error("Failed to send message: {0}")]
+    #[error("Failed to send unit message: {0}")]
     TokioSendUnitError(#[from] mpsc::error::SendError<()>),
     #[error("Failed to create histogram: {0}")]
     HistogramCreationError(#[from] hdrhistogram::CreationError),
     #[error("Failed to record histogram: {0}")]
     HistogramRecordError(#[from] hdrhistogram::RecordError),
-    #[error("Failed to send message: {0}")]
+    #[error("Failed to send u64 message: {0}")]
     TokioSendU64Error(#[from] mpsc::error::SendError<u64>),
 }
 
@@ -94,13 +92,13 @@ impl<Env: Environment> Benchmark<Env> {
         transactions_per_block: usize,
         bps: usize,
         chain_clients: Vec<Vec<ChainClient<Env>>>,
-        epoch: Epoch,
         blocks_infos: Vec<Vec<(Vec<Operation>, AccountOwner)>>,
         committee: Committee,
         health_check_endpoints: Option<String>,
         runtime_in_seconds: Option<u64>,
     ) -> Result<(), BenchmarkError> {
         let bps_count = Arc::new(AtomicUsize::new(0));
+        let notifier = Arc::new(Notify::new());
         let barrier = Arc::new(Barrier::new(num_chain_groups + 1));
 
         let shutdown_notifier = CancellationToken::new();
@@ -110,6 +108,7 @@ impl<Env: Environment> Benchmark<Env> {
             &barrier,
             &shutdown_notifier,
             &bps_count,
+            &notifier,
             transactions_per_block,
             bps,
         );
@@ -131,12 +130,13 @@ impl<Env: Environment> Benchmark<Env> {
             let barrier_clone = barrier.clone();
             let block_time_quantiles_sender = block_time_quantiles_sender.clone();
             let bps_count_clone = bps_count.clone();
+            let notifier_clone = notifier.clone();
             let runtime_control_sender_clone = runtime_control_sender.clone();
             join_set.spawn(
                 async move {
                     Box::pin(Self::run_benchmark_internal(
                         chain_group_index,
-                        epoch,
+                        bps,
                         chain_group,
                         chain_clients,
                         shutdown_notifier_clone,
@@ -144,16 +144,16 @@ impl<Env: Environment> Benchmark<Env> {
                         committee,
                         block_time_quantiles_sender,
                         barrier_clone,
+                        notifier_clone,
                         runtime_control_sender_clone,
                     ))
                     .await?;
 
                     Ok(())
                 }
-                .instrument(tracing::info_span!(
-                    "benchmark_chain_group",
-                    chain_group_index = ?chain_group_index
-                )),
+                .instrument(
+                    tracing::info_span!("chain_group", chain_group_index = ?chain_group_index),
+                ),
             );
         }
 
@@ -184,46 +184,52 @@ impl<Env: Environment> Benchmark<Env> {
         barrier: &Arc<Barrier>,
         shutdown_notifier: &CancellationToken,
         bps_count: &Arc<AtomicUsize>,
+        notifier: &Arc<Notify>,
         transactions_per_block: usize,
         bps: usize,
     ) -> task::JoinHandle<()> {
         let shutdown_notifier = shutdown_notifier.clone();
         let bps_count = bps_count.clone();
+        let notifier = notifier.clone();
         let barrier = barrier.clone();
-        task::spawn(async move {
-            barrier.wait().await;
-            let mut one_second_interval = time::interval(time::Duration::from_secs(1));
-            loop {
-                if shutdown_notifier.is_cancelled() {
-                    info!("Shutdown signal received in bps control task");
-                    break;
+        task::spawn(
+            async move {
+                barrier.wait().await;
+                let mut one_second_interval = time::interval(time::Duration::from_secs(1));
+                loop {
+                    if shutdown_notifier.is_cancelled() {
+                        info!("Shutdown signal received in bps control task");
+                        break;
+                    }
+                    one_second_interval.tick().await;
+                    let current_bps_count = bps_count.swap(0, Ordering::Relaxed);
+                    notifier.notify_waiters();
+                    let formatted_current_bps = current_bps_count.to_formatted_string(&Locale::en);
+                    let formatted_current_tps = (current_bps_count * transactions_per_block)
+                        .to_formatted_string(&Locale::en);
+                    let formatted_tps_goal =
+                        (bps * transactions_per_block).to_formatted_string(&Locale::en);
+                    let formatted_bps_goal = bps.to_formatted_string(&Locale::en);
+                    if current_bps_count >= bps {
+                        info!(
+                            "Achieved {} BPS/{} TPS",
+                            formatted_bps_goal, formatted_tps_goal
+                        );
+                    } else {
+                        warn!(
+                            "Failed to achieve {} BPS/{} TPS, only achieved {} BPS/{} TPS",
+                            formatted_bps_goal,
+                            formatted_tps_goal,
+                            formatted_current_bps,
+                            formatted_current_tps,
+                        );
+                    }
                 }
-                one_second_interval.tick().await;
-                let current_bps_count = bps_count.swap(0, Ordering::Relaxed);
-                let formatted_current_bps = current_bps_count.to_formatted_string(&Locale::en);
-                let formatted_current_tps =
-                    (current_bps_count * transactions_per_block).to_formatted_string(&Locale::en);
-                let formatted_tps_goal =
-                    (bps * transactions_per_block).to_formatted_string(&Locale::en);
-                let formatted_bps_goal = bps.to_formatted_string(&Locale::en);
-                if current_bps_count >= bps {
-                    info!(
-                        "Achieved {} BPS/{} TPS",
-                        formatted_bps_goal, formatted_tps_goal
-                    );
-                } else {
-                    warn!(
-                        "Failed to achieve {} BPS/{} TPS, only achieved {} BPS/{} TPS",
-                        formatted_bps_goal,
-                        formatted_tps_goal,
-                        formatted_current_bps,
-                        formatted_current_tps,
-                    );
-                }
-            }
 
-            info!("Exiting bps control task");
-        })
+                info!("Exiting bps control task");
+            }
+            .instrument(tracing::info_span!("bps_control")),
+        )
     }
 
     fn block_time_quantiles_task(
@@ -232,16 +238,16 @@ impl<Env: Environment> Benchmark<Env> {
         mpsc::UnboundedSender<u64>,
         task::JoinHandle<Result<(), BenchmarkError>>,
     ) {
-        let shutdown_notifier_clone = shutdown_notifier.clone();
+        let shutdown_notifier = shutdown_notifier.clone();
         let (block_time_quantiles_sender, mut block_time_quantiles_receiver) =
             mpsc::unbounded_channel();
-        let block_time_quantiles_task: task::JoinHandle<Result<(), BenchmarkError>> =
-            task::spawn(async move {
+        let block_time_quantiles_task: task::JoinHandle<Result<(), BenchmarkError>> = task::spawn(
+            async move {
                 let mut block_time_histogram = Histogram::<u64>::new(2)?;
                 let mut block_time_quantiles_timer = Instant::now();
 
                 while let Some(block_time) = block_time_quantiles_receiver.recv().await {
-                    if shutdown_notifier_clone.is_cancelled() {
+                    if shutdown_notifier.is_cancelled() {
                         info!("Shutdown signal received on block time quantiles task");
                         break;
                     }
@@ -263,7 +269,9 @@ impl<Env: Environment> Benchmark<Env> {
 
                 info!("Exiting block time quantiles task");
                 Ok(())
-            });
+            }
+            .instrument(tracing::info_span!("block_time_quantiles")),
+        );
         (block_time_quantiles_sender, block_time_quantiles_task)
     }
 
@@ -316,7 +324,8 @@ impl<Env: Environment> Benchmark<Env> {
                     }
 
                     Ok(())
-                },
+                }
+                .instrument(tracing::info_span!("metrics_watcher")),
             );
 
             Ok(Some(metrics_watcher))
@@ -334,17 +343,20 @@ impl<Env: Environment> Benchmark<Env> {
             let (runtime_control_sender, mut runtime_control_receiver) =
                 mpsc::channel(num_chain_groups);
             let shutdown_notifier = shutdown_notifier.clone();
-            let runtime_control_task = task::spawn(async move {
-                let mut chains_started = 0;
-                while runtime_control_receiver.recv().await.is_some() {
-                    chains_started += 1;
-                    if chains_started == num_chain_groups {
-                        break;
+            let runtime_control_task = task::spawn(
+                async move {
+                    let mut chains_started = 0;
+                    while runtime_control_receiver.recv().await.is_some() {
+                        chains_started += 1;
+                        if chains_started == num_chain_groups {
+                            break;
+                        }
                     }
+                    time::sleep(time::Duration::from_secs(runtime_in_seconds)).await;
+                    shutdown_notifier.cancel();
                 }
-                time::sleep(time::Duration::from_secs(runtime_in_seconds)).await;
-                shutdown_notifier.cancel();
-            });
+                .instrument(tracing::info_span!("runtime_control")),
+            );
             (Some(runtime_control_task), Some(runtime_control_sender))
         } else {
             (None, None)
@@ -541,7 +553,7 @@ impl<Env: Environment> Benchmark<Env> {
     #[expect(clippy::too_many_arguments)]
     async fn run_benchmark_internal(
         chain_group_index: usize,
-        epoch: Epoch,
+        bps: usize,
         chain_group: Vec<(Vec<Operation>, AccountOwner)>,
         chain_clients: Vec<ChainClient<Env>>,
         shutdown_notifier: CancellationToken,
@@ -549,6 +561,7 @@ impl<Env: Environment> Benchmark<Env> {
         committee: Committee,
         block_time_quantiles_sender: mpsc::UnboundedSender<u64>,
         barrier: Arc<Barrier>,
+        notifier: Arc<Notify>,
         runtime_control_sender: Option<mpsc::Sender<()>>,
     ) -> Result<(), BenchmarkError> {
         barrier.wait().await;
@@ -569,22 +582,22 @@ impl<Env: Environment> Benchmark<Env> {
             }
 
             let start = Instant::now();
+            let incoming_bundles = chain_client.pending_message_bundles().await?;
             chain_client
-                .submit_fast_block_proposal(&committee, epoch, &operations, chain_owner)
-                .await
-                .map_err(BenchmarkError::ChainClient)?;
+                .submit_fast_block_proposal(&committee, &operations, &incoming_bundles, chain_owner)
+                .await?;
             // We assume the committee will not change during the benchmark.
-            chain_client
-                .communicate_chain_updates(&committee)
-                .await
-                .map_err(BenchmarkError::ChainClient)?;
+            chain_client.communicate_chain_updates(&committee).await?;
             if let Err(e) = block_time_quantiles_sender.send(start.elapsed().as_millis() as u64) {
                 // The quantiles task might receive the shutdown signal first and exit before this
                 // one receives it.
                 warn!("Failed to send block time quantiles: {}", e);
             }
 
-            bps_count.fetch_add(1, Ordering::Relaxed);
+            let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
+            if current_bps_count >= bps {
+                notifier.notified().await;
+            }
         }
 
         info!("Exiting task...");
@@ -619,30 +632,27 @@ impl<Env: Environment> Benchmark<Env> {
         let mut blocks_infos = Vec::new();
         for chains in benchmark_chains {
             let mut infos = Vec::new();
-            let mut previous_chain_id = chains
-                .iter()
-                .last()
-                .expect("There should be a last element")
-                .0;
+            let chains_len = chains.len();
             let amount = Amount::from(1);
-            for (chain_id, owner) in chains {
+            for i in 0..chains_len {
+                let owner = chains[i].1;
+                let recipient_chain_id = chains[(i + chains_len - 1) % chains_len].0;
                 let operation = match fungible_application_id {
                     Some(application_id) => Self::fungible_transfer(
                         application_id,
-                        previous_chain_id,
+                        recipient_chain_id,
                         owner,
                         owner,
                         amount,
                     ),
                     None => Operation::system(SystemOperation::Transfer {
                         owner: AccountOwner::CHAIN,
-                        recipient: Recipient::chain(previous_chain_id),
+                        recipient: Recipient::chain(recipient_chain_id),
                         amount,
                     }),
                 };
                 let operations = iter::repeat_n(operation, transactions_per_block).collect();
                 infos.push((operations, owner));
-                previous_chain_id = chain_id;
             }
             blocks_infos.push(infos);
         }

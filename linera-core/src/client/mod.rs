@@ -1761,7 +1761,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
     /// local chain.
     #[instrument(level = "trace")]
-    async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
+    pub async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
         if self.options.message_policy.is_ignore() {
             // Ignore all messages.
             return Ok(Vec::new());
@@ -1782,9 +1782,8 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
-        let pending_message_bundles = info.requested_pending_message_bundles;
-
-        Ok(pending_message_bundles
+        Ok(info
+            .requested_pending_message_bundles
             .into_iter()
             .filter_map(|mut bundle| {
                 self.options
@@ -1979,30 +1978,36 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn submit_fast_block_proposal(
         &self,
         committee: &Committee,
-        epoch: Epoch,
         operations: &[Operation],
+        incoming_bundles: &[IncomingBundle],
         super_owner: AccountOwner,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
         let info = self.chain_info().await?;
+        let timestamp = self.next_timestamp(incoming_bundles, info.timestamp);
         let proposed_block = ProposedBlock {
-            epoch,
+            epoch: info.epoch,
             chain_id: self.chain_id,
-            incoming_bundles: Vec::new(),
+            incoming_bundles: incoming_bundles.to_vec(),
             operations: operations.to_vec(),
             previous_block_hash: info.block_hash,
             height: info.next_block_height,
             authenticated_signer: Some(super_owner),
-            timestamp: info.timestamp.max(Timestamp::now()),
+            timestamp,
         };
         let proposal = Box::new(
-            BlockProposal::new_initial(super_owner, Round::Fast, proposed_block, self.signer())
-                .await
-                .map_err(ChainClientError::signer_failure)?,
+            BlockProposal::new_initial(
+                super_owner,
+                Round::Fast,
+                proposed_block.clone(),
+                self.signer(),
+            )
+            .await
+            .map_err(ChainClientError::signer_failure)?,
         );
         let block = self
             .client
             .local_node
-            .stage_block_execution(proposal.content.block.clone(), None, Vec::new())
+            .stage_block_execution(proposed_block, None, Vec::new())
             .await?
             .0;
         let value = ConfirmedBlock::new(block);

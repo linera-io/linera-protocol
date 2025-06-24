@@ -32,7 +32,7 @@ use {
     futures::{stream, StreamExt, TryStreamExt},
     linera_base::{
         crypto::AccountPublicKey,
-        data_types::{Amount, Epoch},
+        data_types::Amount,
         identifiers::{ApplicationId, BlobType},
     },
     linera_core::client::ChainClientError,
@@ -652,7 +652,6 @@ where
     ) -> Result<
         (
             Vec<Vec<ChainClient<Env>>>,
-            Epoch,
             Vec<Vec<(Vec<Operation>, AccountOwner)>>,
             Committee,
         ),
@@ -706,14 +705,14 @@ where
             .default_chain()
             .expect("should have default chain");
         let default_chain_client = self.make_chain_client(default_chain_id);
-        let (epoch, committee) = default_chain_client.admin_committee().await?;
+        let committee = default_chain_client.admin_committee().await?.1;
         let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
             benchmark_chains,
             transactions_per_block,
             fungible_application_id,
         );
 
-        Ok((chain_clients, epoch, blocks_infos, committee))
+        Ok((chain_clients, blocks_infos, committee))
     }
 
     pub async fn wrap_up_benchmark(
