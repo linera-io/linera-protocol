@@ -68,7 +68,9 @@ pub const RUNTIME_TIMESTAMP_SIZE: u32 = 8;
 pub const RUNTIME_OWNER_WEIGHT_SIZE: u32 = 8;
 
 /// The runtime constant part size of the `ChainOwnership`.
-/// It does not correspond exactly to the memory size of the `ChainOwnership`.
+/// It consists of one `u32` and four `TimeDelta` which are the constant part of
+/// the `ChainOwnership`. The way we do it is not optimal:
+/// TODO(#4164): Implement a procedure for computing naive sizes.
 pub const RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE: u32 = 4 + 4 * 8;
 
 #[cfg(test)]
