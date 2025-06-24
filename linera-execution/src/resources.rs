@@ -10,6 +10,7 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, Blob},
     ensure,
     identifiers::AccountOwner,
+    ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_views::{context::Context, ViewError};
@@ -48,6 +49,58 @@ impl<Account, Tracker> ResourceController<Account, Tracker> {
     }
 }
 
+/// The runtime size of an `Amount`.
+pub const RUNTIME_AMOUNT_SIZE: u32 = 16;
+
+/// The runtime size of a `ApplicationId`.
+pub const RUNTIME_APPLICATION_ID_SIZE: u32 = 32;
+
+/// The runtime size of a `BlockHeight`.
+pub const RUNTIME_BLOCK_HEIGHT_SIZE: u32 = 8;
+
+/// The runtime size of a `ChainId`.
+pub const RUNTIME_CHAIN_ID_SIZE: u32 = 32;
+
+/// The runtime size of a `Timestamp`.
+pub const RUNTIME_TIMESTAMP_SIZE: u32 = 8;
+
+/// The runtime size of the weight of an owner.
+pub const RUNTIME_OWNER_WEIGHT_SIZE: u32 = 8;
+
+/// The runtime constant part size of the `ChainOwnership`.
+/// It consists of one `u32` and four `TimeDelta` which are the constant part of
+/// the `ChainOwnership`. The way we do it is not optimal:
+/// TODO(#4164): Implement a procedure for computing naive sizes.
+pub const RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE: u32 = 4 + 4 * 8;
+
+#[cfg(test)]
+mod tests {
+    use std::mem::size_of;
+
+    use linera_base::{
+        data_types::{Amount, BlockHeight, Timestamp},
+        identifiers::{ApplicationId, ChainId},
+    };
+
+    use crate::resources::{
+        RUNTIME_AMOUNT_SIZE, RUNTIME_APPLICATION_ID_SIZE, RUNTIME_BLOCK_HEIGHT_SIZE,
+        RUNTIME_CHAIN_ID_SIZE, RUNTIME_OWNER_WEIGHT_SIZE, RUNTIME_TIMESTAMP_SIZE,
+    };
+
+    #[test]
+    fn test_size_of_runtime_operations() {
+        assert_eq!(RUNTIME_AMOUNT_SIZE as usize, size_of::<Amount>());
+        assert_eq!(
+            RUNTIME_APPLICATION_ID_SIZE as usize,
+            size_of::<ApplicationId>()
+        );
+        assert_eq!(RUNTIME_BLOCK_HEIGHT_SIZE as usize, size_of::<BlockHeight>());
+        assert_eq!(RUNTIME_CHAIN_ID_SIZE as usize, size_of::<ChainId>());
+        assert_eq!(RUNTIME_TIMESTAMP_SIZE as usize, size_of::<Timestamp>());
+        assert_eq!(RUNTIME_OWNER_WEIGHT_SIZE as usize, size_of::<u64>());
+    }
+}
+
 /// The resources used so far by an execution process.
 /// Acts as an accumulator for all resources consumed during
 /// a specific execution flow. This could be the execution of a block,
@@ -65,6 +118,8 @@ pub struct ResourceTracker {
     pub read_operations: u32,
     /// The number of write operations.
     pub write_operations: u32,
+    /// The size of bytes read from runtime.
+    pub bytes_runtime: u32,
     /// The number of bytes read.
     pub bytes_read: u64,
     /// The number of bytes written.
@@ -266,6 +321,91 @@ where
             }
         }
         self.update_balance(self.policy.fuel_price(fuel, vm_runtime)?)
+    }
+
+    /// Tracks runtime reading of `ChainId`
+    pub(crate) fn track_runtime_chain_id(&mut self) -> Result<(), ExecutionError> {
+        self.track_size_runtime_operations(RUNTIME_CHAIN_ID_SIZE)
+    }
+
+    /// Tracks runtime reading of `BlockHeight`
+    pub(crate) fn track_runtime_block_height(&mut self) -> Result<(), ExecutionError> {
+        self.track_size_runtime_operations(RUNTIME_BLOCK_HEIGHT_SIZE)
+    }
+
+    /// Tracks runtime reading of `ApplicationId`
+    pub(crate) fn track_runtime_application_id(&mut self) -> Result<(), ExecutionError> {
+        self.track_size_runtime_operations(RUNTIME_APPLICATION_ID_SIZE)
+    }
+
+    /// Tracks runtime reading of application parameters.
+    pub(crate) fn track_runtime_application_parameters(
+        &mut self,
+        parameters: &[u8],
+    ) -> Result<(), ExecutionError> {
+        let parameters_len = parameters.len() as u32;
+        self.track_size_runtime_operations(parameters_len)
+    }
+
+    /// Tracks runtime reading of `Timestamp`
+    pub(crate) fn track_runtime_timestamp(&mut self) -> Result<(), ExecutionError> {
+        self.track_size_runtime_operations(RUNTIME_TIMESTAMP_SIZE)
+    }
+
+    /// Tracks runtime reading of balance
+    pub(crate) fn track_runtime_balance(&mut self) -> Result<(), ExecutionError> {
+        self.track_size_runtime_operations(RUNTIME_AMOUNT_SIZE)
+    }
+
+    /// Tracks runtime reading of owner balances
+    pub(crate) fn track_runtime_owner_balances(
+        &mut self,
+        owner_balances: &[(AccountOwner, Amount)],
+    ) -> Result<(), ExecutionError> {
+        let mut size = 0;
+        for (account_owner, _) in owner_balances {
+            size += account_owner.size() + RUNTIME_AMOUNT_SIZE;
+        }
+        self.track_size_runtime_operations(size)
+    }
+
+    /// Tracks runtime reading of owners
+    pub(crate) fn track_runtime_owners(
+        &mut self,
+        owners: &[AccountOwner],
+    ) -> Result<(), ExecutionError> {
+        let mut size = 0;
+        for owner in owners {
+            size += owner.size();
+        }
+        self.track_size_runtime_operations(size)
+    }
+
+    /// Tracks runtime reading of owners
+    pub(crate) fn track_runtime_chain_ownership(
+        &mut self,
+        chain_ownership: &ChainOwnership,
+    ) -> Result<(), ExecutionError> {
+        let mut size = 0;
+        for account_owner in &chain_ownership.super_owners {
+            size += account_owner.size();
+        }
+        for account_owner in chain_ownership.owners.keys() {
+            size += account_owner.size() + RUNTIME_OWNER_WEIGHT_SIZE;
+        }
+        size += RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE;
+        self.track_size_runtime_operations(size)
+    }
+
+    /// Tracks runtime operations.
+    fn track_size_runtime_operations(&mut self, size: u32) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().bytes_runtime = self
+            .tracker
+            .as_mut()
+            .bytes_runtime
+            .checked_add(size)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.bytes_runtime_price(size)?)
     }
 
     /// Tracks a read operation.

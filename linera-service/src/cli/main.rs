@@ -630,6 +630,7 @@ impl Runnable for Job {
                                     evm_fuel_unit,
                                     read_operation,
                                     write_operation,
+                                    byte_runtime,
                                     byte_read,
                                     byte_written,
                                     blob_read,
@@ -668,6 +669,8 @@ impl Runnable for Job {
                                             .unwrap_or(existing_policy.read_operation),
                                         write_operation: write_operation
                                             .unwrap_or(existing_policy.write_operation),
+                                        byte_runtime: byte_runtime
+                                            .unwrap_or(existing_policy.byte_runtime),
                                         byte_read: byte_read.unwrap_or(existing_policy.byte_read),
                                         byte_written: byte_written
                                             .unwrap_or(existing_policy.byte_written),
@@ -1682,6 +1685,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             evm_fuel_unit_price,
             read_operation_price,
             write_operation_price,
+            byte_runtime_price,
             byte_read_price,
             byte_written_price,
             byte_stored_price,
@@ -1721,6 +1725,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 evm_fuel_unit: evm_fuel_unit_price.unwrap_or(existing_policy.evm_fuel_unit),
                 read_operation: read_operation_price.unwrap_or(existing_policy.read_operation),
                 write_operation: write_operation_price.unwrap_or(existing_policy.write_operation),
+                byte_runtime: byte_runtime_price.unwrap_or(existing_policy.byte_runtime),
                 byte_read: byte_read_price.unwrap_or(existing_policy.byte_read),
                 byte_written: byte_written_price.unwrap_or(existing_policy.byte_written),
                 blob_read: blob_read_price.unwrap_or(existing_policy.blob_read),

@@ -104,6 +104,7 @@ interface contract-runtime-api {
         evm-fuel: u64,
         read-operations: u32,
         write-operations: u32,
+        bytes-runtime: u32,
         bytes-to-read: u32,
         bytes-to-write: u32,
         blobs-to-read: u32,

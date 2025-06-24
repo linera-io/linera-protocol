@@ -886,6 +886,8 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - write_operation:
         TYPENAME: Amount
+    - byte_runtime:
+        TYPENAME: Amount
     - byte_read:
         TYPENAME: Amount
     - byte_written:
