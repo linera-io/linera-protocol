@@ -808,12 +808,13 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     // Launch local benchmark using some additional chains.
     client
         .benchmark(BenchmarkCommand {
-            num_chains: 4,
             transactions_per_block: 10,
+            runtime_in_seconds: Some(1),
+            close_chains: true,
             ..Default::default()
         })
         .await?;
-    assert_eq!(client.load_wallet()?.num_chains(), 7);
+    assert_eq!(client.load_wallet()?.num_chains(), 3);
 
     // Now we run the benchmark again, with the fungible token application instead of the
     // native token.
@@ -835,9 +836,10 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         .await?;
     client
         .benchmark(BenchmarkCommand {
-            num_chains: 5,
             transactions_per_block: 10,
+            runtime_in_seconds: Some(1),
             fungible_application_id: Some(application_id.forget_abi()),
+            close_chains: true,
             ..Default::default()
         })
         .await?;
