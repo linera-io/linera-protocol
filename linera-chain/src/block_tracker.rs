@@ -31,12 +31,13 @@ use crate::{
 /// Tracks execution of transactions within a block.
 /// Captures the resource policy, produced messages, oracle responses and events.
 #[derive(Debug)]
-pub struct BlockExecutionTracker<'resources, 'blobs> {
+pub struct BlockExecutionTracker<'blobs> {
     chain_id: ChainId,
     block_height: BlockHeight,
     timestamp: Timestamp,
+    round: Option<u32>,
     authenticated_signer: Option<AccountOwner>,
-    resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
+    resource_controller: ResourceController<Option<AccountOwner>, ResourceTracker>,
     local_time: Timestamp,
     #[debug(skip_if = Option::is_none)]
     pub replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
@@ -63,15 +64,13 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     expected_outcomes_count: usize,
 }
 
-impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
+impl<'blobs> BlockExecutionTracker<'blobs> {
     /// Creates a new BlockExecutionTracker.
     pub fn new(
-        resource_controller: &'resources mut ResourceController<
-            Option<AccountOwner>,
-            ResourceTracker,
-        >,
+        mut resource_controller: ResourceController<Option<AccountOwner>, ResourceTracker>,
         published_blobs: BTreeMap<BlobId, &'blobs Blob>,
         local_time: Timestamp,
+        round: Option<u32>,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         proposal: &ProposedBlock,
     ) -> Result<Self, ChainError> {
@@ -83,6 +82,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             chain_id: proposal.chain_id,
             block_height: proposal.height,
             timestamp: proposal.timestamp,
+            round,
             authenticated_signer: proposal.authenticated_signer,
             resource_controller,
             local_time,
@@ -105,7 +105,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     pub async fn execute_transaction<C>(
         &mut self,
         transaction: Transaction<'_>,
-        round: Option<u32>,
         chain: &mut ExecutionStateView<C>,
     ) -> Result<(), ChainError>
     where
@@ -126,7 +125,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                         message_id,
                         posted_message,
                         incoming_bundle,
-                        round,
+                        self.round,
                         &mut txn_tracker,
                     ))
                     .await?;
@@ -143,7 +142,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 let context = OperationContext {
                     chain_id: self.chain_id,
                     height: self.block_height,
-                    round,
+                    round: self.round,
                     authenticated_signer: self.authenticated_signer,
                     authenticated_caller_id: None,
                     timestamp: self.timestamp,
@@ -279,7 +278,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// so that the execution of the next transaction doesn't overwrite the previous ones.
     ///
     /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
-    pub async fn process_txn_outcome<C>(
+    async fn process_txn_outcome<C>(
         &mut self,
         txn_outcome: &TransactionOutcome,
         view: &mut SystemExecutionStateView<C>,
@@ -368,10 +367,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns a mutable reference to the resource controller.
-    pub fn resource_controller_mut(
+    fn resource_controller_mut(
         &mut self,
     ) -> &mut ResourceController<Option<AccountOwner>, ResourceTracker> {
-        self.resource_controller
+        &mut self.resource_controller
     }
 
     /// Finalizes the execution and returns the collected results.

@@ -744,7 +744,7 @@ where
             .policy()
             .clone();
 
-        let mut resource_controller = ResourceController::new(
+        let resource_controller = ResourceController::new(
             Arc::new(policy),
             ResourceTracker::default(),
             block.authenticated_signer,
@@ -762,19 +762,20 @@ where
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
         let mut block_execution_tracker = BlockExecutionTracker::new(
-            &mut resource_controller,
+            resource_controller,
             published_blobs
                 .iter()
                 .map(|blob| (blob.id(), blob))
                 .collect(),
             local_time,
+            round,
             replaying_oracle_responses,
             block,
         )?;
 
         for transaction in block.transactions() {
             block_execution_tracker
-                .execute_transaction(transaction, round, chain)
+                .execute_transaction(transaction, chain)
                 .await?;
         }
 
@@ -798,10 +799,10 @@ where
             chain.crypto_hash().await?
         };
 
-        let (messages, oracle_responses, events, blobs, operation_results) =
+        let (messages, oracle_responses, events, blobs, operation_results, resource_tracker) =
             block_execution_tracker.finalize();
 
-        Ok(BlockExecutionOutcome {
+        let execution_outcome = BlockExecutionOutcome {
             messages,
             previous_message_blocks,
             state_hash,
@@ -809,7 +810,9 @@ where
             events,
             blobs,
             operation_results,
-        })
+        };
+
+        Ok((execution_outcome, resource_tracker))
     }
 
     /// Executes a block: first the incoming messages, then the main operation.
