@@ -57,7 +57,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, ResourceTracker, SystemQuery,
+    SystemResponse,
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use linera_views::ViewError;
@@ -1263,7 +1264,7 @@ impl<Env: Environment> Client<Env> {
         mut block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+    ) -> Result<(Block, ResourceTracker, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
                 .stage_block_execution(block.clone(), round, published_blobs.clone())
@@ -1308,7 +1309,7 @@ impl<Env: Environment> Client<Env> {
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+    ) -> Result<(Block, ResourceTracker, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
                 .local_node
@@ -2425,7 +2426,7 @@ impl<Env: Environment> ChainClient<Env> {
         };
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let (block, _) = self
+        let (block, _resources, _) = self
             .client
             .stage_block_execution_and_discard_failing_messages(
                 proposed_block,
@@ -2597,7 +2598,7 @@ impl<Env: Environment> ChainClient<Env> {
             .stage_block_execution_and_discard_failing_messages(block, None, Vec::new())
             .await
         {
-            Ok((_, response)) => Ok((
+            Ok((_, _, response)) => Ok((
                 response.info.chain_balance,
                 response.info.requested_owner_balance,
             )),
@@ -2776,7 +2777,7 @@ impl<Env: Environment> ChainClient<Env> {
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
-            let (block, _) = self
+            let (block, _resources, _) = self
                 .client
                 .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone())
                 .await?;

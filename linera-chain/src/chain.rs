@@ -731,7 +731,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<BlockExecutionOutcome, ChainError> {
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
         chain.system.timestamp.set(block.timestamp);
@@ -824,7 +824,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<BlockExecutionOutcome, ChainError> {
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()

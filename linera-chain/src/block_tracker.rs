@@ -393,6 +393,7 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
             self.events,
             self.blobs,
             self.operation_results,
+            self.resource_controller.tracker,
         )
     }
 }
@@ -403,4 +404,5 @@ pub(crate) type FinalizeExecutionResult = (
     Vec<Vec<Event>>,
     Vec<Vec<Blob>>,
     Vec<OperationResult>,
+    ResourceTracker,
 );
