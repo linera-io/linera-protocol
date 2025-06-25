@@ -203,7 +203,9 @@ impl<Env: Environment> Benchmark<Env> {
         runtime_in_seconds: Option<u64>,
         delay_between_chain_groups_ms: Option<u64>,
     ) -> Result<(), BenchmarkError> {
-        let bps_count = Arc::new(AtomicUsize::new(0));
+        let bps_counts = (0..num_chain_groups)
+            .map(|_| Arc::new(AtomicUsize::new(0)))
+            .collect::<Vec<_>>();
         let notifier = Arc::new(Notify::new());
         let barrier = Arc::new(Barrier::new(num_chain_groups + 1));
 
@@ -213,7 +215,7 @@ impl<Env: Environment> Benchmark<Env> {
         let bps_control_task = Self::bps_control_task(
             &barrier,
             &shutdown_notifier,
-            &bps_count,
+            &bps_counts,
             &notifier,
             transactions_per_block,
             bps,
@@ -225,6 +227,8 @@ impl<Env: Environment> Benchmark<Env> {
         let (runtime_control_task, runtime_control_sender) =
             Self::runtime_control_task(&shutdown_notifier, runtime_in_seconds, num_chain_groups);
 
+        let bps_initial_share = bps / num_chain_groups;
+        let mut bps_remainder = bps % num_chain_groups;
         let mut join_set = task::JoinSet::<Result<(), BenchmarkError>>::new();
         for (chain_group_index, (chain_group, chain_clients)) in blocks_infos
             .into_iter()
@@ -235,14 +239,20 @@ impl<Env: Environment> Benchmark<Env> {
             let committee = committee.clone();
             let barrier_clone = barrier.clone();
             let block_time_quantiles_sender = block_time_quantiles_sender.clone();
-            let bps_count_clone = bps_count.clone();
+            let bps_count_clone = bps_counts[chain_group_index].clone();
             let notifier_clone = notifier.clone();
             let runtime_control_sender_clone = runtime_control_sender.clone();
+            let bps_share = if bps_remainder > 0 {
+                bps_remainder -= 1;
+                bps_initial_share + 1
+            } else {
+                bps_initial_share
+            };
             join_set.spawn(
                 async move {
                     Box::pin(Self::run_benchmark_internal(
                         chain_group_index,
-                        bps,
+                        bps_share,
                         chain_group,
                         chain_clients,
                         shutdown_notifier_clone,
@@ -290,13 +300,13 @@ impl<Env: Environment> Benchmark<Env> {
     fn bps_control_task(
         barrier: &Arc<Barrier>,
         shutdown_notifier: &CancellationToken,
-        bps_count: &Arc<AtomicUsize>,
+        bps_counts: &[Arc<AtomicUsize>],
         notifier: &Arc<Notify>,
         transactions_per_block: usize,
         bps: usize,
     ) -> task::JoinHandle<()> {
         let shutdown_notifier = shutdown_notifier.clone();
-        let bps_count = bps_count.clone();
+        let bps_counts = bps_counts.to_vec();
         let notifier = notifier.clone();
         let barrier = barrier.clone();
         task::spawn(
@@ -309,7 +319,10 @@ impl<Env: Environment> Benchmark<Env> {
                         break;
                     }
                     one_second_interval.tick().await;
-                    let current_bps_count = bps_count.swap(0, Ordering::Relaxed);
+                    let current_bps_count: usize = bps_counts
+                        .iter()
+                        .map(|count| count.swap(0, Ordering::Relaxed))
+                        .sum();
                     notifier.notify_waiters();
                     let formatted_current_bps = current_bps_count.to_formatted_string(&Locale::en);
                     let formatted_current_tps = (current_bps_count * transactions_per_block)
@@ -320,7 +333,7 @@ impl<Env: Environment> Benchmark<Env> {
                     if current_bps_count >= bps {
                         info!(
                             "Achieved {} BPS/{} TPS",
-                            formatted_bps_goal, formatted_tps_goal
+                            formatted_current_bps, formatted_current_tps
                         );
                     } else {
                         warn!(
