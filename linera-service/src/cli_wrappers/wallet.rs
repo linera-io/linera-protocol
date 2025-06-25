@@ -1228,6 +1228,37 @@ impl NodeService {
         Ok(serde_json::from_value(data["processInbox"].take())?)
     }
 
+    pub async fn balance(&self, account: &Account) -> Result<Amount> {
+        let chain = account.chain_id;
+        let owner = account.owner;
+        if matches!(owner, AccountOwner::CHAIN) {
+            let query = format!(
+                "query {{ chain(chainId:\"{chain}\") {{
+                    executionState {{ system {{ balance }} }}
+                }} }}"
+            );
+            let response = self.query_node(query).await?;
+            let balance = &response["chain"]["executionState"]["system"]["balance"]
+                .as_str()
+                .unwrap();
+            return Ok(Amount::from_str(balance)?);
+        }
+        let query = format!(
+            "query {{ chain(chainId:\"{chain}\") {{
+                executionState {{ system {{ balances {{
+                    entry(key:\"{owner}\") {{ value }}
+                }} }} }}
+            }} }}"
+        );
+        let response = self.query_node(query).await?;
+        let balances = &response["chain"]["executionState"]["system"]["balances"];
+        let balance = balances["entry"]["value"].as_str();
+        match balance {
+            None => Ok(Amount::ZERO),
+            Some(amount) => Ok(Amount::from_str(amount)?),
+        }
+    }
+
     pub async fn make_application<A: ContractAbi>(
         &self,
         chain_id: &ChainId,
