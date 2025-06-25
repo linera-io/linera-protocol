@@ -440,9 +440,9 @@ pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
         InitialChainConfig {
             ownership: Default::default(),
             epoch: Default::default(),
-            committees: Default::default(),
             balance: Default::default(),
             application_permissions: Default::default(),
+            active_epochs: Default::default(),
         },
         Timestamp::now(),
     );
