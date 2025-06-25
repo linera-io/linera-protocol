@@ -30,6 +30,7 @@
   "homepage": "https://github.com/linera-io/linera-web#readme",
   "devDependencies": {
     "prettier": "3.5.3",
-    "typedoc": "^0.28.5"
+    "typedoc": "^0.28.5",
+    "typedoc-plugin-markdown": "^4.7.0"
   }
 }
