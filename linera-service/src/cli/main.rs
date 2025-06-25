@@ -2151,8 +2151,6 @@ Make sure to use a Linera client compatible with this network.
                             "1000".to_string(),
                             "--storage-max-stream-queries".to_string(),
                             "50".to_string(),
-                            "--tokio-blocking-threads".to_string(),
-                            "10000".to_string(),
                             "--wait-for-outgoing-messages".to_string(),
                         ],
                     )))
