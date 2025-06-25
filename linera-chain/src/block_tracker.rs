@@ -12,9 +12,9 @@ use linera_base::{
     identifiers::{AccountOwner, BlobId, ChainId, MessageId},
 };
 use linera_execution::{
-    ExecutionRuntimeContext, ExecutionStateView, MessageContext, OperationContext, OutgoingMessage,
-    ResourceController, ResourceTracker, SystemExecutionStateView, TransactionOutcome,
-    TransactionTracker,
+    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, MessageContext, Operation,
+    OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
+    SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
 
@@ -133,33 +133,10 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
             }
             Transaction::ExecuteOperation(operation) => {
                 self.resource_controller_mut()
-                    .with_state(&mut chain.system)
-                    .await?
                     .track_block_size_of(&operation)
                     .with_execution_context(chain_execution_context)?;
-                #[cfg(with_metrics)]
-                let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
-                let context = OperationContext {
-                    chain_id: self.chain_id,
-                    height: self.block_height,
-                    round: self.round,
-                    authenticated_signer: self.authenticated_signer,
-                    authenticated_caller_id: None,
-                    timestamp: self.timestamp,
-                };
-                Box::pin(chain.execute_operation(
-                    context,
-                    operation.clone(),
-                    &mut txn_tracker,
-                    self.resource_controller_mut(),
-                ))
-                .await
-                .with_execution_context(chain_execution_context)?;
-                self.resource_controller_mut()
-                    .with_state(&mut chain.system)
-                    .await?
-                    .track_operation(operation)
-                    .with_execution_context(chain_execution_context)?;
+                Box::pin(self.execute_operation_in_block(chain, operation, &mut txn_tracker))
+                    .await?;
             }
         }
 
@@ -258,6 +235,44 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
             }
         }
         Ok(())
+    }
+
+    async fn execute_operation_in_block<C>(
+        &mut self,
+        chain: &mut ExecutionStateView<C>,
+        operation: &Operation,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ChainError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        let execution_context = ChainExecutionContext::Operation(txn_tracker.transaction_index());
+        self.resource_controller_mut()
+            .with_state(&mut chain.system)
+            .await?
+            .track_operation(operation)
+            .with_execution_context(execution_context)?;
+
+        #[cfg(with_metrics)]
+        let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
+        let context = OperationContext {
+            chain_id: self.chain_id,
+            height: self.block_height,
+            round: self.round,
+            authenticated_signer: self.authenticated_signer,
+            authenticated_caller_id: None,
+            timestamp: self.timestamp,
+        };
+        chain
+            .execute_operation(
+                context,
+                operation.clone(),
+                txn_tracker,
+                self.resource_controller_mut(),
+            )
+            .await
+            .with_execution_context(execution_context)
     }
 
     /// Returns oracle responses for the current transaction.
