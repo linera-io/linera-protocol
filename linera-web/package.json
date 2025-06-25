@@ -12,9 +12,10 @@
     "install": "true",
     "build": "bash build.bash --release",
     "prepare": "pnpm build",
-    "lint": "cargo fmt --check && cargo clippy -- -W clippy::pedantic",
-    "ci": "pnpm lint",
-    "format": "pnpm exec prettier . --write"
+    "lint": "pnpm build && pnpm exec tsc && cargo fmt --check && cargo clippy",
+    "ci": "pnpm lint && pnpm doc",
+    "format": "pnpm exec prettier . --write",
+    "doc": "pnpm exec typedoc"
   },
   "keywords": [],
   "author": "Linera <contact@linera.io>",
@@ -28,6 +29,7 @@
   },
   "homepage": "https://github.com/linera-io/linera-web#readme",
   "devDependencies": {
-    "prettier": "3.5.3"
+    "prettier": "3.5.3",
+    "typedoc": "^0.28.5"
   }
 }

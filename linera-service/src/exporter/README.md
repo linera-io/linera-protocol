@@ -45,7 +45,7 @@ tls = "ClearText"
 
 ```
 
-Finally, the `URI` endpoint of the block exporter service must be provided in the configuration of the chain workers for it to recieve notification about the new blocks.
+Finally, the `URI` endpoint of the block exporter service must be provided in the configuration of the chain workers for it to receive notification about the new blocks.
 In the configuration file of the chain worker:
 
 ```bash

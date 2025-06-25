@@ -100,6 +100,7 @@ where
             Ok(value) => Ok(value),
             Err(guard) => {
                 let block = self.storage.read_certificate(hash).await?;
+                let block = block.ok_or_else(|| ExporterError::ReadCertificateError(hash))?;
                 let heaped_block = Arc::new(block);
                 let _ = guard.insert(heaped_block.clone());
                 Ok(heaped_block)

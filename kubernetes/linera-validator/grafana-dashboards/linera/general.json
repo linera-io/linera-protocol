@@ -183,7 +183,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -698,7 +699,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -2858,7 +2860,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(rate(container_memory_failures_total{container=\"scylla\"}[60s])) by (failure_type)",
+          "expr": "sum by(failure_type) (rate(container_memory_failures_total{container=\"scylla\", failure_type!=\"pgfault\"}[60s]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,

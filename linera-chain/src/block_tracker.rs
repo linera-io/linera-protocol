@@ -4,19 +4,27 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use custom_debug_derive::Debug;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency;
 use linera_base::{
-    data_types::{Blob, Event, OracleResponse, Timestamp},
-    identifiers::{AccountOwner, BlobId, ChainId},
+    data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Timestamp},
+    ensure,
+    identifiers::{AccountOwner, BlobId, ChainId, MessageId},
 };
 use linera_execution::{
-    OutgoingMessage, ResourceController, ResourceTracker, SystemExecutionStateView,
-    TransactionOutcome, TransactionTracker,
+    ExecutionRuntimeContext, ExecutionStateView, MessageContext, OperationContext, OutgoingMessage,
+    ResourceController, ResourceTracker, SystemExecutionStateView, TransactionOutcome,
+    TransactionTracker,
 };
 use linera_views::context::Context;
 
+#[cfg(with_metrics)]
+use crate::chain::metrics;
 use crate::{
     chain::EMPTY_BLOCK_SIZE,
-    data_types::{OperationResult, ProposedBlock, Transaction},
+    data_types::{
+        IncomingBundle, MessageAction, OperationResult, PostedMessage, ProposedBlock, Transaction,
+    },
     ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
@@ -24,6 +32,10 @@ use crate::{
 /// Captures the resource policy, produced messages, oracle responses and events.
 #[derive(Debug)]
 pub struct BlockExecutionTracker<'resources, 'blobs> {
+    chain_id: ChainId,
+    block_height: BlockHeight,
+    timestamp: Timestamp,
+    authenticated_signer: Option<AccountOwner>,
     resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
     local_time: Timestamp,
     #[debug(skip_if = Option::is_none)]
@@ -68,6 +80,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .with_execution_context(ChainExecutionContext::Block)?;
 
         Ok(Self {
+            chain_id: proposal.chain_id,
+            block_height: proposal.height,
+            timestamp: proposal.timestamp,
+            authenticated_signer: proposal.authenticated_signer,
             resource_controller,
             local_time,
             replaying_oracle_responses,
@@ -85,8 +101,79 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         })
     }
 
+    /// Executes a transaction in the context of the block.
+    pub async fn execute_transaction<C>(
+        &mut self,
+        transaction: Transaction<'_>,
+        round: Option<u32>,
+        chain: &mut ExecutionStateView<C>,
+    ) -> Result<(), ChainError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        let chain_execution_context = self.chain_execution_context(&transaction);
+        let mut txn_tracker = self.new_transaction_tracker()?;
+
+        match transaction {
+            Transaction::ReceiveMessages(incoming_bundle) => {
+                self.resource_controller_mut()
+                    .track_block_size_of(&incoming_bundle)
+                    .with_execution_context(chain_execution_context)?;
+                for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
+                    Box::pin(self.execute_message_in_block(
+                        chain,
+                        message_id,
+                        posted_message,
+                        incoming_bundle,
+                        round,
+                        &mut txn_tracker,
+                    ))
+                    .await?;
+                }
+            }
+            Transaction::ExecuteOperation(operation) => {
+                self.resource_controller_mut()
+                    .with_state(&mut chain.system)
+                    .await?
+                    .track_block_size_of(&operation)
+                    .with_execution_context(chain_execution_context)?;
+                #[cfg(with_metrics)]
+                let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
+                let context = OperationContext {
+                    chain_id: self.chain_id,
+                    height: self.block_height,
+                    round,
+                    authenticated_signer: self.authenticated_signer,
+                    authenticated_caller_id: None,
+                    timestamp: self.timestamp,
+                };
+                Box::pin(chain.execute_operation(
+                    context,
+                    operation.clone(),
+                    &mut txn_tracker,
+                    self.resource_controller_mut(),
+                ))
+                .await
+                .with_execution_context(chain_execution_context)?;
+                self.resource_controller_mut()
+                    .with_state(&mut chain.system)
+                    .await?
+                    .track_operation(operation)
+                    .with_execution_context(chain_execution_context)?;
+            }
+        }
+
+        let txn_outcome = txn_tracker
+            .into_outcome()
+            .with_execution_context(chain_execution_context)?;
+        self.process_txn_outcome(&txn_outcome, &mut chain.system, chain_execution_context)
+            .await?;
+        Ok(())
+    }
+
     /// Returns a new TransactionTracker for the current transaction.
-    pub fn new_transaction_tracker(&mut self) -> Result<TransactionTracker, ChainError> {
+    fn new_transaction_tracker(&mut self) -> Result<TransactionTracker, ChainError> {
         Ok(TransactionTracker::new(
             self.local_time,
             self.transaction_index,
@@ -95,6 +182,83 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.next_chain_index,
             self.oracle_responses()?,
         ))
+    }
+
+    /// Executes a message as part of an incoming bundle in a block.
+    async fn execute_message_in_block<C>(
+        &mut self,
+        chain: &mut ExecutionStateView<C>,
+        message_id: MessageId,
+        posted_message: &PostedMessage,
+        incoming_bundle: &IncomingBundle,
+        round: Option<u32>,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ChainError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        #[cfg(with_metrics)]
+        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency();
+        let context = MessageContext {
+            chain_id: self.chain_id,
+            is_bouncing: posted_message.is_bouncing(),
+            height: self.block_height,
+            round,
+            message_id,
+            authenticated_signer: posted_message.authenticated_signer,
+            refund_grant_to: posted_message.refund_grant_to,
+            timestamp: self.timestamp,
+        };
+        let mut grant = posted_message.grant;
+        match incoming_bundle.action {
+            MessageAction::Accept => {
+                let chain_execution_context =
+                    ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
+                // Once a chain is closed, accepting incoming messages is not allowed.
+                ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
+
+                Box::pin(chain.execute_message(
+                    context,
+                    posted_message.message.clone(),
+                    (grant > Amount::ZERO).then_some(&mut grant),
+                    txn_tracker,
+                    self.resource_controller_mut(),
+                ))
+                .await
+                .with_execution_context(chain_execution_context)?;
+                chain
+                    .send_refund(context, grant, txn_tracker)
+                    .await
+                    .with_execution_context(chain_execution_context)?;
+            }
+            MessageAction::Reject => {
+                // If rejecting a message fails, the entire block proposal should be
+                // scrapped.
+                ensure!(
+                    !posted_message.is_protected() || *chain.system.closed.get(),
+                    ChainError::CannotRejectMessage {
+                        chain_id: self.chain_id,
+                        origin: incoming_bundle.origin,
+                        posted_message: Box::new(posted_message.clone()),
+                    }
+                );
+                if posted_message.is_tracked() {
+                    // Bounce the message.
+                    chain
+                        .bounce_message(context, grant, posted_message.message.clone(), txn_tracker)
+                        .await
+                        .with_execution_context(ChainExecutionContext::Block)?;
+                } else {
+                    // Nothing to do except maybe refund the grant.
+                    chain
+                        .send_refund(context, grant, txn_tracker)
+                        .await
+                        .with_execution_context(ChainExecutionContext::Block)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Returns oracle responses for the current transaction.

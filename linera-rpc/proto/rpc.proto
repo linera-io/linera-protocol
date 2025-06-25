@@ -125,6 +125,7 @@ message NetworkDescription {
     CryptoHash genesis_config_hash = 2;
     uint64 genesis_timestamp = 3;
     ChainId admin_chain_id = 4;
+    CryptoHash genesis_committee_blob_hash = 5;
 }
 
 // A request for client to subscribe to notifications for a given `ChainId`

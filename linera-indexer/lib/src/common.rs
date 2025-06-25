@@ -28,24 +28,16 @@ pub enum IndexerError {
     IoError(#[from] std::io::Error),
     #[error(transparent)]
     ParserError(#[from] AddrParseError),
-    #[error(transparent)]
-    ServerError(#[from] hyper::Error),
     #[error("Null GraphQL data: {0:?}")]
     NullData(Option<Vec<graphql_client::Error>>),
     #[error("Block not found: {0:?}")]
     NotFound(Option<CryptoHash>),
     #[error("Unknown plugin: {0}")]
     UnknownPlugin(String),
-    #[error("Plugin not loaded: {0}")]
-    UnloadedPlugin(String),
     #[error(transparent)]
     ConversionError(linera_service_graphql_client::ConversionError),
-    #[error("Different plugins in command line and memory")]
-    WrongPlugins,
     #[error("Plugin is already registered")]
     PluginAlreadyRegistered,
-    #[error("Invalid certificate content: {0:?}")]
-    InvalidCertificateValue(CryptoHash),
     #[error("Open exclusive error")]
     OpenExclusiveError,
 

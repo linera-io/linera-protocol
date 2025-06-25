@@ -60,9 +60,6 @@ pub enum LocalNodeError {
     #[error("Worker operation failed: {0}")]
     WorkerError(WorkerError),
 
-    #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
-    CannotReadLocalBlob { chain_id: ChainId, blob_id: BlobId },
-
     #[error("The local node doesn't have an active chain {0}")]
     InactiveChain(ChainId),
 
@@ -311,23 +308,23 @@ where
     }
 
     /// Given a list of chain IDs, returns a map that assigns to each of them the next block
-    /// height, i.e. the lowest block height that we have not processed in the local node yet.
+    /// height to schedule, i.e. the lowest block height for which we haven't added the messages
+    /// to `receiver_id` to the outbox yet.
     ///
     /// It makes at most `chain_worker_limit` requests to the local node in parallel.
-    pub async fn next_block_heights(
+    pub async fn next_outbox_heights(
         &self,
         chain_ids: impl IntoIterator<Item = &ChainId>,
         chain_worker_limit: usize,
+        receiver_id: ChainId,
     ) -> Result<BTreeMap<ChainId, BlockHeight>, LocalNodeError> {
         let futures = chain_ids
             .into_iter()
             .map(|chain_id| async move {
                 let chain = self.chain_state_view(*chain_id).await?;
                 let mut next_height = chain.tip_state.get().next_block_height;
-                // TODO(#3969): This is not great for performance, but the whole function will
-                // probably go away with #3969 anyway.
-                while chain.preprocessed_blocks.contains_key(&next_height).await? {
-                    next_height.try_add_assign_one()?;
+                if let Some(outbox) = chain.outboxes.try_load_entry(&receiver_id).await? {
+                    next_height = next_height.max(*outbox.next_height_to_schedule.get());
                 }
                 Ok::<_, LocalNodeError>((*chain_id, next_height))
             })

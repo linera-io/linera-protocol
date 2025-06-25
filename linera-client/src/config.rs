@@ -2,12 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, iter::IntoIterator};
+use std::iter::IntoIterator;
 
 use linera_base::{
     crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
-        Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, NetworkDescription,
+        Amount, Blob, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, NetworkDescription,
         Timestamp,
     },
     identifiers::ChainId,
@@ -33,7 +33,7 @@ pub enum Error {
     #[error("persistence error: {0}")]
     Persistence(Box<dyn std::error::Error + Send + Sync>),
     #[error("storage is already initialized: {0:?}")]
-    StorageIsAlreadyInitialized(NetworkDescription),
+    StorageIsAlreadyInitialized(Box<NetworkDescription>),
     #[error("no admin chain configured")]
     NoAdminChain,
 }
@@ -102,23 +102,16 @@ pub struct GenesisConfig {
 impl BcsSignable<'_> for GenesisConfig {}
 
 fn make_chain(
-    committee: &Committee,
     index: u32,
     public_key: AccountPublicKey,
     balance: Amount,
     timestamp: Timestamp,
 ) -> ChainDescription {
-    let committees: BTreeMap<_, _> = [(
-        Epoch::ZERO,
-        bcs::to_bytes(committee).expect("serializing a committee should not fail"),
-    )]
-    .into_iter()
-    .collect();
     let origin = ChainOrigin::Root(index);
     let config = InitialChainConfig {
         application_permissions: Default::default(),
         balance,
-        committees: committees.clone(),
+        active_epochs: [Epoch::ZERO].into_iter().collect(),
         epoch: Epoch::ZERO,
         ownership: ChainOwnership::single(public_key.into()),
     };
@@ -136,7 +129,7 @@ impl GenesisConfig {
         admin_balance: Amount,
     ) -> Self {
         let committee = committee.into_committee(policy);
-        let admin_chain = make_chain(&committee, 0, admin_public_key, admin_balance, timestamp);
+        let admin_chain = make_chain(0, admin_public_key, admin_balance, timestamp);
         Self {
             committee,
             timestamp,
@@ -151,7 +144,6 @@ impl GenesisConfig {
         balance: Amount,
     ) -> ChainDescription {
         let description = make_chain(
-            &self.committee,
             self.chains.len() as u32,
             public_key,
             balance,
@@ -178,9 +170,13 @@ impl GenesisConfig {
             .await
             .map_err(linera_chain::ChainError::from)?
         {
-            return Err(Error::StorageIsAlreadyInitialized(description));
+            return Err(Error::StorageIsAlreadyInitialized(Box::new(description)));
         }
         let network_description = self.network_description();
+        storage
+            .write_blob(&self.committee_blob())
+            .await
+            .map_err(linera_chain::ChainError::from)?;
         storage
             .write_network_description(&network_description)
             .await
@@ -195,11 +191,18 @@ impl GenesisConfig {
         CryptoHash::new(self)
     }
 
+    pub fn committee_blob(&self) -> Blob {
+        Blob::new_committee(
+            bcs::to_bytes(&self.committee).expect("serializing a committee should succeed"),
+        )
+    }
+
     pub fn network_description(&self) -> NetworkDescription {
         NetworkDescription {
             name: self.network_name.clone(),
             genesis_config_hash: CryptoHash::new(self),
             genesis_timestamp: self.timestamp,
+            genesis_committee_blob_hash: self.committee_blob().id().hash,
             admin_chain_id: self.admin_id(),
         }
     }

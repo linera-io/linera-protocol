@@ -238,7 +238,12 @@ impl<C: ClientContext> ChainListener<C> {
     /// If any new chains were created by the given block, and we have a key pair for them,
     /// add them to the wallet and start listening for notifications.
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
-        let block = self.storage.read_confirmed_block(hash).await?.into_block();
+        let block = self
+            .storage
+            .read_confirmed_block(hash)
+            .await?
+            .ok_or(ChainClientError::MissingConfirmedBlock(hash))?
+            .into_block();
         let blobs = block.created_blobs().into_iter();
         let new_chains = blobs
             .filter_map(|(blob_id, blob)| {
@@ -311,11 +316,6 @@ impl<C: ClientContext> ChainListener<C> {
         }
         let client = self.context.lock().await.make_chain_client(chain_id);
         let (listener, abort_handle, notification_stream) = client.listen().await?;
-        if client.is_tracked() {
-            client.synchronize_from_validators().await?;
-        } else {
-            client.synchronize_chain_state(chain_id).await?;
-        }
         let join_handle = linera_base::task::spawn(listener.in_current_span());
         let listening_client =
             ListeningClient::new(client, abort_handle, join_handle, notification_stream);

@@ -14,13 +14,15 @@ use linera_storage_service::{
     common::{ServiceStoreConfig, ServiceStoreInternalConfig},
 };
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig};
+use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig, DynamoDbStoreInternalConfig};
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig};
+use linera_views::rocks_db::{
+    PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig, RocksDbStoreInternalConfig,
+};
 use linera_views::{
     lru_caching::StorageCacheConfig,
     memory::{MemoryStore, MemoryStoreConfig},
-    store::{CommonStoreConfig, KeyValueStore},
+    store::KeyValueStore,
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -32,7 +34,7 @@ use {
 };
 #[cfg(feature = "scylladb")]
 use {
-    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };
@@ -65,17 +67,11 @@ pub struct CommonStorageOptions {
 }
 
 impl CommonStorageOptions {
-    pub fn common_store_config(&self) -> CommonStoreConfig {
-        let storage_cache_config = StorageCacheConfig {
+    pub fn storage_cache_config(&self) -> StorageCacheConfig {
+        StorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
             max_entry_size: self.storage_max_entry_size,
             max_cache_entries: self.storage_max_cache_entries,
-        };
-        CommonStoreConfig {
-            storage_cache_config,
-            max_concurrent_queries: self.storage_max_concurrent_queries,
-            max_stream_queries: self.storage_max_stream_queries,
-            replication_factor: self.storage_replication_factor,
         }
     }
 }
@@ -83,17 +79,17 @@ impl CommonStorageOptions {
 /// The configuration of the key value store in use.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum StoreConfig {
-    /// The storage service key-value store
-    #[cfg(feature = "storage-service")]
-    Service {
-        config: ServiceStoreConfig,
-        namespace: String,
-    },
     /// The memory key value store
     Memory {
         config: MemoryStoreConfig,
         namespace: String,
         genesis_path: PathBuf,
+    },
+    /// The storage service key-value store
+    #[cfg(feature = "storage-service")]
+    Service {
+        config: ServiceStoreConfig,
+        namespace: String,
     },
     /// The RocksDB key value store
     #[cfg(feature = "rocksdb")]
@@ -124,17 +120,17 @@ pub enum StoreConfig {
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum InnerStorageConfig {
-    /// The storage service description.
-    #[cfg(feature = "storage-service")]
-    Service {
-        /// The endpoint used.
-        endpoint: String,
-    },
     /// The memory description.
     Memory {
         /// The path to the genesis configuration. This is needed because we reinitialize
         /// memory databases from the genesis config everytime.
         genesis_path: PathBuf,
+    },
+    /// The storage service description.
+    #[cfg(feature = "storage-service")]
+    Service {
+        /// The endpoint used.
+        endpoint: String,
     },
     /// The RocksDB description.
     #[cfg(feature = "rocksdb")]
@@ -430,25 +426,11 @@ impl StorageConfig {
         &self,
         options: &CommonStorageOptions,
     ) -> Result<StoreConfig, anyhow::Error> {
-        let common_config = options.common_store_config();
         let namespace = self.namespace.clone();
         match &self.inner_storage_config {
-            #[cfg(feature = "storage-service")]
-            InnerStorageConfig::Service { endpoint } => {
-                let endpoint = endpoint.clone();
-                let inner_config = ServiceStoreInternalConfig {
-                    endpoint,
-                    common_config: common_config.reduced(),
-                };
-                let config = ServiceStoreConfig {
-                    inner_config,
-                    storage_cache_config: common_config.storage_cache_config,
-                };
-                Ok(StoreConfig::Service { config, namespace })
-            }
             InnerStorageConfig::Memory { genesis_path } => {
                 let config = MemoryStoreConfig {
-                    common_config: common_config.reduced(),
+                    max_stream_queries: options.storage_max_stream_queries,
                 };
                 let genesis_path = genesis_path.clone();
                 Ok(StoreConfig::Memory {
@@ -457,21 +439,58 @@ impl StorageConfig {
                     genesis_path,
                 })
             }
+            #[cfg(feature = "storage-service")]
+            InnerStorageConfig::Service { endpoint } => {
+                let inner_config = ServiceStoreInternalConfig {
+                    endpoint: endpoint.clone(),
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                    max_stream_queries: options.storage_max_stream_queries,
+                };
+                let config = ServiceStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
+                Ok(StoreConfig::Service { config, namespace })
+            }
             #[cfg(feature = "rocksdb")]
             InnerStorageConfig::RocksDb { path, spawn_mode } => {
-                let path_buf = path.to_path_buf();
-                let path_with_guard = PathWithGuard::new(path_buf);
-                let config = RocksDbStoreConfig::new(*spawn_mode, path_with_guard, common_config);
+                let path_with_guard = PathWithGuard::new(path.to_path_buf());
+                let inner_config = RocksDbStoreInternalConfig {
+                    spawn_mode: *spawn_mode,
+                    path_with_guard,
+                    max_stream_queries: options.storage_max_stream_queries,
+                };
+                let config = RocksDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
                 Ok(StoreConfig::RocksDb { config, namespace })
             }
             #[cfg(feature = "dynamodb")]
             InnerStorageConfig::DynamoDb { use_dynamodb_local } => {
-                let config = DynamoDbStoreConfig::new(*use_dynamodb_local, common_config);
+                let inner_config = DynamoDbStoreInternalConfig {
+                    use_dynamodb_local: *use_dynamodb_local,
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                    max_stream_queries: options.storage_max_stream_queries,
+                };
+                let config = DynamoDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
                 Ok(StoreConfig::DynamoDb { config, namespace })
             }
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { uri } => {
-                let config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let inner_config = ScyllaDbStoreInternalConfig {
+                    uri: uri.clone(),
+                    max_stream_queries: options.storage_max_stream_queries,
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                    replication_factor: options.storage_replication_factor,
+                };
+                let config = ScyllaDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
                 Ok(StoreConfig::ScyllaDb { config, namespace })
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -480,12 +499,27 @@ impl StorageConfig {
                 spawn_mode,
                 uri,
             } => {
-                let first_config = RocksDbStoreConfig::new(
-                    *spawn_mode,
-                    path_with_guard.clone(),
-                    common_config.clone(),
-                );
-                let second_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let inner_config = RocksDbStoreInternalConfig {
+                    spawn_mode: *spawn_mode,
+                    path_with_guard: path_with_guard.clone(),
+                    max_stream_queries: options.storage_max_stream_queries,
+                };
+                let first_config = RocksDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
+
+                let inner_config = ScyllaDbStoreInternalConfig {
+                    uri: uri.clone(),
+                    max_stream_queries: options.storage_max_stream_queries,
+                    max_concurrent_queries: options.storage_max_concurrent_queries,
+                    replication_factor: options.storage_replication_factor,
+                };
+                let second_config = ScyllaDbStoreConfig {
+                    inner_config,
+                    storage_cache_config: options.storage_cache_config(),
+                };
+
                 let config = DualStoreConfig {
                     first_config,
                     second_config,
@@ -578,9 +612,8 @@ impl StoreConfig {
                 namespace,
                 genesis_path,
             } => {
-                let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
                 let mut storage = DbStorage::<MemoryStore, _>::maybe_create_and_connect(
-                    &store_config,
+                    &config,
                     &namespace,
                     wasm_runtime,
                 )

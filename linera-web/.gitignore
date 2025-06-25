@@ -1,2 +1,3 @@
-/target
-/pkg
+/docs/
+/target/
+pnpm-lock.yaml

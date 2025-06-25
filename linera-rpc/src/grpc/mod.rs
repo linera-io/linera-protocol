@@ -30,9 +30,6 @@ pub enum GrpcError {
     #[error("failed to parse socket address: {0}")]
     SocketAddr(#[from] std::net::AddrParseError),
 
-    #[error(transparent)]
-    InvalidUri(#[from] tonic::codegen::http::uri::InvalidUri),
-
     #[cfg(with_server)]
     #[error(transparent)]
     Reflection(#[from] tonic_reflection::server::Error),

@@ -12,10 +12,7 @@ use std::{
 use futures::future::Either;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, DecompressionError, Epoch,
-        Round,
-    },
+    data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round},
     doc_scalar,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId},
@@ -152,6 +149,9 @@ pub enum WorkerError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
+    #[error("Certificates are in confirmed_log but not in storage: {0:?}")]
+    ReadCertificatesError(Vec<CryptoHash>),
+
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
 
@@ -178,6 +178,8 @@ pub enum WorkerError {
         chain_epoch: Epoch,
         epoch: Epoch,
     },
+    #[error("Proposal on chain {chain_id:} claims an unknown epoch {epoch:}")]
+    UnknownEpoch { chain_id: ChainId, epoch: Epoch },
 
     // Other server-side errors
     #[error("Invalid cross-chain request")]
@@ -223,8 +225,6 @@ pub enum WorkerError {
     UnexpectedBlob,
     #[error("Number of published blobs per block must not exceed {0}")]
     TooManyPublishedBlobs(u64),
-    #[error(transparent)]
-    Decompression(#[from] DecompressionError),
 }
 
 impl From<ChainError> for WorkerError {

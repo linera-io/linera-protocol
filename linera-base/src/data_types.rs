@@ -7,7 +7,7 @@
 #[cfg(with_testing)]
 use std::ops;
 use std::{
-    collections::BTreeMap,
+    collections::BTreeSet,
     fmt::{self, Display},
     fs,
     hash::Hash,
@@ -266,6 +266,8 @@ pub struct Resources {
     pub read_operations: u32,
     /// A number of write operations to be executed.
     pub write_operations: u32,
+    /// A number of bytes read from runtime.
+    pub bytes_runtime: u32,
     /// A number of bytes to read.
     pub bytes_to_read: u32,
     /// A number of bytes to write.
@@ -834,8 +836,8 @@ pub struct InitialChainConfig {
     pub ownership: ChainOwnership,
     /// The epoch in which the chain is created.
     pub epoch: Epoch,
-    /// Serialized committees corresponding to epochs.
-    pub committees: BTreeMap<Epoch, Vec<u8>>,
+    /// Set of epochs active at the time of creation of the chain.
+    pub active_epochs: BTreeSet<Epoch>,
     /// The initial chain balance.
     pub balance: Amount,
     /// The initial application permissions.
@@ -897,6 +899,8 @@ pub struct NetworkDescription {
     pub genesis_config_hash: CryptoHash,
     /// Genesis timestamp.
     pub genesis_timestamp: Timestamp,
+    /// Hash of the blob containing the genesis committee.
+    pub genesis_committee_blob_hash: CryptoHash,
     /// The chain ID of the admin chain.
     pub admin_chain_id: ChainId,
 }

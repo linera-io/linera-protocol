@@ -46,7 +46,7 @@ pub enum ViewError {
 
     /// The entry does not exist in memory
     // FIXME(#148): This belongs to a future `linera_storage::StoreError`.
-    #[error("entry does not exist in memory: {0}")]
+    #[error("entry does not exist in storage: {0}")]
     NotFound(String),
 
     /// The database is corrupt: Entries don't have the expected hash.
@@ -60,11 +60,4 @@ pub enum ViewError {
     /// The values are incoherent.
     #[error("post load values error")]
     PostLoadValuesError,
-}
-
-impl ViewError {
-    /// Creates a `NotFound` error with the given message and key.
-    pub fn not_found<T: std::fmt::Debug>(msg: &str, key: T) -> Self {
-        ViewError::NotFound(format!("{msg} {key:?}"))
-    }
 }

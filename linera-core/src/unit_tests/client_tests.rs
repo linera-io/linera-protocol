@@ -28,6 +28,7 @@ use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
     SystemMessage, SystemQuery, SystemResponse,
 };
+use linera_storage::Storage;
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
@@ -547,11 +548,11 @@ where
     let new_chain_config = InitialChainConfig {
         ownership: ChainOwnership::single(new_public_key.into()),
         epoch: Epoch::ZERO,
-        committees: builder
+        active_epochs: builder
             .admin_description()
             .unwrap()
             .config()
-            .committees
+            .active_epochs
             .clone(),
         balance: Amount::ZERO,
         application_permissions: Default::default(),
@@ -1286,6 +1287,70 @@ where
     // We have balance=3, we try to burn 3 tokens but the operation itself
     // costs 1 microtoken so we don't have enough balance to pay for it.
     assert_fees_exceed_funding(obtained_error);
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_sparse_sender_chain<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+    let receiver_id = receiver.chain_id();
+
+    let cert0 = sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(receiver_id),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let cert1 = sender
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap()
+        .unwrap();
+    let cert2 = sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(receiver_id),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+
+    // The first and last blocks sent something to the receiver. The middle one didn't.
+    // So the sender chain should have a gap.
+    assert!(
+        receiver
+            .storage_client()
+            .contains_certificate(cert0.hash())
+            .await?
+    );
+    assert!(
+        !receiver
+            .storage_client()
+            .contains_certificate(cert1.hash())
+            .await?
+    );
+    assert!(
+        receiver
+            .storage_client()
+            .contains_certificate(cert2.hash())
+            .await?
+    );
+
     Ok(())
 }
 

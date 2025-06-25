@@ -23,22 +23,27 @@ use linera_rpc::config::CrossChainConfig;
 use serde::Serialize;
 
 #[cfg(feature = "benchmark")]
-const DEFAULT_NUM_CHAINS: usize = 10;
-#[cfg(feature = "benchmark")]
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
 #[cfg(feature = "benchmark")]
 const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
 #[cfg(feature = "benchmark")]
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
+#[cfg(feature = "benchmark")]
+const DEFAULT_BPS: usize = 10;
 
 // Make sure that the default values are consts, and that they are used in the Default impl.
 #[cfg(feature = "benchmark")]
 #[derive(Clone, Serialize, clap::Args)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkCommand {
-    /// How many chains to use for the benchmark
-    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS)]
-    pub num_chains: usize,
+    /// Wether to use cross chain messages in the transactions or not. This effectively sets the
+    /// chain group size to 1.
+    #[arg(long)]
+    pub dont_use_cross_chain_messages: bool,
+
+    /// How many chain groups to use. If not provided, the number of CPUs will be used.
+    #[arg(long)]
+    pub num_chain_groups: Option<usize>,
 
     /// How many tokens to assign to each newly created chain.
     /// These need to cover the transaction fees per chain for the benchmark.
@@ -54,22 +59,23 @@ pub struct BenchmarkCommand {
     #[arg(long)]
     pub fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
 
-    /// If provided, will be long running, and block proposals will be sent at the
-    /// provided fixed BPS rate.
-    #[arg(long)]
-    pub bps: Option<usize>,
+    /// The fixed BPS (Blocks Per Second) rate that block proposals will be sent at.
+    #[arg(long, default_value_t = DEFAULT_BPS)]
+    pub bps: usize,
 
     /// If provided, will close the chains after the benchmark is finished. Keep in mind that
     /// closing the chains might take a while, and will increase the validator latency while
     /// they're being closed.
     #[arg(long)]
     pub close_chains: bool,
+
     /// A comma-separated list of host:port pairs to query for health metrics.
     /// If provided, the benchmark will check these endpoints for validator health
     /// and terminate if any validator is unhealthy.
     /// Example: "127.0.0.1:21100,validator-1.some-network.linera.net:21100"
     #[arg(long)]
     pub health_check_endpoints: Option<String>,
+
     /// The maximum number of in-flight requests to validators when wrapping up the benchmark.
     /// While wrapping up, this controls the concurrency level when processing inboxes and
     /// closing chains.
@@ -79,21 +85,37 @@ pub struct BenchmarkCommand {
     /// Confirm before starting the benchmark.
     #[arg(long)]
     pub confirm_before_start: bool,
+
+    /// How long to run the benchmark for. If not provided, the benchmark will run until
+    /// it is interrupted.
+    #[arg(long)]
+    pub runtime_in_seconds: Option<u64>,
+
+    /// The delay between chain groups, in milliseconds. For example, if set to 200ms, the first
+    /// chain group will start, then the second will start 200 ms after the first one, the third
+    /// 200 ms after the second one, and so on.
+    /// This is used for slowly ramping up the TPS, so we don't pound the validators with the full
+    /// TPS all at once.
+    #[arg(long)]
+    pub delay_between_chain_groups_ms: Option<u64>,
 }
 
 #[cfg(feature = "benchmark")]
 impl Default for BenchmarkCommand {
     fn default() -> Self {
         Self {
-            num_chains: DEFAULT_NUM_CHAINS,
+            dont_use_cross_chain_messages: false,
+            num_chain_groups: None,
             tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
             transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
             wrap_up_max_in_flight: DEFAULT_WRAP_UP_MAX_IN_FLIGHT,
             fungible_application_id: None,
-            bps: None,
+            bps: DEFAULT_BPS,
             close_chains: false,
             health_check_endpoints: None,
             confirm_before_start: false,
+            runtime_in_seconds: None,
+            delay_between_chain_groups_ms: None,
         }
     }
 }
@@ -330,6 +352,10 @@ pub enum ClientCommand {
         #[arg(long)]
         write_operation: Option<Amount>,
 
+        /// Set the price per byte read from runtime.
+        #[arg(long)]
+        byte_runtime: Option<Amount>,
+
         /// Set the price per byte read.
         #[arg(long)]
         byte_read: Option<Amount>,
@@ -516,6 +542,11 @@ pub enum ClientCommand {
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         write_operation_price: Option<Amount>,
+
+        /// Set the price per byte read from runtime.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        byte_runtime_price: Option<Amount>,
 
         /// Set the price per byte read.
         /// (This will overwrite value from `--policy-config`)

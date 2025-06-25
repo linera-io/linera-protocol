@@ -81,20 +81,6 @@ use crate::{
 /// The test worker accepts blocks with a timestamp this far in the future.
 const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 
-fn serialize_committees(
-    committees: impl IntoIterator<Item = (Epoch, Committee)>,
-) -> BTreeMap<Epoch, Vec<u8>> {
-    committees
-        .into_iter()
-        .map(|(epoch, committee)| {
-            (
-                epoch,
-                bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-            )
-        })
-        .collect()
-}
-
 struct TestEnvironment<S: Storage> {
     committee: Committee,
     worker: WorkerState<S>,
@@ -135,19 +121,25 @@ where
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
             epoch: Epoch::ZERO,
-            committees: serialize_committees([(Epoch::ZERO, committee.clone())]),
+            active_epochs: [Epoch::ZERO].into_iter().collect(),
             application_permissions: Default::default(),
         };
         let admin_description = ChainDescription::new(origin, config, Timestamp::from(0));
+        let committee_blob = Blob::new_committee(bcs::to_bytes(&committee).unwrap());
         storage
             .write_blob(&Blob::new_chain_description(&admin_description))
             .await
             .expect("writing a blob should not fail");
         storage
+            .write_blob(&committee_blob)
+            .await
+            .expect("writing a blob should succeed");
+        storage
             .write_network_description(&NetworkDescription {
                 admin_chain_id: admin_description.id(),
                 genesis_config_hash: CryptoHash::test_hash("genesis config"),
                 genesis_timestamp: Timestamp::from(0),
+                genesis_committee_blob_hash: committee_blob.id().hash,
                 name: "test network".to_string(),
             })
             .await
@@ -208,7 +200,7 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership,
-            committees: self.admin_description.config().committees.clone(),
+            active_epochs: self.admin_description.config().active_epochs.clone(),
             balance,
             application_permissions: Default::default(),
         };
@@ -237,7 +229,7 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
-            committees: self.admin_description.config().committees.clone(),
+            active_epochs: self.admin_description.config().active_epochs.clone(),
             balance,
             application_permissions: Default::default(),
         };
@@ -459,6 +451,9 @@ where
         SystemExecutionState {
             admin_id: Some(self.admin_id()),
             timestamp: description.timestamp(),
+            committees: [(Epoch::ZERO, self.committee.clone())]
+                .into_iter()
+                .collect(),
             ..SystemExecutionState::new(description.clone())
         }
     }

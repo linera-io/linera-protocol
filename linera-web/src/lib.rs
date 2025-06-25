@@ -45,7 +45,9 @@ type JsResult<T> = Result<T, JsError>;
 async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore as WithError>::Error>
 {
     linera_storage::DbStorage::maybe_create_and_connect(
-        &linera_views::memory::MemoryStoreConfig::new(1),
+        &linera_views::memory::MemoryStoreConfig {
+            max_stream_queries: 1,
+        },
         "linera",
         Some(linera_execution::WasmRuntime::Wasmer),
     )

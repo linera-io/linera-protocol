@@ -7,31 +7,36 @@
 
 mod db_storage;
 
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
-use dashmap::{mapref::entry::Entry, DashMap};
+use dashmap::DashMap;
+use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, NetworkDescription,
-        TimeDelta, Timestamp,
+        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch,
+        NetworkDescription, TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
+use linera_execution::{
+    committee::Committee, system::EPOCH_STREAM_NAME, BlobState, ExecutionError,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode, UserServiceCode,
+    WasmRuntime,
+};
 #[cfg(with_revm)]
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
-};
-use linera_execution::{
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode,
-    UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
@@ -81,7 +86,10 @@ pub trait Storage: Sized {
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
     /// Reads the hashed certificate value with the given hash.
-    async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError>;
+    async fn read_confirmed_block(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Option<ConfirmedBlock>, ViewError>;
 
     /// Reads the blob with the given blob ID.
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
@@ -97,13 +105,6 @@ pub trait Storage: Sized {
         &self,
         blob_ids: &[BlobId],
     ) -> Result<Vec<Option<BlobState>>, ViewError>;
-
-    /// Reads the hashed certificate values in descending order from the given hash.
-    async fn read_confirmed_blocks_downward(
-        &self,
-        from: CryptoHash,
-        limit: u32,
-    ) -> Result<Vec<ConfirmedBlock>, ViewError>;
 
     /// Writes the given blob.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
@@ -136,13 +137,13 @@ pub trait Storage: Sized {
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, ViewError>;
+    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
+    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
 
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
@@ -172,6 +173,72 @@ pub trait Storage: Sized {
         &self,
         information: &NetworkDescription,
     ) -> Result<(), ViewError>;
+
+    /// Returns a map of the committees for the given epochs.
+    async fn committees_for(
+        &self,
+        mut epochs: BTreeSet<Epoch>,
+    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
+        let read_committee = async |committee_hash| -> Result<Committee, ViewError> {
+            let blob_id = BlobId::new(committee_hash, BlobType::Committee);
+            let committee_blob = self
+                .read_blob(blob_id)
+                .await?
+                .ok_or_else(|| ViewError::NotFound(format!("blob {}", blob_id)))?;
+            Ok(bcs::from_bytes(committee_blob.bytes())?)
+        };
+
+        let network_description = self
+            .read_network_description()
+            .await?
+            .ok_or_else(|| ViewError::NotFound("NetworkDescription not found".to_owned()))?;
+        let admin_chain_id = network_description.admin_chain_id;
+        let mut result = BTreeMap::new();
+        // special case: the genesis epoch is stored in the NetworkDescription
+        if epochs.remove(&Epoch::ZERO) {
+            let genesis_committee =
+                read_committee(network_description.genesis_committee_blob_hash).await?;
+            result.insert(Epoch::ZERO, genesis_committee);
+        }
+
+        let start_index = epochs.first().unwrap_or(&Epoch::ZERO).0;
+        let epoch_creation_events = self
+            .read_events_from_index(
+                &admin_chain_id,
+                &StreamId::system(EPOCH_STREAM_NAME),
+                start_index,
+            )
+            .await?;
+
+        let epochs_and_committees = futures::future::try_join_all(
+            epoch_creation_events
+                .into_iter()
+                .filter_map(|index_and_event| {
+                    let epoch = Epoch::from(index_and_event.index);
+                    let maybe_blob_hash = bcs::from_bytes::<CryptoHash>(&index_and_event.event);
+                    epochs.contains(&epoch).then_some((epoch, maybe_blob_hash))
+                })
+                .map(|(epoch, maybe_blob_hash)| async move {
+                    let committee = read_committee(maybe_blob_hash?).await?;
+                    Result::<_, ViewError>::Ok((epoch, committee))
+                }),
+        )
+        .await?;
+
+        for (epoch, committee) in epochs_and_committees {
+            epochs.remove(&epoch);
+            result.insert(epoch, committee);
+        }
+
+        if epochs.is_empty() {
+            Ok(result)
+        } else {
+            Err(ViewError::NotFound(format!(
+                "Committees for epochs not found: {:?}",
+                epochs
+            )))
+        }
+    }
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
     ///
@@ -322,6 +389,33 @@ pub trait Storage: Sized {
     ) -> Result<Self::BlockExporterContext, ViewError>;
 }
 
+/// The result of processing the obtained read certificates.
+pub enum ResultReadCertificates {
+    Certificates(Vec<ConfirmedBlockCertificate>),
+    InvalidHashes(Vec<CryptoHash>),
+}
+
+impl ResultReadCertificates {
+    /// Creating the processed read certificates.
+    pub fn new(
+        certificates: Vec<Option<ConfirmedBlockCertificate>>,
+        hashes: Vec<CryptoHash>,
+    ) -> Self {
+        let (certificates, invalid_hashes) = certificates
+            .into_iter()
+            .zip(hashes)
+            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
+                Some(cert) => itertools::Either::Left(cert),
+                None => itertools::Either::Right(hash),
+            });
+        if invalid_hashes.is_empty() {
+            Self::Certificates(certificates)
+        } else {
+            Self::InvalidHashes(invalid_hashes)
+        }
+    }
+}
+
 /// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
@@ -358,28 +452,26 @@ where
         &self,
         description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
-        match self.user_contracts.entry(description.into()) {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let contract = self.storage.load_contract(description).await?;
-                entry.insert(contract.clone());
-                Ok(contract)
-            }
+        let application_id = description.into();
+        if let Some(contract) = self.user_contracts.get(&application_id) {
+            return Ok(contract.clone());
         }
+        let contract = self.storage.load_contract(description).await?;
+        self.user_contracts.insert(application_id, contract.clone());
+        Ok(contract)
     }
 
     async fn get_user_service(
         &self,
         description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
-        match self.user_services.entry(description.into()) {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let service = self.storage.load_service(description).await?;
-                entry.insert(service.clone());
-                Ok(service)
-            }
+        let application_id = description.into();
+        if let Some(service) = self.user_services.get(&application_id) {
+            return Ok(service.clone());
         }
+        let service = self.storage.load_service(description).await?;
+        self.user_services.insert(application_id, service.clone());
+        Ok(service)
     }
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
@@ -392,6 +484,13 @@ where
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         self.storage.read_network_description().await
+    }
+
+    async fn committees_for(
+        &self,
+        epochs: BTreeSet<Epoch>,
+    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
+        self.storage.committees_for(epochs).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

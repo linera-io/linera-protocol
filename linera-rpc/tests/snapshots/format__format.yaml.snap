@@ -544,12 +544,9 @@ InitialChainConfig:
         TYPENAME: ChainOwnership
     - epoch:
         TYPENAME: Epoch
-    - committees:
-        MAP:
-          KEY:
-            TYPENAME: Epoch
-          VALUE:
-            SEQ: U8
+    - active_epochs:
+        SEQ:
+          TYPENAME: Epoch
     - balance:
         TYPENAME: Amount
     - application_permissions:
@@ -648,6 +645,8 @@ NetworkDescription:
         TYPENAME: CryptoHash
     - genesis_timestamp:
         TYPENAME: Timestamp
+    - genesis_committee_blob_hash:
+        TYPENAME: CryptoHash
     - admin_chain_id:
         TYPENAME: ChainId
 NodeError:
@@ -736,8 +735,17 @@ NodeError:
     22:
       UnexpectedEntriesInBlobsNotFound: UNIT
     23:
-      EmptyBlobsNotFound: UNIT
+      UnexpectedCertificates:
+        STRUCT:
+          - returned:
+              SEQ:
+                TYPENAME: CryptoHash
+          - requested:
+              SEQ:
+                TYPENAME: CryptoHash
     24:
+      EmptyBlobsNotFound: UNIT
+    25:
       ResponseHandlingError:
         STRUCT:
           - error: STR
@@ -877,6 +885,8 @@ ResourceControlPolicy:
     - read_operation:
         TYPENAME: Amount
     - write_operation:
+        TYPENAME: Amount
+    - byte_runtime:
         TYPENAME: Amount
     - byte_read:
         TYPENAME: Amount

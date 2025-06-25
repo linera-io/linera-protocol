@@ -71,7 +71,7 @@ where
                         Ok(_) => {},
 
                         // this error variant is safe to retry as this block is already confirmed so this error will
-                        // orignate from things like missing dependencies or io error.
+                        // originate from things like missing dependencies or io error.
                         // Other error variants are either safe to skip or unreachable.
                         Err(ExporterError::ViewError(_)) => {
                             // return the block to the back of the task queue to process again later
