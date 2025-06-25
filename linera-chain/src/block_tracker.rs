@@ -12,18 +12,16 @@ use linera_base::{
     identifiers::{AccountOwner, BlobId, ChainId, MessageId},
 };
 use linera_execution::{
-    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, MessageContext, Operation,
-    OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
-    SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    ExecutionRuntimeContext, ExecutionStateView, MessageContext, Operation, OperationContext,
+    OutgoingMessage, ResourceController, ResourceTracker, SystemExecutionStateView,
+    TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
 
 #[cfg(with_metrics)]
 use crate::chain::metrics;
 use crate::{
-    data_types::{
-        IncomingBundle, MessageAction, OperationResult, PostedMessage, ProposedBlock, Transaction,
-    },
+    data_types::{IncomingBundle, MessageAction, OperationResult, PostedMessage, Transaction},
     ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
@@ -58,27 +56,28 @@ pub struct BlockExecutionTracker<'blobs> {
 
     // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
-
-    // We expect the number of outcomes to be equal to the number of transactions in the block.
-    expected_outcomes_count: usize,
 }
 
 impl<'blobs> BlockExecutionTracker<'blobs> {
     /// Creates a new BlockExecutionTracker.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         resource_controller: ResourceController<Option<AccountOwner>, ResourceTracker>,
         published_blobs: BTreeMap<BlobId, &'blobs Blob>,
         local_time: Timestamp,
         round: Option<u32>,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-        proposal: &ProposedBlock,
-    ) -> Result<Self, ChainError> {
-        Ok(Self {
-            chain_id: proposal.chain_id,
-            block_height: proposal.height,
-            timestamp: proposal.timestamp,
+        chain_id: ChainId,
+        block_height: BlockHeight,
+        block_timestamp: Timestamp,
+        authenticated_signer: Option<AccountOwner>,
+    ) -> Self {
+        Self {
+            chain_id,
+            block_height,
+            timestamp: block_timestamp,
             round,
-            authenticated_signer: proposal.authenticated_signer,
+            authenticated_signer,
             resource_controller,
             local_time,
             replaying_oracle_responses,
@@ -92,8 +91,7 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
-            expected_outcomes_count: proposal.incoming_bundles.len() + proposal.operations.len(),
-        })
+        }
     }
 
     /// Executes a transaction in the context of the block.
@@ -386,12 +384,12 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
     ///
     /// This method should be called after all transactions have been processed.
     /// Panics if the number of outcomes does match the expected count.
-    pub fn finalize(self) -> FinalizeExecutionResult {
+    pub fn finalize(self, expected_outcomes_count: usize) -> FinalizeExecutionResult {
         // Asserts that the number of outcomes matches the expected count.
-        assert_eq!(self.oracle_responses.len(), self.expected_outcomes_count);
-        assert_eq!(self.messages.len(), self.expected_outcomes_count);
-        assert_eq!(self.events.len(), self.expected_outcomes_count);
-        assert_eq!(self.blobs.len(), self.expected_outcomes_count);
+        assert_eq!(self.oracle_responses.len(), expected_outcomes_count);
+        assert_eq!(self.messages.len(), expected_outcomes_count);
+        assert_eq!(self.events.len(), expected_outcomes_count);
+        assert_eq!(self.blobs.len(), expected_outcomes_count);
 
         #[cfg(with_metrics)]
         crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker);

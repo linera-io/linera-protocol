@@ -767,8 +767,11 @@ where
             local_time,
             round,
             replaying_oracle_responses,
-            block,
-        )?;
+            block.chain_id,
+            block.height,
+            block.timestamp,
+            block.authenticated_signer,
+        );
 
         for transaction in block.transactions() {
             block_execution_tracker
@@ -797,7 +800,7 @@ where
         };
 
         let (messages, oracle_responses, events, blobs, operation_results, resource_tracker) =
-            block_execution_tracker.finalize();
+            block_execution_tracker.finalize(block.incoming_bundles.len() + block.operations.len());
 
         let execution_outcome = BlockExecutionOutcome {
             messages,
