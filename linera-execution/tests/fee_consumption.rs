@@ -180,6 +180,19 @@ use test_case::test_case;
     Some(Amount::from_tokens(1_000));
     "with all fee spend operations"
 )]
+#[test_case(
+    vec![
+        FeeSpend::Fuel(11),
+        FeeSpend::HttpRequest,
+        FeeSpend::Read(vec![0, 1], None),
+        FeeSpend::Fuel(23),
+        FeeSpend::HttpRequest,
+    ],
+    Amount::ZERO,
+    Some(Amount::ZERO),
+    Some(Amount::from_tokens(250));
+    "with just a grant; no chain balance or owner balance"
+)]
 // TODO(#1601): Add more test cases
 #[tokio::test]
 async fn test_fee_consumption(
