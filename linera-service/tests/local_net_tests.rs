@@ -210,26 +210,19 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     let recipient =
         AccountOwner::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
+    let account_recipient = Account::new(chain_2, recipient);
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),
             Account::chain(chain_1),
-            Account::new(chain_2, recipient),
+            account_recipient,
         )
         .await?;
 
     if let Some(mut service) = node_service_2 {
         service.process_inbox(&chain_2).await?;
-        let query = format!(
-            "query {{ chain(chainId:\"{chain_2}\") {{
-                executionState {{ system {{ balances {{
-                    entry(key:\"{recipient}\") {{ value }}
-                }} }} }}
-            }} }}"
-        );
-        let response = service.query_node(query).await?;
-        let balances = &response["chain"]["executionState"]["system"]["balances"];
-        assert_eq!(balances["entry"]["value"].as_str(), Some("5."));
+        let balance = service.balance(&account_recipient).await?;
+        assert_eq!(balance, Amount::from_tokens(5));
         let committees = service.query_committees(&chain_2).await?;
         let epochs = committees.into_keys().collect::<Vec<_>>();
         assert_eq!(&epochs, &[Epoch(7)]);
@@ -240,7 +233,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         client_2.process_inbox(chain_2).await?;
         assert_eq!(
             client_2
-                .local_balance(Account::new(chain_2, recipient))
+                .local_balance(account_recipient)
                 .await?,
             Amount::from_tokens(5),
         );
