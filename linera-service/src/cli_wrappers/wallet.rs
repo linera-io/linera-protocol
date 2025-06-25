@@ -1199,7 +1199,8 @@ impl NodeService {
             );
             let response = self.query_node(query).await?;
             let balance = &response["chain"]["executionState"]["system"]["balance"]
-                .as_str().unwrap();
+                .as_str()
+                .unwrap();
             return Ok(Amount::from_str(balance)?);
         }
         let query = format!(
@@ -1212,7 +1213,7 @@ impl NodeService {
         let response = self.query_node(query).await?;
         let balances = &response["chain"]["executionState"]["system"]["balances"];
         let balance = balances["entry"]["value"].as_str();
-	match balance {
+        match balance {
             None => Ok(Amount::ZERO),
             Some(amount) => Ok(Amount::from_str(amount)?),
         }

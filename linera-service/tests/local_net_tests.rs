@@ -232,9 +232,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         client_2.sync(chain_2).await?;
         client_2.process_inbox(chain_2).await?;
         assert_eq!(
-            client_2
-                .local_balance(account_recipient)
-                .await?,
+            client_2.local_balance(account_recipient).await?,
             Amount::from_tokens(5),
         );
     }
