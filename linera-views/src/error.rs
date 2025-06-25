@@ -61,10 +61,3 @@ pub enum ViewError {
     #[error("post load values error")]
     PostLoadValuesError,
 }
-
-impl ViewError {
-    /// Creates a `NotFound` error with the given message and key.
-    pub fn not_found<T: std::fmt::Debug>(msg: &str, key: T) -> Self {
-        ViewError::NotFound(format!("{msg} {key:?}"))
-    }
-}

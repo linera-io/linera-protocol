@@ -1474,6 +1474,9 @@ pub enum ChainClientError {
     #[error("Missing certificates: {0:?}")]
     ReadCertificatesError(Vec<CryptoHash>),
 
+    #[error("Missing confirmed block: {0:?}")]
+    MissingConfirmedBlock(CryptoHash),
+
     #[error("JSON (de)serialization error: {0}")]
     JsonError(#[from] serde_json::Error),
 
@@ -3463,11 +3466,13 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlock, ViewError> {
-        self.client
+    ) -> Result<ConfirmedBlock, ChainClientError> {
+        let block = self
+            .client
             .storage_client()
             .read_confirmed_block(hash)
-            .await
+            .await?;
+        block.ok_or(ChainClientError::MissingConfirmedBlock(hash))
     }
 
     /// Handles any cross-chain requests for any pending outgoing messages.
@@ -3478,18 +3483,6 @@ impl<Env: Environment> ChainClient<Env> {
             .retry_pending_cross_chain_requests(self.chain_id)
             .await?;
         Ok(())
-    }
-
-    #[instrument(level = "trace", skip(from, limit))]
-    pub async fn read_confirmed_blocks_downward(
-        &self,
-        from: CryptoHash,
-        limit: u32,
-    ) -> Result<Vec<ConfirmedBlock>, ViewError> {
-        self.client
-            .storage_client()
-            .read_confirmed_blocks_downward(from, limit)
-            .await
     }
 
     #[instrument(level = "trace", skip(local_node))]

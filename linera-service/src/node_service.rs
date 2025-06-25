@@ -654,12 +654,20 @@ where
                 view.tip_state.get().block_hash
             }
         };
-        if let Some(from) = from {
-            let values = client.read_confirmed_blocks_downward(from, limit).await?;
-            Ok(values)
-        } else {
-            Ok(vec![])
+        let Some(from) = from else {
+            return Ok(vec![]);
+        };
+        let mut hash = Some(from);
+        let mut values = Vec::new();
+        for _ in 0..limit {
+            let Some(next_hash) = hash else {
+                break;
+            };
+            let value = client.read_confirmed_block(next_hash).await?;
+            hash = value.block().header.previous_block_hash;
+            values.push(value);
         }
+        Ok(values)
     }
 
     /// Returns the version information on this node service.

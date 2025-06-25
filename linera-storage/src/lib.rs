@@ -86,7 +86,10 @@ pub trait Storage: Sized {
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
     /// Reads the hashed certificate value with the given hash.
-    async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError>;
+    async fn read_confirmed_block(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Option<ConfirmedBlock>, ViewError>;
 
     /// Reads the blob with the given blob ID.
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
@@ -102,13 +105,6 @@ pub trait Storage: Sized {
         &self,
         blob_ids: &[BlobId],
     ) -> Result<Vec<Option<BlobState>>, ViewError>;
-
-    /// Reads the hashed certificate values in descending order from the given hash.
-    async fn read_confirmed_blocks_downward(
-        &self,
-        from: CryptoHash,
-        limit: u32,
-    ) -> Result<Vec<ConfirmedBlock>, ViewError>;
 
     /// Writes the given blob.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
