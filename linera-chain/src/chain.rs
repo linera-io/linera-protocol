@@ -192,9 +192,6 @@ pub(crate) mod metrics {
     }
 }
 
-/// The BCS-serialized size of an empty [`Block`].
-pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
-
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1077,16 +1074,4 @@ where
             .observe(self.outboxes.count().await? as f64);
         Ok(targets)
     }
-}
-
-#[test]
-fn empty_block_size() {
-    let size = bcs::serialized_size(&crate::block::Block::new(
-        crate::test::make_first_block(
-            linera_execution::test_utils::dummy_chain_description(0).id(),
-        ),
-        crate::data_types::BlockExecutionOutcome::default(),
-    ))
-    .unwrap();
-    assert_eq!(size, EMPTY_BLOCK_SIZE);
 }

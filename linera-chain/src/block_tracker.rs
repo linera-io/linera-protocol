@@ -21,7 +21,6 @@ use linera_views::context::Context;
 #[cfg(with_metrics)]
 use crate::chain::metrics;
 use crate::{
-    chain::EMPTY_BLOCK_SIZE,
     data_types::{
         IncomingBundle, MessageAction, OperationResult, PostedMessage, ProposedBlock, Transaction,
     },
@@ -67,17 +66,13 @@ pub struct BlockExecutionTracker<'blobs> {
 impl<'blobs> BlockExecutionTracker<'blobs> {
     /// Creates a new BlockExecutionTracker.
     pub fn new(
-        mut resource_controller: ResourceController<Option<AccountOwner>, ResourceTracker>,
+        resource_controller: ResourceController<Option<AccountOwner>, ResourceTracker>,
         published_blobs: BTreeMap<BlobId, &'blobs Blob>,
         local_time: Timestamp,
         round: Option<u32>,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         proposal: &ProposedBlock,
     ) -> Result<Self, ChainError> {
-        resource_controller
-            .track_block_size(EMPTY_BLOCK_SIZE)
-            .with_execution_context(ChainExecutionContext::Block)?;
-
         Ok(Self {
             chain_id: proposal.chain_id,
             block_height: proposal.height,
