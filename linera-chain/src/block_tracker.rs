@@ -115,7 +115,7 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
                     .track_block_size_of(&incoming_bundle)
                     .with_execution_context(chain_execution_context)?;
                 for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
-                    Box::pin(self.execute_message_in_block(
+                    Box::pin(self.execute_message(
                         chain,
                         message_id,
                         posted_message,
@@ -130,8 +130,7 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
                 self.resource_controller_mut()
                     .track_block_size_of(&operation)
                     .with_execution_context(chain_execution_context)?;
-                Box::pin(self.execute_operation_in_block(chain, operation, &mut txn_tracker))
-                    .await?;
+                Box::pin(self.execute_operation(chain, operation, &mut txn_tracker)).await?;
             }
         }
 
@@ -156,7 +155,7 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
     }
 
     /// Executes a message as part of an incoming bundle in a block.
-    async fn execute_message_in_block<C>(
+    async fn execute_message<C>(
         &mut self,
         chain: &mut ExecutionStateView<C>,
         message_id: MessageId,
@@ -232,7 +231,7 @@ impl<'blobs> BlockExecutionTracker<'blobs> {
         Ok(())
     }
 
-    async fn execute_operation_in_block<C>(
+    async fn execute_operation<C>(
         &mut self,
         chain: &mut ExecutionStateView<C>,
         operation: &Operation,
