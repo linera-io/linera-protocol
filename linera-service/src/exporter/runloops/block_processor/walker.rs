@@ -63,10 +63,10 @@ where
             // now just resolve the blobs
             let mut blobs_to_send = Vec::new();
             let mut blobs_to_index_block_with = Vec::new();
-            for id in node_visitor.node.blobs {
+            for id in node_visitor.node.required_blobs {
                 if !self.is_blob_indexed(id).await? {
                     blobs_to_index_block_with.push(id);
-                    if !node_visitor.node.native_blobs.contains(&id) {
+                    if !node_visitor.node.created_blobs.contains(&id) {
                         blobs_to_send.push(id);
                     }
                 }
@@ -140,8 +140,8 @@ impl NodeVisitor {
 #[derive(Debug)]
 struct ProcessedBlock {
     block: BlockId,
-    blobs: Vec<BlobId>,
-    native_blobs: Vec<BlobId>,
+    created_blobs: Vec<BlobId>,
+    required_blobs: Vec<BlobId>,
     dependencies: Vec<BlockId>,
 }
 
@@ -169,8 +169,8 @@ impl ProcessedBlock {
         Self {
             dependencies,
             block: block_id,
-            blobs: block.required_blob_ids().into_iter().collect(),
-            native_blobs: block.block().created_blob_ids().into_iter().collect(),
+            required_blobs: block.required_blob_ids().into_iter().collect(),
+            created_blobs: block.block().created_blob_ids().into_iter().collect(),
         }
     }
 }

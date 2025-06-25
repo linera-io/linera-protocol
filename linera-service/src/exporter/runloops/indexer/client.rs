@@ -37,29 +37,28 @@ impl IndexerClient {
         })
     }
 
-    pub(super) async fn synchronize_long_lived_stream(
+    // try to make a streaming connection with the destination
+    pub(super) async fn setup_indexer_client(
         &mut self,
         queue_size: usize,
     ) -> Result<(Sender<Element>, Streaming<()>), ExporterError> {
         let mut retry_count = 0;
-        let streams = loop {
-            let (stream, sink) = tokio::sync::mpsc::channel(queue_size);
-            let request = Request::new(ReceiverStream::new(sink));
+        loop {
+            let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
+            let request = Request::new(ReceiverStream::new(receiver));
             match self.client.index_batch(request).await {
-                Ok(res) => break (stream, res.into_inner()),
+                Ok(res) => return Ok((sender, res.into_inner())),
                 Err(e) => {
                     if retry_count > self.max_retries {
                         return Err(ExporterError::SynchronizationFailed(e.into()));
                     }
-                    println!("{:?}", e);
+
                     let delay = self.retry_delay.saturating_mul(retry_count);
                     sleep(delay).await;
                     retry_count += 1;
                 }
             }
-        };
-
-        Ok(streams)
+        }
     }
 }
 

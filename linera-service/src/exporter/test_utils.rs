@@ -60,6 +60,27 @@ pub(crate) struct DummyIndexer {
     pub(crate) state: Arc<DashSet<CryptoHash>>,
 }
 
+impl DummyIndexer {
+    pub(crate) async fn start(
+        self,
+        port: u16,
+        cancellation_token: CancellationToken,
+    ) -> Result<(), anyhow::Error> {
+        let endpoint = get_address(port);
+        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        health_reporter.set_serving::<IndexerServer<Self>>().await;
+
+        Server::builder()
+            .add_service(health_service)
+            .add_service(IndexerServer::new(self))
+            .serve_with_shutdown(endpoint, cancellation_token.cancelled_owned())
+            .await
+            .expect("a running indexer");
+
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl Indexer for DummyIndexer {
     type IndexBatchStream = Pin<Box<dyn Stream<Item = Result<(), Status>> + Send + 'static>>;
@@ -96,7 +117,7 @@ impl Indexer for DummyIndexer {
                         Ok(Element {
                             payload: Some(Payload::Blob(indexer_blob)),
                         }) => {
-                            let blob = Blob::from(indexer_blob);
+                            let blob = Blob::try_from(indexer_blob).unwrap();
                             moved_blobs_state.insert(blob.id());
                         }
                         Ok(_) => continue,
@@ -108,27 +129,6 @@ impl Indexer for DummyIndexer {
         });
 
         Ok(Response::new(Box::pin(output)))
-    }
-}
-
-impl DummyIndexer {
-    pub(crate) async fn start(
-        self,
-        port: u16,
-        cancellation_token: CancellationToken,
-    ) -> Result<(), anyhow::Error> {
-        let endpoint = get_address(port);
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
-        health_reporter.set_serving::<IndexerServer<Self>>().await;
-
-        Server::builder()
-            .add_service(health_service)
-            .add_service(IndexerServer::new(self))
-            .serve_with_shutdown(endpoint, cancellation_token.cancelled_owned())
-            .await
-            .expect("a running indexer");
-
-        Ok(())
     }
 }
 
@@ -167,20 +167,6 @@ impl ValidatorNode for DummyValidator {
     type SubscribeStream =
         UnboundedReceiverStream<Result<linera_rpc::grpc::api::Notification, Status>>;
 
-    async fn handle_block_proposal(
-        &self,
-        _request: Request<linera_rpc::grpc::api::BlockProposal>,
-    ) -> Result<Response<linera_rpc::grpc::api::ChainInfoResult>, Status> {
-        unimplemented!()
-    }
-
-    async fn handle_lite_certificate(
-        &self,
-        _request: Request<linera_rpc::grpc::api::LiteCertificate>,
-    ) -> Result<Response<linera_rpc::grpc::api::ChainInfoResult>, Status> {
-        unimplemented!()
-    }
-
     async fn handle_confirmed_certificate(
         &self,
         request: Request<linera_rpc::grpc::api::HandleConfirmedCertificateRequest>,
@@ -194,8 +180,9 @@ impl ValidatorNode for DummyValidator {
         self.state.insert(req.certificate.hash());
 
         let mut missing_blobs = Vec::new();
+        let created_blobs = req.certificate.inner().block().created_blob_ids();
         for blob in req.certificate.inner().required_blob_ids() {
-            if !self.blobs.contains(&blob) {
+            if !self.blobs.contains(&blob) && !created_blobs.contains(&blob) {
                 missing_blobs.push(blob);
             }
         }
@@ -234,12 +221,47 @@ impl ValidatorNode for DummyValidator {
         };
 
         let response = if missing_blobs.is_empty() {
-            ChainInfoResponse::new(chain_info, None).try_into()?
+            let response = ChainInfoResponse::new(chain_info, None).try_into()?;
+            for blob in created_blobs {
+                self.blobs.insert(blob);
+            }
+
+            response
         } else {
             NodeError::BlobsNotFound(missing_blobs).try_into()?
         };
 
         Ok(Response::new(response))
+    }
+
+    async fn upload_blob(
+        &self,
+        request: Request<linera_rpc::grpc::api::BlobContent>,
+    ) -> Result<Response<linera_rpc::grpc::api::BlobId>, Status> {
+        if self.fault_guard.load(Ordering::Acquire) {
+            return Err(Status::from_error("err".into()));
+        }
+
+        let content: linera_sdk::linera_base_types::BlobContent =
+            request.into_inner().try_into()?;
+        let blob = Blob::new(content);
+        let id = blob.id();
+        self.blobs.insert(id);
+        Ok(Response::new(id.try_into()?))
+    }
+
+    async fn handle_block_proposal(
+        &self,
+        _request: Request<linera_rpc::grpc::api::BlockProposal>,
+    ) -> Result<Response<linera_rpc::grpc::api::ChainInfoResult>, Status> {
+        unimplemented!()
+    }
+
+    async fn handle_lite_certificate(
+        &self,
+        _request: Request<linera_rpc::grpc::api::LiteCertificate>,
+    ) -> Result<Response<linera_rpc::grpc::api::ChainInfoResult>, Status> {
+        unimplemented!()
     }
 
     async fn handle_validated_certificate(
@@ -282,22 +304,6 @@ impl ValidatorNode for DummyValidator {
         _request: Request<()>,
     ) -> Result<Response<linera_rpc::grpc::api::NetworkDescription>, Status> {
         unimplemented!()
-    }
-
-    async fn upload_blob(
-        &self,
-        request: Request<linera_rpc::grpc::api::BlobContent>,
-    ) -> Result<Response<linera_rpc::grpc::api::BlobId>, Status> {
-        if self.fault_guard.load(Ordering::Acquire) {
-            return Err(Status::from_error("err".into()));
-        }
-
-        let content: linera_sdk::linera_base_types::BlobContent =
-            request.into_inner().try_into()?;
-        let blob = Blob::new(content);
-        let id = blob.id();
-        self.blobs.insert(id);
-        Ok(Response::new(id.try_into()?))
     }
 
     async fn download_blob(
@@ -354,7 +360,8 @@ impl ValidatorNode for DummyValidator {
 pub trait TestDestination {
     fn kind(&self) -> DestinationKind;
     fn blobs(&self) -> &DashSet<BlobId>;
-    fn fault_guard(&self) -> &AtomicBool;
+    fn set_faulty(&self);
+    fn unset_faulty(&self);
     fn state(&self) -> &DashSet<CryptoHash>;
     async fn start(
         self,
@@ -373,8 +380,12 @@ impl TestDestination for DummyIndexer {
         self.blobs.as_ref()
     }
 
-    fn fault_guard(&self) -> &AtomicBool {
-        self.fault_guard.as_ref()
+    fn set_faulty(&self) {
+        self.fault_guard.store(true, Ordering::Release);
+    }
+
+    fn unset_faulty(&self) {
+        self.fault_guard.store(false, Ordering::Release);
     }
 
     fn state(&self) -> &DashSet<CryptoHash> {
@@ -400,8 +411,12 @@ impl TestDestination for DummyValidator {
         self.blobs.as_ref()
     }
 
-    fn fault_guard(&self) -> &AtomicBool {
-        self.fault_guard.as_ref()
+    fn set_faulty(&self) {
+        self.fault_guard.store(true, Ordering::Release);
+    }
+
+    fn unset_faulty(&self) {
+        self.fault_guard.store(false, Ordering::Release);
     }
 
     fn state(&self) -> &DashSet<CryptoHash> {

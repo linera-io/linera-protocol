@@ -183,7 +183,6 @@ pub async fn handle_net_up_service(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
-    _num_block_exporters: u32,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");

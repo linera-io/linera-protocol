@@ -258,21 +258,6 @@ pub enum DestinationKind {
     Validator,
 }
 
-impl Destination {
-    pub fn indexer_address(&self) -> String {
-        let tls = match self.tls {
-            TlsConfig::ClearText => "http",
-            TlsConfig::Tls => "https",
-        };
-
-        format!("{}://{}:{}", tls, self.endpoint, self.port)
-    }
-
-    pub fn validator_address(&self) -> String {
-        format!("{}:{}:{}", "grpc", self.endpoint, self.port)
-    }
-}
-
 /// The configuration file to impose various limits
 /// on the resources used by the linera-exporter.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -312,11 +297,19 @@ impl Default for LimitsConfig {
 
 impl Destination {
     pub fn address(&self) -> String {
-        let tls = match self.tls {
-            TlsConfig::ClearText => "http",
-            TlsConfig::Tls => "https",
-        };
+        match self.kind {
+            DestinationKind::Indexer => {
+                let tls = match self.tls {
+                    TlsConfig::ClearText => "http",
+                    TlsConfig::Tls => "https",
+                };
 
-        format!("{}://{}:{}", tls, self.endpoint, self.port)
+                format!("{}://{}:{}", tls, self.endpoint, self.port)
+            }
+
+            DestinationKind::Validator => {
+                format!("{}:{}:{}", "grpc", self.endpoint, self.port)
+            }
+        }
     }
 }

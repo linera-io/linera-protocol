@@ -490,6 +490,8 @@ mod test {
         )
     }
 
+    // tests a simple scenario for a chain with two blocks
+    // and some blobs
     #[tokio::test]
     async fn test_topological_sort_5() -> anyhow::Result<()> {
         let (tx, rx) = unbounded_channel();

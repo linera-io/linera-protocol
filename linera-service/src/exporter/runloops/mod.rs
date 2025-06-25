@@ -232,7 +232,7 @@ fn spawn_exporter_task_on_set<F, S>(
 
 #[cfg(test)]
 mod test {
-    use std::{sync::atomic::Ordering, time::Duration};
+    use std::time::Duration;
 
     use linera_base::port::get_free_port;
     use linera_client::config::{Destination, DestinationConfig, LimitsConfig};
@@ -371,10 +371,8 @@ mod test {
             }
         }
 
-        faulty_indexer.fault_guard().store(false, Ordering::Release);
-        faulty_validator
-            .fault_guard()
-            .store(false, Ordering::Release);
+        faulty_indexer.unset_faulty();
+        faulty_validator.unset_faulty();
 
         let child = cancellation_token.child_token();
         let signal = ExporterCancellationSignal::new(child.clone());
@@ -455,7 +453,7 @@ mod test {
     ) -> anyhow::Result<DummyIndexer> {
         let port = get_free_port().await?;
         let destination = DummyIndexer::default();
-        destination.fault_guard().store(true, Ordering::Release);
+        destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("faulty indexer", port as usize, "http").await?;
         let destination_address = Destination {
@@ -475,7 +473,7 @@ mod test {
     ) -> anyhow::Result<DummyValidator> {
         let port = get_free_port().await?;
         let destination = DummyValidator::default();
-        destination.fault_guard().store(true, Ordering::Release);
+        destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("falty validator", port as usize, "http").await?;
         let destination_address = Destination {

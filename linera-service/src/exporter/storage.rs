@@ -29,6 +29,8 @@ use crate::{
     state::{BlockExporterStateView, DestinationStates},
 };
 
+const NUM_OF_BLOBS: usize = 20;
+
 pub(super) struct ExporterStorage<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -351,7 +353,6 @@ where
     C: Context + Send + Sync + 'static,
 {
     fn new(cache_size: usize, state_context: LogView<C, CanonicalBlock>) -> Self {
-        const NUM_OF_BLOBS: usize = 20;
         let cache_size = cache_size * 1024 * 1024;
         let items_capacity = cache_size
             / (size_of::<usize>()
@@ -461,8 +462,9 @@ impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>> for BlockCacheWeighter
 }
 
 impl Weighter<usize, CanonicalBlock> for CanonicalStateCacheWeighter {
-    fn weight(&self, _key: &usize, val: &CanonicalBlock) -> u64 {
-        (size_of::<usize>() + bcs::serialized_size(val).unwrap()) as u64
+    fn weight(&self, _key: &usize, _val: &CanonicalBlock) -> u64 {
+        (size_of::<usize>() + size_of::<CanonicalBlock>() + NUM_OF_BLOBS * size_of::<BlobId>())
+            as u64
     }
 }
 

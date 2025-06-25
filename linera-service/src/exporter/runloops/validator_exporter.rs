@@ -17,7 +17,6 @@ use tokio_stream::StreamExt;
 
 use crate::{
     common::{BlockId, ExporterError},
-    dispatch,
     storage::ExporterStorage,
 };
 
@@ -61,7 +60,7 @@ where
             ExporterError::DestinationError
         );
 
-        let address = self.destination_config.validator_address();
+        let address = self.destination_config.address();
         let node = self.node_provider.make_node(&address)?;
 
         let export_task = ExportTask::new(node, self.destination_id, &self.storage);
@@ -113,15 +112,8 @@ where
         &self,
         mut receiver: Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) -> anyhow::Result<()> {
-        let delivery = CrossChainMessageDelivery::NonBlocking;
         while let Some((block, blobs_ids)) = receiver.recv().await {
-            let block_id = BlockId::from_confirmed_block(block.value());
-            let method = |certificate, delivery| {
-                self.node
-                    .handle_confirmed_certificate(certificate, delivery)
-            };
-
-            match dispatch!(method, log = block_id, (*block).clone(), delivery) {
+            match self.dispatch_block((*block).clone()).await {
                 Ok(_) => {}
 
                 Err(NodeError::BlobsNotFound(blobs_to_maybe_send)) => {
@@ -129,18 +121,11 @@ where
                         .into_iter()
                         .filter(|id| blobs_to_maybe_send.contains(id))
                         .collect();
-                    let method = |blobs| self.upload_blobs(blobs);
-                    dispatch!(method, log = blobs, blobs)?;
+                    self.upload_blobs(blobs).await?;
+                    self.dispatch_block((*block).clone()).await?
                 }
 
-                Err(e) => {
-                    tracing::error!(
-                        "error {} when resolving block with hash: {:#?}",
-                        e,
-                        block_id
-                    );
-                    Err(e)?
-                }
+                Err(e) => Err(e)?,
             }
 
             self.storage.increment_destination(self.destination_id);
@@ -153,16 +138,46 @@ where
         let tasks = blobs.iter().map(|id| async {
             match self.storage.get_blob(*id).await {
                 Err(e) => Err(e),
-                Ok(blob) => self
-                    .node
-                    .upload_blob((*blob).clone().into())
-                    .await
-                    .map_err(|e| ExporterError::GenericError(e.into()))
-                    .map(|_| ()),
+                Ok(blob) => {
+                    tracing::info!(
+                        "dispatching blob with id: {:#?} from linera exporter",
+                        blob.id()
+                    );
+                    self.node
+                        .upload_blob((*blob).clone().into())
+                        .await
+                        .map_err(|e| ExporterError::GenericError(e.into()))
+                        .map(|_| ())
+                }
             }
         });
 
         let _ = try_join_all(tasks).await?;
+
+        Ok(())
+    }
+
+    async fn dispatch_block(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Result<(), NodeError> {
+        let delivery = CrossChainMessageDelivery::NonBlocking;
+        let block_id = BlockId::from_confirmed_block(certificate.value());
+        tracing::info!(
+            "dispatching block with id: {:#?} from linera exporter",
+            block_id
+        );
+        match self
+            .node
+            .handle_confirmed_certificate(certificate, delivery)
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!("error {} when resolving block with id: {:#?}", e, block_id);
+                Err(e)?
+            }
+        }
 
         Ok(())
     }

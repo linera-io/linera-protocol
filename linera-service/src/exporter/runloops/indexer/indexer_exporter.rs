@@ -14,7 +14,7 @@ use tonic::Streaming;
 
 use super::indexer_api::Element;
 use crate::{
-    common::BlockId, dispatch, runloops::indexer::client::IndexerClient, storage::ExporterStorage,
+    common::BlockId, runloops::indexer::client::IndexerClient, storage::ExporterStorage,
     ExporterError,
 };
 
@@ -61,13 +61,12 @@ where
         let furure = signal.into_future();
         let mut pinned = Box::pin(furure);
 
-        let address = self.destination_config.indexer_address();
+        let address = self.destination_config.address();
         let mut client = IndexerClient::new(&address, self.options)?;
 
         loop {
-            let (outgoing_stream, incoming_stream) = client
-                .synchronize_long_lived_stream(self.work_queue_size)
-                .await?;
+            let (outgoing_stream, incoming_stream) =
+                client.setup_indexer_client(self.work_queue_size).await?;
             let mut streamer = ExportTaskQueue::new(
                 self.work_queue_size,
                 outgoing_stream,
@@ -91,10 +90,17 @@ where
                 },
 
                 res = acknowledgement_task.run() => {
-                    if let Err(e) = res {
-                        tracing::error!("unexpected error: {e}, re-trying to establish a stream");
-                        sleep(Duration::from_secs(1)).await;
+                    match res {
+                        Err(e) => {
+                            tracing::error!("unexpected error: {e}, re-trying to establish a stream");
+                        }
+
+                        Ok(_) => {
+                            tracing::error!("stream closed unexpectedly, retrying to establish a stream");
+                        }
                     }
+
+                    sleep(Duration::from_secs(1)).await;
                 },
 
             }
@@ -134,8 +140,6 @@ where
             self.storage.increment_destination(self.destination_id);
         }
 
-        tracing::error!("stream closed unexpectedly, retrying to establish a stream");
-        sleep(Duration::from_secs(1)).await;
         Ok(())
     }
 }
@@ -181,19 +185,19 @@ where
         while let Some((block, blobs)) = futures.next().await.transpose()? {
             for blob in blobs {
                 let blob_id = blob.id();
-                dispatch!(
-                    |payload| self.buffer.send(payload),
-                    log = blob_id,
-                    blob.into()
-                )?;
+                tracing::info!(
+                    "dispatching blob with id: {:?} from linera exporter",
+                    blob_id
+                );
+                self.buffer.send(blob.try_into().unwrap()).await?
             }
 
             let block_id = BlockId::from_confirmed_block(block.value());
-            dispatch!(
-                |payload| self.buffer.send(payload),
-                log = block_id,
-                block.try_into().unwrap()
-            )?;
+            tracing::info!(
+                "dispatching block with id: {:?} from linera exporter",
+                block_id
+            );
+            self.buffer.send(block.try_into().unwrap()).await?;
 
             futures.push_back(self.get_block_with_blobs_task(index));
             index += 1;

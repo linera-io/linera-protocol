@@ -134,19 +134,6 @@ impl From<BlockId> for LiteBlockId {
     }
 }
 
-#[macro_export]
-macro_rules! dispatch {
-    ($func:expr, log_batch = $log_value:expr $(, $args:expr)* ) => {{
-        tracing::info!("dispatching batch: {:?} from linera exporter", $log_value);
-        $func($($args),*).await
-    }};
-
-    ($func:expr, log = $log_value:expr $(, $args:expr)* ) => {{
-        tracing::info!("dispatching: {:?} from linera exporter", $log_value);
-        $func($($args),*).await
-    }};
-}
-
 #[derive(Clone)]
 pub(crate) struct ExporterCancellationSignal {
     token: CancellationToken,
