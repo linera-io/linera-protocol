@@ -224,7 +224,7 @@ impl Client {
                 tracing::error!("ChainListener error: {error:?}");
             }
         });
-        log::info!("Linera Web client successfully initialized");
+        tracing::info!("Linera Web client successfully initialized");
         Ok(Self { client_context })
     }
 
@@ -241,10 +241,10 @@ impl Client {
             let mut notifications = this
                 .default_chain_client()
                 .await
-                .unwrap()
+                .expect("should have default chain client")
                 .subscribe()
                 .await
-                .unwrap();
+                .expect("subscribing should not fail");
             while let Some(notification) = notifications.next().await {
                 tracing::debug!("received notification: {notification:?}");
                 handler
@@ -252,7 +252,7 @@ impl Client {
                         &JsValue::null(),
                         &serde_wasm_bindgen::to_value(&notification).unwrap(),
                     )
-                    .unwrap();
+                    .expect("calling handler should succeed");
             }
         });
     }
@@ -428,6 +428,8 @@ impl Application {
     // TODO(#14) allow passing bytes here rather than just strings
     // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
     pub async fn query(&self, query: &str) -> JsResult<String> {
+        tracing::info!("Application.query: executing query");
+
         let chain_client = self.client.default_chain_client().await?;
 
         let linera_execution::QueryOutcome {
@@ -444,6 +446,8 @@ impl Application {
         };
 
         if !operations.is_empty() {
+            tracing::info!("Application.query: executing operations");
+
             let _hash = self
                 .client
                 .apply_client_command(&chain_client, || {
@@ -451,6 +455,8 @@ impl Application {
                 })
                 .await??;
         }
+
+        tracing::info!("Application.query: query execution complete");
 
         Ok(String::from_utf8(response)?)
     }
