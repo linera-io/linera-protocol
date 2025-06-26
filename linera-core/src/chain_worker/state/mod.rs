@@ -70,7 +70,6 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-
         execution_state_cache: Arc<
             ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
         >,
