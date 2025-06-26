@@ -222,7 +222,7 @@ where
     async fn run(&mut self) -> anyhow::Result<()> {
         let mut index = self.start_height;
         let mut futures = FuturesOrdered::new();
-        while futures.len() != self.queue_size {
+        while futures.len() < self.queue_size {
             futures.push_back(self.get_block_task(index));
             index += 1;
         }
