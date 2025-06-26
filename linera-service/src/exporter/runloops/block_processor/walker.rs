@@ -142,7 +142,7 @@ struct ProcessedBlock {
     block: BlockId,
     // blobs created by this block
     // used for filtering which blobs
-    // we won't need to send separately 
+    // we won't need to send separately
     // as these blobs are part of the block itself.
     created_blobs: Vec<BlobId>,
     // all the blobs required by this block
