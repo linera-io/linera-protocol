@@ -1255,6 +1255,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     let increment = 5;
 
     let chain = client.load_wallet()?.default_chain().unwrap();
+    let account_chain = Account::chain(chain);
     let (contract, service) = client.build_example("counter").await?;
 
     let application_id = client
@@ -1275,11 +1276,17 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
         .make_application(&chain, &application_id)
         .await?;
 
+    let balance1 = node_service.balance(&account_chain).await?;
+
     let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value);
+    let balance2 = node_service.balance(&account_chain).await?;
+    assert_eq!(balance1, balance2);
 
     let mutation = format!("increment(value: {increment})");
     application.mutate(mutation).await?;
+    let balance3 = node_service.balance(&account_chain).await?;
+    assert!(balance3 < balance2);
 
     let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value + increment);
