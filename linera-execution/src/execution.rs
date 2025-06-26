@@ -194,27 +194,6 @@ where
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
-        let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-        self.run_user_action_with_runtime(
-            application_id,
-            action,
-            refund_grant_to,
-            grant,
-            txn_tracker,
-            resource_controller,
-        )
-        .await
-    }
-
-    async fn run_user_action_with_runtime(
-        &mut self,
-        application_id: ApplicationId,
-        action: UserAction,
-        refund_grant_to: Option<Account>,
-        grant: Option<&mut Amount>,
-        txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<AccountOwner>>,
-    ) -> Result<(), ExecutionError> {
         let chain_id = self.context().extra().chain_id();
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
