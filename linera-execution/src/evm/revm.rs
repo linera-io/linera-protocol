@@ -468,6 +468,9 @@ const PRECOMPILE_ADDRESS: Address = address!("0000000000000000000000000000000000
 // This is the zero address used for service calls
 const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
 
+// This is the address being used for service calls
+const SERVICE_ADDRESS: Address = address!("0000000000000000000000000000000000002000");
+
 fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
     vec[..20].copy_from_slice(address.as_ref());
@@ -1431,7 +1434,7 @@ where
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
         };
-        let caller = ZERO_ADDRESS;
+        let caller = SERVICE_ADDRESS;
         let nonce = self.db.get_nonce(&caller)?;
         let result_state = {
             let ctx: revm_context::Context<

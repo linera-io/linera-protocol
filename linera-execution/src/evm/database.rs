@@ -114,9 +114,9 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     }
 
     /// Returns the tag associated to the contract.
-    fn get_address_key(&self, prefix: u8, address: &Address) -> Vec<u8> {
+    fn get_address_key(&self, prefix: u8, address: Address) -> Vec<u8> {
         let mut key = vec![prefix];
-        key.extend(address.to_vec());
+        key.extend(address);
         key
     }
 
@@ -192,7 +192,7 @@ where
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, &address);
+        let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, address);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo>(&result)?;
@@ -211,7 +211,7 @@ where
                 Some(slot) => slot.present_value(),
             });
         }
-        let key_prefix = self.get_address_key(KeyCategory::Storage as u8, &address);
+        let key_prefix = self.get_address_key(KeyCategory::Storage as u8, address);
         let key = Self::get_linera_key(&key_prefix, index)?;
         {
             let mut storage_stats = self
@@ -249,9 +249,9 @@ where
             if !account.is_touched() {
                 continue;
             }
-            let key_prefix = self.get_address_key(KeyCategory::Storage as u8, address);
-            let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, address);
-            let key_state = self.get_address_key(KeyCategory::AccountState as u8, address);
+            let key_prefix = self.get_address_key(KeyCategory::Storage as u8, *address);
+            let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, *address);
+            let key_state = self.get_address_key(KeyCategory::AccountState as u8, *address);
             if account.is_selfdestructed() {
                 batch.delete_key_prefix(key_prefix);
                 batch.put_key_value(key_info, &AccountInfo::default())?;
@@ -326,7 +326,7 @@ where
     pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let evm_address = runtime.application_id()?.evm_address();
-        let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, &evm_address);
+        let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, evm_address);
         let promise = runtime.contains_key_new(key_info)?;
         let result = runtime.contains_key_wait(&promise)?;
         Ok(result)
