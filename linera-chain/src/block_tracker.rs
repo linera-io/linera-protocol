@@ -413,3 +413,134 @@ pub(crate) type FinalizeExecutionResult = (
     Vec<OperationResult>,
     ResourceTracker,
 );
+
+#[cfg(test)]
+mod block_execution {
+    use std::{collections::BTreeMap, sync::Arc};
+
+    use linera_base::{
+        crypto::{AccountPublicKey, CryptoHash},
+        data_types::{Amount, BlockHeight, Epoch, Timestamp},
+        identifiers::Account,
+    };
+    use linera_execution::{
+        test_utils::{dummy_chain_description_with_owner, SystemExecutionState},
+        MessageKind, ResourceControlPolicy, ResourceController, ResourceTracker, SystemMessage,
+    };
+
+    use crate::{
+        block_tracker::BlockExecutionTracker,
+        data_types::{
+            IncomingBundle, MessageAction, MessageBundle, PostedMessage, ProposedBlock, Transaction,
+        },
+        ChainError,
+    };
+
+    #[test]
+    fn test_empty_block() {
+        let proposal: ProposedBlock = ProposedBlock {
+            chain_id: Default::default(),
+            height: BlockHeight(0),
+            timestamp: Default::default(),
+            authenticated_signer: None,
+            epoch: Epoch(0),
+            incoming_bundles: vec![],
+            operations: vec![],
+            previous_block_hash: None,
+        };
+
+        let tracker = BlockExecutionTracker::new(
+            ResourceController::new(
+                Arc::new(ResourceControlPolicy::testnet()),
+                ResourceTracker::default(),
+                None,
+            ),
+            Default::default(),
+            Default::default(),
+            None,
+            None,
+            proposal.chain_id,
+            proposal.height,
+            proposal.timestamp,
+            proposal.authenticated_signer,
+        );
+
+        let (_, _, _, _, _, _resource_tracker) = tracker.finalize(0);
+    }
+
+    // Test that an incoming message with a grant can pay for everything.
+    #[tokio::test]
+    async fn grant_pays_all() -> Result<(), ChainError> {
+        let chain_owner = AccountPublicKey::test_key(0);
+        let chain_description = dummy_chain_description_with_owner(0, chain_owner.into());
+        // By default `balances` and (chain) `balance` are zero.
+        let system = SystemExecutionState {
+            description: Some(chain_description.clone()),
+            epoch: chain_description.config().epoch,
+            ..SystemExecutionState::default()
+        };
+
+        let other_chain_owner = AccountPublicKey::test_key(1);
+        let other_chain = dummy_chain_description_with_owner(1, other_chain_owner.into());
+
+        let bundle = IncomingBundle {
+            origin: other_chain.id(),
+            bundle: MessageBundle {
+                height: BlockHeight(0),
+                timestamp: Timestamp::now(),
+                certificate_hash: CryptoHash::default(),
+                transaction_index: 0,
+                messages: vec![PostedMessage {
+                    authenticated_signer: Some(chain_owner.into()),
+                    refund_grant_to: Some(Account::new(other_chain.id(), other_chain_owner.into())),
+                    kind: MessageKind::Protected,
+                    index: 0,
+                    grant: Amount::MAX,
+                    message: linera_execution::Message::System(SystemMessage::Credit {
+                        target: chain_owner.into(),
+                        amount: Amount::from_tokens(2),
+                        source: other_chain_owner.into(),
+                    }),
+                }],
+            },
+            action: MessageAction::Accept,
+        };
+
+        let proposal: ProposedBlock = ProposedBlock {
+            chain_id: chain_description.id(),
+            height: BlockHeight(0),
+            timestamp: Timestamp::now(),
+            authenticated_signer: Some(chain_owner.into()),
+            epoch: Epoch(0),
+            incoming_bundles: vec![bundle.clone()],
+            operations: vec![],
+            previous_block_hash: None,
+        };
+
+        let mut tracker = BlockExecutionTracker::new(
+            ResourceController::new(
+                Arc::new(ResourceControlPolicy::testnet()),
+                ResourceTracker::default(),
+                None,
+            ),
+            BTreeMap::new(),
+            Timestamp::now(),
+            Some(1),
+            None,
+            proposal.chain_id,
+            proposal.height,
+            proposal.timestamp,
+            proposal.authenticated_signer,
+        );
+
+        let mut chain = system.into_view().await;
+
+        tracker
+            .execute_transaction(Transaction::ReceiveMessages(&bundle), &mut chain)
+            .await?;
+
+        let (_, _, _, _, _, resources) = tracker.finalize(1);
+        println!("Resources used: {resources:?}");
+        Ok(())
+    }
+}
