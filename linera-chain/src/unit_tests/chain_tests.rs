@@ -5,7 +5,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    iter, thread,
+    thread,
     time::{Duration, Instant},
 };
 
@@ -64,7 +64,8 @@ impl TestEnvironment {
         let config = InitialChainConfig {
             ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
             epoch: Epoch::ZERO,
-            active_epochs: iter::once(Epoch::ZERO).collect(),
+            min_active_epoch: Epoch::ZERO,
+            max_active_epoch: Epoch::ZERO,
             balance: Amount::from_tokens(10),
             application_permissions: Default::default(),
         };
@@ -162,8 +163,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
     // The size of the executed valid block below.
     let maximum_block_size = 260;
 
-    let mut config = env.make_open_chain_config();
-    config.active_epochs.insert(Epoch(0));
+    let config = env.make_open_chain_config();
 
     let chain_desc = env.make_child_chain_description_with_config(3, config);
     let chain_id = chain_desc.id();
@@ -697,8 +697,7 @@ async fn prepare_test_with_dummy_mock_application(
     let mut env = TestEnvironment::new();
     let time = Timestamp::from(0);
 
-    let mut config = env.make_open_chain_config();
-    config.active_epochs.insert(Epoch(0));
+    let config = env.make_open_chain_config();
 
     let committee_blob = committee_blob(policy);
 

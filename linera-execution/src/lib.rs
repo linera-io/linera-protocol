@@ -22,13 +22,7 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{
-    any::Any,
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{any::Any, collections::BTreeMap, fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -406,7 +400,8 @@ pub trait ExecutionRuntimeContext {
 
     async fn committees_for(
         &self,
-        epochs: BTreeSet<Epoch>,
+        min_epoch: Epoch,
+        max_epoch: Epoch,
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
@@ -1097,7 +1092,8 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn committees_for(
         &self,
-        epochs: BTreeSet<Epoch>,
+        min_epoch: Epoch,
+        max_epoch: Epoch,
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
         let committee_blob_bytes = self
             .blobs
@@ -1111,9 +1107,8 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         // TODO(#4146): this currently assigns the first found committee to all epochs,
         // which should be fine for the tests we have at the moment, but might not be in
         // the future.
-        Ok(epochs
-            .into_iter()
-            .map(|epoch| (epoch, committee.clone()))
+        Ok((min_epoch.0..=max_epoch.0)
+            .map(|epoch| (Epoch::from(epoch), committee.clone()))
             .collect())
     }
 

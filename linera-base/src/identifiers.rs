@@ -1117,7 +1117,8 @@ mod tests {
             epoch: Epoch::ZERO,
             ownership: ChainOwnership::single(AccountOwner::Reserved(0)),
             balance: Amount::ZERO,
-            active_epochs: [Epoch::ZERO].into_iter().collect(),
+            min_active_epoch: Epoch::ZERO,
+            max_active_epoch: Epoch::ZERO,
             application_permissions: Default::default(),
         };
         let description = ChainDescription::new(
@@ -1127,7 +1128,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "24774c4de89d4684745509eedc75f48fd11958c7fd202ca96240bf616212cc73"
+            "fe947fddf2735224d01eb9d56580109f2d9d02397dc5ddd748ef9beeb38d9caa"
         );
     }
 

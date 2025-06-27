@@ -442,7 +442,8 @@ pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
             epoch: Default::default(),
             balance: Default::default(),
             application_permissions: Default::default(),
-            active_epochs: Default::default(),
+            min_active_epoch: Default::default(),
+            max_active_epoch: Default::default(),
         },
         Timestamp::now(),
     );
