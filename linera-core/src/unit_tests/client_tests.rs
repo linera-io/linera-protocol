@@ -1269,11 +1269,8 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
-    let mut policy = ResourceControlPolicy::only_fuel();
-    // Set the price for outoing messages - otherwise the transfer will succeed
-    // because system operations are free (and transfer is one).
-    policy.message = Amount::from_micros(1);
-    let mut builder = TestBuilder::new(storage_builder, 2, 0, signer)
+    let policy = ResourceControlPolicy::only_fuel();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
         .await?
         .with_policy(policy);
     let balance = Amount::from_tokens(3);

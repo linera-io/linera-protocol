@@ -48,8 +48,6 @@ pub struct ResourceControlPolicy {
     /// The price of increasing storage by a byte.
     // TODO(#1536): This is not fully supported.
     pub byte_stored: Amount,
-    /// The base price of adding an operation to a block.
-    pub operation: Amount,
     /// The additional price for each byte in the argument of a user operation.
     pub operation_byte: Amount,
     /// The additional price for each byte in the argument of a user message.
@@ -106,7 +104,6 @@ impl fmt::Display for ResourceControlPolicy {
             blob_byte_read,
             blob_byte_published,
             byte_stored,
-            operation,
             operation_byte,
             message_byte,
             service_as_oracle_query,
@@ -140,7 +137,6 @@ impl fmt::Display for ResourceControlPolicy {
             {blob_byte_read:.2} cost of reading blobs, per byte\n\
             {blob_byte_published:.2} cost of publishing blobs, per byte\n\
             {byte_stored:.2} cost per byte stored\n\
-            {operation:.2} per operation\n\
             {operation_byte:.2} per byte in the argument of an operation\n\
             {service_as_oracle_query:.2} per query to a service as an oracle\n\
             {message_byte:.2} per byte in the argument of an outgoing messages\n\
@@ -188,7 +184,6 @@ impl ResourceControlPolicy {
             blob_byte_read: Amount::ZERO,
             blob_byte_published: Amount::ZERO,
             byte_stored: Amount::ZERO,
-            operation: Amount::ZERO,
             operation_byte: Amount::ZERO,
             message_byte: Amount::ZERO,
             service_as_oracle_query: Amount::ZERO,
@@ -242,7 +237,6 @@ impl ResourceControlPolicy {
             blob_published: Amount::from_nanos(10),
             blob_byte_read: Amount::from_attos(100),
             blob_byte_published: Amount::from_attos(1_000),
-            operation: Amount::from_attos(10),
             operation_byte: Amount::from_attos(1),
             message_byte: Amount::from_attos(1),
             http_request: Amount::from_micros(1),
@@ -266,7 +260,6 @@ impl ResourceControlPolicy {
             byte_stored: Amount::from_nanos(10),
             message_byte: Amount::from_nanos(100),
             operation_byte: Amount::from_nanos(10),
-            operation: Amount::from_micros(10),
             service_as_oracle_query: Amount::from_millis(10),
             http_request: Amount::from_micros(50),
             maximum_wasm_fuel_per_block: 100_000_000,
