@@ -928,12 +928,12 @@ where
                 .with_authenticated_signer(Some(sender_owner)),
         ),
     ));
-    // Missing earlier blocks
+    // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
         env.worker()
             .handle_confirmed_certificate(certificate1.clone(), None)
             .await,
-        Err(WorkerError::MissingEarlierBlocks { .. })
+        Ok(_)
     );
 
     // Run transfers

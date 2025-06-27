@@ -426,10 +426,6 @@ where
         }
         if outbox.queue.count() == 0 {
             self.nonempty_outboxes.get_mut().remove(target);
-            // If the outbox is empty and not ahead of the executed blocks, remove it.
-            if *outbox.next_height_to_schedule.get() <= self.tip_state.get().next_block_height {
-                self.outboxes.remove_entry(target)?;
-            }
         }
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
@@ -990,14 +986,9 @@ where
         };
         // Everything after (including) next_height in in preprocessed_blocks if we have it.
         for height in start.max(next_height).0..=end.0 {
-            hashes.push(
-                self.preprocessed_blocks
-                    .get(&BlockHeight(height))
-                    .await?
-                    .ok_or_else(|| {
-                        ChainError::InternalError("missing entry in preprocessed_blocks".into())
-                    })?,
-            );
+            if let Some(hash) = self.preprocessed_blocks.get(&BlockHeight(height)).await? {
+                hashes.push(hash);
+            }
         }
         Ok(hashes)
     }
