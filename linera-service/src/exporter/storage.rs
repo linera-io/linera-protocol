@@ -26,7 +26,7 @@ use quick_cache::{sync::Cache as FifoCache, Weighter};
 
 use crate::{
     common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
-    state::{BlockExporterStateView, DestinationStates},
+    state::{BlockExporterStateView, CommitteeState, DestinationStates},
 };
 
 const NUM_OF_BLOBS: usize = 20;
@@ -45,6 +45,7 @@ where
     storage: S,
     destination_states: DestinationStates,
     shared_canonical_state: CanonicalState<C>,
+    committee_destination_states: CommitteeState,
     blobs_cache: Arc<FifoCache<BlobId, Arc<Blob>, BlobCacheWeighter>>,
     blocks_cache: Arc<FifoCache<CryptoHash, Arc<ConfirmedBlockCertificate>, BlockCacheWeighter>>,
 }
@@ -68,6 +69,7 @@ where
         storage: S,
         state_context: LogView<C, CanonicalBlock>,
         destination_states: DestinationStates,
+        committee_state: CommitteeState,
         limits: LimitsConfig,
     ) -> Self {
         let shared_canonical_state =
@@ -89,6 +91,7 @@ where
             blobs_cache,
             blocks_cache,
             destination_states,
+            committee_destination_states: committee_state,
         }
     }
 
@@ -137,6 +140,7 @@ where
             blobs_cache: self.blobs_cache.clone(),
             blocks_cache: self.blocks_cache.clone(),
             destination_states: self.destination_states.clone(),
+            committee_destination_states: self.committee_destination_states.clone(),
         })
     }
 }
@@ -196,6 +200,24 @@ where
         self.shared_storage.destination_states.load_state(id)
     }
 
+    pub(crate) fn increment_committee_member(&self, id: DestinationId) {
+        self.shared_storage
+            .committee_destination_states
+            .increment_destination(id);
+    }
+
+    pub(crate) fn get_committee_member_address(&self, id: DestinationId) -> String {
+        self.shared_storage
+            .committee_destination_states
+            .get_address(id)
+    }
+
+    pub(crate) fn load_committee_member_state(&self, id: DestinationId) -> u64 {
+        self.shared_storage
+            .committee_destination_states
+            .load_state(id)
+    }
+
     pub(crate) fn clone(&mut self) -> Result<Self, ExporterError> {
         Ok(ExporterStorage::new(self.shared_storage.clone()?))
     }
@@ -212,7 +234,7 @@ where
         limits: LimitsConfig,
     ) -> Result<(Self, ExporterStorage<S>), ExporterError> {
         let context = storage.block_exporter_context(id).await?;
-        let (view, canonical_state, destination_states) =
+        let (view, canonical_state, destination_states, committee_state) =
             BlockExporterStateView::initiate(context, number_of_destinaions).await?;
 
         let chain_states_cache_capacity =
@@ -228,8 +250,13 @@ where
             .max_capacity(blob_state_cache_capacity)
             .build();
 
-        let mut shared_storage =
-            SharedStorage::new(storage, canonical_state, destination_states, limits);
+        let mut shared_storage = SharedStorage::new(
+            storage,
+            canonical_state,
+            destination_states,
+            committee_state,
+            limits,
+        );
         let exporter_storage = ExporterStorage::new(shared_storage.clone()?);
 
         Ok((
@@ -248,6 +275,10 @@ where
         hash: CryptoHash,
     ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
         self.shared_storage.get_block(hash).await
+    }
+
+    pub(super) async fn get_blob(&self, blob: BlobId) -> Result<Arc<Blob>, ExporterError> {
+        self.shared_storage.get_blob(blob).await
     }
 
     pub(super) async fn is_blob_indexed(&mut self, blob: BlobId) -> Result<bool, ExporterError> {
@@ -315,13 +346,24 @@ where
         self.shared_storage.push_block(block)
     }
 
+    pub(super) fn new_committee(&self, addresses: Vec<String>) {
+        self.exporter_state_view
+            .replace_current_committee(addresses);
+    }
+
     pub(super) async fn save(&mut self) -> Result<(), ExporterError> {
         let mut batch = Batch::new();
+
         self.shared_storage
             .shared_canonical_state
             .flush(&mut batch)?;
+
         self.exporter_state_view
             .set_destination_states(self.shared_storage.destination_states.clone());
+
+        self.exporter_state_view
+            .set_committee_state(self.shared_storage.committee_destination_states.clone());
+
         self.exporter_state_view.flush(&mut batch)?;
         self.exporter_state_view.rollback();
         if let Err(e) = self

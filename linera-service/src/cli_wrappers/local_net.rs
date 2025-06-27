@@ -21,7 +21,7 @@ use linera_base::{
 };
 use linera_client::{
     client_options::ResourceControlPolicyConfig,
-    config::{BlockExporterConfig, DestinationKind},
+    config::{BlockExporterConfig, DestinationConfig, DestinationKind},
 };
 use linera_core::node::ValidatorNodeProvider;
 use linera_rpc::config::{CrossChainConfig, TlsConfig};
@@ -549,10 +549,23 @@ impl LocalNet {
             "#
         );
 
-        for destination in &self.block_exporters[exporter_id as usize]
-            .destination_config
-            .destinations
-        {
+        let DestinationConfig {
+            destinations,
+            committee_destination,
+        } = &self.block_exporters[exporter_id as usize].destination_config;
+
+        if *committee_destination {
+            let destination_string_to_push = r#"
+
+            [destination_config]
+            committee_destination = true
+            "#
+            .to_string();
+
+            config.push_str(&destination_string_to_push);
+        }
+
+        for destination in destinations {
             let tls = match destination.tls {
                 TlsConfig::ClearText => "ClearText",
                 TlsConfig::Tls => "Tls",

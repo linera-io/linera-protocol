@@ -20,6 +20,12 @@ use crate::{
     storage::ExporterStorage,
 };
 
+#[derive(Debug, Clone)]
+pub(super) enum ValidatorDestinationKind {
+    CommitteeMember,
+    NonCommitteeMember(Destination),
+}
+
 pub(crate) struct Exporter<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -27,7 +33,7 @@ where
     node_provider: Arc<GrpcNodeProvider>,
     destination_id: DestinationId,
     storage: ExporterStorage<S>,
-    destination_config: Destination,
+    destination_config: ValidatorDestinationKind,
     work_queue_size: usize,
 }
 
@@ -39,7 +45,7 @@ where
         node_provider: Arc<GrpcNodeProvider>,
         destination_id: DestinationId,
         storage: ExporterStorage<S>,
-        destination_config: Destination,
+        destination_config: ValidatorDestinationKind,
         work_queue_size: usize,
     ) -> Self {
         Self {
@@ -55,17 +61,39 @@ where
         self,
         shutdown_signal: F,
     ) -> anyhow::Result<()> {
-        ensure!(
-            DestinationKind::Validator == self.destination_config.kind,
-            ExporterError::DestinationError
-        );
+        if let ValidatorDestinationKind::NonCommitteeMember(destination) = &self.destination_config
+        {
+            ensure!(
+                DestinationKind::Validator == destination.kind,
+                ExporterError::DestinationError
+            );
+        }
 
-        let address = self.destination_config.address();
+        let (address, committee_member) = match self.destination_config.clone() {
+            ValidatorDestinationKind::CommitteeMember => (
+                self.storage
+                    .get_committee_member_address(self.destination_id),
+                true,
+            ),
+            ValidatorDestinationKind::NonCommitteeMember(destination) => {
+                (destination.address(), false)
+            }
+        };
+
         let node = self.node_provider.make_node(&address)?;
 
-        let export_task = ExportTask::new(node, self.destination_id, &self.storage);
-        let (mut task_queue, task_receiver) =
-            TaskQueue::new(self.work_queue_size, self.destination_id, &self.storage);
+        let export_task = ExportTask::new(
+            node,
+            self.destination_id,
+            &self.storage,
+            self.destination_config.clone(),
+        );
+        let (mut task_queue, task_receiver) = TaskQueue::new(
+            self.work_queue_size,
+            committee_member,
+            self.destination_id,
+            &self.storage,
+        );
 
         tokio::select! {
 
@@ -90,6 +118,7 @@ where
     node: GrpcClient,
     destination_id: DestinationId,
     storage: &'a ExporterStorage<S>,
+    destination_kind: ValidatorDestinationKind,
 }
 
 impl<'a, S> ExportTask<'a, S>
@@ -100,11 +129,13 @@ where
         node: GrpcClient,
         destination_id: DestinationId,
         storage: &'a ExporterStorage<S>,
+        destination_kind: ValidatorDestinationKind,
     ) -> ExportTask<'a, S> {
         ExportTask {
             node,
-            destination_id,
             storage,
+            destination_id,
+            destination_kind,
         }
     }
 
@@ -128,7 +159,14 @@ where
                 Err(e) => Err(e)?,
             }
 
-            self.storage.increment_destination(self.destination_id);
+            match &self.destination_kind {
+                ValidatorDestinationKind::CommitteeMember => {
+                    self.storage.increment_committee_member(self.destination_id);
+                }
+                ValidatorDestinationKind::NonCommitteeMember(_) => {
+                    self.storage.increment_destination(self.destination_id);
+                }
+            }
         }
 
         Ok(())
@@ -200,13 +238,18 @@ where
     #[expect(clippy::type_complexity)]
     fn new(
         queue_size: usize,
+        committee_member: bool,
         destination_id: DestinationId,
         storage: &'a ExporterStorage<S>,
     ) -> (
         TaskQueue<'a, S>,
         Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) {
-        let start_height = storage.load_destination_state(destination_id) as usize;
+        let start_height = match committee_member {
+            true => storage.load_committee_member_state(destination_id) as usize,
+            false => storage.load_destination_state(destination_id) as usize,
+        };
+
         let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
 
         let queue = Self {

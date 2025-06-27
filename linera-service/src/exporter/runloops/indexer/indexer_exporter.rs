@@ -51,15 +51,15 @@ where
 
     pub(crate) async fn run_with_shutdown<F: IntoFuture<Output = ()>>(
         self,
-        signal: F,
+        shutdown_signal: F,
     ) -> anyhow::Result<()> {
         ensure!(
             DestinationKind::Indexer == self.destination_config.kind,
             ExporterError::DestinationError
         );
 
-        let furure = signal.into_future();
-        let mut pinned = Box::pin(furure);
+        let shutdown_signal_future = shutdown_signal.into_future();
+        let mut pinned_shutdown_signal = Box::pin(shutdown_signal_future);
 
         let address = self.destination_config.address();
         let mut client = IndexerClient::new(&address, self.options)?;
@@ -80,7 +80,7 @@ where
 
                 biased;
 
-                _ = &mut pinned => {break},
+                _ = &mut pinned_shutdown_signal => {break},
 
                 res = streamer.run() => {
                     if let Err(e) = res {

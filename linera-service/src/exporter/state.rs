@@ -6,6 +6,7 @@ use std::sync::{
     Arc,
 };
 
+use arc_swap::ArcSwap;
 use linera_base::{
     data_types::BlockHeight,
     identifiers::{BlobId, ChainId},
@@ -36,6 +37,8 @@ pub struct BlockExporterStateView<C> {
     chain_states: MapView<C, ChainId, LiteBlockId>,
     /// The exporter state per destination.
     destination_states: RegisterView<C, DestinationStates>,
+    /// The exporter state for the current committee.
+    committee_state: RegisterView<C, CommitteeState>,
 }
 
 impl<C> BlockExporterStateView<C>
@@ -45,7 +48,15 @@ where
     pub async fn initiate(
         context: C,
         number_of_destinations: u16,
-    ) -> Result<(Self, LogView<C, CanonicalBlock>, DestinationStates), ExporterError> {
+    ) -> Result<
+        (
+            Self,
+            LogView<C, CanonicalBlock>,
+            DestinationStates,
+            CommitteeState,
+        ),
+        ExporterError,
+    > {
         let mut view = BlockExporterStateView::load(context)
             .await
             .map_err(ExporterError::StateError)?;
@@ -64,7 +75,9 @@ where
         let states = view.destination_states.get().clone();
         let canonical_state = view.canonical_state.clone_unchecked()?;
 
-        Ok((view, canonical_state, states))
+        let committee_state = view.committee_state.get().clone();
+
+        Ok((view, canonical_state, states, committee_state))
     }
 
     pub fn index_blob(&mut self, blob: BlobId) -> Result<(), ExporterError> {
@@ -117,6 +130,21 @@ where
 
     pub fn set_destination_states(&mut self, destination_states: DestinationStates) {
         self.destination_states.set(destination_states);
+    }
+
+    pub fn set_committee_state(&mut self, committee_state: CommitteeState) {
+        self.committee_state.set(committee_state);
+    }
+
+    pub fn replace_current_committee(&self, addresses: Vec<String>) {
+        let state = Arc::new(
+            addresses
+                .into_iter()
+                .map(CommitteeMember::new)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        );
+        self.committee_state.get().states.swap(state);
     }
 }
 
@@ -193,5 +221,113 @@ impl DestinationStates {
             .get(id as usize)
             .expect("DestinationId should correspond")
             .load(Ordering::Acquire)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct CommitteeState {
+    states: Arc<ArcSwap<Box<[CommitteeMember]>>>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "CommitteeState")]
+struct SerializableCommitteeState {
+    states: Vec<SerializedCommitteeMember>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "CommitteeMember")]
+struct SerializedCommitteeMember {
+    address: String,
+    export_state: u64,
+}
+
+impl Serialize for CommitteeState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let states = self
+            .states
+            .load()
+            .iter()
+            .map(|member| SerializedCommitteeMember {
+                address: member.address.clone(),
+                export_state: member.export_state.load(Ordering::Acquire),
+            })
+            .collect();
+
+        SerializableCommitteeState::serialize(&SerializableCommitteeState { states }, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for CommitteeState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let SerializableCommitteeState { states } =
+            SerializableCommitteeState::deserialize(deserializer)?;
+        let states = states
+            .iter()
+            .map(|member| CommitteeMember {
+                address: member.address.clone(),
+                export_state: member.export_state.into(),
+            })
+            .collect::<Box<[_]>>();
+        Ok(Self {
+            states: Arc::new(ArcSwap::new(states.into())),
+        })
+    }
+}
+
+impl CommitteeState {
+    pub fn load_state(&self, id: DestinationId) -> u64 {
+        self.states
+            .load()
+            .get(id as usize)
+            .expect("DestinationId should correspond")
+            .load_state()
+    }
+
+    pub fn increment_destination(&self, id: DestinationId) {
+        if let Some(member) = self.states.load().get(id as usize) {
+            member.increment_state();
+        }
+    }
+
+    pub fn get_address(&self, id: DestinationId) -> String {
+        self.states
+            .load()
+            .get(id as usize)
+            .expect("DestinationId should correspond")
+            .get_address()
+    }
+}
+
+#[derive(Debug)]
+struct CommitteeMember {
+    address: String,
+    export_state: AtomicU64,
+}
+
+impl CommitteeMember {
+    fn new(address: String) -> Self {
+        Self {
+            address,
+            export_state: AtomicU64::new(0),
+        }
+    }
+
+    fn increment_state(&self) {
+        self.export_state.fetch_add(1, Ordering::Release);
+    }
+
+    fn load_state(&self) -> u64 {
+        self.export_state.load(Ordering::Acquire)
+    }
+
+    fn get_address(&self) -> String {
+        self.address.clone()
     }
 }
