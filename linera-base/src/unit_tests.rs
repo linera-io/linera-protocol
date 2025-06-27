@@ -32,6 +32,7 @@ use crate::{
 #[test_case(module_id_test_case(); "of_module_id")]
 #[test_case(timeout_config_test_case(); "of_timeout_config")]
 #[test_case(chain_ownership_test_case(); "of_chain_ownership")]
+#[test_case([5u8; 20]; "array20")]
 fn test_wit_roundtrip<T>(input: T)
 where
     T: Debug + Eq + WitLoad + WitStore,

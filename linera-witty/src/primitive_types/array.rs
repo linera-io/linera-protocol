@@ -42,7 +42,7 @@ impl WitLoad for [u8; 20] {
         let mut dest = [0u8; 20];
         dest[0..8].copy_from_slice(&part1.to_be_bytes());
         dest[8..16].copy_from_slice(&part2.to_be_bytes());
-        dest[16..20].copy_from_slice(&part3.to_be_bytes());
+        dest[16..20].copy_from_slice(&part3.to_be_bytes()[0..4]);
         Ok(dest)
     }
 
@@ -58,7 +58,7 @@ impl WitLoad for [u8; 20] {
         let mut dest = [0u8; 20];
         dest[0..8].copy_from_slice(&part1.to_be_bytes());
         dest[8..16].copy_from_slice(&part2.to_be_bytes());
-        dest[16..20].copy_from_slice(&part3.to_be_bytes());
+        dest[16..20].copy_from_slice(&part3.to_be_bytes()[0..4]);
         Ok(dest)
     }
 }
@@ -75,7 +75,7 @@ impl WitStore for [u8; 20] {
     {
         let part1 = u64::from_be_bytes(self[0..8].try_into().unwrap());
         let part2 = u64::from_be_bytes(self[8..16].try_into().unwrap());
-        let part3 = u64::from_be_bytes(self[16..20].try_into().unwrap());
+        let part3 = (u32::from_be_bytes(self[16..20].try_into().unwrap()) as u64) << 32;
         (part1, part2, part3).store(memory, location)
     }
 
@@ -89,7 +89,7 @@ impl WitStore for [u8; 20] {
     {
         let part1 = u64::from_be_bytes(self[0..8].try_into().unwrap());
         let part2 = u64::from_be_bytes(self[8..16].try_into().unwrap());
-        let part3 = u64::from_be_bytes(self[16..20].try_into().unwrap());
+        let part3 = (u32::from_be_bytes(self[16..20].try_into().unwrap()) as u64) << 32;
         (part1, part2, part3).lower(memory)
     }
 }

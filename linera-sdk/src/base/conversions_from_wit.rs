@@ -32,9 +32,9 @@ macro_rules! impl_from_wit {
         impl From<$wit_base_api::Array20> for [u8; 20] {
             fn from(ethereum_address: $wit_base_api::Array20) -> Self {
                 let mut bytes = [0u8; 20];
-                bytes[0..8].copy_from_slice(&ethereum_address.part1.to_le_bytes());
-                bytes[8..16].copy_from_slice(&ethereum_address.part2.to_le_bytes());
-                bytes[16..20].copy_from_slice(&ethereum_address.part3.to_le_bytes());
+                bytes[0..8].copy_from_slice(&ethereum_address.part1.to_be_bytes());
+                bytes[8..16].copy_from_slice(&ethereum_address.part2.to_be_bytes());
+                bytes[16..20].copy_from_slice(&ethereum_address.part3.to_be_bytes()[0..4]);
                 bytes
             }
         }
