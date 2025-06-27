@@ -111,7 +111,8 @@ fn make_chain(
     let config = InitialChainConfig {
         application_permissions: Default::default(),
         balance,
-        active_epochs: [Epoch::ZERO].into_iter().collect(),
+        min_active_epoch: Epoch::ZERO,
+        max_active_epoch: Epoch::ZERO,
         epoch: Epoch::ZERO,
         ownership: ChainOwnership::single(public_key.into()),
     };

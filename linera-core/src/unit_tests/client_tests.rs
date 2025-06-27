@@ -545,15 +545,13 @@ where
     let parent = builder.add_root_chain(2, Amount::ZERO).await?;
     let new_public_key = builder.signer.generate_new();
 
+    let admin_config = builder.admin_description().unwrap().config();
+
     let new_chain_config = InitialChainConfig {
         ownership: ChainOwnership::single(new_public_key.into()),
         epoch: Epoch::ZERO,
-        active_epochs: builder
-            .admin_description()
-            .unwrap()
-            .config()
-            .active_epochs
-            .clone(),
+        min_active_epoch: admin_config.min_active_epoch,
+        max_active_epoch: admin_config.max_active_epoch,
         balance: Amount::ZERO,
         application_permissions: Default::default(),
     };

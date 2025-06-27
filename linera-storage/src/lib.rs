@@ -7,10 +7,7 @@
 
 mod db_storage;
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -177,7 +174,8 @@ pub trait Storage: Sized {
     /// Returns a map of the committees for the given epochs.
     async fn committees_for(
         &self,
-        mut epochs: BTreeSet<Epoch>,
+        min_epoch: Epoch,
+        max_epoch: Epoch,
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
         let read_committee = async |committee_hash| -> Result<Committee, ViewError> {
             let blob_id = BlobId::new(committee_hash, BlobType::Committee);
@@ -195,13 +193,13 @@ pub trait Storage: Sized {
         let admin_chain_id = network_description.admin_chain_id;
         let mut result = BTreeMap::new();
         // special case: the genesis epoch is stored in the NetworkDescription
-        if epochs.remove(&Epoch::ZERO) {
+        if min_epoch == Epoch::ZERO {
             let genesis_committee =
                 read_committee(network_description.genesis_committee_blob_hash).await?;
             result.insert(Epoch::ZERO, genesis_committee);
         }
 
-        let start_index = epochs.first().unwrap_or(&Epoch::ZERO).0;
+        let start_index = min_epoch.0.max(1);
         let epoch_creation_events = self
             .read_events_from_index(
                 &admin_chain_id,
@@ -210,34 +208,22 @@ pub trait Storage: Sized {
             )
             .await?;
 
-        let epochs_and_committees = futures::future::try_join_all(
-            epoch_creation_events
-                .into_iter()
-                .filter_map(|index_and_event| {
-                    let epoch = Epoch::from(index_and_event.index);
-                    let maybe_blob_hash = bcs::from_bytes::<CryptoHash>(&index_and_event.event);
-                    epochs.contains(&epoch).then_some((epoch, maybe_blob_hash))
-                })
-                .map(|(epoch, maybe_blob_hash)| async move {
-                    let committee = read_committee(maybe_blob_hash?).await?;
-                    Result::<_, ViewError>::Ok((epoch, committee))
-                }),
-        )
-        .await?;
+        result.extend(
+            futures::future::try_join_all(
+                epoch_creation_events
+                    .into_iter()
+                    .take_while(|index_and_event| index_and_event.index <= max_epoch.0)
+                    .map(|index_and_event| async move {
+                        let epoch = Epoch::from(index_and_event.index);
+                        let maybe_blob_hash = bcs::from_bytes::<CryptoHash>(&index_and_event.event);
+                        let committee = read_committee(maybe_blob_hash?).await?;
+                        Result::<_, ViewError>::Ok((epoch, committee))
+                    }),
+            )
+            .await?,
+        );
 
-        for (epoch, committee) in epochs_and_committees {
-            epochs.remove(&epoch);
-            result.insert(epoch, committee);
-        }
-
-        if epochs.is_empty() {
-            Ok(result)
-        } else {
-            Err(ViewError::NotFound(format!(
-                "Committees for epochs not found: {:?}",
-                epochs
-            )))
-        }
+        Ok(result)
     }
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
@@ -488,9 +474,10 @@ where
 
     async fn committees_for(
         &self,
-        epochs: BTreeSet<Epoch>,
+        min_epoch: Epoch,
+        max_epoch: Epoch,
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        self.storage.committees_for(epochs).await
+        self.storage.committees_for(min_epoch, max_epoch).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

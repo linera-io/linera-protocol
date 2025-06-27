@@ -1,5 +1,6 @@
 ---
 source: linera-rpc/tests/format.rs
+assertion_line: 92
 expression: get_registry().unwrap()
 ---
 Account:
@@ -544,9 +545,10 @@ InitialChainConfig:
         TYPENAME: ChainOwnership
     - epoch:
         TYPENAME: Epoch
-    - active_epochs:
-        SEQ:
-          TYPENAME: Epoch
+    - min_active_epoch:
+        TYPENAME: Epoch
+    - max_active_epoch:
+        TYPENAME: Epoch
     - balance:
         TYPENAME: Amount
     - application_permissions:

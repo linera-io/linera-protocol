@@ -59,7 +59,8 @@ pub fn dummy_chain_description_with_ownership_and_balance(
         application_permissions: Default::default(),
         balance,
         epoch: Epoch::ZERO,
-        active_epochs: [Epoch::ZERO].into_iter().collect(),
+        min_active_epoch: Epoch::ZERO,
+        max_active_epoch: Epoch::ZERO,
         ownership,
     };
     ChainDescription::new(origin, config, Timestamp::default())
