@@ -639,7 +639,6 @@ impl Runnable for Job {
                                     byte_stored,
                                     operation,
                                     operation_byte,
-                                    message,
                                     message_byte,
                                     service_as_oracle_query,
                                     http_request,
@@ -683,7 +682,6 @@ impl Runnable for Job {
                                         operation: operation.unwrap_or(existing_policy.operation),
                                         operation_byte: operation_byte
                                             .unwrap_or(existing_policy.operation_byte),
-                                        message: message.unwrap_or(existing_policy.message),
                                         message_byte: message_byte
                                             .unwrap_or(existing_policy.message_byte),
                                         service_as_oracle_query: service_as_oracle_query
@@ -1691,7 +1689,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             blob_byte_published_price,
             operation_price,
             operation_byte_price,
-            message_price,
             message_byte_price,
             service_as_oracle_query_price,
             http_request_price,
@@ -1731,7 +1728,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 byte_stored: byte_stored_price.unwrap_or(existing_policy.byte_stored),
                 operation: operation_price.unwrap_or(existing_policy.operation),
                 operation_byte: operation_byte_price.unwrap_or(existing_policy.operation_byte),
-                message: message_price.unwrap_or(existing_policy.message),
                 message_byte: message_byte_price.unwrap_or(existing_policy.message_byte),
                 service_as_oracle_query: service_as_oracle_query_price
                     .unwrap_or(existing_policy.service_as_oracle_query),

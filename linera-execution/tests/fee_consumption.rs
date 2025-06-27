@@ -228,7 +228,6 @@ async fn test_fee_consumption(
         byte_stored: Amount::from_tokens(13),
         operation: Amount::from_tokens(17),
         operation_byte: Amount::from_tokens(19),
-        message: Amount::from_tokens(23),
         message_byte: Amount::from_tokens(29),
         service_as_oracle_query: Amount::from_millis(31),
         http_request: Amount::from_tokens(37),

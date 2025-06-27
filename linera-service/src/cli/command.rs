@@ -366,10 +366,6 @@ pub enum ClientCommand {
         #[arg(long)]
         operation_byte: Option<Amount>,
 
-        /// Set the base price of sending a message from a block..
-        #[arg(long)]
-        message: Option<Amount>,
-
         /// Set the additional price for each byte in the argument of a user message.
         #[arg(long)]
         message_byte: Option<Amount>,
@@ -561,11 +557,6 @@ pub enum ClientCommand {
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         operation_byte_price: Option<Amount>,
-
-        /// Set the base price of sending a message from a block..
-        /// (This will overwrite value from `--policy-config`)
-        #[arg(long)]
-        message_price: Option<Amount>,
 
         /// Set the additional price for each byte in the argument of a user message.
         /// (This will overwrite value from `--policy-config`)
