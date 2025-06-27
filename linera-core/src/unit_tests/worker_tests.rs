@@ -3077,7 +3077,7 @@ where
             timeout_config: TimeoutConfig::default(),
         })
         .with_authenticated_signer(Some(owner0));
-    let (block0, _) = env
+    let (block0, _resources, _) = env
         .worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
@@ -3139,7 +3139,7 @@ where
     // Now owner 0 can propose a block, but owner 1 can't.
     let proposed_block1 =
         make_child_block(&value0.clone()).with_simple_transfer(chain_1, small_transfer);
-    let (block1, _) = env
+    let (block1, _resources, _) = env
         .worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
@@ -3186,7 +3186,7 @@ where
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
-    let (block2, _) = env
+    let (block2, _resources, _) = env
         .worker()
         .stage_block_execution(proposed_block2.clone(), None, vec![])
         .await?;
@@ -3320,7 +3320,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (block0, _) = env
+    let (block0, _resources, _) = env
         .worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
@@ -3423,7 +3423,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (change_ownership_block, _) = env
+    let (change_ownership_block, _resources, _) = env
         .worker()
         .stage_block_execution(change_ownership_block, None, vec![])
         .await?;
@@ -3453,7 +3453,7 @@ where
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let (block, _) = env
+    let (block, _resources, _) = env
         .worker()
         .stage_block_execution(proposal.content.block.clone(), None, vec![])
         .await?;
@@ -3502,7 +3502,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (block0, _) = env
+    let (block0, _resources, _) = env
         .worker()
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
@@ -3530,7 +3530,7 @@ where
         .into_proposal_with_round(owner0, &signer, Round::Fast)
         .await
         .unwrap();
-    let (block1, _) = env
+    let (block1, _resources, _) = env
         .worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
@@ -3587,7 +3587,7 @@ where
     env.worker().handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
-    let (block2, _) = env
+    let (block2, _resources, _) = env
         .worker()
         .stage_block_execution(proposed_block2.clone(), None, vec![])
         .await?;
@@ -3658,7 +3658,7 @@ where
     let proposed_block = make_first_block(chain_id)
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_authenticated_signer(Some(public_key.into()));
-    let (block, _) = env
+    let (block, _resources, _) = env
         .worker()
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
