@@ -296,7 +296,7 @@ pub struct BlockExecutionOutcome {
     /// The list of outgoing messages for each transaction.
     pub messages: Vec<Vec<OutgoingMessage>>,
     /// The hashes of previous blocks that sent messages to the same recipients.
-    pub previous_message_blocks: BTreeMap<ChainId, CryptoHash>,
+    pub previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
     /// The hash of the chain's execution state after this block.
     pub state_hash: CryptoHash,
     /// The record of oracle responses for each transaction.

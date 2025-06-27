@@ -422,7 +422,15 @@ where
                     .flat_map(|block| block.inner().block().body.messages.iter().flatten())
                     .any(|message| message.destination == *recipient)
             })
-            .map(|recipient| (recipient, previous_confirmed_block.unwrap().hash()))
+            .map(|recipient| {
+                (
+                    recipient,
+                    (
+                        previous_confirmed_block.unwrap().hash(),
+                        previous_confirmed_block.unwrap().block().header.height,
+                    ),
+                )
+            })
             .collect();
         let value = ConfirmedBlock::new(
             BlockExecutionOutcome {
@@ -910,7 +918,10 @@ where
     let certificate1 = env.make_certificate(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![vec![direct_credit_message(chain_2, Amount::from_tokens(3))]],
-            previous_message_blocks: BTreeMap::from([(chain_2, certificate0.hash())]),
+            previous_message_blocks: BTreeMap::from([(
+                chain_2,
+                (certificate0.hash(), BlockHeight(0)),
+            )]),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
