@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BENCH_CALLER","BENCH_CALLER_BALANCE","BENCH_TARGET","BENCH_TARGET_BALANCE","EEADDRESS","FFADDRESS"],"enum":["AccountState"],"struct":["BenchmarkDB","Cache","CacheDB","DbAccount"],"type":["InMemoryDB"]};

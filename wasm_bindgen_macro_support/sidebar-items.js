@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["expand","expand_class_marker","expand_link_to","expand_struct_marker"],"struct":["BindgenAttrs"]};

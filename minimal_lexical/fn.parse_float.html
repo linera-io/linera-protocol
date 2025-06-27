@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parse float from extracted float components."><title>parse_float in minimal_lexical - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="minimal_lexical" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../minimal_lexical/index.html">minimal_<wbr>lexical</a><span class="version">0.2.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">parse_<wbr>float</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#preconditions" title="Preconditions">Preconditions</a></li><li><a href="#panics" title="Panics">Panics</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate minimal_<wbr>lexical</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">minimal_lexical</a></div><h1>Function <span class="fn">parse_float</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/minimal_lexical/parse.rs.html#146-171">Source</a> </span></div><pre class="rust item-decl"><code>pub fn parse_float&lt;'a, F, Iter1, Iter2&gt;(
+    integer: Iter1,
+    fraction: Iter2,
+    exponent: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.i32.html">i32</a>,
+) -&gt; F<div class="where">where
+    F: <a class="trait" href="trait.Float.html" title="trait minimal_lexical::Float">Float</a>,
+    Iter1: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator">Iterator</a>&lt;Item = &amp;'a <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+    Iter2: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator">Iterator</a>&lt;Item = &amp;'a <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Parse float from extracted float components.</p>
+<ul>
+<li><code>integer</code>     - Cloneable, forward iterator over integer digits.</li>
+<li><code>fraction</code>    - Cloneable, forward iterator over integer digits.</li>
+<li><code>exponent</code>    - Parsed, 32-bit exponent.</li>
+</ul>
+<h2 id="preconditions"><a class="doc-anchor" href="#preconditions">§</a>Preconditions</h2>
+<ol>
+<li>The integer should not have leading zeros.</li>
+<li>The fraction should not have trailing zeros.</li>
+<li>All bytes in <code>integer</code> and <code>fraction</code> should be valid digits,
+in the range [`b’0’, b’9’].</li>
+</ol>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Although passing garbage input will not cause memory safety issues,
+it is very likely to cause a panic with a large number of digits, or
+in debug mode. The big-integer arithmetic without the <code>alloc</code> feature
+assumes a maximum, fixed-width input, which assumes at maximum a
+value of <code>10^(769 + 342)</code>, or ~4000 bits of storage. Passing in
+nonsensical digits may require up to ~6000 bits of storage, which will
+panic when attempting to add it to the big integer. It is therefore
+up to the caller to validate this input.</p>
+<p>We cannot efficiently remove trailing zeros while only accepting a
+forward iterator.</p>
+</div></details></section></div></main></body></html>

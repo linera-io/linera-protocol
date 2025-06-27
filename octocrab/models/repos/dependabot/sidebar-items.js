@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AdvisoryType","DissmisedReason","Scope","Severity","State"],"struct":["Cvss","CvssSeverities","Cwe","DependabotAlert","Dependency","FirstPatchedVersion","Identifier","Package","Reference","SecurityAdvisory","SecurityVulnerability","UpdateDependabotAlert","Vulnerability"]};

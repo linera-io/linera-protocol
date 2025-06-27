@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_SIMULATE_BLOCKS"],"struct":["SimBlock","SimCallResult","SimulateError","SimulatePayload","SimulatedBlock"]};

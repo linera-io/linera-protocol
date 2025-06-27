@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Compares the addresses of the two function pointers for equality."><title>fn_addr_eq in wasmtime_environ::__core::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">fn_<wbr>addr_<wbr>eq</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>ptr</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">ptr</a></div><h1>Function <span class="fn">fn_addr_eq</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.85.0">1.85.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/ptr/mod.rs.html#2151">Source</a> </span></div><pre class="rust item-decl"><code>pub fn fn_addr_eq&lt;T, U&gt;(f: T, g: U) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: <a class="trait" href="../marker/trait.FnPtr.html" title="trait wasmtime_environ::__core::marker::FnPtr">FnPtr</a>,
+    U: <a class="trait" href="../marker/trait.FnPtr.html" title="trait wasmtime_environ::__core::marker::FnPtr">FnPtr</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Compares the <em>addresses</em> of the two function pointers for equality.</p>
+<p>This is the same as <code>f == g</code>, but using this function makes clear that the potentially
+surprising semantics of function pointer comparison are involved.</p>
+<p>There are <strong>very few guarantees</strong> about how functions are compiled and they have no intrinsic
+“identity”; in particular, this comparison:</p>
+<ul>
+<li>
+<p>May return <code>true</code> unexpectedly, in cases where functions are equivalent.</p>
+<p>For example, the following program is likely (but not guaranteed) to print <code>(true, true)</code>
+when compiled with optimization:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>f: <span class="kw">fn</span>(i32) -&gt; i32 = |x| x;
+<span class="kw">let </span>g: <span class="kw">fn</span>(i32) -&gt; i32 = |x| x + <span class="number">0</span>;  <span class="comment">// different closure, different body
+</span><span class="kw">let </span>h: <span class="kw">fn</span>(u32) -&gt; u32 = |x| x + <span class="number">0</span>;  <span class="comment">// different signature too
+</span><span class="macro">dbg!</span>(std::ptr::fn_addr_eq(f, g), std::ptr::fn_addr_eq(f, h)); <span class="comment">// not guaranteed to be equal</span></code></pre></div>
+</li>
+<li>
+<p>May return <code>false</code> in any case.</p>
+<p>This is particularly likely with generic functions but may happen with any function.
+(From an implementation perspective, this is possible because functions may sometimes be
+processed more than once by the compiler, resulting in duplicate machine code.)</p>
+</li>
+</ul>
+<p>Despite these false positives and false negatives, this comparison can still be useful.
+Specifically, if</p>
+<ul>
+<li><code>T</code> is the same type as <code>U</code>, <code>T</code> is a <a href="https://doc.rust-lang.org/reference/subtyping.html">subtype</a> of <code>U</code>, or <code>U</code> is a <a href="https://doc.rust-lang.org/reference/subtyping.html">subtype</a> of <code>T</code>, and</li>
+<li><code>ptr::fn_addr_eq(f, g)</code> returns true,</li>
+</ul>
+<p>then calling <code>f</code> and calling <code>g</code> will be equivalent.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+
+<span class="kw">fn </span>a() { <span class="macro">println!</span>(<span class="string">"a"</span>); }
+<span class="kw">fn </span>b() { <span class="macro">println!</span>(<span class="string">"b"</span>); }
+<span class="macro">assert!</span>(!ptr::fn_addr_eq(a <span class="kw">as fn</span>(), b <span class="kw">as fn</span>()));</code></pre></div>
+</div></details></section></div></main></body></html>
