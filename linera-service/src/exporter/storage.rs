@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
 
 use dashmap::DashMap;
+use futures::future::try_join_all;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -24,9 +25,11 @@ use mini_moka::unsync::Cache as LfuCache;
 use quick_cache::{sync::Cache as FifoCache, Weighter};
 
 use crate::{
-    common::{BlockId, ExporterError, LiteBlockId},
+    common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
     state::{BlockExporterStateView, DestinationStates},
 };
+
+const NUM_OF_BLOBS: usize = 20;
 
 pub(super) struct ExporterStorage<S>
 where
@@ -50,8 +53,9 @@ pub(super) struct BlockProcessorStorage<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    shared_storage: SharedStorage<S::BlockExporterContext, S>,
+    blob_state_cache: LfuCache<BlobId, ()>,
     chain_states_cache: LfuCache<ChainId, LiteBlockId>,
+    shared_storage: SharedStorage<S::BlockExporterContext, S>,
     exporter_state_view: BlockExporterStateView<<S as Storage>::BlockExporterContext>,
 }
 
@@ -62,20 +66,20 @@ where
 {
     fn new(
         storage: S,
-        state_context: LogView<C, CryptoHash>,
+        state_context: LogView<C, CanonicalBlock>,
         destination_states: DestinationStates,
         limits: LimitsConfig,
     ) -> Self {
         let shared_canonical_state =
-            CanonicalState::new((limits.auxiliary_cache_size_mb / 2).into(), state_context);
+            CanonicalState::new((limits.auxiliary_cache_size_mb / 3).into(), state_context);
         let blobs_cache = Arc::new(FifoCache::with_weighter(
             limits.blob_cache_items_capacity as usize,
-            limits.blob_cache_weight_mb as u64,
+            (limits.blob_cache_weight_mb as u64) * 1024 * 1024,
             CacheWeighter::default(),
         ));
         let blocks_cache = Arc::new(FifoCache::with_weighter(
             limits.block_cache_items_capacity as usize,
-            limits.block_cache_weight_mb as u64,
+            (limits.block_cache_weight_mb as u64) * 1024 * 1024,
             CacheWeighter::default(),
         ));
 
@@ -116,8 +120,14 @@ where
         }
     }
 
-    async fn push_block(&mut self, block_hash: CryptoHash) -> Result<(), ExporterError> {
-        self.shared_canonical_state.push(block_hash).await
+    async fn get_blobs(&self, blobs: &[BlobId]) -> Result<Vec<Arc<Blob>>, ExporterError> {
+        let tasks = blobs.iter().map(|id| self.get_blob(*id));
+        let results = try_join_all(tasks).await?;
+        Ok(results)
+    }
+
+    fn push_block(&mut self, block: CanonicalBlock) {
+        self.shared_canonical_state.push(block)
     }
 
     fn clone(&mut self) -> Result<Self, ExporterError> {
@@ -139,16 +149,37 @@ where
         Self { shared_storage }
     }
 
-    pub(crate) async fn get_block(
+    pub(crate) async fn get_block_with_blob_ids(
         &self,
         index: usize,
-    ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
-        let hash = self
+    ) -> Result<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>), ExporterError> {
+        let block = self
             .shared_storage
             .shared_canonical_state
             .get(index)
             .await?;
-        self.shared_storage.get_block(hash).await
+
+        Ok((
+            self.shared_storage.get_block(block.block_hash).await?,
+            block.blobs.into(),
+        ))
+    }
+
+    pub(crate) async fn get_block_with_blobs(
+        &self,
+        index: usize,
+    ) -> Result<(Arc<ConfirmedBlockCertificate>, Vec<Arc<Blob>>), ExporterError> {
+        let canonical_block = self
+            .shared_storage
+            .shared_canonical_state
+            .get(index)
+            .await?;
+
+        let block_task = self.shared_storage.get_block(canonical_block.block_hash);
+        let blobs_task = self.shared_storage.get_blobs(&canonical_block.blobs);
+
+        let (block, blobs) = tokio::try_join!(block_task, blobs_task)?;
+        Ok((block, blobs))
     }
 
     pub(crate) async fn get_blob(&self, blob_id: BlobId) -> Result<Arc<Blob>, ExporterError> {
@@ -185,10 +216,16 @@ where
             BlockExporterStateView::initiate(context, number_of_destinaions).await?;
 
         let chain_states_cache_capacity =
-            ((limits.auxiliary_cache_size_mb / 2) as u64 * 1024 * 1024)
+            ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024)
                 / (size_of::<CryptoHash>() + size_of::<LiteBlockId>()) as u64;
         let chain_states_cache = LfuCache::builder()
             .max_capacity(chain_states_cache_capacity)
+            .build();
+
+        let blob_state_cache_capacity = ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024)
+            / (size_of::<BlobId>() as u64);
+        let blob_state_cache = LfuCache::builder()
+            .max_capacity(blob_state_cache_capacity)
             .build();
 
         let mut shared_storage =
@@ -200,6 +237,7 @@ where
                 shared_storage,
                 chain_states_cache,
                 exporter_state_view: view,
+                blob_state_cache,
             },
             exporter_storage,
         ))
@@ -210,6 +248,13 @@ where
         hash: CryptoHash,
     ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
         self.shared_storage.get_block(hash).await
+    }
+
+    pub(super) async fn is_blob_indexed(&mut self, blob: BlobId) -> Result<bool, ExporterError> {
+        match self.blob_state_cache.get(&blob) {
+            Some(_) => Ok(true),
+            None => self.exporter_state_view.is_blob_indexed(blob).await,
+        }
     }
 
     pub(super) async fn is_block_indexed(
@@ -238,7 +283,6 @@ where
             block_id.height == BlockHeight::ZERO,
             ExporterError::BadInitialization
         );
-        self.shared_storage.push_block(block_id.hash).await?;
         self.exporter_state_view.initialize_chain(*block_id).await?;
         self.chain_states_cache
             .insert(block_id.chain_id, (*block_id).into());
@@ -246,19 +290,29 @@ where
         Ok(())
     }
 
-    pub(super) async fn index_block(&mut self, block_id: &BlockId) -> Result<(), ExporterError> {
+    pub(super) async fn index_block(&mut self, block_id: &BlockId) -> Result<bool, ExporterError> {
         if block_id.height == BlockHeight::ZERO {
             self.index_chain(block_id).await?;
-            return Ok(());
+            return Ok(true);
         }
 
         if self.exporter_state_view.index_block(*block_id).await? {
-            self.shared_storage.push_block(block_id.hash).await?;
             self.chain_states_cache
                 .insert(block_id.chain_id, (*block_id).into());
+            return Ok(true);
         }
 
+        Ok(false)
+    }
+
+    pub(super) fn index_blob(&mut self, blob: BlobId) -> Result<(), ExporterError> {
+        self.exporter_state_view.index_blob(blob)?;
+        self.blob_state_cache.insert(blob, ());
         Ok(())
+    }
+
+    pub(super) fn push_block(&mut self, block: CanonicalBlock) {
+        self.shared_storage.push_block(block)
     }
 
     pub(super) async fn save(&mut self) -> Result<(), ExporterError> {
@@ -280,28 +334,39 @@ where
             Err(ExporterError::ViewError(e.into()))?;
         };
 
+        // clear the shared state only after persisting it
+        // only matters for the shared updates buffer
+        self.shared_storage.shared_canonical_state.clear();
+
         Ok(())
     }
 }
 
 struct CanonicalState<C> {
     count: usize,
-    state_cache: Arc<FifoCache<usize, CryptoHash>>,
-    state_updates_buffer: Arc<DashMap<usize, CryptoHash>>,
-    state_context: LogView<C, CryptoHash>,
+    state_context: LogView<C, CanonicalBlock>,
+    state_updates_buffer: Arc<DashMap<usize, CanonicalBlock>>,
+    state_cache: Arc<FifoCache<usize, CanonicalBlock, CanonicalStateCacheWeighter>>,
 }
 
 impl<C> CanonicalState<C>
 where
     C: Context + Send + Sync + 'static,
 {
-    fn new(cache_size: usize, state_context: LogView<C, CryptoHash>) -> Self {
-        let items_capacity =
-            (cache_size * 1024 * 1024) / (size_of::<usize>() + size_of::<CryptoHash>());
+    fn new(cache_size: usize, state_context: LogView<C, CanonicalBlock>) -> Self {
+        let cache_size = cache_size * 1024 * 1024;
+        let items_capacity = cache_size
+            / (size_of::<usize>()
+                + size_of::<CanonicalBlock>()
+                + NUM_OF_BLOBS * size_of::<BlobId>());
 
         Self {
             count: state_context.count(),
-            state_cache: Arc::new(FifoCache::new(items_capacity)),
+            state_cache: Arc::new(FifoCache::with_weighter(
+                items_capacity,
+                cache_size as u64,
+                CacheWeighter::default(),
+            )),
             state_updates_buffer: Arc::new(DashMap::new()),
             state_context,
         }
@@ -316,14 +381,14 @@ where
         })
     }
 
-    async fn get(&self, index: usize) -> Result<CryptoHash, ExporterError> {
+    async fn get(&self, index: usize) -> Result<CanonicalBlock, ExporterError> {
         match self.state_cache.get_value_or_guard_async(&index).await {
             Ok(value) => Ok(value),
             Err(guard) => {
-                let hash = if let Some(entry) = self
+                let block = if let Some(entry) = self
                     .state_updates_buffer
                     .get(&index)
-                    .map(|entry| *entry.value())
+                    .map(|entry| entry.value().clone())
                 {
                     entry
                 } else {
@@ -333,25 +398,23 @@ where
                         .ok_or(ExporterError::UnprocessedBlock)?
                 };
 
-                let _ = guard.insert(hash);
-                Ok(hash)
+                let _ = guard.insert(block.clone());
+                Ok(block)
             }
         }
     }
 
-    async fn push(&mut self, value: CryptoHash) -> Result<(), ExporterError> {
+    fn push(&mut self, value: CanonicalBlock) {
         let index = self.next_index();
-        let _ = self.state_updates_buffer.insert(index, value);
+        let _ = self.state_updates_buffer.insert(index, value.clone());
         self.state_cache.insert(index, value);
-
-        Ok(())
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ExporterError> {
         for (_, value) in self
             .state_updates_buffer
             .iter()
-            .map(|r| (*r.key(), *r.value()))
+            .map(|r| (*r.key(), r.value().clone()))
             .collect::<BTreeMap<_, _>>()
         {
             self.state_context.push(value);
@@ -359,10 +422,12 @@ where
 
         let _ = self.state_context.flush(batch)?;
 
+        Ok(())
+    }
+
+    fn clear(&mut self) {
         self.state_updates_buffer.clear();
         self.state_context.rollback();
-
-        Ok(())
     }
 
     fn next_index(&mut self) -> usize {
@@ -397,6 +462,13 @@ impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>> for BlockCacheWeighter
     }
 }
 
+impl Weighter<usize, CanonicalBlock> for CanonicalStateCacheWeighter {
+    fn weight(&self, _key: &usize, _val: &CanonicalBlock) -> u64 {
+        (size_of::<usize>() + size_of::<CanonicalBlock>() + NUM_OF_BLOBS * size_of::<BlobId>())
+            as u64
+    }
+}
+
 impl<Q, V> Default for CacheWeighter<Q, V> {
     fn default() -> Self {
         Self {
@@ -408,3 +480,4 @@ impl<Q, V> Default for CacheWeighter<Q, V> {
 
 type BlobCacheWeighter = CacheWeighter<BlobId, Arc<Blob>>;
 type BlockCacheWeighter = CacheWeighter<CryptoHash, Arc<ConfirmedBlockCertificate>>;
+type CanonicalStateCacheWeighter = CacheWeighter<usize, CanonicalBlock>;
