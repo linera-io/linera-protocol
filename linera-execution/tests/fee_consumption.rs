@@ -180,6 +180,19 @@ use test_case::test_case;
     Some(Amount::from_tokens(1_000));
     "with all fee spend operations"
 )]
+#[test_case(
+    vec![
+        FeeSpend::Fuel(11),
+        FeeSpend::HttpRequest,
+        FeeSpend::Read(vec![0, 1], None),
+        FeeSpend::Fuel(23),
+        FeeSpend::HttpRequest,
+    ],
+    Amount::ZERO,
+    Some(Amount::ZERO),
+    Some(Amount::from_tokens(250));
+    "with just a grant; no chain balance or owner balance"
+)]
 // TODO(#1601): Add more test cases
 #[tokio::test]
 async fn test_fee_consumption(
@@ -213,9 +226,7 @@ async fn test_fee_consumption(
         byte_read: Amount::from_tokens(7),
         byte_written: Amount::from_tokens(11),
         byte_stored: Amount::from_tokens(13),
-        operation: Amount::from_tokens(17),
         operation_byte: Amount::from_tokens(19),
-        message: Amount::from_tokens(23),
         message_byte: Amount::from_tokens(29),
         service_as_oracle_query: Amount::from_millis(31),
         http_request: Amount::from_tokens(37),

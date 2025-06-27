@@ -1269,8 +1269,7 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
-    let mut policy = ResourceControlPolicy::only_fuel();
-    policy.operation = Amount::from_micros(1); // Otherwise BURN passes b/c it will be free.
+    let policy = ResourceControlPolicy::only_fuel();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
         .await?
         .with_policy(policy);
