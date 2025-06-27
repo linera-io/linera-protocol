@@ -47,9 +47,9 @@ struct ExporterOptions {
     #[command(flatten)]
     common_storage_options: CommonStorageOptions,
 
-    /// Clients per thread
+    /// Maximum number of threads to use for exporters
     #[arg(long, default_value = "16")]
-    max_clients_per_thread: usize,
+    max_exporter_threads: usize,
 
     /// Timeout in milliseconds for sending queries.
     #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
@@ -73,8 +73,8 @@ struct ExporterOptions {
 }
 
 struct ExporterContext {
-    clients_per_thread: usize,
     node_options: NodeOptions,
+    max_exporter_threads: usize,
     config: BlockExporterConfig,
 }
 
@@ -89,32 +89,32 @@ impl Runnable for ExporterContext {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-        let sender = start_block_processor_task(
+        let (sender, handle) = start_block_processor_task(
             storage,
             ExporterCancellationSignal::new(shutdown_notifier.clone()),
             self.config.limits,
             self.node_options,
             self.config.id,
-            self.clients_per_thread,
+            self.max_exporter_threads,
             self.config.destination_config,
         )?;
 
         let service = ExporterService::new(sender);
         let port = self.config.service_config.port;
-        service.run(shutdown_notifier, port).await
+        service.run(shutdown_notifier, port, handle).await
     }
 }
 
 impl ExporterContext {
     fn new(
-        clients_per_thread: usize,
+        max_exporter_threads: usize,
         node_options: NodeOptions,
         config: BlockExporterConfig,
     ) -> ExporterContext {
         Self {
             config,
             node_options,
-            clients_per_thread,
+            max_exporter_threads,
         }
     }
 }
@@ -139,7 +139,7 @@ impl ExporterOptions {
             max_retries: self.max_retries,
         };
 
-        let context = ExporterContext::new(self.max_clients_per_thread, node_options, config);
+        let context = ExporterContext::new(self.max_exporter_threads, node_options, config);
 
         let future = async {
             let store_config = self

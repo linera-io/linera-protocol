@@ -232,6 +232,9 @@ pub struct BlockExporterConfig {
 pub struct DestinationConfig {
     /// The destination URIs to export to.
     pub destinations: Vec<Destination>,
+    /// Export blocks to the current committee.
+    #[serde(default)]
+    pub committee_destination: bool,
 }
 
 // Each destination has an ID and a configuration.
