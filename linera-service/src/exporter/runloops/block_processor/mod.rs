@@ -121,10 +121,10 @@ mod test {
 
     use crate::{
         common::BlockId, runloops::BlockProcessor, storage::BlockProcessorStorage,
-        ExporterCancellationSignal,
+        test_utils::make_simple_state_with_blobs, ExporterCancellationSignal,
     };
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_topological_sort() -> anyhow::Result<()> {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
@@ -156,7 +156,7 @@ mod test {
         ];
 
         for (i, (x, y)) in expected_state.into_iter().enumerate() {
-            let hash = exporter_storage.get_block(i).await?.hash();
+            let hash = exporter_storage.get_block_with_blob_ids(i).await?.0.hash();
             assert_eq!(hash, state[x][y]);
         }
 
@@ -215,7 +215,7 @@ mod test {
                 let block_b = ConfirmedBlock::new(BlockExecutionOutcome::default().with(
                     make_child_block(chain_b.last().unwrap()).with_incoming_bundle(incoming_bundle),
                 ));
-                let block_id = get_block_id(&block_b);
+                let block_id = BlockId::from_confirmed_block(&block_b);
                 notifications.push(block_id);
                 block_b
             };
@@ -240,11 +240,7 @@ mod test {
         )
     }
 
-    fn get_block_id(block: &ConfirmedBlock) -> BlockId {
-        BlockId::new(block.chain_id(), block.inner().hash(), block.height())
-    }
-
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_topological_sort_2() -> anyhow::Result<()> {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
@@ -264,7 +260,7 @@ mod test {
         let expected_state = [(2, 0), (1, 0), (0, 0), (0, 1), (1, 1), (2, 1)];
 
         for (i, (x, y)) in expected_state.into_iter().enumerate() {
-            let hash = exporter_storage.get_block(i).await?.hash();
+            let hash = exporter_storage.get_block_with_blob_ids(i).await?.0.hash();
             assert_eq!(hash, state[x][y]);
         }
 
@@ -317,7 +313,7 @@ mod test {
                 .with(make_child_block(&block_1_c).with_incoming_bundle(get_bundle(&block_2_b))),
         );
 
-        let notification = get_block_id(&block_2_c);
+        let notification = BlockId::from_confirmed_block(&block_2_c);
 
         state.push(vec![block_1_a, block_2_a]);
         state.push(vec![block_1_b, block_2_b]);
@@ -358,7 +354,11 @@ mod test {
         }
 
         for (index, expected_hash) in state.iter().enumerate() {
-            let sorted_hash = exporter_storage.get_block(index).await?.hash();
+            let sorted_hash = exporter_storage
+                .get_block_with_blob_ids(index)
+                .await?
+                .0
+                .hash();
             assert_eq!(*expected_hash, sorted_hash);
         }
 
@@ -387,7 +387,7 @@ mod test {
             chain.push(block);
         }
 
-        let notification = get_block_id(chain.last().unwrap());
+        let notification = BlockId::from_confirmed_block(chain.last().unwrap());
 
         for block in &chain {
             let cert = ConfirmedBlockCertificate::new(block.clone(), Round::Fast, vec![]);
@@ -421,7 +421,11 @@ mod test {
         }
 
         for (index, expected_hash) in state.iter().enumerate() {
-            let sorted_hash = exporter_storage.get_block(index).await?.hash();
+            let sorted_hash = exporter_storage
+                .get_block_with_blob_ids(index)
+                .await?
+                .0
+                .hash();
             assert_eq!(*expected_hash, sorted_hash);
         }
 
@@ -470,7 +474,7 @@ mod test {
             chain.push(block);
         }
 
-        let notification = get_block_id(chain.last().unwrap());
+        let notification = BlockId::from_confirmed_block(chain.last().unwrap());
 
         for block in &chain {
             let cert = ConfirmedBlockCertificate::new(block.clone(), Round::Fast, vec![]);
@@ -484,5 +488,38 @@ mod test {
             notification,
             chain.iter().map(|block| block.inner().hash()).collect(),
         )
+    }
+
+    // tests a simple scenario for a chain with two blocks
+    // and some blobs
+    #[tokio::test]
+    async fn test_topological_sort_5() -> anyhow::Result<()> {
+        let (tx, rx) = unbounded_channel();
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let (block_processor_storage, exporter_storage) =
+            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+        let mut block_processor = BlockProcessor::new(block_processor_storage, tx.clone(), rx);
+        let token = CancellationToken::new();
+        let signal = ExporterCancellationSignal::new(token.clone());
+        let (block_id, expected_state) = make_simple_state_with_blobs(&storage).await;
+        let _ = tx.send(block_id);
+
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(10)) => {},
+            _ = block_processor.run_with_shutdown(signal, 5) => {},
+        }
+
+        for (i, block_with_blobs) in expected_state.iter().enumerate() {
+            let (actual_block, actual_blobs) = exporter_storage.get_block_with_blobs(i).await?;
+            assert_eq!(actual_block.hash(), block_with_blobs.block_hash);
+            assert!(!actual_blobs.is_empty());
+            assert_eq!(actual_blobs.len(), block_with_blobs.blobs.len());
+            assert!(actual_blobs
+                .iter()
+                .map(|blob| blob.id())
+                .eq(block_with_blobs.blobs.iter().copied()));
+        }
+
+        Ok(())
     }
 }

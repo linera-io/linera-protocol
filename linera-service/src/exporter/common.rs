@@ -1,16 +1,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::future::IntoFuture;
+use std::{future::IntoFuture, net::SocketAddr};
 
 use bincode::ErrorKind;
 use custom_debug_derive::Debug;
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
-use linera_chain::data_types::IncomingBundle;
-use linera_rpc::grpc::GrpcProtoConversionError;
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::BlockHeight,
+    identifiers::{BlobId, ChainId},
+};
+use linera_chain::{data_types::IncomingBundle, types::ConfirmedBlock};
+use linera_rpc::grpc::{GrpcError, GrpcProtoConversionError};
 use linera_sdk::views::ViewError;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
+use tonic::Status;
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum ExporterError {
@@ -35,6 +40,15 @@ pub(crate) enum ExporterError {
     #[error("trying to re-initialize the chain: {0}")]
     ChainAlreadyExists(ChainId),
 
+    #[error("unable to establish an underlying stream")]
+    SynchronizationFailed(Box<Status>),
+
+    #[error(transparent)]
+    GrpcError(#[from] GrpcError),
+
+    #[error("wrong destination")]
+    DestinationError,
+
     #[error("generic error: {0}")]
     GenericError(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
@@ -55,6 +69,21 @@ pub(crate) enum BadNotificationKind {
 impl From<BadNotificationKind> for ExporterError {
     fn from(value: BadNotificationKind) -> Self {
         ExporterError::BadNotification(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct CanonicalBlock {
+    pub blobs: Box<[BlobId]>,
+    pub block_hash: CryptoHash,
+}
+
+impl CanonicalBlock {
+    pub(crate) fn new(hash: CryptoHash, blobs: &[BlobId]) -> CanonicalBlock {
+        CanonicalBlock {
+            block_hash: hash,
+            blobs: blobs.to_vec().into_boxed_slice(),
+        }
     }
 }
 
@@ -87,6 +116,10 @@ impl BlockId {
             height: incoming_bundle.bundle.height,
         }
     }
+
+    pub(crate) fn from_confirmed_block(block: &ConfirmedBlock) -> BlockId {
+        BlockId::new(block.chain_id(), block.inner().hash(), block.height())
+    }
 }
 
 impl LiteBlockId {
@@ -99,14 +132,6 @@ impl From<BlockId> for LiteBlockId {
     fn from(value: BlockId) -> Self {
         LiteBlockId::new(value.height, value.hash)
     }
-}
-
-#[macro_export]
-macro_rules! dispatch {
-    ($func:expr, log = $log_value:expr $(, $args:expr)* ) => {{
-        tracing::debug!("dispatching batch: {:?} from linera exporter", $log_value);
-        $func($($args),*).await
-    }};
 }
 
 #[derive(Clone)]
@@ -127,4 +152,8 @@ impl IntoFuture for ExporterCancellationSignal {
     fn into_future(self) -> Self::IntoFuture {
         self.token.cancelled_owned()
     }
+}
+
+pub(crate) fn get_address(port: u16) -> SocketAddr {
+    SocketAddr::from(([0, 0, 0, 0], port))
 }

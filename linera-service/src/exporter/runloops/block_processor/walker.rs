@@ -3,10 +3,15 @@
 
 use std::collections::HashSet;
 
+use linera_base::identifiers::BlobId;
 use linera_chain::types::{CertificateValue, ConfirmedBlock};
 use linera_storage::Storage;
 
-use crate::{common::BlockId, storage::BlockProcessorStorage, ExporterError};
+use crate::{
+    common::{BlockId, CanonicalBlock},
+    storage::BlockProcessorStorage,
+    ExporterError,
+};
 
 pub(super) struct Walker<'a, S>
 where
@@ -43,7 +48,7 @@ where
                 continue;
             }
 
-            // resolve dependencies
+            // resolve block dependencies
             if let Some(dependency) = node_visitor.next_dependency() {
                 self.path.push(node_visitor);
                 if !self.is_block_indexed(&dependency).await? {
@@ -54,9 +59,29 @@ where
                 continue;
             }
 
+            // all the block dependecies have been resolved for this block
+            // now just resolve the blobs
+            let mut blobs_to_send = Vec::new();
+            let mut blobs_to_index_block_with = Vec::new();
+            for id in node_visitor.node.required_blobs {
+                if !self.is_blob_indexed(id).await? {
+                    blobs_to_index_block_with.push(id);
+                    if !node_visitor.node.created_blobs.contains(&id) {
+                        blobs_to_send.push(id);
+                    }
+                }
+            }
+
             let block_id = node_visitor.node.block;
+            if self.index_block(&block_id).await? {
+                let block_to_push = CanonicalBlock::new(block_id.hash, &blobs_to_send);
+                self.storage.push_block(block_to_push);
+                for blob in blobs_to_index_block_with {
+                    let _ = self.storage.index_blob(blob);
+                }
+            }
+
             self.visited.insert(block_id);
-            self.index_block(&block_id).await?;
         }
 
         Ok(())
@@ -80,9 +105,12 @@ where
         }
     }
 
-    async fn index_block(&mut self, block_id: &BlockId) -> Result<(), ExporterError> {
-        self.storage.index_block(block_id).await.unwrap();
-        Ok(())
+    async fn index_block(&mut self, block_id: &BlockId) -> Result<bool, ExporterError> {
+        self.storage.index_block(block_id).await
+    }
+
+    async fn is_blob_indexed(&mut self, blob_id: BlobId) -> Result<bool, ExporterError> {
+        self.storage.is_blob_indexed(blob_id).await
     }
 }
 
@@ -112,6 +140,13 @@ impl NodeVisitor {
 #[derive(Debug)]
 struct ProcessedBlock {
     block: BlockId,
+    // blobs created by this block
+    // used for filtering which blobs
+    // we won't need to send separately
+    // as these blobs are part of the block itself.
+    created_blobs: Vec<BlobId>,
+    // all the blobs required by this block
+    required_blobs: Vec<BlobId>,
     dependencies: Vec<BlockId>,
 }
 
@@ -139,6 +174,8 @@ impl ProcessedBlock {
         Self {
             dependencies,
             block: block_id,
+            required_blobs: block.required_blob_ids().into_iter().collect(),
+            created_blobs: block.block().created_blob_ids().into_iter().collect(),
         }
     }
 }
