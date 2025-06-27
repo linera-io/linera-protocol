@@ -684,6 +684,7 @@ where
         } else {
             self.balances.get_mut(account).await?.ok_or_else(|| {
                 ExecutionError::InsufficientBalance {
+                    amount,
                     balance: Amount::ZERO,
                     account: *account,
                 }
@@ -693,6 +694,7 @@ where
         balance
             .try_sub_assign(amount)
             .map_err(|_| ExecutionError::InsufficientBalance {
+                amount,
                 balance: *balance,
                 account: *account,
             })?;
