@@ -34,7 +34,7 @@ use {
     std::{cmp::Reverse, collections::BTreeMap},
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage};
+use crate::{get_guard, ChainRuntimeContext, Clock, Storage};
 
 #[cfg(with_metrics)]
 pub mod metrics {
@@ -554,6 +554,7 @@ where
             execution_runtime_config: self.execution_runtime_config,
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
+            _chain_guard: Arc::new(get_guard(chain_id).await),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
         let store = self.store.open_exclusive(&root_key)?;
