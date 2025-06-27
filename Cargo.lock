@@ -5534,6 +5534,7 @@ dependencies = [
  "alloy-sol-types",
  "amm",
  "anyhow",
+ "arc-swap",
  "assert_matches",
  "async-graphql",
  "async-graphql-axum",
