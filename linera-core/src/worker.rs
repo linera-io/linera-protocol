@@ -170,8 +170,6 @@ pub enum WorkerError {
         expected_block_height: BlockHeight,
         found_block_height: BlockHeight,
     },
-    #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
-    MissingEarlierBlocks { current_block_height: BlockHeight },
     #[error("Unexpected epoch {epoch:}: chain {chain_id:} is at {chain_epoch:}")]
     InvalidEpoch {
         chain_id: ChainId,

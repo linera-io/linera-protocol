@@ -160,7 +160,9 @@ BlockBody:
           KEY:
             TYPENAME: ChainId
           VALUE:
-            TYPENAME: CryptoHash
+            TUPLE:
+              - TYPENAME: CryptoHash
+              - TYPENAME: BlockHeight
     - oracle_responses:
         SEQ:
           SEQ:
@@ -187,7 +189,9 @@ BlockExecutionOutcome:
           KEY:
             TYPENAME: ChainId
           VALUE:
-            TYPENAME: CryptoHash
+            TUPLE:
+              - TYPENAME: CryptoHash
+              - TYPENAME: BlockHeight
     - state_hash:
         TYPENAME: CryptoHash
     - oracle_responses:

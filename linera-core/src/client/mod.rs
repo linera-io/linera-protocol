@@ -507,7 +507,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn preprocess_certificate(
+    async fn preprocess_certificate(
         &self,
         certificate: Box<ConfirmedBlockCertificate>,
     ) -> Result<(), LocalNodeError> {

@@ -345,7 +345,7 @@ pub struct BlockBody {
     /// The list of outgoing messages for each transaction.
     pub messages: Vec<Vec<OutgoingMessage>>,
     /// The hashes of previous blocks that sent messages to the same recipients.
-    pub previous_message_blocks: BTreeMap<ChainId, CryptoHash>,
+    pub previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
     /// The record of oracle responses for each transaction.
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
@@ -586,7 +586,7 @@ impl BcsHashable<'_> for Block {}
 
 #[derive(Serialize, Deserialize)]
 pub struct PreviousMessageBlocksMap<'a> {
-    inner: Cow<'a, BTreeMap<ChainId, CryptoHash>>,
+    inner: Cow<'a, BTreeMap<ChainId, (CryptoHash, BlockHeight)>>,
 }
 
 impl<'de> BcsHashable<'de> for PreviousMessageBlocksMap<'de> {}

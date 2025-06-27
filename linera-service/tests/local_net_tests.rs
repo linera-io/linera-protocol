@@ -1005,6 +1005,109 @@ async fn test_sync_child_chain(config: LocalNetConfig) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_update_validator_sender_gaps(config: LocalNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    const UNAWARE_VALIDATOR_INDEX: usize = 0;
+    const STOPPED_VALIDATOR_INDEX: usize = 1;
+
+    let (mut net, client) = config.instantiate().await?;
+
+    let sender_client = net.make_client().await;
+    sender_client.wallet_init(None).await?;
+
+    let sender_chain = client
+        .open_and_assign(&sender_client, Amount::from_tokens(1000))
+        .await?;
+
+    let receiver_client = net.make_client().await;
+    receiver_client.wallet_init(None).await?;
+
+    let receiver_chain = client
+        .open_and_assign(&receiver_client, Amount::from_tokens(1000))
+        .await?;
+
+    // Stop a validator so that it is not aware of the blocks on the sender chain
+    net.stop_validator(UNAWARE_VALIDATOR_INDEX).await?;
+
+    // Create some blocks
+    sender_client
+        .transfer(Amount::from_tokens(1), sender_chain, receiver_chain)
+        .await?;
+    // send to itself so that this doesn't generate messages to receiver_chain
+    sender_client
+        .transfer(Amount::from_tokens(2), sender_chain, sender_chain)
+        .await?;
+    // transfer some more to create a gap in the chain from the recipient's perspective
+    sender_client
+        .transfer(Amount::from_tokens(3), sender_chain, receiver_chain)
+        .await?;
+
+    receiver_client.process_inbox(receiver_chain).await?;
+
+    // Restart the stopped validator and stop another one.
+    net.restart_validator(UNAWARE_VALIDATOR_INDEX).await?;
+    net.stop_validator(STOPPED_VALIDATOR_INDEX).await?;
+
+    let unaware_validator = net.validator_client(UNAWARE_VALIDATOR_INDEX).await?;
+
+    let sender_state_before_sync = unaware_validator
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .await?;
+    assert_eq!(
+        sender_state_before_sync.info.next_block_height,
+        BlockHeight::ZERO
+    );
+
+    let receiver_state_before_sync = unaware_validator
+        .handle_chain_info_query(ChainInfoQuery::new(receiver_chain))
+        .await?;
+    assert_eq!(
+        receiver_state_before_sync.info.next_block_height,
+        BlockHeight::ZERO
+    );
+
+    // Try to send tokens from receiver to sender. Receiver should have a gap in the
+    // sender chain at this point.
+    receiver_client
+        .transfer(Amount::from_tokens(4), receiver_chain, sender_chain)
+        .await?;
+
+    // Synchronize the validator
+    let validator_address = net.validator_address(UNAWARE_VALIDATOR_INDEX);
+    receiver_client
+        .sync_validator([&receiver_chain], validator_address)
+        .await
+        .expect("Missing lagging validator name");
+
+    let sender_state_after_sync = unaware_validator
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .await?;
+    // The next block height should be 1 - only block 0 has been processed fully, block 2
+    // has only been preprocessed.
+    assert_eq!(
+        sender_state_after_sync.info.next_block_height,
+        BlockHeight(1)
+    );
+
+    let receiver_state_after_sync = unaware_validator
+        .handle_chain_info_query(ChainInfoQuery::new(receiver_chain))
+        .await?;
+    // On the receiver side, block 0 received the transfers from sender and block 1 made a
+    // transfer.
+    assert_eq!(
+        receiver_state_after_sync.info.next_block_height,
+        BlockHeight(2)
+    );
+
+    Ok(())
+}
+
 #[cfg(feature = "ethereum")]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]

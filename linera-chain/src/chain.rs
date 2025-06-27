@@ -788,7 +788,7 @@ where
                     .ok_or_else(|| {
                         ChainError::InternalError("missing entry in confirmed_log".into())
                     })?;
-                previous_message_blocks.insert(recipient, hash);
+                previous_message_blocks.insert(recipient, (hash, height));
             }
         }
 
@@ -969,8 +969,7 @@ where
         Ok(())
     }
 
-    /// Returns the hashes of all blocks in the given range. Returns an error if we are missing
-    /// any of those blocks.
+    /// Returns the hashes of all blocks we have in the given range.
     pub async fn block_hashes(
         &self,
         range: impl RangeBounds<BlockHeight>,
@@ -990,14 +989,9 @@ where
         };
         // Everything after (including) next_height in in preprocessed_blocks if we have it.
         for height in start.max(next_height).0..=end.0 {
-            hashes.push(
-                self.preprocessed_blocks
-                    .get(&BlockHeight(height))
-                    .await?
-                    .ok_or_else(|| {
-                        ChainError::InternalError("missing entry in preprocessed_blocks".into())
-                    })?,
-            );
+            if let Some(hash) = self.preprocessed_blocks.get(&BlockHeight(height)).await? {
+                hashes.push(hash);
+            }
         }
         Ok(hashes)
     }
@@ -1040,7 +1034,8 @@ where
             if block_height > next_height {
                 // There may be a gap in the chain before this block. We can only add it to this
                 // outbox if the previous message to the same recipient has already been added.
-                let prev_hash = match outbox.next_height_to_schedule.get().try_sub_one().ok() {
+                let maybe_prev_hash = match outbox.next_height_to_schedule.get().try_sub_one().ok()
+                {
                     // The block with the last added message has already been executed; look up its
                     // hash in the confirmed_log.
                     Some(height) if height < next_height => {
@@ -1058,8 +1053,38 @@ where
                     None => None, // No message to that sender was added yet.
                 };
                 // Only schedule if this block contains the next message for that recipient.
-                if prev_hash.as_ref() != block.body.previous_message_blocks.get(target) {
-                    continue;
+                match (
+                    maybe_prev_hash,
+                    block.body.previous_message_blocks.get(target),
+                ) {
+                    (None, None) => {
+                        // No previous message block expected and none indicated by the outbox -
+                        // all good
+                    }
+                    (Some(_), None) => {
+                        // Outbox indicates there was a previous message block, but
+                        // previous_message_blocks has no idea about it - possible bug
+                        return Err(ChainError::InternalError(
+                            "block indicates no previous message block,\
+                            but we have one in the outbox"
+                                .into(),
+                        ));
+                    }
+                    (None, Some((_, prev_msg_block_height))) => {
+                        // We have no previously processed block in the outbox, but we are
+                        // expecting one - this could be due to an empty outbox having been pruned.
+                        // Only process the outbox if the height of the previous message block is
+                        // lower than the tip
+                        if *prev_msg_block_height >= next_height {
+                            continue;
+                        }
+                    }
+                    (Some(ref prev_hash), Some((prev_msg_block_hash, _))) => {
+                        // Only process the outbox if the hashes match.
+                        if prev_hash != prev_msg_block_hash {
+                            continue;
+                        }
+                    }
                 }
             }
             if outbox.schedule_message(block_height)? {
