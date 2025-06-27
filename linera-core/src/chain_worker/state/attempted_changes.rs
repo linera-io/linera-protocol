@@ -322,6 +322,8 @@ where
             certificate.check(committee)?;
         }
 
+        // If this block is higher than the next expected block in this chain, we're going
+        // to have a gap: do not process this block fully, only preprocess it.
         if tip.next_block_height < height {
             let actions = self.preprocess_certificate(certificate).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
