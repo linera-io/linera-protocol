@@ -16,7 +16,7 @@ spec:
       name: metrics
   selector:
     app: proxy
-  clusterIp: None
+  type: NodePort
 
 ---
 apiVersion: v1
@@ -24,27 +24,26 @@ kind: Service
 metadata:
   name: proxy-internal
   labels:
-    app: proxy
+    app: proxy-internal
 spec:
   ports:
     - port: 20100
-      name: proxy-internal
-  clusterIP: None
+      name: linera-port-int
+      targetPort: 20100
   selector:
     app: proxy
----
+  type: NodePort
 
+---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: proxy
 spec:
-  serviceName: "proxy"
   selector:
     matchLabels:
       app: proxy
-  replicas: {{ .Values.numProxies }}
-  podManagementPolicy: Parallel
+  replicas: 1
   template:
     metadata:
       labels:
@@ -69,7 +68,7 @@ spec:
             - containerPort: {{ .Values.proxyPort }}
               name: linera-port
             - containerPort: 20100
-              name: private-port
+              name: linera-port-int
           command: ["./proxy-entrypoint.sh", {{ .Values.storageReplicationFactor | quote }}]
           env:
             - name: RUST_LOG

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result};
+use linera_base::command::CommandExt;
 use tokio::process::{Child, Command};
 
 pub struct KubectlInstance {
@@ -15,10 +16,10 @@ impl KubectlInstance {
         }
     }
 
-    pub fn port_forward(&mut self, resource: &str, ports: &str, cluster_id: u32) -> Result<()> {
+    pub fn port_forward(&mut self, pod_name: &str, ports: &str, cluster_id: u32) -> Result<()> {
         let port_forward_child = Command::new("kubectl")
             .arg("port-forward")
-            .arg(resource)
+            .arg(pod_name)
             .arg(ports)
             .args(["--context", &format!("kind-{}", cluster_id)])
             .spawn()
@@ -26,5 +27,16 @@ impl KubectlInstance {
 
         self.port_forward_children.push(port_forward_child);
         Ok(())
+    }
+
+    pub async fn get_pods(&mut self, cluster_id: u32) -> Result<String> {
+        let output = Command::new("kubectl")
+            .arg("get")
+            .arg("pods")
+            .args(["--context", &format!("kind-{}", cluster_id)])
+            .spawn_and_wait_for_stdout()
+            .await?;
+
+        Ok(String::from_utf8_lossy(output.as_bytes()).to_string())
     }
 }
