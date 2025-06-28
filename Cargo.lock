@@ -5668,6 +5668,7 @@ dependencies = [
  "linera-views",
  "prometheus",
  "serde",
+ "tokio",
 ]
 
 [[package]]

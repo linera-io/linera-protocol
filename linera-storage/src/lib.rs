@@ -9,7 +9,7 @@ mod db_storage;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 
 use async_trait::async_trait;
@@ -41,6 +41,7 @@ use linera_execution::{
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{context::Context, views::RootView, ViewError};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
@@ -416,6 +417,48 @@ impl ResultReadCertificates {
     }
 }
 
+use std::sync::LazyLock;
+type ChainGuardMap = DashMap<ChainId, Weak<Mutex<()>>>;
+
+#[derive(Default)]
+pub struct ChainGuards {
+    guards: Arc<ChainGuardMap>,
+}
+
+static OPENED_CHAINS: LazyLock<ChainGuards> = LazyLock::new(ChainGuards::default);
+
+struct ChainGuard {
+    _guard: OwnedMutexGuard<()>,
+}
+
+impl ChainGuards {
+    fn get_or_create_lock(&self, chain_id: ChainId) -> Arc<Mutex<()>> {
+        let mut new_guard_holder = None;
+        let mut guard_reference = self.guards.entry(chain_id).or_insert_with(|| {
+            let (new_guard, weak_reference) = Self::create_new_mutex();
+            new_guard_holder = Some(new_guard);
+            weak_reference
+        });
+        guard_reference.upgrade().unwrap_or_else(|| {
+            let (new_guard, weak_reference) = Self::create_new_mutex();
+            *guard_reference = weak_reference;
+            new_guard
+        })
+    }
+
+    fn create_new_mutex() -> (Arc<Mutex<()>>, Weak<Mutex<()>>) {
+        let new_guard = Arc::new(Mutex::new(()));
+        let weak_reference = Arc::downgrade(&new_guard);
+        (new_guard, weak_reference)
+    }
+}
+
+async fn get_guard(chain_id: ChainId) -> ChainGuard {
+    let mutex = OPENED_CHAINS.get_or_create_lock(chain_id);
+    let _guard = mutex.lock_owned().await;
+    ChainGuard { _guard }
+}
+
 /// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
@@ -424,6 +467,7 @@ pub struct ChainRuntimeContext<S> {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<ApplicationId, UserServiceCode>>,
+    _chain_guard: Arc<ChainGuard>,
 }
 
 #[cfg_attr(not(web), async_trait)]
