@@ -182,7 +182,6 @@ pub struct LocalNetConfig {
     pub initial_amount: Amount,
     pub num_initial_validators: usize,
     pub num_shards: usize,
-    pub num_proxies: usize,
     pub policy_config: ResourceControlPolicyConfig,
     pub cross_chain_config: CrossChainConfig,
     pub storage_config_builder: InnerStorageConfigBuilder,
@@ -196,7 +195,6 @@ pub struct LocalNet {
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
     num_initial_validators: usize,
-    num_proxies: usize,
     num_shards: usize,
     validator_keys: BTreeMap<usize, (String, String)>,
     running_validators: BTreeMap<usize, Validator>,
@@ -287,7 +285,6 @@ impl Validator {
 impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = 4;
-        let num_proxies = 1;
         let storage_config_builder = InnerStorageConfigBuilder::TestConfig;
         let path_provider = PathProvider::create_temporary_directory().unwrap();
         let internal = network.drop_tls();
@@ -305,7 +302,6 @@ impl LocalNetConfig {
             namespace: linera_views::random::generate_test_namespace(),
             num_initial_validators: 4,
             num_shards,
-            num_proxies,
             storage_config_builder,
             path_provider,
             block_exporters: vec![],
@@ -325,7 +321,6 @@ impl LineraNetConfig for LocalNetConfig {
             self.namespace,
             self.num_initial_validators,
             self.num_shards,
-            self.num_proxies,
             storage_config,
             self.cross_chain_config,
             self.path_provider,
@@ -389,7 +384,6 @@ impl LocalNet {
         testing_prng_seed: Option<u64>,
         common_namespace: String,
         num_initial_validators: usize,
-        num_proxies: usize,
         num_shards: usize,
         common_storage_config: InnerStorageConfig,
         cross_chain_config: CrossChainConfig,
@@ -401,7 +395,6 @@ impl LocalNet {
             testing_prng_seed,
             next_client_id: 0,
             num_initial_validators,
-            num_proxies,
             num_shards,
             validator_keys: BTreeMap::new(),
             running_validators: BTreeMap::new(),
@@ -427,20 +420,20 @@ impl LocalNet {
         crate::util::read_json(path.join("genesis.json"))
     }
 
-    pub fn proxy_public_port(validator: usize, proxy_id: usize) -> usize {
-        13000 + validator * 100 + proxy_id + 1
-    }
-
-    pub fn proxy_internal_port(validator: usize, proxy_id: usize) -> usize {
-        10000 + validator * 100 + proxy_id + 1
+    pub fn proxy_port(validator: usize) -> usize {
+        9000 + validator * 100
     }
 
     fn shard_port(validator: usize, shard: usize) -> usize {
         9000 + validator * 100 + shard + 1
     }
 
-    fn proxy_metrics_port(validator: usize, proxy_id: usize) -> usize {
-        12000 + validator * 100 + proxy_id + 1
+    fn internal_port(validator: usize) -> usize {
+        10000 + validator * 100
+    }
+
+    fn proxy_metrics_port(validator: usize) -> usize {
+        11000 + validator * 100
     }
 
     fn shard_metrics_port(validator: usize, shard: usize) -> usize {
@@ -457,7 +450,9 @@ impl LocalNet {
             .path_provider
             .path()
             .join(format!("validator_{n}.toml"));
-        let port = Self::proxy_public_port(n, 0);
+        let port = Self::proxy_port(n);
+        let internal_port = Self::internal_port(n);
+        let metrics_port = Self::proxy_metrics_port(n);
         let external_protocol = self.network.external.toml();
         let internal_protocol = self.network.internal.toml();
         let external_host = self.network.external.localhost();
@@ -467,28 +462,13 @@ impl LocalNet {
                 server_config_path = "server_{n}.json"
                 host = "{external_host}"
                 port = {port}
+                internal_host = "{internal_host}"
+                internal_port = {internal_port}
+                metrics_port = {metrics_port}
                 external_protocol = {external_protocol}
                 internal_protocol = {internal_protocol}
             "#
         );
-
-        for k in 0..self.num_proxies {
-            let internal_port = Self::proxy_internal_port(n, k);
-            let metrics_port = Self::proxy_metrics_port(n, k);
-            // In the local network, the validator ingress is
-            // the proxy - so the `public_port` is the validator
-            // port.
-            content.push_str(&format!(
-                r#"
-                [[proxies]]
-                host = "{internal_host}"
-                public_port = {port}
-                private_port = {internal_port}
-                metrics_host = "{external_host}"
-                metrics_port = {metrics_port}
-                "#
-            ));
-        }
 
         for k in 0..self.num_shards {
             let shard_port = Self::shard_port(n, k);
@@ -623,16 +603,13 @@ impl LocalNet {
             .args(["--storage", &storage.to_string()])
             .spawn_into()?;
 
-        let port = Self::proxy_public_port(validator, 0);
+        let port = Self::proxy_port(validator);
         let nickname = format!("validator proxy {validator}");
         match self.network.external {
             Network::Grpc => {
                 Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
-                let nickname = format!("validator proxy {validator}");
-                Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
             }
             Network::Grpcs => {
-                let nickname = format!("validator proxy {validator}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "https").await?;
             }
             Network::Tcp => {
@@ -864,9 +841,8 @@ impl LocalNet {
     }
 
     /// Returns the address to connect to a validator's proxy.
-    /// In local networks, the zeroth proxy _is_ the validator ingress.
     pub fn validator_address(&self, validator: usize) -> String {
-        let port = Self::proxy_public_port(validator, 0);
+        let port = Self::proxy_port(validator);
         let schema = self.network.external.schema();
 
         format!("{schema}:localhost:{port}")
