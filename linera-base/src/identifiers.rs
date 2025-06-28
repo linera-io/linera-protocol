@@ -946,6 +946,18 @@ impl<A> ApplicationId<A> {
     pub fn bytes32(&self) -> B256 {
         *self.application_description_hash.as_bytes()
     }
+
+    /// Returns whether the `ApplicationId` is the one of an EVM application.
+    pub fn is_evm(&self) -> bool {
+        let bytes = self.application_description_hash.as_bytes();
+        let bytes = bytes.0.as_ref();
+        for byte in &bytes[20..] {
+            if byte != &0 {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 #[derive(Serialize, Deserialize)]
