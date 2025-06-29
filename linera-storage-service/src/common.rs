@@ -62,6 +62,16 @@ pub enum ServiceStoreError {
     /// An error occurred during BCS serialization
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
+
+    #[cfg(feature = "artificial_random_read_error")]
+    /// An artificial read error occurred
+    #[error("An artificial read error occurred")]
+    ArtificialReadError,
+
+    #[cfg(feature = "artificial_random_write_error")]
+    /// An artificial write batch error occurred
+    #[error("An artificial write batch error occurred")]
+    ArtificialWriteBatchError,
 }
 
 impl From<Status> for ServiceStoreError {

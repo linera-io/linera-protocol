@@ -5687,6 +5687,7 @@ dependencies = [
  "linera-views",
  "proptest",
  "prost",
+ "rand",
  "serde",
  "serde-reflection",
  "similar-asserts",
