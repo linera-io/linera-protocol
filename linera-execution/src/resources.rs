@@ -180,7 +180,6 @@ where
             .operations
             .checked_add(1)
             .ok_or(ArithmeticError::Overflow)?;
-        self.update_balance(self.policy.operation)?;
         match operation {
             Operation::System(_) => Ok(()),
             Operation::User { bytes, .. } => {
@@ -205,7 +204,6 @@ where
             .messages
             .checked_add(1)
             .ok_or(ArithmeticError::Overflow)?;
-        self.update_balance(self.policy.message)?;
         match message {
             Message::System(_) => Ok(()),
             Message::User { bytes, .. } => {
