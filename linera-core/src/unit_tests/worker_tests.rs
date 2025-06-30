@@ -3276,7 +3276,8 @@ where
 
     // The worker updates its locking block even if it's from a past round.
     let certificate = env.make_certificate_with_round(value1, Round::SingleLeader(7));
-    let worker = env.worker().clone().with_key_pair(None).await; // Forget validator keys.
+    // Forget validator keys.
+    let worker = env.worker().clone().with_key_pair(None).await;
     // The use of the cloned worker has to be disabled since it interacts with
     // the chain guards.
     if false {
