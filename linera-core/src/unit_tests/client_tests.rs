@@ -13,7 +13,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, InMemorySigner},
     data_types::*,
-    identifiers::{Account, AccountOwner, ApplicationId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -1270,21 +1270,34 @@ where
 {
     let signer = InMemorySigner::new(None);
     let mut policy = ResourceControlPolicy::only_fuel();
-    policy.operation = Amount::from_micros(1); // Otherwise BURN passes b/c it will be free.
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+    // Set the price for outoing messages - otherwise the transfer will succeed
+    // because system operations are free (and transfer is one).
+    policy.message = Amount::from_micros(1);
+    let mut builder = TestBuilder::new(storage_builder, 2, 0, signer)
         .await?
         .with_policy(policy);
-    let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let balance = Amount::from_tokens(3);
+    let sender = builder.add_root_chain(1, balance).await?;
 
+    let recipient = Recipient::Account(Account::new(
+        ChainId(CryptoHash::test_hash("some_chain")),
+        sender.identity().await.unwrap(),
+    ));
+
+    // We can transfer more than we have.
     let obtained_error = sender
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+        .transfer(
+            AccountOwner::CHAIN,
+            balance + Amount::from_micros(1),
+            recipient,
+        )
         .await;
     assert_insufficient_balance_during_operation(obtained_error, 0);
 
     let obtained_error = sender
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+        .transfer(AccountOwner::CHAIN, balance, recipient)
         .await;
-    // We have balance=3, we try to burn 3 tokens but the operation itself
+    // We have balance=3, we try to burn 3 tokens but the outgoing message
     // costs 1 microtoken so we don't have enough balance to pay for it.
     assert_fees_exceed_funding(obtained_error);
     Ok(())
