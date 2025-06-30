@@ -1,7 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::IntoFuture, sync::Arc, time::Duration};
+use std::{
+    future::IntoFuture,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use futures::{stream::FuturesOrdered, StreamExt};
 use linera_base::{data_types::Blob, ensure};
@@ -63,18 +70,20 @@ where
 
         let address = self.destination_config.address();
         let mut client = IndexerClient::new(&address, self.options)?;
+        let destination_state = self.storage.load_destination_state(self.destination_id);
 
         loop {
             let (outgoing_stream, incoming_stream) =
                 client.setup_indexer_client(self.work_queue_size).await?;
             let mut streamer = ExportTaskQueue::new(
                 self.work_queue_size,
+                destination_state.load(Ordering::Acquire) as usize,
                 outgoing_stream,
-                self.destination_id,
                 &self.storage,
             );
+
             let mut acknowledgement_task =
-                AcknowledgementTask::new(incoming_stream, self.destination_id, &self.storage);
+                AcknowledgementTask::new(incoming_stream, destination_state.clone());
 
             select! {
 
@@ -110,37 +119,29 @@ where
     }
 }
 
-struct AcknowledgementTask<'a, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
+struct AcknowledgementTask {
     incoming: Streaming<()>,
-    destination_id: DestinationId,
-    storage: &'a ExporterStorage<S>,
+    destination_state: Arc<AtomicU64>,
 }
 
-impl<'a, S> AcknowledgementTask<'a, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
-    fn new(
-        incoming: Streaming<()>,
-        destination_id: DestinationId,
-        storage: &'a ExporterStorage<S>,
-    ) -> Self {
+impl AcknowledgementTask {
+    fn new(incoming: Streaming<()>, destination_state: Arc<AtomicU64>) -> Self {
         Self {
             incoming,
-            destination_id,
-            storage,
+            destination_state,
         }
     }
 
     async fn run(&mut self) -> anyhow::Result<()> {
         while self.incoming.message().await?.is_some() {
-            self.storage.increment_destination(self.destination_id);
+            self.increment_destination_state();
         }
 
         Ok(())
+    }
+
+    fn increment_destination_state(&self) {
+        let _ = self.destination_state.fetch_add(1, Ordering::Release);
     }
 }
 
@@ -160,12 +161,10 @@ where
 {
     fn new(
         queue_size: usize,
+        start_height: usize,
         sender: CanonicalBlockStream,
-        destination_id: DestinationId,
         storage: &'a ExporterStorage<S>,
     ) -> ExportTaskQueue<'a, S> {
-        let start_height = storage.load_destination_state(destination_id) as usize;
-
         Self {
             queue_size,
             start_height,

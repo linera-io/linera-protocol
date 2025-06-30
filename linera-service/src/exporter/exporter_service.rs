@@ -46,7 +46,7 @@ impl ExporterService {
         self,
         cancellation_token: CancellationToken,
         port: u16,
-        block_processor_handle: JoinHandle<Result<(), ExporterError>>,
+        block_processor_handle: Option<JoinHandle<Result<(), ExporterError>>>,
     ) -> core::result::Result<(), ExporterError> {
         info!("Linera exporter is running.");
         self.start_notification_server(port, cancellation_token, block_processor_handle)
@@ -57,7 +57,7 @@ impl ExporterService {
         self,
         port: u16,
         cancellation_token: CancellationToken,
-        block_processor_handle: JoinHandle<Result<(), ExporterError>>,
+        block_processor_handle: Option<JoinHandle<Result<(), ExporterError>>>,
     ) -> core::result::Result<(), ExporterError> {
         let endpoint = get_address(port);
         info!(
@@ -77,7 +77,9 @@ impl ExporterService {
             .await
             .expect("a running notification server");
 
-        block_processor_handle.join().unwrap()?;
+        if let Some(some_handle) = block_processor_handle {
+            some_handle.join().unwrap()?;
+        }
 
         Ok(())
     }
@@ -102,9 +104,6 @@ fn parse_notification(notification: Notification) -> core::result::Result<BlockI
 
 #[cfg(test)]
 mod test {
-
-    use std::thread;
-
     use linera_base::{crypto::CryptoHash, identifiers::ChainId, port::get_free_port};
     use linera_core::worker::Notification;
     use linera_rpc::grpc::api::notifier_service_client::NotifierServiceClient;
@@ -117,12 +116,10 @@ mod test {
     async fn test_notification_server() -> anyhow::Result<()> {
         let port = get_free_port().await?;
         let endpoint = format!("127.0.0.1:{port}");
-        let cancellation_token: CancellationToken = CancellationToken::new();
+        let cancellation_token = CancellationToken::new();
         let (tx, mut rx) = unbounded_channel();
-        let dummy_thread = thread::spawn(|| Ok(()));
         let server = ExporterService::new(tx);
-        let server_handle =
-            tokio::spawn(server.run(cancellation_token.clone(), port, dummy_thread));
+        let server_handle = tokio::spawn(server.run(cancellation_token.clone(), port, None));
         LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
 
         let mut client = NotifierServiceClient::connect(format!("http://{endpoint}")).await?;

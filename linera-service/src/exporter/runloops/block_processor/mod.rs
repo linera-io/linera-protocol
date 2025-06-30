@@ -15,7 +15,7 @@ use tokio::{
 
 use crate::{
     common::{BlockId, ExporterError},
-    runloops::{block_processor::walker::Walker, DestinationContext, ThreadPoolState},
+    runloops::{block_processor::walker::Walker, ThreadPoolState},
     storage::BlockProcessorStorage,
 };
 
@@ -100,15 +100,10 @@ where
                                 };
 
                                 let addresses = committee.validator_addresses().map(|(_, address)| address.to_owned()).collect::<Vec<String>>();
-                                for thread in &mut self.pool_state.threads {
-                                    if let Some(set) = &mut thread.committee_task_handles {
-                                        set.shutdown().await;
-                                    }
-                                }
+                                self.pool_state.shutdown_current_committee().await;
 
-                                let destination_context = DestinationContext::from_committee_addresses(addresses.as_slice());
-                                self.storage.new_committee(addresses);
-                                self.pool_state.start_exporters(destination_context);
+                                self.storage.new_committee(addresses.clone());
+                                self.pool_state.start_committee_exporters(addresses.as_ref());
                             }
                         },
 
@@ -180,7 +175,7 @@ mod test {
         let pool_state = ThreadPoolState::<
             ExporterCancellationSignal,
             DbStorage<MemoryStore, TestClock>,
-        >::new(vec![]);
+        >::new(vec![], vec![]);
         let mut block_processor =
             BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
         let (block_ids, state) = make_state(&storage).await;
@@ -301,7 +296,7 @@ mod test {
         let pool_state = ThreadPoolState::<
             ExporterCancellationSignal,
             DbStorage<MemoryStore, TestClock>,
-        >::new(vec![]);
+        >::new(vec![], vec![]);
         let mut block_processor =
             BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
         let (block_id, state) = make_state_2(&storage).await;
@@ -402,7 +397,7 @@ mod test {
         let pool_state = ThreadPoolState::<
             ExporterCancellationSignal,
             DbStorage<MemoryStore, TestClock>,
-        >::new(vec![]);
+        >::new(vec![], vec![]);
         let mut block_processor =
             BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
         let (block_id, state) = make_state_3(&storage).await;
@@ -474,7 +469,7 @@ mod test {
         let pool_state = ThreadPoolState::<
             ExporterCancellationSignal,
             DbStorage<MemoryStore, TestClock>,
-        >::new(vec![]);
+        >::new(vec![], vec![]);
         let mut block_processor =
             BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
         let (block_id, state) = make_state_4(&storage).await;
@@ -568,7 +563,7 @@ mod test {
         let pool_state = ThreadPoolState::<
             ExporterCancellationSignal,
             DbStorage<MemoryStore, TestClock>,
-        >::new(vec![]);
+        >::new(vec![], vec![]);
         let mut block_processor =
             BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
         let (block_id, expected_state) = make_simple_state_with_blobs(&storage).await;

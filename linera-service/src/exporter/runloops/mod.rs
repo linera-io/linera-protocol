@@ -3,32 +3,32 @@
 
 use std::{
     future::{Future, IntoFuture},
-    sync::Arc,
     thread::{self, JoinHandle},
 };
 
 use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
-use linera_client::config::{
-    Destination, DestinationConfig, DestinationId, DestinationKind, LimitsConfig,
-};
-use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
+use linera_client::config::{DestinationConfig, LimitsConfig};
+use linera_rpc::NodeOptions;
 use linera_storage::Storage;
 use tokio::{
     runtime::Handle,
     sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-    task::{JoinError, JoinSet},
 };
 use validator_exporter::Exporter as ValidatorExporter;
 
 use crate::{
     common::{BlockId, ExporterError},
-    runloops::validator_exporter::ValidatorDestinationKind,
-    storage::{BlockProcessorStorage, ExporterStorage},
+    runloops::{
+        task_manager::{PoolMember, ThreadPoolState},
+        validator_exporter::ValidatorDestinationKind,
+    },
+    storage::BlockProcessorStorage,
 };
 
 mod block_processor;
 mod indexer;
+mod task_manager;
 mod validator_exporter;
 
 #[cfg(test)]
@@ -100,7 +100,7 @@ where
     )
     .await?;
 
-    let pool_handles = start_theadpool(max_exporter_threads);
+    let pool_handles = start_threadpool(max_exporter_threads);
 
     let pool_members = pool_handles
         .into_iter()
@@ -115,10 +115,10 @@ where
             )
         })
         .collect();
-    let mut pool_state = ThreadPoolState::new(pool_members);
+    let mut pool_state =
+        ThreadPoolState::new(pool_members, destination_config.destinations.clone());
 
-    let destination_context = DestinationContext::from_config(destination_config);
-    pool_state.start_exporters(destination_context);
+    pool_state.start_startup_exporters();
 
     let mut block_processor =
         BlockProcessor::new(pool_state, block_processor_storage, queue_rear, queue_front);
@@ -132,7 +132,7 @@ where
     Ok(())
 }
 
-fn start_theadpool(number_of_threads: usize) -> Vec<(JoinHandle<()>, Handle)> {
+fn start_threadpool(number_of_threads: usize) -> Vec<(JoinHandle<()>, Handle)> {
     let mut handles = Vec::new();
 
     for _ in 0..number_of_threads {
@@ -151,203 +151,9 @@ fn start_theadpool(number_of_threads: usize) -> Vec<(JoinHandle<()>, Handle)> {
     handles
 }
 
-enum DestinationContext {
-    Committee(usize),
-    NonCommittee(Vec<Destination>),
-}
-
-impl DestinationContext {
-    fn from_config(config: DestinationConfig) -> Self {
-        Self::NonCommittee(config.destinations.clone())
-    }
-
-    fn from_committee_addresses(addresses: &[String]) -> Self {
-        Self::Committee(addresses.len())
-    }
-}
-
-struct ThreadPoolState<F, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
-    next_thread_index: usize,
-    next_spawn_id: DestinationId,
-    threads: Vec<PoolMember<F, S>>,
-    next_committee_spawn_id: DestinationId,
-}
-
-impl<F, S> ThreadPoolState<F, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-    F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
-    <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
-{
-    fn new(threads: Vec<PoolMember<F, S>>) -> Self {
-        Self {
-            threads,
-            next_spawn_id: 0,
-            next_thread_index: 0,
-            next_committee_spawn_id: 0,
-        }
-    }
-
-    fn spawn(&mut self, destination: Destination) {
-        let id = self.next_spawn_id;
-        self.next_spawn_id += 1;
-        let handle = self.get_pool_handle();
-        handle.spawn(id, destination)
-    }
-
-    fn spawn_committee(&mut self) {
-        let id = self.next_committee_spawn_id;
-        self.next_committee_spawn_id += 1;
-        let handle = self.get_pool_handle();
-        handle.spawn_committee(id);
-    }
-
-    fn get_pool_handle(&mut self) -> &mut PoolMember<F, S> {
-        let number_of_threads = self.threads.len();
-        let handle = self
-            .threads
-            .get_mut(self.next_thread_index)
-            .expect("handle_index is manually checked below");
-
-        self.next_thread_index += 1;
-        if self.next_thread_index == number_of_threads {
-            self.next_thread_index = 0;
-        }
-
-        handle
-    }
-
-    fn start_exporters(&mut self, destination_context: DestinationContext)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
-        <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
-    {
-        match destination_context {
-            DestinationContext::Committee(committee_size) => {
-                for _ in 0..committee_size {
-                    self.spawn_committee()
-                }
-            }
-
-            DestinationContext::NonCommittee(destinations) => {
-                for destination in destinations {
-                    self.spawn(destination)
-                }
-            }
-        }
-    }
-
-    fn join_all(self) {
-        for thread in self.threads {
-            thread.join_handle.join().unwrap();
-        }
-    }
-}
-
-struct PoolMember<F, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
-    shutdown_signal: F,
-    options: NodeOptions,
-    work_queue_size: usize,
-    runtime_handle: Handle,
-    task_handles: JoinSet<Result<anyhow::Result<()>, JoinError>>,
-    storage: ExporterStorage<S>,
-    join_handle: JoinHandle<()>,
-    node_provider: Arc<GrpcNodeProvider>,
-    committee_task_handles: Option<JoinSet<Result<anyhow::Result<()>, JoinError>>>,
-}
-
-impl<F, S> PoolMember<F, S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-    F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
-    <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
-{
-    fn new(
-        runtime_handle: Handle,
-        join_handle: JoinHandle<()>,
-        options: NodeOptions,
-        storage: ExporterStorage<S>,
-        work_queue_size: usize,
-        shutdown_signal: F,
-    ) -> Self {
-        let node_provider = GrpcNodeProvider::new(options);
-        let arced_node_provider = Arc::new(node_provider);
-
-        Self {
-            storage,
-            options,
-            join_handle,
-            runtime_handle,
-            shutdown_signal,
-            work_queue_size,
-            committee_task_handles: None,
-            task_handles: JoinSet::new(),
-            node_provider: arced_node_provider,
-        }
-    }
-
-    fn spawn(&mut self, id: DestinationId, destination: Destination) {
-        let handle = match destination.kind {
-            DestinationKind::Indexer => {
-                let exporter_task = IndexerExporter::new(
-                    self.options,
-                    self.work_queue_size,
-                    self.storage.clone().unwrap(),
-                    id,
-                    destination,
-                );
-
-                self.runtime_handle
-                    .spawn(exporter_task.run_with_shutdown(self.shutdown_signal.clone()))
-            }
-
-            DestinationKind::Validator => {
-                let destination = ValidatorDestinationKind::NonCommitteeMember(destination);
-                let exporter_task = ValidatorExporter::new(
-                    self.node_provider.clone(),
-                    id,
-                    self.storage.clone().unwrap(),
-                    destination,
-                    self.work_queue_size,
-                );
-
-                self.runtime_handle
-                    .spawn(exporter_task.run_with_shutdown(self.shutdown_signal.clone()))
-            }
-        };
-
-        let _abort_handle = self.task_handles.spawn(handle);
-    }
-
-    fn spawn_committee(&mut self, id: DestinationId) {
-        let destination = ValidatorDestinationKind::CommitteeMember;
-        let exporter_task = ValidatorExporter::new(
-            self.node_provider.clone(),
-            id,
-            self.storage.clone().unwrap(),
-            destination,
-            self.work_queue_size,
-        );
-        let handle = self
-            .runtime_handle
-            .spawn(exporter_task.run_with_shutdown(self.shutdown_signal.clone()));
-        let _abort_handle = self
-            .committee_task_handles
-            .get_or_insert_default()
-            .spawn(handle);
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, time::Duration};
+    use std::{collections::BTreeMap, sync::atomic::Ordering, time::Duration};
 
     use linera_base::{
         crypto::{AccountPublicKey, Secp256k1PublicKey},
@@ -499,9 +305,9 @@ mod test {
         for i in 0..4 {
             let state = destination_states.load_state(i);
             if i % 2 == 0 {
-                assert_eq!(state, 2);
+                assert_eq!(state.load(Ordering::Acquire), 2);
             } else {
-                assert_eq!(state, 0);
+                assert_eq!(state.load(Ordering::Acquire), 0);
             }
         }
 
@@ -540,7 +346,7 @@ mod test {
         let (_, _, destination_states, _) =
             BlockExporterStateView::initiate(context.clone(), 4).await?;
         for i in 0..4 {
-            assert_eq!(destination_states.load_state(i), 2);
+            assert_eq!(destination_states.load_state(i).load(Ordering::Acquire), 2);
         }
 
         Ok(())
