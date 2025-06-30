@@ -39,7 +39,7 @@ kind: StatefulSet
 metadata:
   name: proxy
 spec:
-  serviceName: "proxy"
+  serviceName: "proxy-internal"
   selector:
     matchLabels:
       app: proxy
