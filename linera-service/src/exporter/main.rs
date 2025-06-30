@@ -101,7 +101,7 @@ impl Runnable for ExporterContext {
 
         let service = ExporterService::new(sender);
         let port = self.config.service_config.port;
-        service.run(shutdown_notifier, port, handle).await
+        service.run(shutdown_notifier, port, Some(handle)).await
     }
 }
 

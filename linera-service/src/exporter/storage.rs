@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    marker::PhantomData,
+    sync::{atomic::AtomicU64, Arc},
+};
 
 use dashmap::DashMap;
 use futures::future::try_join_all;
@@ -190,20 +194,8 @@ where
         self.shared_storage.get_blob(blob_id).await
     }
 
-    pub(crate) fn increment_destination(&self, id: DestinationId) {
-        self.shared_storage
-            .destination_states
-            .increment_destination(id);
-    }
-
-    pub(crate) fn load_destination_state(&self, id: DestinationId) -> u64 {
+    pub(crate) fn load_destination_state(&self, id: DestinationId) -> Arc<AtomicU64> {
         self.shared_storage.destination_states.load_state(id)
-    }
-
-    pub(crate) fn increment_committee_member(&self, id: DestinationId) {
-        self.shared_storage
-            .committee_destination_states
-            .increment_destination(id);
     }
 
     pub(crate) fn get_committee_member_address(&self, id: DestinationId) -> String {
@@ -212,7 +204,7 @@ where
             .get_address(id)
     }
 
-    pub(crate) fn load_committee_member_state(&self, id: DestinationId) -> u64 {
+    pub(crate) fn load_committee_member_export_state(&self, id: DestinationId) -> Arc<AtomicU64> {
         self.shared_storage
             .committee_destination_states
             .load_state(id)

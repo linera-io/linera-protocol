@@ -1,7 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::IntoFuture, sync::Arc, time::Duration};
+use std::{
+    future::IntoFuture,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use futures::{future::try_join_all, stream::FuturesOrdered};
 use linera_base::{ensure, identifiers::BlobId};
@@ -69,31 +76,28 @@ where
             );
         }
 
-        let (address, committee_member) = match self.destination_config.clone() {
+        let (address, destination_state) = match self.destination_config.clone() {
             ValidatorDestinationKind::CommitteeMember => (
                 self.storage
                     .get_committee_member_address(self.destination_id),
-                true,
+                self.storage
+                    .load_committee_member_export_state(self.destination_id),
             ),
-            ValidatorDestinationKind::NonCommitteeMember(destination) => {
-                (destination.address(), false)
-            }
+            ValidatorDestinationKind::NonCommitteeMember(destination) => (
+                destination.address(),
+                self.storage.load_destination_state(self.destination_id),
+            ),
         };
 
         let node = self.node_provider.make_node(&address)?;
 
-        let export_task = ExportTask::new(
-            node,
-            self.destination_id,
-            &self.storage,
-            self.destination_config.clone(),
-        );
         let (mut task_queue, task_receiver) = TaskQueue::new(
             self.work_queue_size,
-            committee_member,
-            self.destination_id,
+            destination_state.load(Ordering::Acquire) as usize,
             &self.storage,
         );
+
+        let export_task = ExportTask::new(node, &self.storage, destination_state);
 
         tokio::select! {
 
@@ -116,9 +120,8 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     node: GrpcClient,
-    destination_id: DestinationId,
     storage: &'a ExporterStorage<S>,
-    destination_kind: ValidatorDestinationKind,
+    destination_state: Arc<AtomicU64>,
 }
 
 impl<'a, S> ExportTask<'a, S>
@@ -127,15 +130,13 @@ where
 {
     fn new(
         node: GrpcClient,
-        destination_id: DestinationId,
         storage: &'a ExporterStorage<S>,
-        destination_kind: ValidatorDestinationKind,
+        destination_state: Arc<AtomicU64>,
     ) -> ExportTask<'a, S> {
         ExportTask {
             node,
             storage,
-            destination_id,
-            destination_kind,
+            destination_state,
         }
     }
 
@@ -159,17 +160,14 @@ where
                 Err(e) => Err(e)?,
             }
 
-            match &self.destination_kind {
-                ValidatorDestinationKind::CommitteeMember => {
-                    self.storage.increment_committee_member(self.destination_id);
-                }
-                ValidatorDestinationKind::NonCommitteeMember(_) => {
-                    self.storage.increment_destination(self.destination_id);
-                }
-            }
+            self.increment_destination_state();
         }
 
         Ok(())
+    }
+
+    fn increment_destination_state(&self) {
+        let _ = self.destination_state.fetch_add(1, Ordering::Release);
     }
 
     async fn upload_blobs(&self, blobs: Vec<BlobId>) -> anyhow::Result<()> {
@@ -238,18 +236,12 @@ where
     #[expect(clippy::type_complexity)]
     fn new(
         queue_size: usize,
-        committee_member: bool,
-        destination_id: DestinationId,
+        start_height: usize,
         storage: &'a ExporterStorage<S>,
     ) -> (
         TaskQueue<'a, S>,
         Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) {
-        let start_height = match committee_member {
-            true => storage.load_committee_member_state(destination_id) as usize,
-            false => storage.load_destination_state(destination_id) as usize,
-        };
-
         let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
 
         let queue = Self {

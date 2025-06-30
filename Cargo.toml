@@ -77,7 +77,6 @@ alloy-primitives = { version = "1.1.0", default-features = false, features = [
 ] }
 alloy-sol-types = "1.1.2"
 anyhow = "1.0.80"
-arc-swap = "1.7.1"
 assert_matches = "1.5.0"
 async-graphql = "=7.0.17"
 async-graphql-axum = "=7.0.17"

@@ -3,10 +3,9 @@
 
 use std::sync::{
     atomic::{AtomicU64, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 
-use arc_swap::ArcSwap;
 use linera_base::{
     data_types::BlockHeight,
     identifiers::{BlobId, ChainId},
@@ -137,20 +136,20 @@ where
     }
 
     pub fn replace_current_committee(&self, addresses: Vec<String>) {
-        let state = Arc::new(
-            addresses
-                .into_iter()
-                .map(CommitteeMember::new)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-        );
-        self.committee_state.get().states.swap(state);
+        let state = addresses
+            .into_iter()
+            .map(CommitteeMember::new)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        let mut guard = self.committee_state.get().states.lock().unwrap();
+        *guard = state;
     }
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct DestinationStates {
-    states: Arc<[AtomicU64]>,
+    states: Arc<[Arc<AtomicU64>]>,
 }
 
 impl Default for DestinationStates {
@@ -194,7 +193,7 @@ impl<'de> Deserialize<'de> for DestinationStates {
             SerializableDestinationStates::deserialize(deserializer)?;
         let states = states
             .iter()
-            .map(|state| AtomicU64::new(*state))
+            .map(|state| AtomicU64::new(*state).into())
             .collect::<Arc<_>>();
         Ok(Self { states })
     }
@@ -204,29 +203,23 @@ impl DestinationStates {
     pub fn new(number_of_destinations: u16) -> Self {
         let slice = vec![0u64; number_of_destinations.into()]
             .into_iter()
-            .map(AtomicU64::new)
+            .map(|x| AtomicU64::new(x).into())
             .collect::<Vec<_>>();
         let states = Arc::from(slice);
         Self { states }
     }
 
-    pub fn increment_destination(&self, id: DestinationId) {
-        if let Some(atomic) = self.states.get(id as usize) {
-            let _ = atomic.fetch_add(1, Ordering::Release);
-        }
-    }
-
-    pub fn load_state(&self, id: DestinationId) -> u64 {
+    pub fn load_state(&self, id: DestinationId) -> Arc<AtomicU64> {
         self.states
             .get(id as usize)
             .expect("DestinationId should correspond")
-            .load(Ordering::Acquire)
+            .clone()
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CommitteeState {
-    states: Arc<ArcSwap<Box<[CommitteeMember]>>>,
+    states: Arc<Mutex<Box<[CommitteeMember]>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -249,7 +242,8 @@ impl Serialize for CommitteeState {
     {
         let states = self
             .states
-            .load()
+            .lock()
+            .unwrap()
             .iter()
             .map(|member| SerializedCommitteeMember {
                 address: member.address.clone(),
@@ -272,59 +266,51 @@ impl<'de> Deserialize<'de> for CommitteeState {
             .iter()
             .map(|member| CommitteeMember {
                 address: member.address.clone(),
-                export_state: member.export_state.into(),
+                export_state: Arc::new(member.export_state.into()),
             })
             .collect::<Box<[_]>>();
         Ok(Self {
-            states: Arc::new(ArcSwap::new(states.into())),
+            states: Arc::new(Mutex::new(states)),
         })
     }
 }
 
 impl CommitteeState {
-    pub fn load_state(&self, id: DestinationId) -> u64 {
-        self.states
-            .load()
-            .get(id as usize)
-            .expect("DestinationId should correspond")
-            .load_state()
-    }
-
-    pub fn increment_destination(&self, id: DestinationId) {
-        if let Some(member) = self.states.load().get(id as usize) {
-            member.increment_state();
-        }
-    }
-
     pub fn get_address(&self, id: DestinationId) -> String {
         self.states
-            .load()
+            .lock()
+            .unwrap()
             .get(id as usize)
             .expect("DestinationId should correspond")
             .get_address()
+    }
+
+    pub fn load_state(&self, id: DestinationId) -> Arc<AtomicU64> {
+        self.states
+            .lock()
+            .unwrap()
+            .get(id as usize)
+            .expect("DestinationId should correspond")
+            .load_state()
     }
 }
 
 #[derive(Debug)]
 struct CommitteeMember {
     address: String,
-    export_state: AtomicU64,
+    export_state: Arc<AtomicU64>,
 }
 
 impl CommitteeMember {
     fn new(address: String) -> Self {
         Self {
             address,
-            export_state: AtomicU64::new(0),
+            export_state: AtomicU64::new(0).into(),
         }
     }
 
-    fn increment_state(&self) {
-        self.export_state.fetch_add(1, Ordering::Release);
-    }
-
-    fn load_state(&self) -> u64 {
-        self.export_state.load(Ordering::Acquire)
+    fn load_state(&self) -> Arc<AtomicU64> {
+        self.export_state.clone()
     }
 
     fn get_address(&self) -> String {
