@@ -599,6 +599,8 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
         .make_application(&chain, &wasm_application_id)
         .await?;
 
+    // Testing the queries
+
     let query = CallCounterRequest::Query;
     let counter_value = wasm_application.run_json_query(&query).await?;
     assert_eq!(counter_value, original_counter_value);
@@ -609,6 +611,15 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 
     let counter_value = wasm_application.run_json_query(&query).await?;
     assert_eq!(counter_value, original_counter_value + increment);
+
+    // Testing the address
+
+    let query = CallCounterRequest::TestCallAddress;
+    let counter_value = wasm_application.run_json_query(&query).await?;
+    assert_eq!(counter_value, 34);
+
+    let query = CallCounterRequest::ContractTestCallAddress;
+    wasm_application.run_json_query(query).await?;
 
     node_service.ensure_is_running()?;
 

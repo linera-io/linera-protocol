@@ -1251,9 +1251,11 @@ where
         let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
         let application_id = runtime.authenticated_caller_id()?;
         if let Some(application_id) = application_id {
-            if application_id.is_evm() {
-                return Ok(application_id.evm_address());
-            }
+            return Ok(if application_id.is_evm() {
+                application_id.evm_address()
+            } else {
+                Address::ZERO
+            });
         };
         let account_owner = runtime.authenticated_signer()?;
         if let Some(AccountOwner::Address20(address)) = account_owner {

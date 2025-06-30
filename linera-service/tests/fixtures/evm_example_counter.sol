@@ -17,4 +17,9 @@ contract ExampleCounter {
     function get_value() external view returns (uint64) {
         return value;
     }
+
+    function call_from_wasm(address remote_address) external returns (uint64) {
+        require(msg.sender == remote_address);
+        return 34;
+    }
 }

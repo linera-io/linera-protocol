@@ -21,10 +21,13 @@ impl ServiceAbi for CallCounterAbi {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CallCounterRequest {
     Query,
+    TestCallAddress,
+    ContractTestCallAddress,
     Increment(u64),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CallCounterOperation {
+    TestCallAddress,
     Increment(u64),
 }
