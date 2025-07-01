@@ -12,7 +12,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
     ensure,
-    identifiers::{ApplicationId, ChainId, StreamName},
+    identifiers::{AccountOwner, ApplicationId, ChainId, StreamName},
     vm::{EvmQuery, VmRuntime},
 };
 use revm::{primitives::Bytes, InspectCommitEvm, InspectEvm, Inspector};
@@ -465,8 +465,13 @@ type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<R
 // functionalities accessed from the EVM.
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-// This is the zero address of the contract
+// This is the zero address used when no address can be obtained from `authenticated_signer`
+// and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
+// if an EVM contract calls another EVM contract.
 const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
+
+// This is the address being used for service calls.
+const SERVICE_ADDRESS: Address = address!("0000000000000000000000000000000000002000");
 
 fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
@@ -889,9 +894,9 @@ fn get_argument<Ctx: ContextTr>(context: &mut Ctx, argument: &mut Vec<u8>, input
     };
 }
 
-fn get_call_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
-    let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
-    get_argument(context, &mut argument, input);
+fn get_call_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInputs) -> Vec<u8> {
+    let mut argument = INTERPRETER_RESULT_SELECTOR.to_vec();
+    get_argument(context, &mut argument, &inputs.input);
     argument
 }
 
@@ -939,7 +944,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
-        let argument = get_call_argument(context, &inputs.input);
+        let argument = get_call_argument(context, inputs);
         let authenticated = true;
         let result = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
@@ -1012,7 +1017,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
-        let argument = get_call_argument(context, &inputs.input);
+        let argument = get_call_argument(context, inputs);
         let result = {
             let evm_query = EvmQuery::Query(argument);
             let evm_query = serde_json::to_vec(&evm_query)?;
@@ -1092,11 +1097,12 @@ where
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
-        self.initialize_contract()?;
+        let caller = self.get_msg_address()?;
+        self.initialize_contract(caller)?;
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
             let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
             let argument = get_revm_instantiation_bytes(instantiation_argument);
-            let result = self.transact_commit(EvmTxKind::Call, argument)?;
+            let result = self.transact_commit(EvmTxKind::Call, argument, caller)?;
             self.write_logs(result.logs, "instantiate")?;
         }
         Ok(())
@@ -1105,15 +1111,16 @@ where
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
+        let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
-            let result = self.init_transact_commit(operation[4..].to_vec())?;
+            let result = self.init_transact_commit(operation[4..].to_vec(), caller)?;
             result.interpreter_result_and_logs()?
         } else {
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
-            let result = self.init_transact_commit(operation)?;
+            let result = self.init_transact_commit(operation, caller)?;
             result.output_and_logs()
         };
         self.consume_fuel(gas_final)?;
@@ -1129,7 +1136,8 @@ where
             "function execute_message(bytes)",
         )?;
         let operation = get_revm_execute_message_bytes(message);
-        self.execute_no_return_operation(operation, "message")
+        let caller = self.get_msg_address()?;
+        self.execute_no_return_operation(operation, "message", caller)
     }
 
     fn process_streams(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
@@ -1140,7 +1148,9 @@ where
             PROCESS_STREAMS_SELECTOR,
             "function process_streams(LineraTypes.StreamUpdate[] memory streams)",
         )?;
-        self.execute_no_return_operation(operation, "process_streams")
+        // For process_streams, authenticated_signer and authenticated_called_id are None.
+        let caller = Address::ZERO;
+        self.execute_no_return_operation(operation, "process_streams", caller)
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {
@@ -1202,8 +1212,9 @@ where
         &mut self,
         operation: Vec<u8>,
         origin: &str,
+        caller: Address,
     ) -> Result<(), ExecutionError> {
-        let result = self.init_transact_commit(operation)?;
+        let result = self.init_transact_commit(operation, caller)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
         self.write_logs(logs, origin)?;
@@ -1215,32 +1226,63 @@ where
     fn init_transact_commit(
         &mut self,
         vec: Vec<u8>,
+        caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
         if !self.db.is_initialized()? {
-            self.initialize_contract()?;
+            self.initialize_contract(caller)?;
         }
-        self.transact_commit(EvmTxKind::Call, vec)
+        self.transact_commit(EvmTxKind::Call, vec, caller)
     }
 
     /// Initializes the contract.
-    fn initialize_contract(&mut self) -> Result<(), ExecutionError> {
+    fn initialize_contract(&mut self, caller: Address) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        let result = self.transact_commit(EvmTxKind::Create, vec_init)?;
+        let result = self.transact_commit(EvmTxKind::Create, vec_init, caller)?;
         result
             .check_contract_initialization(self.db.contract_address)
             .map_err(EvmExecutionError::IncorrectContractCreation)?;
         self.write_logs(result.logs, "deploy")
     }
 
+    /// Computes the address used in the `msg.sender` variable.
+    /// It is computed in the following way:
+    /// * If a Wasm contract calls an EVM contract then it is `Address::ZERO`.
+    /// * If an EVM contract calls an EVM contract it is the address of the contract.
+    /// * If a user having an `AccountOwner::Address32` address calls an EVM contract
+    ///   then it is `Address::ZERO`.
+    /// * If a user having an `AccountOwner::Address20` address calls an EVM contract
+    ///   then it is this address.
+    ///
+    /// By doing this we ensure that EVM smart contracts works in the same way as
+    /// on the EVM and that users and contracts outside of that realm can still
+    /// call EVM smart contracts.
+    fn get_msg_address(&self) -> Result<Address, ExecutionError> {
+        let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+        let application_id = runtime.authenticated_caller_id()?;
+        if let Some(application_id) = application_id {
+            return Ok(if application_id.is_evm() {
+                application_id.evm_address()
+            } else {
+                Address::ZERO
+            });
+        };
+        let account_owner = runtime.authenticated_signer()?;
+        if let Some(AccountOwner::Address20(address)) = account_owner {
+            return Ok(Address::from(address));
+        };
+        Ok(ZERO_ADDRESS)
+    }
+
     fn transact_commit(
         &mut self,
         ch: EvmTxKind,
         input: Vec<u8>,
+        caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         let data = Bytes::from(input);
         let kind = match ch {
@@ -1257,7 +1299,7 @@ where
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
-        let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
+        let nonce = self.db.get_nonce(&caller)?;
         let result = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1284,6 +1326,7 @@ where
                     data,
                     nonce,
                     gas_limit,
+                    caller,
                     ..TxEnv::default()
                 },
                 inspector,
@@ -1401,14 +1444,14 @@ where
         input: Vec<u8>,
     ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
         let data = Bytes::from(input);
-
         let block_env = self.db.get_service_block_env()?;
         let inspector = CallInterceptorService {
             db: self.db.clone(),
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
         };
-        let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
+        let caller = SERVICE_ADDRESS;
+        let nonce = self.db.get_nonce(&caller)?;
         let result_state = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1434,6 +1477,7 @@ where
                     kind,
                     data,
                     nonce,
+                    caller,
                     gas_limit: EVM_SERVICE_GAS_LIMIT,
                     ..TxEnv::default()
                 },

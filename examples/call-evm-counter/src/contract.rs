@@ -3,7 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use alloy_primitives::U256;
+use alloy_primitives::{address, U256};
 use alloy_sol_types::{sol, SolCall};
 use call_evm_counter::{CallCounterAbi, CallCounterOperation};
 use linera_sdk::{
@@ -22,6 +22,17 @@ impl WithContractAbi for CallCounterContract {
     type Abi = CallCounterAbi;
 }
 
+impl CallCounterContract {
+    fn process_operation(&mut self, operation: Vec<u8>) -> u64 {
+        let evm_counter_id = self.runtime.application_parameters();
+        let result = self
+            .runtime
+            .call_application(true, evm_counter_id, &operation);
+        let arr: [u8; 32] = result.try_into().expect("result should have length 32");
+        U256::from_be_bytes(arr).to::<u64>()
+    }
+}
+
 impl Contract for CallCounterContract {
     type Message = ();
     type InstantiationArgument = ();
@@ -38,18 +49,23 @@ impl Contract for CallCounterContract {
     }
 
     async fn execute_operation(&mut self, operation: CallCounterOperation) -> u64 {
-        let CallCounterOperation::Increment(increment) = operation;
         sol! {
             function increment(uint64 input);
+            function call_from_wasm(address remote_address);
         }
-        let operation = incrementCall { input: increment };
-        let operation = operation.abi_encode();
-        let evm_counter_id = self.runtime.application_parameters();
-        let result = self
-            .runtime
-            .call_application(true, evm_counter_id, &operation);
-        let arr: [u8; 32] = result.try_into().expect("result should have length 32");
-        U256::from_be_bytes(arr).to::<u64>()
+        match operation {
+            CallCounterOperation::Increment(increment) => {
+                let operation = incrementCall { input: increment };
+                let operation = operation.abi_encode();
+                self.process_operation(operation)
+            }
+            CallCounterOperation::TestCallAddress => {
+                let remote_address = address!("0000000000000000000000000000000000000000");
+                let operation = call_from_wasmCall { remote_address };
+                let operation = operation.abi_encode();
+                self.process_operation(operation)
+            }
+        }
     }
 
     async fn execute_message(&mut self, _message: ()) {
