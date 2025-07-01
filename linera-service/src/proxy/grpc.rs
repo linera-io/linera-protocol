@@ -47,6 +47,7 @@ use tonic::{
     Request, Response, Status,
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{debug, info, instrument, Instrument as _, Level};
 
 #[cfg(with_metrics)]
@@ -266,6 +267,11 @@ where
                         .into_inner(),
                 )
                 .accept_http1(true)
+                .layer(
+                    CorsLayer::new()
+                        .allow_origin(AllowOrigin::mirror_request())
+                        .max_age(Duration::from_secs(24 * 60 * 60)), // 24 hours,
+                )
                 .add_service(health_service)
                 .add_service(tonic_web::enable(self.as_validator_node()))
                 .add_service(tonic_web::enable(reflection_service))
