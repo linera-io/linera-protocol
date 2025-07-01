@@ -67,6 +67,7 @@ tokio-util = { workspace = true, optional = true, features = ["codec"] }
 tonic-health = { workspace = true, optional = true }
 tonic-reflection = { workspace = true, optional = true }
 tower.workspace = true
+tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
 
 [dev-dependencies]

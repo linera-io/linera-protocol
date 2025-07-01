@@ -21,6 +21,7 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use super::{
@@ -261,6 +262,11 @@ where
                     ServiceBuilder::new()
                         .layer(GrpcPrometheusMetricsMiddlewareLayer)
                         .into_inner(),
+                )
+                .layer(
+                    CorsLayer::new()
+                        .allow_origin(AllowOrigin::mirror_request())
+                        .max_age(Duration::from_secs(24 * 60 * 60)), // 24 hours,
                 )
                 .add_service(health_service)
                 .add_service(reflection_service)

@@ -5482,6 +5482,7 @@ dependencies = [
  "tonic-reflection",
  "tonic-web-wasm-client",
  "tower 0.4.13",
+ "tower-http 0.5.2",
  "tracing",
  "wasm-bindgen-test",
 ]
