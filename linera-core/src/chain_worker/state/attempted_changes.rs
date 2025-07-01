@@ -290,11 +290,6 @@ where
 
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
-        if tip.next_block_height < height {
-            return Err(WorkerError::MissingEarlierBlocks {
-                current_block_height: tip.next_block_height,
-            });
-        }
         if tip.next_block_height > height {
             // We already processed this block.
             let actions = self.state.create_network_actions().await?;
@@ -304,6 +299,7 @@ where
             return Ok((info, actions));
         }
 
+        // We haven't processed the block - verify the certificate first
         if height == BlockHeight::ZERO {
             // For the initial proposal on a chain, we read the committee directly from
             // storage. If the certificate is good for this committee, we will accept it -
@@ -325,6 +321,17 @@ where
             check_block_epoch(epoch, chain_id, block.header.epoch)?;
             certificate.check(committee)?;
         }
+
+        // If this block is higher than the next expected block in this chain, we're going
+        // to have a gap: do not process this block fully, only preprocess it.
+        if tip.next_block_height < height {
+            let actions = self.preprocess_certificate(certificate).await?;
+            self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
+                .await;
+            let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
+            return Ok((info, actions));
+        }
+
         // This should always be true for valid certificates.
         ensure!(
             tip.block_hash == block.header.previous_block_hash,
