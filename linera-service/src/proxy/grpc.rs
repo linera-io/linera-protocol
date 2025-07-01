@@ -268,7 +268,7 @@ where
                 )
                 .accept_http1(true)
                 .layer(
-                    CorsLayer::new()
+                    CorsLayer::very_permissive()
                         .allow_origin(AllowOrigin::mirror_request())
                         .max_age(Duration::from_secs(24 * 60 * 60)), // 24 hours,
                 )
