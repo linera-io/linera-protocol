@@ -34,10 +34,9 @@ use crate::{
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, ExecutionError,
-    FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation, OperationContext,
-    OutgoingMessage, QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker,
-    UserContractCode, UserContractInstance, UserServiceCode, UserServiceInstance,
-    MAX_STREAM_NAME_LEN,
+    FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation, OutgoingMessage,
+    QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker, UserContractCode,
+    UserContractInstance, UserServiceCode, UserServiceInstance, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -442,7 +441,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         this: ContractSyncRuntimeHandle,
         authenticated: bool,
         callee_id: ApplicationId,
-    ) -> Result<(Arc<Mutex<UserContractInstance>>, OperationContext), ExecutionError> {
+    ) -> Result<Arc<Mutex<UserContractInstance>>, ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
 
         ensure!(
@@ -465,15 +464,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
             _ => None,
         };
         let authenticated_caller_id = authenticated.then_some(caller_id);
-        let timestamp = self.user_context;
-        let callee_context = OperationContext {
-            chain_id: self.chain_id,
-            authenticated_signer,
-            authenticated_caller_id,
-            height: self.height,
-            round: self.round,
-            timestamp,
-        };
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,
             id: callee_id,
@@ -481,7 +471,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
         });
-        Ok((application.instance, callee_context))
+        Ok(application.instance)
     }
 
     /// Cleans up the runtime after the execution of a call to a different contract.
@@ -1325,9 +1315,9 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         callee_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (contract, _context) =
-            self.inner()
-                .prepare_for_call(self.clone(), authenticated, callee_id)?;
+        let contract = self
+            .inner()
+            .prepare_for_call(self.clone(), authenticated, callee_id)?;
 
         let value = contract
             .try_lock()
@@ -1588,7 +1578,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
         self.inner().transaction_tracker = txn_tracker_moved;
 
-        let (contract, _context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
+        let contract = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 
         contract
             .try_lock()
