@@ -465,10 +465,12 @@ type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<R
 // functionalities accessed from the EVM.
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-// This is the zero address used for service calls
+// This is the zero address used when no address can be obtained from `authenticated_signer`
+// and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
+// if an EVM contract calls another EVM contract.
 const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
 
-// This is the address being used for service calls
+// This is the address being used for service calls.
 const SERVICE_ADDRESS: Address = address!("0000000000000000000000000000000000002000");
 
 fn address_to_user_application_id(address: Address) -> ApplicationId {
@@ -1111,7 +1113,7 @@ where
         ensure_message_length(operation.len(), 4)?;
         let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
-            ensure_message_length(operation.len(), 28)?;
+            ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
             let result = self.init_transact_commit(operation[4..].to_vec(), caller)?;
             result.interpreter_result_and_logs()?
@@ -1247,6 +1249,18 @@ where
         self.write_logs(result.logs, "deploy")
     }
 
+    /// Computes the address used in the `msg.sender` variable.
+    /// It is computed in the following way:
+    /// * If a Wasm contract calls an EVM contract then it is `Address::ZERO`.
+    /// * If an EVM contract calls an EVM contract it is the address of the contract.
+    /// * If a user having an `AccountOwner::Address32` address calls an EVM contract
+    ///   then it is `Address::ZERO`.
+    /// * If a user having an `AccountOwner::Address20` address calls an EVM contract
+    ///   then it is this address.
+    ///
+    /// By doing this we ensure that EVM smart contracts works in the same way as
+    /// on the EVM and that users and contracts outside of that realm can still
+    /// call EVM smart contracts.
     fn get_msg_address(&self) -> Result<Address, ExecutionError> {
         let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
         let application_id = runtime.authenticated_caller_id()?;
