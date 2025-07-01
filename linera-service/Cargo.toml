@@ -116,6 +116,7 @@ tracing.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
+tonic-build = { workspace = true, features = ["prost", "transport"] }
 
 [dev-dependencies]
 alloy = { workspace = true, default-features = false, features = [
@@ -154,6 +155,7 @@ test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 test-strategy.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [[bin]]
 name = "linera"

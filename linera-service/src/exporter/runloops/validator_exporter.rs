@@ -4,9 +4,9 @@
 use std::{future::IntoFuture, sync::Arc, time::Duration};
 
 use futures::{future::try_join_all, stream::FuturesOrdered};
-use linera_base::identifiers::BlobId;
+use linera_base::{ensure, identifiers::BlobId};
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_client::config::{Destination, DestinationId};
+use linera_client::config::{Destination, DestinationId, DestinationKind};
 use linera_core::node::{
     CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider,
 };
@@ -15,7 +15,10 @@ use linera_storage::Storage;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::StreamExt;
 
-use crate::{common::ExporterError, dispatch, storage::ExporterStorage};
+use crate::{
+    common::{BlockId, ExporterError},
+    storage::ExporterStorage,
+};
 
 pub(crate) struct Exporter<S>
 where
@@ -52,6 +55,11 @@ where
         self,
         shutdown_signal: F,
     ) -> anyhow::Result<()> {
+        ensure!(
+            DestinationKind::Validator == self.destination_config.kind,
+            ExporterError::DestinationError
+        );
+
         let address = self.destination_config.address();
         let node = self.node_provider.make_node(&address)?;
 
@@ -102,28 +110,22 @@ where
 
     async fn run(
         &self,
-        mut receiver: Receiver<Arc<ConfirmedBlockCertificate>>,
+        mut receiver: Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) -> anyhow::Result<()> {
-        let delivery = CrossChainMessageDelivery::NonBlocking;
-        while let Some(block) = receiver.recv().await {
-            let hash = block.hash();
-            let method = |certificate, delivery| {
-                self.node
-                    .handle_confirmed_certificate(certificate, delivery)
-            };
+        while let Some((block, blobs_ids)) = receiver.recv().await {
+            match self.dispatch_block((*block).clone()).await {
+                Ok(_) => {}
 
-            // As the linera-rpc client already contains a retry loop, the loop below is mainly for the blobs.
-            loop {
-                match dispatch!(method, log = hash, (*block).clone(), delivery) {
-                    Ok(_) => break,
-
-                    Err(NodeError::BlobsNotFound(blobs)) => self.upload_blobs(blobs).await?,
-
-                    Err(e) => {
-                        tracing::error!("error {} when resolving block with hash: {}", e, hash);
-                        Err(e)?
-                    }
+                Err(NodeError::BlobsNotFound(blobs_to_maybe_send)) => {
+                    let blobs = blobs_ids
+                        .into_iter()
+                        .filter(|id| blobs_to_maybe_send.contains(id))
+                        .collect();
+                    self.upload_blobs(blobs).await?;
+                    self.dispatch_block((*block).clone()).await?
                 }
+
+                Err(e) => Err(e)?,
             }
 
             self.storage.increment_destination(self.destination_id);
@@ -136,16 +138,46 @@ where
         let tasks = blobs.iter().map(|id| async {
             match self.storage.get_blob(*id).await {
                 Err(e) => Err(e),
-                Ok(blob) => self
-                    .node
-                    .upload_blob((*blob).clone().into())
-                    .await
-                    .map_err(|e| ExporterError::GenericError(e.into()))
-                    .map(|_| ()),
+                Ok(blob) => {
+                    tracing::info!(
+                        "dispatching blob with id: {:#?} from linera exporter",
+                        blob.id()
+                    );
+                    self.node
+                        .upload_blob((*blob).clone().into())
+                        .await
+                        .map_err(|e| ExporterError::GenericError(e.into()))
+                        .map(|_| ())
+                }
             }
         });
 
         let _ = try_join_all(tasks).await?;
+
+        Ok(())
+    }
+
+    async fn dispatch_block(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Result<(), NodeError> {
+        let delivery = CrossChainMessageDelivery::NonBlocking;
+        let block_id = BlockId::from_confirmed_block(certificate.value());
+        tracing::info!(
+            "dispatching block with id: {:#?} from linera exporter",
+            block_id
+        );
+        match self
+            .node
+            .handle_confirmed_certificate(certificate, delivery)
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!("error {} when resolving block with id: {:#?}", e, block_id);
+                Err(e)?
+            }
+        }
 
         Ok(())
     }
@@ -158,18 +190,22 @@ where
     queue_size: usize,
     start_height: usize,
     storage: &'a ExporterStorage<S>,
-    buffer: Sender<Arc<ConfirmedBlockCertificate>>,
+    buffer: Sender<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
 }
 
 impl<'a, S> TaskQueue<'a, S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
+    #[expect(clippy::type_complexity)]
     fn new(
         queue_size: usize,
         destination_id: DestinationId,
         storage: &'a ExporterStorage<S>,
-    ) -> (TaskQueue<'a, S>, Receiver<Arc<ConfirmedBlockCertificate>>) {
+    ) -> (
+        TaskQueue<'a, S>,
+        Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
+    ) {
         let start_height = storage.load_destination_state(destination_id) as usize;
         let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
 
@@ -186,7 +222,7 @@ where
     async fn run(&mut self) -> anyhow::Result<()> {
         let mut index = self.start_height;
         let mut futures = FuturesOrdered::new();
-        while futures.len() != self.queue_size {
+        while futures.len() < self.queue_size {
             futures.push_back(self.get_block_task(index));
             index += 1;
         }
@@ -203,10 +239,10 @@ where
     async fn get_block_task(
         &self,
         index: usize,
-    ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
+    ) -> Result<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>), ExporterError> {
         loop {
-            match self.storage.get_block(index).await {
-                Ok(block) => return Ok(block),
+            match self.storage.get_block_with_blob_ids(index).await {
+                Ok(block_with_blobs_ids) => return Ok(block_with_blobs_ids),
                 Err(ExporterError::UnprocessedBlock) => {
                     tokio::time::sleep(Duration::from_secs(1)).await
                 }
