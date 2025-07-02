@@ -21,6 +21,7 @@ use linera_execution::{
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
+    batch::Batch,
     context::ViewContext,
     store::{AdminKeyValueStore, KeyIterable as _, KeyValueStore},
     views::View,
@@ -222,26 +223,23 @@ pub mod metrics {
     });
 }
 
-#[derive(Default)]
-struct Batch {
-    key_value_bytes: Vec<(Vec<u8>, Vec<u8>)>,
+trait BatchExt {
+    fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError>;
+
+    fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError>;
+
+    fn add_certificate(&mut self, certificate: &ConfirmedBlockCertificate)
+        -> Result<(), ViewError>;
+
+    fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError>;
+
+    fn add_network_description(
+        &mut self,
+        information: &NetworkDescription,
+    ) -> Result<(), ViewError>;
 }
 
-impl Batch {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        self.key_value_bytes.push((key, value));
-    }
-
-    fn put_key_value<T: Serialize>(&mut self, key: Vec<u8>, value: &T) -> Result<(), ViewError> {
-        let bytes = bcs::to_bytes(value)?;
-        self.key_value_bytes.push((key, bytes));
-        Ok(())
-    }
-
+impl BatchExt for Batch {
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -937,23 +935,8 @@ where
         Ok(Some(certificate))
     }
 
-    async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {
-        let mut batch = linera_views::batch::Batch::new();
-        batch.put_key_value_bytes(key, bytes);
-        store.write_batch(batch).await?;
-        Ok(())
-    }
-
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        if batch.key_value_bytes.is_empty() {
-            return Ok(());
-        }
-        let mut futures = Vec::new();
-        for (key, bytes) in batch.key_value_bytes.into_iter() {
-            let store = self.store.clone();
-            futures.push(async move { Self::write_entry(&store, key, bytes).await });
-        }
-        futures::future::try_join_all(futures).await?;
+        self.store.write_batch(batch).await?;
         Ok(())
     }
 
