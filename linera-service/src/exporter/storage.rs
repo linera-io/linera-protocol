@@ -222,12 +222,12 @@ where
     pub(super) async fn load(
         storage: S,
         id: u32,
-        number_of_destinaions: u16,
+        number_of_destinations: u16,
         limits: LimitsConfig,
     ) -> Result<(Self, ExporterStorage<S>), ExporterError> {
         let context = storage.block_exporter_context(id).await?;
         let (view, canonical_state, destination_states, committee_state) =
-            BlockExporterStateView::initiate(context, number_of_destinaions).await?;
+            BlockExporterStateView::initiate(context, number_of_destinations).await?;
 
         let chain_states_cache_capacity =
             ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024)
