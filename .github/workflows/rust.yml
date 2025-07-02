@@ -242,7 +242,7 @@ jobs:
         serdegen --language solidity --module-name LineraTypes --target-source-dir dest linera-execution/solidity/LineraTypes.yaml
     - name: Check for generated LineraTypes.sol
       run: |
-        if ! diff dest/LineraTypes.sol  < linera-execution/solidity/LineraTypes.sol
+        if ! diff dest/LineraTypes.sol linera-execution/solidity/LineraTypes.sol
         then
           echo '`LineraTypes.sol` differs from the output of `serdegen`'
           exit 1
