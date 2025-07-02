@@ -3,7 +3,9 @@
 
 use linera_views::{
     lru_caching::StorageCacheConfig,
-    scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
+    scylla_db::{
+        ScyllaDbClientConfig, ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig,
+    },
     store::AdminKeyValueStore,
 };
 
@@ -62,6 +64,7 @@ impl ScyllaDbRunner {
             max_stream_queries: config.client.max_stream_queries,
             max_concurrent_queries: config.client.max_concurrent_queries,
             replication_factor: config.client.replication_factor,
+            client_config: ScyllaDbClientConfig::default(),
         };
         let store_config = ScyllaDbStoreConfig {
             inner_config,

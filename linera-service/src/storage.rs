@@ -34,7 +34,9 @@ use {
 };
 #[cfg(feature = "scylladb")]
 use {
-    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
+    linera_views::scylla_db::{
+        ScyllaDbClientConfig, ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig,
+    },
     std::num::NonZeroU16,
     tracing::debug,
 };
@@ -486,6 +488,7 @@ impl StorageConfig {
                     max_stream_queries: options.storage_max_stream_queries,
                     max_concurrent_queries: options.storage_max_concurrent_queries,
                     replication_factor: options.storage_replication_factor,
+                    client_config: ScyllaDbClientConfig::default(),
                 };
                 let config = ScyllaDbStoreConfig {
                     inner_config,
@@ -514,6 +517,7 @@ impl StorageConfig {
                     max_stream_queries: options.storage_max_stream_queries,
                     max_concurrent_queries: options.storage_max_concurrent_queries,
                     replication_factor: options.storage_replication_factor,
+                    client_config: ScyllaDbClientConfig::default(),
                 };
                 let second_config = ScyllaDbStoreConfig {
                     inner_config,
