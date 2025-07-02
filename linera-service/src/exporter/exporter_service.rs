@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::thread::JoinHandle;
-
 use async_trait::async_trait;
 use linera_core::worker::Reason;
 use linera_rpc::grpc::api::{
@@ -46,10 +44,9 @@ impl ExporterService {
         self,
         cancellation_token: CancellationToken,
         port: u16,
-        block_processor_handle: Option<JoinHandle<Result<(), ExporterError>>>,
     ) -> core::result::Result<(), ExporterError> {
         info!("Linera exporter is running.");
-        self.start_notification_server(port, cancellation_token, block_processor_handle)
+        self.start_notification_server(port, cancellation_token)
             .await
     }
 
@@ -57,7 +54,6 @@ impl ExporterService {
         self,
         port: u16,
         cancellation_token: CancellationToken,
-        block_processor_handle: Option<JoinHandle<Result<(), ExporterError>>>,
     ) -> core::result::Result<(), ExporterError> {
         let endpoint = get_address(port);
         info!(
@@ -76,10 +72,6 @@ impl ExporterService {
             .serve_with_shutdown(endpoint, cancellation_token.cancelled_owned())
             .await
             .expect("a running notification server");
-
-        if let Some(some_handle) = block_processor_handle {
-            some_handle.join().unwrap()?;
-        }
 
         Ok(())
     }
@@ -119,7 +111,7 @@ mod test {
         let cancellation_token = CancellationToken::new();
         let (tx, mut rx) = unbounded_channel();
         let server = ExporterService::new(tx);
-        let server_handle = tokio::spawn(server.run(cancellation_token.clone(), port, None));
+        let server_handle = tokio::spawn(server.run(cancellation_token.clone(), port));
         LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
 
         let mut client = NotifierServiceClient::connect(format!("http://{endpoint}")).await?;
