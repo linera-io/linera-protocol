@@ -63,12 +63,14 @@ RUN cargo build --release \
     --bin linera \
     --bin linera-proxy \
     --bin linera-server \
+    --bin linera-exporter \
     --features scylladb,metrics
 
 RUN mv \
     target/"$target"/release/linera \
     target/"$target"/release/linera-proxy \
     target/"$target"/release/linera-server \
+    target/"$target"/release/linera-exporter \
     ./
 
 # Optionally copy binaries instead of using the build images above
@@ -78,6 +80,7 @@ COPY \
     "$binaries"/linera \
     "$binaries"/linera-server \
     "$binaries"/linera-proxy \
+    "$binaries"/linera-exporter \
     ./
 
 FROM builder$copy AS binaries
@@ -102,6 +105,7 @@ COPY --from=binaries \
     linera \
     linera-server \
     linera-proxy \
+    linera-exporter \
     ./
 
 COPY --chmod=755 \

@@ -48,6 +48,22 @@ services:
     depends_on:
       - scylla
 
+  exporter:
+    image: "${LINERA_IMAGE:-linera}"
+    command: [
+      "linera-exporter",
+      "--config-path", "exporter-config.toml",
+      "--storage", "scylladb:tcp:scylla:9042",
+      "--genesis", "/config/genesis.json"
+    ]
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
