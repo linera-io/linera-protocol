@@ -449,7 +449,7 @@ where
 
     /// Stores a block's blobs, and adds its messages to the outbox where possible.
     /// Does not execute the block.
-    pub(super) async fn preprocess_certificate(
+    async fn preprocess_certificate(
         &mut self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<NetworkActions, WorkerError> {

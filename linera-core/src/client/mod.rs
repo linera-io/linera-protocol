@@ -506,17 +506,6 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    #[instrument(level = "trace", skip_all)]
-    async fn preprocess_certificate(
-        &self,
-        certificate: Box<ConfirmedBlockCertificate>,
-    ) -> Result<(), LocalNodeError> {
-        self.local_node
-            .preprocess_certificate(*certificate, &self.notifier)
-            .await?;
-        Ok(())
-    }
-
     /// Submits a validated block for finalization and returns the confirmed block certificate.
     #[instrument(level = "trace", skip_all)]
     async fn finalize_block(
@@ -752,7 +741,7 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
-        if let Err(err) = self.preprocess_certificate(certificate.clone()).await {
+        if let Err(err) = self.handle_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     let blobs = RemoteNode::download_blobs(
@@ -763,7 +752,7 @@ impl<Env: Environment> Client<Env> {
                     .await
                     .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
-                    self.preprocess_certificate(certificate.clone()).await?;
+                    self.handle_certificate(certificate.clone()).await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
