@@ -64,7 +64,6 @@ revm = { workspace = true, optional = true, default-features = false, features =
     "kzg-rs",
     "secp256k1",
     "portable",
-    "blst",
     "serde",
 ] }
 revm-context = { workspace = true, optional = true, default-features = false, features = [

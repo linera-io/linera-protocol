@@ -180,7 +180,6 @@ revm = { version = "24.0.1", default-features = false, features = [
     "kzg-rs",
     "secp256k1",
     "portable",
-    "blst",
     "serde",
 ] }
 revm-context = { version = "5.0.0", default-features = false, features = [
