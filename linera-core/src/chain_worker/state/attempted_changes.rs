@@ -300,27 +300,17 @@ where
         }
 
         // We haven't processed the block - verify the certificate first
-        if height == BlockHeight::ZERO {
-            // For the initial proposal on a chain, we read the committee directly from
-            // storage. If the certificate is good for this committee, we will accept it -
-            // which will later allow us to also accept the chain description blob.
-            let epoch = block.header.epoch;
-            let committees = self
-                .state
-                .storage
-                .committees_for([epoch].into_iter().collect())
-                .await?;
-            let committee = committees
-                .get(&epoch)
-                .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;
-            certificate.check(committee)?;
-        } else {
-            self.state.ensure_is_active().await?;
-            // Verify the certificate.
-            let (epoch, committee) = self.state.chain.current_committee()?;
-            check_block_epoch(epoch, chain_id, block.header.epoch)?;
-            certificate.check(committee)?;
-        }
+        let epoch = block.header.epoch;
+        // Get the committee for the block's epoch from storage.
+        let committees = self
+            .state
+            .storage
+            .committees_for([epoch].into_iter().collect())
+            .await?;
+        let committee = committees
+            .get(&epoch)
+            .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;
+        certificate.check(committee)?;
 
         // If this block is higher than the next expected block in this chain, we're going
         // to have a gap: do not process this block fully, only preprocess it.
@@ -337,6 +327,13 @@ where
             tip.block_hash == block.header.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
+
+        // If we got here, `height` is equal to `tip.next_block_height` and the block is
+        // properly chained. Verify that the chain is active and that the epoch we used for
+        // verifying the certificate is actually the active one on the chain.
+        self.state.ensure_is_active().await?;
+        let (epoch, _) = self.state.chain.current_committee()?;
+        check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
         let required_blob_ids = block.required_blob_ids();
         let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
