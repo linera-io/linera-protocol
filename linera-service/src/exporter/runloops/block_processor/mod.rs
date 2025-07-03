@@ -87,7 +87,7 @@ where
                                     Ok(blob) => blob,
                                     Err(error) => {
                                         tracing::error!("unable to get the committee blob: {:?} from storage, , received error: {:?}", blob_id, error);
-                                        continue;
+                                        return Err(error);
                                     },
                                 };
 
