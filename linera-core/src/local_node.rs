@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
-    types::{Block, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{Block, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome};
@@ -120,20 +120,6 @@ where
                 .fully_handle_certificate_with_notifications(certificate, notifier),
         )
         .await?)
-    }
-
-    /// Preprocesses a block without executing it.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn preprocess_certificate(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-        notifier: &impl Notifier,
-    ) -> Result<(), LocalNodeError> {
-        self.node
-            .state
-            .fully_preprocess_certificate_with_notifications(certificate, notifier)
-            .await?;
-        Ok(())
     }
 
     #[instrument(level = "trace", skip_all)]
