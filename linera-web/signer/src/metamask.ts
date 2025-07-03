@@ -60,7 +60,7 @@ export class MetaMask implements Signer {
     }
 
     // Encode message as hex string
-    const msgHex = `0x${Buffer.from(value).toString("hex")}`;
+    const msgHex = `0x${uint8ArrayToHex(value)}`;
     try {
       const signature = (await window.ethereum.request({
         method: "personal_sign",
@@ -94,4 +94,10 @@ export class MetaMask implements Signer {
     let address = await signer.getAddress();
     return address;
   }
+}
+
+function uint8ArrayToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b: number) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
