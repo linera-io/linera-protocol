@@ -1416,9 +1416,10 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_primitives::U256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -1426,14 +1427,16 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     let (mut net, client) = config.instantiate().await?;
 
     sol! {
-        function increment(uint64 input);
-        function get_value();
-        function failing_function();
+        struct ConstructorArgs {
+            uint256 initial_supply;
+        }
+        function totalSupply();
     }
 
-    let constructor_argument = Vec::new();
-
-    let increment = 5;
+    let initial_supply = 1000000000;
+    let initial_supply = U256::from(initial_supply);
+    let constructor_argument = ConstructorArgs { initial_supply };
+    let constructor_argument = constructor_argument.abi_encode();
 
     let chain = client.load_wallet()?.default_chain().unwrap();
 
@@ -1458,6 +1461,12 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     let application = node_service
         .make_application(&chain, &application_id)
         .await?;
+
+    let total_supply = totalSupplyCall { };
+    let query = total_supply.abi_encode();
+    let query = EvmQuery::Query(query);
+
+    let _result = application.run_json_query(query).await?;
 
     node_service.ensure_is_running()?;
 
