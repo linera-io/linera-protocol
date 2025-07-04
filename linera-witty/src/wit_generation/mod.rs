@@ -66,13 +66,13 @@ impl FileContentGenerator for WitInterfaceWriter {
         writeln!(writer, "interface {} {{", self.name)?;
 
         for function in &self.functions {
-            writeln!(writer, "{}", &function)?;
+            writeln!(writer, "{}", function)?;
         }
 
         for type_declaration in self.types.values() {
             if !type_declaration.is_empty() {
                 writeln!(writer)?;
-                write!(writer, "{}", &type_declaration)?;
+                write!(writer, "{}", type_declaration)?;
             }
         }
 
