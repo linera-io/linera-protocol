@@ -873,7 +873,8 @@ where
         let open_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(public_key.into()),
             epoch: Epoch(0),
-            active_epochs: [Epoch(0)].into_iter().collect(),
+            min_active_epoch: Epoch(0),
+            max_active_epoch: Epoch(0),
             balance,
             application_permissions: ApplicationPermissions::default(),
         };
