@@ -128,12 +128,12 @@ impl Operation for WriteToFile {
 /// Checks that a WIT file has the expected contents.
 pub struct CheckFile;
 
-struct FileComparer {
+struct FileComparator {
     buffer: Vec<u8>,
     file: BufReader<File>,
 }
 
-impl FileComparer {
+impl FileComparator {
     fn new(file: File) -> Self {
         Self {
             buffer: Vec::new(),
@@ -142,7 +142,7 @@ impl FileComparer {
     }
 }
 
-impl Write for FileComparer {
+impl Write for FileComparator {
     fn write(&mut self, part: &[u8]) -> std::io::Result<usize> {
         self.buffer.resize(part.len(), 0);
         self.file.read_exact(&mut self.buffer)?;
@@ -163,7 +163,7 @@ impl Write for FileComparer {
 
 impl Operation for CheckFile {
     fn run_for_file(&mut self, path: &Path, generator: impl FileContentGenerator) -> Result<()> {
-        let mut file_comparer = FileComparer::new(
+        let mut file_comparer = FileComparator::new(
             File::open(path)
                 .with_context(|| format!("Failed to open file at {}", path.display()))?,
         );
