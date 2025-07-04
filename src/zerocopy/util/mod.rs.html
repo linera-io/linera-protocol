@@ -1,0 +1,835 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerocopy-0.8.25/src/util/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">zerocopy/util/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright 2023 The Fuchsia Authors
+<a href=#2 id=2 data-nosnippet>2</a>//
+<a href=#3 id=3 data-nosnippet>3</a>// Licensed under a BSD-style license &lt;LICENSE-BSD&gt;, Apache License, Version 2.0
+<a href=#4 id=4 data-nosnippet>4</a>// &lt;LICENSE-APACHE or https://www.apache.org/licenses/LICENSE-2.0&gt;, or the MIT
+<a href=#5 id=5 data-nosnippet>5</a>// license &lt;LICENSE-MIT or https://opensource.org/licenses/MIT&gt;, at your option.
+<a href=#6 id=6 data-nosnippet>6</a>// This file may not be copied, modified, or distributed except according to
+<a href=#7 id=7 data-nosnippet>7</a>// those terms.
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="attr">#[macro_use]
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>macros;
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="attr">#[doc(hidden)]
+<a href=#13 id=13 data-nosnippet>13</a></span><span class="kw">pub mod </span>macro_util;
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>core::{
+<a href=#16 id=16 data-nosnippet>16</a>    marker::PhantomData,
+<a href=#17 id=17 data-nosnippet>17</a>    mem::{<span class="self">self</span>, ManuallyDrop},
+<a href=#18 id=18 data-nosnippet>18</a>    num::NonZeroUsize,
+<a href=#19 id=19 data-nosnippet>19</a>    ptr::NonNull,
+<a href=#20 id=20 data-nosnippet>20</a>};
+<a href=#21 id=21 data-nosnippet>21</a>
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// Like [`PhantomData`], but [`Send`] and [`Sync`] regardless of whether the
+<a href=#25 id=25 data-nosnippet>25</a>/// wrapped `T` is.
+<a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>SendSyncPhantomData&lt;T: <span class="question-mark">?</span>Sized&gt;(PhantomData&lt;T&gt;);
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="comment">// SAFETY: `SendSyncPhantomData` does not enable any behavior which isn't sound
+<a href=#29 id=29 data-nosnippet>29</a>// to be called from multiple threads.
+<a href=#30 id=30 data-nosnippet>30</a></span><span class="kw">unsafe impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Send <span class="kw">for </span>SendSyncPhantomData&lt;T&gt; {}
+<a href=#31 id=31 data-nosnippet>31</a><span class="comment">// SAFETY: `SendSyncPhantomData` does not enable any behavior which isn't sound
+<a href=#32 id=32 data-nosnippet>32</a>// to be called from multiple threads.
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">unsafe impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Sync <span class="kw">for </span>SendSyncPhantomData&lt;T&gt; {}
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Default <span class="kw">for </span>SendSyncPhantomData&lt;T&gt; {
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="kw">fn </span>default() -&gt; SendSyncPhantomData&lt;T&gt; {
+<a href=#37 id=37 data-nosnippet>37</a>        SendSyncPhantomData(PhantomData)
+<a href=#38 id=38 data-nosnippet>38</a>    }
+<a href=#39 id=39 data-nosnippet>39</a>}
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; PartialEq <span class="kw">for </span>SendSyncPhantomData&lt;T&gt; {
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+<a href=#43 id=43 data-nosnippet>43</a>        <span class="self">self</span>.<span class="number">0</span>.eq(<span class="kw-2">&amp;</span>other.<span class="number">0</span>)
+<a href=#44 id=44 data-nosnippet>44</a>    }
+<a href=#45 id=45 data-nosnippet>45</a>}
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Eq <span class="kw">for </span>SendSyncPhantomData&lt;T&gt; {}
+<a href=#48 id=48 data-nosnippet>48</a>
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">trait </span>AsAddress {
+<a href=#50 id=50 data-nosnippet>50</a>    <span class="kw">fn </span>addr(<span class="self">self</span>) -&gt; usize;
+<a href=#51 id=51 data-nosnippet>51</a>}
+<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; AsAddress <span class="kw">for </span><span class="kw-2">&amp;</span>T {
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="attr">#[inline(always)]
+<a href=#55 id=55 data-nosnippet>55</a>    </span><span class="kw">fn </span>addr(<span class="self">self</span>) -&gt; usize {
+<a href=#56 id=56 data-nosnippet>56</a>        <span class="kw">let </span>ptr: <span class="kw-2">*const </span>T = <span class="self">self</span>;
+<a href=#57 id=57 data-nosnippet>57</a>        AsAddress::addr(ptr)
+<a href=#58 id=58 data-nosnippet>58</a>    }
+<a href=#59 id=59 data-nosnippet>59</a>}
+<a href=#60 id=60 data-nosnippet>60</a>
+<a href=#61 id=61 data-nosnippet>61</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; AsAddress <span class="kw">for </span><span class="kw-2">&amp;mut </span>T {
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="attr">#[inline(always)]
+<a href=#63 id=63 data-nosnippet>63</a>    </span><span class="kw">fn </span>addr(<span class="self">self</span>) -&gt; usize {
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="kw">let </span>ptr: <span class="kw-2">*const </span>T = <span class="self">self</span>;
+<a href=#65 id=65 data-nosnippet>65</a>        AsAddress::addr(ptr)
+<a href=#66 id=66 data-nosnippet>66</a>    }
+<a href=#67 id=67 data-nosnippet>67</a>}
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; AsAddress <span class="kw">for </span>NonNull&lt;T&gt; {
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="attr">#[inline(always)]
+<a href=#71 id=71 data-nosnippet>71</a>    </span><span class="kw">fn </span>addr(<span class="self">self</span>) -&gt; usize {
+<a href=#72 id=72 data-nosnippet>72</a>        AsAddress::addr(<span class="self">self</span>.as_ptr())
+<a href=#73 id=73 data-nosnippet>73</a>    }
+<a href=#74 id=74 data-nosnippet>74</a>}
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; AsAddress <span class="kw">for </span><span class="kw-2">*const </span>T {
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="attr">#[inline(always)]
+<a href=#78 id=78 data-nosnippet>78</a>    </span><span class="kw">fn </span>addr(<span class="self">self</span>) -&gt; usize {
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="comment">// FIXME(#181), FIXME(https://github.com/rust-lang/rust/issues/95228):
+<a href=#80 id=80 data-nosnippet>80</a>        // Use `.addr()` instead of `as usize` once it's stable, and get rid of
+<a href=#81 id=81 data-nosnippet>81</a>        // this `allow`. Currently, `as usize` is the only way to accomplish
+<a href=#82 id=82 data-nosnippet>82</a>        // this.
+<a href=#83 id=83 data-nosnippet>83</a>        </span><span class="attr">#[allow(clippy::as_conversions)]
+<a href=#84 id=84 data-nosnippet>84</a>        #[cfg_attr(
+<a href=#85 id=85 data-nosnippet>85</a>            __ZEROCOPY_INTERNAL_USE_ONLY_NIGHTLY_FEATURES_IN_TESTS,
+<a href=#86 id=86 data-nosnippet>86</a>            allow(lossy_provenance_casts)
+<a href=#87 id=87 data-nosnippet>87</a>        )]
+<a href=#88 id=88 data-nosnippet>88</a>        </span><span class="kw">return </span><span class="self">self</span>.cast::&lt;()&gt;() <span class="kw">as </span>usize;
+<a href=#89 id=89 data-nosnippet>89</a>    }
+<a href=#90 id=90 data-nosnippet>90</a>}
+<a href=#91 id=91 data-nosnippet>91</a>
+<a href=#92 id=92 data-nosnippet>92</a><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; AsAddress <span class="kw">for </span><span class="kw-2">*mut </span>T {
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="attr">#[inline(always)]
+<a href=#94 id=94 data-nosnippet>94</a>    </span><span class="kw">fn </span>addr(<span class="self">self</span>) -&gt; usize {
+<a href=#95 id=95 data-nosnippet>95</a>        <span class="kw">let </span>ptr: <span class="kw-2">*const </span>T = <span class="self">self</span>;
+<a href=#96 id=96 data-nosnippet>96</a>        AsAddress::addr(ptr)
+<a href=#97 id=97 data-nosnippet>97</a>    }
+<a href=#98 id=98 data-nosnippet>98</a>}
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a><span class="doccomment">/// Validates that `t` is aligned to `align_of::&lt;U&gt;()`.
+<a href=#101 id=101 data-nosnippet>101</a></span><span class="attr">#[inline(always)]
+<a href=#102 id=102 data-nosnippet>102</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>validate_aligned_to&lt;T: AsAddress, U&gt;(t: T) -&gt; <span class="prelude-ty">Result</span>&lt;(), AlignmentError&lt;(), U&gt;&gt; {
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="comment">// `mem::align_of::&lt;U&gt;()` is guaranteed to return a non-zero value, which in
+<a href=#104 id=104 data-nosnippet>104</a>    // turn guarantees that this mod operation will not panic.
+<a href=#105 id=105 data-nosnippet>105</a>    </span><span class="attr">#[allow(clippy::arithmetic_side_effects)]
+<a href=#106 id=106 data-nosnippet>106</a>    </span><span class="kw">let </span>remainder = t.addr() % mem::align_of::&lt;U&gt;();
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">if </span>remainder == <span class="number">0 </span>{
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="prelude-val">Ok</span>(())
+<a href=#109 id=109 data-nosnippet>109</a>    } <span class="kw">else </span>{
+<a href=#110 id=110 data-nosnippet>110</a>        <span class="comment">// SAFETY: We just confirmed that `t.addr() % align_of::&lt;U&gt;() != 0`.
+<a href=#111 id=111 data-nosnippet>111</a>        // That's only possible if `align_of::&lt;U&gt;() &gt; 1`.
+<a href=#112 id=112 data-nosnippet>112</a>        </span><span class="prelude-val">Err</span>(<span class="kw">unsafe </span>{ AlignmentError::new_unchecked(()) })
+<a href=#113 id=113 data-nosnippet>113</a>    }
+<a href=#114 id=114 data-nosnippet>114</a>}
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a><span class="doccomment">/// Returns the bytes needed to pad `len` to the next multiple of `align`.
+<a href=#117 id=117 data-nosnippet>117</a>///
+<a href=#118 id=118 data-nosnippet>118</a>/// This function assumes that align is a power of two; there are no guarantees
+<a href=#119 id=119 data-nosnippet>119</a>/// on the answer it gives if this is not the case.
+<a href=#120 id=120 data-nosnippet>120</a></span><span class="attr">#[cfg_attr(
+<a href=#121 id=121 data-nosnippet>121</a>    kani,
+<a href=#122 id=122 data-nosnippet>122</a>    kani::requires(len &lt;= isize::MAX <span class="kw">as </span>usize),
+<a href=#123 id=123 data-nosnippet>123</a>    kani::requires(align.is_power_of_two()),
+<a href=#124 id=124 data-nosnippet>124</a>    kani::ensures(|<span class="kw-2">&amp;</span>p| (len + p) % align.get() == <span class="number">0</span>),
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="comment">// Ensures that we add the minimum required padding.
+<a href=#126 id=126 data-nosnippet>126</a>    </span>kani::ensures(|<span class="kw-2">&amp;</span>p| p &lt; align.get()),
+<a href=#127 id=127 data-nosnippet>127</a>)]
+<a href=#128 id=128 data-nosnippet>128</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const fn </span>padding_needed_for(len: usize, align: NonZeroUsize) -&gt; usize {
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="attr">#[cfg(kani)]
+<a href=#130 id=130 data-nosnippet>130</a>    #[kani::proof_for_contract(padding_needed_for)]
+<a href=#131 id=131 data-nosnippet>131</a>    </span><span class="kw">fn </span>proof() {
+<a href=#132 id=132 data-nosnippet>132</a>        padding_needed_for(kani::any(), kani::any());
+<a href=#133 id=133 data-nosnippet>133</a>    }
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="comment">// Abstractly, we want to compute:
+<a href=#136 id=136 data-nosnippet>136</a>    //   align - (len % align).
+<a href=#137 id=137 data-nosnippet>137</a>    // Handling the case where len%align is 0.
+<a href=#138 id=138 data-nosnippet>138</a>    // Because align is a power of two, len % align = len &amp; (align-1).
+<a href=#139 id=139 data-nosnippet>139</a>    // Guaranteed not to underflow as align is nonzero.
+<a href=#140 id=140 data-nosnippet>140</a>    </span><span class="attr">#[allow(clippy::arithmetic_side_effects)]
+<a href=#141 id=141 data-nosnippet>141</a>    </span><span class="kw">let </span>mask = align.get() - <span class="number">1</span>;
+<a href=#142 id=142 data-nosnippet>142</a>
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="comment">// To efficiently subtract this value from align, we can use the bitwise complement.
+<a href=#144 id=144 data-nosnippet>144</a>    // Note that ((!len) &amp; (align-1)) gives us a number that with (len &amp;
+<a href=#145 id=145 data-nosnippet>145</a>    // (align-1)) sums to align-1. So subtracting 1 from x before taking the
+<a href=#146 id=146 data-nosnippet>146</a>    // complement subtracts `len` from `align`. Some quick inspection of
+<a href=#147 id=147 data-nosnippet>147</a>    // cases shows that this also handles the case where `len % align = 0`
+<a href=#148 id=148 data-nosnippet>148</a>    // correctly too: len-1 % align then equals align-1, so the complement mod
+<a href=#149 id=149 data-nosnippet>149</a>    // align will be 0, as desired.
+<a href=#150 id=150 data-nosnippet>150</a>    //
+<a href=#151 id=151 data-nosnippet>151</a>    // The following reasoning can be verified quickly by an SMT solver
+<a href=#152 id=152 data-nosnippet>152</a>    // supporting the theory of bitvectors:
+<a href=#153 id=153 data-nosnippet>153</a>    // ```smtlib
+<a href=#154 id=154 data-nosnippet>154</a>    // ; Naive implementation of padding
+<a href=#155 id=155 data-nosnippet>155</a>    // (define-fun padding1 (
+<a href=#156 id=156 data-nosnippet>156</a>    //     (len (_ BitVec 32))
+<a href=#157 id=157 data-nosnippet>157</a>    //     (align (_ BitVec 32))) (_ BitVec 32)
+<a href=#158 id=158 data-nosnippet>158</a>    //    (ite
+<a href=#159 id=159 data-nosnippet>159</a>    //      (= (_ bv0 32) (bvand len (bvsub align (_ bv1 32))))
+<a href=#160 id=160 data-nosnippet>160</a>    //      (_ bv0 32)
+<a href=#161 id=161 data-nosnippet>161</a>    //      (bvsub align (bvand len (bvsub align (_ bv1 32))))))
+<a href=#162 id=162 data-nosnippet>162</a>    //
+<a href=#163 id=163 data-nosnippet>163</a>    // ; The implementation below
+<a href=#164 id=164 data-nosnippet>164</a>    // (define-fun padding2 (
+<a href=#165 id=165 data-nosnippet>165</a>    //     (len (_ BitVec 32))
+<a href=#166 id=166 data-nosnippet>166</a>    //     (align (_ BitVec 32))) (_ BitVec 32)
+<a href=#167 id=167 data-nosnippet>167</a>    // (bvand (bvnot (bvsub len (_ bv1 32))) (bvsub align (_ bv1 32))))
+<a href=#168 id=168 data-nosnippet>168</a>    //
+<a href=#169 id=169 data-nosnippet>169</a>    // (define-fun is-power-of-two ((x (_ BitVec 32))) Bool
+<a href=#170 id=170 data-nosnippet>170</a>    //   (= (_ bv0 32) (bvand x (bvsub x (_ bv1 32)))))
+<a href=#171 id=171 data-nosnippet>171</a>    //
+<a href=#172 id=172 data-nosnippet>172</a>    // (declare-const len (_ BitVec 32))
+<a href=#173 id=173 data-nosnippet>173</a>    // (declare-const align (_ BitVec 32))
+<a href=#174 id=174 data-nosnippet>174</a>    // ; Search for a case where align is a power of two and padding2 disagrees with padding1
+<a href=#175 id=175 data-nosnippet>175</a>    // (assert (and (is-power-of-two align)
+<a href=#176 id=176 data-nosnippet>176</a>    //              (not (= (padding1 len align) (padding2 len align)))))
+<a href=#177 id=177 data-nosnippet>177</a>    // (simplify (padding1 (_ bv300 32) (_ bv32 32))) ; 20
+<a href=#178 id=178 data-nosnippet>178</a>    // (simplify (padding2 (_ bv300 32) (_ bv32 32))) ; 20
+<a href=#179 id=179 data-nosnippet>179</a>    // (simplify (padding1 (_ bv322 32) (_ bv32 32))) ; 30
+<a href=#180 id=180 data-nosnippet>180</a>    // (simplify (padding2 (_ bv322 32) (_ bv32 32))) ; 30
+<a href=#181 id=181 data-nosnippet>181</a>    // (simplify (padding1 (_ bv8 32) (_ bv8 32)))    ; 0
+<a href=#182 id=182 data-nosnippet>182</a>    // (simplify (padding2 (_ bv8 32) (_ bv8 32)))    ; 0
+<a href=#183 id=183 data-nosnippet>183</a>    // (check-sat) ; unsat, also works for 64-bit bitvectors
+<a href=#184 id=184 data-nosnippet>184</a>    // ```
+<a href=#185 id=185 data-nosnippet>185</a>    </span>!(len.wrapping_sub(<span class="number">1</span>)) &amp; mask
+<a href=#186 id=186 data-nosnippet>186</a>}
+<a href=#187 id=187 data-nosnippet>187</a>
+<a href=#188 id=188 data-nosnippet>188</a><span class="doccomment">/// Rounds `n` down to the largest value `m` such that `m &lt;= n` and `m % align
+<a href=#189 id=189 data-nosnippet>189</a>/// == 0`.
+<a href=#190 id=190 data-nosnippet>190</a>///
+<a href=#191 id=191 data-nosnippet>191</a>/// # Panics
+<a href=#192 id=192 data-nosnippet>192</a>///
+<a href=#193 id=193 data-nosnippet>193</a>/// May panic if `align` is not a power of two. Even if it doesn't panic in this
+<a href=#194 id=194 data-nosnippet>194</a>/// case, it will produce nonsense results.
+<a href=#195 id=195 data-nosnippet>195</a></span><span class="attr">#[inline(always)]
+<a href=#196 id=196 data-nosnippet>196</a>#[cfg_attr(
+<a href=#197 id=197 data-nosnippet>197</a>    kani,
+<a href=#198 id=198 data-nosnippet>198</a>    kani::requires(align.is_power_of_two()),
+<a href=#199 id=199 data-nosnippet>199</a>    kani::ensures(|<span class="kw-2">&amp;</span>m| m &lt;= n &amp;&amp; m % align.get() == <span class="number">0</span>),
+<a href=#200 id=200 data-nosnippet>200</a>    <span class="comment">// Guarantees that `m` is the *largest* value such that `m % align == 0`.
+<a href=#201 id=201 data-nosnippet>201</a>    </span>kani::ensures(|<span class="kw-2">&amp;</span>m| {
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="comment">// If this `checked_add` fails, then the next multiple would wrap
+<a href=#203 id=203 data-nosnippet>203</a>        // around, which trivially satisfies the "largest value" requirement.
+<a href=#204 id=204 data-nosnippet>204</a>        </span>m.checked_add(align.get()).map(|next_mul| next_mul &gt; n).unwrap_or(<span class="bool-val">true</span>)
+<a href=#205 id=205 data-nosnippet>205</a>    })
+<a href=#206 id=206 data-nosnippet>206</a>)]
+<a href=#207 id=207 data-nosnippet>207</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const fn </span>round_down_to_next_multiple_of_alignment(
+<a href=#208 id=208 data-nosnippet>208</a>    n: usize,
+<a href=#209 id=209 data-nosnippet>209</a>    align: NonZeroUsize,
+<a href=#210 id=210 data-nosnippet>210</a>) -&gt; usize {
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="attr">#[cfg(kani)]
+<a href=#212 id=212 data-nosnippet>212</a>    #[kani::proof_for_contract(round_down_to_next_multiple_of_alignment)]
+<a href=#213 id=213 data-nosnippet>213</a>    </span><span class="kw">fn </span>proof() {
+<a href=#214 id=214 data-nosnippet>214</a>        round_down_to_next_multiple_of_alignment(kani::any(), kani::any());
+<a href=#215 id=215 data-nosnippet>215</a>    }
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>    <span class="kw">let </span>align = align.get();
+<a href=#218 id=218 data-nosnippet>218</a>    <span class="attr">#[cfg(zerocopy_panic_in_const_and_vec_try_reserve_1_57_0)]
+<a href=#219 id=219 data-nosnippet>219</a>    </span><span class="macro">debug_assert!</span>(align.is_power_of_two());
+<a href=#220 id=220 data-nosnippet>220</a>
+<a href=#221 id=221 data-nosnippet>221</a>    <span class="comment">// Subtraction can't underflow because `align.get() &gt;= 1`.
+<a href=#222 id=222 data-nosnippet>222</a>    </span><span class="attr">#[allow(clippy::arithmetic_side_effects)]
+<a href=#223 id=223 data-nosnippet>223</a>    </span><span class="kw">let </span>mask = !(align - <span class="number">1</span>);
+<a href=#224 id=224 data-nosnippet>224</a>    n &amp; mask
+<a href=#225 id=225 data-nosnippet>225</a>}
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const fn </span>max(a: NonZeroUsize, b: NonZeroUsize) -&gt; NonZeroUsize {
+<a href=#228 id=228 data-nosnippet>228</a>    <span class="kw">if </span>a.get() &lt; b.get() {
+<a href=#229 id=229 data-nosnippet>229</a>        b
+<a href=#230 id=230 data-nosnippet>230</a>    } <span class="kw">else </span>{
+<a href=#231 id=231 data-nosnippet>231</a>        a
+<a href=#232 id=232 data-nosnippet>232</a>    }
+<a href=#233 id=233 data-nosnippet>233</a>}
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const fn </span>min(a: NonZeroUsize, b: NonZeroUsize) -&gt; NonZeroUsize {
+<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">if </span>a.get() &gt; b.get() {
+<a href=#237 id=237 data-nosnippet>237</a>        b
+<a href=#238 id=238 data-nosnippet>238</a>    } <span class="kw">else </span>{
+<a href=#239 id=239 data-nosnippet>239</a>        a
+<a href=#240 id=240 data-nosnippet>240</a>    }
+<a href=#241 id=241 data-nosnippet>241</a>}
+<a href=#242 id=242 data-nosnippet>242</a>
+<a href=#243 id=243 data-nosnippet>243</a><span class="doccomment">/// Copies `src` into the prefix of `dst`.
+<a href=#244 id=244 data-nosnippet>244</a>///
+<a href=#245 id=245 data-nosnippet>245</a>/// # Safety
+<a href=#246 id=246 data-nosnippet>246</a>///
+<a href=#247 id=247 data-nosnippet>247</a>/// The caller guarantees that `src.len() &lt;= dst.len()`.
+<a href=#248 id=248 data-nosnippet>248</a></span><span class="attr">#[inline(always)]
+<a href=#249 id=249 data-nosnippet>249</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>copy_unchecked(src: <span class="kw-2">&amp;</span>[u8], dst: <span class="kw-2">&amp;mut </span>[u8]) {
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="macro">debug_assert!</span>(src.len() &lt;= dst.len());
+<a href=#251 id=251 data-nosnippet>251</a>    <span class="comment">// SAFETY: This invocation satisfies the safety contract of
+<a href=#252 id=252 data-nosnippet>252</a>    // copy_nonoverlapping [1]:
+<a href=#253 id=253 data-nosnippet>253</a>    // - `src.as_ptr()` is trivially valid for reads of `src.len()` bytes
+<a href=#254 id=254 data-nosnippet>254</a>    // - `dst.as_ptr()` is valid for writes of `src.len()` bytes, because the
+<a href=#255 id=255 data-nosnippet>255</a>    //   caller has promised that `src.len() &lt;= dst.len()`
+<a href=#256 id=256 data-nosnippet>256</a>    // - `src` and `dst` are, trivially, properly aligned
+<a href=#257 id=257 data-nosnippet>257</a>    // - the region of memory beginning at `src` with a size of `src.len()`
+<a href=#258 id=258 data-nosnippet>258</a>    //   bytes does not overlap with the region of memory beginning at `dst`
+<a href=#259 id=259 data-nosnippet>259</a>    //   with the same size, because `dst` is derived from an exclusive
+<a href=#260 id=260 data-nosnippet>260</a>    //   reference.
+<a href=#261 id=261 data-nosnippet>261</a>    </span><span class="kw">unsafe </span>{
+<a href=#262 id=262 data-nosnippet>262</a>        core::ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), src.len());
+<a href=#263 id=263 data-nosnippet>263</a>    };
+<a href=#264 id=264 data-nosnippet>264</a>}
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a><span class="doccomment">/// Unsafely transmutes the given `src` into a type `Dst`.
+<a href=#267 id=267 data-nosnippet>267</a>///
+<a href=#268 id=268 data-nosnippet>268</a>/// # Safety
+<a href=#269 id=269 data-nosnippet>269</a>///
+<a href=#270 id=270 data-nosnippet>270</a>/// The value `src` must be a valid instance of `Dst`.
+<a href=#271 id=271 data-nosnippet>271</a></span><span class="attr">#[inline(always)]
+<a href=#272 id=272 data-nosnippet>272</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const unsafe fn </span>transmute_unchecked&lt;Src, Dst&gt;(src: Src) -&gt; Dst {
+<a href=#273 id=273 data-nosnippet>273</a>    <span class="macro">static_assert!</span>(Src, Dst =&gt; core::mem::size_of::&lt;Src&gt;() == core::mem::size_of::&lt;Dst&gt;());
+<a href=#274 id=274 data-nosnippet>274</a>
+<a href=#275 id=275 data-nosnippet>275</a>    <span class="attr">#[repr(C)]
+<a href=#276 id=276 data-nosnippet>276</a>    </span><span class="kw">union </span>Transmute&lt;Src, Dst&gt; {
+<a href=#277 id=277 data-nosnippet>277</a>        src: ManuallyDrop&lt;Src&gt;,
+<a href=#278 id=278 data-nosnippet>278</a>        dst: ManuallyDrop&lt;Dst&gt;,
+<a href=#279 id=279 data-nosnippet>279</a>    }
+<a href=#280 id=280 data-nosnippet>280</a>
+<a href=#281 id=281 data-nosnippet>281</a>    <span class="comment">// SAFETY: Since `Transmute&lt;Src, Dst&gt;` is `#[repr(C)]`, its `src` and `dst`
+<a href=#282 id=282 data-nosnippet>282</a>    // fields both start at the same offset and the types of those fields are
+<a href=#283 id=283 data-nosnippet>283</a>    // transparent wrappers around `Src` and `Dst` [1]. Consequently,
+<a href=#284 id=284 data-nosnippet>284</a>    // initializng `Transmute` with with `src` and then reading out `dst` is
+<a href=#285 id=285 data-nosnippet>285</a>    // equivalent to transmuting from `Src` to `Dst` [2]. Transmuting from `src`
+<a href=#286 id=286 data-nosnippet>286</a>    // to `Dst` is valid because — by contract on the caller — `src` is a valid
+<a href=#287 id=287 data-nosnippet>287</a>    // instance of `Dst`.
+<a href=#288 id=288 data-nosnippet>288</a>    //
+<a href=#289 id=289 data-nosnippet>289</a>    // [1] Per https://doc.rust-lang.org/1.82.0/std/mem/struct.ManuallyDrop.html:
+<a href=#290 id=290 data-nosnippet>290</a>    //
+<a href=#291 id=291 data-nosnippet>291</a>    //     `ManuallyDrop&lt;T&gt;` is guaranteed to have the same layout and bit
+<a href=#292 id=292 data-nosnippet>292</a>    //     validity as `T`, and is subject to the same layout optimizations as
+<a href=#293 id=293 data-nosnippet>293</a>    //     `T`.
+<a href=#294 id=294 data-nosnippet>294</a>    //
+<a href=#295 id=295 data-nosnippet>295</a>    // [2] Per https://doc.rust-lang.org/1.82.0/reference/items/unions.html#reading-and-writing-union-fields:
+<a href=#296 id=296 data-nosnippet>296</a>    //
+<a href=#297 id=297 data-nosnippet>297</a>    //     Effectively, writing to and then reading from a union with the C
+<a href=#298 id=298 data-nosnippet>298</a>    //     representation is analogous to a transmute from the type used for
+<a href=#299 id=299 data-nosnippet>299</a>    //     writing to the type used for reading.
+<a href=#300 id=300 data-nosnippet>300</a>    </span><span class="kw">unsafe </span>{ ManuallyDrop::into_inner(Transmute { src: ManuallyDrop::new(src) }.dst) }
+<a href=#301 id=301 data-nosnippet>301</a>}
+<a href=#302 id=302 data-nosnippet>302</a>
+<a href=#303 id=303 data-nosnippet>303</a><span class="doccomment">/// Uses `allocate` to create a `Box&lt;T&gt;`.
+<a href=#304 id=304 data-nosnippet>304</a>///
+<a href=#305 id=305 data-nosnippet>305</a>/// # Errors
+<a href=#306 id=306 data-nosnippet>306</a>///
+<a href=#307 id=307 data-nosnippet>307</a>/// Returns an error on allocation failure. Allocation failure is guaranteed
+<a href=#308 id=308 data-nosnippet>308</a>/// never to cause a panic or an abort.
+<a href=#309 id=309 data-nosnippet>309</a>///
+<a href=#310 id=310 data-nosnippet>310</a>/// # Safety
+<a href=#311 id=311 data-nosnippet>311</a>///
+<a href=#312 id=312 data-nosnippet>312</a>/// `allocate` must be either `alloc::alloc::alloc` or
+<a href=#313 id=313 data-nosnippet>313</a>/// `alloc::alloc::alloc_zeroed`. The referent of the box returned by `new_box`
+<a href=#314 id=314 data-nosnippet>314</a>/// has the same bit-validity as the referent of the pointer returned by the
+<a href=#315 id=315 data-nosnippet>315</a>/// given `allocate` and sufficient size to store `T` with `meta`.
+<a href=#316 id=316 data-nosnippet>316</a></span><span class="attr">#[must_use = <span class="string">"has no side effects (other than allocation)"</span>]
+<a href=#317 id=317 data-nosnippet>317</a>#[cfg(feature = <span class="string">"alloc"</span>)]
+<a href=#318 id=318 data-nosnippet>318</a>#[inline]
+<a href=#319 id=319 data-nosnippet>319</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>new_box&lt;T&gt;(
+<a href=#320 id=320 data-nosnippet>320</a>    meta: T::PointerMetadata,
+<a href=#321 id=321 data-nosnippet>321</a>    allocate: <span class="kw">unsafe fn</span>(core::alloc::Layout) -&gt; <span class="kw-2">*mut </span>u8,
+<a href=#322 id=322 data-nosnippet>322</a>) -&gt; <span class="prelude-ty">Result</span>&lt;alloc::boxed::Box&lt;T&gt;, AllocError&gt;
+<a href=#323 id=323 data-nosnippet>323</a><span class="kw">where
+<a href=#324 id=324 data-nosnippet>324</a>    </span>T: <span class="question-mark">?</span>Sized + <span class="kw">crate</span>::KnownLayout,
+<a href=#325 id=325 data-nosnippet>325</a>{
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">let </span>size = <span class="kw">match </span>meta.size_for_metadata(T::LAYOUT) {
+<a href=#327 id=327 data-nosnippet>327</a>        <span class="prelude-val">Some</span>(size) =&gt; size,
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(AllocError),
+<a href=#329 id=329 data-nosnippet>329</a>    };
+<a href=#330 id=330 data-nosnippet>330</a>
+<a href=#331 id=331 data-nosnippet>331</a>    <span class="kw">let </span>align = T::LAYOUT.align.get();
+<a href=#332 id=332 data-nosnippet>332</a>    <span class="comment">// On stable Rust versions &lt;= 1.64.0, `Layout::from_size_align` has a bug in
+<a href=#333 id=333 data-nosnippet>333</a>    // which sufficiently-large allocations (those which, when rounded up to the
+<a href=#334 id=334 data-nosnippet>334</a>    // alignment, overflow `isize`) are not rejected, which can cause undefined
+<a href=#335 id=335 data-nosnippet>335</a>    // behavior. See #64 for details.
+<a href=#336 id=336 data-nosnippet>336</a>    //
+<a href=#337 id=337 data-nosnippet>337</a>    // FIXME(#67): Once our MSRV is &gt; 1.64.0, remove this assertion.
+<a href=#338 id=338 data-nosnippet>338</a>    </span><span class="attr">#[allow(clippy::as_conversions)]
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">let </span>max_alloc = (isize::MAX <span class="kw">as </span>usize).saturating_sub(align);
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">if </span>size &gt; max_alloc {
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(AllocError);
+<a href=#342 id=342 data-nosnippet>342</a>    }
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="comment">// FIXME(https://github.com/rust-lang/rust/issues/55724): Use
+<a href=#345 id=345 data-nosnippet>345</a>    // `Layout::repeat` once it's stabilized.
+<a href=#346 id=346 data-nosnippet>346</a>    </span><span class="kw">let </span>layout = Layout::from_size_align(size, align).or(<span class="prelude-val">Err</span>(AllocError))<span class="question-mark">?</span>;
+<a href=#347 id=347 data-nosnippet>347</a>
+<a href=#348 id=348 data-nosnippet>348</a>    <span class="kw">let </span>ptr = <span class="kw">if </span>layout.size() != <span class="number">0 </span>{
+<a href=#349 id=349 data-nosnippet>349</a>        <span class="comment">// SAFETY: By contract on the caller, `allocate` is either
+<a href=#350 id=350 data-nosnippet>350</a>        // `alloc::alloc::alloc` or `alloc::alloc::alloc_zeroed`. The above
+<a href=#351 id=351 data-nosnippet>351</a>        // check ensures their shared safety precondition: that the supplied
+<a href=#352 id=352 data-nosnippet>352</a>        // layout is not zero-sized type [1].
+<a href=#353 id=353 data-nosnippet>353</a>        //
+<a href=#354 id=354 data-nosnippet>354</a>        // [1] Per https://doc.rust-lang.org/stable/std/alloc/trait.GlobalAlloc.html#tymethod.alloc:
+<a href=#355 id=355 data-nosnippet>355</a>        //
+<a href=#356 id=356 data-nosnippet>356</a>        //     This function is unsafe because undefined behavior can result if
+<a href=#357 id=357 data-nosnippet>357</a>        //     the caller does not ensure that layout has non-zero size.
+<a href=#358 id=358 data-nosnippet>358</a>        </span><span class="kw">let </span>ptr = <span class="kw">unsafe </span>{ allocate(layout) };
+<a href=#359 id=359 data-nosnippet>359</a>        <span class="kw">match </span>NonNull::new(ptr) {
+<a href=#360 id=360 data-nosnippet>360</a>            <span class="prelude-val">Some</span>(ptr) =&gt; ptr,
+<a href=#361 id=361 data-nosnippet>361</a>            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(AllocError),
+<a href=#362 id=362 data-nosnippet>362</a>        }
+<a href=#363 id=363 data-nosnippet>363</a>    } <span class="kw">else </span>{
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="kw">let </span>align = T::LAYOUT.align.get();
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="comment">// We use `transmute` instead of an `as` cast since Miri (with strict
+<a href=#366 id=366 data-nosnippet>366</a>        // provenance enabled) notices and complains that an `as` cast creates a
+<a href=#367 id=367 data-nosnippet>367</a>        // pointer with no provenance. Miri isn't smart enough to realize that
+<a href=#368 id=368 data-nosnippet>368</a>        // we're only executing this branch when we're constructing a zero-sized
+<a href=#369 id=369 data-nosnippet>369</a>        // `Box`, which doesn't require provenance.
+<a href=#370 id=370 data-nosnippet>370</a>        //
+<a href=#371 id=371 data-nosnippet>371</a>        // SAFETY: any initialized bit sequence is a bit-valid `*mut u8`. All
+<a href=#372 id=372 data-nosnippet>372</a>        // bits of a `usize` are initialized.
+<a href=#373 id=373 data-nosnippet>373</a>        </span><span class="attr">#[allow(clippy::useless_transmute)]
+<a href=#374 id=374 data-nosnippet>374</a>        </span><span class="kw">let </span>dangling = <span class="kw">unsafe </span>{ mem::transmute::&lt;usize, <span class="kw-2">*mut </span>u8&gt;(align) };
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="comment">// SAFETY: `dangling` is constructed from `T::LAYOUT.align`, which is a
+<a href=#376 id=376 data-nosnippet>376</a>        // `NonZeroUsize`, which is guaranteed to be non-zero.
+<a href=#377 id=377 data-nosnippet>377</a>        //
+<a href=#378 id=378 data-nosnippet>378</a>        // `Box&lt;[T]&gt;` does not allocate when `T` is zero-sized or when `len` is
+<a href=#379 id=379 data-nosnippet>379</a>        // zero, but it does require a non-null dangling pointer for its
+<a href=#380 id=380 data-nosnippet>380</a>        // allocation.
+<a href=#381 id=381 data-nosnippet>381</a>        //
+<a href=#382 id=382 data-nosnippet>382</a>        // FIXME(https://github.com/rust-lang/rust/issues/95228): Use
+<a href=#383 id=383 data-nosnippet>383</a>        // `std::ptr::without_provenance` once it's stable. That may optimize
+<a href=#384 id=384 data-nosnippet>384</a>        // better. As written, Rust may assume that this consumes "exposed"
+<a href=#385 id=385 data-nosnippet>385</a>        // provenance, and thus Rust may have to assume that this may consume
+<a href=#386 id=386 data-nosnippet>386</a>        // provenance from any pointer whose provenance has been exposed.
+<a href=#387 id=387 data-nosnippet>387</a>        </span><span class="kw">unsafe </span>{ NonNull::new_unchecked(dangling) }
+<a href=#388 id=388 data-nosnippet>388</a>    };
+<a href=#389 id=389 data-nosnippet>389</a>
+<a href=#390 id=390 data-nosnippet>390</a>    <span class="kw">let </span>ptr = T::raw_from_ptr_len(ptr, meta);
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="comment">// FIXME(#429): Add a "SAFETY" comment and remove this `allow`. Make sure to
+<a href=#393 id=393 data-nosnippet>393</a>    // include a justification that `ptr.as_ptr()` is validly-aligned in the ZST
+<a href=#394 id=394 data-nosnippet>394</a>    // case (in which we manually construct a dangling pointer) and to justify
+<a href=#395 id=395 data-nosnippet>395</a>    // why `Box` is safe to drop (it's because `allocate` uses the system
+<a href=#396 id=396 data-nosnippet>396</a>    // allocator).
+<a href=#397 id=397 data-nosnippet>397</a>    </span><span class="attr">#[allow(clippy::undocumented_unsafe_blocks)]
+<a href=#398 id=398 data-nosnippet>398</a>    </span><span class="prelude-val">Ok</span>(<span class="kw">unsafe </span>{ alloc::boxed::Box::from_raw(ptr.as_ptr()) })
+<a href=#399 id=399 data-nosnippet>399</a>}
+<a href=#400 id=400 data-nosnippet>400</a>
+<a href=#401 id=401 data-nosnippet>401</a><span class="kw">mod </span>len_of {
+<a href=#402 id=402 data-nosnippet>402</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="doccomment">/// A witness type for metadata of a valid instance of `&amp;T`.
+<a href=#405 id=405 data-nosnippet>405</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>MetadataOf&lt;T: <span class="question-mark">?</span>Sized + KnownLayout&gt; {
+<a href=#406 id=406 data-nosnippet>406</a>        <span class="doccomment">/// # Safety
+<a href=#407 id=407 data-nosnippet>407</a>        ///
+<a href=#408 id=408 data-nosnippet>408</a>        /// The size of an instance of `&amp;T` with the given metadata is not
+<a href=#409 id=409 data-nosnippet>409</a>        /// larger than `isize::MAX`.
+<a href=#410 id=410 data-nosnippet>410</a>        </span>meta: T::PointerMetadata,
+<a href=#411 id=411 data-nosnippet>411</a>        _p: PhantomData&lt;T&gt;,
+<a href=#412 id=412 data-nosnippet>412</a>    }
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized + KnownLayout&gt; Copy <span class="kw">for </span>MetadataOf&lt;T&gt; {}
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized + KnownLayout&gt; Clone <span class="kw">for </span>MetadataOf&lt;T&gt; {
+<a href=#416 id=416 data-nosnippet>416</a>        <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#417 id=417 data-nosnippet>417</a>            <span class="kw-2">*</span><span class="self">self
+<a href=#418 id=418 data-nosnippet>418</a>        </span>}
+<a href=#419 id=419 data-nosnippet>419</a>    }
+<a href=#420 id=420 data-nosnippet>420</a>
+<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; MetadataOf&lt;T&gt;
+<a href=#422 id=422 data-nosnippet>422</a>    <span class="kw">where
+<a href=#423 id=423 data-nosnippet>423</a>        </span>T: KnownLayout,
+<a href=#424 id=424 data-nosnippet>424</a>    {
+<a href=#425 id=425 data-nosnippet>425</a>        <span class="doccomment">/// Returns `None` if `meta` is greater than `t`'s metadata.
+<a href=#426 id=426 data-nosnippet>426</a>        </span><span class="attr">#[inline(always)]
+<a href=#427 id=427 data-nosnippet>427</a>        </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_in_bounds(t: <span class="kw-2">&amp;</span>T, meta: usize) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;
+<a href=#428 id=428 data-nosnippet>428</a>        <span class="kw">where
+<a href=#429 id=429 data-nosnippet>429</a>            </span>T: KnownLayout&lt;PointerMetadata = usize&gt;,
+<a href=#430 id=430 data-nosnippet>430</a>        {
+<a href=#431 id=431 data-nosnippet>431</a>            <span class="kw">if </span>meta &lt;= Ptr::from_ref(t).len() {
+<a href=#432 id=432 data-nosnippet>432</a>                <span class="comment">// SAFETY: We have checked that `meta` is not greater than `t`'s
+<a href=#433 id=433 data-nosnippet>433</a>                // metadata, which, by invariant on `&amp;T`, addresses no more than
+<a href=#434 id=434 data-nosnippet>434</a>                // `isize::MAX` bytes [1][2].
+<a href=#435 id=435 data-nosnippet>435</a>                //
+<a href=#436 id=436 data-nosnippet>436</a>                // [1] Per https://doc.rust-lang.org/1.85.0/std/primitive.reference.html#safety:
+<a href=#437 id=437 data-nosnippet>437</a>                //
+<a href=#438 id=438 data-nosnippet>438</a>                //    For all types, `T: ?Sized`, and for all `t: &amp;T` or `t:
+<a href=#439 id=439 data-nosnippet>439</a>                //    &amp;mut T`, when such values cross an API boundary, the
+<a href=#440 id=440 data-nosnippet>440</a>                //    following invariants must generally be upheld:
+<a href=#441 id=441 data-nosnippet>441</a>                //
+<a href=#442 id=442 data-nosnippet>442</a>                //    * `t` is non-null
+<a href=#443 id=443 data-nosnippet>443</a>                //    * `t` is aligned to `align_of_val(t)`
+<a href=#444 id=444 data-nosnippet>444</a>                //    * if `size_of_val(t) &gt; 0`, then `t` is dereferenceable for
+<a href=#445 id=445 data-nosnippet>445</a>                //      `size_of_val(t)` many bytes
+<a href=#446 id=446 data-nosnippet>446</a>                //
+<a href=#447 id=447 data-nosnippet>447</a>                //    If `t` points at address `a`, being "dereferenceable" for
+<a href=#448 id=448 data-nosnippet>448</a>                //    N bytes means that the memory range `[a, a + N)` is all
+<a href=#449 id=449 data-nosnippet>449</a>                //    contained within a single allocated object.
+<a href=#450 id=450 data-nosnippet>450</a>                //
+<a href=#451 id=451 data-nosnippet>451</a>                // [2] Per https://doc.rust-lang.org/1.85.0/std/ptr/index.html#allocated-object:
+<a href=#452 id=452 data-nosnippet>452</a>                //
+<a href=#453 id=453 data-nosnippet>453</a>                //    For any allocated object with `base` address, `size`, and
+<a href=#454 id=454 data-nosnippet>454</a>                //    a set of `addresses`, the following are guaranteed:
+<a href=#455 id=455 data-nosnippet>455</a>                //    - For all addresses `a` in `addresses`, `a` is in the
+<a href=#456 id=456 data-nosnippet>456</a>                //      range `base .. (base + size)` (note that this requires
+<a href=#457 id=457 data-nosnippet>457</a>                //      `a &lt; base + size`, not `a &lt;= base + size`)
+<a href=#458 id=458 data-nosnippet>458</a>                //    - `base` is not equal to [`null()`] (i.e., the address
+<a href=#459 id=459 data-nosnippet>459</a>                //      with the numerical value 0)
+<a href=#460 id=460 data-nosnippet>460</a>                //    - `base + size &lt;= usize::MAX`
+<a href=#461 id=461 data-nosnippet>461</a>                //    - `size &lt;= isize::MAX`
+<a href=#462 id=462 data-nosnippet>462</a>                </span><span class="prelude-val">Some</span>(<span class="kw">unsafe </span>{ <span class="self">Self</span>::new_unchecked(meta) })
+<a href=#463 id=463 data-nosnippet>463</a>            } <span class="kw">else </span>{
+<a href=#464 id=464 data-nosnippet>464</a>                <span class="prelude-val">None
+<a href=#465 id=465 data-nosnippet>465</a>            </span>}
+<a href=#466 id=466 data-nosnippet>466</a>        }
+<a href=#467 id=467 data-nosnippet>467</a>
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="doccomment">/// # Safety
+<a href=#469 id=469 data-nosnippet>469</a>        ///
+<a href=#470 id=470 data-nosnippet>470</a>        /// The size of an instance of `&amp;T` with the given metadata is not
+<a href=#471 id=471 data-nosnippet>471</a>        /// larger than `isize::MAX`.
+<a href=#472 id=472 data-nosnippet>472</a>        </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>new_unchecked(meta: T::PointerMetadata) -&gt; <span class="self">Self </span>{
+<a href=#473 id=473 data-nosnippet>473</a>            <span class="comment">// SAFETY: The caller has promised that the size of an instance of
+<a href=#474 id=474 data-nosnippet>474</a>            // `&amp;T` with the given metadata is not larger than `isize::MAX`.
+<a href=#475 id=475 data-nosnippet>475</a>            </span><span class="self">Self </span>{ meta, _p: PhantomData }
+<a href=#476 id=476 data-nosnippet>476</a>        }
+<a href=#477 id=477 data-nosnippet>477</a>
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; T::PointerMetadata
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">where
+<a href=#480 id=480 data-nosnippet>480</a>            </span>T::PointerMetadata: Copy,
+<a href=#481 id=481 data-nosnippet>481</a>        {
+<a href=#482 id=482 data-nosnippet>482</a>            <span class="self">self</span>.meta
+<a href=#483 id=483 data-nosnippet>483</a>        }
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>        <span class="attr">#[inline]
+<a href=#486 id=486 data-nosnippet>486</a>        </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>padding_needed_for(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize
+<a href=#487 id=487 data-nosnippet>487</a>        <span class="kw">where
+<a href=#488 id=488 data-nosnippet>488</a>            </span>T: KnownLayout&lt;PointerMetadata = usize&gt;,
+<a href=#489 id=489 data-nosnippet>489</a>        {
+<a href=#490 id=490 data-nosnippet>490</a>            <span class="kw">let </span>trailing_slice_layout = <span class="kw">crate</span>::trailing_slice_layout::&lt;T&gt;();
+<a href=#491 id=491 data-nosnippet>491</a>            <span class="comment">// SAFETY: By invariant on `self`, a `&amp;T` with metadata `self.meta`
+<a href=#492 id=492 data-nosnippet>492</a>            // describes an object of size `&lt;= isize::MAX`. This computes the
+<a href=#493 id=493 data-nosnippet>493</a>            // size of such a `&amp;T` without any trailing padding, and so neither
+<a href=#494 id=494 data-nosnippet>494</a>            // the multiplication nor the addition will overflow.
+<a href=#495 id=495 data-nosnippet>495</a>            //
+<a href=#496 id=496 data-nosnippet>496</a>            // FIXME(#67): Remove this allow. See NumExt for more details.
+<a href=#497 id=497 data-nosnippet>497</a>            </span><span class="attr">#[allow(unstable_name_collisions, clippy::incompatible_msrv)]
+<a href=#498 id=498 data-nosnippet>498</a>            </span><span class="kw">let </span>unpadded_size = <span class="kw">unsafe </span>{
+<a href=#499 id=499 data-nosnippet>499</a>                <span class="kw">let </span>trailing_size = <span class="self">self</span>.meta.unchecked_mul(trailing_slice_layout.elem_size);
+<a href=#500 id=500 data-nosnippet>500</a>                trailing_size.unchecked_add(trailing_slice_layout.offset)
+<a href=#501 id=501 data-nosnippet>501</a>            };
+<a href=#502 id=502 data-nosnippet>502</a>
+<a href=#503 id=503 data-nosnippet>503</a>            util::padding_needed_for(unpadded_size, T::LAYOUT.align)
+<a href=#504 id=504 data-nosnippet>504</a>        }
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a>        <span class="attr">#[inline(always)]
+<a href=#507 id=507 data-nosnippet>507</a>        </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>validate_cast_and_convert_metadata(
+<a href=#508 id=508 data-nosnippet>508</a>            addr: usize,
+<a href=#509 id=509 data-nosnippet>509</a>            bytes_len: MetadataOf&lt;[u8]&gt;,
+<a href=#510 id=510 data-nosnippet>510</a>            cast_type: CastType,
+<a href=#511 id=511 data-nosnippet>511</a>            meta: <span class="prelude-ty">Option</span>&lt;T::PointerMetadata&gt;,
+<a href=#512 id=512 data-nosnippet>512</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;(MetadataOf&lt;T&gt;, MetadataOf&lt;[u8]&gt;), MetadataCastError&gt; {
+<a href=#513 id=513 data-nosnippet>513</a>            <span class="kw">let </span>layout = <span class="kw">match </span>meta {
+<a href=#514 id=514 data-nosnippet>514</a>                <span class="prelude-val">None </span>=&gt; T::LAYOUT,
+<a href=#515 id=515 data-nosnippet>515</a>                <span class="comment">// This can return `None` if the metadata describes an object
+<a href=#516 id=516 data-nosnippet>516</a>                // which can't fit in an `isize`.
+<a href=#517 id=517 data-nosnippet>517</a>                </span><span class="prelude-val">Some</span>(meta) =&gt; {
+<a href=#518 id=518 data-nosnippet>518</a>                    <span class="kw">let </span>size = <span class="kw">match </span>meta.size_for_metadata(T::LAYOUT) {
+<a href=#519 id=519 data-nosnippet>519</a>                        <span class="prelude-val">Some</span>(size) =&gt; size,
+<a href=#520 id=520 data-nosnippet>520</a>                        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(MetadataCastError::Size),
+<a href=#521 id=521 data-nosnippet>521</a>                    };
+<a href=#522 id=522 data-nosnippet>522</a>                    DstLayout { align: T::LAYOUT.align, size_info: <span class="kw">crate</span>::SizeInfo::Sized { size } }
+<a href=#523 id=523 data-nosnippet>523</a>                }
+<a href=#524 id=524 data-nosnippet>524</a>            };
+<a href=#525 id=525 data-nosnippet>525</a>            <span class="comment">// Lemma 0: By contract on `validate_cast_and_convert_metadata`, if
+<a href=#526 id=526 data-nosnippet>526</a>            // the result is `Ok(..)`, then a `&amp;T` with `elems` trailing slice
+<a href=#527 id=527 data-nosnippet>527</a>            // elements is no larger in size than `bytes_len.get()`.
+<a href=#528 id=528 data-nosnippet>528</a>            </span><span class="kw">let </span>(elems, split_at) =
+<a href=#529 id=529 data-nosnippet>529</a>                layout.validate_cast_and_convert_metadata(addr, bytes_len.get(), cast_type)<span class="question-mark">?</span>;
+<a href=#530 id=530 data-nosnippet>530</a>            <span class="kw">let </span>elems = T::PointerMetadata::from_elem_count(elems);
+<a href=#531 id=531 data-nosnippet>531</a>
+<a href=#532 id=532 data-nosnippet>532</a>            <span class="comment">// For a slice DST type, if `meta` is `Some(elems)`, then we
+<a href=#533 id=533 data-nosnippet>533</a>            // synthesize `layout` to describe a sized type whose size is equal
+<a href=#534 id=534 data-nosnippet>534</a>            // to the size of the instance that we are asked to cast. For sized
+<a href=#535 id=535 data-nosnippet>535</a>            // types, `validate_cast_and_convert_metadata` returns `elems == 0`.
+<a href=#536 id=536 data-nosnippet>536</a>            // Thus, in this case, we need to use the `elems` passed by the
+<a href=#537 id=537 data-nosnippet>537</a>            // caller, not the one returned by
+<a href=#538 id=538 data-nosnippet>538</a>            // `validate_cast_and_convert_metadata`.
+<a href=#539 id=539 data-nosnippet>539</a>            //
+<a href=#540 id=540 data-nosnippet>540</a>            // Lemma 1: A `&amp;T` with `elems` trailing slice elements is no larger
+<a href=#541 id=541 data-nosnippet>541</a>            // in size than `bytes_len.get()`. Proof:
+<a href=#542 id=542 data-nosnippet>542</a>            // - If `meta` is `None`, then `elems` satisfies this condition by
+<a href=#543 id=543 data-nosnippet>543</a>            //   Lemma 0.
+<a href=#544 id=544 data-nosnippet>544</a>            // - If `meta` is `Some(meta)`, then `layout` describes an object
+<a href=#545 id=545 data-nosnippet>545</a>            //   whose size is equal to the size of an `&amp;T` with `meta`
+<a href=#546 id=546 data-nosnippet>546</a>            //   metadata. By Lemma 0, that size is not larger than
+<a href=#547 id=547 data-nosnippet>547</a>            //   `bytes_len.get()`.
+<a href=#548 id=548 data-nosnippet>548</a>            //
+<a href=#549 id=549 data-nosnippet>549</a>            // Lemma 2: A `&amp;T` with `elems` trailing slice elements is no larger
+<a href=#550 id=550 data-nosnippet>550</a>            // than `isize::MAX` bytes. Proof: By Lemma 1, a `&amp;T` with metadata
+<a href=#551 id=551 data-nosnippet>551</a>            // `elems` is not larger in size than `bytes_len.get()`. By
+<a href=#552 id=552 data-nosnippet>552</a>            // invariant on `MetadataOf&lt;[u8]&gt;`, a `&amp;[u8]` with metadata
+<a href=#553 id=553 data-nosnippet>553</a>            // `bytes_len` is not larger than `isize::MAX`. Because
+<a href=#554 id=554 data-nosnippet>554</a>            // `size_of::&lt;u8&gt;()` is `1`, a `&amp;[u8]` with metadata `bytes_len` has
+<a href=#555 id=555 data-nosnippet>555</a>            // size `bytes_len.get()` bytes. Therefore, a `&amp;T` with metadata
+<a href=#556 id=556 data-nosnippet>556</a>            // `elems` has size not larger than `isize::MAX`.
+<a href=#557 id=557 data-nosnippet>557</a>            </span><span class="kw">let </span>elems = meta.unwrap_or(elems);
+<a href=#558 id=558 data-nosnippet>558</a>
+<a href=#559 id=559 data-nosnippet>559</a>            <span class="comment">// SAFETY: See Lemma 2.
+<a href=#560 id=560 data-nosnippet>560</a>            </span><span class="kw">let </span>elems = <span class="kw">unsafe </span>{ MetadataOf::new_unchecked(elems) };
+<a href=#561 id=561 data-nosnippet>561</a>
+<a href=#562 id=562 data-nosnippet>562</a>            <span class="comment">// SAFETY: Let `size` be the size of a `&amp;T` with metadata `elems`.
+<a href=#563 id=563 data-nosnippet>563</a>            // By post-condition on `validate_cast_and_convert_metadata`, one of
+<a href=#564 id=564 data-nosnippet>564</a>            // the following conditions holds:
+<a href=#565 id=565 data-nosnippet>565</a>            // - `split_at == size`, in which case, by Lemma 2, `split_at &lt;=
+<a href=#566 id=566 data-nosnippet>566</a>            //   isize::MAX`. Since `size_of::&lt;u8&gt;() == 1`, a `[u8]` with
+<a href=#567 id=567 data-nosnippet>567</a>            //   `split_at` elems has size not larger than `isize::MAX`.
+<a href=#568 id=568 data-nosnippet>568</a>            // - `split_at == bytes_len - size`. Since `bytes_len:
+<a href=#569 id=569 data-nosnippet>569</a>            //   MetadataOf&lt;u8&gt;`, and since `size` is non-negative, `split_at`
+<a href=#570 id=570 data-nosnippet>570</a>            //   addresses no more bytes than `bytes_len` does. Since
+<a href=#571 id=571 data-nosnippet>571</a>            //   `bytes_len: MetadataOf&lt;u8&gt;`, `bytes_len` describes a `[u8]`
+<a href=#572 id=572 data-nosnippet>572</a>            //   which has no more than `isize::MAX` bytes, and thus so does
+<a href=#573 id=573 data-nosnippet>573</a>            //   `split_at`.
+<a href=#574 id=574 data-nosnippet>574</a>            </span><span class="kw">let </span>split_at = <span class="kw">unsafe </span>{ MetadataOf::&lt;[u8]&gt;::new_unchecked(split_at) };
+<a href=#575 id=575 data-nosnippet>575</a>            <span class="prelude-val">Ok</span>((elems, split_at))
+<a href=#576 id=576 data-nosnippet>576</a>        }
+<a href=#577 id=577 data-nosnippet>577</a>    }
+<a href=#578 id=578 data-nosnippet>578</a>}
+<a href=#579 id=579 data-nosnippet>579</a>
+<a href=#580 id=580 data-nosnippet>580</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>len_of::MetadataOf;
+<a href=#581 id=581 data-nosnippet>581</a>
+<a href=#582 id=582 data-nosnippet>582</a><span class="doccomment">/// Since we support multiple versions of Rust, there are often features which
+<a href=#583 id=583 data-nosnippet>583</a>/// have been stabilized in the most recent stable release which do not yet
+<a href=#584 id=584 data-nosnippet>584</a>/// exist (stably) on our MSRV. This module provides polyfills for those
+<a href=#585 id=585 data-nosnippet>585</a>/// features so that we can write more "modern" code, and just remove the
+<a href=#586 id=586 data-nosnippet>586</a>/// polyfill once our MSRV supports the corresponding feature. Without this,
+<a href=#587 id=587 data-nosnippet>587</a>/// we'd have to write worse/more verbose code and leave FIXME comments sprinkled
+<a href=#588 id=588 data-nosnippet>588</a>/// throughout the codebase to update to the new pattern once it's stabilized.
+<a href=#589 id=589 data-nosnippet>589</a>///
+<a href=#590 id=590 data-nosnippet>590</a>/// Each trait is imported as `_` at the crate root; each polyfill should "just
+<a href=#591 id=591 data-nosnippet>591</a>/// work" at usage sites.
+<a href=#592 id=592 data-nosnippet>592</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>polyfills {
+<a href=#593 id=593 data-nosnippet>593</a>    <span class="kw">use </span>core::ptr::{<span class="self">self</span>, NonNull};
+<a href=#594 id=594 data-nosnippet>594</a>
+<a href=#595 id=595 data-nosnippet>595</a>    <span class="comment">// A polyfill for `NonNull::slice_from_raw_parts` that we can use before our
+<a href=#596 id=596 data-nosnippet>596</a>    // MSRV is 1.70, when that function was stabilized.
+<a href=#597 id=597 data-nosnippet>597</a>    //
+<a href=#598 id=598 data-nosnippet>598</a>    // The `#[allow(unused)]` is necessary because, on sufficiently recent
+<a href=#599 id=599 data-nosnippet>599</a>    // toolchain versions, `ptr.slice_from_raw_parts()` resolves to the inherent
+<a href=#600 id=600 data-nosnippet>600</a>    // method rather than to this trait, and so this trait is considered unused.
+<a href=#601 id=601 data-nosnippet>601</a>    //
+<a href=#602 id=602 data-nosnippet>602</a>    // FIXME(#67): Once our MSRV is 1.70, remove this.
+<a href=#603 id=603 data-nosnippet>603</a>    </span><span class="attr">#[allow(unused)]
+<a href=#604 id=604 data-nosnippet>604</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">trait </span>NonNullExt&lt;T&gt; {
+<a href=#605 id=605 data-nosnippet>605</a>        <span class="kw">fn </span>slice_from_raw_parts(data: <span class="self">Self</span>, len: usize) -&gt; NonNull&lt;[T]&gt;;
+<a href=#606 id=606 data-nosnippet>606</a>    }
+<a href=#607 id=607 data-nosnippet>607</a>
+<a href=#608 id=608 data-nosnippet>608</a>    <span class="kw">impl</span>&lt;T&gt; NonNullExt&lt;T&gt; <span class="kw">for </span>NonNull&lt;T&gt; {
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="comment">// NOTE on coverage: this will never be tested in nightly since it's a
+<a href=#610 id=610 data-nosnippet>610</a>        // polyfill for a feature which has been stabilized on our nightly
+<a href=#611 id=611 data-nosnippet>611</a>        // toolchain.
+<a href=#612 id=612 data-nosnippet>612</a>        </span><span class="attr">#[cfg_attr(
+<a href=#613 id=613 data-nosnippet>613</a>            all(coverage_nightly, __ZEROCOPY_INTERNAL_USE_ONLY_NIGHTLY_FEATURES_IN_TESTS),
+<a href=#614 id=614 data-nosnippet>614</a>            coverage(off)
+<a href=#615 id=615 data-nosnippet>615</a>        )]
+<a href=#616 id=616 data-nosnippet>616</a>        #[inline(always)]
+<a href=#617 id=617 data-nosnippet>617</a>        </span><span class="kw">fn </span>slice_from_raw_parts(data: <span class="self">Self</span>, len: usize) -&gt; NonNull&lt;[T]&gt; {
+<a href=#618 id=618 data-nosnippet>618</a>            <span class="kw">let </span>ptr = ptr::slice_from_raw_parts_mut(data.as_ptr(), len);
+<a href=#619 id=619 data-nosnippet>619</a>            <span class="comment">// SAFETY: `ptr` is converted from `data`, which is non-null.
+<a href=#620 id=620 data-nosnippet>620</a>            </span><span class="kw">unsafe </span>{ NonNull::new_unchecked(ptr) }
+<a href=#621 id=621 data-nosnippet>621</a>        }
+<a href=#622 id=622 data-nosnippet>622</a>    }
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a>    <span class="comment">// A polyfill for `Self::unchecked_sub` that we can use until methods like
+<a href=#625 id=625 data-nosnippet>625</a>    // `usize::unchecked_sub` is stabilized.
+<a href=#626 id=626 data-nosnippet>626</a>    //
+<a href=#627 id=627 data-nosnippet>627</a>    // The `#[allow(unused)]` is necessary because, on sufficiently recent
+<a href=#628 id=628 data-nosnippet>628</a>    // toolchain versions, `ptr.slice_from_raw_parts()` resolves to the inherent
+<a href=#629 id=629 data-nosnippet>629</a>    // method rather than to this trait, and so this trait is considered unused.
+<a href=#630 id=630 data-nosnippet>630</a>    //
+<a href=#631 id=631 data-nosnippet>631</a>    // FIXME(#67): Once our MSRV is high enough, remove this.
+<a href=#632 id=632 data-nosnippet>632</a>    </span><span class="attr">#[allow(unused)]
+<a href=#633 id=633 data-nosnippet>633</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">trait </span>NumExt {
+<a href=#634 id=634 data-nosnippet>634</a>        <span class="doccomment">/// Subtract without checking for underflow.
+<a href=#635 id=635 data-nosnippet>635</a>        ///
+<a href=#636 id=636 data-nosnippet>636</a>        /// # Safety
+<a href=#637 id=637 data-nosnippet>637</a>        ///
+<a href=#638 id=638 data-nosnippet>638</a>        /// The caller promises that the subtraction will not underflow.
+<a href=#639 id=639 data-nosnippet>639</a>        </span><span class="kw">unsafe fn </span>unchecked_sub(<span class="self">self</span>, rhs: <span class="self">Self</span>) -&gt; <span class="self">Self</span>;
+<a href=#640 id=640 data-nosnippet>640</a>
+<a href=#641 id=641 data-nosnippet>641</a>        <span class="doccomment">/// Add without checking for overflow.
+<a href=#642 id=642 data-nosnippet>642</a>        ///
+<a href=#643 id=643 data-nosnippet>643</a>        /// # Safety
+<a href=#644 id=644 data-nosnippet>644</a>        ///
+<a href=#645 id=645 data-nosnippet>645</a>        /// The caller promises that the addition will not overflow.
+<a href=#646 id=646 data-nosnippet>646</a>        </span><span class="kw">unsafe fn </span>unchecked_add(<span class="self">self</span>, rhs: <span class="self">Self</span>) -&gt; <span class="self">Self</span>;
+<a href=#647 id=647 data-nosnippet>647</a>
+<a href=#648 id=648 data-nosnippet>648</a>        <span class="doccomment">/// Multiply without checking for overflow.
+<a href=#649 id=649 data-nosnippet>649</a>        ///
+<a href=#650 id=650 data-nosnippet>650</a>        /// # Safety
+<a href=#651 id=651 data-nosnippet>651</a>        ///
+<a href=#652 id=652 data-nosnippet>652</a>        /// The caller promises that the multiplication will not overflow.
+<a href=#653 id=653 data-nosnippet>653</a>        </span><span class="kw">unsafe fn </span>unchecked_mul(<span class="self">self</span>, rhs: <span class="self">Self</span>) -&gt; <span class="self">Self</span>;
+<a href=#654 id=654 data-nosnippet>654</a>    }
+<a href=#655 id=655 data-nosnippet>655</a>
+<a href=#656 id=656 data-nosnippet>656</a>    <span class="kw">impl </span>NumExt <span class="kw">for </span>usize {
+<a href=#657 id=657 data-nosnippet>657</a>        <span class="comment">// NOTE on coverage: this will never be tested in nightly since it's a
+<a href=#658 id=658 data-nosnippet>658</a>        // polyfill for a feature which has been stabilized on our nightly
+<a href=#659 id=659 data-nosnippet>659</a>        // toolchain.
+<a href=#660 id=660 data-nosnippet>660</a>        </span><span class="attr">#[cfg_attr(
+<a href=#661 id=661 data-nosnippet>661</a>            all(coverage_nightly, __ZEROCOPY_INTERNAL_USE_ONLY_NIGHTLY_FEATURES_IN_TESTS),
+<a href=#662 id=662 data-nosnippet>662</a>            coverage(off)
+<a href=#663 id=663 data-nosnippet>663</a>        )]
+<a href=#664 id=664 data-nosnippet>664</a>        #[inline(always)]
+<a href=#665 id=665 data-nosnippet>665</a>        </span><span class="kw">unsafe fn </span>unchecked_sub(<span class="self">self</span>, rhs: usize) -&gt; usize {
+<a href=#666 id=666 data-nosnippet>666</a>            <span class="kw">match </span><span class="self">self</span>.checked_sub(rhs) {
+<a href=#667 id=667 data-nosnippet>667</a>                <span class="prelude-val">Some</span>(x) =&gt; x,
+<a href=#668 id=668 data-nosnippet>668</a>                <span class="prelude-val">None </span>=&gt; {
+<a href=#669 id=669 data-nosnippet>669</a>                    <span class="comment">// SAFETY: The caller promises that the subtraction will not
+<a href=#670 id=670 data-nosnippet>670</a>                    // underflow.
+<a href=#671 id=671 data-nosnippet>671</a>                    </span><span class="kw">unsafe </span>{ core::hint::unreachable_unchecked() }
+<a href=#672 id=672 data-nosnippet>672</a>                }
+<a href=#673 id=673 data-nosnippet>673</a>            }
+<a href=#674 id=674 data-nosnippet>674</a>        }
+<a href=#675 id=675 data-nosnippet>675</a>
+<a href=#676 id=676 data-nosnippet>676</a>        <span class="comment">// NOTE on coverage: this will never be tested in nightly since it's a
+<a href=#677 id=677 data-nosnippet>677</a>        // polyfill for a feature which has been stabilized on our nightly
+<a href=#678 id=678 data-nosnippet>678</a>        // toolchain.
+<a href=#679 id=679 data-nosnippet>679</a>        </span><span class="attr">#[cfg_attr(
+<a href=#680 id=680 data-nosnippet>680</a>            all(coverage_nightly, __ZEROCOPY_INTERNAL_USE_ONLY_NIGHTLY_FEATURES_IN_TESTS),
+<a href=#681 id=681 data-nosnippet>681</a>            coverage(off)
+<a href=#682 id=682 data-nosnippet>682</a>        )]
+<a href=#683 id=683 data-nosnippet>683</a>        #[inline(always)]
+<a href=#684 id=684 data-nosnippet>684</a>        </span><span class="kw">unsafe fn </span>unchecked_add(<span class="self">self</span>, rhs: usize) -&gt; usize {
+<a href=#685 id=685 data-nosnippet>685</a>            <span class="kw">match </span><span class="self">self</span>.checked_add(rhs) {
+<a href=#686 id=686 data-nosnippet>686</a>                <span class="prelude-val">Some</span>(x) =&gt; x,
+<a href=#687 id=687 data-nosnippet>687</a>                <span class="prelude-val">None </span>=&gt; {
+<a href=#688 id=688 data-nosnippet>688</a>                    <span class="comment">// SAFETY: The caller promises that the addition will not
+<a href=#689 id=689 data-nosnippet>689</a>                    // overflow.
+<a href=#690 id=690 data-nosnippet>690</a>                    </span><span class="kw">unsafe </span>{ core::hint::unreachable_unchecked() }
+<a href=#691 id=691 data-nosnippet>691</a>                }
+<a href=#692 id=692 data-nosnippet>692</a>            }
+<a href=#693 id=693 data-nosnippet>693</a>        }
+<a href=#694 id=694 data-nosnippet>694</a>
+<a href=#695 id=695 data-nosnippet>695</a>        <span class="comment">// NOTE on coverage: this will never be tested in nightly since it's a
+<a href=#696 id=696 data-nosnippet>696</a>        // polyfill for a feature which has been stabilized on our nightly
+<a href=#697 id=697 data-nosnippet>697</a>        // toolchain.
+<a href=#698 id=698 data-nosnippet>698</a>        </span><span class="attr">#[cfg_attr(
+<a href=#699 id=699 data-nosnippet>699</a>            all(coverage_nightly, __ZEROCOPY_INTERNAL_USE_ONLY_NIGHTLY_FEATURES_IN_TESTS),
+<a href=#700 id=700 data-nosnippet>700</a>            coverage(off)
+<a href=#701 id=701 data-nosnippet>701</a>        )]
+<a href=#702 id=702 data-nosnippet>702</a>        #[inline(always)]
+<a href=#703 id=703 data-nosnippet>703</a>        </span><span class="kw">unsafe fn </span>unchecked_mul(<span class="self">self</span>, rhs: usize) -&gt; usize {
+<a href=#704 id=704 data-nosnippet>704</a>            <span class="kw">match </span><span class="self">self</span>.checked_mul(rhs) {
+<a href=#705 id=705 data-nosnippet>705</a>                <span class="prelude-val">Some</span>(x) =&gt; x,
+<a href=#706 id=706 data-nosnippet>706</a>                <span class="prelude-val">None </span>=&gt; {
+<a href=#707 id=707 data-nosnippet>707</a>                    <span class="comment">// SAFETY: The caller promises that the multiplication will
+<a href=#708 id=708 data-nosnippet>708</a>                    // not overflow.
+<a href=#709 id=709 data-nosnippet>709</a>                    </span><span class="kw">unsafe </span>{ core::hint::unreachable_unchecked() }
+<a href=#710 id=710 data-nosnippet>710</a>                }
+<a href=#711 id=711 data-nosnippet>711</a>            }
+<a href=#712 id=712 data-nosnippet>712</a>        }
+<a href=#713 id=713 data-nosnippet>713</a>    }
+<a href=#714 id=714 data-nosnippet>714</a>}
+<a href=#715 id=715 data-nosnippet>715</a>
+<a href=#716 id=716 data-nosnippet>716</a><span class="attr">#[cfg(test)]
+<a href=#717 id=717 data-nosnippet>717</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>testutil {
+<a href=#718 id=718 data-nosnippet>718</a>    <span class="kw">use crate</span>::<span class="kw-2">*</span>;
+<a href=#719 id=719 data-nosnippet>719</a>
+<a href=#720 id=720 data-nosnippet>720</a>    <span class="doccomment">/// A `T` which is aligned to at least `align_of::&lt;A&gt;()`.
+<a href=#721 id=721 data-nosnippet>721</a>    </span><span class="attr">#[derive(Default)]
+<a href=#722 id=722 data-nosnippet>722</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Align&lt;T, A&gt; {
+<a href=#723 id=723 data-nosnippet>723</a>        <span class="kw">pub</span>(<span class="kw">crate</span>) t: T,
+<a href=#724 id=724 data-nosnippet>724</a>        _a: [A; <span class="number">0</span>],
+<a href=#725 id=725 data-nosnippet>725</a>    }
+<a href=#726 id=726 data-nosnippet>726</a>
+<a href=#727 id=727 data-nosnippet>727</a>    <span class="kw">impl</span>&lt;T: Default, A&gt; Align&lt;T, A&gt; {
+<a href=#728 id=728 data-nosnippet>728</a>        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>set_default(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#729 id=729 data-nosnippet>729</a>            <span class="self">self</span>.t = T::default();
+<a href=#730 id=730 data-nosnippet>730</a>        }
+<a href=#731 id=731 data-nosnippet>731</a>    }
+<a href=#732 id=732 data-nosnippet>732</a>
+<a href=#733 id=733 data-nosnippet>733</a>    <span class="kw">impl</span>&lt;T, A&gt; Align&lt;T, A&gt; {
+<a href=#734 id=734 data-nosnippet>734</a>        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const fn </span>new(t: T) -&gt; Align&lt;T, A&gt; {
+<a href=#735 id=735 data-nosnippet>735</a>            Align { t, _a: [] }
+<a href=#736 id=736 data-nosnippet>736</a>        }
+<a href=#737 id=737 data-nosnippet>737</a>    }
+<a href=#738 id=738 data-nosnippet>738</a>
+<a href=#739 id=739 data-nosnippet>739</a>    <span class="doccomment">/// A `T` which is guaranteed not to satisfy `align_of::&lt;A&gt;()`.
+<a href=#740 id=740 data-nosnippet>740</a>    ///
+<a href=#741 id=741 data-nosnippet>741</a>    /// It must be the case that `align_of::&lt;T&gt;() &lt; align_of::&lt;A&gt;()` in order
+<a href=#742 id=742 data-nosnippet>742</a>    /// fot this type to work properly.
+<a href=#743 id=743 data-nosnippet>743</a>    </span><span class="attr">#[repr(C)]
+<a href=#744 id=744 data-nosnippet>744</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ForceUnalign&lt;T: Unaligned, A&gt; {
+<a href=#745 id=745 data-nosnippet>745</a>        <span class="comment">// The outer struct is aligned to `A`, and, thanks to `repr(C)`, `t` is
+<a href=#746 id=746 data-nosnippet>746</a>        // placed at the minimum offset that guarantees its alignment. If
+<a href=#747 id=747 data-nosnippet>747</a>        // `align_of::&lt;T&gt;() &lt; align_of::&lt;A&gt;()`, then that offset will be
+<a href=#748 id=748 data-nosnippet>748</a>        // guaranteed *not* to satisfy `align_of::&lt;A&gt;()`.
+<a href=#749 id=749 data-nosnippet>749</a>        //
+<a href=#750 id=750 data-nosnippet>750</a>        // Note that we need `T: Unaligned` in order to guarantee that there is
+<a href=#751 id=751 data-nosnippet>751</a>        // no padding between `_u` and `t`.
+<a href=#752 id=752 data-nosnippet>752</a>        </span>_u: u8,
+<a href=#753 id=753 data-nosnippet>753</a>        <span class="kw">pub</span>(<span class="kw">crate</span>) t: T,
+<a href=#754 id=754 data-nosnippet>754</a>        _a: [A; <span class="number">0</span>],
+<a href=#755 id=755 data-nosnippet>755</a>    }
+<a href=#756 id=756 data-nosnippet>756</a>
+<a href=#757 id=757 data-nosnippet>757</a>    <span class="kw">impl</span>&lt;T: Unaligned, A&gt; ForceUnalign&lt;T, A&gt; {
+<a href=#758 id=758 data-nosnippet>758</a>        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(t: T) -&gt; ForceUnalign&lt;T, A&gt; {
+<a href=#759 id=759 data-nosnippet>759</a>            ForceUnalign { _u: <span class="number">0</span>, t, _a: [] }
+<a href=#760 id=760 data-nosnippet>760</a>        }
+<a href=#761 id=761 data-nosnippet>761</a>    }
+<a href=#762 id=762 data-nosnippet>762</a>    <span class="comment">// A `u64` with alignment 8.
+<a href=#763 id=763 data-nosnippet>763</a>    //
+<a href=#764 id=764 data-nosnippet>764</a>    // Though `u64` has alignment 8 on some platforms, it's not guaranteed. By
+<a href=#765 id=765 data-nosnippet>765</a>    // contrast, `AU64` is guaranteed to have alignment 8 on all platforms.
+<a href=#766 id=766 data-nosnippet>766</a>    </span><span class="attr">#[derive(
+<a href=#767 id=767 data-nosnippet>767</a>        KnownLayout,
+<a href=#768 id=768 data-nosnippet>768</a>        Immutable,
+<a href=#769 id=769 data-nosnippet>769</a>        FromBytes,
+<a href=#770 id=770 data-nosnippet>770</a>        IntoBytes,
+<a href=#771 id=771 data-nosnippet>771</a>        Eq,
+<a href=#772 id=772 data-nosnippet>772</a>        PartialEq,
+<a href=#773 id=773 data-nosnippet>773</a>        Ord,
+<a href=#774 id=774 data-nosnippet>774</a>        PartialOrd,
+<a href=#775 id=775 data-nosnippet>775</a>        Default,
+<a href=#776 id=776 data-nosnippet>776</a>        Debug,
+<a href=#777 id=777 data-nosnippet>777</a>        Copy,
+<a href=#778 id=778 data-nosnippet>778</a>        Clone,
+<a href=#779 id=779 data-nosnippet>779</a>    )]
+<a href=#780 id=780 data-nosnippet>780</a>    #[repr(C, align(<span class="number">8</span>))]
+<a href=#781 id=781 data-nosnippet>781</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>AU64(<span class="kw">pub</span>(<span class="kw">crate</span>) u64);
+<a href=#782 id=782 data-nosnippet>782</a>
+<a href=#783 id=783 data-nosnippet>783</a>    <span class="kw">impl </span>AU64 {
+<a href=#784 id=784 data-nosnippet>784</a>        <span class="comment">// Converts this `AU64` to bytes using this platform's endianness.
+<a href=#785 id=785 data-nosnippet>785</a>        </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>to_bytes(<span class="self">self</span>) -&gt; [u8; <span class="number">8</span>] {
+<a href=#786 id=786 data-nosnippet>786</a>            <span class="macro">crate::transmute!</span>(<span class="self">self</span>)
+<a href=#787 id=787 data-nosnippet>787</a>        }
+<a href=#788 id=788 data-nosnippet>788</a>    }
+<a href=#789 id=789 data-nosnippet>789</a>
+<a href=#790 id=790 data-nosnippet>790</a>    <span class="kw">impl </span>Display <span class="kw">for </span>AU64 {
+<a href=#791 id=791 data-nosnippet>791</a>        <span class="attr">#[cfg_attr(
+<a href=#792 id=792 data-nosnippet>792</a>            all(coverage_nightly, __ZEROCOPY_INTERNAL_USE_ONLY_NIGHTLY_FEATURES_IN_TESTS),
+<a href=#793 id=793 data-nosnippet>793</a>            coverage(off)
+<a href=#794 id=794 data-nosnippet>794</a>        )]
+<a href=#795 id=795 data-nosnippet>795</a>        </span><span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#796 id=796 data-nosnippet>796</a>            Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
+<a href=#797 id=797 data-nosnippet>797</a>        }
+<a href=#798 id=798 data-nosnippet>798</a>    }
+<a href=#799 id=799 data-nosnippet>799</a>
+<a href=#800 id=800 data-nosnippet>800</a>    <span class="attr">#[derive(Immutable, FromBytes, Eq, PartialEq, Ord, PartialOrd, Default, Debug, Copy, Clone)]
+<a href=#801 id=801 data-nosnippet>801</a>    #[repr(C)]
+<a href=#802 id=802 data-nosnippet>802</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Nested&lt;T, U: <span class="question-mark">?</span>Sized&gt; {
+<a href=#803 id=803 data-nosnippet>803</a>        _t: T,
+<a href=#804 id=804 data-nosnippet>804</a>        _u: U,
+<a href=#805 id=805 data-nosnippet>805</a>    }
+<a href=#806 id=806 data-nosnippet>806</a>}
+<a href=#807 id=807 data-nosnippet>807</a>
+<a href=#808 id=808 data-nosnippet>808</a><span class="attr">#[cfg(test)]
+<a href=#809 id=809 data-nosnippet>809</a></span><span class="kw">mod </span>tests {
+<a href=#810 id=810 data-nosnippet>810</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#811 id=811 data-nosnippet>811</a>
+<a href=#812 id=812 data-nosnippet>812</a>    <span class="attr">#[test]
+<a href=#813 id=813 data-nosnippet>813</a>    </span><span class="kw">fn </span>test_round_down_to_next_multiple_of_alignment() {
+<a href=#814 id=814 data-nosnippet>814</a>        <span class="kw">fn </span>alt_impl(n: usize, align: NonZeroUsize) -&gt; usize {
+<a href=#815 id=815 data-nosnippet>815</a>            <span class="kw">let </span>mul = n / align.get();
+<a href=#816 id=816 data-nosnippet>816</a>            mul * align.get()
+<a href=#817 id=817 data-nosnippet>817</a>        }
+<a href=#818 id=818 data-nosnippet>818</a>
+<a href=#819 id=819 data-nosnippet>819</a>        <span class="kw">for </span>align <span class="kw">in </span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">8</span>, <span class="number">16</span>] {
+<a href=#820 id=820 data-nosnippet>820</a>            <span class="kw">for </span>n <span class="kw">in </span><span class="number">0</span>..<span class="number">256 </span>{
+<a href=#821 id=821 data-nosnippet>821</a>                <span class="kw">let </span>align = NonZeroUsize::new(align).unwrap();
+<a href=#822 id=822 data-nosnippet>822</a>                <span class="kw">let </span>want = alt_impl(n, align);
+<a href=#823 id=823 data-nosnippet>823</a>                <span class="kw">let </span>got = round_down_to_next_multiple_of_alignment(n, align);
+<a href=#824 id=824 data-nosnippet>824</a>                <span class="macro">assert_eq!</span>(got, want, <span class="string">"round_down_to_next_multiple_of_alignment({}, {})"</span>, n, align);
+<a href=#825 id=825 data-nosnippet>825</a>            }
+<a href=#826 id=826 data-nosnippet>826</a>        }
+<a href=#827 id=827 data-nosnippet>827</a>    }
+<a href=#828 id=828 data-nosnippet>828</a>
+<a href=#829 id=829 data-nosnippet>829</a>    <span class="attr">#[rustversion::since(<span class="number">1.57</span>.<span class="number">0</span>)]
+<a href=#830 id=830 data-nosnippet>830</a>    #[test]
+<a href=#831 id=831 data-nosnippet>831</a>    #[should_panic]
+<a href=#832 id=832 data-nosnippet>832</a>    </span><span class="kw">fn </span>test_round_down_to_next_multiple_of_alignment_zerocopy_panic_in_const_and_vec_try_reserve() {
+<a href=#833 id=833 data-nosnippet>833</a>        round_down_to_next_multiple_of_alignment(<span class="number">0</span>, NonZeroUsize::new(<span class="number">3</span>).unwrap());
+<a href=#834 id=834 data-nosnippet>834</a>    }
+<a href=#835 id=835 data-nosnippet>835</a>}</code></pre></div></section></main></body></html>

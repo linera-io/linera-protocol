@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["MonotonicTimestampGenerator","SimpleTimestampGenerator"],"trait":["TimestampGenerator"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Fp4ConfigWrapper"],"trait":["Fp4Config"],"type":["Fp4"]};

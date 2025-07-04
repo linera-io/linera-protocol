@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Impl"],"trait":["AutoTraits","Environment","Network","Signer","Storage"],"type":["Test","TestNetwork","TestSigner","TestStorage"]};

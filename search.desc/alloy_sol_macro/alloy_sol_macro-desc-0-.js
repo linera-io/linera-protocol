@@ -1,0 +1,1 @@
+searchState.loadedDescShard("alloy_sol_macro", 0, "alloy-sol-macro\nGenerate types that implement <code>alloy-sol-types</code> traits, …")

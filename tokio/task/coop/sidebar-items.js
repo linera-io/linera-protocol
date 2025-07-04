@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["consume_budget","has_budget_remaining","unconstrained"],"struct":["Unconstrained"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["KnownNode","NodeAddr"],"mod":["metadata"],"struct":["ClusterState","Node"],"type":["NodeRef"]};

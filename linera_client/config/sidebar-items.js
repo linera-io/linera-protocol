@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DestinationKind","Error"],"struct":["BlockExporterConfig","CommitteeConfig","Destination","DestinationConfig","GenesisConfig","LimitsConfig","ValidatorConfig","ValidatorServerConfig"],"type":["DestinationId"]};

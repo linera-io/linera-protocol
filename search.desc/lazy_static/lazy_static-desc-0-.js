@@ -1,0 +1,1 @@
+searchState.loadedDescShard("lazy_static", 0, "A macro for declaring lazily evaluated statics.\nSupport trait for enabling a few common operation on lazy …\nTakes a shared reference to a lazy static and initializes …")
