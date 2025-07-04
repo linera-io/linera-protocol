@@ -120,8 +120,13 @@ where
 
     pool_state.start_startup_exporters();
 
-    let mut block_processor =
-        BlockProcessor::new(pool_state, block_processor_storage, queue_rear, queue_front);
+    let mut block_processor = BlockProcessor::new(
+        pool_state,
+        block_processor_storage,
+        queue_rear,
+        queue_front,
+        destination_config.committee_destination,
+    );
 
     block_processor
         .run_with_shutdown(shutdown_signal, limits.persistence_period_ms)

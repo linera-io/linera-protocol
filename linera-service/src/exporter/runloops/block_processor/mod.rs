@@ -29,6 +29,7 @@ where
     storage: BlockProcessorStorage<T>,
     queue_rear: UnboundedSender<BlockId>,
     queue_front: UnboundedReceiver<BlockId>,
+    committee_destination_update: bool,
 }
 
 impl<S, T> BlockProcessor<S, T>
@@ -42,12 +43,14 @@ where
         storage: BlockProcessorStorage<T>,
         queue_rear: UnboundedSender<BlockId>,
         queue_front: UnboundedReceiver<BlockId>,
+        committee_destination_update: bool,
     ) -> Self {
         Self {
             storage,
             pool_state,
             queue_rear,
             queue_front,
+            committee_destination_update,
         }
     }
 
@@ -81,7 +84,7 @@ where
                 Some(next_block_notification) = self.queue_front.recv() => {
                     let walker = Walker::new(&mut self.storage);
                     match walker.walk(next_block_notification).await {
-                        Ok(maybe_new_committee) => {
+                        Ok(maybe_new_committee) if self.committee_destination_update => {
                             if let Some(blob_id) = maybe_new_committee {
                                 let blob = match self.storage.get_blob(blob_id).await {
                                     Ok(blob) => blob,
@@ -105,6 +108,11 @@ where
                                 self.storage.new_committee(addresses.clone());
                                 self.pool_state.start_committee_exporters(addresses.as_ref());
                             }
+                        },
+
+                        Ok(_) => {
+                            tracing::info!(block=?next_block_notification, "New committee blob found but exporter is not configured \
+                             to update the committee destination, skipping.");
                         },
 
                         // this error variant is safe to retry as this block is already confirmed so this error will
@@ -177,7 +185,7 @@ mod test {
             DbStorage<MemoryStore, TestClock>,
         >::new(vec![], vec![]);
         let mut block_processor =
-            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
+            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx, false);
         let (block_ids, state) = make_state(&storage).await;
         for id in block_ids {
             let _ = tx.send(id);
@@ -298,7 +306,7 @@ mod test {
             DbStorage<MemoryStore, TestClock>,
         >::new(vec![], vec![]);
         let mut block_processor =
-            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
+            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx, false);
         let (block_id, state) = make_state_2(&storage).await;
         let _ = tx.send(block_id);
 
@@ -399,7 +407,7 @@ mod test {
             DbStorage<MemoryStore, TestClock>,
         >::new(vec![], vec![]);
         let mut block_processor =
-            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
+            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx, false);
         let (block_id, state) = make_state_3(&storage).await;
         let _ = tx.send(block_id);
 
@@ -471,7 +479,7 @@ mod test {
             DbStorage<MemoryStore, TestClock>,
         >::new(vec![], vec![]);
         let mut block_processor =
-            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
+            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx, false);
         let (block_id, state) = make_state_4(&storage).await;
         let _ = tx.send(block_id);
 
@@ -565,7 +573,7 @@ mod test {
             DbStorage<MemoryStore, TestClock>,
         >::new(vec![], vec![]);
         let mut block_processor =
-            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx);
+            BlockProcessor::new(pool_state, block_processor_storage, tx.clone(), rx, false);
         let (block_id, expected_state) = make_simple_state_with_blobs(&storage).await;
         let _ = tx.send(block_id);
 
