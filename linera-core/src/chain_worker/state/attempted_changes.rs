@@ -309,7 +309,7 @@ where
             // storage. If the certificate is good for this committee, we will accept it -
             // which will later allow us to also accept the chain description blob.
             let epoch = block.header.epoch;
-            let committees = self.state.storage.committees_for(epoch, epoch).await?;
+            let committees = self.state.storage.committees_for(epoch..=epoch).await?;
             let committee = committees
                 .get(&epoch)
                 .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;

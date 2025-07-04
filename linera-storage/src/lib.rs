@@ -7,7 +7,7 @@
 
 mod db_storage;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, ops::RangeInclusive, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -174,9 +174,14 @@ pub trait Storage: Sized {
     /// Returns a map of the committees for the given epochs.
     async fn committees_for(
         &self,
-        min_epoch: Epoch,
-        max_epoch: Epoch,
+        epoch_range: RangeInclusive<Epoch>,
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
+        // Short-circuit for an empty input range.
+        if epoch_range.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+        let min_epoch = epoch_range.start();
+        let max_epoch = epoch_range.end();
         let read_committee = async |committee_hash| -> Result<Committee, ViewError> {
             let blob_id = BlobId::new(committee_hash, BlobType::Committee);
             let committee_blob = self
@@ -193,7 +198,7 @@ pub trait Storage: Sized {
         let admin_chain_id = network_description.admin_chain_id;
         let mut result = BTreeMap::new();
         // special case: the genesis epoch is stored in the NetworkDescription
-        if min_epoch == Epoch::ZERO {
+        if *min_epoch == Epoch::ZERO {
             let genesis_committee =
                 read_committee(network_description.genesis_committee_blob_hash).await?;
             result.insert(Epoch::ZERO, genesis_committee);
@@ -474,10 +479,9 @@ where
 
     async fn committees_for(
         &self,
-        min_epoch: Epoch,
-        max_epoch: Epoch,
+        epoch_range: RangeInclusive<Epoch>,
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        self.storage.committees_for(min_epoch, max_epoch).await
+        self.storage.committees_for(epoch_range).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

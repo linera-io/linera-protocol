@@ -781,7 +781,7 @@ where
         let committees = self
             .context()
             .extra()
-            .committees_for(min_active_epoch, max_active_epoch)
+            .committees_for(min_active_epoch..=max_active_epoch)
             .await?;
         self.committees.set(committees);
         let admin_id = self
