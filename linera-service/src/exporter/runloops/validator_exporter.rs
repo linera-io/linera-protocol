@@ -199,10 +199,7 @@ where
     ) -> Result<(), NodeError> {
         let delivery = CrossChainMessageDelivery::NonBlocking;
         let block_id = BlockId::from_confirmed_block(certificate.value());
-        tracing::info!(
-            "dispatching block with id: {:#?} from linera exporter",
-            block_id
-        );
+        tracing::info!(?block_id, "dispatching block");
         match self
             .node
             .handle_confirmed_certificate(certificate, delivery)
@@ -210,7 +207,7 @@ where
         {
             Ok(_) => {}
             Err(e) => {
-                tracing::error!("error {} when resolving block with id: {:#?}", e, block_id);
+                tracing::error!(error=%e, ?block_id, "error when dispatching block");
                 Err(e)?
             }
         }

@@ -183,19 +183,15 @@ where
 
         while let Some((block, blobs)) = futures.next().await.transpose()? {
             for blob in blobs {
-                let blob_id = blob.id();
                 tracing::info!(
-                    "dispatching blob with id: {:?} from linera exporter",
-                    blob_id
+                    blob_id=?blob.id(),
+                    "dispatching blob"
                 );
                 self.buffer.send(blob.try_into().unwrap()).await?
             }
 
             let block_id = BlockId::from_confirmed_block(block.value());
-            tracing::info!(
-                "dispatching block with id: {:?} from linera exporter",
-                block_id
-            );
+            tracing::info!(?block_id, "dispatching block");
             self.buffer.send(block.try_into().unwrap()).await?;
 
             futures.push_back(self.get_block_with_blobs_task(index));
