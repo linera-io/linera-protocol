@@ -22,7 +22,7 @@
   "keywords": [],
   "author": "Linera <contact@linera.io>",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/linera-io/linera-protocol/linera-web/signer/#readme",
+  "homepage": "https://github.com/linera-io/linera-protocol/tree/main/linera-web/signer",
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^24.0.1",
