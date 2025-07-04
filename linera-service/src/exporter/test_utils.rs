@@ -10,7 +10,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use dashmap::DashSet;
+use dashmap::{DashMap, DashSet};
 use futures::{stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
@@ -137,9 +137,20 @@ pub(crate) struct DummyValidator {
     pub(crate) fault_guard: Arc<AtomicBool>,
     pub(crate) blobs: Arc<DashSet<BlobId>>,
     pub(crate) state: Arc<DashSet<CryptoHash>>,
+    // Tracks whether a block has been received multiple times.
+    pub(crate) duplicate_blocks: Arc<DashMap<CryptoHash, u64>>,
 }
 
 impl DummyValidator {
+    pub fn new() -> Self {
+        Self {
+            fault_guard: Arc::new(AtomicBool::new(false)),
+            blobs: Arc::new(DashSet::new()),
+            state: Arc::new(DashSet::new()),
+            duplicate_blocks: Arc::new(DashMap::new()),
+        }
+    }
+
     pub(crate) async fn start(
         self,
         port: u16,
@@ -177,7 +188,12 @@ impl ValidatorNode for DummyValidator {
 
         let req = HandleConfirmedCertificateRequest::try_from(request.into_inner())
             .map_err(Status::from)?;
-        self.state.insert(req.certificate.hash());
+        if !self.state.insert(req.certificate.hash()) {
+            self.duplicate_blocks
+                .entry(req.certificate.hash())
+                .and_modify(|count| *count += 1)
+                .or_insert(2);
+        }
 
         let mut missing_blobs = Vec::new();
         let created_blobs = req.certificate.inner().block().created_blob_ids();
