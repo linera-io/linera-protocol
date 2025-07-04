@@ -5,9 +5,7 @@
 
 mod stub_instance;
 
-use std::collections::BTreeMap;
-
-use genawaiter::{rc::gen, yield_};
+use std::{collections::BTreeMap, io::Write};
 
 pub use self::stub_instance::StubInstance;
 pub use crate::type_traits::RegisterWitTypes;
@@ -25,6 +23,12 @@ pub trait WitInterface {
 
     /// The WIT definitions of each function in this interface.
     fn wit_functions() -> Vec<String>;
+}
+
+/// Trait for content generation.
+pub trait FileContentGenerator {
+    /// Generate file contents.
+    fn generate_file_contents(&self, writer: impl Write) -> std::io::Result<()>;
 }
 
 /// Helper type to write a [`WitInterface`] to a file.
@@ -53,33 +57,27 @@ impl WitInterfaceWriter {
             functions: Interface::wit_functions(),
         }
     }
+}
 
-    /// Returns an [`Iterator`] with the file contents of the WIT interface file.
-    pub fn generate_file_contents(&self) -> impl Iterator<Item = &str> {
-        gen!({
-            yield_!("package ");
-            yield_!(self.package);
-            yield_!(";\n\n");
+impl FileContentGenerator for WitInterfaceWriter {
+    fn generate_file_contents(&self, mut writer: impl Write) -> std::io::Result<()> {
+        writeln!(writer, "package {};\n", self.package)?;
 
-            yield_!("interface ");
-            yield_!(self.name);
-            yield_!(" {\n");
+        writeln!(writer, "interface {} {{", self.name)?;
 
-            for function in &self.functions {
-                yield_!(&function);
-                yield_!("\n");
+        for function in &self.functions {
+            writeln!(writer, "{}", function)?;
+        }
+
+        for type_declaration in self.types.values() {
+            if !type_declaration.is_empty() {
+                writeln!(writer)?;
+                write!(writer, "{}", type_declaration)?;
             }
+        }
 
-            for type_declaration in self.types.values() {
-                if !type_declaration.is_empty() {
-                    yield_!("\n");
-                    yield_!(&type_declaration);
-                }
-            }
-
-            yield_!("}\n");
-        })
-        .into_iter()
+        writeln!(writer, "}}")?;
+        Ok(())
     }
 }
 
@@ -121,39 +119,29 @@ impl WitWorldWriter {
         self.exports.push(Interface::wit_name());
         self
     }
+}
 
-    /// Returns an [`Iterator`] with the file contents of the WIT world file, optionally including
-    /// a package header.
-    pub fn generate_file_contents(&self) -> impl Iterator<Item = &str> {
-        gen!({
-            if let Some(package) = &self.package {
-                yield_!("package ");
-                yield_!(package);
-                yield_!(";\n\n");
-            }
+impl FileContentGenerator for WitWorldWriter {
+    fn generate_file_contents(&self, mut writer: impl Write) -> std::io::Result<()> {
+        if let Some(package) = &self.package {
+            writeln!(writer, "package {};\n", package)?;
+        }
 
-            yield_!("world ");
-            yield_!(&self.name);
-            yield_!(" {\n");
+        writeln!(writer, "world {} {{", &self.name)?;
 
-            for import in &self.imports {
-                yield_!("    import ");
-                yield_!(import);
-                yield_!(";\n");
-            }
+        for import in &self.imports {
+            writeln!(writer, "    import {};", import)?;
+        }
 
-            if !self.imports.is_empty() {
-                yield_!("\n");
-            }
+        if !self.imports.is_empty() {
+            writeln!(writer)?;
+        }
 
-            for export in &self.exports {
-                yield_!("    export ");
-                yield_!(export);
-                yield_!(";\n");
-            }
+        for export in &self.exports {
+            writeln!(writer, "    export {};", export)?;
+        }
 
-            yield_!("}\n");
-        })
-        .into_iter()
+        writeln!(writer, "}}")?;
+        Ok(())
     }
 }
