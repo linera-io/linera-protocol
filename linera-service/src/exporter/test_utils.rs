@@ -140,6 +140,14 @@ pub(crate) struct DummyValidator {
 }
 
 impl DummyValidator {
+    pub fn new() -> Self {
+        Self {
+            fault_guard: Arc::new(AtomicBool::new(false)),
+            blobs: Arc::new(DashSet::new()),
+            state: Arc::new(DashSet::new()),
+        }
+    }
+
     pub(crate) async fn start(
         self,
         port: u16,

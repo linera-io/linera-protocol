@@ -170,8 +170,8 @@ mod test {
     };
     use linera_chain::{
         data_types::BlockExecutionOutcome,
-        test::{make_first_block, BlockTestExt},
-        types::{ConfirmedBlock, ConfirmedBlockCertificate},
+        test::{make_child_block, make_first_block, BlockTestExt},
+        types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_client::config::{Destination, DestinationConfig, LimitsConfig};
     use linera_execution::{
@@ -182,14 +182,14 @@ mod test {
     use linera_rpc::{config::TlsConfig, NodeOptions};
     use linera_service::cli_wrappers::local_net::LocalNet;
     use linera_storage::{DbStorage, Storage};
-    use linera_views::memory::MemoryStore;
+    use linera_views::{memory::MemoryStore, ViewError};
     use test_case::test_case;
     use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
 
     use super::start_block_processor_task;
     use crate::{
-        common::{BlockId, CanonicalBlock},
+        common::{get_address, BlockId, CanonicalBlock},
         state::BlockExporterStateView,
         test_utils::{make_simple_state_with_blobs, DummyIndexer, DummyValidator, TestDestination},
         ExporterCancellationSignal,
@@ -360,6 +360,7 @@ mod test {
     #[test_log::test(tokio::test)]
     async fn test_committee_destination() -> anyhow::Result<()> {
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let test_chain = TestChain::new(storage.clone());
         let cancellation_token = CancellationToken::new();
         let child = cancellation_token.child_token();
         let signal = ExporterCancellationSignal::new(child.clone());
@@ -387,59 +388,102 @@ mod test {
 
         let mut destinations = Vec::new();
         let dummy_validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
-        let destination = destinations.pop().expect("manually done");
+        let destination = destinations
+            .iter()
+            .peekable()
+            .next()
+            .expect("manually done");
         let validator_state = ValidatorState {
             network_address: destination.address(),
             votes: 0,
             account_public_key: AccountPublicKey::test_key(0),
         };
+
         let mut validators = BTreeMap::new();
         validators.insert(Secp256k1PublicKey::test_key(0), validator_state);
+
         let committee = Committee::new(validators, ResourceControlPolicy::testnet());
+        let confirmed_certificate = test_chain
+            .publish_committee(&committee, None)
+            .await
+            .expect("Failed to publish committee");
 
-        let chain_description = ChainDescription::new(
-            ChainOrigin::Root(0),
-            InitialChainConfig {
-                ownership: Default::default(),
-                epoch: Default::default(),
-                balance: Default::default(),
-                application_permissions: Default::default(),
-                active_epochs: Default::default(),
-            },
-            Timestamp::now(),
-        );
-
-        let chain_id = chain_description.id();
-        let chain_blob = Blob::new_chain_description(&chain_description);
-
-        let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
-        let proposed_block = make_first_block(chain_id).with_operation(Operation::System(
-            Box::new(SystemOperation::Admin(AdminOperation::CreateCommittee {
-                epoch: Epoch::ZERO,
-                blob_hash: committee_blob.id().hash,
-            })),
-        ));
-        let blobs = vec![chain_blob, committee_blob];
-        let block = BlockExecutionOutcome {
-            blobs: vec![blobs.clone()],
-            ..Default::default()
-        }
-        .with(proposed_block);
-
-        let confirmed_block = ConfirmedBlock::new(block);
-        let notification = BlockId::from_confirmed_block(&confirmed_block);
-        let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
-        storage
-            .write_blobs_and_certificate(blobs.as_ref(), &certificate)
-            .await?;
-
+        let notification = BlockId::from_confirmed_block(confirmed_certificate.value());
         notifier.send(notification)?;
-
         sleep(Duration::from_secs(4)).await;
 
         assert!(dummy_validator.state.contains(&notification.hash));
 
         Ok(())
+    }
+
+    struct TestChain<S> {
+        chain_description: ChainDescription,
+        storage: S,
+    }
+
+    impl<S> TestChain<S> {
+        fn new(storage: S) -> Self {
+            let chain_description = ChainDescription::new(
+                ChainOrigin::Root(0),
+                InitialChainConfig {
+                    ownership: Default::default(),
+                    epoch: Default::default(),
+                    balance: Default::default(),
+                    application_permissions: Default::default(),
+                    active_epochs: Default::default(),
+                },
+                Timestamp::now(),
+            );
+            Self {
+                chain_description,
+                storage,
+            }
+        }
+
+        // Constructs a new block, with the blob containing the committee.
+        async fn publish_committee(
+            &self,
+            committee: &Committee,
+            prev_block: Option<ConfirmedBlock>,
+        ) -> Result<ConfirmedBlockCertificate, ViewError>
+        where
+            S: Storage + Clone + Send + Sync + 'static,
+        {
+            let chain_id = self.chain_description.id();
+            let chain_blob = Blob::new_chain_description(&self.chain_description);
+
+            let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+            let proposed_block = if let Some(parent_block) = prev_block {
+                make_child_block(&parent_block).with_operation(Operation::System(Box::new(
+                    SystemOperation::Admin(AdminOperation::CreateCommittee {
+                        epoch: parent_block.epoch().try_add_one().unwrap(),
+                        blob_hash: committee_blob.id().hash,
+                    }),
+                )))
+            } else {
+                make_first_block(chain_id).with_operation(Operation::System(Box::new(
+                    SystemOperation::Admin(AdminOperation::CreateCommittee {
+                        epoch: Epoch::ZERO,
+                        blob_hash: committee_blob.id().hash,
+                    }),
+                )))
+            };
+            let blobs = vec![chain_blob, committee_blob];
+            let block = BlockExecutionOutcome {
+                blobs: vec![blobs.clone()],
+                ..Default::default()
+            }
+            .with(proposed_block);
+
+            let confirmed_block = ConfirmedBlock::new(block);
+            let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+            self.storage
+                .write_blobs_and_certificate(blobs.as_ref(), &certificate)
+                .await?;
+
+            Ok(certificate)
+        }
     }
 
     async fn spawn_dummy_indexer(
@@ -466,13 +510,13 @@ mod test {
         token: &CancellationToken,
     ) -> anyhow::Result<DummyValidator> {
         let port = get_free_port().await?;
-        let destination = DummyValidator::default();
+        let destination = DummyValidator::new();
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("dummy validator", port as usize, "http").await?;
         let destination_address = Destination {
             port,
             tls: TlsConfig::ClearText,
-            endpoint: "127.0.0.1".to_owned(),
+            endpoint: get_address(port as u16).ip().to_string(),
             kind: destination.kind(),
         };
 
