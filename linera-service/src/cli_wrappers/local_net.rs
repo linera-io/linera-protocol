@@ -716,7 +716,7 @@ impl LocalNet {
             linera_base::time::timer::sleep(Duration::from_millis(i * 500)).await;
             let result = client.check(HealthCheckRequest::default()).await;
             if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
-                info!("Successfully started {nickname}");
+                info!(?port, "Successfully started {nickname}");
                 return Ok(());
             } else {
                 warn!("Waiting for {nickname} to start");

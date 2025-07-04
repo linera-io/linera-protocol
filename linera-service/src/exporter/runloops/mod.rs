@@ -365,7 +365,7 @@ mod test {
         let child = cancellation_token.child_token();
         let signal = ExporterCancellationSignal::new(child.clone());
 
-        let (notifier, _handle) = start_block_processor_task(
+        let (notifier, block_processor_handle) = start_block_processor_task(
             storage.clone(),
             signal,
             LimitsConfig {
@@ -402,18 +402,68 @@ mod test {
         let mut validators = BTreeMap::new();
         validators.insert(Secp256k1PublicKey::test_key(0), validator_state);
 
-        let committee = Committee::new(validators, ResourceControlPolicy::testnet());
+        let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet());
         let confirmed_certificate = test_chain
             .publish_committee(&committee, None)
             .await
             .expect("Failed to publish committee");
 
-        let notification = BlockId::from_confirmed_block(confirmed_certificate.value());
-        notifier.send(notification)?;
+        let first_notification = BlockId::from_confirmed_block(confirmed_certificate.value());
+        notifier.send(first_notification)?;
         sleep(Duration::from_secs(4)).await;
 
-        assert!(dummy_validator.state.contains(&notification.hash));
+        assert!(dummy_validator.state.contains(&first_notification.hash));
+        // We expect the validator to receive the confired certificate only once.
+        assert!(dummy_validator
+            .duplicate_blocks
+            .get(&first_notification.hash)
+            .is_none());
 
+        ///////////
+        // Add new validator to the committee.
+        ///////////
+        let second_dummy = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
+        let destination = destinations
+            .iter()
+            .peekable()
+            .next()
+            .expect("manually done");
+        let validator_state = ValidatorState {
+            network_address: destination.address(),
+            votes: 0,
+            account_public_key: AccountPublicKey::test_key(0),
+        };
+        let mut new_validators = validators.clone();
+        new_validators.insert(Secp256k1PublicKey::test_key(1), validator_state);
+        let new_committee = Committee::new(new_validators, ResourceControlPolicy::testnet());
+        let new_confirmed_certificate = test_chain
+            .publish_committee(&new_committee, Some(confirmed_certificate.value().clone()))
+            .await
+            .expect("Failed to publish new committee");
+        let second_notification = BlockId::from_confirmed_block(new_confirmed_certificate.value());
+        notifier.send(second_notification)?;
+        sleep(Duration::from_secs(4)).await;
+        assert!(second_dummy.state.contains(&second_notification.hash));
+        // We expect the new validator to receive the new confirmed certificate only once.
+        assert!(second_dummy
+            .duplicate_blocks
+            .get(&second_notification.hash)
+            .is_none());
+        // The first certificate should not be duplicated.
+        assert!(second_dummy
+            .duplicate_blocks
+            .get(&first_notification.hash)
+            .is_none());
+
+        // The first validator should receive the new committee as well.
+        assert!(dummy_validator.state.contains(&second_notification.hash));
+        // We expect the first validator to receive the new confirmed certificate only once.
+        assert!(dummy_validator
+            .duplicate_blocks
+            .get(&first_notification.hash)
+            .is_none());
+
+        block_processor_handle.join().unwrap().unwrap();
         Ok(())
     }
 
