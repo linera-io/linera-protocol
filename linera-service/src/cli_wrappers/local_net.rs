@@ -157,7 +157,7 @@ impl PathProvider {
         Ok(PathProvider::TemporaryDirectory { tmp_dir })
     }
 
-    pub fn new(path: &Option<String>) -> anyhow::Result<Self> {
+    pub fn from_path_option(path: &Option<String>) -> anyhow::Result<Self> {
         Ok(match path {
             None => {
                 let tmp_dir = Arc::new(tempfile::tempdir()?);

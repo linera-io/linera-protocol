@@ -206,7 +206,7 @@ pub async fn handle_net_up_service(
     };
     let internal = Network::Grpc;
     let network = NetworkConfig { external, internal };
-    let path_provider = PathProvider::new(path)?;
+    let path_provider = PathProvider::from_path_option(path)?;
     let num_proxies = 1; // Local networks currently support exactly 1 proxy.
     let config = LocalNetConfig {
         network,
