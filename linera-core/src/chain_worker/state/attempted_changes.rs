@@ -398,7 +398,7 @@ where
             chain.execution_state = execution_state;
             outcome.clone()
         } else {
-            chain
+            let (outcome, _resources) = chain
                 .execute_block(
                     &proposed_block,
                     local_time,
@@ -406,7 +406,8 @@ where
                     &published_blobs,
                     oracle_responses,
                 )
-                .await?
+                .await?;
+            outcome
         };
         // We should always agree on the messages and state hash.
         ensure!(
