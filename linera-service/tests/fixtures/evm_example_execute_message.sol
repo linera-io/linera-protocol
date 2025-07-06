@@ -6,7 +6,7 @@ import "./Linera.sol";
 
 contract ExampleExecuteMessage {
     uint64 value;
-    LineraTypes.MessageId last_message_id;
+    Linera.MessageId last_message_id;
 
     constructor(uint64 test_value) {
        require(test_value == 42);
@@ -20,7 +20,7 @@ contract ExampleExecuteMessage {
     function execute_message(bytes memory input) external {
         uint64 increment = abi.decode(input, (uint64));
         value = value + increment;
-        LineraTypes.opt_MessageId memory opt_message_id = Linera.message_id();
+        Linera.opt_MessageId memory opt_message_id = Linera.message_id();
         require(opt_message_id.has_value);
         last_message_id = opt_message_id.value;
     }

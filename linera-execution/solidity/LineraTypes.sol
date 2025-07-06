@@ -144,6 +144,80 @@ library LineraTypes {
         return value;
     }
 
+    struct AccountOwnerBalanceInner {
+        AccountOwner account_owner;
+        Amount balance_;
+    }
+
+    function bcs_serialize_AccountOwnerBalanceInner(AccountOwnerBalanceInner memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_AccountOwner(input.account_owner);
+        return abi.encodePacked(result, bcs_serialize_Amount(input.balance_));
+    }
+
+    function bcs_deserialize_offset_AccountOwnerBalanceInner(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, AccountOwnerBalanceInner memory)
+    {
+        uint256 new_pos;
+        AccountOwner memory account_owner;
+        (new_pos, account_owner) = bcs_deserialize_offset_AccountOwner(pos, input);
+        Amount memory balance_;
+        (new_pos, balance_) = bcs_deserialize_offset_Amount(new_pos, input);
+        return (new_pos, AccountOwnerBalanceInner(account_owner, balance_));
+    }
+
+    function bcs_deserialize_AccountOwnerBalanceInner(bytes memory input)
+        internal
+        pure
+        returns (AccountOwnerBalanceInner memory)
+    {
+        uint256 new_pos;
+        AccountOwnerBalanceInner memory value;
+        (new_pos, value) = bcs_deserialize_offset_AccountOwnerBalanceInner(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct Amount {
+        bytes32 value;
+    }
+
+    function bcs_serialize_Amount(Amount memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_bytes32(input.value);
+    }
+
+    function bcs_deserialize_offset_Amount(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, Amount memory)
+    {
+        uint256 new_pos;
+        bytes32 value;
+        (new_pos, value) = bcs_deserialize_offset_bytes32(pos, input);
+        return (new_pos, Amount(value));
+    }
+
+    function bcs_deserialize_Amount(bytes memory input)
+        internal
+        pure
+        returns (Amount memory)
+    {
+        uint256 new_pos;
+        Amount memory value;
+        (new_pos, value) = bcs_deserialize_offset_Amount(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct ApplicationId {
         CryptoHash application_description_hash;
     }
@@ -182,12 +256,19 @@ library LineraTypes {
     struct BaseRuntimePrecompile {
         uint8 choice;
         // choice=0 corresponds to ChainId
-        // choice=1 corresponds to ApplicationCreatorChainId
-        // choice=2 corresponds to ChainOwnership
-        // choice=3 corresponds to ReadDataBlob
-        BaseRuntimePrecompile_ReadDataBlob read_data_blob;
-        // choice=4 corresponds to AssertDataBlobExists
-        BaseRuntimePrecompile_AssertDataBlobExists assert_data_blob_exists;
+        // choice=1 corresponds to BlockHeight
+        // choice=2 corresponds to ApplicationCreatorChainId
+        // choice=3 corresponds to ReadSystemTimestamp
+        // choice=4 corresponds to ReadChainBalance
+        // choice=5 corresponds to ReadOwnerBalance
+        AccountOwner read_owner_balance;
+        // choice=6 corresponds to ReadOwnerBalances
+        // choice=7 corresponds to ReadBalanceOwners
+        // choice=8 corresponds to ChainOwnership
+        // choice=9 corresponds to ReadDataBlob
+        CryptoHash read_data_blob;
+        // choice=10 corresponds to AssertDataBlobExists
+        CryptoHash assert_data_blob_exists;
     }
 
     function BaseRuntimePrecompile_case_chain_id()
@@ -195,9 +276,21 @@ library LineraTypes {
         pure
         returns (BaseRuntimePrecompile memory)
     {
-        BaseRuntimePrecompile_ReadDataBlob memory read_data_blob;
-        BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(0), read_data_blob, assert_data_blob_exists);
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(0), read_owner_balance, read_data_blob, assert_data_blob_exists);
+    }
+
+    function BaseRuntimePrecompile_case_block_height()
+        internal
+        pure
+        returns (BaseRuntimePrecompile memory)
+    {
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(1), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function BaseRuntimePrecompile_case_application_creator_chain_id()
@@ -205,9 +298,64 @@ library LineraTypes {
         pure
         returns (BaseRuntimePrecompile memory)
     {
-        BaseRuntimePrecompile_ReadDataBlob memory read_data_blob;
-        BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(1), read_data_blob, assert_data_blob_exists);
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(2), read_owner_balance, read_data_blob, assert_data_blob_exists);
+    }
+
+    function BaseRuntimePrecompile_case_read_system_timestamp()
+        internal
+        pure
+        returns (BaseRuntimePrecompile memory)
+    {
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(3), read_owner_balance, read_data_blob, assert_data_blob_exists);
+    }
+
+    function BaseRuntimePrecompile_case_read_chain_balance()
+        internal
+        pure
+        returns (BaseRuntimePrecompile memory)
+    {
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(4), read_owner_balance, read_data_blob, assert_data_blob_exists);
+    }
+
+    function BaseRuntimePrecompile_case_read_owner_balance(AccountOwner memory read_owner_balance)
+        internal
+        pure
+        returns (BaseRuntimePrecompile memory)
+    {
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(5), read_owner_balance, read_data_blob, assert_data_blob_exists);
+    }
+
+    function BaseRuntimePrecompile_case_read_owner_balances()
+        internal
+        pure
+        returns (BaseRuntimePrecompile memory)
+    {
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(6), read_owner_balance, read_data_blob, assert_data_blob_exists);
+    }
+
+    function BaseRuntimePrecompile_case_read_balance_owners()
+        internal
+        pure
+        returns (BaseRuntimePrecompile memory)
+    {
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(7), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function BaseRuntimePrecompile_case_chain_ownership()
@@ -215,27 +363,30 @@ library LineraTypes {
         pure
         returns (BaseRuntimePrecompile memory)
     {
-        BaseRuntimePrecompile_ReadDataBlob memory read_data_blob;
-        BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(2), read_data_blob, assert_data_blob_exists);
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(8), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
-    function BaseRuntimePrecompile_case_read_data_blob(BaseRuntimePrecompile_ReadDataBlob memory read_data_blob)
+    function BaseRuntimePrecompile_case_read_data_blob(CryptoHash memory read_data_blob)
         internal
         pure
         returns (BaseRuntimePrecompile memory)
     {
-        BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(3), read_data_blob, assert_data_blob_exists);
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory assert_data_blob_exists;
+        return BaseRuntimePrecompile(uint8(9), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
-    function BaseRuntimePrecompile_case_assert_data_blob_exists(BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists)
+    function BaseRuntimePrecompile_case_assert_data_blob_exists(CryptoHash memory assert_data_blob_exists)
         internal
         pure
         returns (BaseRuntimePrecompile memory)
     {
-        BaseRuntimePrecompile_ReadDataBlob memory read_data_blob;
-        return BaseRuntimePrecompile(uint8(4), read_data_blob, assert_data_blob_exists);
+        AccountOwner memory read_owner_balance;
+        CryptoHash memory read_data_blob;
+        return BaseRuntimePrecompile(uint8(10), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function bcs_serialize_BaseRuntimePrecompile(BaseRuntimePrecompile memory input)
@@ -243,11 +394,14 @@ library LineraTypes {
         pure
         returns (bytes memory)
     {
-        if (input.choice == 3) {
-            return abi.encodePacked(input.choice, bcs_serialize_BaseRuntimePrecompile_ReadDataBlob(input.read_data_blob));
+        if (input.choice == 5) {
+            return abi.encodePacked(input.choice, bcs_serialize_AccountOwner(input.read_owner_balance));
         }
-        if (input.choice == 4) {
-            return abi.encodePacked(input.choice, bcs_serialize_BaseRuntimePrecompile_AssertDataBlobExists(input.assert_data_blob_exists));
+        if (input.choice == 9) {
+            return abi.encodePacked(input.choice, bcs_serialize_CryptoHash(input.read_data_blob));
+        }
+        if (input.choice == 10) {
+            return abi.encodePacked(input.choice, bcs_serialize_CryptoHash(input.assert_data_blob_exists));
         }
         return abi.encodePacked(input.choice);
     }
@@ -260,16 +414,20 @@ library LineraTypes {
         uint256 new_pos;
         uint8 choice;
         (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
-        BaseRuntimePrecompile_ReadDataBlob memory read_data_blob;
-        if (choice == 3) {
-            (new_pos, read_data_blob) = bcs_deserialize_offset_BaseRuntimePrecompile_ReadDataBlob(new_pos, input);
+        AccountOwner memory read_owner_balance;
+        if (choice == 5) {
+            (new_pos, read_owner_balance) = bcs_deserialize_offset_AccountOwner(new_pos, input);
         }
-        BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists;
-        if (choice == 4) {
-            (new_pos, assert_data_blob_exists) = bcs_deserialize_offset_BaseRuntimePrecompile_AssertDataBlobExists(new_pos, input);
+        CryptoHash memory read_data_blob;
+        if (choice == 9) {
+            (new_pos, read_data_blob) = bcs_deserialize_offset_CryptoHash(new_pos, input);
         }
-        require(choice < 5);
-        return (new_pos, BaseRuntimePrecompile(choice, read_data_blob, assert_data_blob_exists));
+        CryptoHash memory assert_data_blob_exists;
+        if (choice == 10) {
+            (new_pos, assert_data_blob_exists) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        }
+        require(choice < 11);
+        return (new_pos, BaseRuntimePrecompile(choice, read_owner_balance, read_data_blob, assert_data_blob_exists));
     }
 
     function bcs_deserialize_BaseRuntimePrecompile(bytes memory input)
@@ -280,76 +438,6 @@ library LineraTypes {
         uint256 new_pos;
         BaseRuntimePrecompile memory value;
         (new_pos, value) = bcs_deserialize_offset_BaseRuntimePrecompile(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct BaseRuntimePrecompile_AssertDataBlobExists {
-        CryptoHash hash;
-    }
-
-    function bcs_serialize_BaseRuntimePrecompile_AssertDataBlobExists(BaseRuntimePrecompile_AssertDataBlobExists memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return bcs_serialize_CryptoHash(input.hash);
-    }
-
-    function bcs_deserialize_offset_BaseRuntimePrecompile_AssertDataBlobExists(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, BaseRuntimePrecompile_AssertDataBlobExists memory)
-    {
-        uint256 new_pos;
-        CryptoHash memory hash;
-        (new_pos, hash) = bcs_deserialize_offset_CryptoHash(pos, input);
-        return (new_pos, BaseRuntimePrecompile_AssertDataBlobExists(hash));
-    }
-
-    function bcs_deserialize_BaseRuntimePrecompile_AssertDataBlobExists(bytes memory input)
-        internal
-        pure
-        returns (BaseRuntimePrecompile_AssertDataBlobExists memory)
-    {
-        uint256 new_pos;
-        BaseRuntimePrecompile_AssertDataBlobExists memory value;
-        (new_pos, value) = bcs_deserialize_offset_BaseRuntimePrecompile_AssertDataBlobExists(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct BaseRuntimePrecompile_ReadDataBlob {
-        CryptoHash hash;
-    }
-
-    function bcs_serialize_BaseRuntimePrecompile_ReadDataBlob(BaseRuntimePrecompile_ReadDataBlob memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return bcs_serialize_CryptoHash(input.hash);
-    }
-
-    function bcs_deserialize_offset_BaseRuntimePrecompile_ReadDataBlob(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, BaseRuntimePrecompile_ReadDataBlob memory)
-    {
-        uint256 new_pos;
-        CryptoHash memory hash;
-        (new_pos, hash) = bcs_deserialize_offset_CryptoHash(pos, input);
-        return (new_pos, BaseRuntimePrecompile_ReadDataBlob(hash));
-    }
-
-    function bcs_deserialize_BaseRuntimePrecompile_ReadDataBlob(bytes memory input)
-        internal
-        pure
-        returns (BaseRuntimePrecompile_ReadDataBlob memory)
-    {
-        uint256 new_pos;
-        BaseRuntimePrecompile_ReadDataBlob memory value;
-        (new_pos, value) = bcs_deserialize_offset_BaseRuntimePrecompile_ReadDataBlob(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -477,48 +565,85 @@ library LineraTypes {
 
     struct ContractRuntimePrecompile {
         uint8 choice;
-        // choice=0 corresponds to TryCallApplication
-        ContractRuntimePrecompile_TryCallApplication try_call_application;
-        // choice=1 corresponds to ValidationRound
-        // choice=2 corresponds to SendMessage
+        // choice=0 corresponds to AuthenticatedSigner
+        // choice=1 corresponds to MessageId
+        // choice=2 corresponds to MessageIsBouncing
+        // choice=3 corresponds to AuthenticatedCallerId
+        // choice=4 corresponds to SendMessage
         ContractRuntimePrecompile_SendMessage send_message;
-        // choice=3 corresponds to MessageId
-        // choice=4 corresponds to MessageIsBouncing
-        // choice=5 corresponds to Emit
+        // choice=5 corresponds to TryCallApplication
+        ContractRuntimePrecompile_TryCallApplication try_call_application;
+        // choice=6 corresponds to Emit
         ContractRuntimePrecompile_Emit emit_;
-        // choice=6 corresponds to ReadEvent
+        // choice=7 corresponds to ReadEvent
         ContractRuntimePrecompile_ReadEvent read_event;
-        // choice=7 corresponds to SubscribeToEvents
+        // choice=8 corresponds to SubscribeToEvents
         ContractRuntimePrecompile_SubscribeToEvents subscribe_to_events;
-        // choice=8 corresponds to UnsubscribeFromEvents
+        // choice=9 corresponds to UnsubscribeFromEvents
         ContractRuntimePrecompile_UnsubscribeFromEvents unsubscribe_from_events;
+        // choice=10 corresponds to QueryService
+        ContractRuntimePrecompile_QueryService query_service;
+        // choice=11 corresponds to ValidationRound
     }
 
-    function ContractRuntimePrecompile_case_try_call_application(ContractRuntimePrecompile_TryCallApplication memory try_call_application)
+    function ContractRuntimePrecompile_case_authenticated_signer()
         internal
         pure
         returns (ContractRuntimePrecompile memory)
     {
         ContractRuntimePrecompile_SendMessage memory send_message;
-        ContractRuntimePrecompile_Emit memory emit_;
-        ContractRuntimePrecompile_ReadEvent memory read_event;
-        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
-        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(0), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
-    }
-
-    function ContractRuntimePrecompile_case_validation_round()
-        internal
-        pure
-        returns (ContractRuntimePrecompile memory)
-    {
         ContractRuntimePrecompile_TryCallApplication memory try_call_application;
-        ContractRuntimePrecompile_SendMessage memory send_message;
         ContractRuntimePrecompile_Emit memory emit_;
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(1), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(0), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+    }
+
+    function ContractRuntimePrecompile_case_message_id()
+        internal
+        pure
+        returns (ContractRuntimePrecompile memory)
+    {
+        ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
+        ContractRuntimePrecompile_Emit memory emit_;
+        ContractRuntimePrecompile_ReadEvent memory read_event;
+        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
+        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(1), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+    }
+
+    function ContractRuntimePrecompile_case_message_is_bouncing()
+        internal
+        pure
+        returns (ContractRuntimePrecompile memory)
+    {
+        ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
+        ContractRuntimePrecompile_Emit memory emit_;
+        ContractRuntimePrecompile_ReadEvent memory read_event;
+        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
+        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(2), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+    }
+
+    function ContractRuntimePrecompile_case_authenticated_caller_id()
+        internal
+        pure
+        returns (ContractRuntimePrecompile memory)
+    {
+        ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
+        ContractRuntimePrecompile_Emit memory emit_;
+        ContractRuntimePrecompile_ReadEvent memory read_event;
+        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
+        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(3), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_send_message(ContractRuntimePrecompile_SendMessage memory send_message)
@@ -531,35 +656,22 @@ library LineraTypes {
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(2), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(4), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
-    function ContractRuntimePrecompile_case_message_id()
+    function ContractRuntimePrecompile_case_try_call_application(ContractRuntimePrecompile_TryCallApplication memory try_call_application)
         internal
         pure
         returns (ContractRuntimePrecompile memory)
     {
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_SendMessage memory send_message;
         ContractRuntimePrecompile_Emit memory emit_;
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(3), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
-    }
-
-    function ContractRuntimePrecompile_case_message_is_bouncing()
-        internal
-        pure
-        returns (ContractRuntimePrecompile memory)
-    {
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
-        ContractRuntimePrecompile_SendMessage memory send_message;
-        ContractRuntimePrecompile_Emit memory emit_;
-        ContractRuntimePrecompile_ReadEvent memory read_event;
-        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
-        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(4), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(5), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_emit(ContractRuntimePrecompile_Emit memory emit_)
@@ -567,12 +679,13 @@ library LineraTypes {
         pure
         returns (ContractRuntimePrecompile memory)
     {
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(5), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(6), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_read_event(ContractRuntimePrecompile_ReadEvent memory read_event)
@@ -580,12 +693,13 @@ library LineraTypes {
         pure
         returns (ContractRuntimePrecompile memory)
     {
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_Emit memory emit_;
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(6), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(7), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_subscribe_to_events(ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events)
@@ -593,12 +707,13 @@ library LineraTypes {
         pure
         returns (ContractRuntimePrecompile memory)
     {
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_Emit memory emit_;
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(7), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(8), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_unsubscribe_from_events(ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events)
@@ -606,12 +721,42 @@ library LineraTypes {
         pure
         returns (ContractRuntimePrecompile memory)
     {
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         ContractRuntimePrecompile_Emit memory emit_;
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
-        return ContractRuntimePrecompile(uint8(8), try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events);
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(9), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+    }
+
+    function ContractRuntimePrecompile_case_query_service(ContractRuntimePrecompile_QueryService memory query_service)
+        internal
+        pure
+        returns (ContractRuntimePrecompile memory)
+    {
+        ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
+        ContractRuntimePrecompile_Emit memory emit_;
+        ContractRuntimePrecompile_ReadEvent memory read_event;
+        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
+        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
+        return ContractRuntimePrecompile(uint8(10), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+    }
+
+    function ContractRuntimePrecompile_case_validation_round()
+        internal
+        pure
+        returns (ContractRuntimePrecompile memory)
+    {
+        ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
+        ContractRuntimePrecompile_Emit memory emit_;
+        ContractRuntimePrecompile_ReadEvent memory read_event;
+        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
+        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
+        ContractRuntimePrecompile_QueryService memory query_service;
+        return ContractRuntimePrecompile(uint8(11), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function bcs_serialize_ContractRuntimePrecompile(ContractRuntimePrecompile memory input)
@@ -619,23 +764,26 @@ library LineraTypes {
         pure
         returns (bytes memory)
     {
-        if (input.choice == 0) {
-            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_TryCallApplication(input.try_call_application));
-        }
-        if (input.choice == 2) {
+        if (input.choice == 4) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_SendMessage(input.send_message));
         }
         if (input.choice == 5) {
-            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_Emit(input.emit_));
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_TryCallApplication(input.try_call_application));
         }
         if (input.choice == 6) {
-            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_ReadEvent(input.read_event));
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_Emit(input.emit_));
         }
         if (input.choice == 7) {
-            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_SubscribeToEvents(input.subscribe_to_events));
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_ReadEvent(input.read_event));
         }
         if (input.choice == 8) {
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_SubscribeToEvents(input.subscribe_to_events));
+        }
+        if (input.choice == 9) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_UnsubscribeFromEvents(input.unsubscribe_from_events));
+        }
+        if (input.choice == 10) {
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_QueryService(input.query_service));
         }
         return abi.encodePacked(input.choice);
     }
@@ -648,32 +796,36 @@ library LineraTypes {
         uint256 new_pos;
         uint8 choice;
         (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
-        if (choice == 0) {
-            (new_pos, try_call_application) = bcs_deserialize_offset_ContractRuntimePrecompile_TryCallApplication(new_pos, input);
-        }
         ContractRuntimePrecompile_SendMessage memory send_message;
-        if (choice == 2) {
+        if (choice == 4) {
             (new_pos, send_message) = bcs_deserialize_offset_ContractRuntimePrecompile_SendMessage(new_pos, input);
         }
-        ContractRuntimePrecompile_Emit memory emit_;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
         if (choice == 5) {
+            (new_pos, try_call_application) = bcs_deserialize_offset_ContractRuntimePrecompile_TryCallApplication(new_pos, input);
+        }
+        ContractRuntimePrecompile_Emit memory emit_;
+        if (choice == 6) {
             (new_pos, emit_) = bcs_deserialize_offset_ContractRuntimePrecompile_Emit(new_pos, input);
         }
         ContractRuntimePrecompile_ReadEvent memory read_event;
-        if (choice == 6) {
+        if (choice == 7) {
             (new_pos, read_event) = bcs_deserialize_offset_ContractRuntimePrecompile_ReadEvent(new_pos, input);
         }
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
-        if (choice == 7) {
+        if (choice == 8) {
             (new_pos, subscribe_to_events) = bcs_deserialize_offset_ContractRuntimePrecompile_SubscribeToEvents(new_pos, input);
         }
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        if (choice == 8) {
+        if (choice == 9) {
             (new_pos, unsubscribe_from_events) = bcs_deserialize_offset_ContractRuntimePrecompile_UnsubscribeFromEvents(new_pos, input);
         }
-        require(choice < 9);
-        return (new_pos, ContractRuntimePrecompile(choice, try_call_application, send_message, emit_, read_event, subscribe_to_events, unsubscribe_from_events));
+        ContractRuntimePrecompile_QueryService memory query_service;
+        if (choice == 10) {
+            (new_pos, query_service) = bcs_deserialize_offset_ContractRuntimePrecompile_QueryService(new_pos, input);
+        }
+        require(choice < 12);
+        return (new_pos, ContractRuntimePrecompile(choice, send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service));
     }
 
     function bcs_deserialize_ContractRuntimePrecompile(bytes memory input)
@@ -723,6 +875,45 @@ library LineraTypes {
         uint256 new_pos;
         ContractRuntimePrecompile_Emit memory value;
         (new_pos, value) = bcs_deserialize_offset_ContractRuntimePrecompile_Emit(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ContractRuntimePrecompile_QueryService {
+        ApplicationId application_id;
+        bytes query;
+    }
+
+    function bcs_serialize_ContractRuntimePrecompile_QueryService(ContractRuntimePrecompile_QueryService memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ApplicationId(input.application_id);
+        return abi.encodePacked(result, bcs_serialize_bytes(input.query));
+    }
+
+    function bcs_deserialize_offset_ContractRuntimePrecompile_QueryService(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ContractRuntimePrecompile_QueryService memory)
+    {
+        uint256 new_pos;
+        ApplicationId memory application_id;
+        (new_pos, application_id) = bcs_deserialize_offset_ApplicationId(pos, input);
+        bytes memory query;
+        (new_pos, query) = bcs_deserialize_offset_bytes(new_pos, input);
+        return (new_pos, ContractRuntimePrecompile_QueryService(application_id, query));
+    }
+
+    function bcs_deserialize_ContractRuntimePrecompile_QueryService(bytes memory input)
+        internal
+        pure
+        returns (ContractRuntimePrecompile_QueryService memory)
+    {
+        uint256 new_pos;
+        ContractRuntimePrecompile_QueryService memory value;
+        (new_pos, value) = bcs_deserialize_offset_ContractRuntimePrecompile_QueryService(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -1110,6 +1301,76 @@ library LineraTypes {
         return value;
     }
 
+    struct OptionAccountOwner {
+        opt_AccountOwner value;
+    }
+
+    function bcs_serialize_OptionAccountOwner(OptionAccountOwner memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_opt_AccountOwner(input.value);
+    }
+
+    function bcs_deserialize_offset_OptionAccountOwner(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, OptionAccountOwner memory)
+    {
+        uint256 new_pos;
+        opt_AccountOwner memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_AccountOwner(pos, input);
+        return (new_pos, OptionAccountOwner(value));
+    }
+
+    function bcs_deserialize_OptionAccountOwner(bytes memory input)
+        internal
+        pure
+        returns (OptionAccountOwner memory)
+    {
+        uint256 new_pos;
+        OptionAccountOwner memory value;
+        (new_pos, value) = bcs_deserialize_offset_OptionAccountOwner(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct OptionApplicationId {
+        opt_ApplicationId value;
+    }
+
+    function bcs_serialize_OptionApplicationId(OptionApplicationId memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_opt_ApplicationId(input.value);
+    }
+
+    function bcs_deserialize_offset_OptionApplicationId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, OptionApplicationId memory)
+    {
+        uint256 new_pos;
+        opt_ApplicationId memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_ApplicationId(pos, input);
+        return (new_pos, OptionApplicationId(value));
+    }
+
+    function bcs_deserialize_OptionApplicationId(bytes memory input)
+        internal
+        pure
+        returns (OptionApplicationId memory)
+    {
+        uint256 new_pos;
+        OptionApplicationId memory value;
+        (new_pos, value) = bcs_deserialize_offset_OptionApplicationId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     enum OptionBool { None, True, False }
 
     function bcs_serialize_OptionBool(OptionBool input)
@@ -1224,6 +1485,76 @@ library LineraTypes {
         uint256 new_pos;
         OptionU32 memory value;
         (new_pos, value) = bcs_deserialize_offset_OptionU32(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ResponseReadBalanceOwners {
+        AccountOwner[] value;
+    }
+
+    function bcs_serialize_ResponseReadBalanceOwners(ResponseReadBalanceOwners memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_seq_AccountOwner(input.value);
+    }
+
+    function bcs_deserialize_offset_ResponseReadBalanceOwners(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ResponseReadBalanceOwners memory)
+    {
+        uint256 new_pos;
+        AccountOwner[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_AccountOwner(pos, input);
+        return (new_pos, ResponseReadBalanceOwners(value));
+    }
+
+    function bcs_deserialize_ResponseReadBalanceOwners(bytes memory input)
+        internal
+        pure
+        returns (ResponseReadBalanceOwners memory)
+    {
+        uint256 new_pos;
+        ResponseReadBalanceOwners memory value;
+        (new_pos, value) = bcs_deserialize_offset_ResponseReadBalanceOwners(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ResponseReadOwnerBalances {
+        AccountOwnerBalanceInner[] value;
+    }
+
+    function bcs_serialize_ResponseReadOwnerBalances(ResponseReadOwnerBalances memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_seq_AccountOwnerBalanceInner(input.value);
+    }
+
+    function bcs_deserialize_offset_ResponseReadOwnerBalances(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ResponseReadOwnerBalances memory)
+    {
+        uint256 new_pos;
+        AccountOwnerBalanceInner[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_AccountOwnerBalanceInner(pos, input);
+        return (new_pos, ResponseReadOwnerBalances(value));
+    }
+
+    function bcs_deserialize_ResponseReadOwnerBalances(bytes memory input)
+        internal
+        pure
+        returns (ResponseReadOwnerBalances memory)
+    {
+        uint256 new_pos;
+        ResponseReadOwnerBalances memory value;
+        (new_pos, value) = bcs_deserialize_offset_ResponseReadOwnerBalances(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -1651,6 +1982,41 @@ library LineraTypes {
         return value;
     }
 
+    struct Timestamp {
+        uint64 value;
+    }
+
+    function bcs_serialize_Timestamp(Timestamp memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_uint64(input.value);
+    }
+
+    function bcs_deserialize_offset_Timestamp(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, Timestamp memory)
+    {
+        uint256 new_pos;
+        uint64 value;
+        (new_pos, value) = bcs_deserialize_offset_uint64(pos, input);
+        return (new_pos, Timestamp(value));
+    }
+
+    function bcs_deserialize_Timestamp(bytes memory input)
+        internal
+        pure
+        returns (Timestamp memory)
+    {
+        uint256 new_pos;
+        Timestamp memory value;
+        (new_pos, value) = bcs_deserialize_offset_Timestamp(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     function bcs_serialize_bool(bool input)
         internal
         pure
@@ -1798,6 +2164,94 @@ library LineraTypes {
         uint256 new_pos;
         key_values_AccountOwner_uint64 memory value;
         (new_pos, value) = bcs_deserialize_offset_key_values_AccountOwner_uint64(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct opt_AccountOwner {
+        bool has_value;
+        AccountOwner value;
+    }
+
+    function bcs_serialize_opt_AccountOwner(opt_AccountOwner memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.has_value) {
+            return abi.encodePacked(uint8(1), bcs_serialize_AccountOwner(input.value));
+        } else {
+            return abi.encodePacked(uint8(0));
+        }
+    }
+
+    function bcs_deserialize_offset_opt_AccountOwner(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, opt_AccountOwner memory)
+    {
+        uint256 new_pos;
+        bool has_value;
+        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
+        AccountOwner memory value;
+        if (has_value) {
+            (new_pos, value) = bcs_deserialize_offset_AccountOwner(new_pos, input);
+        }
+        return (new_pos, opt_AccountOwner(has_value, value));
+    }
+
+    function bcs_deserialize_opt_AccountOwner(bytes memory input)
+        internal
+        pure
+        returns (opt_AccountOwner memory)
+    {
+        uint256 new_pos;
+        opt_AccountOwner memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_AccountOwner(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct opt_ApplicationId {
+        bool has_value;
+        ApplicationId value;
+    }
+
+    function bcs_serialize_opt_ApplicationId(opt_ApplicationId memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.has_value) {
+            return abi.encodePacked(uint8(1), bcs_serialize_ApplicationId(input.value));
+        } else {
+            return abi.encodePacked(uint8(0));
+        }
+    }
+
+    function bcs_deserialize_offset_opt_ApplicationId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, opt_ApplicationId memory)
+    {
+        uint256 new_pos;
+        bool has_value;
+        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
+        ApplicationId memory value;
+        if (has_value) {
+            (new_pos, value) = bcs_deserialize_offset_ApplicationId(new_pos, input);
+        }
+        return (new_pos, opt_ApplicationId(has_value, value));
+    }
+
+    function bcs_deserialize_opt_ApplicationId(bytes memory input)
+        internal
+        pure
+        returns (opt_ApplicationId memory)
+    {
+        uint256 new_pos;
+        opt_ApplicationId memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_ApplicationId(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -1973,6 +2427,49 @@ library LineraTypes {
         uint256 new_pos;
         AccountOwner[] memory value;
         (new_pos, value) = bcs_deserialize_offset_seq_AccountOwner(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_seq_AccountOwnerBalanceInner(AccountOwnerBalanceInner[] memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        uint256 len = input.length;
+        bytes memory result = bcs_serialize_len(len);
+        for (uint256 i=0; i<len; i++) {
+            result = abi.encodePacked(result, bcs_serialize_AccountOwnerBalanceInner(input[i]));
+        }
+        return result;
+    }
+
+    function bcs_deserialize_offset_seq_AccountOwnerBalanceInner(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, AccountOwnerBalanceInner[] memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        AccountOwnerBalanceInner[] memory result;
+        result = new AccountOwnerBalanceInner[](len);
+        AccountOwnerBalanceInner memory value;
+        for (uint256 i=0; i<len; i++) {
+            (new_pos, value) = bcs_deserialize_offset_AccountOwnerBalanceInner(new_pos, input);
+            result[i] = value;
+        }
+        return (new_pos, result);
+    }
+
+    function bcs_deserialize_seq_AccountOwnerBalanceInner(bytes memory input)
+        internal
+        pure
+        returns (AccountOwnerBalanceInner[] memory)
+    {
+        uint256 new_pos;
+        AccountOwnerBalanceInner[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_AccountOwnerBalanceInner(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
