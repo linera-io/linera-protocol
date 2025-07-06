@@ -28,7 +28,7 @@ use revm_interpreter::{
     CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl,
     InstructionResult, InterpreterResult,
 };
-use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind};
+use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind, U256};
 use revm_state::EvmState;
 use serde::{Deserialize, Serialize};
 
@@ -484,35 +484,51 @@ fn address_to_user_application_id(address: Address) -> ApplicationId {
 enum BaseRuntimePrecompile {
     /// Calling `chain_id` of `BaseRuntime`
     ChainId,
+    /// Calling `block_height_id` of `BaseRuntime`
+    BlockHeight,
+    /// Calling `application_id` of `BaseRuntime`
+    ApplicationId,
     /// Calling `application_creator_chain_id` of `BaseRuntime`
     ApplicationCreatorChainId,
+    /// Calling `read_system_timestamp` of `BaseRuntime`
+    ReadSystemTimestamp,
+    /// Calling `read_chain_balance` of `BaseRuntime`
+    ReadChainBalance,
+    /// Calling `read_owner_balance` of `BaseRuntime`
+    ReadOwnerBalance(AccountOwner),
+    /// Calling `read_owner_balances` of `BaseRuntime`
+    ReadOwnerBalances,
+    /// Calling `read_balance_owners` of `BaseRuntime`
+    ReadBalanceOwners,
     /// Calling `chain_ownership` of `BaseRuntime`
     ChainOwnership,
     /// Calling `read_data_blob` of `BaseRuntime`
-    ReadDataBlob { hash: CryptoHash },
+    ReadDataBlob(CryptoHash),
     /// Calling `assert_data_blob_exists` of `BaseRuntime`
-    AssertDataBlobExists { hash: CryptoHash },
+    AssertDataBlobExists(CryptoHash),
 }
 
 /// Some functionalities from the ContractRuntime not in BaseRuntime
 #[derive(Debug, Serialize, Deserialize)]
 enum ContractRuntimePrecompile {
-    /// Calling `try_call_application` of `ContractRuntime`
-    TryCallApplication {
-        target: ApplicationId,
-        argument: Vec<u8>,
-    },
-    /// Calling `validation_round` of `ContractRuntime`
-    ValidationRound,
+    /// Calling `authenticated_signer` of `ContractRuntime`
+    AuthenticatedSigner,
+    /// Calling `message_id` of `ContractRuntime`
+    MessageId,
+    /// Calling `message_is_bouncing` of `ContractRuntime`
+    MessageIsBouncing,
+    /// Calling `authenticated_caller_id` of `ContractRuntime`
+    AuthenticatedCallerId,
     /// Calling `send_message` of `ContractRuntime`
     SendMessage {
         destination: ChainId,
         message: Vec<u8>,
     },
-    /// Calling `message_id` of `ContractRuntime`
-    MessageId,
-    /// Calling `message_is_bouncing` of `ContractRuntime`
-    MessageIsBouncing,
+    /// Calling `try_call_application` of `ContractRuntime`
+    TryCallApplication {
+        target: ApplicationId,
+        argument: Vec<u8>,
+    },
     /// Calling `emit` of `ContractRuntime`
     Emit {
         stream_name: StreamName,
@@ -536,6 +552,13 @@ enum ContractRuntimePrecompile {
         application_id: ApplicationId,
         stream_name: StreamName,
     },
+    /// Calling `query_service` of `ContractRuntime`
+    QueryService {
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    },
+    /// Calling `validation_round` of `ContractRuntime`
+    ValidationRound,
 }
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
@@ -595,16 +618,51 @@ fn base_runtime_call<Runtime: BaseRuntime>(
             let chain_id = runtime.chain_id()?;
             Ok(bcs::to_bytes(&chain_id)?)
         }
+        BaseRuntimePrecompile::BlockHeight => {
+            let block_height = runtime.block_height()?;
+            Ok(bcs::to_bytes(&block_height)?)
+        }
+        BaseRuntimePrecompile::ApplicationId => {
+            let application_id = runtime.application_id()?;
+            Ok(bcs::to_bytes(&application_id)?)
+        }
         BaseRuntimePrecompile::ApplicationCreatorChainId => {
             let chain_id = runtime.application_creator_chain_id()?;
             Ok(bcs::to_bytes(&chain_id)?)
+        }
+        BaseRuntimePrecompile::ReadSystemTimestamp => {
+            let timestamp = runtime.read_system_timestamp()?;
+            Ok(bcs::to_bytes(&timestamp)?)
+        }
+        BaseRuntimePrecompile::ReadChainBalance => {
+            let balance: linera_base::data_types::Amount = runtime.read_chain_balance()?;
+            let balance: U256 = balance.into();
+            Ok(bcs::to_bytes(&balance)?)
+        }
+        BaseRuntimePrecompile::ReadOwnerBalance(account_owner) => {
+            let balance = runtime.read_owner_balance(account_owner)?;
+            let balance = Into::<U256>::into(balance);
+            Ok(bcs::to_bytes(&balance)?)
+        }
+        BaseRuntimePrecompile::ReadOwnerBalances => {
+            let owner_balances = runtime.read_owner_balances()?;
+            let owner_balances = owner_balances
+                .into_iter()
+                .map(|(account_owner, balance)|
+                     (account_owner, balance.into()))
+                .collect::<Vec<(AccountOwner,U256)>>();
+            Ok(bcs::to_bytes(&owner_balances)?)
+        }
+        BaseRuntimePrecompile::ReadBalanceOwners => {
+            let owners = runtime.read_balance_owners()?;
+            Ok(bcs::to_bytes(&owners)?)
         }
         BaseRuntimePrecompile::ChainOwnership => {
             let chain_ownership = runtime.chain_ownership()?;
             Ok(bcs::to_bytes(&chain_ownership)?)
         }
-        BaseRuntimePrecompile::ReadDataBlob { hash } => runtime.read_data_blob(&hash),
-        BaseRuntimePrecompile::AssertDataBlobExists { hash } => {
+        BaseRuntimePrecompile::ReadDataBlob(hash) => runtime.read_data_blob(&hash),
+        BaseRuntimePrecompile::AssertDataBlobExists(hash) => {
             runtime.assert_data_blob_exists(&hash)?;
             Ok(Vec::new())
         }
@@ -673,13 +731,21 @@ impl<'a> ContractPrecompile {
             .lock()
             .expect("The lock should be possible");
         match request {
-            ContractRuntimePrecompile::TryCallApplication { target, argument } => {
-                let authenticated = true;
-                runtime.try_call_application(authenticated, target, argument)
+            ContractRuntimePrecompile::AuthenticatedSigner => {
+                let account_owner = runtime.authenticated_signer()?;
+                Ok(bcs::to_bytes(&account_owner)?)
             }
-            ContractRuntimePrecompile::ValidationRound => {
-                let value = runtime.validation_round()?;
-                Ok(bcs::to_bytes(&value)?)
+            ContractRuntimePrecompile::MessageId => {
+                let message_id = runtime.message_id()?;
+                Ok(bcs::to_bytes(&message_id)?)
+            }
+            ContractRuntimePrecompile::MessageIsBouncing => {
+                let result = runtime.message_is_bouncing()?;
+                Ok(bcs::to_bytes(&result)?)
+            }
+            ContractRuntimePrecompile::AuthenticatedCallerId => {
+                let application_id = runtime.authenticated_caller_id()?;
+                Ok(bcs::to_bytes(&application_id)?)
             }
             ContractRuntimePrecompile::SendMessage {
                 destination,
@@ -698,13 +764,9 @@ impl<'a> ContractPrecompile {
                 runtime.send_message(send_message_request)?;
                 Ok(vec![])
             }
-            ContractRuntimePrecompile::MessageId => {
-                let message_id = runtime.message_id()?;
-                Ok(bcs::to_bytes(&message_id)?)
-            }
-            ContractRuntimePrecompile::MessageIsBouncing => {
-                let result = runtime.message_is_bouncing()?;
-                Ok(bcs::to_bytes(&result)?)
+            ContractRuntimePrecompile::TryCallApplication { target, argument } => {
+                let authenticated = true;
+                runtime.try_call_application(authenticated, target, argument)
             }
             ContractRuntimePrecompile::Emit { stream_name, value } => {
                 let result = runtime.emit(stream_name, value)?;
@@ -730,6 +792,13 @@ impl<'a> ContractPrecompile {
             } => {
                 runtime.unsubscribe_from_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
+            }
+            ContractRuntimePrecompile::QueryService { application_id, query } => {
+                runtime.query_service(application_id, query)
+            }
+            ContractRuntimePrecompile::ValidationRound => {
+                let value = runtime.validation_round()?;
+                Ok(bcs::to_bytes(&value)?)
             }
         }
     }

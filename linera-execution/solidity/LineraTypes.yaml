@@ -41,6 +41,32 @@ AccountOwner:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
+Timestamp:
+  NEWTYPESTRUCT: U64
+Amount:
+  NEWTYPESTRUCT: U128
+AccountOwnerBalance:
+  STRUCT:
+    - account_owner:
+        TYPENAME: AccountOwner
+    - balance:
+        TYPENAME: Balance
+OptionAccountOwner:
+  NEWTYPESTRUCT:
+    OPTION:
+      TYPENAME: AccountOwner
+OptionApplicationId:
+  NEWTYPESTRUCT:
+    OPTION:
+      TYPENAME: ApplicationId
+ResponseReadOwnerBalances:
+  NEWTYPESTRUCT:
+    SEQ:
+      TYPENAME: AccountOwnerBalance
+ResponseReadBalanceOwners:
+  NEWTYPESTRUCT:
+    SEQ:
+      TYPENAME: AccountOwner
 CryptoHash:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -58,6 +84,8 @@ BlockHeight:
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
+BlockHeight:
+  NEWTYPESTRUCT: U64
 MessageIsBouncing:
   NEWTYPESTRUCT:
     OPTION: BOOL
@@ -82,46 +110,62 @@ BaseRuntimePrecompile:
     0:
       ChainId: UNIT
     1:
-      ApplicationCreatorChainId: UNIT
+      BlockHeight: UNIT
     2:
-      ChainOwnership: UNIT
+      ApplicationId: UNIT
     3:
-      ReadDataBlob:
-        STRUCT:
-          - hash:
-              TYPENAME: CryptoHash
+      ApplicationCreatorChainId: UNIT
     4:
+      ReadSystemTimestamp: UNIT
+    5:
+      ReadChainBalance: UNIT
+    6:
+      ReadOwnerBalance:
+        NEWTYPE:
+          TYPENAME: AccountOwner
+    7:
+      ReadOwnerBalances: UNIT
+    8:
+      ReadBalanceOwners: UNIT
+    9:
+      ChainOwnership: UNIT
+    10:
+      ReadDataBlob:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    11:
       AssertDataBlobExists:
-        STRUCT:
-          - hash:
-              TYPENAME: CryptoHash
+        NEWTYPE:
+          TYPENAME: CryptoHash
 ContractRuntimePrecompile:
   ENUM:
     0:
-      TryCallApplication:
-        STRUCT:
-          - target:
-              TYPENAME: ApplicationId
-          - argument: BYTES
+      AuthenticatedSigner: UNIT
     1:
-      ValidationRound: UNIT
+      MessageId: UNIT
     2:
+      MessageIsBouncing: UNIT
+    3:
+      AuthenticatedCalledId: UNIT
+    4:
       SendMessage:
         STRUCT:
           - destination:
               TYPENAME: ChainId
           - message: BYTES
-    3:
-      MessageId: UNIT
-    4:
-      MessageIsBouncing: UNIT
     5:
+      TryCallApplication:
+        STRUCT:
+          - target:
+              TYPENAME: ApplicationId
+          - argument: BYTES
+    6:
       Emit:
         STRUCT:
           - stream_name:
               TYPENAME: StreamName
           - value: BYTES
-    6:
+    7:
       ReadEvent:
         STRUCT:
           - chain_id:
@@ -129,7 +173,7 @@ ContractRuntimePrecompile:
           - stream_name:
               TYPENAME: StreamName
           - index: U32
-    7:
+    8:
       SubscribeToEvents:
         STRUCT:
           - chain_id:
@@ -138,8 +182,7 @@ ContractRuntimePrecompile:
               TYPENAME: ApplicationId
           - stream_name:
               TYPENAME: StreamName
-
-    8:
+    9:
       UnsubscribeFromEvents:
         STRUCT:
           - chain_id:
@@ -148,6 +191,14 @@ ContractRuntimePrecompile:
               TYPENAME: ApplicationId
           - stream_name:
               TYPENAME: StreamName
+    10:
+      QueryService:
+        STRUCT:
+          - application_id:
+              TYPENAME: ApplicationId
+          - query: BYTES
+    11:
+      ValidationRound: UNIT
 ServiceRuntimePrecompile:
   ENUM:
     0:
