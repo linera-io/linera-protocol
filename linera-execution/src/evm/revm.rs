@@ -910,6 +910,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         _context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
+        tracing::info!("CallInterceptorContract::create, index.index_creation={}", self.index_creation);
         if self.index_creation == 0 {
             inputs.scheme = CreateScheme::Custom {
                 address: self.contract_address,
@@ -1107,15 +1108,25 @@ where
     Runtime: ContractRuntime,
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
+        tracing::info!("instantiate, step 1");
         self.db.set_contract_address()?;
+        tracing::info!("instantiate, step 2");
         let caller = self.get_msg_address()?;
+        tracing::info!("instantiate, step 3");
         self.initialize_contract(caller)?;
+        tracing::info!("instantiate, step 4");
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
+            tracing::info!("instantiate, step 5");
             let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
+            tracing::info!("instantiate, step 6");
             let argument = get_revm_instantiation_bytes(instantiation_argument);
+            tracing::info!("instantiate, step 7");
             let result = self.transact_commit(EvmTxKind::Call, argument, caller)?;
+            tracing::info!("instantiate, step 8");
             self.write_logs(result.logs, "instantiate")?;
+            tracing::info!("instantiate, step 9");
         }
+        tracing::info!("instantiate, step 10");
         Ok(())
     }
 
@@ -1295,6 +1306,7 @@ where
         input: Vec<u8>,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
+        tracing::info!("transact_commit, step 1");
         let data = Bytes::from(input);
         let kind = match ch {
             EvmTxKind::Create => TxKind::Create,
@@ -1312,7 +1324,9 @@ where
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
         let nonce = self.db.get_nonce(&caller)?;
+        tracing::info!("transact_commit, step 2");
         let result = {
+            tracing::info!("transact_commit, step 2.1");
             let ctx: revm_context::Context<
                 BlockEnv,
                 _,
@@ -1325,13 +1339,16 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
+            tracing::info!("transact_commit, step 2.2");
             let instructions = EthInstructions::new_mainnet();
+            tracing::info!("transact_commit, step 2.3");
             let mut evm = Evm::new_with_inspector(
                 ctx,
                 inspector.clone(),
                 instructions,
                 ContractPrecompile::default(),
             );
+            tracing::info!("transact_commit, step 2.4");
             evm.inspect_commit(
                 TxEnv {
                     kind,
@@ -1348,9 +1365,13 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
+        tracing::info!("transact_commit, step 3");
         let storage_stats = self.db.take_storage_stats();
+        tracing::info!("transact_commit, step 4");
         self.db.commit_changes()?;
+        tracing::info!("transact_commit, step 5");
         let result = process_execution_result(storage_stats, result)?;
+        tracing::info!("transact_commit, step 6");
         Ok(result)
     }
 

@@ -1416,7 +1416,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::U256;
+    use alloy_primitives::{Bytes, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{get_evm_contract_path_name, read_evm_u256_entry};
@@ -1430,6 +1430,7 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
         struct ConstructorArgs {
             uint256 initial_supply;
         }
+        function instantiate(bytes input);
         function totalSupply();
     }
 
@@ -1437,12 +1438,16 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     let initial_supply = U256::from(initial_supply);
     let constructor_argument = ConstructorArgs { initial_supply };
     let constructor_argument = constructor_argument.abi_encode();
+    let input = Bytes::from(Vec::new());
+    let instantiation_argument = instantiateCall { input };
+    let instantiation_argument = instantiation_argument.abi_encode();
+    tracing::info!("|constructor_argument|={}", constructor_argument.len());
+    tracing::info!("|instantiation_argument|={}", instantiation_argument.len());
 
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     let (evm_contract, _dir) = get_evm_contract_path_name("tests/fixtures/erc20_token.sol", "MyToken")?;
 
-    let instantiation_argument = Vec::new();
     let application_id = client
         .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
             evm_contract.clone(),

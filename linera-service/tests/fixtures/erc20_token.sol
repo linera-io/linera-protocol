@@ -6,8 +6,11 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MyTokenInner is ERC20 {
-    constructor(address sender, uint256 initial_supply) ERC20("MyTokenInner", "MTK") {
-        _mint(sender, initial_supply);
+    constructor() ERC20("MyTokenInner", "MTK") {
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
     }
 }
 
@@ -17,7 +20,11 @@ contract MyToken {
 
     constructor(uint256 initial_supply) {
         total_supply = initial_supply;
-        child = new MyTokenInner(msg.sender, initial_supply);
+        child = new MyTokenInner();
+    }
+
+    function instantiate(bytes memory input) external {
+        child.mint(msg.sender, total_supply);
     }
 
     function totalSupply() external view returns (uint256) {
