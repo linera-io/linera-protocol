@@ -300,40 +300,17 @@ where
         }
 
         // We haven't processed the block - verify the certificate first
-        if height == BlockHeight::ZERO {
-            // For the initial proposal on a chain, we read the committee directly from
-            // storage. If the certificate is good for this committee, we will accept it -
-            // which will later allow us to also accept the chain description blob.
-            let epoch = block.header.epoch;
-            let committees = self.state.storage.committees_for(epoch..=epoch).await?;
-            let committee = committees
-                .get(&epoch)
-                .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;
-            certificate.check(committee)?;
-        } else {
-            self.state.ensure_is_active().await?;
-            // Verify the certificate.
-            let (epoch, committee) = self.state.chain.current_committee()?;
-            check_block_epoch(epoch, chain_id, block.header.epoch)?;
-            certificate.check(committee)?;
-        }
+        let epoch = block.header.epoch;
+        // Get the committee for the block's epoch from storage.
+        let committees = self.state.storage.committees_for(epoch..=epoch).await?;
+        let committee = committees
+            .get(&epoch)
+            .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;
+        certificate.check(committee)?;
 
-        // If this block is higher than the next expected block in this chain, we're going
-        // to have a gap: do not process this block fully, only preprocess it.
-        if tip.next_block_height < height {
-            let actions = self.preprocess_certificate(certificate).await?;
-            self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
-                .await;
-            let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
-            return Ok((info, actions));
-        }
-
-        // This should always be true for valid certificates.
-        ensure!(
-            tip.block_hash == block.header.previous_block_hash,
-            WorkerError::InvalidBlockChaining
-        );
-
+        // Certificate check passed - which means the blobs the block requires are legitimate and
+        // we can take note of it, so that if any are missing, we will accept them when the client
+        // sends them.
         let required_blob_ids = block.required_blob_ids();
         let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
         let blobs_result = self
@@ -363,10 +340,43 @@ where
             .storage
             .maybe_write_blob_states(&blob_ids, blob_state)
             .await?;
+
         let mut blobs = blobs_result?
             .into_iter()
             .map(|blob| (blob.id(), blob))
             .collect::<BTreeMap<_, _>>();
+
+        // If this block is higher than the next expected block in this chain, we're going
+        // to have a gap: do not execute this block, only update the outboxes and return.
+        if tip.next_block_height < height {
+            // Update the outboxes.
+            self.state
+                .chain
+                .preprocess_block(certificate.value())
+                .await?;
+            // Persist chain.
+            self.save().await?;
+            let actions = self.state.create_network_actions().await?;
+            trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
+            self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
+                .await;
+            let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
+            return Ok((info, actions));
+        }
+
+        // This should always be true for valid certificates.
+        ensure!(
+            tip.block_hash == block.header.previous_block_hash,
+            WorkerError::InvalidBlockChaining
+        );
+
+        // If we got here, `height` is equal to `tip.next_block_height` and the block is
+        // properly chained. Verify that the chain is active and that the epoch we used for
+        // verifying the certificate is actually the active one on the chain.
+        self.state.ensure_is_active().await?;
+        let (epoch, _) = self.state.chain.current_committee()?;
+        check_block_epoch(epoch, chain_id, block.header.epoch)?;
+
         let published_blobs = block
             .published_blob_ids()
             .iter()
@@ -441,53 +451,6 @@ where
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
 
         Ok((info, actions))
-    }
-
-    /// Stores a block's blobs, and adds its messages to the outbox where possible.
-    /// Does not execute the block.
-    pub(super) async fn preprocess_certificate(
-        &mut self,
-        certificate: ConfirmedBlockCertificate,
-    ) -> Result<NetworkActions, WorkerError> {
-        let block = certificate.block();
-        // Check that the chain is active and ready for this confirmation.
-        let tip = self.state.chain.tip_state.get().clone();
-        if tip.next_block_height > block.header.height {
-            // We already processed this block.
-            return self.state.create_network_actions().await;
-        }
-
-        let required_blob_ids = block.required_blob_ids();
-        let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
-        let blobs_result = self
-            .state
-            .get_required_blobs(required_blob_ids.iter().copied(), &created_blobs)
-            .await
-            .map(|blobs| blobs.into_values().collect::<Vec<_>>());
-
-        if let Ok(blobs) = &blobs_result {
-            self.state
-                .storage
-                .write_blobs_and_certificate(blobs, &certificate)
-                .await?;
-        }
-
-        // Update the blob state with last used certificate hash.
-        let blob_state = certificate.value().to_blob_state(blobs_result.is_ok());
-        let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
-        self.state
-            .storage
-            .maybe_write_blob_states(&blob_ids, blob_state)
-            .await?;
-        blobs_result?;
-        // Update the outboxes.
-        self.state
-            .chain
-            .preprocess_block(certificate.value())
-            .await?;
-        // Persist chain.
-        self.save().await?;
-        self.state.create_network_actions().await
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given

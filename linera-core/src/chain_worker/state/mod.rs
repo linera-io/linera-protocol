@@ -260,18 +260,6 @@ where
             .await
     }
 
-    /// Preprocesses a block without executing it.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn preprocess_certificate(
-        &mut self,
-        certificate: ConfirmedBlockCertificate,
-    ) -> Result<NetworkActions, WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::new(self)
-            .await
-            .preprocess_certificate(certificate)
-            .await
-    }
-
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn process_cross_chain_update(
