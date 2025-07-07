@@ -324,13 +324,9 @@ where
             WorkerError::InvalidBlockChaining
         );
 
-        // If we got here, `height` is equal to `tip.next_block_height` and the block is
-        // properly chained. Verify that the chain is active and that the epoch we used for
-        // verifying the certificate is actually the active one on the chain.
-        self.state.ensure_is_active().await?;
-        let (epoch, _) = self.state.chain.current_committee()?;
-        check_block_epoch(epoch, chain_id, block.header.epoch)?;
-
+        // Certificate check passed - which means the blobs the block requires are legitimate and
+        // we can take note of it, so that if any are missing, we will accept them when the client
+        // sends them.
         let required_blob_ids = block.required_blob_ids();
         let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
         let blobs_result = self
@@ -360,6 +356,14 @@ where
             .storage
             .maybe_write_blob_states(&blob_ids, blob_state)
             .await?;
+
+        // If we got here, `height` is equal to `tip.next_block_height` and the block is
+        // properly chained. Verify that the chain is active and that the epoch we used for
+        // verifying the certificate is actually the active one on the chain.
+        self.state.ensure_is_active().await?;
+        let (epoch, _) = self.state.chain.current_committee()?;
+        check_block_epoch(epoch, chain_id, block.header.epoch)?;
+
         let mut blobs = blobs_result?
             .into_iter()
             .map(|blob| (blob.id(), blob))
