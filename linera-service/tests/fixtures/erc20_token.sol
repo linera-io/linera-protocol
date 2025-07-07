@@ -23,4 +23,24 @@ contract MyToken {
     function totalSupply() external view returns (uint256) {
         return total_supply;
     }
+
+    function balanceOf(address account) external view returns (uint256) {
+        return child.balanceOf(account);
+    }
+
+    function transfer(address recipient, uint256 amount) external returns (bool) {
+        return child.transfer(recipient, amount);
+    }
+
+    function allowance(address owner, address spender) external view returns (uint256) {
+        return child.allowance(owner, spender);
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        return child.approve(spender, amount);
+    }
+
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool) {
+        return child.transferFrom(sender, recipient, amount);
+    }
 }
