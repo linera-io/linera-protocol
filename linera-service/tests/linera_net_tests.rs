@@ -1419,7 +1419,7 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::U256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use linera_execution::test_utils::solidity::get_evm_contract_path_name;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -1440,7 +1440,7 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
 
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/erc20_token.sol")?;
+    let (evm_contract, _dir) = get_evm_contract_path_name("tests/fixtures/erc20_token.sol", "MyToken")?;
 
     let instantiation_argument = Vec::new();
     let application_id = client
