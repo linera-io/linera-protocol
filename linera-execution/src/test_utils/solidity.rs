@@ -60,15 +60,12 @@ fn get_bytecode_path(path: &Path, file_name: &str, contract_name: &str) -> anyho
 
     let contents = std::fs::read_to_string(output_path)?;
     let json_data: serde_json::Value = serde_json::from_str(&contents)?;
-    tracing::info!("json_data={json_data}");
     let contracts = json_data
         .get("contracts")
         .with_context(|| format!("failed to get contracts in json_data={json_data}"))?;
-    tracing::info!("contracts={contracts}");
     let file_name_contract = contracts
         .get(file_name)
         .context("failed to get {file_name}")?;
-    tracing::info!("file_name_contract={file_name_contract}");
     let test_data = file_name_contract
         .get(contract_name)
         .with_context(|| format!("failed to get contract_name={contract_name}"))?;
@@ -153,9 +150,6 @@ pub fn get_evm_contract_path_name(path: &str, contract_name: &str) -> anyhow::Re
     let module = get_bytecode(&source_code, contract_name)?;
     temporary_write_evm_module(module)
 }
-
-
-
 
 pub fn value_to_vec_u8(value: Value) -> Vec<u8> {
     let mut vec: Vec<u8> = Vec::new();

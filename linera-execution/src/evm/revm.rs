@@ -869,6 +869,7 @@ struct CallInterceptorContract<Runtime> {
     // This is the contract address of the contract being created.
     contract_address: Address,
     precompile_addresses: BTreeSet<Address>,
+    index_creation: usize,
 }
 
 impl<Runtime> Clone for CallInterceptorContract<Runtime> {
@@ -877,6 +878,7 @@ impl<Runtime> Clone for CallInterceptorContract<Runtime> {
             db: self.db.clone(),
             contract_address: self.contract_address,
             precompile_addresses: self.precompile_addresses.clone(),
+            index_creation: self.index_creation,
         }
     }
 }
@@ -908,9 +910,12 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         _context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
-        inputs.scheme = CreateScheme::Custom {
-            address: self.contract_address,
-        };
+        if self.index_creation == 0 {
+            inputs.scheme = CreateScheme::Custom {
+                address: self.contract_address,
+            };
+            self.index_creation += 1;
+        }
         None
     }
 
@@ -963,6 +968,7 @@ struct CallInterceptorService<Runtime> {
     // This is the contract address of the contract being created.
     contract_address: Address,
     precompile_addresses: BTreeSet<Address>,
+    index_creation: usize,
 }
 
 impl<Runtime> Clone for CallInterceptorService<Runtime> {
@@ -971,6 +977,7 @@ impl<Runtime> Clone for CallInterceptorService<Runtime> {
             db: self.db.clone(),
             contract_address: self.contract_address,
             precompile_addresses: self.precompile_addresses.clone(),
+            index_creation: self.index_creation,
         }
     }
 }
@@ -981,9 +988,12 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
         _context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
-        inputs.scheme = CreateScheme::Custom {
-            address: self.contract_address,
-        };
+        if self.index_creation == 0 {
+            inputs.scheme = CreateScheme::Custom {
+                address: self.contract_address,
+            };
+            self.index_creation += 1;
+        }
         None
     }
 
@@ -1294,6 +1304,7 @@ where
             db: self.db.clone(),
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
+            index_creation: 0,
         };
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
@@ -1339,7 +1350,8 @@ where
         }?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
-        Ok(process_execution_result(storage_stats, result)?)
+        let result = process_execution_result(storage_stats, result)?;
+        Ok(result)
     }
 
     fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
@@ -1450,6 +1462,7 @@ where
             db: self.db.clone(),
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
+            index_creation: 0,
         };
         let caller = SERVICE_ADDRESS;
         let nonce = self.db.get_nonce(&caller)?;
