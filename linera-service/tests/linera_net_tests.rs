@@ -1466,7 +1466,15 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     let query = total_supply.abi_encode();
     let query = EvmQuery::Query(query);
 
-    let _result = application.run_json_query(query).await?;
+    let result = application.run_json_query(query).await?;
+    let result = result
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_u64().ok_or("Not a number").map(|n| n as u8))
+        .collect::<Result<Vec<u8>,_>>().unwrap();
+    let total_supply = U256::from_be_slice(&result);
+    assert_eq!(total_supply, initial_supply);
 
     node_service.ensure_is_running()?;
 
