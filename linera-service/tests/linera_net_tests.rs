@@ -1419,7 +1419,7 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::U256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::get_evm_contract_path_name;
+    use linera_execution::test_utils::solidity::{get_evm_contract_path_name, read_evm_u256_entry};
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -1467,14 +1467,7 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     let query = EvmQuery::Query(query);
 
     let result = application.run_json_query(query).await?;
-    let result = result
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_u64().ok_or("Not a number").map(|n| n as u8))
-        .collect::<Result<Vec<u8>,_>>().unwrap();
-    let total_supply = U256::from_be_slice(&result);
-    assert_eq!(total_supply, initial_supply);
+    assert_eq!(read_evm_u256_entry(result), initial_supply);
 
     node_service.ensure_is_running()?;
 

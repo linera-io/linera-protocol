@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::Context;
+use revm_primitives::U256;
 use serde_json::Value;
 use tempfile::{tempdir, TempDir};
 
@@ -166,4 +167,14 @@ pub fn read_evm_u64_entry(value: Value) -> u64 {
     let mut arr = [0_u8; 8];
     arr.copy_from_slice(&vec[24..]);
     u64::from_be_bytes(arr)
+}
+
+pub fn read_evm_u256_entry(value: Value) -> U256 {
+    let result = value
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_u64().ok_or("Not a number").map(|n| n as u8))
+        .collect::<Result<Vec<u8>,_>>().unwrap();
+    U256::from_be_slice(&result)
 }
