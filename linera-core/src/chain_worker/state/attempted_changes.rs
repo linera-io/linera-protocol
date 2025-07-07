@@ -302,11 +302,7 @@ where
         // We haven't processed the block - verify the certificate first
         let epoch = block.header.epoch;
         // Get the committee for the block's epoch from storage.
-        let committees = self
-            .state
-            .storage
-            .committees_for([epoch].into_iter().collect())
-            .await?;
+        let committees = self.state.storage.committees_for(epoch..=epoch).await?;
         let committee = committees
             .get(&epoch)
             .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;

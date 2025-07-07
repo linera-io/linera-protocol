@@ -120,13 +120,15 @@ impl OpenChainConfig {
     pub fn init_chain_config(
         &self,
         epoch: Epoch,
-        active_epochs: BTreeSet<Epoch>,
+        min_active_epoch: Epoch,
+        max_active_epoch: Epoch,
     ) -> InitialChainConfig {
         InitialChainConfig {
             application_permissions: self.application_permissions.clone(),
             balance: self.balance,
             epoch,
-            active_epochs,
+            min_active_epoch,
+            max_active_epoch,
             ownership: self.ownership.clone(),
         }
     }
@@ -769,13 +771,18 @@ where
             ownership,
             epoch,
             balance,
-            active_epochs,
+            min_active_epoch,
+            max_active_epoch,
             application_permissions,
         } = description.config().clone();
         self.timestamp.set(description.timestamp());
         self.description.set(Some(description));
         self.epoch.set(epoch);
-        let committees = self.context().extra().committees_for(active_epochs).await?;
+        let committees = self
+            .context()
+            .extra()
+            .committees_for(min_active_epoch..=max_active_epoch)
+            .await?;
         self.committees.set(committees);
         let admin_id = self
             .context()
@@ -824,7 +831,18 @@ where
         };
         let init_chain_config = config.init_chain_config(
             *self.epoch.get(),
-            self.committees.get().keys().copied().collect(),
+            self.committees
+                .get()
+                .keys()
+                .min()
+                .copied()
+                .unwrap_or(Epoch::ZERO),
+            self.committees
+                .get()
+                .keys()
+                .max()
+                .copied()
+                .unwrap_or(Epoch::ZERO),
         );
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();

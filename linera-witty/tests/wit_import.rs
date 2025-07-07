@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 use insta::assert_snapshot;
 use linera_witty::{
-    wit_generation::{WitInterface, WitInterfaceWriter, WitWorldWriter},
+    wit_generation::{FileContentGenerator as _, WitInterface, WitInterfaceWriter, WitWorldWriter},
     wit_import, Instance, MockInstance, Runtime, RuntimeMemory,
 };
 use test_case::test_case;
@@ -353,25 +353,24 @@ fn test_wit_interface_file<Interface>(_: PhantomData<Interface>, name: &str)
 where
     Interface: WitInterface,
 {
-    assert_snapshot!(
-        name,
-        WitInterfaceWriter::new::<Interface>()
-            .generate_file_contents()
-            .collect::<String>()
-    );
+    let mut buffer = Vec::new();
+    WitInterfaceWriter::new::<Interface>()
+        .generate_file_contents(&mut buffer)
+        .unwrap();
+    assert_snapshot!(name, String::from_utf8(buffer).unwrap());
 }
 
 /// Tests the generated file contents for a WIT world containing all the interfaces used in this
 /// test.
 #[test]
 fn test_wit_world_file() {
-    assert_snapshot!(
-        WitWorldWriter::new("witty-macros:test-modules", "test-world")
-            .export::<SimpleFunction<MockInstance<()>>>()
-            .export::<Getters<MockInstance<()>>>()
-            .export::<Setters<MockInstance<()>>>()
-            .export::<Operations<MockInstance<()>>>()
-            .generate_file_contents()
-            .collect::<String>()
-    );
+    let mut buffer = Vec::new();
+    WitWorldWriter::new("witty-macros:test-modules", "test-world")
+        .export::<SimpleFunction<MockInstance<()>>>()
+        .export::<Getters<MockInstance<()>>>()
+        .export::<Setters<MockInstance<()>>>()
+        .export::<Operations<MockInstance<()>>>()
+        .generate_file_contents(&mut buffer)
+        .unwrap();
+    assert_snapshot!(String::from_utf8(buffer).unwrap());
 }

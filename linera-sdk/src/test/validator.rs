@@ -101,7 +101,8 @@ impl TestValidator {
 
         let new_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(key_pair.public().into()),
-            active_epochs: [epoch].into_iter().collect(),
+            min_active_epoch: epoch,
+            max_active_epoch: epoch,
             epoch,
             balance: Amount::from_tokens(1_000_000),
             application_permissions: ApplicationPermissions::default(),
@@ -325,8 +326,7 @@ impl TestValidator {
             balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };
-        let new_chain_config =
-            open_chain_config.init_chain_config(epoch, [epoch].into_iter().collect());
+        let new_chain_config = open_chain_config.init_chain_config(epoch, epoch, epoch);
 
         let certificate = admin_chain
             .add_block(|block| {
