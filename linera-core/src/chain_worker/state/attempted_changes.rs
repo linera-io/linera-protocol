@@ -39,7 +39,7 @@ use crate::{
 /// dropped.
 pub struct ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage,
 {
     state: &'state mut ChainWorkerState<StorageClient>,
     succeeded: bool,
@@ -678,7 +678,7 @@ where
 
 impl<StorageClient> Drop for ChainWorkerStateWithAttemptedChanges<'_, StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage,
 {
     fn drop(&mut self) {
         if !self.succeeded {

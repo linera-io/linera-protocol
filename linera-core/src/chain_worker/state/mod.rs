@@ -46,7 +46,7 @@ use crate::{
 /// The state of the chain worker.
 pub struct ChainWorkerState<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage,
 {
     config: ChainWorkerConfig,
     storage: StorageClient,
@@ -92,6 +92,11 @@ where
             delivery_notifier,
             knows_chain_is_active: false,
         })
+    }
+
+    /// Drops the service runtime endpoint.
+    pub fn drop_service_runtime_endpoint(&mut self) {
+        self.service_runtime_endpoint = None;
     }
 
     /// Returns the [`ChainId`] of the chain handled by this worker.

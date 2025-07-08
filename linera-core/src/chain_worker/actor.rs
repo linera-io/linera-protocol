@@ -26,8 +26,8 @@ use linera_execution::{
     ServiceSyncRuntime,
 };
 use linera_storage::Storage;
-use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{debug, instrument, trace, warn, Instrument as _};
+use tokio::sync::{oneshot, OwnedRwLockReadGuard};
+use tracing::{debug, instrument, warn};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
@@ -168,7 +168,7 @@ where
 /// The actor worker type.
 pub struct ChainWorkerActor<StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage,
 {
     worker: ChainWorkerState<StorageClient>,
     service_runtime_thread: Option<linera_base::task::Blocking>,
@@ -178,52 +178,6 @@ impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
-    /// Runs the [`ChainWorkerActor`], first by loading the chain state from `storage` then
-    /// handling all `incoming_requests` as they arrive.
-    ///
-    /// If loading the chain state fails, the next request will receive the error reported by the
-    /// `storage`, and the actor will then try again to load the state.
-    #[expect(clippy::too_many_arguments)]
-    pub async fn run(
-        config: ChainWorkerConfig,
-        storage: StorageClient,
-        block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
-        tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
-        delivery_notifier: DeliveryNotifier,
-        chain_id: ChainId,
-        mut incoming_requests: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
-            tracing::Span,
-        )>,
-    ) {
-        let actor = loop {
-            let load_result = Self::load(
-                config.clone(),
-                storage.clone(),
-                block_cache.clone(),
-                execution_state_cache.clone(),
-                tracked_chains.clone(),
-                delivery_notifier.clone(),
-                chain_id,
-            )
-            .await
-            .inspect_err(|error| warn!("Failed to load chain state: {error:?}"));
-
-            match load_result {
-                Ok(actor) => break actor,
-                Err(error) => match incoming_requests.recv().await {
-                    Some((request, _span)) => request.send_error(error),
-                    None => return,
-                },
-            }
-        };
-
-        actor.handle_requests(incoming_requests).await;
-    }
-
     /// Creates a [`ChainWorkerActor`], loading it with the chain state for the requested
     /// [`ChainId`].
     pub async fn load(
@@ -264,6 +218,15 @@ where
         })
     }
 
+    /// Stops the service runtime thread, if active.
+    pub async fn stop_runtime_thread(&mut self) -> Result<(), WorkerError> {
+        self.worker.drop_service_runtime_endpoint();
+        if let Some(thread) = self.service_runtime_thread.take() {
+            thread.join().await;
+        }
+        Ok(())
+    }
+
     /// Spawns a blocking task to execute the service runtime actor.
     ///
     /// Returns the task handle and the endpoints to interact with the actor.
@@ -290,33 +253,6 @@ where
             runtime_request_sender,
         };
         (service_runtime_thread, endpoint)
-    }
-
-    /// Runs the worker until there are no more incoming requests.
-    #[instrument(
-        name = "ChainWorkerActor::handle_requests",
-        skip_all,
-        fields(chain_id = format!("{:.8}", self.worker.chain_id())),
-    )]
-    pub async fn handle_requests(
-        mut self,
-        mut incoming_requests: mpsc::UnboundedReceiver<(
-            ChainWorkerRequest<StorageClient::Context>,
-            tracing::Span,
-        )>,
-    ) {
-        trace!("Starting `ChainWorkerActor`");
-
-        while let Some((request, span)) = incoming_requests.recv().await {
-            Box::pin(self.handle_request(request).instrument(span)).await;
-        }
-
-        if let Some(thread) = self.service_runtime_thread {
-            drop(self.worker);
-            thread.join().await
-        }
-
-        trace!("`ChainWorkerActor` finished");
     }
 
     /// Runs the worker until there are no more incoming requests.

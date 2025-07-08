@@ -5,18 +5,20 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
-    sync::{Arc, Mutex, RwLock},
+    sync::{self, Arc},
     time::Duration,
 };
 
-use futures::future::Either;
+use futures::{
+    future::Either,
+    stream::{FuturesUnordered, StreamExt},
+};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round},
     doc_scalar,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId},
-    time::timer::{sleep, timeout},
 };
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
@@ -31,16 +33,14 @@ use linera_chain::{
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::ViewError;
-use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{error, instrument, trace, warn};
+use tokio::sync::{oneshot, Mutex, OwnedRwLockReadGuard, RwLock};
+use tracing::{error, instrument, trace, warn, Instrument};
 
 use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
     value_cache::ValueCache,
 };
@@ -266,6 +266,9 @@ impl WorkerError {
     }
 }
 
+type ChainWorkerMap<StorageClient> =
+    Arc<RwLock<BTreeMap<ChainId, Arc<Mutex<ChainWorkerActor<StorageClient>>>>>>;
+
 /// State of a worker in a validator or a local node.
 pub struct WorkerState<StorageClient>
 where
@@ -280,14 +283,14 @@ where
     block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
     /// Chain IDs that should be tracked by a worker.
-    tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
+    tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
-    delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
-    /// The set of spawned [`ChainWorkerActor`] tasks.
-    chain_worker_tasks: Arc<Mutex<JoinSet>>,
-    /// The cache of running [`ChainWorkerActor`]s.
-    chain_workers: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
+    delivery_notifiers: Arc<sync::Mutex<DeliveryNotifiers>>,
+    /// The maximum number of chain states in memory.
+    chain_worker_limit: NonZeroUsize,
+    /// The map of loaded [`ChainWorkerActor`]s.
+    chain_workers: ChainWorkerMap<StorageClient>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -303,17 +306,11 @@ where
             execution_state_cache: self.execution_state_cache.clone(),
             tracked_chains: self.tracked_chains.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
-            chain_worker_tasks: self.chain_worker_tasks.clone(),
+            chain_worker_limit: self.chain_worker_limit,
             chain_workers: self.chain_workers.clone(),
         }
     }
 }
-
-/// The sender endpoint for [`ChainWorkerRequest`]s.
-type ChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
-    ChainWorkerRequest<<StorageClient as Storage>::Context>,
-    tracing::Span,
-)>;
 
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
@@ -336,8 +333,8 @@ where
             execution_state_cache: Arc::new(ValueCache::default()),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
-            chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(chain_worker_limit))),
+            chain_worker_limit,
+            chain_workers: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
@@ -345,7 +342,7 @@ where
     pub fn new_for_client(
         nickname: String,
         storage: StorageClient,
-        tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
+        tracked_chains: Arc<sync::RwLock<HashSet<ChainId>>>,
         chain_worker_limit: NonZeroUsize,
     ) -> Self {
         WorkerState {
@@ -356,8 +353,8 @@ where
             execution_state_cache: Arc::new(ValueCache::default()),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
-            chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(chain_worker_limit))),
+            chain_worker_limit,
+            chain_workers: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
@@ -414,7 +411,7 @@ where
     #[cfg(test)]
     pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<ValidatorSecretKey>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
-        self.chain_workers.lock().unwrap().clear();
+        self.chain_workers.write().await.clear();
         self
     }
 
@@ -682,38 +679,44 @@ where
             oneshot::Sender<Result<Response, WorkerError>>,
         ) -> ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<Response, WorkerError> {
-        let chain_actor = self.get_chain_worker_endpoint(chain_id).await?;
+        let worker = self.get_chain_worker_endpoint(chain_id).await?;
         let (callback, response) = oneshot::channel();
+        let request = request_builder(callback);
 
-        chain_actor
-            .send((request_builder(callback), tracing::Span::current()))
-            .expect("`ChainWorkerActor` stopped executing unexpectedly");
+        linera_base::task::spawn(
+            async move { worker.lock().await.handle_request(request).await }.in_current_span(),
+        );
 
         response
             .await
             .expect("`ChainWorkerActor` stopped executing without responding")
     }
 
-    /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, creating one and adding it
+    /// Retrieves a [`ChainWorkerActor`] from the cache, creating one and adding it
     /// to the cache if needed.
     #[instrument(level = "trace", skip(self))]
     async fn get_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
-        let (sender, new_receiver) = timeout(Duration::from_secs(3), async move {
-            loop {
-                match self.try_get_chain_worker_endpoint(chain_id) {
-                    Some(endpoint) => break endpoint,
-                    None => sleep(Duration::from_millis(250)).await,
-                }
-                warn!("No chain worker candidates found for eviction, retrying...");
-            }
-        })
-        .await
-        .map_err(|_| WorkerError::FullChainWorkerCache)?;
-
-        if let Some(receiver) = new_receiver {
+    ) -> Result<Arc<Mutex<ChainWorkerActor<StorageClient>>>, WorkerError> {
+        // If a worker already exists, we only need a read lock.
+        if let Some(worker) = self
+            .chain_workers
+            .read()
+            .await
+            .get(&chain_id)
+            .map(Arc::clone)
+        {
+            return Ok(worker);
+        }
+        // We may have to create a new entry: obtain a write lock.
+        let mut guard = self.chain_workers.write().await;
+        // Between the two locks, another task could have inserted the worker.
+        if let Some(worker) = guard.get(&chain_id).map(Arc::clone) {
+            return Ok(worker);
+        }
+        // No? Then we'll create a new one.
+        let load_worker = async {
             let delivery_notifier = self
                 .delivery_notifiers
                 .lock()
@@ -721,8 +724,7 @@ where
                 .entry(chain_id)
                 .or_default()
                 .clone();
-
-            let actor_task = ChainWorkerActor::run(
+            ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.block_cache.clone(),
@@ -730,72 +732,32 @@ where
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,
-                receiver,
-            );
-
-            self.chain_worker_tasks
-                .lock()
-                .unwrap()
-                .spawn_task(actor_task);
-        }
-
-        Ok(sender)
-    }
-
-    /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, attempting to create one
-    /// and add it to the cache if needed.
-    ///
-    /// Returns [`None`] if the cache is full and no candidate for eviction was found.
-    #[instrument(level = "trace", skip(self))]
-    #[expect(clippy::type_complexity)]
-    fn try_get_chain_worker_endpoint(
-        &self,
-        chain_id: ChainId,
-    ) -> Option<(
-        ChainActorEndpoint<StorageClient>,
-        Option<
-            mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
-        >,
-    )> {
-        let mut chain_workers = self.chain_workers.lock().unwrap();
-
-        if let Some(endpoint) = chain_workers.get(&chain_id) {
-            Some((endpoint.clone(), None))
-        } else {
-            if chain_workers.len() >= usize::from(chain_workers.cap()) {
-                let (chain_to_evict, _) = chain_workers
+            )
+            .await
+            .map(|worker| Arc::new(Mutex::new(worker)))
+        };
+        // At the same time we may have to evict another worker.
+        let mut lock_futures = if guard.len() < self.chain_worker_limit.into() {
+            FuturesUnordered::from_iter(
+                guard
                     .iter()
-                    .rev()
-                    .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1)?;
-                let chain_to_evict = *chain_to_evict;
-
-                chain_workers.pop(&chain_to_evict);
-                self.clean_up_finished_chain_workers(&chain_workers);
-            }
-
-            let (sender, receiver) = mpsc::unbounded_channel();
-            chain_workers.push(chain_id, sender.clone());
-
-            Some((sender, Some(receiver)))
+                    .map(|(&chain_id, worker)| {
+                        let worker = Arc::clone(worker);
+                        async move { (chain_id, worker.lock_owned().await) }
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            FuturesUnordered::new()
+        };
+        let lock_to_evict = async move { Ok(lock_futures.next().await) };
+        let (worker, old_worker) = futures::try_join!(load_worker, lock_to_evict)?;
+        if let Some((old_chain_id, mut old_guard)) = old_worker {
+            old_guard.stop_runtime_thread().await?;
+            guard.remove(&old_chain_id);
         }
-    }
-
-    /// Cleans up any finished chain workers and their delivery notifiers.
-    fn clean_up_finished_chain_workers(
-        &self,
-        active_chain_workers: &LruCache<ChainId, ChainActorEndpoint<StorageClient>>,
-    ) {
-        self.chain_worker_tasks
-            .lock()
-            .unwrap()
-            .reap_finished_tasks();
-
-        self.delivery_notifiers
-            .lock()
-            .unwrap()
-            .retain(|chain_id, notifier| {
-                !notifier.is_empty() || active_chain_workers.contains(chain_id)
-            });
+        guard.insert(chain_id, Arc::clone(&worker));
+        Ok(worker)
     }
 
     #[instrument(skip_all, fields(

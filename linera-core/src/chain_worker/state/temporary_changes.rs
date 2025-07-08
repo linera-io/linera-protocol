@@ -36,7 +36,7 @@ pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>(
     &'state mut ChainWorkerState<StorageClient>,
 )
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static;
+    StorageClient: Storage;
 
 impl<'state, StorageClient> ChainWorkerStateWithTemporaryChanges<'state, StorageClient>
 where
@@ -368,7 +368,7 @@ where
 
 impl<StorageClient> Drop for ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
+    StorageClient: Storage,
 {
     fn drop(&mut self) {
         self.0.chain.rollback();
