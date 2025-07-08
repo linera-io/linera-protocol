@@ -44,7 +44,10 @@ AccountOwner:
 Timestamp:
   NEWTYPESTRUCT: U64
 Amount:
-  NEWTYPESTRUCT: U128
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
 AccountOwnerBalance:
   STRUCT:
     - account_owner:
