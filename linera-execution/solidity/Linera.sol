@@ -76,6 +76,39 @@ library Linera {
         return uint256(output2.value);
     }
 
+    function read_owner_balance(LineraTypes.AccountOwner memory owner) internal returns (uint256) {
+        address precompile = address(0x0b);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_owner_balance(owner);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        LineraTypes.Amount memory output2 = LineraTypes.bcs_deserialize_Amount(output);
+        return uint256(output2.value);
+    }
+
+    function read_owner_balances() internal returns (LineraTypes.AccountOwnerBalance[] memory result) {
+        address precompile = address(0x0b);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_owner_balances();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        LineraTypes.ResponseReadOwnerBalances memory output2 = LineraTypes.bcs_deserialize_ResponseReadOwnerBalances(output);
+        return output2.value;
+    }
+
+    function read_balance_owners() internal returns (LineraTypes.AccountOwner[] memory result) {
+        address precompile = address(0x0b);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_balance_owners();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        LineraTypes.ResponseReadBalanceOwners memory output2 = LineraTypes.bcs_deserialize_ResponseReadBalanceOwners(output);
+        return output2.value;
+    }
+
 
 
     function chain_ownership() internal returns (LineraTypes.ChainOwnership memory) {
