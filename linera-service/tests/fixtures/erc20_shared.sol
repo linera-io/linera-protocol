@@ -38,8 +38,8 @@ contract ERC20_shared is Context, IERC20, IERC20Errors {
      * @dev Sets the values for {name} and {symbol}.
      *
      */
-    constructor(uint256 start_supply) {
-        summed_total_supply = start_supply;
+    constructor(uint256 the_supply) {
+        summed_total_supply = the_supply;
     }
 
     function instantiate(bytes memory input) external {

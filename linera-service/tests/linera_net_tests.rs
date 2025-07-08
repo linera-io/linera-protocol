@@ -1415,8 +1415,8 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::{Bytes, U256};
+async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_primitives::{Address, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
@@ -1425,20 +1425,28 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
+    let owner1 = client.get_owner().unwrap();
+    let owner2 = client.keygen().await?;
+    let address1 = owner1.to_address().unwrap();
+    let address2 = owner2.to_address().unwrap();
 
     sol! {
         struct ConstructorArgs {
-            uint256 initial_supply;
+            uint256 the_supply;
         }
         function totalSupply();
+        function transfer(address to, uint256 value);
+        function balanceOf(address account);
+        function transferToChain(bytes32 chain_id, uint256 value);
     }
 
-    let initial_supply = 1000000000;
-    let initial_supply = U256::from(initial_supply);
-    let constructor_argument = ConstructorArgs { initial_supply };
+    let the_supply = U256::from(1000000000);
+    let transfer1 = U256::from(1);
+    let transfer2 = U256::from(6);
+    let constructor_argument = ConstructorArgs { the_supply };
     let constructor_argument = constructor_argument.abi_encode();
 
-    let instantiation_argument = U256::abi_encode(&initial_supply);
+    let instantiation_argument = U256::abi_encode(&the_supply);
 
     let chain = client.load_wallet()?.default_chain().unwrap();
 
@@ -1466,15 +1474,29 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     let total_supply = totalSupplyCall { };
     let query = total_supply.abi_encode();
     let query = EvmQuery::Query(query);
-
     let result = application.run_json_query(query).await?;
-    assert_eq!(read_evm_u256_entry(result), initial_supply);
+    assert_eq!(read_evm_u256_entry(result), the_supply);
+
+    let mutation = transferCall { to: address2, value: transfer1 };
+    let mutation = EvmQuery::Mutation(mutation.abi_encode());
+    application.run_json_query(mutation).await?;
+
+    let query = balanceOfCall { account: address1 };
+    let query = EvmQuery::Query(query.abi_encode());
+    let result = application.run_json_query(query).await?;
+    assert_eq!(read_evm_u256_entry(result), the_supply - transfer1);
+
+    let query = balanceOfCall { account: address2 };
+    let query = EvmQuery::Query(query.abi_encode());
+    let result = application.run_json_query(query).await?;
+    assert_eq!(read_evm_u256_entry(result), transfer1);
+
 
     node_service.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
-
+//    assert!(false);
     Ok(())
 }
 
