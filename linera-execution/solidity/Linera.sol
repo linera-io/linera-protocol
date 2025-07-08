@@ -23,6 +23,27 @@ library Linera {
         return LineraTypes.bcs_deserialize_ChainId(output);
     }
 
+    function block_height() internal returns (uint64) {
+        address precompile = address(0x0b);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_block_height();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        LineraTypes.BlockHeight memory output2 = LineraTypes.bcs_deserialize_BlockHeight(output);
+        return output2.value;
+    }
+
+    function application_id() internal returns (LineraTypes.ApplicationId memory) {
+        address precompile = address(0x0b);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_application_id();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return LineraTypes.bcs_deserialize_ApplicationId(output);
+    }
+
     function application_creator_chain_id() internal returns (LineraTypes.ChainId memory) {
         address precompile = address(0x0b);
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_application_creator_chain_id();
@@ -32,6 +53,30 @@ library Linera {
         require(success);
         return LineraTypes.bcs_deserialize_ChainId(output);
     }
+
+    function read_system_timestamp() internal returns (uint64) {
+        address precompile = address(0x0b);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_system_timestamp();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        LineraTypes.Timestamp memory output2 = LineraTypes.bcs_deserialize_Timestamp(output);
+        return output2.value;
+    }
+
+    function read_chain_balance() internal returns (uint256) {
+        address precompile = address(0x0b);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_chain_balance();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        LineraTypes.Amount memory output2 = LineraTypes.bcs_deserialize_Amount(output);
+        return uint256(output2.value);
+    }
+
+
 
     function chain_ownership() internal returns (LineraTypes.ChainOwnership memory) {
         address precompile = address(0x0b);
@@ -145,10 +190,10 @@ library Linera {
         return output;
     }
 
-    function subscribe_to_events(bytes32 chain_id1, bytes32 application_id, bytes memory stream_name) internal {
+    function subscribe_to_events(bytes32 chain_id1, bytes32 subscribed_application_id, bytes memory stream_name) internal {
         address precompile = address(0x0b);
         LineraTypes.ChainId memory chain_id2 = LineraTypes.ChainId(LineraTypes.CryptoHash(chain_id1));
-        LineraTypes.ApplicationId memory application_id2 = LineraTypes.ApplicationId(LineraTypes.CryptoHash(application_id));
+        LineraTypes.ApplicationId memory application_id2 = LineraTypes.ApplicationId(LineraTypes.CryptoHash(subscribed_application_id));
         LineraTypes.StreamName memory stream_name2 = LineraTypes.StreamName(stream_name);
         LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_ = LineraTypes.ContractRuntimePrecompile_SubscribeToEvents(chain_id2, application_id2, stream_name2);
         LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_subscribe_to_events(subscribe_to_events_);
@@ -159,10 +204,10 @@ library Linera {
         require(output.length == 0);
     }
 
-    function unsubscribe_from_events(bytes32 chain_id1, bytes32 application_id, bytes memory stream_name) internal {
+    function unsubscribe_from_events(bytes32 chain_id1, bytes32 unsubscribe_application_id, bytes memory stream_name) internal {
         address precompile = address(0x0b);
         LineraTypes.ChainId memory chain_id2 = LineraTypes.ChainId(LineraTypes.CryptoHash(chain_id1));
-        LineraTypes.ApplicationId memory application_id2 = LineraTypes.ApplicationId(LineraTypes.CryptoHash(application_id));
+        LineraTypes.ApplicationId memory application_id2 = LineraTypes.ApplicationId(LineraTypes.CryptoHash(unsubscribe_application_id));
         LineraTypes.StreamName memory stream_name2 = LineraTypes.StreamName(stream_name);
         LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_ = LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents(chain_id2, application_id2, stream_name2);
         LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_unsubscribe_from_events(unsubscribe_from_events_);
