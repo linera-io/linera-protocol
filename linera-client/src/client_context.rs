@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_testing)]
-use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use futures::Future;
@@ -135,7 +133,6 @@ where
             options.long_lived_services,
             chain_ids,
             name,
-            options.max_loaded_chains,
             options.to_chain_client_options(),
         );
 
@@ -180,7 +177,6 @@ where
             false,
             chain_ids,
             name,
-            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
             ChainClientOptions {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
                 ..ChainClientOptions::test_default()

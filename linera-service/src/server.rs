@@ -6,7 +6,7 @@
 
 use std::{
     borrow::Cow,
-    num::{NonZeroU16, NonZeroUsize},
+    num::NonZeroU16,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -49,7 +49,6 @@ struct ServerContext {
     notification_config: NotificationConfig,
     shard: Option<usize>,
     grace_period: Duration,
-    max_loaded_chains: NonZeroUsize,
 }
 
 impl ServerContext {
@@ -72,7 +71,6 @@ impl ServerContext {
             format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
             Some(self.server_config.validator_secret.copy()),
             storage,
-            self.max_loaded_chains,
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
@@ -353,10 +351,6 @@ enum ServerCommand {
         /// The WebAssembly runtime to use.
         #[arg(long)]
         wasm_runtime: Option<WasmRuntime>,
-
-        /// The maximal number of chains loaded in memory at a given time.
-        #[arg(long, default_value = "400")]
-        max_loaded_chains: NonZeroUsize,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -468,7 +462,6 @@ async fn run(options: ServerOptions) {
             shard,
             grace_period,
             wasm_runtime,
-            max_loaded_chains,
         } => {
             linera_version::VERSION_INFO.log();
 
@@ -481,7 +474,6 @@ async fn run(options: ServerOptions) {
                 notification_config,
                 shard,
                 grace_period,
-                max_loaded_chains,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config

@@ -5920,7 +5920,6 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "log",
- "nonzero_lit",
  "num-traits",
  "serde",
  "serde-wasm-bindgen 0.6.5",
@@ -6339,12 +6338,6 @@ dependencies = [
  "serde",
  "sha3",
 ]
-
-[[package]]
-name = "nonzero_lit"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30a9e0365849b8ce3d067218268d6c523c1c14f539f7e9157d635d8adfb308fa"
 
 [[package]]
 name = "ntapi"

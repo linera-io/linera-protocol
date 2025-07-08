@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
@@ -113,7 +113,6 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             false,
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
-            NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
             ChainClientOptions::test_default(),
         )),
     };
@@ -197,7 +196,6 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             false,
             [],
             "Client node with no chains".to_string(),
-            NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
             ChainClientOptions::test_default(),
         )),
     };

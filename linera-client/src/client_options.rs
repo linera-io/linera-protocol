@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, fmt, iter, num::NonZeroUsize, path::PathBuf};
+use std::{collections::HashSet, fmt, iter, path::PathBuf};
 
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
@@ -66,10 +66,6 @@ pub struct ClientContextOptions {
     /// The maximum number of incoming message bundles to include in a block proposal.
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
-
-    /// The maximal number of chains loaded in memory at a given time.
-    #[arg(long, default_value = "40")]
-    pub max_loaded_chains: NonZeroUsize,
 
     /// Delay increment for retrying to connect to a validator.
     #[arg(

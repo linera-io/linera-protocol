@@ -9,7 +9,10 @@ use std::{
     mem,
 };
 
-use futures::{stream, stream::TryStreamExt, Future, StreamExt};
+use futures::{
+    stream::{FuturesUnordered, TryStreamExt},
+    Future, StreamExt,
+};
 use linera_base::{
     data_types::{BlockHeight, Round},
     identifiers::{BlobId, ChainId},
@@ -71,7 +74,6 @@ pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
 {
-    pub chain_worker_count: usize,
     pub remote_node: RemoteNode<A>,
     pub local_node: LocalNodeClient<S>,
 }
@@ -391,16 +393,15 @@ where
         chain_heights: BTreeMap<ChainId, BlockHeight>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let stream = stream::iter(chain_heights)
-            .map(|(chain_id, height)| {
+        let stream =
+            FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, height)| {
                 let mut updater = self.clone();
                 async move {
                     updater
                         .send_chain_information(chain_id, height, delivery)
                         .await
                 }
-            })
-            .buffer_unordered(self.chain_worker_count);
+            }));
         stream.try_collect::<Vec<_>>().await?;
         Ok(())
     }

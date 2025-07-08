@@ -6,7 +6,6 @@ use std::{
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
-    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
     time::{Duration, Instant},
@@ -158,8 +157,6 @@ pub struct Client<Env: Environment> {
     notifier: Arc<ChannelNotifier<Notification>>,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
-    /// The maximum active chain workers.
-    max_loaded_chains: NonZeroUsize,
     /// Configuration options.
     options: ChainClientOptions,
 }
@@ -173,7 +170,6 @@ impl<Env: Environment> Client<Env> {
         long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
-        max_loaded_chains: NonZeroUsize,
         options: ChainClientOptions,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
@@ -181,7 +177,6 @@ impl<Env: Environment> Client<Env> {
             name.into(),
             environment.storage().clone(),
             tracked_chains.clone(),
-            max_loaded_chains,
         )
         .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)
@@ -195,7 +190,6 @@ impl<Env: Environment> Client<Env> {
             admin_id,
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
-            max_loaded_chains,
             options,
         }
     }
@@ -565,15 +559,12 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), ChainClientError> {
         let local_node = self.local_node.clone();
         let nodes = self.make_nodes(committee)?;
-        let n_validators = nodes.len();
-        let chain_worker_count = std::cmp::max(1, self.max_loaded_chains.get() / n_validators);
         communicate_with_quorum(
             &nodes,
             committee,
             |_: &()| (),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
-                    chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
                 };
@@ -603,15 +594,12 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<GenericCertificate<T>, ChainClientError> {
         let local_node = self.local_node.clone();
         let nodes = self.make_nodes(committee)?;
-        let n_validators = nodes.len();
-        let chain_worker_count = std::cmp::max(1, self.max_loaded_chains.get() / n_validators);
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
             committee,
             |vote: &LiteVote| (vote.value.value_hash, vote.round),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
-                    chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
                 };
@@ -772,7 +760,6 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
         remote_node: &RemoteNode<Env::ValidatorNode>,
-        chain_worker_limit: usize,
     ) -> Result<ReceivedCertificatesFromValidator, ChainClientError> {
         let mut tracker = self
             .local_node
@@ -794,7 +781,7 @@ impl<Env: Environment> Client<Env> {
         // Obtain the next block height we need in the local node, for each chain.
         let local_next_heights = self
             .local_node
-            .next_outbox_heights(remote_heights.keys(), chain_worker_limit, chain_id)
+            .next_outbox_heights(remote_heights.keys(), chain_id)
             .await?;
 
         // We keep track of the height we've successfully downloaded and checked, per chain.
@@ -2085,13 +2072,8 @@ impl<Env: Environment> ChainClient<Env> {
             "Received {certificate_count} certificates from {validator_count} validator(s)."
         );
 
-        // We would like to use all chain workers, but we need to keep some of them free, because
-        // handling the certificates can trigger messages to other chains, and putting these in
-        // the inbox requires the recipient chain's worker, too.
-        let chain_worker_limit = (self.client.max_loaded_chains.get() / 2).max(1);
-
         // Process the certificates sorted by chain and in ascending order of block height.
-        let stream = stream::iter(certificates.into_values().map(|certificates| {
+        let stream = FuturesUnordered::from_iter(certificates.into_values().map(|certificates| {
             let client = self.client.clone();
             async move {
                 for certificate in certificates.into_values() {
@@ -2105,14 +2087,13 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                 }
             }
-        }))
-        .buffer_unordered(chain_worker_limit);
+        }));
         stream.for_each(future::ready).await;
 
         // Certificates for these chains were omitted from `certificates` because they were
         // already processed locally. If they were processed in a concurrent task, it is not
         // guaranteed that their cross-chain messages were already handled.
-        let stream = stream::iter(other_sender_chains.into_iter().map(|chain_id| {
+        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
             let local_node = self.client.local_node.clone();
             async move {
                 if let Err(error) = local_node
@@ -2122,8 +2103,7 @@ impl<Env: Environment> ChainClient<Env> {
                     error!("Failed to retry outgoing messages from {chain_id}: {error}");
                 }
             }
-        }))
-        .buffer_unordered(chain_worker_limit);
+        }));
         stream.for_each(future::ready).await;
 
         // Update the trackers.
@@ -2182,10 +2162,7 @@ impl<Env: Environment> ChainClient<Env> {
         let chain_id = self.chain_id;
         let (_, committee) = self.admin_committee().await?;
         let nodes = self.client.make_nodes(&committee)?;
-        // Proceed to downloading received certificates. Split the available chain workers so that
-        // the tasks don't use more than the limit in total.
-        let chain_worker_limit =
-            (self.client.max_loaded_chains.get() / committee.validators().len()).max(1);
+        // Proceed to downloading received certificates.
         let result = communicate_with_quorum(
             &nodes,
             &committee,
@@ -2194,11 +2171,7 @@ impl<Env: Environment> ChainClient<Env> {
                 let client = &self.client;
                 Box::pin(async move {
                     client
-                        .synchronize_received_certificates_from_validator(
-                            chain_id,
-                            &remote_node,
-                            chain_worker_limit,
-                        )
+                        .synchronize_received_certificates_from_validator(chain_id, &remote_node)
                         .await
                 })
             },
@@ -3779,11 +3752,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Proceed to downloading received certificates.
         let received_certificates = self
             .client
-            .synchronize_received_certificates_from_validator(
-                chain_id,
-                &remote_node,
-                self.client.max_loaded_chains.into(),
-            )
+            .synchronize_received_certificates_from_validator(chain_id, &remote_node)
             .await?;
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.

@@ -6,7 +6,7 @@
 //! The [`TestValidator`] is a minimal validator with a single shard. Micro-chains can be added to
 //! it, and blocks can be added to each microchain individually.
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use futures::{
@@ -93,7 +93,6 @@ impl TestValidator {
             "Single validator node".to_string(),
             Some(validator_keypair.secret_key.copy()),
             storage.clone(),
-            NonZeroUsize::new(40).expect("Chain worker limit should not be zero"),
         );
 
         // Create an admin chain.
