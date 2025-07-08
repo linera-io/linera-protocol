@@ -187,7 +187,6 @@ where
     type Error = ExecutionError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
-        tracing::info!("database: step 1, address={address}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(Some(account.info.clone()));
@@ -197,7 +196,6 @@ where
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo>(&result)?;
-        tracing::info!("database: step 2, account_info={account_info:?}");
         Ok(account_info)
     }
 

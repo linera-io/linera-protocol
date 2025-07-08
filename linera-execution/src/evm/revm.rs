@@ -869,7 +869,6 @@ struct CallInterceptorContract<Runtime> {
     // This is the contract address of the contract being created.
     contract_address: Address,
     precompile_addresses: BTreeSet<Address>,
-    index_creation: usize,
 }
 
 impl<Runtime> Clone for CallInterceptorContract<Runtime> {
@@ -878,7 +877,6 @@ impl<Runtime> Clone for CallInterceptorContract<Runtime> {
             db: self.db.clone(),
             contract_address: self.contract_address,
             precompile_addresses: self.precompile_addresses.clone(),
-            index_creation: self.index_creation,
         }
     }
 }
@@ -910,13 +908,9 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         _context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
-        tracing::info!("CallInterceptorContract::create, index.index_creation={}", self.index_creation);
-        if self.index_creation == 0 {
-            inputs.scheme = CreateScheme::Custom {
-                address: self.contract_address,
-            };
-            self.index_creation += 1;
-        }
+        inputs.scheme = CreateScheme::Custom {
+            address: self.contract_address,
+        };
         None
     }
 
@@ -969,7 +963,6 @@ struct CallInterceptorService<Runtime> {
     // This is the contract address of the contract being created.
     contract_address: Address,
     precompile_addresses: BTreeSet<Address>,
-    index_creation: usize,
 }
 
 impl<Runtime> Clone for CallInterceptorService<Runtime> {
@@ -978,7 +971,6 @@ impl<Runtime> Clone for CallInterceptorService<Runtime> {
             db: self.db.clone(),
             contract_address: self.contract_address,
             precompile_addresses: self.precompile_addresses.clone(),
-            index_creation: self.index_creation,
         }
     }
 }
@@ -989,12 +981,9 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
         _context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
-        if self.index_creation == 0 {
-            inputs.scheme = CreateScheme::Custom {
-                address: self.contract_address,
-            };
-            self.index_creation += 1;
-        }
+        inputs.scheme = CreateScheme::Custom {
+            address: self.contract_address,
+        };
         None
     }
 
@@ -1316,7 +1305,6 @@ where
             db: self.db.clone(),
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
-            index_creation: 0,
         };
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
@@ -1483,7 +1471,6 @@ where
             db: self.db.clone(),
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
-            index_creation: 0,
         };
         let caller = SERVICE_ADDRESS;
         let nonce = self.db.get_nonce(&caller)?;

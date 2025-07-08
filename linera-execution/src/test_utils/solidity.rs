@@ -146,12 +146,6 @@ pub fn get_evm_contract_path(path: &str) -> anyhow::Result<(PathBuf, TempDir)> {
     temporary_write_evm_module(module)
 }
 
-pub fn get_evm_contract_path_name(path: &str, contract_name: &str) -> anyhow::Result<(PathBuf, TempDir)> {
-    let source_code = std::fs::read_to_string(path)?;
-    let module = get_bytecode(&source_code, contract_name)?;
-    temporary_write_evm_module(module)
-}
-
 pub fn value_to_vec_u8(value: Value) -> Vec<u8> {
     let mut vec: Vec<u8> = Vec::new();
     for val in value.as_array().unwrap() {
