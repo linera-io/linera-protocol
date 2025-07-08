@@ -101,7 +101,6 @@ where
 
     fn spawn_committee(&mut self) {
         let id = self.next_committee_spawn_id();
-        self.next_committee_spawn_id += 1;
         let handle = self.get_pool_handle();
         handle.spawn_committee(id);
     }
@@ -223,6 +222,8 @@ where
             destination,
             self.work_queue_size,
         );
+        println!("Spawning committee member with id: {}", id);
+        println!("{}", self.storage.get_committee_member_address(id));
         let handle = self
             .runtime_handle
             .spawn(exporter_task.run_with_shutdown(self.shutdown_signal.clone()));
