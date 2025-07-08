@@ -53,7 +53,7 @@ AccountOwnerBalance:
     - account_owner:
         TYPENAME: AccountOwner
     - balance:
-        TYPENAME: Balance
+        TYPENAME: Amount
 OptionAccountOwner:
   NEWTYPESTRUCT:
     OPTION:

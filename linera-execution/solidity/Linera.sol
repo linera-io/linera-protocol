@@ -46,8 +46,7 @@ library Linera {
     function read_data_blob(bytes32 hash) internal returns (bytes memory) {
         address precompile = address(0x0b);
         LineraTypes.CryptoHash memory hash2 = LineraTypes.CryptoHash(hash);
-        LineraTypes.BaseRuntimePrecompile_ReadDataBlob memory read_data_blob_ = LineraTypes.BaseRuntimePrecompile_ReadDataBlob(hash2);
-        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_data_blob(read_data_blob_);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_data_blob(hash2);
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
@@ -58,8 +57,7 @@ library Linera {
     function assert_data_blob_exists(bytes32 hash) internal {
         address precompile = address(0x0b);
         LineraTypes.CryptoHash memory hash2 = LineraTypes.CryptoHash(hash);
-        LineraTypes.BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists_ = LineraTypes.BaseRuntimePrecompile_AssertDataBlobExists(hash2);
-        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_assert_data_blob_exists(assert_data_blob_exists_);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_assert_data_blob_exists(hash2);
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
