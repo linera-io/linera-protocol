@@ -169,6 +169,7 @@ pub fn read_evm_u256_entry(value: Value) -> U256 {
         .unwrap()
         .iter()
         .map(|v| v.as_u64().ok_or("Not a number").map(|n| n as u8))
-        .collect::<Result<Vec<u8>,_>>().unwrap();
+        .collect::<Result<Vec<u8>, _>>()
+        .unwrap();
     U256::from_be_slice(&result)
 }

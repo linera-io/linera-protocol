@@ -1482,7 +1482,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
 
     // Checking the total supply
 
-    let total_supply = totalSupplyCall { };
+    let total_supply = totalSupplyCall {};
     let query = total_supply.abi_encode();
     let query = EvmQuery::Query(query);
     let result = application1.run_json_query(query).await?;
@@ -1490,7 +1490,10 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
 
     // Transfering to another user and checking the balances.
 
-    let mutation = transferCall { to: address2, value: transfer1 };
+    let mutation = transferCall {
+        to: address2,
+        value: transfer1,
+    };
     let mutation = EvmQuery::Mutation(mutation.abi_encode());
     application1.run_json_query(mutation).await?;
 
@@ -1523,7 +1526,10 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let query = balanceOfCall { account: address1 };
     let query = EvmQuery::Query(query.abi_encode());
     let result = application1.run_json_query(query.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), the_supply - transfer1 - transfer2);
+    assert_eq!(
+        read_evm_u256_entry(result),
+        the_supply - transfer1 - transfer2
+    );
 
     let result = application2.run_json_query(query).await?;
     assert_eq!(read_evm_u256_entry(result), transfer2);
