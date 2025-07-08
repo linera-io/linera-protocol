@@ -881,7 +881,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let constructor_argument = ConstructorArgs { test_value: 42 };
     let constructor_argument = constructor_argument.abi_encode();
 
-    let instantiation_argument: Vec<u8> = u64::abi_encode(&original_value);
+    let instantiation_argument = u64::abi_encode(&original_value);
 
     let (evm_contract, _dir) =
         get_evm_contract_path("tests/fixtures/evm_example_execute_message.sol")?;
@@ -1439,8 +1439,6 @@ async fn test_evm_erc20(config: impl LineraNetConfig) -> Result<()> {
     let constructor_argument = constructor_argument.abi_encode();
 
     let instantiation_argument = U256::abi_encode(&initial_supply);
-    tracing::info!("|constructor_argument|={}", constructor_argument.len());
-    tracing::info!("|instantiation_argument|={}", instantiation_argument.len());
 
     let chain = client.load_wallet()?.default_chain().unwrap();
 
