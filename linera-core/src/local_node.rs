@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
+use futures::{future::Either, stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch},
@@ -296,29 +296,21 @@ where
     /// Given a list of chain IDs, returns a map that assigns to each of them the next block
     /// height to schedule, i.e. the lowest block height for which we haven't added the messages
     /// to `receiver_id` to the outbox yet.
-    ///
-    /// It makes at most `chain_worker_limit` requests to the local node in parallel.
     pub async fn next_outbox_heights(
         &self,
         chain_ids: impl IntoIterator<Item = &ChainId>,
-        chain_worker_limit: usize,
         receiver_id: ChainId,
     ) -> Result<BTreeMap<ChainId, BlockHeight>, LocalNodeError> {
-        let futures = chain_ids
-            .into_iter()
-            .map(|chain_id| async move {
+        let futures =
+            FuturesUnordered::from_iter(chain_ids.into_iter().map(|chain_id| async move {
                 let chain = self.chain_state_view(*chain_id).await?;
                 let mut next_height = chain.tip_state.get().next_block_height;
                 if let Some(outbox) = chain.outboxes.try_load_entry(&receiver_id).await? {
                     next_height = next_height.max(*outbox.next_height_to_schedule.get());
                 }
                 Ok::<_, LocalNodeError>((*chain_id, next_height))
-            })
-            .collect::<Vec<_>>();
-        stream::iter(futures)
-            .buffer_unordered(chain_worker_limit)
-            .try_collect()
-            .await
+            }));
+        futures.try_collect().await
     }
 
     pub async fn update_received_certificate_trackers(

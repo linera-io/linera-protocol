@@ -28,7 +28,8 @@ use linera_chain::{
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::views::ClonableView;
-use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
+use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
+use tracing::{instrument, warn};
 
 #[cfg(test)]
 pub(crate) use self::attempted_changes::CrossChainUpdateHelper;
@@ -36,7 +37,7 @@ use self::{
     attempted_changes::ChainWorkerStateWithAttemptedChanges,
     temporary_changes::ChainWorkerStateWithTemporaryChanges,
 };
-use super::{ChainWorkerConfig, DeliveryNotifier};
+use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier};
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
@@ -97,6 +98,119 @@ where
     /// Returns the [`ChainId`] of the chain handled by this worker.
     pub fn chain_id(&self) -> ChainId {
         self.chain.chain_id()
+    }
+
+    /// Handles a request and applies it to the chain state.
+    #[instrument(skip_all)]
+    pub async fn handle_request(&mut self, request: ChainWorkerRequest<StorageClient::Context>) {
+        tracing::trace!("Handling chain worker request: {request:?}");
+        // TODO(#2237): Spawn concurrent tasks for read-only operations
+        let responded = match request {
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadCertificate { height, callback } => {
+                callback.send(self.read_certificate(height).await).is_ok()
+            }
+            #[cfg(with_testing)]
+            ChainWorkerRequest::FindBundleInInbox {
+                inbox_id,
+                certificate_hash,
+                height,
+                index,
+                callback,
+            } => callback
+                .send(
+                    self.find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
+                        .await,
+                )
+                .is_ok(),
+            ChainWorkerRequest::GetChainStateView { callback } => {
+                callback.send(self.chain_state_view().await).is_ok()
+            }
+            ChainWorkerRequest::QueryApplication { query, callback } => {
+                callback.send(self.query_application(query).await).is_ok()
+            }
+            ChainWorkerRequest::DescribeApplication {
+                application_id,
+                callback,
+            } => callback
+                .send(self.describe_application(application_id).await)
+                .is_ok(),
+            ChainWorkerRequest::StageBlockExecution {
+                block,
+                round,
+                published_blobs,
+                callback,
+            } => callback
+                .send(
+                    self.stage_block_execution(block, round, &published_blobs)
+                        .await,
+                )
+                .is_ok(),
+            ChainWorkerRequest::ProcessTimeout {
+                certificate,
+                callback,
+            } => callback
+                .send(self.process_timeout(certificate).await)
+                .is_ok(),
+            ChainWorkerRequest::HandleBlockProposal { proposal, callback } => callback
+                .send(self.handle_block_proposal(proposal).await)
+                .is_ok(),
+            ChainWorkerRequest::ProcessValidatedBlock {
+                certificate,
+                callback,
+            } => callback
+                .send(self.process_validated_block(certificate).await)
+                .is_ok(),
+            ChainWorkerRequest::ProcessConfirmedBlock {
+                certificate,
+                notify_when_messages_are_delivered,
+                callback,
+            } => callback
+                .send(
+                    self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
+                        .await,
+                )
+                .is_ok(),
+            ChainWorkerRequest::ProcessCrossChainUpdate {
+                origin,
+                bundles,
+                callback,
+            } => callback
+                .send(self.process_cross_chain_update(origin, bundles).await)
+                .is_ok(),
+            ChainWorkerRequest::ConfirmUpdatedRecipient {
+                recipient,
+                latest_height,
+                callback,
+            } => callback
+                .send(
+                    self.confirm_updated_recipient(recipient, latest_height)
+                        .await,
+                )
+                .is_ok(),
+            ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
+                .send(self.handle_chain_info_query(query).await)
+                .is_ok(),
+            ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
+                .send(self.download_pending_blob(blob_id).await)
+                .is_ok(),
+            ChainWorkerRequest::HandlePendingBlob { blob, callback } => {
+                callback.send(self.handle_pending_blob(blob).await).is_ok()
+            }
+            ChainWorkerRequest::UpdateReceivedCertificateTrackers {
+                new_trackers,
+                callback,
+            } => callback
+                .send(
+                    self.update_received_certificate_trackers(new_trackers)
+                        .await,
+                )
+                .is_ok(),
+        };
+
+        if !responded {
+            warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
+        }
     }
 
     /// Returns a read-only view of the [`ChainStateView`].
@@ -233,6 +347,19 @@ where
 
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
         Ok((info, actions))
+    }
+
+    /// Clears the shared chain view, and acquires and drops its write lock.
+    ///
+    /// This is the only place a write lock is acquired, and read locks are acquired in
+    /// the `chain_state_view` method, which has a `&mut self` receiver like this one.
+    /// That means that when this function returns, no readers will be waiting to acquire
+    /// the lock and it is safe to write the chain state to storage without any readers
+    /// having a stale view of it.
+    pub(super) async fn clear_shared_chain_view(&mut self) {
+        if let Some(shared_chain_view) = self.shared_chain_view.take() {
+            let _: RwLockWriteGuard<_> = shared_chain_view.write().await;
+        }
     }
 
     /// Processes a validated block issued for this multi-owner chain.

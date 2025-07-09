@@ -10,7 +10,6 @@ mod wasm;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
-    num::NonZeroUsize,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -150,7 +149,6 @@ where
             "Single validator node".to_string(),
             Some(validator_keypair.secret_key),
             storage,
-            NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
         )
         .with_allow_inactive_chains(is_client)
         .with_allow_messages_from_deprecated_epochs(is_client)

@@ -22,6 +22,8 @@ pub struct ChainWorkerConfig {
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     pub grace_period: Duration,
+    /// Idle chain workers free their memory after that duration without requests.
+    pub ttl: Duration,
 }
 
 impl ChainWorkerConfig {

@@ -4,7 +4,6 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -31,7 +30,6 @@ use linera_chain::{
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::ViewError;
-use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -287,7 +285,7 @@ where
     /// The set of spawned [`ChainWorkerActor`] tasks.
     chain_worker_tasks: Arc<Mutex<JoinSet>>,
     /// The cache of running [`ChainWorkerActor`]s.
-    chain_workers: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
+    chain_workers: Arc<Mutex<BTreeMap<ChainId, ChainActorEndpoint<StorageClient>>>>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -326,7 +324,6 @@ where
         nickname: String,
         key_pair: Option<ValidatorSecretKey>,
         storage: StorageClient,
-        chain_worker_limit: NonZeroUsize,
     ) -> Self {
         WorkerState {
             nickname,
@@ -337,7 +334,7 @@ where
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(chain_worker_limit))),
+            chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -346,7 +343,6 @@ where
         nickname: String,
         storage: StorageClient,
         tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
-        chain_worker_limit: NonZeroUsize,
     ) -> Self {
         WorkerState {
             nickname,
@@ -357,7 +353,7 @@ where
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(chain_worker_limit))),
+            chain_workers: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -380,13 +376,22 @@ where
         self
     }
 
-    /// Returns an instance with the specified grace period, in microseconds.
+    /// Returns an instance with the specified grace period.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
-    #[instrument(level = "trace", skip(self, grace_period))]
+    #[instrument(level = "trace", skip(self))]
     pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
         self.chain_worker_config.grace_period = grace_period;
+        self
+    }
+
+    /// Returns an instance with the specified chain worker TTL.
+    ///
+    /// Idle chain workers free their memory after that duration without requests.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_chain_worker_ttl(mut self, chain_worker_ttl: Duration) -> Self {
+        self.chain_worker_config.ttl = chain_worker_ttl;
         self
     }
 
@@ -707,7 +712,6 @@ where
                     Some(endpoint) => break endpoint,
                     None => sleep(Duration::from_millis(250)).await,
                 }
-                warn!("No chain worker candidates found for eviction, retrying...");
             }
         })
         .await
@@ -762,40 +766,10 @@ where
         if let Some(endpoint) = chain_workers.get(&chain_id) {
             Some((endpoint.clone(), None))
         } else {
-            if chain_workers.len() >= usize::from(chain_workers.cap()) {
-                let (chain_to_evict, _) = chain_workers
-                    .iter()
-                    .rev()
-                    .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1)?;
-                let chain_to_evict = *chain_to_evict;
-
-                chain_workers.pop(&chain_to_evict);
-                self.clean_up_finished_chain_workers(&chain_workers);
-            }
-
             let (sender, receiver) = mpsc::unbounded_channel();
-            chain_workers.push(chain_id, sender.clone());
-
+            chain_workers.insert(chain_id, sender.clone());
             Some((sender, Some(receiver)))
         }
-    }
-
-    /// Cleans up any finished chain workers and their delivery notifiers.
-    fn clean_up_finished_chain_workers(
-        &self,
-        active_chain_workers: &LruCache<ChainId, ChainActorEndpoint<StorageClient>>,
-    ) {
-        self.chain_worker_tasks
-            .lock()
-            .unwrap()
-            .reap_finished_tasks();
-
-        self.delivery_notifiers
-            .lock()
-            .unwrap()
-            .retain(|chain_id, notifier| {
-                !notifier.is_empty() || active_chain_workers.contains(chain_id)
-            });
     }
 
     #[instrument(skip_all, fields(
