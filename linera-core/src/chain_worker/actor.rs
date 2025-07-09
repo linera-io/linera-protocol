@@ -6,7 +6,7 @@
 use std::{
     collections::{BTreeMap, HashSet},
     fmt,
-    sync::{Arc, RwLock},
+    sync::{self, Arc, RwLock},
 };
 
 use custom_debug_derive::Debug;
@@ -171,8 +171,13 @@ pub struct ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
-    worker: ChainWorkerState<StorageClient>,
-    service_runtime_thread: Option<linera_base::task::Blocking>,
+    chain_id: ChainId,
+    config: ChainWorkerConfig,
+    storage: StorageClient,
+    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
+    tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
+    delivery_notifier: DeliveryNotifier,
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
@@ -222,7 +227,9 @@ where
             }
         };
 
-        actor.handle_requests(incoming_requests).await;
+        if let Err(err) = actor.handle_requests(incoming_requests).await {
+            tracing::error!("Chain actor error: {err}");
+        }
     }
 
     /// Creates a [`ChainWorkerActor`], loading it with the chain state for the requested
@@ -230,7 +237,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         execution_state_cache: Arc<
             ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
         >,
@@ -238,30 +245,14 @@ where
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
     ) -> Result<Self, WorkerError> {
-        let (service_runtime_thread, service_runtime_endpoint) = {
-            if config.long_lived_services {
-                let (thread, endpoint) = Self::spawn_service_runtime_actor(chain_id).await;
-                (Some(thread), Some(endpoint))
-            } else {
-                (None, None)
-            }
-        };
-
-        let worker = ChainWorkerState::load(
+        Ok(ChainWorkerActor {
             config,
             storage,
-            block_cache,
+            block_values,
             execution_state_cache,
             tracked_chains,
             delivery_notifier,
             chain_id,
-            service_runtime_endpoint,
-        )
-        .await?;
-
-        Ok(ChainWorkerActor {
-            worker,
-            service_runtime_thread,
         })
     }
 
@@ -295,37 +286,58 @@ where
 
     /// Runs the worker until there are no more incoming requests.
     #[instrument(
-        name = "ChainWorkerActor::handle_requests",
         skip_all,
-        fields(chain_id = format!("{:.8}", self.worker.chain_id())),
+        fields(chain_id = format!("{:.8}", self.chain_id)),
     )]
     pub async fn handle_requests(
-        mut self,
+        self,
         mut incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
         )>,
-    ) {
+    ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
+
+        let (service_runtime_thread, service_runtime_endpoint) = {
+            if self.config.long_lived_services {
+                let (thread, endpoint) = Self::spawn_service_runtime_actor(self.chain_id).await;
+                (Some(thread), Some(endpoint))
+            } else {
+                (None, None)
+            }
+        };
+
+        let mut worker = ChainWorkerState::load(
+            self.config.clone(),
+            self.storage.clone(),
+            self.block_values.clone(),
+            self.execution_state_cache.clone(),
+            self.tracked_chains.clone(),
+            self.delivery_notifier.clone(),
+            self.chain_id,
+            service_runtime_endpoint,
+        )
+        .await?;
 
         loop {
             futures::select! {
-                () = self.worker.sleep_until_timeout().fuse() => self.worker.free_memory().await,
+                () = worker.sleep_until_timeout().fuse() => worker.free_memory().await,
                 maybe_request = incoming_requests.recv().fuse() => {
                     let Some((request, span)) = maybe_request else {
                         break; // Request sender was dropped.
                     };
-                    Box::pin(self.worker.handle_request(request).instrument(span)).await;
+                    Box::pin(worker.handle_request(request).instrument(span)).await;
                 }
             }
         }
 
-        if let Some(thread) = self.service_runtime_thread {
-            drop(self.worker);
+        if let Some(thread) = service_runtime_thread {
+            drop(worker);
             thread.join().await
         }
 
         trace!("`ChainWorkerActor` finished");
+        Ok(())
     }
 }
 
