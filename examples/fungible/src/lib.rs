@@ -4,6 +4,7 @@
 /* ABI of the Fungible Token Example Application */
 
 pub use linera_sdk::abis::fungible::*;
+use async_graphql::{SimpleObject, InputObject};
 use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
@@ -39,6 +40,14 @@ pub enum Message {
         /// Target account to transfer amount to
         target_account: Account,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, SimpleObject, InputObject)]
+pub struct OwnerSpender {
+    /// Account to withdraw from
+    pub owner: AccountOwner,
+    /// Account to do the withdrawing
+    pub spender: AccountOwner,
 }
 
 /// Creates a fungible token application and distributes `initial_amounts` to new individual

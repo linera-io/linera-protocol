@@ -8,7 +8,7 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{Operation, Parameters};
+use fungible::{Operation, Parameters, OwnerSpender};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, WithServiceAbi},
@@ -58,6 +58,10 @@ impl Service for FungibleTokenService {
 impl FungibleTokenService {
     async fn accounts(&self) -> &MapView<AccountOwner, Amount> {
         &self.state.accounts
+    }
+
+    async fn allowances(&self) -> &MapView<OwnerSpender, Amount> {
+        &self.state.allowances
     }
 
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
