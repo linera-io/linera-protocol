@@ -133,6 +133,7 @@ where
             options.long_lived_services,
             chain_ids,
             name,
+            Duration::from_secs(30),
             options.to_chain_client_options(),
         );
 
@@ -177,6 +178,7 @@ where
             false,
             chain_ids,
             name,
+            Duration::from_secs(30),
             ChainClientOptions {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
                 ..ChainClientOptions::test_default()

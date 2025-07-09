@@ -113,6 +113,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             false,
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
+            Duration::from_secs(30),
             ChainClientOptions::test_default(),
         )),
     };
@@ -196,6 +197,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             false,
             [],
             "Client node with no chains".to_string(),
+            Duration::from_secs(30),
             ChainClientOptions::test_default(),
         )),
     };

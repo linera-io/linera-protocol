@@ -67,6 +67,14 @@ pub struct ClientContextOptions {
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
+    /// The duration in milliseconds after which an idle chain worker will free its memory.
+    #[arg(
+        long = "chain-worker-ttl-ms",
+        default_value = "30000",
+        value_parser = util::parse_millis
+    )]
+    pub chain_worker_ttl: Duration,
+
     /// Delay increment for retrying to connect to a validator.
     #[arg(
         long = "retry-delay-ms",

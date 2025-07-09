@@ -376,13 +376,22 @@ where
         self
     }
 
-    /// Returns an instance with the specified grace period, in microseconds.
+    /// Returns an instance with the specified grace period.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
-    #[instrument(level = "trace", skip(self, grace_period))]
+    #[instrument(level = "trace", skip(self))]
     pub fn with_grace_period(mut self, grace_period: Duration) -> Self {
         self.chain_worker_config.grace_period = grace_period;
+        self
+    }
+
+    /// Returns an instance with the specified chain worker TTL.
+    ///
+    /// Idle chain workers free their memory after that duration without requests.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_chain_worker_ttl(mut self, chain_worker_ttl: Duration) -> Self {
+        self.chain_worker_config.ttl = chain_worker_ttl;
         self
     }
 
