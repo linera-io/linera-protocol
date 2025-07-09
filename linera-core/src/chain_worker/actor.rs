@@ -315,7 +315,7 @@ where
                     let Some((request, span)) = maybe_request else {
                         break; // Request sender was dropped.
                     };
-                    Box::pin(self.handle_request(request).instrument(span)).await;
+                    Box::pin(self.worker.handle_request(request).instrument(span)).await;
                 }
             }
         }
@@ -326,127 +326,6 @@ where
         }
 
         trace!("`ChainWorkerActor` finished");
-    }
-
-    /// Runs the worker until there are no more incoming requests.
-    #[instrument(skip(self, request))]
-    pub async fn handle_request(&mut self, request: ChainWorkerRequest<StorageClient::Context>) {
-        // TODO(#2237): Spawn concurrent tasks for read-only operations
-        let responded = match request {
-            #[cfg(with_testing)]
-            ChainWorkerRequest::ReadCertificate { height, callback } => callback
-                .send(self.worker.read_certificate(height).await)
-                .is_ok(),
-            #[cfg(with_testing)]
-            ChainWorkerRequest::FindBundleInInbox {
-                inbox_id,
-                certificate_hash,
-                height,
-                index,
-                callback,
-            } => callback
-                .send(
-                    self.worker
-                        .find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::GetChainStateView { callback } => {
-                callback.send(self.worker.chain_state_view().await).is_ok()
-            }
-            ChainWorkerRequest::QueryApplication { query, callback } => callback
-                .send(self.worker.query_application(query).await)
-                .is_ok(),
-            ChainWorkerRequest::DescribeApplication {
-                application_id,
-                callback,
-            } => callback
-                .send(self.worker.describe_application(application_id).await)
-                .is_ok(),
-            ChainWorkerRequest::StageBlockExecution {
-                block,
-                round,
-                published_blobs,
-                callback,
-            } => callback
-                .send(
-                    self.worker
-                        .stage_block_execution(block, round, &published_blobs)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::ProcessTimeout {
-                certificate,
-                callback,
-            } => callback
-                .send(self.worker.process_timeout(certificate).await)
-                .is_ok(),
-            ChainWorkerRequest::HandleBlockProposal { proposal, callback } => callback
-                .send(self.worker.handle_block_proposal(proposal).await)
-                .is_ok(),
-            ChainWorkerRequest::ProcessValidatedBlock {
-                certificate,
-                callback,
-            } => callback
-                .send(self.worker.process_validated_block(certificate).await)
-                .is_ok(),
-            ChainWorkerRequest::ProcessConfirmedBlock {
-                certificate,
-                notify_when_messages_are_delivered,
-                callback,
-            } => callback
-                .send(
-                    self.worker
-                        .process_confirmed_block(certificate, notify_when_messages_are_delivered)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::ProcessCrossChainUpdate {
-                origin,
-                bundles,
-                callback,
-            } => callback
-                .send(
-                    self.worker
-                        .process_cross_chain_update(origin, bundles)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::ConfirmUpdatedRecipient {
-                recipient,
-                latest_height,
-                callback,
-            } => callback
-                .send(
-                    self.worker
-                        .confirm_updated_recipient(recipient, latest_height)
-                        .await,
-                )
-                .is_ok(),
-            ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
-                .send(self.worker.handle_chain_info_query(query).await)
-                .is_ok(),
-            ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
-                .send(self.worker.download_pending_blob(blob_id).await)
-                .is_ok(),
-            ChainWorkerRequest::HandlePendingBlob { blob, callback } => callback
-                .send(self.worker.handle_pending_blob(blob).await)
-                .is_ok(),
-            ChainWorkerRequest::UpdateReceivedCertificateTrackers {
-                new_trackers,
-                callback,
-            } => callback
-                .send(
-                    self.worker
-                        .update_received_certificate_trackers(new_trackers)
-                        .await,
-                )
-                .is_ok(),
-        };
-
-        if !responded {
-            warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
-        }
     }
 }
 
