@@ -1432,8 +1432,8 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
     let owner1 = client1.get_owner().unwrap();
     let owner2 = client1.keygen().await?;
-    let address1 = owner1.to_address().unwrap();
-    let address2 = owner2.to_address().unwrap();
+    let address1 = owner1.to_evm_address().unwrap();
+    let address2 = owner2.to_evm_address().unwrap();
 
     sol! {
         struct ConstructorArgs {
@@ -1488,7 +1488,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let result = application1.run_json_query(query).await?;
     assert_eq!(read_evm_u256_entry(result), the_supply);
 
-    // Transfering to another user and checking the balances.
+    // Transferring to another user and checking the balances.
 
     let mutation = transferCall {
         to: address2,
@@ -1507,7 +1507,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let result = application1.run_json_query(query).await?;
     assert_eq!(read_evm_u256_entry(result), transfer1);
 
-    // Transfering to another chain and checking the balances.
+    // Transferring to another chain and checking the balances.
 
     let chain_id: [u64; 4] = <[u64; 4]>::from(chain2.0);
     let chain_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(chain_id);

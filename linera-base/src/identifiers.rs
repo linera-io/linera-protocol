@@ -62,7 +62,7 @@ impl AccountOwner {
 
     /// Gets the EVM address if possible
     #[cfg(with_revm)]
-    pub fn to_address(&self) -> Option<Address> {
+    pub fn to_evm_address(&self) -> Option<Address> {
         match self {
             AccountOwner::Address20(address) => Some(Address::from(address)),
             _ => None,
