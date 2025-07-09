@@ -3,7 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, FungibleOperation, Parameters};
+use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, ChainId, WithContractAbi},
     Contract, ContractRuntime,
@@ -47,14 +47,14 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            FungibleOperation::Balance { owner } => {
+            Operation::Balance { owner } => {
                 let balance = self.runtime.owner_balance(owner);
                 FungibleResponse::Balance(balance)
             }
 
-            FungibleOperation::TickerSymbol => FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)),
+            Operation::TickerSymbol => FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)),
 
-            FungibleOperation::Transfer {
+            Operation::Transfer {
                 owner,
                 amount,
                 target_account,
@@ -72,7 +72,7 @@ impl Contract for NativeFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            FungibleOperation::Claim {
+            Operation::Claim {
                 source_account,
                 amount,
                 target_account,

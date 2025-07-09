@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{FungibleOperation, Parameters};
+use fungible::{Operation, Parameters};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, WithServiceAbi},
@@ -37,7 +37,7 @@ impl Service for NativeFungibleTokenService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.clone(),
-            FungibleOperation::mutation_root(self.runtime.clone()),
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();

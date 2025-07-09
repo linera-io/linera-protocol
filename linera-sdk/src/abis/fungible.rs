@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 pub struct FungibleTokenAbi;
 
 impl ContractAbi for FungibleTokenAbi {
-    type Operation = FungibleOperation;
+    type Operation = Operation;
     type Response = FungibleResponse;
 }
 
@@ -29,7 +29,7 @@ impl ServiceAbi for FungibleTokenAbi {
 
 /// An operation
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
-pub enum FungibleOperation {
+pub enum Operation {
     /// Requests an account balance.
     Balance {
         /// Owner to query the balance for
