@@ -199,32 +199,6 @@ library Linera {
         return LineraTypes.bcs_deserialize_opt_ApplicationId(output);
     }
 
-
-
-
-
-    function try_call_application(bytes32 universal_address, bytes memory operation) internal returns (bytes memory) {
-        address precompile = address(0x0b);
-        LineraTypes.ApplicationId memory target = LineraTypes.ApplicationId(LineraTypes.CryptoHash(universal_address));
-        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_ = LineraTypes.ContractRuntimePrecompile_TryCallApplication(target, operation);
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_try_call_application(try_call_application_);
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
-        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
-        require(success);
-        return output;
-    }
-
-    function validation_round() internal returns (LineraTypes.opt_uint32 memory) {
-        address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_validation_round();
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
-        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
-        require(success);
-        return LineraTypes.bcs_deserialize_opt_uint32(output);
-    }
-
     function send_message(bytes32 chain_id1, bytes memory message) internal {
         address precompile = address(0x0b);
         LineraTypes.ChainId memory chain_id2 = LineraTypes.ChainId(LineraTypes.CryptoHash(chain_id1));
@@ -236,6 +210,18 @@ library Linera {
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         require(output.length == 0);
+    }
+
+    function try_call_application(bytes32 universal_address, bytes memory operation) internal returns (bytes memory) {
+        address precompile = address(0x0b);
+        LineraTypes.ApplicationId memory target = LineraTypes.ApplicationId(LineraTypes.CryptoHash(universal_address));
+        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_ = LineraTypes.ContractRuntimePrecompile_TryCallApplication(target, operation);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_try_call_application(try_call_application_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return output;
     }
 
     function linera_emit(bytes memory stream_name, bytes memory value) internal returns (uint32) {
@@ -290,6 +276,30 @@ library Linera {
         require(success);
         require(output.length == 0);
     }
+
+    function query_service(bytes32 universal_address, bytes memory query) internal returns (bytes memory) {
+        address precompile = address(0x0b);
+        LineraTypes.ApplicationId memory target = LineraTypes.ApplicationId(LineraTypes.CryptoHash(universal_address));
+        LineraTypes.ContractRuntimePrecompile_QueryService memory query_service_ = LineraTypes.ContractRuntimePrecompile_QueryService(target, query);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_query_service(query_service_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return output;
+    }
+
+    function validation_round() internal returns (LineraTypes.opt_uint32 memory) {
+        address precompile = address(0x0b);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_validation_round();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return LineraTypes.bcs_deserialize_opt_uint32(output);
+    }
+
+    // ServiceRuntime functions.
 
     function try_query_application(bytes32 universal_address, bytes memory argument) internal returns (bytes memory) {
         address precompile = address(0x0b);
