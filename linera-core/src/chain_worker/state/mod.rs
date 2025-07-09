@@ -14,7 +14,7 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch},
+    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta},
     ensure,
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, BlobType, ChainId},
@@ -233,6 +233,37 @@ where
 
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
         Ok((info, actions))
+    }
+
+    /// Sleeps for the configured TTL. If the memory is already freed, it never returns.
+    pub(super) async fn sleep_until_timeout(&self) {
+        if self.shared_chain_view.is_none() {
+            futures::future::pending::<()>().await;
+        }
+        let now = self.storage.clock().current_time();
+        let ttl =
+            TimeDelta::from_micros(u64::try_from(self.config.ttl.as_micros()).unwrap_or(u64::MAX));
+        let timeout = now.saturating_add(ttl);
+        self.storage.clock().sleep_until(timeout).await
+    }
+
+    /// Drops the chain state from memory to minimize the worker's footprint.
+    pub(super) async fn free_memory(&mut self) {
+        tracing::debug!("Freeing worker memory.");
+        self.shared_chain_view = None;
+    }
+
+    /// Clears the shared chain view, and acquires and drops its write lock.
+    ///
+    /// This is the only place a write lock is acquired, and read locks are acquired in
+    /// the `chain_state_view` method, which has a `&mut self` receiver like this one.
+    /// That means that when this function returns, no readers will be waiting to acquire
+    /// the lock and it is safe to write the chain state to storage without any readers
+    /// having a stale view of it.
+    pub(super) async fn clear_shared_chain_view(&mut self) {
+        if let Some(shared_chain_view) = self.shared_chain_view.take() {
+            let _ = shared_chain_view.write().await;
+        }
     }
 
     /// Processes a validated block issued for this multi-owner chain.

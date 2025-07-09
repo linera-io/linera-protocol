@@ -10,6 +10,7 @@ use std::{
 };
 
 use custom_debug_derive::Debug;
+use futures::FutureExt;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, Timestamp},
@@ -307,8 +308,16 @@ where
     ) {
         trace!("Starting `ChainWorkerActor`");
 
-        while let Some((request, span)) = incoming_requests.recv().await {
-            Box::pin(self.handle_request(request).instrument(span)).await;
+        loop {
+            futures::select! {
+                () = self.worker.sleep_until_timeout().fuse() => self.worker.free_memory().await,
+                maybe_request = incoming_requests.recv().fuse() => {
+                    let Some((request, span)) = maybe_request else {
+                        break; // Request sender was dropped.
+                    };
+                    Box::pin(self.handle_request(request).instrument(span)).await;
+                }
+            }
         }
 
         if let Some(thread) = self.service_runtime_thread {
