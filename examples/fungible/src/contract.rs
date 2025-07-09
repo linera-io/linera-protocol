@@ -69,6 +69,14 @@ impl Contract for FungibleTokenContract {
                 FungibleResponse::TickerSymbol(params.ticker_symbol)
             }
 
+            Operation::Approve { owner, spender, allowance } => {
+                self.runtime
+                    .check_account_permission(owner)
+                    .expect("Permission for Transfer operation");
+                self.state.approve(owner, spender, allowance).await;
+                FungibleResponse::Ok
+            }
+
             Operation::Transfer {
                 owner,
                 amount,
@@ -78,6 +86,16 @@ impl Contract for FungibleTokenContract {
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
                 self.state.debit(owner, amount).await;
+                self.finish_transfer_to_account(amount, target_account, owner)
+                    .await;
+                FungibleResponse::Ok
+            }
+
+            Operation::TransferFrom { owner, spender, amount, target_account } => {
+                self.runtime
+                    .check_account_permission(spender)
+                    .expect("Permission for Transfer operation");
+                self.state.debit_for_transfer_from(owner, spender, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
                 FungibleResponse::Ok

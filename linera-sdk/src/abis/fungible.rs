@@ -35,12 +35,32 @@ pub enum Operation {
         /// Owner to query the balance for
         owner: AccountOwner,
     },
+    /// Approve the transfer of tokens 
+    Approve {
+        /// Owner to transfer from
+        owner: AccountOwner,
+        /// The spender account
+        spender: AccountOwner,
+        /// Maximum amount to be transferred
+        allowance: Amount,
+    },
     /// Requests this fungible token's ticker symbol.
     TickerSymbol,
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
         /// Owner to transfer from
         owner: AccountOwner,
+        /// Amount to be transferred
+        amount: Amount,
+        /// Target account to transfer the amount to
+        target_account: Account,
+    },
+    /// Transfers tokens from a (locally owned) account to a (possibly remote) account by using the allowance.
+    TransferFrom {
+        /// Owner to transfer from
+        owner: AccountOwner,
+        /// The spender of the amount.
+        spender: AccountOwner,
         /// Amount to be transferred
         amount: Amount,
         /// Target account to transfer the amount to

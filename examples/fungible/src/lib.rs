@@ -50,6 +50,17 @@ pub struct OwnerSpender {
     pub spender: AccountOwner,
 }
 
+impl OwnerSpender {
+    pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {
+        if owner == spender {
+            panic!("owner should be different from spender");
+        }
+        Self { owner, spender }
+    }
+
+}
+
+
 /// Creates a fungible token application and distributes `initial_amounts` to new individual
 /// chains.
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
