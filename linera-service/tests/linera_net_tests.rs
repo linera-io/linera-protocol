@@ -170,28 +170,31 @@ impl FungibleApp {
     }
 }
 
-
-
-
-
-
-
-
 struct DelegatedFungibleApp(ApplicationWrapper<delegated_fungible::DelegatedFungibleTokenAbi>);
 
 impl DelegatedFungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
+        tracing::info!("account_owner={}", account_owner);
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
             account_owner.to_value()
         );
         let response_body = self.0.query(&query).await.unwrap();
+        tracing::info!("response_body={}", response_body);
         let amount_option = serde_json::from_value::<Option<Amount>>(
             response_body["accounts"]["entry"]["value"].clone(),
         )
         .unwrap();
+        tracing::info!("amount_option={:?}", amount_option);
 
         amount_option.unwrap_or(Amount::ZERO)
+    }
+
+    async fn assert_balances(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
+        for (account_owner, amount) in accounts {
+            let value = self.get_amount(&account_owner).await;
+            assert_eq!(value, amount);
+        }
     }
 
     async fn approve(
@@ -225,43 +228,7 @@ impl DelegatedFungibleApp {
         );
         self.0.mutate(mutation).await.unwrap()
     }
-
-    async fn transfer(
-        &self,
-        account_owner: &AccountOwner,
-        amount_transfer: Amount,
-        destination: fungible::Account,
-    ) -> Value {
-        let mutation = format!(
-            "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
-            account_owner.to_value(),
-            amount_transfer,
-            destination.to_value(),
-        );
-        self.0.mutate(mutation).await.unwrap()
-    }
-
-    async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
-        // Claiming tokens from chain1 to chain2.
-        let mutation = format!(
-            "claim(sourceAccount: {}, amount: \"{}\", targetAccount: {})",
-            source.to_value(),
-            amount,
-            target.to_value()
-        );
-
-        self.0.mutate(mutation).await.unwrap();
-    }
 }
-
-
-
-
-
-
-
-
-
 
 struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 
@@ -1838,6 +1805,182 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 
     Ok(())
 }
+
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -> Result<()> {
+    use std::collections::BTreeMap;
+
+    use fungible::FungibleTokenAbi;
+
+    use delegated_fungible::{DelegatedFungibleTokenAbi, InitialState, Parameters};
+    tracing::info!("delegated_fungible, step 1");
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+    tracing::info!("delegated_fungible, step 2");
+
+    // Create runner and two clients.
+    let (mut net, client1) = config.instantiate().await?;
+    tracing::info!("delegated_fungible, step 3");
+
+    let client2 = net.make_client().await;
+    client2.wallet_init(None).await?;
+    tracing::info!("delegated_fungible, step 4");
+
+    let client3 = net.make_client().await;
+    client3.wallet_init(None).await?;
+    tracing::info!("delegated_fungible, step 5");
+
+    let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
+
+    // Generate keys for all clients.
+    let owner1 = client1.keygen().await?;
+    let owner2 = client2.keygen().await?;
+    let owner3 = client3.keygen().await?;
+    tracing::info!("delegated_fungible, step 6");
+
+    // Open a chain owned by both clients.
+    let chain2 = client1
+        .open_multi_owner_chain(
+            chain1,
+            vec![owner1, owner2, owner3],
+            vec![100, 100, 100],
+            u32::MAX,
+            Amount::from_tokens(6),
+            10_000,
+        )
+        .await?;
+    tracing::info!("delegated_fungible, step 7");
+
+    // Assign chain2 to clients.
+    client1.assign(owner1, chain2).await?;
+    client2.assign(owner2, chain2).await?;
+    client3.assign(owner3, chain2).await?;
+
+    client1.sync(chain2).await?;
+    client2.sync(chain2).await?;
+    client3.sync(chain2).await?;
+    tracing::info!("delegated_fungible, step 8");
+
+
+    // The initial accounts on chain1
+    let accounts = BTreeMap::from([
+        (owner1, Amount::from_tokens(9)),
+        (owner2, Amount::from_tokens(19)),
+    ]);
+    let state = InitialState { accounts };
+    // Setting up the application and verifying
+    let (contract, service) = client1.build_example("delegated-fungible").await?;
+//    let (contract, service) = client1.build_example("fungible").await?;
+    let params = Parameters::new("DEL");
+//       .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
+    let application_id = client1
+        .publish_and_create::<DelegatedFungibleTokenAbi, Parameters, InitialState>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &params,
+            &state,
+            &[],
+            Some(chain2),
+        )
+        .await?;
+    tracing::info!("delegated_fungible, step 9");
+
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let port3 = get_node_port().await;
+    tracing::info!("delegated_fungible, step 10");
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut node_service3 = client3.run_node_service(port3, ProcessInbox::Skip).await?;
+    tracing::info!("delegated_fungible, step 11");
+
+    let app1 = DelegatedFungibleApp(
+        node_service1
+            .make_application(&chain2, &application_id)
+            .await?,
+    );
+    tracing::info!("delegated_fungible, step 12");
+    let app2 = DelegatedFungibleApp(
+        node_service2
+            .make_application(&chain2, &application_id)
+            .await?,
+    );
+    tracing::info!("delegated_fungible, step 13");
+    let app3 = DelegatedFungibleApp(
+        node_service3
+            .make_application(&chain2, &application_id)
+            .await?,
+    );
+
+    tracing::info!("delegated_fungible, step 14");
+
+    let expected_balances = [
+        (owner1, Amount::from_tokens(9)),
+        (owner2, Amount::from_tokens(19)),
+    ];
+    app1.assert_balances(expected_balances).await;
+    tracing::info!("delegated_fungible, step 14.1");
+    app2.assert_balances(expected_balances).await;
+    tracing::info!("delegated_fungible, step 14.2");
+    app3.assert_balances(expected_balances).await;
+    tracing::info!("delegated_fungible, step 15");
+
+
+    /*
+    // Approving a transfer
+    app1.approve(
+        &owner1,
+        &owner2,
+        Amount::from_tokens(50),
+    )
+    .await;
+    tracing::info!("delegated_fungible, step 16");
+
+    // Doing the transfer from
+    app2.transfer_from(
+        &owner1,
+        &owner2,
+        Amount::from_tokens(2),
+        fungible::Account {
+            chain_id: chain2,
+            owner: owner3,
+        },
+    )
+    .await;
+    tracing::info!("delegated_fungible, step 17");
+
+
+    // Checking the final values on chain1 and chain2.
+
+    let expected_balances = [
+        (owner1, Amount::from_tokens(8)),
+        (owner2, Amount::from_tokens(20)),
+        (owner3, Amount::from_tokens(2)),
+    ];
+    app2.assert_balances(expected_balances).await;
+    tracing::info!("delegated_fungible, step 18");
+    */
+
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
+    node_service3.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+
+
 
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.
