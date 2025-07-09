@@ -12,10 +12,7 @@ use alloy_primitives::map::HashMap;
 use linera_client::config::{Destination, DestinationId, DestinationKind};
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_storage::Storage;
-use tokio::{
-    runtime::Runtime,
-    task::{AbortHandle, JoinError, JoinSet},
-};
+use tokio::runtime::Runtime;
 
 use crate::storage::ExporterStorage;
 
@@ -88,20 +85,21 @@ where
             .difference(&new_committee.iter().cloned().collect())
         {
             tracing::trace!(id=?id, "shutting down old committee member");
-            if let Some(abort_handle) = self.threads[0].abort_handles.remove(id) {
+            if let Some(abort_handle) = self.threads[0].join_handles.remove(id) {
                 abort_handle.abort();
             }
         }
     }
 
-    pub(super) fn join_all(self) {
+    pub(super) async fn join_all(self) {
         for thread in self.threads {
             // Wait for all tasks to finish.
-            let _ = thread
-                .runtime_handle
-                .block_on(thread.task_handles.join_all());
+            for (id, handle) in thread.join_handles.into_iter() {
+                if let Err(e) = handle.await.unwrap() {
+                    tracing::error!(id=?id, error=?e, "failed to join task");
+                }
+            }
 
-            // Shutdown the runtime.
             thread
                 .runtime_handle
                 .shutdown_timeout(Duration::from_secs(1));
@@ -124,8 +122,7 @@ where
     options: NodeOptions,
     work_queue_size: usize,
     runtime_handle: Runtime,
-    task_handles: JoinSet<Result<anyhow::Result<()>, JoinError>>,
-    abort_handles: HashMap<DestinationId, AbortHandle>,
+    join_handles: HashMap<DestinationId, tokio::task::JoinHandle<anyhow::Result<()>>>,
     storage: ExporterStorage<S>,
     node_provider: Arc<GrpcNodeProvider>,
 }
@@ -152,8 +149,7 @@ where
             runtime_handle,
             shutdown_signal,
             work_queue_size,
-            abort_handles: HashMap::new(),
-            task_handles: JoinSet::new(),
+            join_handles: HashMap::new(),
             node_provider: arced_node_provider,
         }
     }
@@ -185,7 +181,6 @@ where
             }
         };
 
-        self.abort_handles
-            .insert(id, self.task_handles.spawn(handle));
+        self.join_handles.insert(id, handle);
     }
 }

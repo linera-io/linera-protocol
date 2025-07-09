@@ -124,7 +124,7 @@ where
         .run_with_shutdown(shutdown_signal, limits.persistence_period_ms)
         .await?;
 
-    block_processor.pool_state().join_all();
+    block_processor.pool_state().join_all().await;
 
     Ok(())
 }
