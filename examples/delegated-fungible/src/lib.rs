@@ -58,7 +58,6 @@ impl OwnerSpender {
         }
         Self { owner, spender }
     }
-
 }
 
 

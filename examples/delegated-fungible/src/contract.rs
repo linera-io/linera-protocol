@@ -42,17 +42,16 @@ impl Contract for DelegatedFungibleTokenContract {
         DelegatedFungibleTokenContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, mut state: Self::InstantiationArgument) {
+    async fn instantiate(&mut self, state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
-        // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
-        if state.accounts.is_empty() {
-            if let Some(owner) = self.runtime.authenticated_signer() {
-                state
-                    .accounts
-                    .insert(owner, Amount::from_str("1000000").unwrap());
-            }
+        let mut total_supply = Amount::ZERO;
+        for (_, value) in &state.accounts {
+            total_supply.saturating_add_assign(*value);
+        }
+        if total_supply == Amount::ZERO {
+            panic!("The total supply is zero, therefore we cannot instantiate the contract");
         }
         self.state.initialize_accounts(state).await;
     }

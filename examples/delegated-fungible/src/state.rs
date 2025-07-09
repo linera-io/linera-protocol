@@ -15,7 +15,6 @@ pub struct DelegatedFungibleTokenState {
     pub allowances: MapView<OwnerSpender, Amount>,
 }
 
-#[allow(dead_code)]
 impl DelegatedFungibleTokenState {
     /// Initializes the application state with some accounts with initial balances.
     pub(crate) async fn initialize_accounts(&mut self, state: InitialState) {
@@ -69,7 +68,7 @@ impl DelegatedFungibleTokenState {
         allowance.try_sub_assign(amount).unwrap_or_else(|_| {
             panic!("Spender {spender} does not have a sufficient from owner {owner} for transfer_from")
         });
-        if balance == Amount::ZERO {
+        if allowance == Amount::ZERO {
             self.allowances
                 .remove(&owner_spender)
                 .expect("Failed to remove an empty account");
