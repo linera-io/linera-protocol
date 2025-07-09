@@ -28,7 +28,7 @@ use linera_chain::{
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::views::ClonableView;
-use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
+use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{instrument, warn};
 
 #[cfg(test)]
@@ -358,7 +358,7 @@ where
     /// having a stale view of it.
     pub(super) async fn clear_shared_chain_view(&mut self) {
         if let Some(shared_chain_view) = self.shared_chain_view.take() {
-            let _ = shared_chain_view.write().await;
+            let _: RwLockWriteGuard<_> = shared_chain_view.write().await;
         }
     }
 
