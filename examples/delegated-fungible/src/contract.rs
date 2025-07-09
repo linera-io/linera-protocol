@@ -5,8 +5,6 @@
 
 mod state;
 
-use std::str::FromStr;
-
 use delegated_fungible::{
     Account, DelegatedFungibleResponse, DelegatedFungibleTokenAbi, InitialState, Message, DelegatedFungibleOperation, Parameters,
 };

@@ -201,13 +201,13 @@ impl DelegatedFungibleApp {
         &self,
         owner: &AccountOwner,
         spender: &AccountOwner,
-        amount_transfer: Amount,
+        allowance: Amount,
     ) -> Value {
         let mutation = format!(
-            "approve(owner: {}, spender: {}, amount: \"{}\")",
+            "approve(owner: {}, spender: {}, allowance: \"{}\")",
             owner.to_value(),
             spender.to_value(),
-            amount_transfer,
+            allowance,
         );
         self.0.mutate(mutation).await.unwrap()
     }
@@ -1861,8 +1861,6 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     client2.assign(owner2, chain2).await?;
     client3.assign(owner3, chain2).await?;
 
-    client1.sync(chain2).await?;
-    client2.sync(chain2).await?;
     client3.sync(chain2).await?;
     tracing::info!("delegated_fungible, step 8");
 
@@ -1875,9 +1873,7 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("delegated-fungible").await?;
-//    let (contract, service) = client1.build_example("fungible").await?;
     let params = Parameters::new("DEL");
-//       .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
     let application_id = client1
         .publish_and_create::<DelegatedFungibleTokenAbi, Parameters, InitialState>(
             contract,

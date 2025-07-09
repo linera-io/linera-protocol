@@ -5,7 +5,6 @@
 
 pub use linera_sdk::abis::fungible::{Account, DelegatedFungibleResponse, DelegatedFungibleTokenAbi, Parameters, DelegatedFungibleOperation, InitialState};
 
-use async_graphql::{SimpleObject, InputObject};
 use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
@@ -43,13 +42,15 @@ pub enum Message {
     },
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, SimpleObject, InputObject)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OwnerSpender {
     /// Account to withdraw from
     pub owner: AccountOwner,
     /// Account to do the withdrawing
     pub spender: AccountOwner,
 }
+
+async_graphql::scalar!(OwnerSpender);
 
 impl OwnerSpender {
     pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {

@@ -15,6 +15,7 @@ pub struct DelegatedFungibleTokenState {
     pub allowances: MapView<OwnerSpender, Amount>,
 }
 
+#[allow(dead_code)]
 impl DelegatedFungibleTokenState {
     /// Initializes the application state with some accounts with initial balances.
     pub(crate) async fn initialize_accounts(&mut self, state: InitialState) {
