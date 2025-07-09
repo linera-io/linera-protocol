@@ -13,6 +13,11 @@ import "./LineraTypes.sol";
 
 library Linera {
 
+    struct AccountOwnerBalance {
+        LineraTypes.AccountOwner account_owner;
+        uint256 balance;
+    }
+
     function chain_id() internal returns (LineraTypes.ChainId memory) {
         address precompile = address(0x0b);
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_chain_id();
@@ -87,7 +92,7 @@ library Linera {
         return uint256(output2.value);
     }
 
-    function read_owner_balances() internal returns (LineraTypes.AccountOwnerBalanceInner[] memory result) {
+    function read_owner_balances() internal returns (Linera.AccountOwnerBalance[] memory) {
         address precompile = address(0x0b);
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_owner_balances();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
@@ -95,7 +100,14 @@ library Linera {
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         LineraTypes.ResponseReadOwnerBalances memory output2 = LineraTypes.bcs_deserialize_ResponseReadOwnerBalances(output);
-        return output2.value;
+        uint256 len = output2.value.length;
+        AccountOwnerBalance[] memory elist;
+        elist = new AccountOwnerBalance[](len);
+        for (uint256 i=0; i<len; i++) {
+            uint256 balance = uint256(output2.value[i].balance_.value);
+            elist[i] = AccountOwnerBalance(output2.value[i].account_owner, balance);
+        }
+        return elist;
     }
 
     function read_balance_owners() internal returns (LineraTypes.AccountOwner[] memory result) {
@@ -108,8 +120,6 @@ library Linera {
         LineraTypes.ResponseReadBalanceOwners memory output2 = LineraTypes.bcs_deserialize_ResponseReadBalanceOwners(output);
         return output2.value;
     }
-
-
 
     function chain_ownership() internal returns (LineraTypes.ChainOwnership memory) {
         address precompile = address(0x0b);
