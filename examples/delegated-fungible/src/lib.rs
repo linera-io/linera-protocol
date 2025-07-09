@@ -1,9 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/* ABI of the Fungible Token Example Application */
+/* ABI of the Delegated Fungible Token Example Application */
 
-pub use linera_sdk::abis::fungible::*;
+pub use linera_sdk::abis::fungible::{Account, DelegatedFungibleResponse, DelegatedFungibleTokenAbi, Parameters, DelegatedFungibleOperation, InitialState};
+
+use async_graphql::{SimpleObject, InputObject};
 use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
@@ -41,15 +43,34 @@ pub enum Message {
     },
 }
 
-/// Creates a fungible token application and distributes `initial_amounts` to new individual
+#[derive(Clone, Debug, Deserialize, Serialize, SimpleObject, InputObject)]
+pub struct OwnerSpender {
+    /// Account to withdraw from
+    pub owner: AccountOwner,
+    /// Account to do the withdrawing
+    pub spender: AccountOwner,
+}
+
+impl OwnerSpender {
+    pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {
+        if owner == spender {
+            panic!("owner should be different from spender");
+        }
+        Self { owner, spender }
+    }
+
+}
+
+
+/// Creates a delegated fungible token application and distributes `initial_amounts` to new individual
 /// chains.
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 pub async fn create_with_accounts(
     validator: &TestValidator,
-    module_id: ModuleId<FungibleTokenAbi, Parameters, InitialState>,
+    module_id: ModuleId<DelegatedFungibleTokenAbi, Parameters, InitialState>,
     initial_amounts: impl IntoIterator<Item = Amount>,
 ) -> (
-    ApplicationId<FungibleTokenAbi>,
+    ApplicationId<DelegatedFungibleTokenAbi>,
     Vec<(ActiveChain, AccountOwner, Amount)>,
 ) {
     let mut token_chain = validator.new_chain().await;
@@ -117,7 +138,7 @@ pub async fn create_with_accounts(
 /// Queries the balance of an account owned by `account_owner` on a specific `chain`.
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 pub async fn query_account(
-    application_id: ApplicationId<FungibleTokenAbi>,
+    application_id: ApplicationId<DelegatedFungibleTokenAbi>,
     chain: &ActiveChain,
     account_owner: AccountOwner,
 ) -> Option<Amount> {

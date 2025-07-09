@@ -7,8 +7,8 @@ mod state;
 
 use std::str::FromStr;
 
-use fungible::{
-    Account, FungibleResponse, FungibleTokenAbi, InitialState, Message, FungibleOperation, Parameters,
+use delegated_fungible::{
+    Account, DelegatedFungibleResponse, DelegatedFungibleTokenAbi, InitialState, Message, DelegatedFungibleOperation, Parameters,
 };
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
@@ -16,30 +16,30 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 
-use self::state::FungibleTokenState;
+use self::state::DelegatedFungibleTokenState;
 
-pub struct FungibleTokenContract {
-    state: FungibleTokenState,
+pub struct DelegatedFungibleTokenContract {
+    state: DelegatedFungibleTokenState,
     runtime: ContractRuntime<Self>,
 }
 
-linera_sdk::contract!(FungibleTokenContract);
+linera_sdk::contract!(DelegatedFungibleTokenContract);
 
-impl WithContractAbi for FungibleTokenContract {
-    type Abi = FungibleTokenAbi;
+impl WithContractAbi for DelegatedFungibleTokenContract {
+    type Abi = DelegatedFungibleTokenAbi;
 }
 
-impl Contract for FungibleTokenContract {
+impl Contract for DelegatedFungibleTokenContract {
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = FungibleTokenState::load(runtime.root_view_storage_context())
+        let state = DelegatedFungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        FungibleTokenContract { state, runtime }
+        DelegatedFungibleTokenContract { state, runtime }
     }
 
     async fn instantiate(&mut self, mut state: Self::InstantiationArgument) {
@@ -59,17 +59,25 @@ impl Contract for FungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            FungibleOperation::Balance { owner } => {
+            DelegatedFungibleOperation::Balance { owner } => {
                 let balance = self.state.balance_or_default(&owner).await;
-                FungibleResponse::Balance(balance)
+                DelegatedFungibleResponse::Balance(balance)
             }
 
-            FungibleOperation::TickerSymbol => {
+            DelegatedFungibleOperation::TickerSymbol => {
                 let params = self.runtime.application_parameters();
-                FungibleResponse::TickerSymbol(params.ticker_symbol)
+                DelegatedFungibleResponse::TickerSymbol(params.ticker_symbol)
             }
 
-            FungibleOperation::Transfer {
+            DelegatedFungibleOperation::Approve { owner, spender, allowance } => {
+                self.runtime
+                    .check_account_permission(owner)
+                    .expect("Permission for Transfer operation");
+                self.state.approve(owner, spender, allowance).await;
+                DelegatedFungibleResponse::Ok
+            }
+
+            DelegatedFungibleOperation::Transfer {
                 owner,
                 amount,
                 target_account,
@@ -80,10 +88,20 @@ impl Contract for FungibleTokenContract {
                 self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
-                FungibleResponse::Ok
+                DelegatedFungibleResponse::Ok
             }
 
-            FungibleOperation::Claim {
+            DelegatedFungibleOperation::TransferFrom { owner, spender, amount, target_account } => {
+                self.runtime
+                    .check_account_permission(spender)
+                    .expect("Permission for Transfer operation");
+                self.state.debit_for_transfer_from(owner, spender, amount).await;
+                self.finish_transfer_to_account(amount, target_account, owner)
+                    .await;
+                DelegatedFungibleResponse::Ok
+            }
+
+            DelegatedFungibleOperation::Claim {
                 source_account,
                 amount,
                 target_account,
@@ -92,7 +110,7 @@ impl Contract for FungibleTokenContract {
                     .check_account_permission(source_account.owner)
                     .expect("Permission for Claim operation");
                 self.claim(source_account, amount, target_account).await;
-                FungibleResponse::Ok
+                DelegatedFungibleResponse::Ok
             }
         }
     }
@@ -131,7 +149,7 @@ impl Contract for FungibleTokenContract {
     }
 }
 
-impl FungibleTokenContract {
+impl DelegatedFungibleTokenContract {
     async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
         if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await;

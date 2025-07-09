@@ -82,7 +82,7 @@ fn test_iterations() -> Option<usize> {
     }
 }
 
-fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
+fn get_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
 
@@ -1779,8 +1779,8 @@ async fn test_wasm_end_to_end_fungible(
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
 
     // The players
-    let account_owner1 = get_fungible_account_owner(&client1);
-    let account_owner2 = get_fungible_account_owner(&client2);
+    let account_owner1 = get_account_owner(&client1);
+    let account_owner2 = get_account_owner(&client2);
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
         (account_owner1, Amount::from_tokens(5)),
@@ -1954,7 +1954,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         .expect("Failed to obtain a chain ID from the wallet");
 
     // The players
-    let account_owner1 = get_fungible_account_owner(&client1);
+    let account_owner1 = get_account_owner(&client1);
     let account_owner2 = client1.keygen().await?;
 
     // The initial accounts on chain1
@@ -2069,8 +2069,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
 
     // The players
-    let account_owner1 = get_fungible_account_owner(&client1);
-    let account_owner2 = get_fungible_account_owner(&client2);
+    let account_owner1 = get_account_owner(&client1);
+    let account_owner2 = get_account_owner(&client2);
 
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("non-fungible").await?;
@@ -2360,8 +2360,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
 
     // The players
-    let account_owner1 = get_fungible_account_owner(&client1); // operator
-    let account_owner2 = get_fungible_account_owner(&client2); // contributor
+    let account_owner1 = get_account_owner(&client1); // operator
+    let account_owner2 = get_account_owner(&client2); // contributor
 
     // The initial accounts on chain1
     let accounts = BTreeMap::from([(account_owner1, Amount::from_tokens(6))]);
@@ -2498,9 +2498,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let chain_b = client_admin.open_and_assign(&client_b, Amount::ONE).await?;
 
     // The players
-    let owner_admin = get_fungible_account_owner(&client_admin);
-    let owner_a = get_fungible_account_owner(&client_a);
-    let owner_b = get_fungible_account_owner(&client_b);
+    let owner_admin = get_account_owner(&client_admin);
+    let owner_a = get_account_owner(&client_a);
+    let owner_b = get_account_owner(&client_b);
     // The initial accounts on chain_a and chain_b
     let accounts0 = BTreeMap::from([(owner_a, Amount::from_tokens(10))]);
     let state_fungible0 = fungible::InitialState {
@@ -2757,11 +2757,11 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let chain1 = client_amm.open_and_assign(&client1, Amount::ONE).await?;
 
     // AMM user
-    let owner_amm_chain = get_fungible_account_owner(&client_amm);
+    let owner_amm_chain = get_account_owner(&client_amm);
 
     // Users
-    let owner0 = get_fungible_account_owner(&client0);
-    let owner1 = get_fungible_account_owner(&client1);
+    let owner0 = get_account_owner(&client0);
+    let owner1 = get_account_owner(&client1);
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
@@ -3471,7 +3471,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let owner1 = client.load_wallet()?.get(chain1).unwrap().owner.unwrap();
 
     // Create a fungible token application with 10 tokens for owner 1.
-    let owner = get_fungible_account_owner(&client);
+    let owner = get_account_owner(&client);
     let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
     let state = fungible::InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;

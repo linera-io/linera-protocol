@@ -6,6 +6,7 @@ members = [
     "counter",
     "counter-no-graphql",
     "crowd-funding",
+    "delegated-fungible",
     "ethereum-tracker",
     "fungible",
     "gen-nft",

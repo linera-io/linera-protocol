@@ -8,7 +8,7 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{FungibleOperation, Parameters};
+use delegated_fungible::{DelegatedFungibleOperation, Parameters, OwnerSpender};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, WithServiceAbi},
@@ -16,28 +16,28 @@ use linera_sdk::{
     Service, ServiceRuntime,
 };
 
-use self::state::FungibleTokenState;
+use self::state::DelegatedFungibleTokenState;
 
 #[derive(Clone)]
-pub struct FungibleTokenService {
-    state: Arc<FungibleTokenState>,
+pub struct DelegatedFungibleTokenService {
+    state: Arc<DelegatedFungibleTokenState>,
     runtime: Arc<ServiceRuntime<Self>>,
 }
 
-linera_sdk::service!(FungibleTokenService);
+linera_sdk::service!(DelegatedFungibleTokenService);
 
-impl WithServiceAbi for FungibleTokenService {
-    type Abi = fungible::FungibleTokenAbi;
+impl WithServiceAbi for DelegatedFungibleTokenService {
+    type Abi = delegated_fungible::DelegatedFungibleTokenAbi;
 }
 
-impl Service for FungibleTokenService {
+impl Service for DelegatedFungibleTokenService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = FungibleTokenState::load(runtime.root_view_storage_context())
+        let state = DelegatedFungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        FungibleTokenService {
+        DelegatedFungibleTokenService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),
         }
@@ -46,7 +46,7 @@ impl Service for FungibleTokenService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.clone(),
-            FungibleOperation::mutation_root(self.runtime.clone()),
+            DelegatedFungibleOperation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();
@@ -55,9 +55,13 @@ impl Service for FungibleTokenService {
 }
 
 #[Object]
-impl FungibleTokenService {
+impl DelegatedFungibleTokenService {
     async fn accounts(&self) -> &MapView<AccountOwner, Amount> {
         &self.state.accounts
+    }
+
+    async fn allowances(&self) -> &MapView<OwnerSpender, Amount> {
+        &self.state.allowances
     }
 
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
