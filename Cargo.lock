@@ -2951,6 +2951,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegated-fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "futures",
+ "linera-sdk",
+ "serde",
+]
+
+[[package]]
 name = "deluxe"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5531,6 +5541,7 @@ dependencies = [
  "current_platform",
  "custom_debug_derive",
  "dashmap 5.5.3",
+ "delegated-fungible",
  "dirs",
  "ethereum-tracker",
  "fs-err",

@@ -170,6 +170,99 @@ impl FungibleApp {
     }
 }
 
+
+
+
+
+
+
+
+struct DelegatedFungibleApp(ApplicationWrapper<delegated_fungible::DelegatedFungibleTokenAbi>);
+
+impl DelegatedFungibleApp {
+    async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
+        let query = format!(
+            "accounts {{ entry(key: {}) {{ value }} }}",
+            account_owner.to_value()
+        );
+        let response_body = self.0.query(&query).await.unwrap();
+        let amount_option = serde_json::from_value::<Option<Amount>>(
+            response_body["accounts"]["entry"]["value"].clone(),
+        )
+        .unwrap();
+
+        amount_option.unwrap_or(Amount::ZERO)
+    }
+
+    async fn approve(
+        &self,
+        owner: &AccountOwner,
+        spender: &AccountOwner,
+        amount_transfer: Amount,
+    ) -> Value {
+        let mutation = format!(
+            "approve(owner: {}, spender: {}, amount: \"{}\")",
+            owner.to_value(),
+            spender.to_value(),
+            amount_transfer,
+        );
+        self.0.mutate(mutation).await.unwrap()
+    }
+
+    async fn transfer_from(
+        &self,
+        owner: &AccountOwner,
+        spender: &AccountOwner,
+        amount_transfer: Amount,
+        destination: fungible::Account,
+    ) -> Value {
+        let mutation = format!(
+            "transferFrom(owner: {}, spender: {}, amount: \"{}\", targetAccount: {})",
+            owner.to_value(),
+            spender.to_value(),
+            amount_transfer,
+            destination.to_value(),
+        );
+        self.0.mutate(mutation).await.unwrap()
+    }
+
+    async fn transfer(
+        &self,
+        account_owner: &AccountOwner,
+        amount_transfer: Amount,
+        destination: fungible::Account,
+    ) -> Value {
+        let mutation = format!(
+            "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
+            account_owner.to_value(),
+            amount_transfer,
+            destination.to_value(),
+        );
+        self.0.mutate(mutation).await.unwrap()
+    }
+
+    async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
+        // Claiming tokens from chain1 to chain2.
+        let mutation = format!(
+            "claim(sourceAccount: {}, amount: \"{}\", targetAccount: {})",
+            source.to_value(),
+            amount,
+            target.to_value()
+        );
+
+        self.0.mutate(mutation).await.unwrap();
+    }
+}
+
+
+
+
+
+
+
+
+
+
 struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 
 impl NonFungibleApp {
