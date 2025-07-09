@@ -48,7 +48,7 @@ Amount:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-AccountOwnerBalance:
+AccountOwnerBalanceInner:
   STRUCT:
     - account_owner:
         TYPENAME: AccountOwner
@@ -65,7 +65,7 @@ OptionApplicationId:
 ResponseReadOwnerBalances:
   NEWTYPESTRUCT:
     SEQ:
-      TYPENAME: AccountOwnerBalance
+      TYPENAME: AccountOwnerBalanceInner
 ResponseReadBalanceOwners:
   NEWTYPESTRUCT:
     SEQ:

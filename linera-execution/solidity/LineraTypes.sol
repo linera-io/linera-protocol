@@ -144,12 +144,12 @@ library LineraTypes {
         return value;
     }
 
-    struct AccountOwnerBalance {
+    struct AccountOwnerBalanceInner {
         AccountOwner account_owner;
         Amount balance_;
     }
 
-    function bcs_serialize_AccountOwnerBalance(AccountOwnerBalance memory input)
+    function bcs_serialize_AccountOwnerBalanceInner(AccountOwnerBalanceInner memory input)
         internal
         pure
         returns (bytes memory)
@@ -158,27 +158,27 @@ library LineraTypes {
         return abi.encodePacked(result, bcs_serialize_Amount(input.balance_));
     }
 
-    function bcs_deserialize_offset_AccountOwnerBalance(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_AccountOwnerBalanceInner(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, AccountOwnerBalance memory)
+        returns (uint256, AccountOwnerBalanceInner memory)
     {
         uint256 new_pos;
         AccountOwner memory account_owner;
         (new_pos, account_owner) = bcs_deserialize_offset_AccountOwner(pos, input);
         Amount memory balance_;
         (new_pos, balance_) = bcs_deserialize_offset_Amount(new_pos, input);
-        return (new_pos, AccountOwnerBalance(account_owner, balance_));
+        return (new_pos, AccountOwnerBalanceInner(account_owner, balance_));
     }
 
-    function bcs_deserialize_AccountOwnerBalance(bytes memory input)
+    function bcs_deserialize_AccountOwnerBalanceInner(bytes memory input)
         internal
         pure
-        returns (AccountOwnerBalance memory)
+        returns (AccountOwnerBalanceInner memory)
     {
         uint256 new_pos;
-        AccountOwnerBalance memory value;
-        (new_pos, value) = bcs_deserialize_offset_AccountOwnerBalance(0, input);
+        AccountOwnerBalanceInner memory value;
+        (new_pos, value) = bcs_deserialize_offset_AccountOwnerBalanceInner(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -1537,7 +1537,7 @@ library LineraTypes {
     }
 
     struct ResponseReadOwnerBalances {
-        AccountOwnerBalance[] value;
+        AccountOwnerBalanceInner[] value;
     }
 
     function bcs_serialize_ResponseReadOwnerBalances(ResponseReadOwnerBalances memory input)
@@ -1545,7 +1545,7 @@ library LineraTypes {
         pure
         returns (bytes memory)
     {
-        return bcs_serialize_seq_AccountOwnerBalance(input.value);
+        return bcs_serialize_seq_AccountOwnerBalanceInner(input.value);
     }
 
     function bcs_deserialize_offset_ResponseReadOwnerBalances(uint256 pos, bytes memory input)
@@ -1554,8 +1554,8 @@ library LineraTypes {
         returns (uint256, ResponseReadOwnerBalances memory)
     {
         uint256 new_pos;
-        AccountOwnerBalance[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_AccountOwnerBalance(pos, input);
+        AccountOwnerBalanceInner[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_AccountOwnerBalanceInner(pos, input);
         return (new_pos, ResponseReadOwnerBalances(value));
     }
 
@@ -2443,7 +2443,7 @@ library LineraTypes {
         return value;
     }
 
-    function bcs_serialize_seq_AccountOwnerBalance(AccountOwnerBalance[] memory input)
+    function bcs_serialize_seq_AccountOwnerBalanceInner(AccountOwnerBalanceInner[] memory input)
         internal
         pure
         returns (bytes memory)
@@ -2451,37 +2451,37 @@ library LineraTypes {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_len(len);
         for (uint256 i=0; i<len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_AccountOwnerBalance(input[i]));
+            result = abi.encodePacked(result, bcs_serialize_AccountOwnerBalanceInner(input[i]));
         }
         return result;
     }
 
-    function bcs_deserialize_offset_seq_AccountOwnerBalance(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_seq_AccountOwnerBalanceInner(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, AccountOwnerBalance[] memory)
+        returns (uint256, AccountOwnerBalanceInner[] memory)
     {
         uint256 len;
         uint256 new_pos;
         (new_pos, len) = bcs_deserialize_offset_len(pos, input);
-        AccountOwnerBalance[] memory result;
-        result = new AccountOwnerBalance[](len);
-        AccountOwnerBalance memory value;
+        AccountOwnerBalanceInner[] memory result;
+        result = new AccountOwnerBalanceInner[](len);
+        AccountOwnerBalanceInner memory value;
         for (uint256 i=0; i<len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_AccountOwnerBalance(new_pos, input);
+            (new_pos, value) = bcs_deserialize_offset_AccountOwnerBalanceInner(new_pos, input);
             result[i] = value;
         }
         return (new_pos, result);
     }
 
-    function bcs_deserialize_seq_AccountOwnerBalance(bytes memory input)
+    function bcs_deserialize_seq_AccountOwnerBalanceInner(bytes memory input)
         internal
         pure
-        returns (AccountOwnerBalance[] memory)
+        returns (AccountOwnerBalanceInner[] memory)
     {
         uint256 new_pos;
-        AccountOwnerBalance[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_AccountOwnerBalance(0, input);
+        AccountOwnerBalanceInner[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_AccountOwnerBalanceInner(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

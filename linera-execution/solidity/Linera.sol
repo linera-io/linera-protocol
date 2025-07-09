@@ -87,7 +87,7 @@ library Linera {
         return uint256(output2.value);
     }
 
-    function read_owner_balances() internal returns (LineraTypes.AccountOwnerBalance[] memory result) {
+    function read_owner_balances() internal returns (LineraTypes.AccountOwnerBalanceInner[] memory result) {
         address precompile = address(0x0b);
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_owner_balances();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
