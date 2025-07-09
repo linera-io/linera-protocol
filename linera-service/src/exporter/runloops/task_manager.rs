@@ -109,12 +109,8 @@ where
     }
 
     fn spawn(&mut self, id: DestinationId) {
-        let handle = self.get_pool_handle();
-        handle.spawn(id)
-    }
-
-    fn get_pool_handle(&mut self) -> &mut PoolMember<F, S> {
-        &mut self.threads[0]
+        let handle = &mut self.threads[0];
+        handle.spawn(id);
     }
 }
 
