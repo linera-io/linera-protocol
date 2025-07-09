@@ -101,8 +101,9 @@ where
     }
 
     /// Handles a request and applies it to the chain state.
-    #[instrument(skip(self, request))]
+    #[instrument(skip_all)]
     pub async fn handle_request(&mut self, request: ChainWorkerRequest<StorageClient::Context>) {
+        tracing::trace!("Handling chain worker request: {request:?}");
         // TODO(#2237): Spawn concurrent tasks for read-only operations
         let responded = match request {
             #[cfg(with_testing)]
