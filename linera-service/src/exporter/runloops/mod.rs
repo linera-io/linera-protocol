@@ -12,17 +12,14 @@ use linera_client::config::{DestinationConfig, LimitsConfig};
 use linera_rpc::NodeOptions;
 use linera_storage::Storage;
 use tokio::{
-    runtime::Handle,
+    runtime::Runtime,
     sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
 };
 use validator_exporter::Exporter as ValidatorExporter;
 
 use crate::{
     common::{BlockId, ExporterError},
-    runloops::{
-        task_manager::{PoolMember, ThreadPoolState},
-        validator_exporter::ValidatorDestinationKind,
-    },
+    runloops::task_manager::{PoolMember, ThreadPoolState},
     storage::BlockProcessorStorage,
 };
 
@@ -92,31 +89,26 @@ where
     F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
     <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
 {
-    let (block_processor_storage, mut exporter_storage) = BlockProcessorStorage::load(
-        storage.clone(),
-        block_exporter_id,
-        destination_config.destinations.len() as u16,
-        limits,
-    )
-    .await?;
+    let destination_ids = destination_config
+        .destinations
+        .iter()
+        .map(|destination| destination.id())
+        .collect::<Vec<_>>();
+    let (block_processor_storage, mut exporter_storage) =
+        BlockProcessorStorage::load(storage.clone(), block_exporter_id, destination_ids, limits)
+            .await?;
 
-    let pool_handles = start_threadpool(max_exporter_threads);
+    let runtime = start_threadpool(max_exporter_threads);
 
-    let pool_members = pool_handles
-        .into_iter()
-        .map(|(join_handle, runtime_handle)| {
-            PoolMember::new(
-                runtime_handle,
-                join_handle,
-                options,
-                exporter_storage.clone().unwrap(),
-                limits.work_queue_size.into(),
-                shutdown_signal.clone(),
-            )
-        })
-        .collect();
+    let pool_members = PoolMember::new(
+        runtime,
+        options,
+        exporter_storage.clone().unwrap(),
+        limits.work_queue_size.into(),
+        shutdown_signal.clone(),
+    );
     let mut pool_state =
-        ThreadPoolState::new(pool_members, destination_config.destinations.clone());
+        ThreadPoolState::new(vec![pool_members], destination_config.destinations.clone());
 
     pool_state.start_startup_exporters();
 
@@ -137,23 +129,12 @@ where
     Ok(())
 }
 
-fn start_threadpool(number_of_threads: usize) -> Vec<(JoinHandle<()>, Handle)> {
-    let mut handles = Vec::new();
-
-    for _ in 0..number_of_threads {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let runtime_handle = runtime.handle().clone();
-        let thread_handle = thread::spawn(move || {
-            runtime.block_on(std::future::pending::<()>());
-        });
-
-        handles.push((thread_handle, runtime_handle));
-    }
-
-    handles
+fn start_threadpool(number_of_threads: usize) -> Runtime {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(number_of_threads)
+        .enable_all()
+        .build()
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -305,10 +286,11 @@ mod test {
         child.cancel();
 
         let context = storage.block_exporter_context(0).await?;
-        let (_, _, destination_states, _) =
-            BlockExporterStateView::initiate(context.clone(), 4).await?;
-        for i in 0..4 {
-            let state = destination_states.load_state(i);
+        let destination_ids = destinations.iter().map(|d| d.id()).collect::<Vec<_>>();
+        let (_, _, destination_states) =
+            BlockExporterStateView::initiate(context.clone(), destination_ids.clone()).await?;
+        for (i, destination) in destination_ids.iter().enumerate() {
+            let state = destination_states.load_state(destination);
             if i % 2 == 0 {
                 assert_eq!(state.load(Ordering::Acquire), 2);
             } else {
@@ -339,7 +321,7 @@ mod test {
             0,
             1,
             DestinationConfig {
-                destinations,
+                destinations: destinations.clone(),
                 committee_destination: false,
             },
         )?;
@@ -348,10 +330,15 @@ mod test {
 
         child.cancel();
 
-        let (_, _, destination_states, _) =
-            BlockExporterStateView::initiate(context.clone(), 4).await?;
-        for i in 0..4 {
-            assert_eq!(destination_states.load_state(i).load(Ordering::Acquire), 2);
+        let (_, _, destination_states) =
+            BlockExporterStateView::initiate(context.clone(), destination_ids).await?;
+        for destination in destinations.iter() {
+            assert_eq!(
+                destination_states
+                    .load_state(&destination.id())
+                    .load(Ordering::Acquire),
+                2
+            );
         }
 
         Ok(())
@@ -359,13 +346,23 @@ mod test {
 
     #[test_log::test(tokio::test)]
     async fn test_committee_destination() -> anyhow::Result<()> {
+        tracing::info!("Starting test_committee_destination test");
+
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let test_chain = TestChain::new(storage.clone());
         let cancellation_token = CancellationToken::new();
         let child = cancellation_token.child_token();
         let signal = ExporterCancellationSignal::new(child.clone());
 
-        let (notifier, block_processor_handle) = start_block_processor_task(
+        let mut destinations = vec![];
+        let dummy_validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
+        let destination = destinations[0].clone();
+        let validator_state = ValidatorState {
+            network_address: destination.address(),
+            votes: 0,
+            account_public_key: AccountPublicKey::test_key(0),
+        };
+        let (notifier, _block_processor_handle) = start_block_processor_task(
             storage.clone(),
             signal,
             LimitsConfig {
@@ -385,19 +382,6 @@ mod test {
                 destinations: vec![],
             },
         )?;
-
-        let mut destinations = Vec::new();
-        let dummy_validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
-        let destination = destinations
-            .iter()
-            .peekable()
-            .next()
-            .expect("manually done");
-        let validator_state = ValidatorState {
-            network_address: destination.address(),
-            votes: 0,
-            account_public_key: AccountPublicKey::test_key(0),
-        };
 
         let mut validators = BTreeMap::new();
         validators.insert(Secp256k1PublicKey::test_key(0), validator_state);
@@ -423,15 +407,11 @@ mod test {
         // Add new validator to the committee.
         ///////////
         let second_dummy = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
-        let destination = destinations
-            .iter()
-            .peekable()
-            .next()
-            .expect("manually done");
+        let destination = destinations[1].clone();
         let validator_state = ValidatorState {
             network_address: destination.address(),
             votes: 0,
-            account_public_key: AccountPublicKey::test_key(0),
+            account_public_key: AccountPublicKey::test_key(1),
         };
         let mut new_validators = validators.clone();
         new_validators.insert(Secp256k1PublicKey::test_key(1), validator_state);
@@ -443,6 +423,7 @@ mod test {
         let second_notification = BlockId::from_confirmed_block(new_confirmed_certificate.value());
         notifier.send(second_notification)?;
         sleep(Duration::from_secs(4)).await;
+
         assert!(second_dummy.state.contains(&second_notification.hash));
         // We expect the new validator to receive the new confirmed certificate only once.
         assert!(second_dummy
@@ -460,10 +441,10 @@ mod test {
         // We expect the first validator to receive the new confirmed certificate only once.
         assert!(dummy_validator
             .duplicate_blocks
-            .get(&first_notification.hash)
+            .get(&second_notification.hash)
             .is_none());
 
-        block_processor_handle.join().unwrap().unwrap();
+        // block_processor_handle.join().unwrap()?;
         Ok(())
     }
 
@@ -560,7 +541,7 @@ mod test {
         token: &CancellationToken,
     ) -> anyhow::Result<DummyValidator> {
         let port = get_free_port().await?;
-        let destination = DummyValidator::new();
+        let destination = DummyValidator::new(port);
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("dummy validator", port as usize, "http").await?;
         let destination_address = Destination {

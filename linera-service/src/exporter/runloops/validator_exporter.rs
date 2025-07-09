@@ -11,9 +11,9 @@ use std::{
 };
 
 use futures::{future::try_join_all, stream::FuturesOrdered};
-use linera_base::{ensure, identifiers::BlobId};
+use linera_base::identifiers::BlobId;
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_client::config::{Destination, DestinationId, DestinationKind};
+use linera_client::config::DestinationId;
 use linera_core::node::{
     CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider,
 };
@@ -27,12 +27,6 @@ use crate::{
     storage::ExporterStorage,
 };
 
-#[derive(Debug, Clone)]
-pub(super) enum ValidatorDestinationKind {
-    CommitteeMember,
-    NonCommitteeMember(Destination),
-}
-
 pub(crate) struct Exporter<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -40,7 +34,6 @@ where
     node_provider: Arc<GrpcNodeProvider>,
     destination_id: DestinationId,
     storage: ExporterStorage<S>,
-    destination_config: ValidatorDestinationKind,
     work_queue_size: usize,
 }
 
@@ -52,14 +45,12 @@ where
         node_provider: Arc<GrpcNodeProvider>,
         destination_id: DestinationId,
         storage: ExporterStorage<S>,
-        destination_config: ValidatorDestinationKind,
         work_queue_size: usize,
     ) -> Self {
         Self {
             node_provider,
             destination_id,
             storage,
-            destination_config,
             work_queue_size,
         }
     }
@@ -68,26 +59,8 @@ where
         self,
         shutdown_signal: F,
     ) -> anyhow::Result<()> {
-        if let ValidatorDestinationKind::NonCommitteeMember(destination) = &self.destination_config
-        {
-            ensure!(
-                DestinationKind::Validator == destination.kind,
-                ExporterError::DestinationError
-            );
-        }
-
-        let (address, destination_state) = match self.destination_config.clone() {
-            ValidatorDestinationKind::CommitteeMember => (
-                self.storage
-                    .get_committee_member_address(self.destination_id),
-                self.storage
-                    .load_committee_member_export_state(self.destination_id),
-            ),
-            ValidatorDestinationKind::NonCommitteeMember(destination) => (
-                destination.address(),
-                self.storage.load_destination_state(self.destination_id),
-            ),
-        };
+        let address = self.destination_id.address().to_owned();
+        let destination_state = self.storage.load_destination_state(&self.destination_id);
 
         let node = self.node_provider.make_node(&address)?;
 

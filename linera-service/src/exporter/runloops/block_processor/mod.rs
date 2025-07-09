@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+use linera_client::config::DestinationId;
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use tokio::{
@@ -85,6 +86,7 @@ where
                     let walker = Walker::new(&mut self.storage);
                     match walker.walk(next_block_notification).await {
                         Ok(maybe_new_committee) if self.committee_destination_update => {
+                            tracing::trace!("New committee blob found, updating the committee destination.");
                             if let Some(blob_id) = maybe_new_committee {
                                 let blob = match self.storage.get_blob(blob_id).await {
                                     Ok(blob) => blob,
@@ -102,11 +104,10 @@ where
                                     }
                                 };
 
-                                let addresses = committee.validator_addresses().map(|(_, address)| address.to_owned()).collect::<Vec<String>>();
-                                self.pool_state.shutdown_current_committee().await;
-
-                                self.storage.new_committee(addresses.clone());
-                                self.pool_state.start_committee_exporters(addresses.as_ref());
+                                let committee_destinations = committee.validator_addresses().map(|(_, address)| DestinationId::validator(address.to_owned())).collect::<Vec<_>>();
+                                self.pool_state.shutdown_old_committee(committee_destinations.clone()).await;
+                                self.storage.new_committee(committee_destinations.clone());
+                                self.pool_state.start_committee_exporters(committee_destinations.clone());
                             }
                         },
 
@@ -177,7 +178,8 @@ mod test {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let (block_processor_storage, exporter_storage) =
-            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
         let pool_state = ThreadPoolState::<
@@ -298,7 +300,8 @@ mod test {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let (block_processor_storage, exporter_storage) =
-            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
         let pool_state = ThreadPoolState::<
@@ -399,7 +402,8 @@ mod test {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let (block_processor_storage, exporter_storage) =
-            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
         let pool_state = ThreadPoolState::<
@@ -471,7 +475,8 @@ mod test {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let (block_processor_storage, exporter_storage) =
-            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
         let pool_state = ThreadPoolState::<
@@ -565,7 +570,8 @@ mod test {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let (block_processor_storage, exporter_storage) =
-            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+            BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
+                .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
         let pool_state = ThreadPoolState::<

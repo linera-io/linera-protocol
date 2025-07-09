@@ -11,9 +11,9 @@ use std::{
 };
 
 use futures::{stream::FuturesOrdered, StreamExt};
-use linera_base::{data_types::Blob, ensure};
+use linera_base::data_types::Blob;
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_client::config::{Destination, DestinationId, DestinationKind};
+use linera_client::config::DestinationId;
 use linera_rpc::NodeOptions;
 use linera_storage::Storage;
 use tokio::{select, sync::mpsc::Sender, time::sleep};
@@ -33,7 +33,6 @@ where
     work_queue_size: usize,
     storage: ExporterStorage<S>,
     destination_id: DestinationId,
-    destination_config: Destination,
 }
 
 impl<S> Exporter<S>
@@ -45,14 +44,12 @@ where
         work_queue_size: usize,
         storage: ExporterStorage<S>,
         destination_id: DestinationId,
-        destination_config: Destination,
     ) -> Exporter<S> {
         Self {
             options,
             storage,
             destination_id,
             work_queue_size,
-            destination_config,
         }
     }
 
@@ -60,17 +57,12 @@ where
         self,
         shutdown_signal: F,
     ) -> anyhow::Result<()> {
-        ensure!(
-            DestinationKind::Indexer == self.destination_config.kind,
-            ExporterError::DestinationError
-        );
-
         let shutdown_signal_future = shutdown_signal.into_future();
         let mut pinned_shutdown_signal = Box::pin(shutdown_signal_future);
 
-        let address = self.destination_config.address();
-        let mut client = IndexerClient::new(&address, self.options)?;
-        let destination_state = self.storage.load_destination_state(self.destination_id);
+        let address = self.destination_id.address();
+        let mut client = IndexerClient::new(address, self.options)?;
+        let destination_state = self.storage.load_destination_state(&self.destination_id);
 
         loop {
             let (outgoing_stream, incoming_stream) =

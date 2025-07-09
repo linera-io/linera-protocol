@@ -134,6 +134,7 @@ impl Indexer for DummyIndexer {
 
 #[derive(Clone, Default)]
 pub(crate) struct DummyValidator {
+    pub(crate) validator_port: u16,
     pub(crate) fault_guard: Arc<AtomicBool>,
     pub(crate) blobs: Arc<DashSet<BlobId>>,
     pub(crate) state: Arc<DashSet<CryptoHash>>,
@@ -142,8 +143,9 @@ pub(crate) struct DummyValidator {
 }
 
 impl DummyValidator {
-    pub fn new() -> Self {
+    pub fn new(port: u16) -> Self {
         Self {
+            validator_port: port,
             fault_guard: Arc::new(AtomicBool::new(false)),
             blobs: Arc::new(DashSet::new()),
             state: Arc::new(DashSet::new()),
@@ -189,6 +191,7 @@ impl ValidatorNode for DummyValidator {
         let req = HandleConfirmedCertificateRequest::try_from(request.into_inner())
             .map_err(Status::from)?;
         if !self.state.insert(req.certificate.hash()) {
+            tracing::warn!(validator=?self.validator_port, certificate=?req.certificate.hash(), "Duplicate block received");
             self.duplicate_blocks
                 .entry(req.certificate.hash())
                 .and_modify(|count| *count += 1)
