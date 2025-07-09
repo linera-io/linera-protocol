@@ -13,10 +13,14 @@ import "./LineraTypes.sol";
 
 library Linera {
 
+    // Types
+
     struct AccountOwnerBalance {
         LineraTypes.AccountOwner account_owner;
         uint256 balance;
     }
+
+    // BaseRuntime functions
 
     function chain_id() internal returns (LineraTypes.ChainId memory) {
         address precompile = address(0x0b);
@@ -153,6 +157,52 @@ library Linera {
         assert(output.length == 0);
     }
 
+    // ContractRuntime functions
+
+    function authenticated_signer() internal returns (LineraTypes.opt_AccountOwner memory) {
+        address precompile = address(0x0b);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_authenticated_signer();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return LineraTypes.bcs_deserialize_opt_AccountOwner(output);
+    }
+
+    function message_id() internal returns (LineraTypes.opt_MessageId memory) {
+        address precompile = address(0x0b);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_id();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return LineraTypes.bcs_deserialize_opt_MessageId(output);
+    }
+
+    function message_is_bouncing() internal returns (LineraTypes.MessageIsBouncing memory) {
+        address precompile = address(0x0b);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_is_bouncing();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return LineraTypes.bcs_deserialize_MessageIsBouncing(output);
+    }
+
+    function authenticated_caller_id() internal returns (LineraTypes.opt_ApplicationId memory) {
+        address precompile = address(0x0b);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_authenticated_caller_id();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return LineraTypes.bcs_deserialize_opt_ApplicationId(output);
+    }
+
+
+
+
+
     function try_call_application(bytes32 universal_address, bytes memory operation) internal returns (bytes memory) {
         address precompile = address(0x0b);
         LineraTypes.ApplicationId memory target = LineraTypes.ApplicationId(LineraTypes.CryptoHash(universal_address));
@@ -186,26 +236,6 @@ library Linera {
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         require(output.length == 0);
-    }
-
-    function message_id() internal returns (LineraTypes.opt_MessageId memory) {
-        address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_id();
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
-        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
-        require(success);
-        return LineraTypes.bcs_deserialize_opt_MessageId(output);
-    }
-
-    function message_is_bouncing() internal returns (LineraTypes.MessageIsBouncing memory) {
-        address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_is_bouncing();
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
-        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
-        require(success);
-        return LineraTypes.bcs_deserialize_MessageIsBouncing(output);
     }
 
     function linera_emit(bytes memory stream_name, bytes memory value) internal returns (uint32) {

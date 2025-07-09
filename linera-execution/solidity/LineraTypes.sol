@@ -580,7 +580,7 @@ library LineraTypes {
         // choice=0 corresponds to AuthenticatedSigner
         // choice=1 corresponds to MessageId
         // choice=2 corresponds to MessageIsBouncing
-        // choice=3 corresponds to AuthenticatedCalledId
+        // choice=3 corresponds to AuthenticatedCallerId
         // choice=4 corresponds to SendMessage
         ContractRuntimePrecompile_SendMessage send_message;
         // choice=5 corresponds to TryCallApplication
@@ -643,7 +643,7 @@ library LineraTypes {
         return ContractRuntimePrecompile(uint8(2), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
-    function ContractRuntimePrecompile_case_authenticated_called_id()
+    function ContractRuntimePrecompile_case_authenticated_caller_id()
         internal
         pure
         returns (ContractRuntimePrecompile memory)
