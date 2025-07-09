@@ -100,7 +100,7 @@ where
         self.chain.chain_id()
     }
 
-    /// Runs the worker until there are no more incoming requests.
+    /// Handles a request and applies it to the chain state.
     #[instrument(skip(self, request))]
     pub async fn handle_request(&mut self, request: ChainWorkerRequest<StorageClient::Context>) {
         // TODO(#2237): Spawn concurrent tasks for read-only operations
