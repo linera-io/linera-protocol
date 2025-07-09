@@ -14,7 +14,7 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta},
+    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch},
     ensure,
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, BlobType, ChainId},
@@ -346,24 +346,6 @@ where
 
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
         Ok((info, actions))
-    }
-
-    /// Sleeps for the configured TTL. If the memory is already freed, it never returns.
-    pub(super) async fn sleep_until_timeout(&self) {
-        if self.shared_chain_view.is_none() {
-            futures::future::pending::<()>().await;
-        }
-        let now = self.storage.clock().current_time();
-        let ttl =
-            TimeDelta::from_micros(u64::try_from(self.config.ttl.as_micros()).unwrap_or(u64::MAX));
-        let timeout = now.saturating_add(ttl);
-        self.storage.clock().sleep_until(timeout).await
-    }
-
-    /// Drops the chain state from memory to minimize the worker's footprint.
-    pub(super) async fn free_memory(&mut self) {
-        tracing::debug!("Freeing worker memory.");
-        self.shared_chain_view = None;
     }
 
     /// Clears the shared chain view, and acquires and drops its write lock.

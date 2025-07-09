@@ -13,7 +13,7 @@ use custom_debug_derive::Debug;
 use futures::FutureExt;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, Timestamp},
+    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId},
 };
@@ -26,7 +26,7 @@ use linera_execution::{
     ExecutionStateView, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
     ServiceSyncRuntime,
 };
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{debug, instrument, trace, warn, Instrument as _};
 
@@ -284,6 +284,15 @@ where
         (service_runtime_thread, endpoint)
     }
 
+    /// Sleeps for the configured TTL.
+    pub(super) async fn sleep_until_timeout(&self) {
+        let now = self.storage.clock().current_time();
+        let ttl =
+            TimeDelta::from_micros(u64::try_from(self.config.ttl.as_micros()).unwrap_or(u64::MAX));
+        let timeout = now.saturating_add(ttl);
+        self.storage.clock().sleep_until(timeout).await
+    }
+
     /// Runs the worker until there are no more incoming requests.
     #[instrument(
         skip_all,
@@ -298,42 +307,47 @@ where
     ) -> Result<(), WorkerError> {
         trace!("Starting `ChainWorkerActor`");
 
-        let (service_runtime_thread, service_runtime_endpoint) = {
-            if self.config.long_lived_services {
-                let (thread, endpoint) = Self::spawn_service_runtime_actor(self.chain_id).await;
-                (Some(thread), Some(endpoint))
-            } else {
-                (None, None)
-            }
-        };
+        while let Some((request, span)) = incoming_requests.recv().await {
+            let (service_runtime_thread, service_runtime_endpoint) = {
+                if self.config.long_lived_services {
+                    let (thread, endpoint) = Self::spawn_service_runtime_actor(self.chain_id).await;
+                    (Some(thread), Some(endpoint))
+                } else {
+                    (None, None)
+                }
+            };
 
-        let mut worker = ChainWorkerState::load(
-            self.config.clone(),
-            self.storage.clone(),
-            self.block_values.clone(),
-            self.execution_state_cache.clone(),
-            self.tracked_chains.clone(),
-            self.delivery_notifier.clone(),
-            self.chain_id,
-            service_runtime_endpoint,
-        )
-        .await?;
+            let mut worker = ChainWorkerState::load(
+                self.config.clone(),
+                self.storage.clone(),
+                self.block_values.clone(),
+                self.execution_state_cache.clone(),
+                self.tracked_chains.clone(),
+                self.delivery_notifier.clone(),
+                self.chain_id,
+                service_runtime_endpoint,
+            )
+            .await?;
 
-        loop {
-            futures::select! {
-                () = worker.sleep_until_timeout().fuse() => worker.free_memory().await,
-                maybe_request = incoming_requests.recv().fuse() => {
-                    let Some((request, span)) = maybe_request else {
-                        break; // Request sender was dropped.
-                    };
-                    Box::pin(worker.handle_request(request).instrument(span)).await;
+            Box::pin(worker.handle_request(request).instrument(span)).await;
+
+            loop {
+                futures::select! {
+                    () = self.sleep_until_timeout().fuse() => break,
+                    maybe_request = incoming_requests.recv().fuse() => {
+                        let Some((request, span)) = maybe_request else {
+                            break; // Request sender was dropped.
+                        };
+                        Box::pin(worker.handle_request(request).instrument(span)).await;
+                    }
                 }
             }
-        }
 
-        if let Some(thread) = service_runtime_thread {
+            worker.clear_shared_chain_view().await;
             drop(worker);
-            thread.join().await
+            if let Some(thread) = service_runtime_thread {
+                thread.join().await
+            }
         }
 
         trace!("`ChainWorkerActor` finished");
