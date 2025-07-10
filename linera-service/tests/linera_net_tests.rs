@@ -202,7 +202,7 @@ impl DelegatedFungibleApp {
         );
         let response_body = self.0.query(&query).await.unwrap();
         let amount_option = serde_json::from_value::<Option<Amount>>(
-            response_body["accounts"]["entry"]["value"].clone(),
+            response_body["allowances"]["entry"]["value"].clone(),
         )
         .unwrap();
 
@@ -1956,6 +1956,12 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
 
     app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
     tracing::info!("delegated_fungible, step 16.1");
+
+    client2.sync(chain2).await?;
+    tracing::info!("delegated_fungible, step 16.2");
+
+    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
+    tracing::info!("delegated_fungible, step 16.3");
 
     // Doing the transfer from
     app2.transfer_from(
