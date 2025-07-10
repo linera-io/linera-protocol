@@ -71,21 +71,6 @@ pub enum FungibleResponse {
     TickerSymbol(String),
 }
 
-
-/// An ABI for applications that implement a fungible token.
-pub struct DelegatedFungibleTokenAbi;
-
-impl ContractAbi for DelegatedFungibleTokenAbi {
-    type Operation = DelegatedFungibleOperation;
-    type Response = ();
-}
-
-impl ServiceAbi for DelegatedFungibleTokenAbi {
-    type Query = Request;
-    type QueryResponse = Response;
-}
-
-
 /// A delegated fungible operation
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
 pub enum DelegatedFungibleOperation {

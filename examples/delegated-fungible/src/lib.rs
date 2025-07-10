@@ -3,10 +3,15 @@
 
 /* ABI of the Delegated Fungible Token Example Application */
 
-pub use linera_sdk::abis::fungible::{Account, DelegatedFungibleTokenAbi, Parameters, DelegatedFungibleOperation, InitialState};
+pub use linera_sdk::{
+    abi::{ContractAbi, ServiceAbi},
+    abis::fungible::{Account, Parameters, DelegatedFungibleOperation, InitialState},
+};
 
 use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
+use async_graphql::{scalar, Request, Response};
+
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
     async_graphql::InputType,
@@ -16,6 +21,19 @@ use {
         test::{ActiveChain, QueryOutcome, TestValidator},
     },
 };
+
+/// An ABI for applications that implement a fungible token.
+pub struct DelegatedFungibleTokenAbi;
+
+impl ContractAbi for DelegatedFungibleTokenAbi {
+    type Operation = DelegatedFungibleOperation;
+    type Response = ();
+}
+
+impl ServiceAbi for DelegatedFungibleTokenAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+}
 
 /// A message.
 #[derive(Debug, Deserialize, Serialize)]
@@ -50,7 +68,7 @@ pub struct OwnerSpender {
     pub spender: AccountOwner,
 }
 
-async_graphql::scalar!(OwnerSpender);
+scalar!(OwnerSpender);
 
 impl OwnerSpender {
     pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {
