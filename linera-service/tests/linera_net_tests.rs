@@ -1834,23 +1834,18 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     use std::collections::BTreeMap;
 
     use delegated_fungible::{DelegatedFungibleTokenAbi, InitialState, Parameters};
-    tracing::info!("delegated_fungible, step 1");
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
-    tracing::info!("delegated_fungible, step 2");
 
     // Create runner and three clients.
     let (mut net, client1) = config.instantiate().await?;
-    tracing::info!("delegated_fungible, step 3");
 
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
-    tracing::info!("delegated_fungible, step 4");
 
     let client3 = net.make_client().await;
     client3.wallet_init(None).await?;
-    tracing::info!("delegated_fungible, step 5");
 
     let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
 
@@ -1858,7 +1853,6 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     let owner1 = client1.keygen().await?;
     let owner2 = client2.keygen().await?;
     let owner3 = client3.keygen().await?;
-    tracing::info!("delegated_fungible, step 6");
 
     // Open a chain owned by both clients.
     let chain2 = client1
@@ -1871,7 +1865,6 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
             10_000,
         )
         .await?;
-    tracing::info!("delegated_fungible, step 7");
 
     // Assign chain2 to clients.
     client1.assign(owner1, chain2).await?;
@@ -1879,7 +1872,6 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     client3.assign(owner3, chain2).await?;
 
     client3.sync(chain2).await?;
-    tracing::info!("delegated_fungible, step 8");
 
 
     // The initial accounts on chain1
@@ -1902,47 +1894,37 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
             Some(chain2),
         )
         .await?;
-    tracing::info!("delegated_fungible, step 9");
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
-    tracing::info!("delegated_fungible, step 10");
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service3 = client3.run_node_service(port3, ProcessInbox::Skip).await?;
-    tracing::info!("delegated_fungible, step 11");
 
     let app1 = DelegatedFungibleApp(
         node_service1
             .make_application(&chain2, &application_id)
             .await?,
     );
-    tracing::info!("delegated_fungible, step 12");
     let app2 = DelegatedFungibleApp(
         node_service2
             .make_application(&chain2, &application_id)
             .await?,
     );
-    tracing::info!("delegated_fungible, step 13");
     let app3 = DelegatedFungibleApp(
         node_service3
             .make_application(&chain2, &application_id)
             .await?,
     );
 
-    tracing::info!("delegated_fungible, step 14");
-
     let expected_balances = [
         (owner1, Amount::from_tokens(9)),
         (owner2, Amount::from_tokens(19)),
     ];
     app1.assert_balances(expected_balances).await;
-    tracing::info!("delegated_fungible, step 14.1");
     app2.assert_balances(expected_balances).await;
-    tracing::info!("delegated_fungible, step 14.2");
     app3.assert_balances(expected_balances).await;
-    tracing::info!("delegated_fungible, step 15");
 
 
     // Approving a transfer
@@ -1952,16 +1934,11 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
         Amount::from_tokens(93),
     )
     .await;
-    tracing::info!("delegated_fungible, step 16");
 
     app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
-    tracing::info!("delegated_fungible, step 16.1");
 
-    client2.sync(chain2).await?;
-    tracing::info!("delegated_fungible, step 16.2");
-
+    node_service2.process_inbox(&chain2).await?;
     app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
-    tracing::info!("delegated_fungible, step 16.3");
 
     // Doing the transfer from
     app2.transfer_from(
@@ -1974,18 +1951,21 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
         },
     )
     .await;
-    tracing::info!("delegated_fungible, step 17");
-    client2.sync(chain2).await?;
+    node_service2.process_inbox(&chain2).await?;
+
 
     // Checking the final values on chain1 and chain2.
 
     let expected_balances = [
-        (owner1, Amount::from_tokens(8)),
-        (owner2, Amount::from_tokens(20)),
+        (owner1, Amount::from_tokens(7)),
+        (owner2, Amount::from_tokens(19)),
         (owner3, Amount::from_tokens(2)),
     ];
     app2.assert_balances(expected_balances).await;
-    tracing::info!("delegated_fungible, step 18");
+    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(91)).await;
+
+
+    // Winding down the system
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
