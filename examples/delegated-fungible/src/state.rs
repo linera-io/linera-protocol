@@ -38,20 +38,39 @@ impl DelegatedFungibleTokenState {
     }
 
     /// Credits an `account` with the provided `amount`.
-    pub(crate) async fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: Amount) {
+    pub(crate) async fn approve(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        allowance: Amount,
+    ) {
         if allowance == Amount::ZERO {
             return;
         }
         let owner_spender = OwnerSpender::new(owner, spender);
-        let total_allowance = self.allowances.get_mut_or_default(&owner_spender).await.expect("Failed allowance access");
+        let total_allowance = self
+            .allowances
+            .get_mut_or_default(&owner_spender)
+            .await
+            .expect("Failed allowance access");
         total_allowance.saturating_add_assign(allowance);
     }
 
-    pub(crate) async fn debit_for_transfer_from(&mut self, owner: AccountOwner, spender: AccountOwner, amount: Amount) {
+    pub(crate) async fn debit_for_transfer_from(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) {
         if amount == Amount::ZERO {
             return;
         }
-        let mut balance = self.accounts.get(&owner).await.expect("Failed balance access").unwrap_or_default();
+        let mut balance = self
+            .accounts
+            .get(&owner)
+            .await
+            .expect("Failed balance access")
+            .unwrap_or_default();
         balance.try_sub_assign(amount).unwrap_or_else(|_| {
             panic!("Source owner {owner} does not have sufficient balance for transfer_from")
         });
@@ -65,7 +84,12 @@ impl DelegatedFungibleTokenState {
                 .expect("Failed insertion operation");
         }
         let owner_spender = OwnerSpender::new(owner, spender);
-        let mut allowance = self.allowances.get(&owner_spender).await.expect("Failed allowance access").unwrap_or_default();
+        let mut allowance = self
+            .allowances
+            .get(&owner_spender)
+            .await
+            .expect("Failed allowance access")
+            .unwrap_or_default();
         allowance.try_sub_assign(amount).unwrap_or_else(|_| {
             panic!("Spender {spender} does not have a sufficient from owner {owner} for transfer_from; allowance={allowance} amount={amount}")
         });
@@ -85,7 +109,11 @@ impl DelegatedFungibleTokenState {
         if amount == Amount::ZERO {
             return;
         }
-        let balance = self.accounts.get_mut_or_default(&account).await.expect("Failed to access balance");
+        let balance = self
+            .accounts
+            .get_mut_or_default(&account)
+            .await
+            .expect("Failed to access balance");
         balance.saturating_add_assign(amount);
     }
 

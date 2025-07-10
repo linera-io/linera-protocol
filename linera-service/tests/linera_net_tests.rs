@@ -209,7 +209,12 @@ impl DelegatedFungibleApp {
         amount_option.unwrap_or(Amount::ZERO)
     }
 
-    async fn assert_allowance(&self, owner: &AccountOwner, spender: &AccountOwner, allowance: Amount) {
+    async fn assert_allowance(
+        &self,
+        owner: &AccountOwner,
+        spender: &AccountOwner,
+        allowance: Amount,
+    ) {
         let value = self.get_allowance(owner, spender).await;
         assert_eq!(value, allowance);
     }
@@ -1823,7 +1828,6 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     Ok(())
 }
 
-
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1927,20 +1931,17 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     app2.assert_balances(expected_balances).await;
     app3.assert_balances(expected_balances).await;
 
-
     // Approving a transfer
-    app1.approve(
-        &owner1,
-        &owner2,
-        Amount::from_tokens(93),
-    )
-    .await;
+    app1.approve(&owner1, &owner2, Amount::from_tokens(93))
+        .await;
 
-    app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
+    app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
+        .await;
 
     // Call process inbox in order to synchronize from validators
     node_service2.process_inbox(&chain2).await?;
-    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
+    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
+        .await;
 
     // Doing the transfer from
     app2.transfer_from(
@@ -1962,7 +1963,8 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
         (owner3, Amount::from_tokens(2)),
     ];
     app2.assert_balances(expected_balances).await;
-    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(91)).await;
+    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(91))
+        .await;
 
     // Winding down the system
 
@@ -1975,9 +1977,6 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
 
     Ok(())
 }
-
-
-
 
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.

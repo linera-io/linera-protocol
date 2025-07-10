@@ -3,25 +3,14 @@
 
 /* ABI of the Delegated Fungible Token Example Application */
 
+use async_graphql::{scalar, Request, Response};
 pub use linera_sdk::{
     abi::{ContractAbi, ServiceAbi},
-    abis::fungible::{Account, Parameters, InitialState},
+    abis::fungible::{Account, InitialState, Parameters},
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount},
 };
-
 use serde::{Deserialize, Serialize};
-use async_graphql::{scalar, Request, Response};
-
-#[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
-use {
-    async_graphql::InputType,
-    futures::{stream, StreamExt},
-    linera_sdk::{
-        linera_base_types::{ApplicationId, ModuleId},
-        test::{ActiveChain, QueryOutcome, TestValidator},
-    },
-};
 
 /// An ABI for applications that implement a fungible token.
 pub struct DelegatedFungibleTokenAbi;
@@ -81,9 +70,6 @@ pub enum Operation {
     },
 }
 
-
-
-
 /// A message.
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
@@ -126,99 +112,4 @@ impl OwnerSpender {
         }
         Self { owner, spender }
     }
-}
-
-
-/// Creates a delegated fungible token application and distributes `initial_amounts` to new individual
-/// chains.
-#[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
-pub async fn create_with_accounts(
-    validator: &TestValidator,
-    module_id: ModuleId<DelegatedFungibleTokenAbi, Parameters, InitialState>,
-    initial_amounts: impl IntoIterator<Item = Amount>,
-) -> (
-    ApplicationId<DelegatedFungibleTokenAbi>,
-    Vec<(ActiveChain, AccountOwner, Amount)>,
-) {
-    let mut token_chain = validator.new_chain().await;
-    let mut initial_state = InitialStateBuilder::default();
-
-    let accounts = stream::iter(initial_amounts)
-        .then(|initial_amount| async move {
-            let chain = validator.new_chain().await;
-            let account = AccountOwner::from(chain.public_key());
-
-            (chain, account, initial_amount)
-        })
-        .collect::<Vec<_>>()
-        .await;
-
-    for (_chain, account, initial_amount) in &accounts {
-        initial_state = initial_state.with_account(*account, *initial_amount);
-    }
-
-    let params = Parameters::new("FUN");
-    let application_id = token_chain
-        .create_application(module_id, params, initial_state.build(), vec![])
-        .await;
-
-    for (chain, account, initial_amount) in &accounts {
-        let claim_certificate = chain
-            .add_block(|block| {
-                block.with_operation(
-                    application_id,
-                    Operation::Claim {
-                        source_account: Account {
-                            chain_id: token_chain.id(),
-                            owner: *account,
-                        },
-                        amount: *initial_amount,
-                        target_account: Account {
-                            chain_id: chain.id(),
-                            owner: *account,
-                        },
-                    },
-                );
-            })
-            .await;
-
-        assert_eq!(claim_certificate.outgoing_message_count(), 1);
-
-        let transfer_certificate = token_chain
-            .add_block(|block| {
-                block.with_messages_from(&claim_certificate);
-            })
-            .await;
-
-        assert_eq!(transfer_certificate.outgoing_message_count(), 1);
-
-        chain
-            .add_block(|block| {
-                block.with_messages_from(&transfer_certificate);
-            })
-            .await;
-    }
-
-    (application_id, accounts)
-}
-
-/// Queries the balance of an account owned by `account_owner` on a specific `chain`.
-#[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
-pub async fn query_account(
-    application_id: ApplicationId<DelegatedFungibleTokenAbi>,
-    chain: &ActiveChain,
-    account_owner: AccountOwner,
-) -> Option<Amount> {
-    let query = format!(
-        "query {{ accounts {{ entry(key: {}) {{ value }} }} }}",
-        account_owner.to_value()
-    );
-    let QueryOutcome { response, .. } = chain.graphql_query(application_id, query).await;
-    let balance = response.pointer("/accounts/entry/value")?.as_str()?;
-
-    Some(
-        balance
-            .parse()
-            .expect("Account balance cannot be parsed as a number"),
-    )
 }

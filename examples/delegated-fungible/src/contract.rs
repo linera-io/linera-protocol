@@ -45,7 +45,7 @@ impl Contract for DelegatedFungibleTokenContract {
         let _ = self.runtime.application_parameters();
 
         let mut total_supply = Amount::ZERO;
-        for (_, value) in &state.accounts {
+        for value in state.accounts.values() {
             total_supply.saturating_add_assign(*value);
         }
         if total_supply == Amount::ZERO {
@@ -56,7 +56,11 @@ impl Contract for DelegatedFungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            Operation::Approve { owner, spender, allowance } => {
+            Operation::Approve {
+                owner,
+                spender,
+                allowance,
+            } => {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
@@ -76,11 +80,18 @@ impl Contract for DelegatedFungibleTokenContract {
                     .await;
             }
 
-            Operation::TransferFrom { owner, spender, amount, target_account } => {
+            Operation::TransferFrom {
+                owner,
+                spender,
+                amount,
+                target_account,
+            } => {
                 self.runtime
                     .check_account_permission(spender)
                     .expect("Permission for Transfer operation");
-                self.state.debit_for_transfer_from(owner, spender, amount).await;
+                self.state
+                    .debit_for_transfer_from(owner, spender, amount)
+                    .await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
             }
