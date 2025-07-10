@@ -2957,6 +2957,7 @@ dependencies = [
  "async-graphql",
  "futures",
  "linera-sdk",
+ "log",
  "serde",
 ]
 

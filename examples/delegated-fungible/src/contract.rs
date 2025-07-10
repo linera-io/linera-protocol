@@ -6,7 +6,7 @@
 mod state;
 
 use delegated_fungible::{
-    Account, DelegatedFungibleResponse, DelegatedFungibleTokenAbi, InitialState, Message, DelegatedFungibleOperation, Parameters,
+    Account, DelegatedFungibleTokenAbi, InitialState, Message, DelegatedFungibleOperation, Parameters,
 };
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
@@ -56,22 +56,11 @@ impl Contract for DelegatedFungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            DelegatedFungibleOperation::Balance { owner } => {
-                let balance = self.state.balance_or_default(&owner).await;
-                DelegatedFungibleResponse::Balance(balance)
-            }
-
-            DelegatedFungibleOperation::TickerSymbol => {
-                let params = self.runtime.application_parameters();
-                DelegatedFungibleResponse::TickerSymbol(params.ticker_symbol)
-            }
-
             DelegatedFungibleOperation::Approve { owner, spender, allowance } => {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
                 self.state.approve(owner, spender, allowance).await;
-                DelegatedFungibleResponse::Ok
             }
 
             DelegatedFungibleOperation::Transfer {
@@ -85,7 +74,6 @@ impl Contract for DelegatedFungibleTokenContract {
                 self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
-                DelegatedFungibleResponse::Ok
             }
 
             DelegatedFungibleOperation::TransferFrom { owner, spender, amount, target_account } => {
@@ -95,7 +83,6 @@ impl Contract for DelegatedFungibleTokenContract {
                 self.state.debit_for_transfer_from(owner, spender, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
-                DelegatedFungibleResponse::Ok
             }
 
             DelegatedFungibleOperation::Claim {
@@ -107,7 +94,6 @@ impl Contract for DelegatedFungibleTokenContract {
                     .check_account_permission(source_account.owner)
                     .expect("Permission for Claim operation");
                 self.claim(source_account, amount, target_account).await;
-                DelegatedFungibleResponse::Ok
             }
         }
     }

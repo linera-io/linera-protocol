@@ -77,7 +77,7 @@ pub struct DelegatedFungibleTokenAbi;
 
 impl ContractAbi for DelegatedFungibleTokenAbi {
     type Operation = DelegatedFungibleOperation;
-    type Response = DelegatedFungibleResponse;
+    type Response = ();
 }
 
 impl ServiceAbi for DelegatedFungibleTokenAbi {
@@ -89,11 +89,6 @@ impl ServiceAbi for DelegatedFungibleTokenAbi {
 /// A delegated fungible operation
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
 pub enum DelegatedFungibleOperation {
-    /// Requests an account balance.
-    Balance {
-        /// Owner to query the balance for
-        owner: AccountOwner,
-    },
     /// Approve the transfer of tokens
     Approve {
         /// Owner to transfer from
@@ -103,8 +98,6 @@ pub enum DelegatedFungibleOperation {
         /// Maximum amount to be transferred
         allowance: Amount,
     },
-    /// Requests this fungible token's ticker symbol.
-    TickerSymbol,
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
         /// Owner to transfer from
@@ -136,20 +129,6 @@ pub enum DelegatedFungibleOperation {
         /// Target account to claim the amount into
         target_account: Account,
     },
-}
-
-/// A delegated fungible response
-#[derive(Debug, Deserialize, Serialize, Default)]
-pub enum DelegatedFungibleResponse {
-    /// OK response
-    #[default]
-    Ok,
-    /// Balance response
-    Balance(Amount),
-    /// Allowance response
-    Allowance(Amount),
-    /// Ticker symbol response
-    TickerSymbol(String),
 }
 
 /// The initial state to instantiate fungible with

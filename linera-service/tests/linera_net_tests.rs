@@ -174,18 +174,15 @@ struct DelegatedFungibleApp(ApplicationWrapper<delegated_fungible::DelegatedFung
 
 impl DelegatedFungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
-        tracing::info!("account_owner={}", account_owner);
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
             account_owner.to_value()
         );
         let response_body = self.0.query(&query).await.unwrap();
-        tracing::info!("response_body={}", response_body);
         let amount_option = serde_json::from_value::<Option<Amount>>(
             response_body["accounts"]["entry"]["value"].clone(),
         )
         .unwrap();
-        tracing::info!("amount_option={:?}", amount_option);
 
         amount_option.unwrap_or(Amount::ZERO)
     }
@@ -195,6 +192,26 @@ impl DelegatedFungibleApp {
             let value = self.get_amount(&account_owner).await;
             assert_eq!(value, amount);
         }
+    }
+
+    async fn get_allowance(&self, owner: &AccountOwner, spender: &AccountOwner) -> Amount {
+        let owner_spender = delegated_fungible::OwnerSpender::new(*owner, *spender);
+        let query = format!(
+            "allowances {{ entry(key: {}) {{ value }} }}",
+            owner_spender.to_value()
+        );
+        let response_body = self.0.query(&query).await.unwrap();
+        let amount_option = serde_json::from_value::<Option<Amount>>(
+            response_body["accounts"]["entry"]["value"].clone(),
+        )
+        .unwrap();
+
+        amount_option.unwrap_or(Amount::ZERO)
+    }
+
+    async fn assert_allowance(&self, owner: &AccountOwner, spender: &AccountOwner, allowance: Amount) {
+        let value = self.get_allowance(owner, spender).await;
+        assert_eq!(value, allowance);
     }
 
     async fn approve(
@@ -1928,15 +1945,17 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     tracing::info!("delegated_fungible, step 15");
 
 
-    /*
     // Approving a transfer
     app1.approve(
         &owner1,
         &owner2,
-        Amount::from_tokens(50),
+        Amount::from_tokens(93),
     )
     .await;
     tracing::info!("delegated_fungible, step 16");
+
+    app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
+    tracing::info!("delegated_fungible, step 16.1");
 
     // Doing the transfer from
     app2.transfer_from(
@@ -1950,7 +1969,7 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     )
     .await;
     tracing::info!("delegated_fungible, step 17");
-
+    client2.sync(chain2).await?;
 
     // Checking the final values on chain1 and chain2.
 
@@ -1961,7 +1980,6 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     ];
     app2.assert_balances(expected_balances).await;
     tracing::info!("delegated_fungible, step 18");
-    */
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;

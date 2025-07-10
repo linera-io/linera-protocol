@@ -2011,6 +2011,7 @@ dependencies = [
  "fungible",
  "futures",
  "linera-sdk",
+ "log",
  "serde",
  "tokio",
 ]

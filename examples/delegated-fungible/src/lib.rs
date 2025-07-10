@@ -3,7 +3,7 @@
 
 /* ABI of the Delegated Fungible Token Example Application */
 
-pub use linera_sdk::abis::fungible::{Account, DelegatedFungibleResponse, DelegatedFungibleTokenAbi, Parameters, DelegatedFungibleOperation, InitialState};
+pub use linera_sdk::abis::fungible::{Account, DelegatedFungibleTokenAbi, Parameters, DelegatedFungibleOperation, InitialState};
 
 use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
