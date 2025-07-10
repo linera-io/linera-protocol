@@ -5,10 +5,11 @@
 
 pub use linera_sdk::{
     abi::{ContractAbi, ServiceAbi},
-    abis::fungible::{Account, Parameters, DelegatedFungibleOperation, InitialState},
+    abis::fungible::{Account, Parameters, InitialState},
+    graphql::GraphQLMutationRoot,
+    linera_base_types::{AccountOwner, Amount},
 };
 
-use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
 use async_graphql::{scalar, Request, Response};
 
@@ -34,6 +35,54 @@ impl ServiceAbi for DelegatedFungibleTokenAbi {
     type Query = Request;
     type QueryResponse = Response;
 }
+
+/// A delegated fungible operation
+#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+pub enum DelegatedFungibleOperation {
+    /// Approve the transfer of tokens
+    Approve {
+        /// Owner to transfer from
+        owner: AccountOwner,
+        /// The spender account
+        spender: AccountOwner,
+        /// Maximum amount to be transferred
+        allowance: Amount,
+    },
+    /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
+    Transfer {
+        /// Owner to transfer from
+        owner: AccountOwner,
+        /// Amount to be transferred
+        amount: Amount,
+        /// Target account to transfer the amount to
+        target_account: Account,
+    },
+    /// Transfers tokens from a (locally owned) account to a (possibly remote) account by using the allowance.
+    TransferFrom {
+        /// Owner to transfer from
+        owner: AccountOwner,
+        /// The spender of the amount.
+        spender: AccountOwner,
+        /// Amount to be transferred
+        amount: Amount,
+        /// Target account to transfer the amount to
+        target_account: Account,
+    },
+    /// Same as `Transfer` but the source account may be remote. Depending on its
+    /// configuration, the target chain may take time or refuse to process
+    /// the message.
+    Claim {
+        /// Source account to claim amount from
+        source_account: Account,
+        /// Amount to be claimed
+        amount: Amount,
+        /// Target account to claim the amount into
+        target_account: Account,
+    },
+}
+
+
+
 
 /// A message.
 #[derive(Debug, Deserialize, Serialize)]
