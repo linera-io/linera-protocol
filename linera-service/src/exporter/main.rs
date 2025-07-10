@@ -74,7 +74,6 @@ struct ExporterOptions {
 
 struct ExporterContext {
     node_options: NodeOptions,
-    max_exporter_threads: usize,
     config: BlockExporterConfig,
 }
 
@@ -89,32 +88,28 @@ impl Runnable for ExporterContext {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-        let (sender, _handle) = start_block_processor_task(
+        let (sender, handle) = start_block_processor_task(
             storage,
             ExporterCancellationSignal::new(shutdown_notifier.clone()),
             self.config.limits,
             self.node_options,
             self.config.id,
-            self.max_exporter_threads,
             self.config.destination_config,
         )?;
 
         let service = ExporterService::new(sender);
-        let port = self.config.service_config.port;
-        service.run(shutdown_notifier, port).await
+        service
+            .run(shutdown_notifier, self.config.service_config.port)
+            .await?;
+        handle.join().unwrap()
     }
 }
 
 impl ExporterContext {
-    fn new(
-        max_exporter_threads: usize,
-        node_options: NodeOptions,
-        config: BlockExporterConfig,
-    ) -> ExporterContext {
+    fn new(node_options: NodeOptions, config: BlockExporterConfig) -> ExporterContext {
         Self {
             config,
             node_options,
-            max_exporter_threads,
         }
     }
 }
@@ -139,7 +134,13 @@ impl ExporterOptions {
             max_retries: self.max_retries,
         };
 
-        let context = ExporterContext::new(self.max_exporter_threads, node_options, config);
+        let context = ExporterContext::new(node_options, config);
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("block-exporter-worker")
+            .worker_threads(self.max_exporter_threads)
+            .enable_all()
+            .build()?;
 
         let future = async {
             let store_config = self
@@ -150,9 +151,6 @@ impl ExporterOptions {
             store_config.run_with_storage(None, context).boxed().await
         };
 
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
         runtime.block_on(future)?.map_err(|e| e.into())
     }
 }

@@ -5,14 +5,12 @@ use std::{
     collections::HashSet,
     future::{Future, IntoFuture},
     sync::Arc,
-    time::Duration,
 };
 
 use alloy_primitives::map::HashMap;
 use linera_client::config::{Destination, DestinationId, DestinationKind};
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_storage::Storage;
-use tokio::runtime::Runtime;
 
 use crate::storage::ExporterStorage;
 
@@ -99,10 +97,6 @@ where
                     tracing::error!(id=?id, error=?e, "failed to join task");
                 }
             }
-
-            thread
-                .runtime_handle
-                .shutdown_timeout(Duration::from_secs(1));
         }
     }
 
@@ -118,13 +112,13 @@ pub(super) struct PoolMember<F, S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    shutdown_signal: F,
     options: NodeOptions,
     work_queue_size: usize,
-    runtime_handle: Runtime,
-    join_handles: HashMap<DestinationId, tokio::task::JoinHandle<anyhow::Result<()>>>,
     storage: ExporterStorage<S>,
     node_provider: Arc<GrpcNodeProvider>,
+    // Handles to all the exporter tasks spawned. Allows to join them later and shut down the thread gracefully.
+    join_handles: HashMap<DestinationId, tokio::task::JoinHandle<anyhow::Result<()>>>,
+    shutdown_signal: F,
 }
 
 impl<F, S> PoolMember<F, S>
@@ -134,7 +128,6 @@ where
     <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
 {
     pub(super) fn new(
-        runtime_handle: Runtime,
         options: NodeOptions,
         storage: ExporterStorage<S>,
         work_queue_size: usize,
@@ -146,7 +139,6 @@ where
         Self {
             storage,
             options,
-            runtime_handle,
             shutdown_signal,
             work_queue_size,
             join_handles: HashMap::new(),
@@ -164,8 +156,7 @@ where
                     id.clone(),
                 );
 
-                self.runtime_handle
-                    .spawn(exporter_task.run_with_shutdown(self.shutdown_signal.clone()))
+                tokio::task::spawn(exporter_task.run_with_shutdown(self.shutdown_signal.clone()))
             }
 
             DestinationKind::Validator => {
@@ -176,8 +167,7 @@ where
                     self.work_queue_size,
                 );
 
-                self.runtime_handle
-                    .spawn(exporter_task.run_with_shutdown(self.shutdown_signal.clone()))
+                tokio::task::spawn(exporter_task.run_with_shutdown(self.shutdown_signal.clone()))
             }
         };
 

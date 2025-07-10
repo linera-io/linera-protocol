@@ -73,6 +73,8 @@ where
         let mut interval = interval(Duration::from_millis(persistence_period.into()));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
+        self.pool_state.start_startup_exporters();
+
         loop {
             tokio::select! {
 
@@ -86,7 +88,7 @@ where
                     let walker = Walker::new(&mut self.storage);
                     match walker.walk(next_block_notification).await {
                         Ok(maybe_new_committee) if self.committee_destination_update => {
-                            tracing::trace!("New committee blob found, updating the committee destination.");
+                            tracing::trace!("new committee blob found, updating the committee destination.");
                             if let Some(blob_id) = maybe_new_committee {
                                 let blob = match self.storage.get_blob(blob_id).await {
                                     Ok(blob) => blob,

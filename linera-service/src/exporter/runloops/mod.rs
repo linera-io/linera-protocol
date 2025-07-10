@@ -3,7 +3,6 @@
 
 use std::{
     future::{Future, IntoFuture},
-    thread::{self, JoinHandle},
 };
 
 use block_processor::BlockProcessor;
@@ -11,10 +10,7 @@ use indexer::indexer_exporter::Exporter as IndexerExporter;
 use linera_client::config::{DestinationConfig, LimitsConfig};
 use linera_rpc::NodeOptions;
 use linera_storage::Storage;
-use tokio::{
-    runtime::Runtime,
-    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
 
 use crate::{
@@ -38,12 +34,11 @@ pub(crate) fn start_block_processor_task<S, F>(
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
-    max_exporter_threads: usize,
     destination_config: DestinationConfig,
 ) -> Result<
     (
         UnboundedSender<BlockId>,
-        JoinHandle<Result<(), ExporterError>>,
+        std::thread::JoinHandle<Result<(), ExporterError>>,
     ),
     ExporterError,
 >
@@ -54,14 +49,13 @@ where
 {
     let (task_sender, queue_front) = unbounded_channel();
     let moved_task_sender = task_sender.clone();
-    let handle = thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         start_block_processor(
             storage,
             shutdown_signal,
             limits,
             options,
             block_exporter_id,
-            max_exporter_threads,
             moved_task_sender,
             destination_config,
             queue_front,
@@ -79,7 +73,6 @@ async fn start_block_processor<S, F>(
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
-    max_exporter_threads: usize,
     queue_rear: UnboundedSender<BlockId>,
     destination_config: DestinationConfig,
     queue_front: UnboundedReceiver<BlockId>,
@@ -98,19 +91,14 @@ where
         BlockProcessorStorage::load(storage.clone(), block_exporter_id, destination_ids, limits)
             .await?;
 
-    let runtime = start_threadpool(max_exporter_threads);
-
     let pool_members = PoolMember::new(
-        runtime,
         options,
         exporter_storage.clone().unwrap(),
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
     );
-    let mut pool_state =
+    let pool_state =
         ThreadPoolState::new(vec![pool_members], destination_config.destinations.clone());
-
-    pool_state.start_startup_exporters();
 
     let mut block_processor = BlockProcessor::new(
         pool_state,
@@ -127,14 +115,6 @@ where
     block_processor.pool_state().join_all().await;
 
     Ok(())
-}
-
-fn start_threadpool(number_of_threads: usize) -> Runtime {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(number_of_threads)
-        .enable_all()
-        .build()
-        .unwrap()
 }
 
 #[cfg(test)]
@@ -211,7 +191,6 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
                 committee_destination: false,
                 destinations: vec![destination_address],
@@ -269,7 +248,6 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
                 committee_destination: false,
                 destinations: destinations.clone(),
@@ -319,7 +297,6 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
                 destinations: destinations.clone(),
                 committee_destination: false,
@@ -362,7 +339,7 @@ mod test {
             votes: 0,
             account_public_key: AccountPublicKey::test_key(0),
         };
-        let (notifier, _block_processor_handle) = start_block_processor_task(
+        let (notifier, block_processor_handle) = start_block_processor_task(
             storage.clone(),
             signal,
             LimitsConfig {
@@ -376,7 +353,6 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
                 committee_destination: true,
                 destinations: vec![],
@@ -444,7 +420,8 @@ mod test {
             .get(&second_notification.hash)
             .is_none());
 
-        // block_processor_handle.join().unwrap()?;
+        cancellation_token.cancel();
+        block_processor_handle.join().unwrap()?;
         Ok(())
     }
 
