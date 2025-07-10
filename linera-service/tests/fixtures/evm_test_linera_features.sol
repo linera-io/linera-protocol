@@ -35,4 +35,9 @@ contract ExampleLineraFeatures {
         LineraTypes.opt_ApplicationId memory caller_id = Linera.authenticated_caller_id();
         require(caller_id.has_value == false);
     }
+
+    function test_chain_balance(uint256 expected_balance) external {
+        uint256 balance = Linera.read_chain_balance();
+        require(balance == expected_balance);
+    }
 }

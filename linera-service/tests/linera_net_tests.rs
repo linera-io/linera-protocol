@@ -1270,7 +1270,7 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::B256;
+    use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::get_evm_contract_path;
@@ -1281,6 +1281,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     let (mut net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
+    let account_chain = Account::chain(chain);
 
     // Creating the EVM smart contract
 
@@ -1290,6 +1291,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         function test_assert_data_blob_exists(bytes32 hash);
         function test_chain_ownership();
         function test_authenticated_signer_caller_id();
+        function test_chain_balance(uint256 expected_balance);
     }
 
     let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
@@ -1322,21 +1324,51 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         .make_application(&chain, &application_id)
         .await?;
 
+/*
+    
+    // Testing the ChainId.
+
     let query = test_chain_idCall {};
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
+
+    // Testing Chain Ownership
 
     let query = test_chain_ownershipCall {};
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
 
+    // Testing existence of blob.
+
     let query = test_assert_data_blob_existsCall { hash };
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
 
+    // Reading the blob
+
     let query = test_read_data_blobCall { hash, len };
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
+
+    // Checking authenticated signer/caller_id
+
+    let mutation = test_authenticated_signer_caller_idCall {};
+    let mutation = EvmQuery::Mutation(mutation.abi_encode());
+    application.run_json_query(mutation).await?;
+*/
+    // Testing the chain balance
+
+    let expected_balance = node_service.balance(&account_chain).await?;
+    tracing::info!("A:   expected_balance={expected_balance}");
+    let expected_balance_a: U256 = expected_balance.into();
+    tracing::info!("B: expected_balance_a={expected_balance_a}");
+    let expected_balance: U256 = U256::try_from(expected_balance)?;
+    tracing::info!("B:   expected_balance={expected_balance}");
+    let query = test_chain_balanceCall { expected_balance };
+    let query = EvmQuery::Query(query.abi_encode());
+    application.run_json_query(query).await?;
+
+    // Winding down
 
     node_service.ensure_is_running()?;
 
