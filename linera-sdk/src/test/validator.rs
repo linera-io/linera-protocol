@@ -6,7 +6,7 @@
 //! The [`TestValidator`] is a minimal validator with a single shard. Micro-chains can be added to
 //! it, and blocks can be added to each microchain individually.
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use futures::{
@@ -93,7 +93,6 @@ impl TestValidator {
             "Single validator node".to_string(),
             Some(validator_keypair.secret_key.copy()),
             storage.clone(),
-            NonZeroUsize::new(40).expect("Chain worker limit should not be zero"),
         );
 
         // Create an admin chain.
@@ -101,7 +100,8 @@ impl TestValidator {
 
         let new_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(key_pair.public().into()),
-            active_epochs: [epoch].into_iter().collect(),
+            min_active_epoch: epoch,
+            max_active_epoch: epoch,
             epoch,
             balance: Amount::from_tokens(1_000_000),
             application_permissions: ApplicationPermissions::default(),
@@ -325,8 +325,7 @@ impl TestValidator {
             balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };
-        let new_chain_config =
-            open_chain_config.init_chain_config(epoch, [epoch].into_iter().collect());
+        let new_chain_config = open_chain_config.init_chain_config(epoch, epoch, epoch);
 
         let certificate = admin_chain
             .add_block(|block| {

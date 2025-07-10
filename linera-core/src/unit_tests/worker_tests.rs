@@ -10,7 +10,6 @@ mod wasm;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
-    num::NonZeroUsize,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -121,7 +120,8 @@ where
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
             epoch: Epoch::ZERO,
-            active_epochs: [Epoch::ZERO].into_iter().collect(),
+            min_active_epoch: Epoch::ZERO,
+            max_active_epoch: Epoch::ZERO,
             application_permissions: Default::default(),
         };
         let admin_description = ChainDescription::new(origin, config, Timestamp::from(0));
@@ -149,7 +149,6 @@ where
             "Single validator node".to_string(),
             Some(validator_keypair.secret_key),
             storage,
-            NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
         )
         .with_allow_inactive_chains(is_client)
         .with_allow_messages_from_deprecated_epochs(is_client)
@@ -200,7 +199,8 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership,
-            active_epochs: self.admin_description.config().active_epochs.clone(),
+            min_active_epoch: self.admin_description.config().min_active_epoch,
+            max_active_epoch: self.admin_description.config().max_active_epoch,
             balance,
             application_permissions: Default::default(),
         };
@@ -229,7 +229,8 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
-            active_epochs: self.admin_description.config().active_epochs.clone(),
+            min_active_epoch: self.admin_description.config().min_active_epoch,
+            max_active_epoch: self.admin_description.config().max_active_epoch,
             balance,
             application_permissions: Default::default(),
         };

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, fmt, iter, num::NonZeroUsize, path::PathBuf};
+use std::{collections::HashSet, fmt, iter, path::PathBuf};
 
 use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
@@ -67,9 +67,13 @@ pub struct ClientContextOptions {
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
-    /// The maximal number of chains loaded in memory at a given time.
-    #[arg(long, default_value = "40")]
-    pub max_loaded_chains: NonZeroUsize,
+    /// The duration in milliseconds after which an idle chain worker will free its memory.
+    #[arg(
+        long = "chain-worker-ttl-ms",
+        default_value = "30000",
+        value_parser = util::parse_millis
+    )]
+    pub chain_worker_ttl: Duration,
 
     /// Delay increment for retrying to connect to a validator.
     #[arg(

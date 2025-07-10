@@ -12,13 +12,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser as _;
 use linera_execution::{
     BaseRuntimeApi, ContractEntrypoints, ContractRuntimeApi, ContractSyncRuntimeHandle,
     RuntimeApiData, ServiceEntrypoints, ServiceRuntimeApi, ServiceSyncRuntimeHandle,
 };
-use linera_witty::wit_generation::{StubInstance, WitInterfaceWriter, WitWorldWriter};
+use linera_witty::wit_generation::{
+    FileContentGenerator, StubInstance, WitInterfaceWriter, WitWorldWriter,
+};
 
 /// Command line parameters for the WIT generator.
 #[derive(Debug, clap::Parser)]
@@ -71,34 +73,28 @@ fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) ->
 
     operation.run_for_file(
         &options.base_directory.join("contract-entrypoints.wit"),
-        contract_entrypoints.generate_file_contents(),
+        contract_entrypoints,
     )?;
     operation.run_for_file(
         &options.base_directory.join("service-entrypoints.wit"),
-        service_entrypoints.generate_file_contents(),
+        service_entrypoints,
     )?;
 
     operation.run_for_file(
         &options.base_directory.join("base-runtime-api.wit"),
-        base_runtime_api.generate_file_contents(),
+        base_runtime_api,
     )?;
     operation.run_for_file(
         &options.base_directory.join("contract-runtime-api.wit"),
-        contract_runtime_api.generate_file_contents(),
+        contract_runtime_api,
     )?;
     operation.run_for_file(
         &options.base_directory.join("service-runtime-api.wit"),
-        service_runtime_api.generate_file_contents(),
+        service_runtime_api,
     )?;
 
-    operation.run_for_file(
-        &options.base_directory.join("contract.wit"),
-        contract_world.generate_file_contents(),
-    )?;
-    operation.run_for_file(
-        &options.base_directory.join("service.wit"),
-        service_world.generate_file_contents(),
-    )?;
+    operation.run_for_file(&options.base_directory.join("contract.wit"), contract_world)?;
+    operation.run_for_file(&options.base_directory.join("service.wit"), service_world)?;
 
     Ok(())
 }
@@ -106,31 +102,21 @@ fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) ->
 /// An operation that this WIT generator binary can perform.
 trait Operation {
     /// Executes the operation for a file at `path`, using the WIT `contents`.
-    fn run_for_file<'c>(
-        &mut self,
-        path: &Path,
-        contents: impl Iterator<Item = &'c str>,
-    ) -> Result<()>;
+    fn run_for_file(&mut self, path: &Path, generator: impl FileContentGenerator) -> Result<()>;
 }
 
 /// Writes out the WIT file.
 pub struct WriteToFile;
 
 impl Operation for WriteToFile {
-    fn run_for_file<'c>(
-        &mut self,
-        path: &Path,
-        contents: impl Iterator<Item = &'c str>,
-    ) -> Result<()> {
+    fn run_for_file(&mut self, path: &Path, generator: impl FileContentGenerator) -> Result<()> {
         let mut file = BufWriter::new(
             File::create(path)
                 .with_context(|| format!("Failed to create file at {}", path.display()))?,
         );
-
-        for part in contents {
-            file.write_all(part.as_bytes())
-                .with_context(|| format!("Failed to write to {}", path.display()))?;
-        }
+        generator
+            .generate_file_contents(&mut file)
+            .with_context(|| format!("Failed to write to {}", path.display()))?;
 
         file.flush()
             .with_context(|| format!("Failed to flush to {}", path.display()))?;
@@ -142,34 +128,51 @@ impl Operation for WriteToFile {
 /// Checks that a WIT file has the expected contents.
 pub struct CheckFile;
 
+struct FileComparator {
+    buffer: Vec<u8>,
+    file: BufReader<File>,
+}
+
+impl FileComparator {
+    fn new(file: File) -> Self {
+        Self {
+            buffer: Vec::new(),
+            file: BufReader::new(file),
+        }
+    }
+}
+
+impl Write for FileComparator {
+    fn write(&mut self, part: &[u8]) -> std::io::Result<usize> {
+        self.buffer.resize(part.len(), 0);
+        self.file.read_exact(&mut self.buffer)?;
+        if self.buffer != part {
+            return Err(std::io::Error::other("file does not match"));
+        }
+        Ok(part.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.buffer.resize(1, 0);
+        if self.file.read(&mut self.buffer)? != 0 {
+            return Err(std::io::Error::other("file has extra contents"));
+        }
+        Ok(())
+    }
+}
+
 impl Operation for CheckFile {
-    fn run_for_file<'c>(
-        &mut self,
-        path: &Path,
-        contents: impl Iterator<Item = &'c str>,
-    ) -> Result<()> {
-        let mut buffer = Vec::new();
-        let mut file = BufReader::new(
+    fn run_for_file(&mut self, path: &Path, generator: impl FileContentGenerator) -> Result<()> {
+        let mut file_comparer = FileComparator::new(
             File::open(path)
                 .with_context(|| format!("Failed to open file at {}", path.display()))?,
         );
-
-        for part in contents {
-            buffer.resize(part.len(), 0);
-            file.read_exact(&mut buffer)
-                .with_context(|| format!("Failed to read from {}", path.display()))?;
-
-            ensure!(
-                buffer == part.as_bytes(),
-                format!("WIT file {} does not match", path.display())
-            );
-        }
-
-        buffer.resize(1, 0);
-        ensure!(
-            file.read(&mut buffer)? == 0,
-            format!("WIT file {} has extra contents", path.display())
-        );
+        generator
+            .generate_file_contents(&mut file_comparer)
+            .with_context(|| format!("Comparison with {} failed", path.display()))?;
+        file_comparer
+            .flush()
+            .with_context(|| format!("Comparison with {} failed", path.display()))?;
 
         Ok(())
     }

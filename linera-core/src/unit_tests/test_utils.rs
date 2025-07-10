@@ -3,8 +3,8 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    num::NonZeroUsize,
     sync::Arc,
+    time::Duration,
     vec,
 };
 
@@ -805,7 +805,6 @@ where
                 format!("Node {}", i),
                 Some(validator_keypair.secret_key),
                 storage.clone(),
-                NonZeroUsize::new(100).expect("Chain worker limit should not be zero"),
             )
             .with_allow_inactive_chains(false)
             .with_allow_messages_from_deprecated_epochs(false);
@@ -873,7 +872,8 @@ where
         let open_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(public_key.into()),
             epoch: Epoch(0),
-            active_epochs: [Epoch(0)].into_iter().collect(),
+            min_active_epoch: Epoch(0),
+            max_active_epoch: Epoch(0),
             balance,
             application_permissions: ApplicationPermissions::default(),
         };
@@ -1000,7 +1000,7 @@ where
             false,
             [chain_id],
             format!("Client node for {:.8}", chain_id),
-            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            Duration::from_secs(30),
             ChainClientOptions::test_default(),
         ));
         Ok(client.create_chain_client(

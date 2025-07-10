@@ -11,7 +11,7 @@ This module defines the client API for the Web extension.
 
 pub mod signer;
 
-use std::{collections::HashMap, future::Future, sync::Arc};
+use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
 
 use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
 use linera_base::identifiers::{AccountOwner, ApplicationId};
@@ -67,7 +67,6 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     send_timeout: std::time::Duration::from_millis(4000),
     recv_timeout: std::time::Duration::from_millis(4000),
     max_pending_message_bundles: 10,
-    max_loaded_chains: nonzero_lit::usize!(40),
     retry_delay: std::time::Duration::from_millis(1000),
     max_retries: 10,
     wait_for_outgoing_messages: false,
@@ -75,6 +74,7 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     restrict_chain_ids_to: None,
     long_lived_services: false,
     blob_download_timeout: std::time::Duration::from_millis(1000),
+    chain_worker_ttl: Duration::from_secs(30),
     grace_period: linera_core::DEFAULT_GRACE_PERIOD,
 
     // TODO(linera-protocol#2944): separate these out from the
