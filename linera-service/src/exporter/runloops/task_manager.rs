@@ -71,6 +71,8 @@ where
                     .insert(destination.clone());
                 tracing::trace!(id=?destination, "starting committee exporter");
                 self.spawn(destination);
+            } else {
+                tracing::trace!(id=?destination, "skipping already running committee exporter");
             }
         }
     }

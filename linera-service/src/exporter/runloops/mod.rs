@@ -219,7 +219,7 @@ mod test {
     {
         let mut destinations = Vec::new();
         let cancellation_token = CancellationToken::new();
-        let indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;
+        let _indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;
         let faulty_indexer = spawn_faulty_indexer(&mut destinations, &cancellation_token).await?;
         let validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
         let faulty_validator =
@@ -322,7 +322,6 @@ mod test {
             );
         }
 
-
         assert!(validator.duplicate_blocks.is_empty());
         assert!(faulty_validator.duplicate_blocks.is_empty());
 
@@ -367,12 +366,11 @@ mod test {
             },
         )?;
 
-        let mut validators = BTreeMap::new();
-        validators.insert(Secp256k1PublicKey::test_key(0), validator_state);
+        let mut single_validator = BTreeMap::new();
+        single_validator.insert(Secp256k1PublicKey::test_key(0), validator_state);
 
-        let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet());
         let confirmed_certificate = test_chain
-            .publish_committee(&committee, None)
+            .publish_committee(&single_validator, None)
             .await
             .expect("Failed to publish committee");
 
@@ -397,14 +395,13 @@ mod test {
             votes: 0,
             account_public_key: AccountPublicKey::test_key(1),
         };
-        let mut new_validators = validators.clone();
-        new_validators.insert(Secp256k1PublicKey::test_key(1), validator_state);
-        let new_committee = Committee::new(new_validators, ResourceControlPolicy::testnet());
-        let new_confirmed_certificate = test_chain
-            .publish_committee(&new_committee, Some(confirmed_certificate.value().clone()))
+        let mut two_validators = single_validator.clone();
+        two_validators.insert(Secp256k1PublicKey::test_key(1), validator_state);
+        let add_validator_certificate = test_chain
+            .publish_committee(&two_validators, Some(confirmed_certificate.value().clone()))
             .await
             .expect("Failed to publish new committee");
-        let second_notification = BlockId::from_confirmed_block(new_confirmed_certificate.value());
+        let second_notification = BlockId::from_confirmed_block(add_validator_certificate.value());
         notifier.send(second_notification)?;
         sleep(Duration::from_secs(4)).await;
 
@@ -426,6 +423,40 @@ mod test {
         assert!(dummy_validator
             .duplicate_blocks
             .get(&second_notification.hash)
+            .is_none());
+
+        ///////////
+        // Remove the validator from the committee.
+        ///////////
+
+        let mut new_validators = two_validators.clone();
+        new_validators.remove(&Secp256k1PublicKey::test_key(0));
+
+        let remove_validator_certificate = test_chain
+            .publish_committee(
+                &new_validators,
+                Some(add_validator_certificate.value().clone()),
+            )
+            .await
+            .expect("Failed to publish new committee");
+
+        let third_notification =
+            BlockId::from_confirmed_block(remove_validator_certificate.value());
+        notifier.send(third_notification)?;
+        sleep(Duration::from_secs(4)).await;
+        // The first validator should not receive the new confirmed certificate.
+        assert!(!dummy_validator.state.contains(&third_notification.hash));
+        // We expect the first validator to receive the new confirmed certificate only once.
+        assert!(dummy_validator
+            .duplicate_blocks
+            .get(&third_notification.hash)
+            .is_none());
+        // The second validator should receive the new confirmed certificate.
+        assert!(second_dummy.state.contains(&third_notification.hash));
+        // We expect the second validator to receive the new confirmed certificate only once.
+        assert!(second_dummy
+            .duplicate_blocks
+            .get(&third_notification.hash)
             .is_none());
 
         cancellation_token.cancel();
@@ -460,12 +491,13 @@ mod test {
         // Constructs a new block, with the blob containing the committee.
         async fn publish_committee(
             &self,
-            committee: &Committee,
+            validators: &BTreeMap<Secp256k1PublicKey, ValidatorState>,
             prev_block: Option<ConfirmedBlock>,
         ) -> Result<ConfirmedBlockCertificate, ViewError>
         where
             S: Storage + Clone + Send + Sync + 'static,
         {
+            let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet());
             let chain_id = self.chain_description.id();
             let chain_blob = Blob::new_chain_description(&self.chain_description);
 

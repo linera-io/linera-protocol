@@ -321,7 +321,7 @@ where
         committee_destinations.into_iter().for_each(|id| {
             let state = match self.shared_storage.destination_states.get(&id) {
                 None => {
-                    tracing::trace!(id=?id, "Adding new committee member");
+                    tracing::trace!(id=?id, "adding new committee member");
                     Arc::new(AtomicU64::new(0))
                 }
                 Some(state) => state.clone(),
