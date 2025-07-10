@@ -2955,7 +2955,6 @@ name = "delegated-fungible"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "futures",
  "linera-sdk",
  "serde",
 ]

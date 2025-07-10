@@ -2009,7 +2009,6 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
- "futures",
  "linera-sdk",
  "serde",
  "tokio",
