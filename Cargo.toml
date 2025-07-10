@@ -303,9 +303,9 @@ call-evm-counter = { path = "./examples/call-evm-counter" }
 counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
 crowd-funding = { path = "./examples/crowd-funding" }
+delegated-fungible = { path = "./examples/delegated-fungible" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
-delegated-fungible = { path = "./examples/delegated-fungible" }
 matching-engine = { path = "./examples/matching-engine" }
 meta-counter = { path = "./examples/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
