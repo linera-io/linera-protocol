@@ -136,9 +136,9 @@ counter.workspace = true
 counter-no-graphql.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
+delegated-fungible.workspace = true
 ethereum-tracker.workspace = true
 fungible.workspace = true
-delegated-fungible.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-client = { workspace = true, features = ["test"] }
