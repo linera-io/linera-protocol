@@ -49,9 +49,6 @@ pub(crate) enum ExporterError {
     #[error(transparent)]
     GrpcError(#[from] GrpcError),
 
-    #[error("wrong destination")]
-    DestinationError,
-
     #[error("generic error: {0}")]
     GenericError(Box<dyn std::error::Error + Send + Sync + 'static>),
 }

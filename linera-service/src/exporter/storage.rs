@@ -30,7 +30,7 @@ use quick_cache::{sync::Cache as FifoCache, Weighter};
 
 use crate::{
     common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
-    state::{BlockExporterStateView, CommitteeState, DestinationStates},
+    state::{BlockExporterStateView, DestinationStates},
 };
 
 const NUM_OF_BLOBS: usize = 20;
@@ -49,7 +49,6 @@ where
     storage: S,
     destination_states: DestinationStates,
     shared_canonical_state: CanonicalState<C>,
-    committee_destination_states: CommitteeState,
     blobs_cache: Arc<FifoCache<BlobId, Arc<Blob>, BlobCacheWeighter>>,
     blocks_cache: Arc<FifoCache<CryptoHash, Arc<ConfirmedBlockCertificate>, BlockCacheWeighter>>,
 }
@@ -73,7 +72,6 @@ where
         storage: S,
         state_context: LogView<C, CanonicalBlock>,
         destination_states: DestinationStates,
-        committee_state: CommitteeState,
         limits: LimitsConfig,
     ) -> Self {
         let shared_canonical_state =
@@ -95,7 +93,6 @@ where
             blobs_cache,
             blocks_cache,
             destination_states,
-            committee_destination_states: committee_state,
         }
     }
 
@@ -144,7 +141,6 @@ where
             blobs_cache: self.blobs_cache.clone(),
             blocks_cache: self.blocks_cache.clone(),
             destination_states: self.destination_states.clone(),
-            committee_destination_states: self.committee_destination_states.clone(),
         })
     }
 }
@@ -194,20 +190,8 @@ where
         self.shared_storage.get_blob(blob_id).await
     }
 
-    pub(crate) fn load_destination_state(&self, id: DestinationId) -> Arc<AtomicU64> {
+    pub(crate) fn load_destination_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
         self.shared_storage.destination_states.load_state(id)
-    }
-
-    pub(crate) fn get_committee_member_address(&self, id: DestinationId) -> String {
-        self.shared_storage
-            .committee_destination_states
-            .get_address(id)
-    }
-
-    pub(crate) fn load_committee_member_export_state(&self, id: DestinationId) -> Arc<AtomicU64> {
-        self.shared_storage
-            .committee_destination_states
-            .load_state(id)
     }
 
     pub(crate) fn clone(&mut self) -> Result<Self, ExporterError> {
@@ -222,12 +206,12 @@ where
     pub(super) async fn load(
         storage: S,
         id: u32,
-        number_of_destinations: u16,
+        destinations: Vec<DestinationId>,
         limits: LimitsConfig,
     ) -> Result<(Self, ExporterStorage<S>), ExporterError> {
         let context = storage.block_exporter_context(id).await?;
-        let (view, canonical_state, destination_states, committee_state) =
-            BlockExporterStateView::initiate(context, number_of_destinations).await?;
+        let (view, canonical_state, destination_states) =
+            BlockExporterStateView::initiate(context, destinations).await?;
 
         let chain_states_cache_capacity =
             ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024)
@@ -242,13 +226,8 @@ where
             .max_capacity(blob_state_cache_capacity)
             .build();
 
-        let mut shared_storage = SharedStorage::new(
-            storage,
-            canonical_state,
-            destination_states,
-            committee_state,
-            limits,
-        );
+        let mut shared_storage =
+            SharedStorage::new(storage, canonical_state, destination_states, limits);
         let exporter_storage = ExporterStorage::new(shared_storage.clone()?);
 
         Ok((
@@ -338,9 +317,17 @@ where
         self.shared_storage.push_block(block)
     }
 
-    pub(super) fn new_committee(&self, addresses: Vec<String>) {
-        self.exporter_state_view
-            .replace_current_committee(addresses);
+    pub(super) fn new_committee(&mut self, committee_destinations: Vec<DestinationId>) {
+        committee_destinations.into_iter().for_each(|id| {
+            let state = match self.shared_storage.destination_states.get(&id) {
+                None => {
+                    tracing::trace!(id=?id, "adding new committee member");
+                    Arc::new(AtomicU64::new(0))
+                }
+                Some(state) => state.clone(),
+            };
+            self.shared_storage.destination_states.insert(id, state);
+        });
     }
 
     pub(super) async fn save(&mut self) -> Result<(), ExporterError> {
@@ -352,9 +339,6 @@ where
 
         self.exporter_state_view
             .set_destination_states(self.shared_storage.destination_states.clone());
-
-        self.exporter_state_view
-            .set_committee_state(self.shared_storage.committee_destination_states.clone());
 
         self.exporter_state_view.flush(&mut batch)?;
         self.exporter_state_view.rollback();

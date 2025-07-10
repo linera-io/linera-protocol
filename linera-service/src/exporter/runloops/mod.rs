@@ -1,28 +1,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    future::{Future, IntoFuture},
-    thread::{self, JoinHandle},
-};
+use std::future::{Future, IntoFuture};
 
 use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
 use linera_client::config::{DestinationConfig, LimitsConfig};
 use linera_rpc::NodeOptions;
 use linera_storage::Storage;
-use tokio::{
-    runtime::Handle,
-    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
 
 use crate::{
     common::{BlockId, ExporterError},
-    runloops::{
-        task_manager::{PoolMember, ThreadPoolState},
-        validator_exporter::ValidatorDestinationKind,
-    },
+    runloops::task_manager::{PoolMember, ThreadPoolState},
     storage::BlockProcessorStorage,
 };
 
@@ -41,12 +32,11 @@ pub(crate) fn start_block_processor_task<S, F>(
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
-    max_exporter_threads: usize,
     destination_config: DestinationConfig,
 ) -> Result<
     (
         UnboundedSender<BlockId>,
-        JoinHandle<Result<(), ExporterError>>,
+        std::thread::JoinHandle<Result<(), ExporterError>>,
     ),
     ExporterError,
 >
@@ -57,14 +47,13 @@ where
 {
     let (task_sender, queue_front) = unbounded_channel();
     let moved_task_sender = task_sender.clone();
-    let handle = thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         start_block_processor(
             storage,
             shutdown_signal,
             limits,
             options,
             block_exporter_id,
-            max_exporter_threads,
             moved_task_sender,
             destination_config,
             queue_front,
@@ -82,7 +71,6 @@ async fn start_block_processor<S, F>(
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
-    max_exporter_threads: usize,
     queue_rear: UnboundedSender<BlockId>,
     destination_config: DestinationConfig,
     queue_front: UnboundedReceiver<BlockId>,
@@ -92,33 +80,23 @@ where
     F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
     <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
 {
-    let (block_processor_storage, mut exporter_storage) = BlockProcessorStorage::load(
-        storage.clone(),
-        block_exporter_id,
-        destination_config.destinations.len() as u16,
-        limits,
-    )
-    .await?;
+    let destination_ids = destination_config
+        .destinations
+        .iter()
+        .map(|destination| destination.id())
+        .collect::<Vec<_>>();
+    let (block_processor_storage, mut exporter_storage) =
+        BlockProcessorStorage::load(storage.clone(), block_exporter_id, destination_ids, limits)
+            .await?;
 
-    let pool_handles = start_threadpool(max_exporter_threads);
-
-    let pool_members = pool_handles
-        .into_iter()
-        .map(|(join_handle, runtime_handle)| {
-            PoolMember::new(
-                runtime_handle,
-                join_handle,
-                options,
-                exporter_storage.clone().unwrap(),
-                limits.work_queue_size.into(),
-                shutdown_signal.clone(),
-            )
-        })
-        .collect();
-    let mut pool_state =
-        ThreadPoolState::new(pool_members, destination_config.destinations.clone());
-
-    pool_state.start_startup_exporters();
+    let pool_members = PoolMember::new(
+        options,
+        exporter_storage.clone().unwrap(),
+        limits.work_queue_size.into(),
+        shutdown_signal.clone(),
+    );
+    let pool_state =
+        ThreadPoolState::new(vec![pool_members], destination_config.destinations.clone());
 
     let mut block_processor = BlockProcessor::new(
         pool_state,
@@ -132,28 +110,9 @@ where
         .run_with_shutdown(shutdown_signal, limits.persistence_period_ms)
         .await?;
 
-    block_processor.pool_state().join_all();
+    block_processor.pool_state().join_all().await;
 
     Ok(())
-}
-
-fn start_threadpool(number_of_threads: usize) -> Vec<(JoinHandle<()>, Handle)> {
-    let mut handles = Vec::new();
-
-    for _ in 0..number_of_threads {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let runtime_handle = runtime.handle().clone();
-        let thread_handle = thread::spawn(move || {
-            runtime.block_on(std::future::pending::<()>());
-        });
-
-        handles.push((thread_handle, runtime_handle));
-    }
-
-    handles
 }
 
 #[cfg(test)]
@@ -219,7 +178,7 @@ mod test {
         // make some blocks
         let (notification, state) = make_simple_state_with_blobs(&storage).await;
 
-        let (notifier, _handle) = start_block_processor_task(
+        let (notifier, handle) = start_block_processor_task(
             storage,
             signal,
             LimitsConfig::default(),
@@ -230,7 +189,6 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
                 committee_destination: false,
                 destinations: vec![destination_address],
@@ -252,7 +210,7 @@ mod test {
         }
 
         cancellation_token.cancel();
-
+        handle.join().unwrap()?;
         Ok(())
     }
 
@@ -261,10 +219,9 @@ mod test {
     {
         let mut destinations = Vec::new();
         let cancellation_token = CancellationToken::new();
-        let _dummy_indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;
+        let _indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;
         let faulty_indexer = spawn_faulty_indexer(&mut destinations, &cancellation_token).await?;
-        let _dummy_validator =
-            spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
+        let validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
         let faulty_validator =
             spawn_faulty_validator(&mut destinations, &cancellation_token).await?;
 
@@ -288,7 +245,6 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
                 committee_destination: false,
                 destinations: destinations.clone(),
@@ -303,18 +259,25 @@ mod test {
         sleep(Duration::from_secs(4)).await;
 
         child.cancel();
+        // handle.join().unwrap()?;
 
         let context = storage.block_exporter_context(0).await?;
-        let (_, _, destination_states, _) =
-            BlockExporterStateView::initiate(context.clone(), 4).await?;
-        for i in 0..4 {
-            let state = destination_states.load_state(i);
+        let destination_ids = destinations.iter().map(|d| d.id()).collect::<Vec<_>>();
+        let (_, _, destination_states) =
+            BlockExporterStateView::initiate(context.clone(), destination_ids.clone()).await?;
+        for (i, destination) in destination_ids.iter().enumerate() {
+            let state = destination_states.load_state(destination);
+            // We created destinations such that odd ones were faulty.
             if i % 2 == 0 {
                 assert_eq!(state.load(Ordering::Acquire), 2);
             } else {
                 assert_eq!(state.load(Ordering::Acquire), 0);
             }
         }
+
+        assert!(validator.duplicate_blocks.is_empty());
+
+        tracing::info!("restarting block processor task with faulty destinations fixed");
 
         faulty_indexer.unset_faulty();
         faulty_validator.unset_faulty();
@@ -323,7 +286,7 @@ mod test {
         let signal = ExporterCancellationSignal::new(child.clone());
 
         // restart
-        let _notifier = start_block_processor_task(
+        let (_notifier, handle) = start_block_processor_task(
             storage.clone(),
             signal,
             LimitsConfig {
@@ -337,9 +300,8 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
-                destinations,
+                destinations: destinations.clone(),
                 committee_destination: false,
             },
         )?;
@@ -347,24 +309,43 @@ mod test {
         sleep(Duration::from_secs(4)).await;
 
         child.cancel();
+        handle.join().unwrap()?;
 
-        let (_, _, destination_states, _) =
-            BlockExporterStateView::initiate(context.clone(), 4).await?;
-        for i in 0..4 {
-            assert_eq!(destination_states.load_state(i).load(Ordering::Acquire), 2);
+        let (_, _, destination_states) =
+            BlockExporterStateView::initiate(context.clone(), destination_ids).await?;
+        for destination in destinations.iter() {
+            assert_eq!(
+                destination_states
+                    .load_state(&destination.id())
+                    .load(Ordering::Acquire),
+                2
+            );
         }
+
+        assert!(validator.duplicate_blocks.is_empty());
+        assert!(faulty_validator.duplicate_blocks.is_empty());
 
         Ok(())
     }
 
     #[test_log::test(tokio::test)]
     async fn test_committee_destination() -> anyhow::Result<()> {
+        tracing::info!("Starting test_committee_destination test");
+
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let test_chain = TestChain::new(storage.clone());
         let cancellation_token = CancellationToken::new();
         let child = cancellation_token.child_token();
         let signal = ExporterCancellationSignal::new(child.clone());
 
+        let mut destinations = vec![];
+        let dummy_validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
+        let destination = destinations[0].clone();
+        let validator_state = ValidatorState {
+            network_address: destination.address(),
+            votes: 0,
+            account_public_key: AccountPublicKey::test_key(0),
+        };
         let (notifier, block_processor_handle) = start_block_processor_task(
             storage.clone(),
             signal,
@@ -379,32 +360,17 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
                 committee_destination: true,
                 destinations: vec![],
             },
         )?;
 
-        let mut destinations = Vec::new();
-        let dummy_validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
-        let destination = destinations
-            .iter()
-            .peekable()
-            .next()
-            .expect("manually done");
-        let validator_state = ValidatorState {
-            network_address: destination.address(),
-            votes: 0,
-            account_public_key: AccountPublicKey::test_key(0),
-        };
+        let mut single_validator = BTreeMap::new();
+        single_validator.insert(Secp256k1PublicKey::test_key(0), validator_state);
 
-        let mut validators = BTreeMap::new();
-        validators.insert(Secp256k1PublicKey::test_key(0), validator_state);
-
-        let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet());
         let confirmed_certificate = test_chain
-            .publish_committee(&committee, None)
+            .publish_committee(&single_validator, None)
             .await
             .expect("Failed to publish committee");
 
@@ -423,26 +389,22 @@ mod test {
         // Add new validator to the committee.
         ///////////
         let second_dummy = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
-        let destination = destinations
-            .iter()
-            .peekable()
-            .next()
-            .expect("manually done");
+        let destination = destinations[1].clone();
         let validator_state = ValidatorState {
             network_address: destination.address(),
             votes: 0,
-            account_public_key: AccountPublicKey::test_key(0),
+            account_public_key: AccountPublicKey::test_key(1),
         };
-        let mut new_validators = validators.clone();
-        new_validators.insert(Secp256k1PublicKey::test_key(1), validator_state);
-        let new_committee = Committee::new(new_validators, ResourceControlPolicy::testnet());
-        let new_confirmed_certificate = test_chain
-            .publish_committee(&new_committee, Some(confirmed_certificate.value().clone()))
+        let mut two_validators = single_validator.clone();
+        two_validators.insert(Secp256k1PublicKey::test_key(1), validator_state);
+        let add_validator_certificate = test_chain
+            .publish_committee(&two_validators, Some(confirmed_certificate.value().clone()))
             .await
             .expect("Failed to publish new committee");
-        let second_notification = BlockId::from_confirmed_block(new_confirmed_certificate.value());
+        let second_notification = BlockId::from_confirmed_block(add_validator_certificate.value());
         notifier.send(second_notification)?;
         sleep(Duration::from_secs(4)).await;
+
         assert!(second_dummy.state.contains(&second_notification.hash));
         // We expect the new validator to receive the new confirmed certificate only once.
         assert!(second_dummy
@@ -460,10 +422,45 @@ mod test {
         // We expect the first validator to receive the new confirmed certificate only once.
         assert!(dummy_validator
             .duplicate_blocks
-            .get(&first_notification.hash)
+            .get(&second_notification.hash)
             .is_none());
 
-        block_processor_handle.join().unwrap().unwrap();
+        ///////////
+        // Remove the validator from the committee.
+        ///////////
+
+        let mut new_validators = two_validators.clone();
+        new_validators.remove(&Secp256k1PublicKey::test_key(0));
+
+        let remove_validator_certificate = test_chain
+            .publish_committee(
+                &new_validators,
+                Some(add_validator_certificate.value().clone()),
+            )
+            .await
+            .expect("Failed to publish new committee");
+
+        let third_notification =
+            BlockId::from_confirmed_block(remove_validator_certificate.value());
+        notifier.send(third_notification)?;
+        sleep(Duration::from_secs(4)).await;
+        // The first validator should not receive the new confirmed certificate.
+        assert!(!dummy_validator.state.contains(&third_notification.hash));
+        // We expect the first validator to receive the new confirmed certificate only once.
+        assert!(dummy_validator
+            .duplicate_blocks
+            .get(&third_notification.hash)
+            .is_none());
+        // The second validator should receive the new confirmed certificate.
+        assert!(second_dummy.state.contains(&third_notification.hash));
+        // We expect the second validator to receive the new confirmed certificate only once.
+        assert!(second_dummy
+            .duplicate_blocks
+            .get(&third_notification.hash)
+            .is_none());
+
+        cancellation_token.cancel();
+        block_processor_handle.join().unwrap()?;
         Ok(())
     }
 
@@ -494,12 +491,13 @@ mod test {
         // Constructs a new block, with the blob containing the committee.
         async fn publish_committee(
             &self,
-            committee: &Committee,
+            validators: &BTreeMap<Secp256k1PublicKey, ValidatorState>,
             prev_block: Option<ConfirmedBlock>,
         ) -> Result<ConfirmedBlockCertificate, ViewError>
         where
             S: Storage + Clone + Send + Sync + 'static,
         {
+            let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet());
             let chain_id = self.chain_description.id();
             let chain_blob = Blob::new_chain_description(&self.chain_description);
 
@@ -560,7 +558,7 @@ mod test {
         token: &CancellationToken,
     ) -> anyhow::Result<DummyValidator> {
         let port = get_free_port().await?;
-        let destination = DummyValidator::new();
+        let destination = DummyValidator::new(port);
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("dummy validator", port as usize, "http").await?;
         let destination_address = Destination {

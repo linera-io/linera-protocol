@@ -134,6 +134,7 @@ impl Indexer for DummyIndexer {
 
 #[derive(Clone, Default)]
 pub(crate) struct DummyValidator {
+    pub(crate) validator_port: u16,
     pub(crate) fault_guard: Arc<AtomicBool>,
     pub(crate) blobs: Arc<DashSet<BlobId>>,
     pub(crate) state: Arc<DashSet<CryptoHash>>,
@@ -142,8 +143,9 @@ pub(crate) struct DummyValidator {
 }
 
 impl DummyValidator {
-    pub fn new() -> Self {
+    pub fn new(port: u16) -> Self {
         Self {
+            validator_port: port,
             fault_guard: Arc::new(AtomicBool::new(false)),
             blobs: Arc::new(DashSet::new()),
             state: Arc::new(DashSet::new()),
@@ -188,12 +190,6 @@ impl ValidatorNode for DummyValidator {
 
         let req = HandleConfirmedCertificateRequest::try_from(request.into_inner())
             .map_err(Status::from)?;
-        if !self.state.insert(req.certificate.hash()) {
-            self.duplicate_blocks
-                .entry(req.certificate.hash())
-                .and_modify(|count| *count += 1)
-                .or_insert(2);
-        }
 
         let mut missing_blobs = Vec::new();
         let created_blobs = req.certificate.inner().block().created_blob_ids();
@@ -240,6 +236,14 @@ impl ValidatorNode for DummyValidator {
             let response = ChainInfoResponse::new(chain_info, None).try_into()?;
             for blob in created_blobs {
                 self.blobs.insert(blob);
+            }
+
+            if !self.state.insert(req.certificate.hash()) {
+                tracing::warn!(validator=?self.validator_port, certificate=?req.certificate.hash(), "duplicate block received");
+                self.duplicate_blocks
+                    .entry(req.certificate.hash())
+                    .and_modify(|count| *count += 1)
+                    .or_insert(2);
             }
 
             response
@@ -448,6 +452,7 @@ impl TestDestination for DummyValidator {
     }
 }
 
+/// Creates a chain state with two blocks, each containing blobs.
 pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
     storage: &S,
 ) -> (BlockId, Vec<CanonicalBlock>) {
