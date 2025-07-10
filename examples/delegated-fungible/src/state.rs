@@ -48,17 +48,11 @@ impl DelegatedFungibleTokenState {
         self.allowances
             .insert(&owner_spender, total_allowance)
             .expect("Failed insert statement");
-        log::info!("total_allowance={total_allowance}");
     }
 
     pub(crate) async fn debit_for_transfer_from(&mut self, owner: AccountOwner, spender: AccountOwner, amount: Amount) {
         if amount == Amount::ZERO {
             return;
-        }
-        {
-            let owner_spender = OwnerSpender::new(owner.clone(), spender.clone());
-            let allowance = self.allowances.get(&owner_spender).await.expect("Failed allowance access").unwrap_or_default();
-            log::info!("debit_for_transfer_from, allowance={allowance}");
         }
         let mut balance = self.accounts.get(&owner).await.expect("Failed balance access").unwrap_or_default();
         balance.try_sub_assign(amount).unwrap_or_else(|_| {

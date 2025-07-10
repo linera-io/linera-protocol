@@ -1871,8 +1871,9 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     client2.assign(owner2, chain2).await?;
     client3.assign(owner3, chain2).await?;
 
+    // Synchronizing the chains that need be.
+    client2.sync(chain2).await?;
     client3.sync(chain2).await?;
-
 
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
@@ -1937,6 +1938,7 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
 
     app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
 
+    // Call process inbox in order to synchronize from validators
     node_service2.process_inbox(&chain2).await?;
     app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(93)).await;
 
@@ -1951,8 +1953,6 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
         },
     )
     .await;
-    node_service2.process_inbox(&chain2).await?;
-
 
     // Checking the final values on chain1 and chain2.
 
@@ -1963,7 +1963,6 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     ];
     app2.assert_balances(expected_balances).await;
     app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(91)).await;
-
 
     // Winding down the system
 
