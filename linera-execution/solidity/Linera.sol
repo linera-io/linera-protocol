@@ -13,13 +13,6 @@ import "./LineraTypes.sol";
 
 library Linera {
 
-    // Types
-
-    struct AccountOwnerBalance {
-        LineraTypes.AccountOwner account_owner;
-        uint256 balance;
-    }
-
     // BaseRuntime functions
 
     function chain_id() internal returns (LineraTypes.ChainId memory) {
@@ -96,7 +89,7 @@ library Linera {
         return uint256(output2.value);
     }
 
-    function read_owner_balances() internal returns (Linera.AccountOwnerBalance[] memory) {
+    function read_owner_balances() internal returns (LineraTypes.AccountOwnerBalance[] memory) {
         address precompile = address(0x0b);
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_owner_balances();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
@@ -105,11 +98,11 @@ library Linera {
         require(success);
         LineraTypes.ResponseReadOwnerBalances memory output2 = LineraTypes.bcs_deserialize_ResponseReadOwnerBalances(output);
         uint256 len = output2.value.length;
-        AccountOwnerBalance[] memory elist;
+        LineraTypes.AccountOwnerBalance[] memory elist;
         elist = new AccountOwnerBalance[](len);
         for (uint256 i=0; i<len; i++) {
             uint256 balance = uint256(output2.value[i].balance_.value);
-            elist[i] = AccountOwnerBalance(output2.value[i].account_owner, balance);
+            elist[i] = LineraTypes.AccountOwnerBalance(output2.value[i].account_owner, balance);
         }
         return elist;
     }
