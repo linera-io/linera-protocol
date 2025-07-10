@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    future::{Future, IntoFuture},
-};
+use std::future::{Future, IntoFuture};
 
 use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
@@ -180,7 +178,7 @@ mod test {
         // make some blocks
         let (notification, state) = make_simple_state_with_blobs(&storage).await;
 
-        let (notifier, _handle) = start_block_processor_task(
+        let (notifier, handle) = start_block_processor_task(
             storage,
             signal,
             LimitsConfig::default(),
@@ -212,7 +210,7 @@ mod test {
         }
 
         cancellation_token.cancel();
-
+        handle.join().unwrap()?;
         Ok(())
     }
 
@@ -221,10 +219,9 @@ mod test {
     {
         let mut destinations = Vec::new();
         let cancellation_token = CancellationToken::new();
-        let _dummy_indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;
+        let indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;
         let faulty_indexer = spawn_faulty_indexer(&mut destinations, &cancellation_token).await?;
-        let _dummy_validator =
-            spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
+        let validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
         let faulty_validator =
             spawn_faulty_validator(&mut destinations, &cancellation_token).await?;
 
@@ -262,6 +259,7 @@ mod test {
         sleep(Duration::from_secs(4)).await;
 
         child.cancel();
+        // handle.join().unwrap()?;
 
         let context = storage.block_exporter_context(0).await?;
         let destination_ids = destinations.iter().map(|d| d.id()).collect::<Vec<_>>();
@@ -269,12 +267,17 @@ mod test {
             BlockExporterStateView::initiate(context.clone(), destination_ids.clone()).await?;
         for (i, destination) in destination_ids.iter().enumerate() {
             let state = destination_states.load_state(destination);
+            // We created destinations such that odd ones were faulty.
             if i % 2 == 0 {
                 assert_eq!(state.load(Ordering::Acquire), 2);
             } else {
                 assert_eq!(state.load(Ordering::Acquire), 0);
             }
         }
+
+        assert!(validator.duplicate_blocks.is_empty());
+
+        tracing::info!("restarting block processor task with faulty destinations fixed");
 
         faulty_indexer.unset_faulty();
         faulty_validator.unset_faulty();
@@ -283,7 +286,7 @@ mod test {
         let signal = ExporterCancellationSignal::new(child.clone());
 
         // restart
-        let _notifier = start_block_processor_task(
+        let (_notifier, handle) = start_block_processor_task(
             storage.clone(),
             signal,
             LimitsConfig {
@@ -306,6 +309,7 @@ mod test {
         sleep(Duration::from_secs(4)).await;
 
         child.cancel();
+        handle.join().unwrap()?;
 
         let (_, _, destination_states) =
             BlockExporterStateView::initiate(context.clone(), destination_ids).await?;
@@ -317,6 +321,10 @@ mod test {
                 2
             );
         }
+
+
+        assert!(validator.duplicate_blocks.is_empty());
+        assert!(faulty_validator.duplicate_blocks.is_empty());
 
         Ok(())
     }
