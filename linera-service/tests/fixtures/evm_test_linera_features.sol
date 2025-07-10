@@ -25,4 +25,14 @@ contract ExampleLineraFeatures {
         require(chain_ownership.super_owners.length == 0);
         require(chain_ownership.owners.length == 1);
     }
+
+    function test_authenticated_signer_caller_id() external {
+        LineraTypes.opt_AccountOwner memory signer = Linera.authenticated_signer();
+        require(signer.has_value);
+        require(signer.value.choice == 2);
+        address signer_address = address(signer.value.address20);
+        require(signer_address == msg.sender);
+        LineraTypes.opt_ApplicationId memory caller_id = Linera.authenticated_caller_id();
+        require(caller_id.has_value == false);
+    }
 }

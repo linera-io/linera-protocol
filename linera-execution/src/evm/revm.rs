@@ -486,8 +486,6 @@ enum BaseRuntimePrecompile {
     ChainId,
     /// Calling `block_height_id` of `BaseRuntime`
     BlockHeight,
-    /// Calling `application_id` of `BaseRuntime`
-    ApplicationId,
     /// Calling `application_creator_chain_id` of `BaseRuntime`
     ApplicationCreatorChainId,
     /// Calling `read_system_timestamp` of `BaseRuntime`
@@ -621,10 +619,6 @@ fn base_runtime_call<Runtime: BaseRuntime>(
         BaseRuntimePrecompile::BlockHeight => {
             let block_height = runtime.block_height()?;
             Ok(bcs::to_bytes(&block_height)?)
-        }
-        BaseRuntimePrecompile::ApplicationId => {
-            let application_id = runtime.application_id()?;
-            Ok(bcs::to_bytes(&application_id)?)
         }
         BaseRuntimePrecompile::ApplicationCreatorChainId => {
             let chain_id = runtime.application_creator_chain_id()?;

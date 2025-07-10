@@ -1289,6 +1289,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         function test_read_data_blob(bytes32 hash, uint32 len);
         function test_assert_data_blob_exists(bytes32 hash);
         function test_chain_ownership();
+        function test_authenticated_signer_caller_id();
     }
 
     let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;

@@ -36,16 +36,6 @@ library Linera {
         return output2.value;
     }
 
-    function application_id() internal returns (LineraTypes.ApplicationId memory) {
-        address precompile = address(0x0b);
-        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_application_id();
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
-        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output) = precompile.call(input2);
-        require(success);
-        return LineraTypes.bcs_deserialize_ApplicationId(output);
-    }
-
     function application_creator_chain_id() internal returns (LineraTypes.ChainId memory) {
         address precompile = address(0x0b);
         LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_application_creator_chain_id();

@@ -115,28 +115,26 @@ BaseRuntimePrecompile:
     1:
       BlockHeight: UNIT
     2:
-      ApplicationId: UNIT
-    3:
       ApplicationCreatorChainId: UNIT
-    4:
+    3:
       ReadSystemTimestamp: UNIT
-    5:
+    4:
       ReadChainBalance: UNIT
-    6:
+    5:
       ReadOwnerBalance:
         NEWTYPE:
           TYPENAME: AccountOwner
-    7:
+    6:
       ReadOwnerBalances: UNIT
-    8:
+    7:
       ReadBalanceOwners: UNIT
-    9:
+    8:
       ChainOwnership: UNIT
-    10:
+    9:
       ReadDataBlob:
         NEWTYPE:
           TYPENAME: CryptoHash
-    11:
+    10:
       AssertDataBlobExists:
         NEWTYPE:
           TYPENAME: CryptoHash

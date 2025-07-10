@@ -3,6 +3,11 @@ pragma solidity ^0.8.0;
 
 library LineraTypes {
 
+    struct AccountOwnerBalance {
+        LineraTypes.AccountOwner account_owner;
+        uint256 balance;
+    }
+
     function bcs_serialize_len(uint256 x)
         internal
         pure
@@ -257,18 +262,17 @@ library LineraTypes {
         uint8 choice;
         // choice=0 corresponds to ChainId
         // choice=1 corresponds to BlockHeight
-        // choice=2 corresponds to ApplicationId
-        // choice=3 corresponds to ApplicationCreatorChainId
-        // choice=4 corresponds to ReadSystemTimestamp
-        // choice=5 corresponds to ReadChainBalance
-        // choice=6 corresponds to ReadOwnerBalance
+        // choice=2 corresponds to ApplicationCreatorChainId
+        // choice=3 corresponds to ReadSystemTimestamp
+        // choice=4 corresponds to ReadChainBalance
+        // choice=5 corresponds to ReadOwnerBalance
         AccountOwner read_owner_balance;
-        // choice=7 corresponds to ReadOwnerBalances
-        // choice=8 corresponds to ReadBalanceOwners
-        // choice=9 corresponds to ChainOwnership
-        // choice=10 corresponds to ReadDataBlob
+        // choice=6 corresponds to ReadOwnerBalances
+        // choice=7 corresponds to ReadBalanceOwners
+        // choice=8 corresponds to ChainOwnership
+        // choice=9 corresponds to ReadDataBlob
         CryptoHash read_data_blob;
-        // choice=11 corresponds to AssertDataBlobExists
+        // choice=10 corresponds to AssertDataBlobExists
         CryptoHash assert_data_blob_exists;
     }
 
@@ -294,7 +298,7 @@ library LineraTypes {
         return BaseRuntimePrecompile(uint8(1), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
-    function BaseRuntimePrecompile_case_application_id()
+    function BaseRuntimePrecompile_case_application_creator_chain_id()
         internal
         pure
         returns (BaseRuntimePrecompile memory)
@@ -305,7 +309,7 @@ library LineraTypes {
         return BaseRuntimePrecompile(uint8(2), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
-    function BaseRuntimePrecompile_case_application_creator_chain_id()
+    function BaseRuntimePrecompile_case_read_system_timestamp()
         internal
         pure
         returns (BaseRuntimePrecompile memory)
@@ -316,7 +320,7 @@ library LineraTypes {
         return BaseRuntimePrecompile(uint8(3), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
-    function BaseRuntimePrecompile_case_read_system_timestamp()
+    function BaseRuntimePrecompile_case_read_chain_balance()
         internal
         pure
         returns (BaseRuntimePrecompile memory)
@@ -327,17 +331,6 @@ library LineraTypes {
         return BaseRuntimePrecompile(uint8(4), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
-    function BaseRuntimePrecompile_case_read_chain_balance()
-        internal
-        pure
-        returns (BaseRuntimePrecompile memory)
-    {
-        AccountOwner memory read_owner_balance;
-        CryptoHash memory read_data_blob;
-        CryptoHash memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(5), read_owner_balance, read_data_blob, assert_data_blob_exists);
-    }
-
     function BaseRuntimePrecompile_case_read_owner_balance(AccountOwner memory read_owner_balance)
         internal
         pure
@@ -345,7 +338,7 @@ library LineraTypes {
     {
         CryptoHash memory read_data_blob;
         CryptoHash memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(6), read_owner_balance, read_data_blob, assert_data_blob_exists);
+        return BaseRuntimePrecompile(uint8(5), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function BaseRuntimePrecompile_case_read_owner_balances()
@@ -356,7 +349,7 @@ library LineraTypes {
         AccountOwner memory read_owner_balance;
         CryptoHash memory read_data_blob;
         CryptoHash memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(7), read_owner_balance, read_data_blob, assert_data_blob_exists);
+        return BaseRuntimePrecompile(uint8(6), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function BaseRuntimePrecompile_case_read_balance_owners()
@@ -367,7 +360,7 @@ library LineraTypes {
         AccountOwner memory read_owner_balance;
         CryptoHash memory read_data_blob;
         CryptoHash memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(8), read_owner_balance, read_data_blob, assert_data_blob_exists);
+        return BaseRuntimePrecompile(uint8(7), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function BaseRuntimePrecompile_case_chain_ownership()
@@ -378,7 +371,7 @@ library LineraTypes {
         AccountOwner memory read_owner_balance;
         CryptoHash memory read_data_blob;
         CryptoHash memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(9), read_owner_balance, read_data_blob, assert_data_blob_exists);
+        return BaseRuntimePrecompile(uint8(8), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function BaseRuntimePrecompile_case_read_data_blob(CryptoHash memory read_data_blob)
@@ -388,7 +381,7 @@ library LineraTypes {
     {
         AccountOwner memory read_owner_balance;
         CryptoHash memory assert_data_blob_exists;
-        return BaseRuntimePrecompile(uint8(10), read_owner_balance, read_data_blob, assert_data_blob_exists);
+        return BaseRuntimePrecompile(uint8(9), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function BaseRuntimePrecompile_case_assert_data_blob_exists(CryptoHash memory assert_data_blob_exists)
@@ -398,7 +391,7 @@ library LineraTypes {
     {
         AccountOwner memory read_owner_balance;
         CryptoHash memory read_data_blob;
-        return BaseRuntimePrecompile(uint8(11), read_owner_balance, read_data_blob, assert_data_blob_exists);
+        return BaseRuntimePrecompile(uint8(10), read_owner_balance, read_data_blob, assert_data_blob_exists);
     }
 
     function bcs_serialize_BaseRuntimePrecompile(BaseRuntimePrecompile memory input)
@@ -406,13 +399,13 @@ library LineraTypes {
         pure
         returns (bytes memory)
     {
-        if (input.choice == 6) {
+        if (input.choice == 5) {
             return abi.encodePacked(input.choice, bcs_serialize_AccountOwner(input.read_owner_balance));
         }
-        if (input.choice == 10) {
+        if (input.choice == 9) {
             return abi.encodePacked(input.choice, bcs_serialize_CryptoHash(input.read_data_blob));
         }
-        if (input.choice == 11) {
+        if (input.choice == 10) {
             return abi.encodePacked(input.choice, bcs_serialize_CryptoHash(input.assert_data_blob_exists));
         }
         return abi.encodePacked(input.choice);
@@ -427,18 +420,18 @@ library LineraTypes {
         uint8 choice;
         (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
         AccountOwner memory read_owner_balance;
-        if (choice == 6) {
+        if (choice == 5) {
             (new_pos, read_owner_balance) = bcs_deserialize_offset_AccountOwner(new_pos, input);
         }
         CryptoHash memory read_data_blob;
-        if (choice == 10) {
+        if (choice == 9) {
             (new_pos, read_data_blob) = bcs_deserialize_offset_CryptoHash(new_pos, input);
         }
         CryptoHash memory assert_data_blob_exists;
-        if (choice == 11) {
+        if (choice == 10) {
             (new_pos, assert_data_blob_exists) = bcs_deserialize_offset_CryptoHash(new_pos, input);
         }
-        require(choice < 12);
+        require(choice < 11);
         return (new_pos, BaseRuntimePrecompile(choice, read_owner_balance, read_data_blob, assert_data_blob_exists));
     }
 
