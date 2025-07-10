@@ -27,7 +27,7 @@ use {
 pub struct DelegatedFungibleTokenAbi;
 
 impl ContractAbi for DelegatedFungibleTokenAbi {
-    type Operation = DelegatedFungibleOperation;
+    type Operation = Operation;
     type Response = ();
 }
 
@@ -38,7 +38,7 @@ impl ServiceAbi for DelegatedFungibleTokenAbi {
 
 /// A delegated fungible operation
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
-pub enum DelegatedFungibleOperation {
+pub enum Operation {
     /// Approve the transfer of tokens
     Approve {
         /// Owner to transfer from

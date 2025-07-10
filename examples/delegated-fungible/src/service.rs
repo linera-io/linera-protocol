@@ -8,7 +8,7 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use delegated_fungible::{DelegatedFungibleOperation, Parameters, OwnerSpender};
+use delegated_fungible::{Operation, Parameters, OwnerSpender};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, WithServiceAbi},
@@ -46,7 +46,7 @@ impl Service for DelegatedFungibleTokenService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.clone(),
-            DelegatedFungibleOperation::mutation_root(self.runtime.clone()),
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();

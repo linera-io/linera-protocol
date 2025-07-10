@@ -6,7 +6,7 @@
 mod state;
 
 use delegated_fungible::{
-    Account, DelegatedFungibleTokenAbi, InitialState, Message, DelegatedFungibleOperation, Parameters,
+    Account, DelegatedFungibleTokenAbi, InitialState, Message, Operation, Parameters,
 };
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
@@ -56,14 +56,14 @@ impl Contract for DelegatedFungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            DelegatedFungibleOperation::Approve { owner, spender, allowance } => {
+            Operation::Approve { owner, spender, allowance } => {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
                 self.state.approve(owner, spender, allowance).await;
             }
 
-            DelegatedFungibleOperation::Transfer {
+            Operation::Transfer {
                 owner,
                 amount,
                 target_account,
@@ -76,7 +76,7 @@ impl Contract for DelegatedFungibleTokenContract {
                     .await;
             }
 
-            DelegatedFungibleOperation::TransferFrom { owner, spender, amount, target_account } => {
+            Operation::TransferFrom { owner, spender, amount, target_account } => {
                 self.runtime
                     .check_account_permission(spender)
                     .expect("Permission for Transfer operation");
@@ -85,7 +85,7 @@ impl Contract for DelegatedFungibleTokenContract {
                     .await;
             }
 
-            DelegatedFungibleOperation::Claim {
+            Operation::Claim {
                 source_account,
                 amount,
                 target_account,
