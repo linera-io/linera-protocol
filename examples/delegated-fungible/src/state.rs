@@ -43,11 +43,8 @@ impl DelegatedFungibleTokenState {
             return;
         }
         let owner_spender = OwnerSpender::new(owner, spender);
-        let mut total_allowance = self.allowances.get(&owner_spender).await.expect("Failed allowance access").unwrap_or_default();
+        let total_allowance = self.allowances.get_mut_or_default(&owner_spender).await.expect("Failed allowance access");
         total_allowance.saturating_add_assign(allowance);
-        self.allowances
-            .insert(&owner_spender, total_allowance)
-            .expect("Failed insert statement");
     }
 
     pub(crate) async fn debit_for_transfer_from(&mut self, owner: AccountOwner, spender: AccountOwner, amount: Amount) {
@@ -88,11 +85,8 @@ impl DelegatedFungibleTokenState {
         if amount == Amount::ZERO {
             return;
         }
-        let mut balance = self.balance_or_default(&account).await;
+        let balance = self.accounts.get_mut_or_default(&account).await.expect("Failed to access balance");
         balance.saturating_add_assign(amount);
-        self.accounts
-            .insert(&account, balance)
-            .expect("Failed insert statement");
     }
 
     /// Tries to debit the requested `amount` from an `account`.
