@@ -99,7 +99,7 @@ library Linera {
         LineraTypes.ResponseReadOwnerBalances memory output2 = LineraTypes.bcs_deserialize_ResponseReadOwnerBalances(output);
         uint256 len = output2.value.length;
         LineraTypes.AccountOwnerBalance[] memory elist;
-        elist = new AccountOwnerBalance[](len);
+        elist = new LineraTypes.AccountOwnerBalance[](len);
         for (uint256 i=0; i<len; i++) {
             uint256 balance = uint256(output2.value[i].balance_.value);
             elist[i] = LineraTypes.AccountOwnerBalance(output2.value[i].account_owner, balance);
