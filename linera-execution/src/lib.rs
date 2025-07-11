@@ -869,6 +869,9 @@ pub trait ContractRuntime: BaseRuntime {
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, ExecutionError>;
 
+    /// Returns the current application_index.
+    fn application_index(&mut self) -> Result<u32, ExecutionError>;
+
     /// Creates a new data blob and returns its hash.
     fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<DataBlobHash, ExecutionError>;
 

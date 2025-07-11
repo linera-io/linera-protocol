@@ -9,14 +9,18 @@
 
 mod data_types;
 mod database;
+pub mod inputs;
 pub mod revm;
 
+use linera_base::data_types::AmountConversionError;
 use revm_context::result::{HaltReason, Output, SuccessReason};
-use revm_primitives::Log;
+use revm_primitives::{Address, Log, U256};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum EvmExecutionError {
+    #[error(transparent)]
+    AmountConversionError(#[from] AmountConversionError),
     #[error("Failed to load contract EVM module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service EVM module: {_0}")]
@@ -27,6 +31,16 @@ pub enum EvmExecutionError {
     IllegalOperationCall(String),
     #[error("runtime error")]
     RuntimeError(String),
+    #[error("The balances are incoherent for address {0}, balances {1}, {2}")]
+    IncoherentBalances(Address, U256, U256),
+    #[error("Unknown signer")]
+    UnknownSigner,
+    #[error("No delegate call")]
+    NoDelegateCall,
+    #[error("No transfer in services")]
+    NoTransferInServices,
+    #[error("No transfer in Wasm application call")]
+    NoTransferInRuntimeCall,
     #[error("The function {0} is being called but is missing from the bytecode API")]
     MissingFunction(String),
     #[error("Incorrect contract creation: {0}")]

@@ -118,6 +118,10 @@ impl TransactionTracker {
         self.transaction_index
     }
 
+    pub fn application_index(&self) -> u32 {
+        self.next_application_index
+    }
+
     pub fn next_application_index(&mut self) -> u32 {
         let index = self.next_application_index;
         self.next_application_index += 1;

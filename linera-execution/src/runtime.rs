@@ -1455,6 +1455,15 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?
     }
 
+    fn application_index(&mut self) -> Result<u32, ExecutionError> {
+        let index = self
+            .inner()
+            .execution_state_sender
+            .send_request(move |callback| ExecutionRequest::ApplicationIndex { callback })?
+            .recv_response()?;
+        Ok(index)
+    }
+
     fn create_application(
         &mut self,
         module_id: ModuleId,

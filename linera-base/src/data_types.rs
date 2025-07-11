@@ -94,6 +94,25 @@ impl From<Amount> for U256 {
     }
 }
 
+/// Converting amount from `U256` to Amount can fail since
+/// `Amount` is a `u128`.
+#[derive(Error, Debug)]
+pub struct AmountConversionError(U256);
+
+impl fmt::Display for AmountConversionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Amount conversion error for {}", self.0)
+    }
+}
+
+impl TryFrom<U256> for Amount {
+    type Error = AmountConversionError;
+    fn try_from(value: U256) -> Result<Amount, Self::Error> {
+        let value = u128::try_from(&value).map_err(|_| AmountConversionError(value))?;
+        Ok(Amount(value))
+    }
+}
+
 /// A block height to identify blocks in a chain.
 #[derive(
     Eq,
@@ -1614,6 +1633,8 @@ mod metrics {
 mod tests {
     use std::str::FromStr;
 
+    use alloy_primitives::U256;
+
     use super::{Amount, BlobContent};
     use crate::identifiers::BlobType;
 
@@ -1672,5 +1693,13 @@ mod tests {
 
         assert_eq!(hash1, hash2, "Hashes should be equal for same content");
         assert_eq!(blob1.bytes(), blob2.bytes(), "Byte content should be equal");
+    }
+
+    #[test]
+    fn test_conversion_amount_u256() {
+        let value_amount = Amount::from_tokens(15656565652209004332);
+        let value_u256: U256 = value_amount.into();
+        let value_amount_rev = Amount::try_from(value_u256).expect("Failed conversion");
+        assert_eq!(value_amount, value_amount_rev);
     }
 }
