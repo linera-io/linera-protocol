@@ -4,31 +4,37 @@
 //! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
 
 use core::ops::Range;
-use std::{collections::BTreeSet, convert::TryFrom};
+use std::{
+    collections::BTreeSet,
+    convert::TryFrom,
+    sync::{Arc, Mutex},
+};
 
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
+    data_types::{
+        Amount, ApplicationDescription, Bytecode, Resources, SendMessageRequest, StreamUpdate,
+    },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, ChainId, StreamName},
-    vm::{EvmQuery, VmRuntime},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamName},
+    vm::{EvmInstantiation, EvmOperation, EvmQuery, VmRuntime},
 };
 use revm::{primitives::Bytes, InspectCommitEvm, InspectEvm, Inspector};
 use revm_context::{
     result::{ExecutionResult, Output, SuccessReason},
-    BlockEnv, Cfg, ContextTr, Evm, Journal, LocalContextTr, TxEnv,
+    BlockEnv, Cfg, ContextTr, Evm, Journal, JournalTr, LocalContextTr as _, TxEnv,
 };
 use revm_database::WrapDatabaseRef;
 use revm_handler::{
     instructions::EthInstructions, EthPrecompiles, MainnetContext, PrecompileProvider,
 };
 use revm_interpreter::{
-    CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl,
-    InstructionResult, InterpreterResult,
+    CallInput, CallInputs, CallOutcome, CallValue, CreateInputs, CreateOutcome, CreateScheme, Gas,
+    InputsImpl, InstructionResult, InterpreterResult,
 };
-use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind, U256};
+use revm_primitives::{hardfork::SpecId, Address, Log, TxKind, U256};
 use revm_state::EvmState;
 use serde::{Deserialize, Serialize};
 
@@ -36,23 +42,18 @@ use crate::{
     evm::{
         data_types::AmountU256,
         database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
+        inputs::{
+            ensure_message_length, ensure_selector_presence, forbid_execute_operation_origin,
+            get_revm_execute_message_bytes, get_revm_instantiation_bytes,
+            get_revm_process_streams_bytes, has_selector, EXECUTE_MESSAGE_SELECTOR, FAUCET_ADDRESS,
+            INSTANTIATE_SELECTOR, PRECOMPILE_ADDRESS, PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS,
+            ZERO_ADDRESS,
+        },
     },
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, DataBlobHash, EvmExecutionError,
     EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
     UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
 };
-
-/// This is the selector of the `execute_message` that should be called
-/// only from a submitted message
-const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
-
-/// This is the selector of the `process_streams` that should be called
-/// only from a submitted message
-const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
-
-/// This is the selector of the `instantiate` that should be called
-/// only when creating a new instance of a shared contract
-const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
 /// The selector when calling for `InterpreterResult`. This is a fictional
 /// selector that does not correspond to a real function.
@@ -64,116 +65,6 @@ const GET_DEPLOYED_BYTECODE_SELECTOR: &[u8] = &[21, 34, 55, 89];
 
 /// The json serialization of a trivial vector.
 const JSON_EMPTY_VECTOR: &[u8] = &[91, 93];
-
-fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
-    if vec == EXECUTE_MESSAGE_SELECTOR {
-        return Err(EvmExecutionError::IllegalOperationCall(
-            "function execute_message".to_string(),
-        ));
-    }
-    if vec == PROCESS_STREAMS_SELECTOR {
-        return Err(EvmExecutionError::IllegalOperationCall(
-            "function process_streams".to_string(),
-        ));
-    }
-    if vec == INSTANTIATE_SELECTOR {
-        return Err(EvmExecutionError::IllegalOperationCall(
-            "function instantiate".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn ensure_message_length(actual_length: usize, min_length: usize) -> Result<(), EvmExecutionError> {
-    ensure!(
-        actual_length >= min_length,
-        EvmExecutionError::OperationIsTooShort
-    );
-    Ok(())
-}
-
-fn ensure_selector_presence(
-    module: &[u8],
-    selector: &[u8],
-    fct_name: &str,
-) -> Result<(), EvmExecutionError> {
-    if !has_selector(module, selector) {
-        return Err(EvmExecutionError::MissingFunction(fct_name.to_string()));
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use revm_primitives::keccak256;
-
-    use crate::evm::revm::{
-        EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR, PROCESS_STREAMS_SELECTOR,
-    };
-
-    // The function keccak256 is not const so we cannot build the execute_message
-    // selector directly.
-    #[test]
-    fn check_execute_message_selector() {
-        let selector = &keccak256("execute_message(bytes)".as_bytes())[..4];
-        assert_eq!(selector, EXECUTE_MESSAGE_SELECTOR);
-    }
-
-    #[test]
-    fn check_process_streams_selector() {
-        use alloy_sol_types::{sol, SolCall};
-        sol! {
-            struct InternalApplicationId {
-                bytes32 application_description_hash;
-            }
-
-            struct InternalGenericApplicationId {
-                uint8 choice;
-                InternalApplicationId user;
-            }
-
-            struct InternalStreamName {
-                bytes stream_name;
-            }
-
-            struct InternalStreamId {
-                InternalGenericApplicationId application_id;
-                InternalStreamName stream_name;
-            }
-
-            struct InternalChainId {
-                bytes32 value;
-            }
-
-            struct InternalStreamUpdate {
-                InternalChainId chain_id;
-                InternalStreamId stream_id;
-                uint32 previous_index;
-                uint32 next_index;
-            }
-
-            function process_streams(InternalStreamUpdate[] internal_streams);
-        }
-        assert_eq!(
-            process_streamsCall::SIGNATURE,
-            "process_streams(((bytes32),((uint8,(bytes32)),(bytes)),uint32,uint32)[])"
-        );
-        assert_eq!(process_streamsCall::SELECTOR, PROCESS_STREAMS_SELECTOR);
-    }
-
-    #[test]
-    fn check_instantiate_selector() {
-        let selector = &keccak256("instantiate(bytes)".as_bytes())[..4];
-        assert_eq!(selector, INSTANTIATE_SELECTOR);
-    }
-}
-
-fn has_selector(module: &[u8], selector: &[u8]) -> bool {
-    let push4 = 0x63; // An EVM instruction
-    let mut vec = vec![push4];
-    vec.extend(selector);
-    module.windows(5).any(|window| window == vec)
-}
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -199,144 +90,6 @@ mod metrics {
             exponential_bucket_latencies(1.0),
         )
     });
-}
-
-fn get_revm_instantiation_bytes(value: Vec<u8>) -> Vec<u8> {
-    use alloy_primitives::Bytes;
-    use alloy_sol_types::{sol, SolCall};
-    sol! {
-        function instantiate(bytes value);
-    }
-    let bytes = Bytes::from(value);
-    let argument = instantiateCall { value: bytes };
-    argument.abi_encode()
-}
-
-fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
-    use alloy_primitives::Bytes;
-    use alloy_sol_types::{sol, SolCall};
-    sol! {
-        function execute_message(bytes value);
-    }
-    let value = Bytes::from(value);
-    let argument = execute_messageCall { value };
-    argument.abi_encode()
-}
-
-fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
-    // See TODO(#3966) for a better support of the input.
-    use alloy_primitives::{Bytes, B256};
-    use alloy_sol_types::{sol, SolCall};
-    use linera_base::identifiers::{GenericApplicationId, StreamId};
-    sol! {
-        struct InternalApplicationId {
-            bytes32 application_description_hash;
-        }
-
-        struct InternalGenericApplicationId {
-            uint8 choice;
-            InternalApplicationId user;
-        }
-
-        struct InternalStreamName {
-            bytes stream_name;
-        }
-
-        struct InternalStreamId {
-            InternalGenericApplicationId application_id;
-            InternalStreamName stream_name;
-        }
-
-        struct InternalChainId {
-            bytes32 value;
-        }
-
-        struct InternalStreamUpdate {
-            InternalChainId chain_id;
-            InternalStreamId stream_id;
-            uint32 previous_index;
-            uint32 next_index;
-        }
-
-        function process_streams(InternalStreamUpdate[] internal_streams);
-    }
-
-    fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> B256 {
-        let hash: [u64; 4] = <[u64; 4]>::from(hash);
-        let hash: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(hash);
-        hash.into()
-    }
-
-    fn chain_id_to_internal_chain_id(chain_id: ChainId) -> InternalChainId {
-        let value = crypto_hash_to_internal_crypto_hash(chain_id.0);
-        InternalChainId { value }
-    }
-
-    fn application_id_to_internal_application_id(
-        application_id: ApplicationId,
-    ) -> InternalApplicationId {
-        let application_description_hash =
-            crypto_hash_to_internal_crypto_hash(application_id.application_description_hash);
-        InternalApplicationId {
-            application_description_hash,
-        }
-    }
-
-    fn stream_name_to_internal_stream_name(stream_name: StreamName) -> InternalStreamName {
-        let stream_name = Bytes::from(stream_name.0);
-        InternalStreamName { stream_name }
-    }
-
-    fn generic_application_id_to_internal_generic_application_id(
-        generic_application_id: GenericApplicationId,
-    ) -> InternalGenericApplicationId {
-        match generic_application_id {
-            GenericApplicationId::System => {
-                let application_description_hash = B256::ZERO;
-                InternalGenericApplicationId {
-                    choice: 0,
-                    user: InternalApplicationId {
-                        application_description_hash,
-                    },
-                }
-            }
-            GenericApplicationId::User(application_id) => InternalGenericApplicationId {
-                choice: 1,
-                user: application_id_to_internal_application_id(application_id),
-            },
-        }
-    }
-
-    fn stream_id_to_internal_stream_id(stream_id: StreamId) -> InternalStreamId {
-        let application_id =
-            generic_application_id_to_internal_generic_application_id(stream_id.application_id);
-        let stream_name = stream_name_to_internal_stream_name(stream_id.stream_name);
-        InternalStreamId {
-            application_id,
-            stream_name,
-        }
-    }
-
-    fn stream_update_to_internal_stream_update(
-        stream_update: StreamUpdate,
-    ) -> InternalStreamUpdate {
-        let chain_id = chain_id_to_internal_chain_id(stream_update.chain_id);
-        let stream_id = stream_id_to_internal_stream_id(stream_update.stream_id);
-        InternalStreamUpdate {
-            chain_id,
-            stream_id,
-            previous_index: stream_update.previous_index,
-            next_index: stream_update.next_index,
-        }
-    }
-
-    let internal_streams = streams
-        .into_iter()
-        .map(stream_update_to_internal_stream_update)
-        .collect::<Vec<_>>();
-
-    let fct_call = process_streamsCall { internal_streams };
-    fct_call.abi_encode()
 }
 
 #[derive(Clone)]
@@ -454,18 +207,6 @@ impl UserServiceModule for EvmServiceModule {
 }
 
 type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<Runtime>>>;
-
-// This is the precompile address that contains the Linera specific
-// functionalities accessed from the EVM.
-const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
-
-// This is the zero address used when no address can be obtained from `authenticated_owner`
-// and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
-// if an EVM contract calls another EVM contract.
-const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
-
-// This is the address being used for service calls.
-const SERVICE_ADDRESS: Address = address!("0000000000000000000000000000000000002000");
 
 fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
@@ -586,10 +327,61 @@ fn get_precompile_output(output: Vec<u8>, gas_limit: u64) -> InterpreterResult {
     }
 }
 
-fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
-    let mut argument = Vec::new();
-    get_argument(context, &mut argument, input);
-    argument
+fn get_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
+    match input {
+        CallInput::Bytes(bytes) => bytes.to_vec(),
+        CallInput::SharedBuffer(range) => {
+            match context.local().shared_memory_buffer_slice(range.clone()) {
+                None => Vec::new(),
+                Some(slice) => slice.to_vec(),
+            }
+        }
+    }
+}
+
+fn get_value(call_value: &CallValue) -> Result<U256, EvmExecutionError> {
+    match call_value {
+        CallValue::Transfer(value) => Ok(*value),
+        CallValue::Apparent(_) => Err(EvmExecutionError::NoDelegateCall),
+    }
+}
+
+fn get_precompile_argument<Ctx: ContextTr>(
+    context: &mut Ctx,
+    inputs: &InputsImpl,
+) -> Result<Vec<u8>, ExecutionError> {
+    ensure!(
+        inputs.call_value == U256::ZERO,
+        EvmExecutionError::NoTransferInRuntimeCall
+    );
+    Ok(get_argument(context, &inputs.input))
+}
+
+fn get_call_service_argument<Ctx: ContextTr>(
+    context: &mut Ctx,
+    inputs: &CallInputs,
+) -> Result<Vec<u8>, ExecutionError> {
+    ensure!(
+        get_value(&inputs.value)? == U256::ZERO,
+        EvmExecutionError::NoTransferInServices
+    );
+    let mut argument = INTERPRETER_RESULT_SELECTOR.to_vec();
+    argument.extend(&get_argument(context, &inputs.input));
+    Ok(argument)
+}
+
+fn get_call_contract_argument<Ctx: ContextTr>(
+    context: &mut Ctx,
+    inputs: &CallInputs,
+) -> Result<(Vec<u8>, usize), ExecutionError> {
+    let mut final_argument = INTERPRETER_RESULT_SELECTOR.to_vec();
+    let value = get_value(&inputs.value)?;
+    let argument = get_argument(context, &inputs.input);
+    let n_input = argument.len();
+    let evm_operation = EvmOperation { value, argument };
+    let argument = bcs::to_bytes(&evm_operation)?;
+    final_argument.extend(&argument);
+    Ok((final_argument, n_input))
 }
 
 fn base_runtime_call<Runtime: BaseRuntime>(
@@ -678,8 +470,7 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Cont
         gas_limit: u64,
     ) -> Result<Option<InterpreterResult>, String> {
         if address == &PRECOMPILE_ADDRESS {
-            let input = get_precompile_argument(context, &inputs.input);
-            let output = Self::call_or_fail(&input, context)
+            let output = Self::call_or_fail(inputs, context)
                 .map_err(|error| format!("ContractPrecompile error: {error}"))?;
             return Ok(Some(get_precompile_output(output, gas_limit)));
         }
@@ -781,10 +572,11 @@ impl<'a> ContractPrecompile {
     }
 
     fn call_or_fail<Runtime: ContractRuntime>(
-        input: &[u8],
+        inputs: &InputsImpl,
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        match bcs::from_bytes(input)? {
+        let input = get_precompile_argument(context, inputs)?;
+        match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
             RuntimePrecompile::Contract(contract_tag) => {
                 Self::contract_runtime_call(contract_tag, context)
@@ -816,10 +608,11 @@ impl<'a> ServicePrecompile {
     }
 
     fn call_or_fail<Runtime: ServiceRuntime>(
-        input: &[u8],
+        inputs: &InputsImpl,
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        match bcs::from_bytes(input)? {
+        let input = get_precompile_argument(context, inputs)?;
+        match bcs::from_bytes(&input)? {
             RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
             RuntimePrecompile::Contract(_) => Err(EvmExecutionError::PrecompileError(
                 "Contract calls are not available in GeneralServiceCall".to_string(),
@@ -848,8 +641,7 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
         gas_limit: u64,
     ) -> Result<Option<InterpreterResult>, String> {
         if address == &PRECOMPILE_ADDRESS {
-            let input = get_precompile_argument(context, &inputs.input);
-            let output = Self::call_or_fail(&input, context)
+            let output = Self::call_or_fail(inputs, context)
                 .map_err(|error| format!("ServicePrecompile error: {error}"))?;
             return Ok(Some(get_precompile_output(output, gas_limit)));
         }
@@ -935,6 +727,7 @@ struct CallInterceptorContract<Runtime> {
     // This is the contract address of the contract being created.
     contract_address: Address,
     precompile_addresses: BTreeSet<Address>,
+    error: Arc<Mutex<Option<U256>>>,
 }
 
 impl<Runtime> Clone for CallInterceptorContract<Runtime> {
@@ -943,27 +736,9 @@ impl<Runtime> Clone for CallInterceptorContract<Runtime> {
             db: self.db.clone(),
             contract_address: self.contract_address,
             precompile_addresses: self.precompile_addresses.clone(),
+            error: self.error.clone(),
         }
     }
-}
-
-fn get_argument<Ctx: ContextTr>(context: &mut Ctx, argument: &mut Vec<u8>, input: &CallInput) {
-    match input {
-        CallInput::Bytes(bytes) => {
-            argument.extend(bytes.to_vec());
-        }
-        CallInput::SharedBuffer(range) => {
-            if let Some(slice) = context.local().shared_memory_buffer_slice(range.clone()) {
-                argument.extend(&*slice);
-            }
-        }
-    };
-}
-
-fn get_call_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInputs) -> Vec<u8> {
-    let mut argument = INTERPRETER_RESULT_SELECTOR.to_vec();
-    get_argument(context, &mut argument, &inputs.input);
-    argument
 }
 
 impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
@@ -1066,6 +841,17 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     /// * Data is put together as a `Some(...)` which tells REVM
     ///   that it does not need to execute the bytecode since the
     ///   output is given to it.
+    ///
+    /// The fact that the creation of a contract can be done in a
+    /// parallel way to transfering native tokens to the contract
+    /// being created requires us to handle this as well.
+    /// * We cannot do a transfer from the calling contract with
+    ///   the deposit_funds because we would not have the right
+    ///   to make the transfer.
+    /// * Therefore, we have to do the transfer before the
+    ///   `create_application`. This forces us to know the
+    ///   `application_id` before it is created. This is done
+    ///   by building the `ApplicationDescription` and its hash.
     fn create_or_fail(
         &mut self,
         context: &mut Ctx<'_, Runtime>,
@@ -1078,28 +864,65 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             };
             Ok(None)
         } else {
+            if inputs.value != U256::ZERO {
+                // decrease the balance of the contract address by the expected amount.
+                // We put the address as
+                Self::revm_transfer(
+                    context,
+                    self.db.contract_address,
+                    FAUCET_ADDRESS,
+                    inputs.value,
+                )?;
+            }
             let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
             let service = linera_base::data_types::Bytecode::new(vec![]);
             let mut runtime = context.db().0.runtime.lock().unwrap();
             let module_id = runtime.publish_module(contract, service, VmRuntime::Evm)?;
+            let chain_id = runtime.chain_id()?;
+            let block_height = runtime.block_height()?;
+            let application_index = runtime.application_index()?;
+            let application_id = runtime.application_id()?;
             let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
-            let argument = JSON_EMPTY_VECTOR.to_vec(); // No call to "fn instantiate"
+            let evm_call = EvmInstantiation {
+                value: inputs.value,
+                argument: Vec::new(),
+            };
+            let argument = serde_json::to_vec(&evm_call)?;
             let required_application_ids = Vec::new();
-            let application_id = runtime.create_application(
+            let application_description = ApplicationDescription {
+                module_id,
+                creator_chain_id: chain_id,
+                block_height,
+                application_index,
+                parameters: parameters.clone(),
+                required_application_ids: Vec::new(),
+            };
+            let expected_application_id = ApplicationId::from(&application_description);
+            if inputs.value != U256::ZERO {
+                let amount = Amount::try_from(inputs.value).map_err(EvmExecutionError::from)?;
+                let destination = Account {
+                    chain_id,
+                    owner: expected_application_id.into(),
+                };
+                let source = application_id.into();
+                runtime.transfer(source, destination, amount)?;
+            }
+            let created_application_id = runtime.create_application(
                 module_id,
                 parameters,
                 argument,
                 required_application_ids,
             )?;
+            assert_eq!(expected_application_id, created_application_id);
             let argument = GET_DEPLOYED_BYTECODE_SELECTOR.to_vec();
             let deployed_bytecode: Vec<u8> =
-                runtime.try_call_application(false, application_id, argument)?;
+                runtime.try_call_application(false, created_application_id, argument)?;
             let result = InterpreterResult {
                 result: InstructionResult::Return, // Only possibility if no error occured.
                 output: Bytes::from(deployed_bytecode),
                 gas: Gas::new(inputs.gas_limit),
             };
-            let address = application_id.evm_address();
+            let address = created_application_id.evm_address();
             let creation_outcome = CreateOutcome {
                 result,
                 address: Some(address),
@@ -1108,16 +931,31 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         }
     }
 
+    /// Every call to a contract passes by this function.
+    /// Three kinds:
+    /// --- Call to the EVM smart contract itself (the first call)
+    /// --- Call to the PRECOMPILE smart contract.
+    /// --- Call to other EVM smart contract
+    ///
+    /// The first case is handled by the using the REVM. This is
+    /// when we call this contract.
+    ///
+    /// Calling the precompile is also handled by using REVM
+    /// which would then use specific code for that purpose.
+    ///
+    /// Calling other EVM contracts is handled here and we have
+    /// to produce the `Some(_)` as output. Note that in the EVM
+    /// transfering ethers is the same as calling a function.
+    ///
+    /// In Linera, transfering lineras and calling a function are
+    /// different operations. However, the block is accepted
+    /// completely or not at all. Therefore, we can ensure the
+    /// atomicity of the operations.
     fn call_or_fail(
         &mut self,
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        // Every call to a contract passes by this function.
-        // Three kinds:
-        // --- Call to the PRECOMPILE smart contract.
-        // --- Call to the EVM smart contract itself
-        // --- Call to other EVM smart contract
         if self.precompile_addresses.contains(&inputs.target_address)
             || inputs.target_address == self.contract_address
         {
@@ -1125,19 +963,79 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             // The EVM smart contract is being called
             return Ok(None);
         }
+        // Handling the balances.
+        if let CallValue::Transfer(value) = inputs.value {
+            let source: AccountOwner = inputs.caller.into();
+            let owner: AccountOwner = inputs.bytecode_address.into();
+            if value != U256::ZERO {
+                // In Linera, only non-zero transfers matter
+                let mut runtime = context
+                    .db()
+                    .0
+                    .runtime
+                    .lock()
+                    .expect("The lock should be possible");
+                let amount = Amount::try_from(value).map_err(EvmExecutionError::from)?;
+                let chain_id = runtime.chain_id()?;
+                let destination = Account { chain_id, owner };
+                runtime.transfer(source, destination, amount)?;
+            }
+            Self::revm_transfer(context, inputs.caller, inputs.target_address, value)?;
+        }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
-        let argument = get_call_argument(context, inputs);
-        let authenticated = true;
-        let result = {
-            let mut runtime = self.db.runtime.lock().unwrap();
-            runtime.try_call_application(authenticated, target, argument)?
+        let (argument, n_input) = get_call_contract_argument(context, inputs)?;
+        let result = if n_input > 0 {
+            // The input is non-trivial, we assume that we are calling a contract.
+            //
+            // The correct behavior is the following:
+            // * If a contract exists and input is empty, then the fallback function is called
+            //   if existing. Otherwise failure.
+            // * If not, then it is a user account and no execution occurs.
+            //
+            // So, the correct way is instead to test the existence of the application
+            // given the application_id. So, we would need following function in BaseRuntime:
+            //  fn is_existing_application(&mut self, application_id: ApplicationId)
+            //       -> Result<bool, ExecutionError>;
+            let authenticated = true;
+            let result = {
+                let mut runtime = self.db.runtime.lock().unwrap();
+                runtime.try_call_application(authenticated, target, argument)?
+            };
+            get_interpreter_result(&result, inputs)?
+        } else {
+            // User account, no call needed.
+            InterpreterResult {
+                result: InstructionResult::Stop,
+                output: Bytes::default(),
+                gas: Gas::new(inputs.gas_limit),
+            }
         };
         let call_outcome = CallOutcome {
-            result: get_interpreter_result(&result, inputs)?,
+            result,
             memory_offset: inputs.return_memory_offset.clone(),
         };
         Ok(Some(call_outcome))
+    }
+
+    /// If we are using the `None` case of `fn call` and `fn create` then the transfer
+    /// of ethers is done by REVM. On the other hand, if we are managing the call/create
+    /// by hand, then we need to do the transfers ourselves.
+    fn revm_transfer(
+        context: &mut Ctx<'_, Runtime>,
+        source: Address,
+        destination: Address,
+        value: U256,
+    ) -> Result<(), ExecutionError> {
+        if value != U256::ZERO {
+            // In Ethereum, all transfers matter
+            if let Some(error) = context.journal().transfer(source, destination, value)? {
+                let error = format!("{error:?}");
+                let error = EvmExecutionError::TransactError(error);
+                return Err(error.into());
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1243,7 +1141,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
-        let argument = get_call_argument(context, inputs);
+        let argument = get_call_service_argument(context, inputs)?;
         let result = {
             let evm_query = EvmQuery::Query(argument);
             let evm_query = serde_json::to_vec(&evm_query)?;
@@ -1325,11 +1223,11 @@ where
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
         let caller = self.get_msg_address()?;
-        self.initialize_contract(caller)?;
+        let instantiation_argument = serde_json::from_slice::<EvmInstantiation>(&argument)?;
+        self.initialize_contract(instantiation_argument.value, caller)?;
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
-            let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
-            let argument = get_revm_instantiation_bytes(instantiation_argument);
-            let result = self.transact_commit(EvmTxKind::Call, argument, caller)?;
+            let argument = get_revm_instantiation_bytes(instantiation_argument.argument);
+            let result = self.transact_commit(EvmTxKind::Call, argument, U256::ZERO, caller)?;
             self.write_logs(result.logs, "instantiate")?;
         }
         Ok(())
@@ -1345,12 +1243,13 @@ where
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
-            let result = self.init_transact_commit(operation[4..].to_vec(), caller)?;
+            let evm_call = bcs::from_bytes::<EvmOperation>(&operation[4..])?;
+            let result = self.init_transact_commit(evm_call.argument, evm_call.value, caller)?;
             result.interpreter_result_and_logs()?
         } else {
-            ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
-            let result = self.init_transact_commit(operation, caller)?;
+            let evm_call = bcs::from_bytes::<EvmOperation>(&operation)?;
+            let result = self.init_transact_commit(evm_call.argument, evm_call.value, caller)?;
             result.output_and_logs()
         };
         self.consume_fuel(gas_final)?;
@@ -1367,7 +1266,8 @@ where
         )?;
         let operation = get_revm_execute_message_bytes(message);
         let caller = self.get_msg_address()?;
-        self.execute_no_return_operation(operation, "message", caller)
+        let value = U256::ZERO;
+        self.execute_no_return_operation(operation, "message", value, caller)
     }
 
     fn process_streams(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
@@ -1380,7 +1280,8 @@ where
         )?;
         // For process_streams, authenticated_owner and authenticated_called_id are None.
         let caller = Address::ZERO;
-        self.execute_no_return_operation(operation, "process_streams", caller)
+        let value = U256::ZERO;
+        self.execute_no_return_operation(operation, "process_streams", value, caller)
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {
@@ -1442,9 +1343,10 @@ where
         &mut self,
         operation: Vec<u8>,
         origin: &str,
+        value: U256,
         caller: Address,
     ) -> Result<(), ExecutionError> {
-        let result = self.init_transact_commit(operation, caller)?;
+        let result = self.init_transact_commit(operation, value, caller)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
         self.write_logs(logs, origin)?;
@@ -1456,23 +1358,24 @@ where
     fn init_transact_commit(
         &mut self,
         vec: Vec<u8>,
+        value: U256,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
         if !self.db.set_is_initialized()? {
-            self.initialize_contract(caller)?;
+            self.initialize_contract(U256::ZERO, caller)?;
         }
-        self.transact_commit(EvmTxKind::Call, vec, caller)
+        self.transact_commit(EvmTxKind::Call, vec, value, caller)
     }
 
     /// Initializes the contract.
-    fn initialize_contract(&mut self, caller: Address) -> Result<(), ExecutionError> {
+    fn initialize_contract(&mut self, value: U256, caller: Address) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        let result = self.transact_commit(EvmTxKind::Create, vec_init, caller)?;
+        let result = self.transact_commit(EvmTxKind::Create, vec_init, value, caller)?;
         result
             .check_contract_initialization(self.db.contract_address)
             .map_err(EvmExecutionError::IncorrectContractCreation)?;
@@ -1512,8 +1415,12 @@ where
         &mut self,
         ch: EvmTxKind,
         input: Vec<u8>,
+        value: U256,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
+        self.db.caller = caller;
+        self.db.value = value;
+        self.db.deposit_funds()?;
         let data = Bytes::from(input);
         let kind = match ch {
             EvmTxKind::Create => TxKind::Create,
@@ -1523,6 +1430,7 @@ where
             db: self.db.clone(),
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
+            error: Arc::new(Mutex::new(None)),
         };
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
@@ -1557,9 +1465,10 @@ where
                     nonce,
                     gas_limit,
                     caller,
+                    value,
                     ..TxEnv::default()
                 },
-                inspector,
+                inspector.clone(),
             )
             .map_err(|error| {
                 let error = format!("{:?}", error);
@@ -1618,7 +1527,7 @@ where
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
-            EvmQuery::Mutation(operation) => {
+            EvmQuery::Operation(operation) => {
                 let mut runtime = self.db.runtime.lock().unwrap();
                 runtime.schedule_operation(operation)?;
                 return Ok(Vec::new());
@@ -1682,6 +1591,10 @@ where
         kind: TxKind,
         input: Vec<u8>,
     ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
+        let caller = SERVICE_ADDRESS;
+        let value = U256::ZERO;
+        self.db.caller = caller;
+        self.db.value = value;
         let data = Bytes::from(input);
         let block_env = self.db.get_service_block_env()?;
         let inspector = CallInterceptorService {
@@ -1689,7 +1602,6 @@ where
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
         };
-        let caller = SERVICE_ADDRESS;
         let nonce = self.db.get_nonce(&caller)?;
         let result_state = {
             let ctx: revm_context::Context<
@@ -1716,6 +1628,7 @@ where
                     kind,
                     data,
                     nonce,
+                    value,
                     caller,
                     gas_limit: EVM_SERVICE_GAS_LIMIT,
                     ..TxEnv::default()
