@@ -9,7 +9,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use linera_base::vm::VmRuntime;
+use linera_base::{
+    data_types::Amount,
+    identifiers::{Account, AccountOwner},
+    vm::VmRuntime,
+};
 use linera_views::common::from_bytes_option;
 use revm::{primitives::keccak256, Database, DatabaseCommit, DatabaseRef};
 use revm_context::BlockEnv;
@@ -18,7 +22,11 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
+use crate::{
+    evm::{read_amount, inputs::EvmMutation},
+    ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError,
+    ServiceRuntime,
+};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -78,6 +86,8 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     pub runtime: Arc<Mutex<Runtime>>,
     /// The uncommitted changes to the contract.
     pub changes: EvmState,
+    /// The error that can occur during runtime.
+    pub error: Arc<Mutex<Option<String>>>,
 }
 
 impl<Runtime> Clone for DatabaseRuntime<Runtime> {
@@ -87,6 +97,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
             contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
+            error: self.error.clone(),
         }
     }
 }
@@ -107,14 +118,14 @@ fn application_id_to_address(application_id: ApplicationId) -> Address {
 impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     /// Encode the `index` of the EVM storage associated to the smart contract
     /// in a linera key.
-    fn get_linera_key(key_prefix: &[u8], index: U256) -> Result<Vec<u8>, ExecutionError> {
+    fn get_linera_key(key_prefix: &[u8], index: U256) -> Vec<u8> {
         let mut key = key_prefix.to_vec();
-        bcs::serialize_into(&mut key, &index)?;
-        Ok(key)
+        key.extend(index.as_le_slice());
+        key
     }
 
     /// Returns the tag associated to the contract.
-    fn get_address_key(&self, prefix: u8, address: Address) -> Vec<u8> {
+    fn get_address_key(prefix: u8, address: Address) -> Vec<u8> {
         let mut key = vec![prefix];
         key.extend(address);
         key
@@ -131,6 +142,7 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
             contract_address: Address::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
+            error: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -143,6 +155,23 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
         let storage_stats = storage_stats_read.clone();
         *storage_stats_read = StorageStats::default();
         storage_stats
+    }
+
+    /// Insert error into the database
+    pub fn insert_error(&self, exec_error: ExecutionError) {
+        let mut error = self.error.lock().expect("The lock should be possible");
+        *error = Some(format!("Runtime error {:?}", exec_error));
+    }
+
+    /// Process the error.
+    pub fn process_any_error(&self) -> Result<(), EvmExecutionError> {
+        let error = self.error.lock().expect("The lock should be possible");
+        if error.is_some() {
+            if let Some(error) = error.clone() {
+                return Err(EvmExecutionError::RuntimeError(error));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -192,11 +221,25 @@ where
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, address);
+        let account_owner = address.into();
+        let balance = runtime.read_owner_balance(account_owner)?;
+        let balance: U256 = balance.into();
+        let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, address);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo>(&result)?;
-        Ok(account_info)
+        if balance == U256::ZERO || address == self.contract_address {
+            return Ok(account_info);
+        }
+        if let Some(mut account_info) = account_info {
+            account_info.balance = balance;
+            return Ok(Some(account_info));
+        }
+        // The balance is non-zero. Therefore, the account exists.đ
+        // However, the state is None. Therefore, we need to create
+        // a default account first.
+        let account_info = AccountInfo { balance, ..Default::default() };
+        Ok(Some(account_info))
     }
 
     fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
@@ -211,8 +254,8 @@ where
                 Some(slot) => slot.present_value(),
             });
         }
-        let key_prefix = self.get_address_key(KeyCategory::Storage as u8, address);
-        let key = Self::get_linera_key(&key_prefix, index)?;
+        let key_prefix = Self::get_address_key(KeyCategory::Storage as u8, address);
+        let key = Self::get_linera_key(&key_prefix, index);
         {
             let mut storage_stats = self
                 .storage_stats
@@ -249,9 +292,9 @@ where
             if !account.is_touched() {
                 continue;
             }
-            let key_prefix = self.get_address_key(KeyCategory::Storage as u8, *address);
-            let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, *address);
-            let key_state = self.get_address_key(KeyCategory::AccountState as u8, *address);
+            let key_prefix = Self::get_address_key(KeyCategory::Storage as u8, *address);
+            let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, *address);
+            let key_state = Self::get_address_key(KeyCategory::AccountState as u8, *address);
             if account.is_selfdestructed() {
                 batch.delete_key_prefix(key_prefix);
                 batch.put_key_value(key_info, &AccountInfo::default())?;
@@ -278,7 +321,7 @@ where
                     if value.present_value() == value.original_value() {
                         storage_stats.key_no_operation += 1;
                     } else {
-                        let key = Self::get_linera_key(&key_prefix, *index)?;
+                        let key = Self::get_linera_key(&key_prefix, *index);
                         if value.original_value() == U256::ZERO {
                             batch.put_key_value(key, &value.present_value())?;
                             storage_stats.key_set += 1;
@@ -303,6 +346,30 @@ impl<Runtime> DatabaseRuntime<Runtime>
 where
     Runtime: BaseRuntime,
 {
+    /// Gets the contract address balance
+    pub fn get_balance_increase(&self) -> Result<U256, ExecutionError> {
+        let existing_evm_balance = {
+            let account_info = self.basic_ref(self.contract_address)?;
+            match account_info {
+                None => U256::ZERO,
+                Some(account_info) => account_info.balance,
+            }
+        };
+        let linera_balance = {
+            let mut runtime = self.runtime.lock().expect("The lock should be possible");
+            let application_id = runtime.application_id()?;
+            let account_owner: AccountOwner = application_id.into();
+            let balance = runtime.read_owner_balance(account_owner)?;
+            let balance: U256 = balance.into();
+            balance
+        };
+        if existing_evm_balance > linera_balance {
+            return Err(EvmExecutionError::IncoherentBalance.into());
+        }
+        let increment = linera_balance - existing_evm_balance;
+        Ok(increment)
+    }
+
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
         let account_info = self.basic_ref(*address)?;
@@ -326,7 +393,7 @@ where
     pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let evm_address = runtime.application_id()?.evm_address();
-        let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, evm_address);
+        let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, evm_address);
         let promise = runtime.contains_key_new(key_info)?;
         let result = runtime.contains_key_wait(&promise)?;
         Ok(result)
@@ -393,6 +460,30 @@ where
         let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
         block_env.gas_limit = gas_limit;
         Ok(block_env)
+    }
+
+    pub fn deposit_funds(&self, amount: Amount) -> Result<(), ExecutionError> {
+        if amount != Amount::ZERO {
+            let mut runtime = self.runtime.lock().expect("The lock should be possible");
+            let signer = runtime.authenticated_signer()?;
+            let Some(source) = signer else {
+                let error = EvmExecutionError::UnknownSigner;
+                return Err(error.into());
+            };
+            let chain_id = runtime.chain_id()?;
+            let application_id = runtime.application_id()?;
+            let owner: AccountOwner = application_id.into();
+            let destination = Account { chain_id, owner };
+            return runtime.transfer(source, destination, amount);
+        }
+        Ok(())
+    }
+
+    pub fn get_execute_operation_argument(&self, operation: &[u8]) -> Result<Vec<u8>, ExecutionError> {
+        let evm_call = bcs::from_bytes::<EvmMutation>(operation)?;
+        let value = read_amount(evm_call.value)?;
+        self.deposit_funds(value)?;
+        Ok(evm_call.argument)
     }
 }
 

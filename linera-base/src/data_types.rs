@@ -17,6 +17,7 @@ use std::{
     str::FromStr,
 };
 
+use alloy_primitives::U256;
 use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -76,6 +77,38 @@ impl<'de> Deserialize<'de> for Amount {
         } else {
             Ok(Amount(AmountU128::deserialize(deserializer)?.0))
         }
+    }
+}
+
+impl From<Amount> for U256 {
+    fn from(amount: Amount) -> U256 {
+        U256::from(amount.0)
+    }
+}
+
+/// Converting amount from U256 to Amount can fail since
+/// Amount is a u128.
+#[derive(Error, Debug)]
+pub struct AmountConversionError(U256);
+
+impl fmt::Display for AmountConversionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Amount conversion error for {}", self.0)
+    }
+}
+
+impl TryFrom<U256> for Amount {
+    type Error = AmountConversionError;
+    fn try_from(value: U256) -> Result<Amount, Self::Error> {
+        let vec: [u8; 32] = value.to_be_bytes();
+        for val in vec.iter().take(16) {
+            if *val != 0 {
+                return Err(AmountConversionError(value));
+            }
+        }
+        let value: [u8; 16] = vec[16..].try_into().expect("value should be of length 16");
+        let value = u128::from_be_bytes(value);
+        Ok(Amount(value))
     }
 }
 
@@ -1572,6 +1605,8 @@ mod metrics {
 mod tests {
     use std::str::FromStr;
 
+    use alloy_primitives::U256;
+
     use super::Amount;
 
     #[test]
@@ -1598,5 +1633,13 @@ mod tests {
             "~+12.34~~",
             format!("{:~^+9.1}", Amount::from_str("12.34").unwrap())
         );
+    }
+
+    #[test]
+    fn test_conversion_amount_u256() {
+        let value_amount = Amount::from_tokens(15656565652209004332);
+        let value_u256: U256 = value_amount.into();
+        let value_amount_rev = Amount::try_from(value_u256).expect("Failed conversion");
+        assert_eq!(value_amount, value_amount_rev);
     }
 }

@@ -70,6 +70,14 @@ impl AccountOwner {
     }
 }
 
+#[cfg(with_revm)]
+impl From<Address> for AccountOwner {
+    fn from(address: Address) -> Self {
+        let address = address.into_array();
+        AccountOwner::Address20(address)
+    }
+}
+
 #[cfg(with_testing)]
 impl From<CryptoHash> for AccountOwner {
     fn from(address: CryptoHash) -> Self {
