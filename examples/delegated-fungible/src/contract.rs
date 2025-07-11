@@ -144,6 +144,7 @@ impl Contract for DelegatedFungibleTokenContract {
 }
 
 impl DelegatedFungibleTokenContract {
+    /// Make the account receive the tokens locally or if needed by emitting a message.
     async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
         if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await;

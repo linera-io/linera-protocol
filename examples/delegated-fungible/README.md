@@ -9,4 +9,3 @@ allowances are supported.
 The API `approve` and `transfer_from` have been added to the functionality, following the ERC20
 contract.
 
-## Usage
