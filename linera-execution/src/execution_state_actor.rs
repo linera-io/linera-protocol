@@ -143,12 +143,18 @@ where
             }
 
             OwnerBalances { callback } => {
-                let balances = self.system.balances.index_values().await?;
-                callback.respond(balances.into_iter().collect());
+                let mut owner_balances = Vec::new();
+                for owner in self.system.ownership.get().owners.keys() {
+                    let balance = self.system.balances.get(owner).await?;
+                    let balance = balance.unwrap_or_default();
+                    owner_balances.push((*owner, balance));
+                }
+                callback.respond(owner_balances);
             }
 
             BalanceOwners { callback } => {
-                let owners = self.system.balances.indices().await?;
+                let owners = self.system.ownership.get().owners.clone().into_keys()
+                    .collect::<Vec<_>>();
                 callback.respond(owners);
             }
 

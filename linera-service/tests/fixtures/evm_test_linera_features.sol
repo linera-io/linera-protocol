@@ -40,4 +40,11 @@ contract ExampleLineraFeatures {
         uint256 balance = Linera.read_chain_balance();
         require(balance == expected_balance);
     }
+
+    function test_read_owners() external {
+        LineraTypes.AccountOwnerBalance[] memory owner_balances = Linera.read_owner_balances();
+        require(owner_balances.length == 1);
+        LineraTypes.AccountOwner[] memory owners = Linera.read_balance_owners();
+        require(owners.length == 1);
+    }
 }

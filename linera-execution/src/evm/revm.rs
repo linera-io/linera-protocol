@@ -634,10 +634,7 @@ fn base_runtime_call<Runtime: BaseRuntime>(
         BaseRuntimePrecompile::ReadChainBalance => {
             let balance: linera_base::data_types::Amount = runtime.read_chain_balance()?;
             let balance: AmountU256 = balance.into();
-            let vec = bcs::to_bytes(&balance)?;
-//            assert_eq!(vec, vec![0]);
-            assert_eq!(vec.len(), 32);
-            Ok(vec)
+            Ok(bcs::to_bytes(&balance)?)
         }
         BaseRuntimePrecompile::ReadOwnerBalance(account_owner) => {
             let balance = runtime.read_owner_balance(account_owner)?;
@@ -650,7 +647,7 @@ fn base_runtime_call<Runtime: BaseRuntime>(
                 .into_iter()
                 .map(|(account_owner, balance)|
                      (account_owner, balance.into()))
-                .collect::<Vec<(AccountOwner,U256)>>();
+                .collect::<Vec<(AccountOwner,AmountU256)>>();
             Ok(bcs::to_bytes(&owner_balances)?)
         }
         BaseRuntimePrecompile::ReadBalanceOwners => {
