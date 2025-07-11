@@ -65,3 +65,22 @@ pub enum EvmQuery {
     /// A request to schedule an operation that can mutate the application state.
     Mutation(Vec<u8>),
 }
+
+/// An EVM mutation containing a value and argument data
+#[derive(Default, Serialize, Deserialize)]
+pub struct EvmMutation {
+    /// The amount being transferred
+    pub value: alloy_primitives::U256,
+    /// The encoded argument data
+    pub argument: Vec<u8>,
+}
+
+/// Creates an internal mutation from value and argument data
+pub fn get_evm_mutation(
+    amount: crate::data_types::Amount,
+    argument: Vec<u8>,
+) -> Result<Vec<u8>, bcs::Error> {
+    let value = amount.into();
+    let evm_mutation = EvmMutation { value, argument };
+    bcs::to_bytes(&evm_mutation)
+}

@@ -429,6 +429,11 @@ impl AmmApp {
 }
 
 #[cfg(with_revm)]
+fn get_zero_mutation(mutation: impl alloy_sol_types::SolCall) -> Result<Vec<u8>, bcs::Error> {
+    linera_base::vm::get_evm_mutation(Amount::ZERO, mutation.abi_encode())
+}
+
+#[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -438,7 +443,10 @@ impl AmmApp {
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_execution::{
+        evm::inputs::EvmInstantiation,
+        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -466,9 +474,9 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_example_counter.sol")?;
 
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
     let application_id = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -495,7 +503,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = incrementCall { input: increment };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     application.run_json_query(mutation).await?;
 
@@ -518,14 +526,153 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
+async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_sol_types::{sol, SolCall};
+    use linera_base::vm::EvmQuery;
+    use linera_execution::{
+        evm::inputs::EvmInstantiation,
+        test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
+    };
+    use linera_sdk::abis::evm::EvmAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let account_chain = Account::chain(chain);
+
+    let account_owner1 = client.get_owner().unwrap();
+    let account_owner2 = client.keygen().await?;
+    let address1 = account_owner1.to_evm_address().unwrap();
+    let address2 = account_owner2.to_evm_address().unwrap();
+    let account1 = Account {
+        chain_id: chain,
+        owner: account_owner1,
+    };
+    let account2 = Account {
+        chain_id: chain,
+        owner: account_owner2,
+    };
+    client
+        .transfer_with_accounts(Amount::from_tokens(50), account_chain, account1)
+        .await?;
+    client
+        .transfer_with_accounts(Amount::from_tokens(50), account_chain, account2)
+        .await?;
+
+    sol! {
+        function send_cash(address recipient, uint256 amount);
+        function get_balance(address account);
+    }
+
+    let constructor_argument = Vec::new();
+
+    let (evm_contract, _dir) =
+        get_evm_contract_path("tests/fixtures/evm_balance_and_transfer.sol")?;
+
+    let start_value = Amount::from_tokens(4);
+    let instantiation_argument = EvmInstantiation {
+        value: start_value,
+        argument: vec![],
+    };
+    let application_id = client
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
+            evm_contract.clone(),
+            evm_contract,
+            VmRuntime::Evm,
+            &constructor_argument,
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+    let account_owner_app: AccountOwner = application_id.into();
+    let account_app = Account {
+        chain_id: chain,
+        owner: account_owner_app,
+    };
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let balance1 = node_service.balance(&account1).await?;
+    let balance2 = node_service.balance(&account2).await?;
+    let balance_app = node_service.balance(&account_app).await?;
+    assert_eq!(balance1, Amount::from_tokens(46));
+    assert_eq!(balance2, Amount::from_tokens(50));
+    assert_eq!(balance_app, Amount::from_tokens(4));
+
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await?;
+
+    // Checking the balances on input
+
+    let query1 = get_balanceCall { account: address1 };
+    let query1 = EvmQuery::Query(query1.abi_encode());
+    let result = application.run_json_query(query1.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), balance1.into());
+
+    let query2 = get_balanceCall { account: address2 };
+    let query2 = EvmQuery::Query(query2.abi_encode());
+    let result = application.run_json_query(query2.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), balance2.into());
+
+    // Transfering amount
+
+    let amount = Amount::from_tokens(1);
+
+    let mutation = send_cashCall {
+        recipient: address2,
+        amount: amount.into(),
+    };
+    let mutation = get_zero_mutation(mutation)?;
+    let mutation = EvmQuery::Mutation(mutation);
+    application.run_json_query(mutation).await?;
+
+    // Checking the balances
+
+    let balance1_after = node_service.balance(&account1).await?;
+    let balance2_after = node_service.balance(&account2).await?;
+    let balance_app_after = node_service.balance(&account_app).await?;
+    assert_eq!(balance1_after, balance1);
+    assert_eq!(balance2_after, balance2 + amount);
+    assert_eq!(balance_app_after, balance_app - amount);
+
+    let result = application.run_json_query(query1).await?;
+    assert_eq!(read_evm_u256_entry(result), balance1_after.into());
+
+    let result = application.run_json_query(query2.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), balance2_after.into());
+
+    // Winding down
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
 async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{Bytes, Log, U256};
-    use alloy_sol_types::{sol, SolCall, SolValue};
+    use alloy_sol_types::{sol, SolValue};
     use linera_base::{
         identifiers::{GenericApplicationId, StreamId, StreamName},
         vm::EvmQuery,
     };
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use linera_execution::{
+        evm::inputs::EvmInstantiation, test_utils::solidity::get_evm_contract_path,
+    };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -549,9 +696,9 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
 
     let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_example_log.sol")?;
 
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
     let application_id = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -595,7 +742,7 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     assert_eq!(start_index, 1);
 
     let mutation = incrementCall { input: increment };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     application.run_json_query(mutation).await?;
 
@@ -636,7 +783,9 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
 async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolValue};
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use linera_execution::{
+        evm::inputs::EvmInstantiation, test_utils::solidity::get_evm_contract_path,
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -661,9 +810,9 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 
     let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_example_counter.sol")?;
 
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
     let evm_application_id = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -737,7 +886,10 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_execution::{
+        evm::inputs::EvmInstantiation,
+        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -765,9 +917,9 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
         constructor_argument.abi_encode()
     };
 
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
     let evm_application_id = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -796,7 +948,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
         get_evm_contract_path("tests/fixtures/evm_call_evm_example_counter.sol")?;
 
     let nest_application_id = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             nest_contract.clone(),
             nest_contract,
             VmRuntime::Evm,
@@ -822,7 +974,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = nest_incrementCall { input: increment };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     nest_application.run_json_query(mutation).await?;
 
@@ -849,7 +1001,10 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     use alloy_sol_types::{sol, SolCall, SolValue};
     use counter_no_graphql::CounterNoGraphQlAbi;
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_execution::{
+        evm::inputs::EvmInstantiation,
+        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -894,9 +1049,9 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let (nest_contract, _dir) =
         get_evm_contract_path("tests/fixtures/evm_call_wasm_example_counter.sol")?;
 
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
     let nest_application_id = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             nest_contract.clone(),
             nest_contract,
             VmRuntime::Evm,
@@ -919,7 +1074,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = nest_incrementCall { input: increment };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     nest_application.run_json_query(mutation).await?;
 
@@ -946,7 +1101,10 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_execution::{
+        evm::inputs::EvmInstantiation,
+        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -979,13 +1137,16 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let constructor_argument = ConstructorArgs { test_value: 42 };
     let constructor_argument = constructor_argument.abi_encode();
 
-    let instantiation_argument = u64::abi_encode(&original_value);
+    let instantiation_argument = EvmInstantiation {
+        value: Amount::ZERO,
+        argument: u64::abi_encode(&original_value),
+    };
 
     let (evm_contract, _dir) =
         get_evm_contract_path("tests/fixtures/evm_example_execute_message.sol")?;
 
     let application_id = client1
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -1031,7 +1192,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
         chain_id,
         moved_value,
     };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
 
@@ -1066,7 +1227,10 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_execution::{
+        evm::inputs::EvmInstantiation,
+        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1088,13 +1252,13 @@ async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> 
     let query = EvmQuery::Query(query);
 
     let constructor_argument = Vec::new();
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
 
     let (evm_contract, _dir) =
         get_evm_contract_path("tests/fixtures/evm_example_empty_instantiate.sol")?;
 
     let application_id = client1
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -1147,7 +1311,10 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_execution::{
+        evm::inputs::EvmInstantiation,
+        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1180,13 +1347,13 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     let query = EvmQuery::Query(query);
 
     let constructor_argument = Vec::new();
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
 
     let (evm_contract, _dir) =
         get_evm_contract_path("tests/fixtures/evm_example_process_streams.sol")?;
 
     let evm_application_id = client1
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -1226,7 +1393,7 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
         chain_id: chain_id1,
         application_id,
     };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     application2.run_json_query(mutation).await?;
 
@@ -1237,7 +1404,7 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     // Second: increment the values
 
     let mutation = increment_valueCall { increment };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
 
@@ -1270,21 +1437,19 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::Address;
-    use alloy_sol_types::{sol, SolCall};
-    use linera_base::{identifiers::AccountOwner, vm::EvmQuery};
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use alloy_sol_types::sol;
+    use linera_base::vm::EvmQuery;
+    use linera_execution::{
+        evm::inputs::EvmInstantiation, test_utils::solidity::get_evm_contract_path,
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
-    let account_owner = client.get_owner();
-    let Some(AccountOwner::Address20(address)) = account_owner else {
-        panic!("The owner should be of the form Some(Address20(...))");
-    };
-    let owner = Address::from(address);
+    let account_owner = client.get_owner().unwrap();
+    let owner = account_owner.to_evm_address().unwrap();
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     sol! {
@@ -1292,14 +1457,14 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
         function remote_check(address remote_address);
     }
 
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
     let constructor_argument = Vec::new();
 
     // Creating the inner EVM contract
 
     let (inner_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_msg_sender_inner.sol")?;
     let application_id_inner = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             inner_contract.clone(),
             inner_contract,
             VmRuntime::Evm,
@@ -1315,7 +1480,7 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
 
     let (outer_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_msg_sender_outer.sol")?;
     let application_id_outer = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             outer_contract.clone(),
             outer_contract,
             VmRuntime::Evm,
@@ -1341,14 +1506,14 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     let mutation = check_msg_senderCall {
         remote_address: owner,
     };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     application_inner.run_json_query(mutation).await?;
 
     let mutation = remote_checkCall {
         remote_address: evm_contract_inner,
     };
-    let mutation = mutation.abi_encode();
+    let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     application_outer.run_json_query(mutation).await?;
 
@@ -1371,7 +1536,9 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use linera_execution::{
+        evm::inputs::EvmInstantiation, test_utils::solidity::get_evm_contract_path,
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1396,9 +1563,9 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
 
     let constructor_argument = Vec::new();
-    let instantiation_argument = Vec::new();
+    let instantiation_argument = EvmInstantiation::default();
     let application_id = client
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             contract.clone(),
             contract,
             VmRuntime::Evm,
@@ -1450,7 +1617,8 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     // Checking authenticated signer/caller_id
 
     let mutation = test_authenticated_signer_caller_idCall {};
-    let mutation = EvmQuery::Mutation(mutation.abi_encode());
+    let mutation = get_zero_mutation(mutation)?;
+    let mutation = EvmQuery::Mutation(mutation);
     application.run_json_query(mutation).await?;
 
     // Testing the chain balance
@@ -1551,7 +1719,10 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
+    use linera_execution::{
+        evm::inputs::EvmInstantiation,
+        test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
+    };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -1583,12 +1754,15 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let constructor_argument = ConstructorArgs { the_supply };
     let constructor_argument = constructor_argument.abi_encode();
 
-    let instantiation_argument = U256::abi_encode(&the_supply);
+    let instantiation_argument = EvmInstantiation {
+        value: Amount::ZERO,
+        argument: U256::abi_encode(&the_supply),
+    };
 
     let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/erc20_shared.sol")?;
 
     let application_id = client1
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -1626,7 +1800,8 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         to: address2,
         value: transfer1,
     };
-    let mutation = EvmQuery::Mutation(mutation.abi_encode());
+    let mutation = get_zero_mutation(mutation)?;
+    let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
 
     let query = balanceOfCall { account: address1 };
@@ -1649,7 +1824,8 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         destination: address2,
         value: transfer2,
     };
-    let mutation = EvmQuery::Mutation(mutation.abi_encode());
+    let mutation = get_zero_mutation(mutation)?;
+    let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
 
     node_service2.process_inbox(&chain2).await?;
