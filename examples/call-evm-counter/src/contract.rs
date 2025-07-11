@@ -8,7 +8,7 @@ use alloy_sol_types::{sol, SolCall};
 use call_evm_counter::{CallCounterAbi, CallCounterOperation};
 use linera_sdk::{
     abis::evm::EvmAbi,
-    linera_base_types::{ApplicationId, WithContractAbi},
+    linera_base_types::{get_evm_operation, Amount, ApplicationId, WithContractAbi},
     Contract, ContractRuntime,
 };
 
@@ -56,13 +56,15 @@ impl Contract for CallCounterContract {
         match operation {
             CallCounterOperation::Increment(increment) => {
                 let operation = incrementCall { input: increment };
-                let operation = operation.abi_encode();
+                let operation =
+                    get_evm_operation(Amount::ZERO, operation.abi_encode()).expect("A mutation");
                 self.process_operation(operation)
             }
             CallCounterOperation::TestCallAddress => {
                 let remote_address = address!("0000000000000000000000000000000000000000");
                 let operation = call_from_wasmCall { remote_address };
-                let operation = operation.abi_encode();
+                let operation =
+                    get_evm_operation(Amount::ZERO, operation.abi_encode()).expect("A mutation");
                 self.process_operation(operation)
             }
         }

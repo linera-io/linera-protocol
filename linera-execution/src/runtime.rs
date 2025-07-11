@@ -1446,6 +1446,11 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?
     }
 
+    fn application_index(&mut self) -> Result<u32, ExecutionError> {
+        let txn_tracker = &self.inner().transaction_tracker;
+        Ok(txn_tracker.application_index())
+    }
+
     fn create_application(
         &mut self,
         module_id: ModuleId,

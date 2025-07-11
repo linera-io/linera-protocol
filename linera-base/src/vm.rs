@@ -63,5 +63,34 @@ pub enum EvmQuery {
     /// A read-only query.
     Query(Vec<u8>),
     /// A request to schedule an operation that can mutate the application state.
-    Mutation(Vec<u8>),
+    Operation(Vec<u8>),
+}
+
+/// An EVM operation containing a value and argument data.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct EvmOperation {
+    /// The amount being transferred.
+    pub value: alloy_primitives::U256,
+    /// The encoded argument data.
+    pub argument: Vec<u8>,
+}
+
+/// Creates an operation from value and argument data.
+pub fn get_evm_operation(
+    amount: crate::data_types::Amount,
+    argument: Vec<u8>,
+) -> Result<Vec<u8>, bcs::Error> {
+    let value = amount.into();
+    let evm_operation = EvmOperation { value, argument };
+    bcs::to_bytes(&evm_operation)
+}
+
+/// The instantiation argument to EVM smart contracts.
+/// `value` is the amount being transferred.
+#[derive(Default, Serialize, Deserialize)]
+pub struct EvmInstantiation {
+    /// The initial value put in the instantiation of the contract.
+    pub value: alloy_primitives::U256,
+    /// The input to the `fn instantiate` of the EVM smart contract.
+    pub argument: Vec<u8>,
 }
