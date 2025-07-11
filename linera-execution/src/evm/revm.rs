@@ -645,9 +645,8 @@ fn base_runtime_call<Runtime: BaseRuntime>(
             let owner_balances = runtime.read_owner_balances()?;
             let owner_balances = owner_balances
                 .into_iter()
-                .map(|(account_owner, balance)|
-                     (account_owner, balance.into()))
-                .collect::<Vec<(AccountOwner,AmountU256)>>();
+                .map(|(account_owner, balance)| (account_owner, balance.into()))
+                .collect::<Vec<(AccountOwner, AmountU256)>>();
             Ok(bcs::to_bytes(&owner_balances)?)
         }
         BaseRuntimePrecompile::ReadBalanceOwners => {
@@ -790,9 +789,10 @@ impl<'a> ContractPrecompile {
                 runtime.unsubscribe_from_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
             }
-            ContractRuntimePrecompile::QueryService { application_id, query } => {
-                runtime.query_service(application_id, query)
-            }
+            ContractRuntimePrecompile::QueryService {
+                application_id,
+                query,
+            } => runtime.query_service(application_id, query),
             ContractRuntimePrecompile::ValidationRound => {
                 let value = runtime.validation_round()?;
                 Ok(bcs::to_bytes(&value)?)

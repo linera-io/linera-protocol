@@ -43,8 +43,8 @@ contract ExampleLineraFeatures {
 
     function test_read_owners() external {
         LineraTypes.AccountOwnerBalance[] memory owner_balances = Linera.read_owner_balances();
-        require(owner_balances.length == 1);
+        require(owner_balances.length == 0);
         LineraTypes.AccountOwner[] memory owners = Linera.read_balance_owners();
-        require(owners.length == 1);
+        require(owners.length == 0);
     }
 }

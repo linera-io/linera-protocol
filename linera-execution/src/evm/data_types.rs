@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use alloy_primitives::U256;
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-
 use linera_base::data_types::Amount;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug,
-)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 /// An encapsulation of U256 in order to have a specific serialization
 pub struct AmountU256(U256);
 
@@ -46,8 +43,9 @@ impl From<Amount> for AmountU256 {
 
 #[cfg(test)]
 mod tests {
-    use crate::evm::data_types::AmountU256;
     use linera_base::data_types::Amount;
+
+    use crate::evm::data_types::AmountU256;
 
     #[test]
     fn check_bcs_serialization() -> anyhow::Result<()> {
