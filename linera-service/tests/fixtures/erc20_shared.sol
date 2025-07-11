@@ -1,5 +1,21 @@
 // SPDX-License-Identifier: MIT
+// The original code is from
 // OpenZeppelin Contracts (last updated v5.3.0) (token/ERC20/ERC20.sol)
+//
+// It is not possible to nest an ERC20 contract into another ERC20
+// contract and so a modification of the code could not be avoided.
+//
+// This implementation has been adapted to our need in the following
+// ways:
+// * The totalSupply() of this contract is constant and fixed at
+//   construction to be the total one. It returns the sum of the supply
+//   over all the chains.
+// * The localSupply() has been introduced to return the supply of one
+//   particular chain.
+// * When tokens are transfered to another chain, they are first burned
+//   on the sender chain and then minted on the receiving chain.
+// * The token can be transferred to another chain but under the same
+//   user.
 
 pragma solidity ^0.8.20;
 
@@ -42,17 +58,27 @@ contract ERC20_shared is Context, IERC20, IERC20Errors {
         summed_total_supply = the_supply;
     }
 
+    /**
+     * This is the function run on the creator chain to create the initial supply.
+     */
     function instantiate(bytes memory input) external {
         uint256 input_value = abi.decode(input, (uint256));
         require(input_value == summed_total_supply);
         _mint(msg.sender, input_value);
     }
 
+    /**
+     * This is the function run on the receiving chain in order to credit
+     * the user with the tokens.
+     */
     function execute_message(bytes memory input) external {
         (address user, uint256 amount) = abi.decode(input, (address, uint256));
         _mint(user, amount);
     }
 
+    /**
+     * This is the transfer to another chain under the same username.
+     */
     function transferToChain(bytes32 chain_id, uint256 amount) external {
         _burn(msg.sender, amount);
         bytes memory message = abi.encode(msg.sender, amount);
