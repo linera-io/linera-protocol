@@ -206,7 +206,6 @@ A block height to identify blocks in a chain
 """
 scalar BlockHeight
 
-
 """
 An origin and cursor of a unskippable bundle that is no longer in our inbox.
 """
@@ -547,12 +546,10 @@ type ExecutionStateView {
 	system: SystemExecutionStateView!
 }
 
-
 """
 A unique identifier for a user application or for the system application
 """
 scalar GenericApplicationId
-
 
 """
 The state of an inbox.
@@ -605,7 +602,6 @@ type IncomingBundle {
 	"""
 	action: MessageAction!
 }
-
 
 """
 A scalar that can represent any JSON Object value.
@@ -1184,7 +1180,6 @@ The name of an event stream
 """
 scalar StreamName
 
-
 type SubscriptionRoot {
 	"""
 	Subscribes to notifications from the specified chain.
@@ -1231,7 +1226,13 @@ scalar VersionInfo
 
 scalar VmRuntime
 
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: QueryRoot

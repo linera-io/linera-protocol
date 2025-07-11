@@ -71,14 +71,5 @@ impl From<linera_views::scylla_db::ScyllaDbStoreError> for IndexerError {
 }
 
 pub async fn graphiql(uri: Uri) -> impl IntoResponse {
-    response::Html(
-        GraphiQLSource::build()
-            .endpoint(uri.path())
-            .finish()
-            .replace("@17", "@18")
-            .replace(
-                "ReactDOM.render(",
-                "ReactDOM.createRoot(document.getElementById(\"graphiql\")).render(",
-            ),
-    )
+    response::Html(GraphiQLSource::build().endpoint(uri.path()).finish())
 }
