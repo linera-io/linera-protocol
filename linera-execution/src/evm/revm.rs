@@ -33,7 +33,10 @@ use revm_state::EvmState;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    evm::database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
+    evm::{
+        data_types::AmountU256,
+        database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
+    },
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime,
     ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
     UserContractModule, UserService, UserServiceInstance, UserServiceModule,
@@ -630,12 +633,10 @@ fn base_runtime_call<Runtime: BaseRuntime>(
         }
         BaseRuntimePrecompile::ReadChainBalance => {
             let balance: linera_base::data_types::Amount = runtime.read_chain_balance()?;
-            let balance: U256 = balance.into();
+            let balance: AmountU256 = balance.into();
             let vec = bcs::to_bytes(&balance)?;
 //            assert_eq!(vec, vec![0]);
-            let vec = vec[1..].to_vec();
             assert_eq!(vec.len(), 32);
-//            assert_eq!(vec, vec![0]);
             Ok(vec)
         }
         BaseRuntimePrecompile::ReadOwnerBalance(account_owner) => {

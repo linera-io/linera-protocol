@@ -8,6 +8,7 @@
 #![cfg(with_revm)]
 
 mod database;
+mod data_types;
 pub mod revm;
 
 use revm_context::result::{HaltReason, Output, SuccessReason};
