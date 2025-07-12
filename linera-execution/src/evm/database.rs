@@ -72,7 +72,7 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     /// This is the storage statistics of the read/write in order to adjust gas costs.
     storage_stats: Arc<Mutex<StorageStats>>,
     /// This is the EVM address of the contract.
-    /// At the creation, is is set to `Address::ZERO` and then later set to the correct value.
+    /// At the creation, it is set to `Address::ZERO` and then later set to the correct value.
     pub contract_address: Address,
     /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
