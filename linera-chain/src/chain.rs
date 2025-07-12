@@ -987,7 +987,7 @@ where
         } else {
             Vec::new()
         };
-        // Everything after (including) next_height in in preprocessed_blocks if we have it.
+        // Everything after (including) next_height in preprocessed_blocks if we have it.
         for height in start.max(next_height).0..=end.0 {
             if let Some(hash) = self.preprocessed_blocks.get(&BlockHeight(height)).await? {
                 hashes.push(hash);
