@@ -59,7 +59,7 @@ where
                 continue;
             }
 
-            // all the block dependecies have been resolved for this block
+            // all the block dependencies have been resolved for this block
             // now just resolve the blobs
             let mut blobs_to_send = Vec::new();
             let mut blobs_to_index_block_with = Vec::new();
