@@ -474,17 +474,18 @@ pub enum ClientCommand {
     #[cfg(feature = "benchmark")]
     MultiBenchmark {
         /// The number of `linera benchmark` processes to run in parallel.
-        #[arg(long = "processes", default_value = "1")]
+        #[arg(long, default_value = "1")]
         processes: usize,
 
         /// The faucet (which implicitly defines the network)
-        #[arg(long = "faucet")]
+        #[arg(long)]
         faucet: String,
 
-        /// If running on local SSD, specify the directory to store the storage and wallet.
+        /// If specified, a directory with a random name will be created in this directory, and the
+        /// client state will be stored there.
         /// If not specified, a temporary directory will be used for each client.
-        #[arg(long = "ssd-dir")]
-        ssd_dir: Option<String>,
+        #[arg(long)]
+        client_state_dir: Option<String>,
 
         /// The benchmark command to run.
         #[clap(flatten)]
