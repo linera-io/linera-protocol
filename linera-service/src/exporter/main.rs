@@ -36,7 +36,7 @@ mod test_utils;
 )]
 struct ExporterOptions {
     /// Path to the TOML file describing the configuration for the block exporter.
-    #[arg(long = "config-path")]
+    #[arg(long)]
     config_path: PathBuf,
 
     /// Storage configuration for the blockchain history, chain states and binary blobs.
