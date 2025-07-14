@@ -807,10 +807,6 @@ impl Runnable for Job {
                     "max_pending_message_bundles must be set to at least the same as the \
                      number of transactions per block ({transactions_per_block}) for benchmarking",
                 );
-                assert!(
-                    options.context_options.wait_for_outgoing_messages,
-                    "wait_for_outgoing_messages must be set to true for benchmarking",
-                );
                 let num_chain_groups = num_chain_groups.unwrap_or(num_cpus::get());
                 assert!(
                     num_chain_groups > 0,
