@@ -10,7 +10,7 @@ Most of the CLI arguments required to run the block exporter are similar to that
 From the root of Linera repository, this can be minimally started as follows:
 
 ```bash
-cargo run --package linera-service --bin linera-exporter --config_path <CONFIG_PATH> --storage <STORAGE_CONFIG> --genesis <GENESIS_CONFIG_PATH>
+cargo run --package linera-service --bin linera-exporter --config-path <CONFIG_PATH> --storage <STORAGE_CONFIG> --genesis <GENESIS_CONFIG_PATH>
 ```
 
 Care should be taken when passing the arguments <STORAGE_CONFIG> and <GENESIS_CONFIG_PATH>. They should be same that are already used for that validator to run its proxy and the chain workers.

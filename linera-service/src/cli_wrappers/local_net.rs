@@ -655,7 +655,7 @@ impl LocalNet {
         let child = self
             .command_for_binary("linera-exporter")
             .await?
-            .args(["--config_path", &config_path])
+            .args(["--config-path", &config_path])
             .args(["--storage", &storage.to_string()])
             .spawn_into()?;
 
