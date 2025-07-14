@@ -3,10 +3,10 @@ environments:
     values:
       - writeToGrafanaCloud: {{ env "LINERA_WRITE_TO_GRAFANA_CLOUD" | default "false" }}
         validatorLabel: {{ env "LINERA_VALIDATOR_LABEL" | default (printf "local-%s" (env "USER")) }}
-        usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
-        usingRecommendedScyllaDbSettings: {{ env "LINERA_HELMFILE_SET_USING_RECOMMENDED_SCYLLA_DB_SETTINGS" | default "false" }}
+        gcpRun: {{ env "LINERA_HELMFILE_SET_GCP_RUN" | default "false" }}
         kubeContext: {{ env "LINERA_HELMFILE_SET_KUBE_CONTEXT" | default "" }}
         kubeConfigPath: {{ env "KUBECONFIG" | default "" }}
+        dualStore: {{ env "LINERA_HELMFILE_SET_DUAL_STORE" | default "false" }}
 
 helmDefaults:
   wait: true
@@ -23,7 +23,7 @@ hooks:
         set -euxo pipefail
         echo "Installing Prometheus ServiceMonitor CRD…"
         kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
-{{- if or .Values.usingLocalSsd .Values.usingRecommendedScyllaDbSettings }}
+{{- if and .Values.dualStore .Values.gcpRun }}
   - events: ["prepare"]
     showlogs: true
     command: bash
@@ -45,11 +45,6 @@ hooks:
 
         kubectl "${kube_args[@]}" apply -f ./scylla-setup/gke-daemonset-raid-disks.yaml
         kubectl "${kube_args[@]}" -n default rollout status daemonset/gke-raid-disks
-
-        kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-csi-driver
-        kubectl "${kube_args[@]}" -n local-csi-driver rollout status daemonset.apps/local-csi-driver --timeout=5m
-
-        kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-ssd-sc.yaml
 {{- end }}
 
 ---
@@ -91,6 +86,37 @@ releases:
       - scylla-operator/scylla-operator
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA" | default "scylla.values.yaml.gotmpl" }}
+    {{- if .Values.gcpRun }}
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: bash
+        args:
+          - -c
+          - |
+            set -euxo pipefail
+
+            kube_args=(
+              {{- if .Values.kubeContext }}
+              --context {{ .Values.kubeContext }}
+              {{- end }}
+              {{- if .Values.kubeConfigPath }}
+              --kubeconfig {{ .Values.kubeConfigPath }}
+              {{- end }}
+            )
+
+            echo "Deploy NodeConfig, Local-CSI driver and StorageClass"
+
+            kubectl "${kube_args[@]}" apply -f ./scylla-setup/nodeconfig.yaml
+            kubectl wait --for=condition=Progressing=False --timeout=10m nodeconfig/scylla-nvme
+            kubectl wait --for=condition=Degraded=False --timeout=10m nodeconfig/scylla-nvme
+            kubectl wait --for=condition=Available=True --timeout=10m nodeconfig/scylla-nvme
+
+            kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-csi-driver
+            kubectl "${kube_args[@]}" -n local-csi-driver rollout status daemonset/local-csi-driver --timeout=5m
+
+            kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-ssd-sc.yaml
+    {{- end }}
   - name: scylla-manager
     version: v1.16.0
     namespace: scylla-manager

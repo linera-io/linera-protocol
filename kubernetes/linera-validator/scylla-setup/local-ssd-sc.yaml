@@ -4,5 +4,5 @@ metadata:
   name: nvme-ssd-block
 provisioner: local.csi.scylladb.com
 volumeBindingMode: WaitForFirstConsumer
-reclaimPolicy: Delete
-allowVolumeExpansion: false
+parameters:
+  csi.storage.k8s.io/fstype: xfs
