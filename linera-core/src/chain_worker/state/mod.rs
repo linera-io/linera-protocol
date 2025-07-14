@@ -25,7 +25,9 @@ use linera_chain::{
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
-use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
+use linera_execution::{
+    ExecutionStateView, Query, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
+};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::views::ClonableView;
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
@@ -288,12 +290,12 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        let (block, response) = ChainWorkerStateWithTemporaryChanges::new(self)
+    ) -> Result<(Block, ResourceTracker, ChainInfoResponse), WorkerError> {
+        let (block, resources, response) = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .stage_block_execution(block, round, published_blobs)
             .await?;
-        Ok((block, response))
+        Ok((block, resources, response))
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
