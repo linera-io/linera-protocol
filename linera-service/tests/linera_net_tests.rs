@@ -1442,7 +1442,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         function totalSupply();
         function transfer(address to, uint256 value);
         function balanceOf(address account);
-        function transferToChain(bytes32 chain_id, uint256 value);
+        function transferToChain(bytes32 chain_id, address destination, uint256 value);
     }
 
     let the_supply = U256::from(1000000000);
@@ -1514,6 +1514,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let chain_id: B256 = chain_id.into();
     let mutation = transferToChainCall {
         chain_id,
+        destination: address2,
         value: transfer2,
     };
     let mutation = EvmQuery::Mutation(mutation.abi_encode());
@@ -1531,6 +1532,8 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         the_supply - transfer1 - transfer2
     );
 
+    let query = balanceOfCall { account: address2 };
+    let query = EvmQuery::Query(query.abi_encode());
     let result = application2.run_json_query(query).await?;
     assert_eq!(read_evm_u256_entry(result), transfer2);
 

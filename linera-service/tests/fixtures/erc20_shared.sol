@@ -72,16 +72,22 @@ contract ERC20_shared is Context, IERC20, IERC20Errors {
      * the user with the tokens.
      */
     function execute_message(bytes memory input) external {
-        (address user, uint256 amount) = abi.decode(input, (address, uint256));
-        _mint(user, amount);
+        (address source, address destination, uint256 amount) = abi.decode(input, (address, address, uint256));
+        LineraTypes.OptionBool result = Linera.message_is_bouncing().value;
+        require(result != LineraTypes.OptionBool.None);
+        if (result == LineraTypes.OptionBool.True) {
+            _mint(source, amount);
+        } else {
+            _mint(destination, amount);
+        }
     }
 
     /**
      * This is the transfer to another chain under the same username.
      */
-    function transferToChain(bytes32 chain_id, uint256 amount) external {
+    function transferToChain(bytes32 chain_id, address destination, uint256 amount) external {
         _burn(msg.sender, amount);
-        bytes memory message = abi.encode(msg.sender, amount);
+        bytes memory message = abi.encode(msg.sender, destination, amount);
         Linera.send_message(chain_id, message);
     }
 
