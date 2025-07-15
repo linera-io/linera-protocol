@@ -5578,7 +5578,6 @@ dependencies = [
  "mini-moka",
  "native-fungible",
  "non-fungible",
- "num_cpus",
  "pathdiff",
  "port-selector",
  "prometheus",
