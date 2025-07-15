@@ -790,8 +790,7 @@ impl Runnable for Job {
             #[cfg(feature = "benchmark")]
             Benchmark(benchmark_config) => {
                 let BenchmarkCommand {
-                    num_chains_per_chain_group,
-                    num_chain_groups,
+                    num_chains,
                     tokens_per_chain,
                     transactions_per_block,
                     fungible_application_id,
@@ -808,9 +807,8 @@ impl Runnable for Job {
                     "max_pending_message_bundles must be set to at least the same as the \
                      number of transactions per block ({transactions_per_block}) for benchmarking",
                 );
-                let num_chain_groups = num_chain_groups.unwrap_or(num_cpus::get());
                 assert!(
-                    num_chain_groups > 0,
+                    num_chains > 0,
                     "Number of chain groups must be greater than 0"
                 );
                 assert!(
@@ -825,7 +823,7 @@ impl Runnable for Job {
                 };
 
                 let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
-                    .take(num_chain_groups * num_chains_per_chain_group)
+                    .take(num_chains)
                     .collect();
                 signer.persist().await?;
 
@@ -837,8 +835,7 @@ impl Runnable for Job {
                 );
                 let (chain_clients, blocks_infos) = context
                     .prepare_for_benchmark(
-                        num_chain_groups,
-                        num_chains_per_chain_group,
+                        num_chains,
                         transactions_per_block,
                         tokens_per_chain,
                         fungible_application_id,
@@ -873,7 +870,7 @@ impl Runnable for Job {
                     shutdown_notifier.clone(),
                 );
                 linera_client::benchmark::Benchmark::run_benchmark(
-                    num_chain_groups,
+                    num_chains,
                     transactions_per_block,
                     bps,
                     chain_clients.clone(),
