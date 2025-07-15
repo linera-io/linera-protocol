@@ -321,6 +321,19 @@ impl Client {
         Ok(())
     }
 
+    /// Gets the balance of the default chain.
+    ///
+    /// # Errors
+    /// If the chain couldn't be established.
+    pub async fn balance(&self) -> JsResult<String> {
+        Ok(self
+            .default_chain_client()
+            .await?
+            .query_balance()
+            .await?
+            .to_string())
+    }
+
     /// Gets the identity of the default chain.
     ///
     /// # Errors
