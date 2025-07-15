@@ -48,7 +48,7 @@ const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
 
 /// This is the selector of the `process_streams` that should be called
 /// only from a submitted message
-const PROCESS_STREAMS_SELECTOR: &[u8] = &[227, 9, 189, 153];
+const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 
 /// This is the selector of the `instantiate` that should be called
 /// only when creating a new instance of a shared contract
@@ -116,12 +116,8 @@ mod tests {
     fn check_process_streams_selector() {
         use alloy_sol_types::{sol, SolCall};
         sol! {
-            struct InternalCryptoHash {
-                bytes32 value;
-            }
-
             struct InternalApplicationId {
-                InternalCryptoHash application_description_hash;
+                bytes32 application_description_hash;
             }
 
             struct InternalGenericApplicationId {
@@ -139,7 +135,7 @@ mod tests {
             }
 
             struct InternalChainId {
-                InternalCryptoHash value;
+                bytes32 value;
             }
 
             struct InternalStreamUpdate {
@@ -153,7 +149,7 @@ mod tests {
         }
         assert_eq!(
             process_streamsCall::SIGNATURE,
-            "process_streams((((bytes32)),((uint8,((bytes32))),(bytes)),uint32,uint32)[])"
+            "process_streams(((bytes32),((uint8,(bytes32)),(bytes)),uint32,uint32)[])"
         );
         assert_eq!(process_streamsCall::SELECTOR, PROCESS_STREAMS_SELECTOR);
     }
@@ -226,12 +222,8 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     use alloy_sol_types::{sol, SolCall};
     use linera_base::identifiers::{GenericApplicationId, StreamId};
     sol! {
-        struct InternalCryptoHash {
-            bytes32 value;
-        }
-
         struct InternalApplicationId {
-            InternalCryptoHash application_description_hash;
+            bytes32 application_description_hash;
         }
 
         struct InternalGenericApplicationId {
@@ -249,7 +241,7 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
         }
 
         struct InternalChainId {
-            InternalCryptoHash value;
+            bytes32 value;
         }
 
         struct InternalStreamUpdate {
@@ -262,11 +254,10 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
         function process_streams(InternalStreamUpdate[] internal_streams);
     }
 
-    fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> InternalCryptoHash {
+    fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> B256 {
         let hash: [u64; 4] = <[u64; 4]>::from(hash);
         let hash: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(hash);
-        let value: B256 = hash.into();
-        InternalCryptoHash { value }
+        hash.into()
     }
 
     fn chain_id_to_internal_chain_id(chain_id: ChainId) -> InternalChainId {
@@ -294,7 +285,7 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     ) -> InternalGenericApplicationId {
         match generic_application_id {
             GenericApplicationId::System => {
-                let application_description_hash = InternalCryptoHash { value: B256::ZERO };
+                let application_description_hash = B256::ZERO;
                 InternalGenericApplicationId {
                     choice: 0,
                     user: InternalApplicationId {
@@ -1213,7 +1204,7 @@ where
         ensure_selector_presence(
             &self.module,
             PROCESS_STREAMS_SELECTOR,
-            "function process_streams(LineraTypes.StreamUpdate[] memory streams)",
+            "function process_streams(Linera.StreamUpdate[] memory streams)",
         )?;
         // For process_streams, authenticated_signer and authenticated_called_id are None.
         let caller = Address::ZERO;

@@ -240,9 +240,6 @@ jobs:
     - name: Compile the LineraTypes.yaml
       run: |
         serdegen --language solidity --module-name LineraTypes --target-source-dir dest linera-execution/solidity/LineraTypes.yaml
-    - name: Apply the patch to LineraTypes.sol
-      run: |
-        patch dest/LineraTypes.sol < linera-execution/solidity/LineraTypes.sol.patch
     - name: Check for generated LineraTypes.sol
       run: |
         if ! diff dest/LineraTypes.sol linera-execution/solidity/LineraTypes.sol
