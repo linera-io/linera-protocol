@@ -96,7 +96,6 @@ fn parse_notification(notification: Notification) -> core::result::Result<BlockI
 
 #[cfg(test)]
 mod test {
-
     use linera_base::{crypto::CryptoHash, identifiers::ChainId, port::get_free_port};
     use linera_core::worker::Notification;
     use linera_rpc::grpc::api::notifier_service_client::NotifierServiceClient;

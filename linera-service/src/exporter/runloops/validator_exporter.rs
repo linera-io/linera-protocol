@@ -1,12 +1,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::IntoFuture, sync::Arc, time::Duration};
+use std::{
+    future::IntoFuture,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use futures::{future::try_join_all, stream::FuturesOrdered};
-use linera_base::{ensure, identifiers::BlobId};
+use linera_base::identifiers::BlobId;
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_client::config::{Destination, DestinationId, DestinationKind};
+use linera_client::config::DestinationId;
 use linera_core::node::{
     CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider,
 };
@@ -27,7 +34,6 @@ where
     node_provider: Arc<GrpcNodeProvider>,
     destination_id: DestinationId,
     storage: ExporterStorage<S>,
-    destination_config: Destination,
     work_queue_size: usize,
 }
 
@@ -39,14 +45,12 @@ where
         node_provider: Arc<GrpcNodeProvider>,
         destination_id: DestinationId,
         storage: ExporterStorage<S>,
-        destination_config: Destination,
         work_queue_size: usize,
     ) -> Self {
         Self {
             node_provider,
             destination_id,
             storage,
-            destination_config,
             work_queue_size,
         }
     }
@@ -55,17 +59,18 @@ where
         self,
         shutdown_signal: F,
     ) -> anyhow::Result<()> {
-        ensure!(
-            DestinationKind::Validator == self.destination_config.kind,
-            ExporterError::DestinationError
-        );
+        let address = self.destination_id.address().to_owned();
+        let destination_state = self.storage.load_destination_state(&self.destination_id);
 
-        let address = self.destination_config.address();
         let node = self.node_provider.make_node(&address)?;
 
-        let export_task = ExportTask::new(node, self.destination_id, &self.storage);
-        let (mut task_queue, task_receiver) =
-            TaskQueue::new(self.work_queue_size, self.destination_id, &self.storage);
+        let (mut task_queue, task_receiver) = TaskQueue::new(
+            self.work_queue_size,
+            destination_state.load(Ordering::Acquire) as usize,
+            &self.storage,
+        );
+
+        let export_task = ExportTask::new(node, &self.storage, destination_state);
 
         tokio::select! {
 
@@ -88,8 +93,8 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     node: GrpcClient,
-    destination_id: DestinationId,
     storage: &'a ExporterStorage<S>,
+    destination_state: Arc<AtomicU64>,
 }
 
 impl<'a, S> ExportTask<'a, S>
@@ -98,13 +103,13 @@ where
 {
     fn new(
         node: GrpcClient,
-        destination_id: DestinationId,
         storage: &'a ExporterStorage<S>,
+        destination_state: Arc<AtomicU64>,
     ) -> ExportTask<'a, S> {
         ExportTask {
             node,
-            destination_id,
             storage,
+            destination_state,
         }
     }
 
@@ -128,10 +133,14 @@ where
                 Err(e) => Err(e)?,
             }
 
-            self.storage.increment_destination(self.destination_id);
+            self.increment_destination_state();
         }
 
         Ok(())
+    }
+
+    fn increment_destination_state(&self) {
+        let _ = self.destination_state.fetch_add(1, Ordering::Release);
     }
 
     async fn upload_blobs(&self, blobs: Vec<BlobId>) -> anyhow::Result<()> {
@@ -163,10 +172,7 @@ where
     ) -> Result<(), NodeError> {
         let delivery = CrossChainMessageDelivery::NonBlocking;
         let block_id = BlockId::from_confirmed_block(certificate.value());
-        tracing::info!(
-            "dispatching block with id: {:#?} from linera exporter",
-            block_id
-        );
+        tracing::info!(?block_id, "dispatching block");
         match self
             .node
             .handle_confirmed_certificate(certificate, delivery)
@@ -174,7 +180,7 @@ where
         {
             Ok(_) => {}
             Err(e) => {
-                tracing::error!("error {} when resolving block with id: {:#?}", e, block_id);
+                tracing::error!(error=%e, ?block_id, "error when dispatching block");
                 Err(e)?
             }
         }
@@ -200,13 +206,12 @@ where
     #[expect(clippy::type_complexity)]
     fn new(
         queue_size: usize,
-        destination_id: DestinationId,
+        start_height: usize,
         storage: &'a ExporterStorage<S>,
     ) -> (
         TaskQueue<'a, S>,
         Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) {
-        let start_height = storage.load_destination_state(destination_id) as usize;
         let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
 
         let queue = Self {

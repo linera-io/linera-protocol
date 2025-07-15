@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    marker::PhantomData,
+    sync::{atomic::AtomicU64, Arc},
+};
 
 use dashmap::DashMap;
 use futures::future::try_join_all;
@@ -182,13 +186,7 @@ where
         self.shared_storage.get_blob(blob_id).await
     }
 
-    pub(crate) fn increment_destination(&self, id: DestinationId) {
-        self.shared_storage
-            .destination_states
-            .increment_destination(id);
-    }
-
-    pub(crate) fn load_destination_state(&self, id: DestinationId) -> u64 {
+    pub(crate) fn load_destination_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
         self.shared_storage.destination_states.load_state(id)
     }
 
@@ -204,12 +202,12 @@ where
     pub(super) async fn load(
         storage: S,
         id: u32,
-        number_of_destinaions: u16,
+        destinations: Vec<DestinationId>,
         limits: LimitsConfig,
     ) -> Result<(Self, ExporterStorage<S>), ExporterError> {
         let context = storage.block_exporter_context(id).await?;
         let (view, canonical_state, destination_states) =
-            BlockExporterStateView::initiate(context, number_of_destinaions).await?;
+            BlockExporterStateView::initiate(context, destinations).await?;
 
         let chain_states_cache_capacity =
             ((limits.auxiliary_cache_size_mb / 3) as u64 * 1024 * 1024)
@@ -244,6 +242,10 @@ where
         hash: CryptoHash,
     ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
         self.shared_storage.get_block(hash).await
+    }
+
+    pub(super) async fn get_blob(&self, blob: BlobId) -> Result<Arc<Blob>, ExporterError> {
+        self.shared_storage.get_blob(blob).await
     }
 
     pub(super) async fn is_blob_indexed(&mut self, blob: BlobId) -> Result<bool, ExporterError> {
@@ -311,13 +313,29 @@ where
         self.shared_storage.push_block(block)
     }
 
+    pub(super) fn new_committee(&mut self, committee_destinations: Vec<DestinationId>) {
+        committee_destinations.into_iter().for_each(|id| {
+            let state = match self.shared_storage.destination_states.get(&id) {
+                None => {
+                    tracing::trace!(id=?id, "adding new committee member");
+                    Arc::new(AtomicU64::new(0))
+                }
+                Some(state) => state.clone(),
+            };
+            self.shared_storage.destination_states.insert(id, state);
+        });
+    }
+
     pub(super) async fn save(&mut self) -> Result<(), ExporterError> {
         let mut batch = Batch::new();
+
         self.shared_storage
             .shared_canonical_state
             .flush(&mut batch)?;
+
         self.exporter_state_view
             .set_destination_states(self.shared_storage.destination_states.clone());
+
         self.exporter_state_view.flush(&mut batch)?;
         self.exporter_state_view.rollback();
         if let Err(e) = self.exporter_state_view.context().write_batch(batch).await {
