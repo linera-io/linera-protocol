@@ -302,11 +302,24 @@ where
         // We haven't processed the block - verify the certificate first
         let epoch = block.header.epoch;
         // Get the committee for the block's epoch from storage.
-        let committees = self.state.storage.committees_for(epoch..=epoch).await?;
-        let committee = committees
+        if let Some(committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .committees
+            .get()
             .get(&epoch)
-            .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;
-        certificate.check(committee)?;
+        {
+            certificate.check(committee)?;
+        } else {
+            let committees = self.state.storage.committees_for(epoch..=epoch).await?;
+            let committee = committees
+                .get(&epoch)
+                .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;
+            // This line is duplicated, but this avoids cloning and a lifetimes error.
+            certificate.check(committee)?;
+        }
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client
