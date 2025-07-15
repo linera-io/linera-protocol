@@ -1,46 +1,45 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    future::{Future, IntoFuture},
-    sync::Arc,
-    thread::{self, JoinHandle},
-};
+use std::future::{Future, IntoFuture};
 
 use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
-use linera_client::config::{
-    Destination, DestinationConfig, DestinationId, DestinationKind, LimitsConfig,
-};
-use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
+use linera_client::config::{DestinationConfig, LimitsConfig};
+use linera_rpc::NodeOptions;
 use linera_storage::Storage;
-use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-    task::JoinSet,
-};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
 
 use crate::{
     common::{BlockId, ExporterError},
-    storage::{BlockProcessorStorage, ExporterStorage},
+    runloops::task_manager::{PoolMember, ThreadPoolState},
+    storage::BlockProcessorStorage,
 };
 
 mod block_processor;
 mod indexer;
+mod task_manager;
 mod validator_exporter;
 
 #[cfg(test)]
 pub use indexer::indexer_api;
 
+#[expect(clippy::type_complexity)]
 pub(crate) fn start_block_processor_task<S, F>(
     storage: S,
     shutdown_signal: F,
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
-    clients_per_thread: usize,
     destination_config: DestinationConfig,
-) -> Result<UnboundedSender<BlockId>, ExporterError>
+) -> Result<
+    (
+        UnboundedSender<BlockId>,
+        std::thread::JoinHandle<Result<(), ExporterError>>,
+    ),
+    ExporterError,
+>
 where
     S: Storage + Clone + Send + Sync + 'static,
     F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
@@ -48,108 +47,20 @@ where
 {
     let (task_sender, queue_front) = unbounded_channel();
     let moved_task_sender = task_sender.clone();
-    let _handle = thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         start_block_processor(
             storage,
             shutdown_signal,
             limits,
             options,
             block_exporter_id,
-            clients_per_thread,
             moved_task_sender,
             destination_config,
             queue_front,
         )
     });
 
-    Ok(task_sender)
-}
-
-fn start_exporters<S, F>(
-    shutdown_signal: F,
-    options: NodeOptions,
-    work_queue_size: usize,
-    clients_per_thread: usize,
-    mut storage: ExporterStorage<S>,
-    destination_config: DestinationConfig,
-) -> Result<Vec<JoinHandle<()>>, ExporterError>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-    F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
-    <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
-{
-    let number_of_threads = destination_config
-        .destinations
-        .len()
-        .div_ceil(clients_per_thread);
-    let threadpool = {
-        let mut pool = Vec::new();
-        for n in 0..number_of_threads {
-            let moved_signal = shutdown_signal.clone();
-            let moved_storage = storage.clone()?;
-            let destinations = destination_config
-                .destinations
-                .iter()
-                .enumerate()
-                .filter_map(|(i, dest)| {
-                    if i % number_of_threads == n {
-                        Some((i as u16, dest.clone()))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            let handle = thread::spawn(move || {
-                start_exporter_tasks(
-                    moved_signal,
-                    options,
-                    work_queue_size,
-                    moved_storage,
-                    destinations,
-                )
-            });
-
-            pool.push(handle);
-        }
-
-        pool
-    };
-
-    Ok(threadpool)
-}
-
-#[tokio::main(flavor = "current_thread")]
-async fn start_exporter_tasks<S, F>(
-    shutdown_signal: F,
-    options: NodeOptions,
-    work_queue_size: usize,
-    mut storage: ExporterStorage<S>,
-    destinations: Vec<(DestinationId, Destination)>,
-) where
-    S: Storage + Clone + Send + Sync + 'static,
-    F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
-    <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
-{
-    let node_provider = GrpcNodeProvider::new(options);
-    let arced_node_provider = Arc::new(node_provider);
-    let mut set = JoinSet::new();
-    for (id, destination) in destinations {
-        spawn_exporter_task_on_set(
-            &mut set,
-            shutdown_signal.clone(),
-            id,
-            options,
-            work_queue_size,
-            destination,
-            storage.clone().unwrap(),
-            arced_node_provider.clone(),
-        );
-    }
-
-    while let Some(res) = set.join_next().await {
-        let _res = res.unwrap();
-    }
+    Ok((task_sender, handle))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -160,7 +71,6 @@ async fn start_block_processor<S, F>(
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
-    clients_per_thread: usize,
     queue_rear: UnboundedSender<BlockId>,
     destination_config: DestinationConfig,
     queue_front: UnboundedReceiver<BlockId>,
@@ -170,83 +80,75 @@ where
     F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
     <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
 {
-    let (block_processor_storage, exporter_storage) = BlockProcessorStorage::load(
-        storage.clone(),
-        block_exporter_id,
-        destination_config.destinations.len() as u16,
-        limits,
-    )
-    .await?;
+    let destination_ids = destination_config
+        .destinations
+        .iter()
+        .map(|destination| destination.id())
+        .collect::<Vec<_>>();
+    let (block_processor_storage, mut exporter_storage) =
+        BlockProcessorStorage::load(storage.clone(), block_exporter_id, destination_ids, limits)
+            .await?;
 
-    let mut block_processor = BlockProcessor::new(block_processor_storage, queue_rear, queue_front);
-
-    let _pool = start_exporters(
-        shutdown_signal.clone(),
+    let pool_members = PoolMember::new(
         options,
+        exporter_storage.clone().unwrap(),
         limits.work_queue_size.into(),
-        clients_per_thread,
-        exporter_storage,
-        destination_config,
-    )
-    .unwrap();
+        shutdown_signal.clone(),
+    );
+    let pool_state =
+        ThreadPoolState::new(vec![pool_members], destination_config.destinations.clone());
+
+    let mut block_processor = BlockProcessor::new(
+        pool_state,
+        block_processor_storage,
+        queue_rear,
+        queue_front,
+        destination_config.committee_destination,
+    );
 
     block_processor
         .run_with_shutdown(shutdown_signal, limits.persistence_period_ms)
-        .await
-        .unwrap();
+        .await?;
+
+    block_processor.pool_state().join_all().await;
 
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn spawn_exporter_task_on_set<F, S>(
-    set: &mut JoinSet<Result<(), anyhow::Error>>,
-    signal: F,
-    id: DestinationId,
-    options: NodeOptions,
-    work_queue_size: usize,
-    destination: Destination,
-    storage: ExporterStorage<S>,
-    node_provider: Arc<GrpcNodeProvider>,
-) where
-    S: Storage + Clone + Send + Sync + 'static,
-    F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
-    <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
-{
-    match destination.kind {
-        DestinationKind::Indexer => {
-            let exporter_task =
-                IndexerExporter::new(options, work_queue_size, storage, id, destination);
-
-            let _handle = set.spawn(exporter_task.run_with_shutdown(signal));
-        }
-
-        DestinationKind::Validator => {
-            let exporter_task =
-                ValidatorExporter::new(node_provider, id, storage, destination, work_queue_size);
-
-            let _handle = set.spawn(exporter_task.run_with_shutdown(signal));
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use std::{collections::BTreeMap, sync::atomic::Ordering, time::Duration};
 
-    use linera_base::port::get_free_port;
+    use linera_base::{
+        crypto::{AccountPublicKey, Secp256k1PublicKey},
+        data_types::{
+            Blob, BlobContent, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Round,
+            Timestamp,
+        },
+        port::get_free_port,
+    };
+    use linera_chain::{
+        data_types::BlockExecutionOutcome,
+        test::{make_child_block, make_first_block, BlockTestExt},
+        types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
+    };
     use linera_client::config::{Destination, DestinationConfig, LimitsConfig};
+    use linera_execution::{
+        committee::{Committee, ValidatorState},
+        system::AdminOperation,
+        Operation, ResourceControlPolicy, SystemOperation,
+    };
     use linera_rpc::{config::TlsConfig, NodeOptions};
     use linera_service::cli_wrappers::local_net::LocalNet;
     use linera_storage::{DbStorage, Storage};
-    use linera_views::memory::MemoryStore;
+    use linera_views::{memory::MemoryStore, ViewError};
     use test_case::test_case;
     use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
 
     use super::start_block_processor_task;
     use crate::{
-        common::CanonicalBlock,
+        common::{get_address, BlockId, CanonicalBlock},
         state::BlockExporterStateView,
         test_utils::{make_simple_state_with_blobs, DummyIndexer, DummyValidator, TestDestination},
         ExporterCancellationSignal,
@@ -276,7 +178,7 @@ mod test {
         // make some blocks
         let (notification, state) = make_simple_state_with_blobs(&storage).await;
 
-        let notifier = start_block_processor_task(
+        let (notifier, handle) = start_block_processor_task(
             storage,
             signal,
             LimitsConfig::default(),
@@ -287,8 +189,8 @@ mod test {
                 max_retries: 10,
             },
             0,
-            10,
             DestinationConfig {
+                committee_destination: false,
                 destinations: vec![destination_address],
             },
         )?;
@@ -308,7 +210,7 @@ mod test {
         }
 
         cancellation_token.cancel();
-
+        handle.join().unwrap()?;
         Ok(())
     }
 
@@ -317,10 +219,9 @@ mod test {
     {
         let mut destinations = Vec::new();
         let cancellation_token = CancellationToken::new();
-        let _dummy_indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;
+        let _indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;
         let faulty_indexer = spawn_faulty_indexer(&mut destinations, &cancellation_token).await?;
-        let _dummy_validator =
-            spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
+        let validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
         let faulty_validator =
             spawn_faulty_validator(&mut destinations, &cancellation_token).await?;
 
@@ -330,7 +231,7 @@ mod test {
 
         let (notification, _state) = make_simple_state_with_blobs(&storage).await;
 
-        let notifier = start_block_processor_task(
+        let (notifier, _handle) = start_block_processor_task(
             storage.clone(),
             signal,
             LimitsConfig {
@@ -344,8 +245,8 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
             DestinationConfig {
+                committee_destination: false,
                 destinations: destinations.clone(),
             },
         )?;
@@ -358,18 +259,25 @@ mod test {
         sleep(Duration::from_secs(4)).await;
 
         child.cancel();
+        // handle.join().unwrap()?;
 
         let context = storage.block_exporter_context(0).await?;
+        let destination_ids = destinations.iter().map(|d| d.id()).collect::<Vec<_>>();
         let (_, _, destination_states) =
-            BlockExporterStateView::initiate(context.clone(), 4).await?;
-        for i in 0..4 {
-            let state = destination_states.load_state(i);
+            BlockExporterStateView::initiate(context.clone(), destination_ids.clone()).await?;
+        for (i, destination) in destination_ids.iter().enumerate() {
+            let state = destination_states.load_state(destination);
+            // We created destinations such that odd ones were faulty.
             if i % 2 == 0 {
-                assert_eq!(state, 2);
+                assert_eq!(state.load(Ordering::Acquire), 2);
             } else {
-                assert_eq!(state, 0);
+                assert_eq!(state.load(Ordering::Acquire), 0);
             }
         }
+
+        assert!(validator.duplicate_blocks.is_empty());
+
+        tracing::info!("restarting block processor task with faulty destinations fixed");
 
         faulty_indexer.unset_faulty();
         faulty_validator.unset_faulty();
@@ -378,7 +286,7 @@ mod test {
         let signal = ExporterCancellationSignal::new(child.clone());
 
         // restart
-        let _notifier = start_block_processor_task(
+        let (_notifier, handle) = start_block_processor_task(
             storage.clone(),
             signal,
             LimitsConfig {
@@ -392,21 +300,239 @@ mod test {
                 max_retries: 10,
             },
             0,
-            1,
-            DestinationConfig { destinations },
+            DestinationConfig {
+                destinations: destinations.clone(),
+                committee_destination: false,
+            },
         )?;
 
         sleep(Duration::from_secs(4)).await;
 
         child.cancel();
+        handle.join().unwrap()?;
 
         let (_, _, destination_states) =
-            BlockExporterStateView::initiate(context.clone(), 4).await?;
-        for i in 0..4 {
-            assert_eq!(destination_states.load_state(i), 2);
+            BlockExporterStateView::initiate(context.clone(), destination_ids).await?;
+        for destination in destinations.iter() {
+            assert_eq!(
+                destination_states
+                    .load_state(&destination.id())
+                    .load(Ordering::Acquire),
+                2
+            );
         }
 
+        assert!(validator.duplicate_blocks.is_empty());
+        assert!(faulty_validator.duplicate_blocks.is_empty());
+
         Ok(())
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_committee_destination() -> anyhow::Result<()> {
+        tracing::info!("Starting test_committee_destination test");
+
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let test_chain = TestChain::new(storage.clone());
+        let cancellation_token = CancellationToken::new();
+        let child = cancellation_token.child_token();
+        let signal = ExporterCancellationSignal::new(child.clone());
+
+        let mut destinations = vec![];
+        let dummy_validator = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
+        let destination = destinations[0].clone();
+        let validator_state = ValidatorState {
+            network_address: destination.address(),
+            votes: 0,
+            account_public_key: AccountPublicKey::test_key(0),
+        };
+        let (notifier, block_processor_handle) = start_block_processor_task(
+            storage.clone(),
+            signal,
+            LimitsConfig {
+                persistence_period_ms: 3000,
+                ..Default::default()
+            },
+            NodeOptions {
+                send_timeout: Duration::from_millis(4000),
+                recv_timeout: Duration::from_millis(4000),
+                retry_delay: Duration::from_millis(1000),
+                max_retries: 10,
+            },
+            0,
+            DestinationConfig {
+                committee_destination: true,
+                destinations: vec![],
+            },
+        )?;
+
+        let mut single_validator = BTreeMap::new();
+        single_validator.insert(Secp256k1PublicKey::test_key(0), validator_state);
+
+        let confirmed_certificate = test_chain
+            .publish_committee(&single_validator, None)
+            .await
+            .expect("Failed to publish committee");
+
+        let first_notification = BlockId::from_confirmed_block(confirmed_certificate.value());
+        notifier.send(first_notification)?;
+        sleep(Duration::from_secs(4)).await;
+
+        assert!(dummy_validator.state.contains(&first_notification.hash));
+        // We expect the validator to receive the confired certificate only once.
+        assert!(dummy_validator
+            .duplicate_blocks
+            .get(&first_notification.hash)
+            .is_none());
+
+        ///////////
+        // Add new validator to the committee.
+        ///////////
+        let second_dummy = spawn_dummy_validator(&mut destinations, &cancellation_token).await?;
+        let destination = destinations[1].clone();
+        let validator_state = ValidatorState {
+            network_address: destination.address(),
+            votes: 0,
+            account_public_key: AccountPublicKey::test_key(1),
+        };
+        let mut two_validators = single_validator.clone();
+        two_validators.insert(Secp256k1PublicKey::test_key(1), validator_state);
+        let add_validator_certificate = test_chain
+            .publish_committee(&two_validators, Some(confirmed_certificate.value().clone()))
+            .await
+            .expect("Failed to publish new committee");
+        let second_notification = BlockId::from_confirmed_block(add_validator_certificate.value());
+        notifier.send(second_notification)?;
+        sleep(Duration::from_secs(4)).await;
+
+        assert!(second_dummy.state.contains(&second_notification.hash));
+        // We expect the new validator to receive the new confirmed certificate only once.
+        assert!(second_dummy
+            .duplicate_blocks
+            .get(&second_notification.hash)
+            .is_none());
+        // The first certificate should not be duplicated.
+        assert!(second_dummy
+            .duplicate_blocks
+            .get(&first_notification.hash)
+            .is_none());
+
+        // The first validator should receive the new committee as well.
+        assert!(dummy_validator.state.contains(&second_notification.hash));
+        // We expect the first validator to receive the new confirmed certificate only once.
+        assert!(dummy_validator
+            .duplicate_blocks
+            .get(&second_notification.hash)
+            .is_none());
+
+        ///////////
+        // Remove the validator from the committee.
+        ///////////
+
+        let mut new_validators = two_validators.clone();
+        new_validators.remove(&Secp256k1PublicKey::test_key(0));
+
+        let remove_validator_certificate = test_chain
+            .publish_committee(
+                &new_validators,
+                Some(add_validator_certificate.value().clone()),
+            )
+            .await
+            .expect("Failed to publish new committee");
+
+        let third_notification =
+            BlockId::from_confirmed_block(remove_validator_certificate.value());
+        notifier.send(third_notification)?;
+        sleep(Duration::from_secs(4)).await;
+        // The first validator should not receive the new confirmed certificate.
+        assert!(!dummy_validator.state.contains(&third_notification.hash));
+        // We expect the first validator to receive the new confirmed certificate only once.
+        assert!(dummy_validator
+            .duplicate_blocks
+            .get(&third_notification.hash)
+            .is_none());
+        // The second validator should receive the new confirmed certificate.
+        assert!(second_dummy.state.contains(&third_notification.hash));
+        // We expect the second validator to receive the new confirmed certificate only once.
+        assert!(second_dummy
+            .duplicate_blocks
+            .get(&third_notification.hash)
+            .is_none());
+
+        cancellation_token.cancel();
+        block_processor_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    struct TestChain<S> {
+        chain_description: ChainDescription,
+        storage: S,
+    }
+
+    impl<S> TestChain<S> {
+        fn new(storage: S) -> Self {
+            let chain_description = ChainDescription::new(
+                ChainOrigin::Root(0),
+                InitialChainConfig {
+                    ownership: Default::default(),
+                    epoch: Default::default(),
+                    balance: Default::default(),
+                    application_permissions: Default::default(),
+                    min_active_epoch: Epoch::ZERO,
+                    max_active_epoch: Epoch::ZERO,
+                },
+                Timestamp::now(),
+            );
+            Self {
+                chain_description,
+                storage,
+            }
+        }
+
+        // Constructs a new block, with the blob containing the committee.
+        async fn publish_committee(
+            &self,
+            validators: &BTreeMap<Secp256k1PublicKey, ValidatorState>,
+            prev_block: Option<ConfirmedBlock>,
+        ) -> Result<ConfirmedBlockCertificate, ViewError>
+        where
+            S: Storage + Clone + Send + Sync + 'static,
+        {
+            let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet());
+            let chain_id = self.chain_description.id();
+            let chain_blob = Blob::new_chain_description(&self.chain_description);
+
+            let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+            let proposed_block = if let Some(parent_block) = prev_block {
+                make_child_block(&parent_block).with_operation(Operation::System(Box::new(
+                    SystemOperation::Admin(AdminOperation::CreateCommittee {
+                        epoch: parent_block.epoch().try_add_one().unwrap(),
+                        blob_hash: committee_blob.id().hash,
+                    }),
+                )))
+            } else {
+                make_first_block(chain_id).with_operation(Operation::System(Box::new(
+                    SystemOperation::Admin(AdminOperation::CreateCommittee {
+                        epoch: Epoch::ZERO,
+                        blob_hash: committee_blob.id().hash,
+                    }),
+                )))
+            };
+            let blobs = vec![chain_blob, committee_blob];
+            let block = BlockExecutionOutcome {
+                blobs: vec![blobs.clone()],
+                ..Default::default()
+            }
+            .with(proposed_block);
+
+            let confirmed_block = ConfirmedBlock::new(block);
+            let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+            self.storage
+                .write_blobs_and_certificate(blobs.as_ref(), &certificate)
+                .await?;
+
+            Ok(certificate)
+        }
     }
 
     async fn spawn_dummy_indexer(
@@ -433,13 +559,13 @@ mod test {
         token: &CancellationToken,
     ) -> anyhow::Result<DummyValidator> {
         let port = get_free_port().await?;
-        let destination = DummyValidator::default();
+        let destination = DummyValidator::new(port);
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("dummy validator", port as usize, "http").await?;
         let destination_address = Destination {
             port,
             tls: TlsConfig::ClearText,
-            endpoint: "127.0.0.1".to_owned(),
+            endpoint: get_address(port as u16).ip().to_string(),
             kind: destination.kind(),
         };
 

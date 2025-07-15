@@ -3,8 +3,9 @@
 
 use std::collections::HashSet;
 
-use linera_base::identifiers::BlobId;
+use linera_base::identifiers::{BlobId, BlobType};
 use linera_chain::types::{CertificateValue, ConfirmedBlock};
+use linera_execution::{system::AdminOperation, Operation, SystemOperation};
 use linera_storage::Storage;
 
 use crate::{
@@ -19,6 +20,7 @@ where
 {
     path: Vec<NodeVisitor>,
     visited: HashSet<BlockId>,
+    new_committee_blob: Option<BlobId>,
     storage: &'a mut BlockProcessorStorage<S>,
 }
 
@@ -28,17 +30,18 @@ where
 {
     pub(super) fn new(storage: &'a mut BlockProcessorStorage<S>) -> Self {
         Self {
+            storage,
             path: Vec::new(),
             visited: HashSet::new(),
-            storage,
+            new_committee_blob: None,
         }
     }
 
     /// Walks through the block's dependencies in a depth wise manner
     /// resolving, sorting and indexing all of them along the way.
-    pub(super) async fn walk(mut self, block: BlockId) -> Result<(), ExporterError> {
+    pub(super) async fn walk(mut self, block: BlockId) -> Result<Option<BlobId>, ExporterError> {
         if self.is_block_indexed(&block).await? {
-            return Ok(());
+            return Ok(None);
         }
 
         let node_visitor = self.get_processed_block_node(&block).await?;
@@ -81,10 +84,11 @@ where
                 }
             }
 
+            self.new_committee_blob = node_visitor.node.new_committee_blob;
             self.visited.insert(block_id);
         }
 
-        Ok(())
+        Ok(self.new_committee_blob)
     }
 
     async fn get_processed_block_node(
@@ -148,6 +152,7 @@ struct ProcessedBlock {
     // all the blobs required by this block
     required_blobs: Vec<BlobId>,
     dependencies: Vec<BlockId>,
+    new_committee_blob: Option<BlobId>,
 }
 
 impl ProcessedBlock {
@@ -171,9 +176,24 @@ impl ProcessedBlock {
             .map(BlockId::from_incoming_bundle);
         dependencies.extend(message_senders);
 
+        let new_committee = block.block().body.operations.iter().find_map(|m| {
+            if let Operation::System(boxed) = m {
+                if let SystemOperation::Admin(AdminOperation::CreateCommittee {
+                    blob_hash, ..
+                }) = &**boxed
+                {
+                    let committee_blob = BlobId::new(*blob_hash, BlobType::Committee);
+                    return Some(committee_blob);
+                }
+            }
+
+            None
+        });
+
         Self {
             dependencies,
             block: block_id,
+            new_committee_blob: new_committee,
             required_blobs: block.required_blob_ids().into_iter().collect(),
             created_blobs: block.block().created_blob_ids().into_iter().collect(),
         }
