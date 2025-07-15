@@ -120,11 +120,10 @@ mod test {
     use std::{collections::BTreeMap, sync::atomic::Ordering, time::Duration};
 
     use linera_base::{
+        bcs,
         crypto::{AccountPublicKey, Secp256k1PublicKey},
-        data_types::{
-            Blob, BlobContent, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Round,
-            Timestamp,
-        },
+        data_types::{Blob, BlobContent, Round},
+        identifiers::{ChainDescription, ChainId},
         port::get_free_port,
     };
     use linera_chain::{
@@ -134,14 +133,14 @@ mod test {
     };
     use linera_client::config::{Destination, DestinationConfig, LimitsConfig};
     use linera_execution::{
-        committee::{Committee, ValidatorState},
+        committee::{Committee, Epoch, ValidatorState},
         system::AdminOperation,
         Operation, ResourceControlPolicy, SystemOperation,
     };
     use linera_rpc::{config::TlsConfig, NodeOptions};
     use linera_service::cli_wrappers::local_net::LocalNet;
     use linera_storage::{DbStorage, Storage};
-    use linera_views::{memory::MemoryStore, ViewError};
+    use linera_views::{memory::MemoryStore, views::ViewError};
     use test_case::test_case;
     use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
@@ -465,26 +464,14 @@ mod test {
     }
 
     struct TestChain<S> {
-        chain_description: ChainDescription,
+        chain_id: ChainId,
         storage: S,
     }
 
     impl<S> TestChain<S> {
         fn new(storage: S) -> Self {
-            let chain_description = ChainDescription::new(
-                ChainOrigin::Root(0),
-                InitialChainConfig {
-                    ownership: Default::default(),
-                    epoch: Default::default(),
-                    balance: Default::default(),
-                    application_permissions: Default::default(),
-                    min_active_epoch: Epoch::ZERO,
-                    max_active_epoch: Epoch::ZERO,
-                },
-                Timestamp::now(),
-            );
             Self {
-                chain_description,
+                chain_id: ChainId::from(ChainDescription::Root(0)),
                 storage,
             }
         }
@@ -499,8 +486,6 @@ mod test {
             S: Storage + Clone + Send + Sync + 'static,
         {
             let committee = Committee::new(validators.clone(), ResourceControlPolicy::testnet());
-            let chain_id = self.chain_description.id();
-            let chain_blob = Blob::new_chain_description(&self.chain_description);
 
             let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
             let proposed_block = if let Some(parent_block) = prev_block {
@@ -511,14 +496,14 @@ mod test {
                     }),
                 )))
             } else {
-                make_first_block(chain_id).with_operation(Operation::System(Box::new(
+                make_first_block(self.chain_id).with_operation(Operation::System(Box::new(
                     SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::ZERO,
                         blob_hash: committee_blob.id().hash,
                     }),
                 )))
             };
-            let blobs = vec![chain_blob, committee_blob];
+            let blobs = vec![committee_blob];
             let block = BlockExecutionOutcome {
                 blobs: vec![blobs.clone()],
                 ..Default::default()

@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+use linera_base::bcs;
 use linera_client::config::DestinationId;
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
