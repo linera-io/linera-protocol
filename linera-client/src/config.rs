@@ -271,10 +271,41 @@ pub struct BlockExporterConfig {
 pub struct DestinationConfig {
     /// The destination URIs to export to.
     pub destinations: Vec<Destination>,
+    /// Export blocks to the current committee.
+    #[serde(default)]
+    pub committee_destination: bool,
 }
 
 // Each destination has an ID and a configuration.
-pub type DestinationId = u16;
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DestinationId {
+    address: String,
+    kind: DestinationKind,
+}
+
+impl DestinationId {
+    /// Creates a new destination ID from the address and kind.
+    pub fn new(address: String, kind: DestinationKind) -> Self {
+        Self { address, kind }
+    }
+
+    pub fn validator(address: String) -> Self {
+        Self {
+            address,
+            kind: DestinationKind::Validator,
+        }
+    }
+
+    /// Returns the address of the destination.
+    pub fn address(&self) -> &str {
+        &self.address
+    }
+
+    /// Returns the kind of the destination.
+    pub fn kind(&self) -> DestinationKind {
+        self.kind
+    }
+}
 
 /// The uri to provide export services to.
 #[allow(dead_code)]
@@ -293,7 +324,7 @@ pub struct Destination {
 
 /// The description for the gRPC based destination.
 /// Discriminates the export mode and the client to use.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub enum DestinationKind {
     /// The indexer description.
     Indexer,
@@ -353,6 +384,13 @@ impl Destination {
             DestinationKind::Validator => {
                 format!("{}:{}:{}", "grpc", self.endpoint, self.port)
             }
+        }
+    }
+
+    pub fn id(&self) -> DestinationId {
+        DestinationId {
+            address: self.address(),
+            kind: self.kind,
         }
     }
 }
