@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::Context;
+use revm_primitives::U256;
 use serde_json::Value;
 use tempfile::{tempdir, TempDir};
 
@@ -62,16 +63,22 @@ fn get_bytecode_path(path: &Path, file_name: &str, contract_name: &str) -> anyho
     let json_data: serde_json::Value = serde_json::from_str(&contents)?;
     let contracts = json_data
         .get("contracts")
-        .with_context(|| format!("failed to get contracts in json_data={}", json_data))?;
+        .with_context(|| format!("failed to get contracts in json_data={json_data}"))?;
     let file_name_contract = contracts
         .get(file_name)
         .context("failed to get {file_name}")?;
     let test_data = file_name_contract
         .get(contract_name)
-        .context("failed to get contract_name={contract_name}")?;
-    let evm_data = test_data.get("evm").context("failed to get evm")?;
-    let bytecode = evm_data.get("bytecode").context("failed to get bytecode")?;
-    let object = bytecode.get("object").context("failed to get object")?;
+        .with_context(|| format!("failed to get contract_name={contract_name}"))?;
+    let evm_data = test_data
+        .get("evm")
+        .with_context(|| format!("failed to get evm in test_data={test_data}"))?;
+    let bytecode = evm_data
+        .get("bytecode")
+        .with_context(|| format!("failed to get bytecode in evm_data={evm_data}"))?;
+    let object = bytecode
+        .get("object")
+        .with_context(|| format!("failed to get object in bytecode={bytecode}"))?;
     let object = object.to_string();
     let object = object.trim_matches(|c| c == '"').to_string();
     Ok(hex::decode(&object)?)
@@ -91,6 +98,16 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
             writeln!(test_code_file, "{}", literal_path)?;
         }
     }
+    if source_code.contains("@openzeppelin") {
+        let _output = Command::new("npm")
+            .args(["install", "@openzeppelin/contracts"])
+            .current_dir(path)
+            .output()?;
+        let _output = Command::new("mv")
+            .args(["node_modules/@openzeppelin", "@openzeppelin"])
+            .current_dir(path)
+            .output()?;
+    }
     let file_name = "test_code.sol";
     let test_code_path = path.join(file_name);
     let mut test_code_file = File::create(&test_code_path)?;
@@ -106,8 +123,9 @@ pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
         .next()
         .ok_or_else(|| anyhow::anyhow!("Not matching"))?;
     let contract_name: &str = contract_name
-        .strip_suffix(" {")
-        .ok_or_else(|| anyhow::anyhow!("Not matching"))?;
+        .split_whitespace()
+        .next()
+        .ok_or(anyhow::anyhow!("No space found after the contract name"))?;
     get_bytecode(&source_code, contract_name)
 }
 
@@ -143,4 +161,15 @@ pub fn read_evm_u64_entry(value: Value) -> u64 {
     let mut arr = [0_u8; 8];
     arr.copy_from_slice(&vec[24..]);
     u64::from_be_bytes(arr)
+}
+
+pub fn read_evm_u256_entry(value: Value) -> U256 {
+    let result = value
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_u64().ok_or("Not a number").map(|n| n as u8))
+        .collect::<Result<Vec<u8>, _>>()
+        .unwrap();
+    U256::from_be_slice(&result)
 }

@@ -1037,6 +1037,7 @@ pub struct RevmContractInstance<Runtime> {
     db: DatabaseRuntime<Runtime>,
 }
 
+#[derive(Debug)]
 enum EvmTxKind {
     Create,
     Call,
@@ -1338,7 +1339,8 @@ where
         }?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
-        Ok(process_execution_result(storage_stats, result)?)
+        let result = process_execution_result(storage_stats, result)?;
+        Ok(result)
     }
 
     fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
