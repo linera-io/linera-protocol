@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     future::{Future, IntoFuture},
     sync::Arc,
 };
 
-use alloy_primitives::map::HashMap;
 use linera_client::config::{Destination, DestinationId, DestinationKind};
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_storage::Storage;
