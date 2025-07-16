@@ -3,11 +3,6 @@ pragma solidity ^0.8.0;
 
 library LineraTypes {
 
-    struct AccountOwnerBalance {
-        LineraTypes.AccountOwner account_owner;
-        uint256 balance;
-    }
-
     function bcs_serialize_len(uint256 x)
         internal
         pure
