@@ -27,50 +27,45 @@ use crate::{
     storage::ExporterStorage,
 };
 
-pub(crate) struct Exporter<S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
+pub(crate) struct Exporter {
     node_provider: Arc<GrpcNodeProvider>,
     destination_id: DestinationId,
-    storage: ExporterStorage<S>,
     work_queue_size: usize,
 }
 
-impl<S> Exporter<S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
+impl Exporter {
     pub(super) fn new(
-        node_provider: Arc<GrpcNodeProvider>,
         destination_id: DestinationId,
-        storage: ExporterStorage<S>,
+        node_provider: Arc<GrpcNodeProvider>,
         work_queue_size: usize,
     ) -> Self {
         Self {
             node_provider,
             destination_id,
-            storage,
             work_queue_size,
         }
     }
 
-    pub(super) async fn run_with_shutdown<F: IntoFuture<Output = ()>>(
+    pub(super) async fn run_with_shutdown<S, F: IntoFuture<Output = ()>>(
         self,
         shutdown_signal: F,
-    ) -> anyhow::Result<()> {
+        mut storage: ExporterStorage<S>,
+    ) -> anyhow::Result<()>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+    {
         let address = self.destination_id.address().to_owned();
-        let destination_state = self.storage.load_destination_state(&self.destination_id);
+        let destination_state = storage.load_destination_state(&self.destination_id);
 
         let node = self.node_provider.make_node(&address)?;
 
         let (mut task_queue, task_receiver) = TaskQueue::new(
             self.work_queue_size,
             destination_state.load(Ordering::Acquire) as usize,
-            &self.storage,
+            storage.clone().unwrap(),
         );
 
-        let export_task = ExportTask::new(node, &self.storage, destination_state);
+        let export_task = ExportTask::new(node, storage.clone().unwrap(), destination_state);
 
         tokio::select! {
 
@@ -88,24 +83,24 @@ where
     }
 }
 
-struct ExportTask<'a, S>
+struct ExportTask<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
     node: GrpcClient,
-    storage: &'a ExporterStorage<S>,
+    storage: ExporterStorage<S>,
     destination_state: Arc<AtomicU64>,
 }
 
-impl<'a, S> ExportTask<'a, S>
+impl<S> ExportTask<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
     fn new(
         node: GrpcClient,
-        storage: &'a ExporterStorage<S>,
+        storage: ExporterStorage<S>,
         destination_state: Arc<AtomicU64>,
-    ) -> ExportTask<'a, S> {
+    ) -> ExportTask<S> {
         ExportTask {
             node,
             storage,
@@ -189,17 +184,17 @@ where
     }
 }
 
-struct TaskQueue<'a, S>
+struct TaskQueue<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
     queue_size: usize,
     start_height: usize,
-    storage: &'a ExporterStorage<S>,
+    storage: ExporterStorage<S>,
     buffer: Sender<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
 }
 
-impl<'a, S> TaskQueue<'a, S>
+impl<S> TaskQueue<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
@@ -207,9 +202,9 @@ where
     fn new(
         queue_size: usize,
         start_height: usize,
-        storage: &'a ExporterStorage<S>,
+        storage: ExporterStorage<S>,
     ) -> (
-        TaskQueue<'a, S>,
+        TaskQueue<S>,
         Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) {
         let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
