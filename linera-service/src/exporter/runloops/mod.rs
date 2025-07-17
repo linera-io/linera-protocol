@@ -13,7 +13,7 @@ use validator_exporter::Exporter as ValidatorExporter;
 
 use crate::{
     common::{BlockId, ExporterError},
-    runloops::task_manager::{PoolMember, ThreadPoolState},
+    runloops::task_manager::ExportersTracker,
     storage::BlockProcessorStorage,
 };
 
@@ -46,7 +46,10 @@ where
     <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
 {
     let (task_sender, queue_front) = unbounded_channel();
-    let moved_task_sender = task_sender.clone();
+    let new_block_queue = NewBlockQueue {
+        queue_rear: task_sender.clone(),
+        queue_front,
+    };
     let handle = std::thread::spawn(move || {
         start_block_processor(
             storage,
@@ -54,13 +57,29 @@ where
             limits,
             options,
             block_exporter_id,
-            moved_task_sender,
+            new_block_queue,
             destination_config,
-            queue_front,
         )
     });
 
     Ok((task_sender, handle))
+}
+
+struct NewBlockQueue {
+    pub(crate) queue_rear: UnboundedSender<BlockId>,
+    pub(crate) queue_front: UnboundedReceiver<BlockId>,
+}
+
+impl NewBlockQueue {
+    async fn recv(&mut self) -> Option<BlockId> {
+        self.queue_front.recv().await
+    }
+
+    fn push_back(&self, block_id: BlockId) {
+        self.queue_rear
+            .send(block_id)
+            .expect("sender should never fail");
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -71,9 +90,8 @@ async fn start_block_processor<S, F>(
     limits: LimitsConfig,
     options: NodeOptions,
     block_exporter_id: u32,
-    queue_rear: UnboundedSender<BlockId>,
+    new_block_queue: NewBlockQueue,
     destination_config: DestinationConfig,
-    queue_front: UnboundedReceiver<BlockId>,
 ) -> Result<(), ExporterError>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -89,20 +107,18 @@ where
         BlockProcessorStorage::load(storage.clone(), block_exporter_id, destination_ids, limits)
             .await?;
 
-    let pool_members = PoolMember::new(
+    let tracker = ExportersTracker::new(
         options,
-        exporter_storage.clone().unwrap(),
         limits.work_queue_size.into(),
         shutdown_signal.clone(),
+        exporter_storage.clone().unwrap(),
+        destination_config.destinations.clone(),
     );
-    let pool_state =
-        ThreadPoolState::new(vec![pool_members], destination_config.destinations.clone());
 
     let mut block_processor = BlockProcessor::new(
-        pool_state,
+        tracker,
         block_processor_storage,
-        queue_rear,
-        queue_front,
+        new_block_queue,
         destination_config.committee_destination,
     );
 

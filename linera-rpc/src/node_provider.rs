@@ -46,7 +46,7 @@ impl ValidatorNodeProvider for NodeProvider {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct NodeOptions {
     pub send_timeout: Duration,
     pub recv_timeout: Duration,

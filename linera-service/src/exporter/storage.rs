@@ -42,6 +42,9 @@ where
     shared_storage: SharedStorage<S::BlockExporterContext, S>,
 }
 
+type BlobCache = FifoCache<BlobId, Arc<Blob>, BlobCacheWeighter>;
+type BlockCache = FifoCache<CryptoHash, Arc<ConfirmedBlockCertificate>, BlockCacheWeighter>;
+
 struct SharedStorage<C, S>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -49,8 +52,8 @@ where
     storage: S,
     destination_states: DestinationStates,
     shared_canonical_state: CanonicalState<C>,
-    blobs_cache: Arc<FifoCache<BlobId, Arc<Blob>, BlobCacheWeighter>>,
-    blocks_cache: Arc<FifoCache<CryptoHash, Arc<ConfirmedBlockCertificate>, BlockCacheWeighter>>,
+    blobs_cache: Arc<BlobCache>,
+    blocks_cache: Arc<BlockCache>,
 }
 
 pub(super) struct BlockProcessorStorage<S>
@@ -60,6 +63,7 @@ where
     blob_state_cache: LfuCache<BlobId, ()>,
     chain_states_cache: LfuCache<ChainId, LiteBlockId>,
     shared_storage: SharedStorage<S::BlockExporterContext, S>,
+    // Handle on the persistent storage where the exporter state is pushed to periodically.
     exporter_state_view: BlockExporterStateView<<S as Storage>::BlockExporterContext>,
 }
 
