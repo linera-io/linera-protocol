@@ -78,6 +78,7 @@ dashmap.workspace = true
 dirs.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
+fungible.workspace = true
 futures.workspace = true
 heck.workspace = true
 http.workspace = true
@@ -136,9 +137,7 @@ counter.workspace = true
 counter-no-graphql.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
-delegated-fungible.workspace = true
 ethereum-tracker.workspace = true
-fungible.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-client = { workspace = true, features = ["test"] }

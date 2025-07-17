@@ -86,9 +86,9 @@ fn get_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
 
-struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
+struct NativeFungibleApp(ApplicationWrapper<native_fungible::NativeFungibleTokenAbi>);
 
-impl FungibleApp {
+impl NativeFungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
@@ -170,9 +170,9 @@ impl FungibleApp {
     }
 }
 
-struct DelegatedFungibleApp(ApplicationWrapper<delegated_fungible::DelegatedFungibleTokenAbi>);
+struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
-impl DelegatedFungibleApp {
+impl FungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
@@ -195,7 +195,7 @@ impl DelegatedFungibleApp {
     }
 
     async fn get_allowance(&self, owner: &AccountOwner, spender: &AccountOwner) -> Amount {
-        let owner_spender = delegated_fungible::OwnerSpender::new(*owner, *spender);
+        let owner_spender = fungible::OwnerSpender::new(*owner, *spender);
         let query = format!(
             "allowances {{ entry(key: {}) {{ value }} }}",
             owner_spender.to_value()
@@ -230,6 +230,21 @@ impl DelegatedFungibleApp {
             owner.to_value(),
             spender.to_value(),
             allowance,
+        );
+        self.0.mutate(mutation).await.unwrap()
+    }
+
+    async fn transfer(
+        &self,
+        account_owner: &AccountOwner,
+        amount_transfer: Amount,
+        destination: fungible::Account,
+    ) -> Value {
+        let mutation = format!(
+            "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
+            account_owner.to_value(),
+            amount_transfer,
+            destination.to_value(),
         );
         self.0.mutate(mutation).await.unwrap()
     }
@@ -1834,10 +1849,10 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -> Result<()> {
+async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
-    use delegated_fungible::{DelegatedFungibleTokenAbi, InitialState, Parameters};
+    use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -1889,7 +1904,7 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     let (contract, service) = client1.build_example("delegated-fungible").await?;
     let params = Parameters::new("DEL");
     let application_id = client1
-        .publish_and_create::<DelegatedFungibleTokenAbi, Parameters, InitialState>(
+        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
             contract,
             service,
             VmRuntime::Wasm,
@@ -1907,17 +1922,17 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service3 = client3.run_node_service(port3, ProcessInbox::Skip).await?;
 
-    let app1 = DelegatedFungibleApp(
+    let app1 = FungibleApp(
         node_service1
             .make_application(&chain2, &application_id)
             .await?,
     );
-    let app2 = DelegatedFungibleApp(
+    let app2 = FungibleApp(
         node_service2
             .make_application(&chain2, &application_id)
             .await?,
     );
-    let app3 = DelegatedFungibleApp(
+    let app3 = FungibleApp(
         node_service3
             .make_application(&chain2, &application_id)
             .await?,
@@ -1978,6 +1993,44 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     Ok(())
 }
 
+async fn publish_and_create_native_fungible(client: &ClientWrapper, name: &str, params: &fungible::Parameters, state: &fungible::InitialState, chain_id: Option<ChainId>) -> Result<ApplicationId<native_fungible::NativeFungibleTokenAbi>> {
+    let (contract, service) = client.build_example(name).await?;
+    use native_fungible::NativeFungibleTokenAbi;
+    use fungible::FungibleTokenAbi;
+    use fungible::{InitialState, Parameters};
+    if name == "native-fungible" {
+        client
+            .publish_and_create::<NativeFungibleTokenAbi, Parameters, InitialState>(
+                contract,
+                service,
+                VmRuntime::Wasm,
+                params,
+                state,
+                &[],
+                chain_id,
+            )
+           .await
+    } else {
+        let application_id = client
+            .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
+                contract,
+                service,
+                VmRuntime::Wasm,
+                params,
+                state,
+                &[],
+                chain_id,
+            )
+            .await?;
+        Ok(application_id.forget_abi().with_abi())
+    }
+
+}
+
+
+
+
+
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
@@ -1997,7 +2050,7 @@ async fn test_wasm_end_to_end_fungible(
 ) -> Result<()> {
     use std::collections::BTreeMap;
 
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -2020,31 +2073,20 @@ async fn test_wasm_end_to_end_fungible(
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await?;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         Parameters::new("NAT")
     } else {
         Parameters::new("FUN")
     };
-    let application_id = client1
-        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
-            contract,
-            service,
-            VmRuntime::Wasm,
-            &params,
-            &state,
-            &[],
-            None,
-        )
-        .await?;
+    let application_id = publish_and_create_native_fungible(&client1, example_name, &params, &state, None).await?;
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
-    let app1 = FungibleApp(
+    let app1 = NativeFungibleApp(
         node_service1
             .make_application(&chain1, &application_id)
             .await?,
@@ -2091,7 +2133,7 @@ async fn test_wasm_end_to_end_fungible(
     assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2 = FungibleApp(
+    let app2 = NativeFungibleApp(
         node_service2
             .make_application(&chain2, &application_id)
             .await?,
@@ -2169,7 +2211,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 ) -> Result<()> {
     use std::collections::BTreeMap;
 
-    use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{Account, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -2196,29 +2238,18 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await?;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         Parameters::new("NAT")
     } else {
         Parameters::new("FUN")
     };
-    let application_id = client1
-        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
-            contract,
-            service,
-            VmRuntime::Wasm,
-            &params,
-            &state,
-            &[],
-            None,
-        )
-        .await?;
+    let application_id = publish_and_create_native_fungible(&client1, example_name, &params, &state, None).await?;
 
     let port = get_node_port().await;
     let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let app1 = FungibleApp(
+    let app1 = NativeFungibleApp(
         node_service
             .make_application(&chain1, &application_id)
             .await?,
@@ -2261,7 +2292,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     app1.assert_entries(expected_balances).await;
     app1.assert_keys([account_owner1, account_owner2]).await;
 
-    let app2 = FungibleApp(
+    let app2 = NativeFungibleApp(
         node_service
             .make_application(&chain2, &application_id)
             .await?,

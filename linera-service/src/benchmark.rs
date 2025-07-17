@@ -13,11 +13,12 @@ use linera_base::{
     time::timer::Instant,
     vm::VmRuntime,
 };
-use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
+use linera_sdk::abis::fungible::{InitialState, Parameters};
 use linera_service::cli_wrappers::{
     local_net::{PathProvider, ProcessInbox},
     ApplicationWrapper, ClientWrapper, Faucet, Network, OnClientDrop,
 };
+use fungible::FungibleTokenAbi;
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
 use serde_json::Value;

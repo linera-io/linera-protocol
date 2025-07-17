@@ -6,13 +6,13 @@
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{Operation, Parameters};
+use fungible::Parameters;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, WithServiceAbi},
     Service, ServiceRuntime,
 };
-use native_fungible::{AccountEntry, TICKER_SYMBOL};
+use native_fungible::{NativeFungibleTokenAbi, AccountEntry, Operation, TICKER_SYMBOL};
 
 #[derive(Clone)]
 pub struct NativeFungibleTokenService {
@@ -22,7 +22,7 @@ pub struct NativeFungibleTokenService {
 linera_sdk::service!(NativeFungibleTokenService);
 
 impl WithServiceAbi for NativeFungibleTokenService {
-    type Abi = fungible::FungibleTokenAbi;
+    type Abi = NativeFungibleTokenAbi;
 }
 
 impl Service for NativeFungibleTokenService {

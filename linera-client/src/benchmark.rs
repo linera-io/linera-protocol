@@ -896,7 +896,7 @@ impl<Env: Environment> Benchmark<Env> {
             chain_id,
             owner: receiver,
         };
-        let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
+        let bytes = bcs::to_bytes(&native_fungible::Operation::Transfer {
             owner: sender,
             amount,
             target_account,

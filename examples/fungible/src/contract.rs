@@ -46,13 +46,12 @@ impl Contract for FungibleTokenContract {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
-        // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
-        if state.accounts.is_empty() {
-            if let Some(owner) = self.runtime.authenticated_signer() {
-                state
-                    .accounts
-                    .insert(owner, Amount::from_str("1000000").unwrap());
-            }
+        let mut total_supply = Amount::ZERO;
+        for value in state.accounts.values() {
+            total_supply.saturating_add_assign(*value);
+        }
+        if total_supply == Amount::ZERO {
+            panic!("The total supply is zero, therefore we cannot instantiate the contract");
         }
         self.state.initialize_accounts(state).await;
     }
@@ -69,6 +68,18 @@ impl Contract for FungibleTokenContract {
                 FungibleResponse::TickerSymbol(params.ticker_symbol)
             }
 
+            Operation::Approve {
+                owner,
+                spender,
+                allowance,
+            } => {
+                self.runtime
+                    .check_account_permission(owner)
+                    .expect("Permission for Transfer operation");
+		self.state.approve(owner, spender, allowance).await;
+                FungibleResponse::Ok
+            }
+
             Operation::Transfer {
                 owner,
                 amount,
@@ -78,6 +89,23 @@ impl Contract for FungibleTokenContract {
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
                 self.state.debit(owner, amount).await;
+                self.finish_transfer_to_account(amount, target_account, owner)
+                    .await;
+                FungibleResponse::Ok
+            }
+
+            Operation::TransferFrom {
+		owner,
+                spender,
+                amount,
+                target_account,
+            } => {
+                self.runtime
+                    .check_account_permission(spender)
+                    .expect("Permission for Transfer operation");
+                self.state
+                    .debit_for_transfer_from(owner, spender, amount)
+                    .await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
                 FungibleResponse::Ok
