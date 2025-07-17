@@ -96,11 +96,27 @@
         "type": "github"
       }
     },
+    "nixup": {
+      "locked": {
+        "lastModified": 1752796423,
+        "narHash": "sha256-k/kGtfcyIgVKV1K1U+jY+gE1q/tGy1l2CuUSdC7XFHY=",
+        "owner": "Twey",
+        "repo": "nixup",
+        "rev": "143252d16669dc019346c546ee5bb784a0f89c15",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Twey",
+        "repo": "nixup",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "crane": "crane",
         "flake-parts": "flake-parts",
         "nixpkgs": "nixpkgs",
+        "nixup": "nixup",
         "rust-overlay": "rust-overlay",
         "systems": "systems",
         "treefmt-nix": "treefmt-nix"

@@ -7,6 +7,7 @@
     # Rust
     rust-overlay.url = "github:oxalica/rust-overlay";
     crane.url = "github:ipetkov/crane";
+    nixup.url = "github:Twey/nixup";
 
     # Dev tools
     treefmt-nix.url = "github:numtide/treefmt-nix";
@@ -19,41 +20,45 @@
     ];
     perSystem = { config, self', inputs', pkgs, lib, system, ... }:
       let
-        linera = rust-toolchain: pkgs.callPackage ./. {
+        linera = pkgs.callPackage ./. {
           inherit (inputs) crane;
-          inherit rust-toolchain;
+          rust-toolchain = rust-stable;
         };
-        rust-stable = (pkgs.rust-bin.fromRustupToolchainFile
-          ./toolchains/stable/rust-toolchain.toml);
-        rust-nightly = (pkgs.rust-bin.fromRustupToolchainFile
-          ./toolchains/nightly/rust-toolchain.toml);
-        devShell = rust-toolchain: let linera' = linera rust-toolchain; in pkgs.mkShell {
-          inputsFrom = [
-            config.treefmt.build.devShell
-            linera'
-          ];
-          shellHook = ''
-            # For rust-analyzer 'hover' tooltips to work.
-            export PATH=$PWD/target/debug:$PATH:~/.cargo/bin
-            export RUST_SRC_PATH="${linera'.RUST_SRC_PATH}"
-            export LIBCLANG_PATH="${linera'.LIBCLANG_PATH}"
-            export ROCKSDB_LIB_DIR="${linera'.ROCKSDB_LIB_DIR}";
-          '';
-          nativeBuildInputs = with pkgs; [
-            rust-analyzer
-          ];
+        toolchain-wrapper = pkgs.callPackage inputs.nixup { } {
+          default = rust-stable;
+          stable = rust-stable;
+          nightly = rust-nightly;
         };
+        rust-stable = pkgs.rust-bin.fromRustupToolchainFile
+          ./toolchains/stable/rust-toolchain.toml;
+        rust-nightly = pkgs.rust-bin.fromRustupToolchainFile
+          ./toolchains/nightly/rust-toolchain.toml;
       in {
         _module.args.pkgs = import inputs.nixpkgs {
           inherit system;
           overlays = [ (import inputs.rust-overlay) ];
         };
 
-        packages.default = linera rust-stable;
+        packages.default = linera;
 
         # Rust dev environment
-        devShells.default = devShell rust-stable;
-        devShells.nightly = devShell rust-nightly;
+        devShells.default = pkgs.mkShell {
+          inputsFrom = [
+            config.treefmt.build.devShell
+            linera
+          ];
+          shellHook = ''
+            # For rust-analyzer 'hover' tooltips to work.
+            export PATH=$PWD/target/debug:$PATH:~/.cargo/bin
+            export RUST_SRC_PATH="${linera.RUST_SRC_PATH}"
+            export LIBCLANG_PATH="${linera.LIBCLANG_PATH}"
+            export ROCKSDB_LIB_DIR="${linera.ROCKSDB_LIB_DIR}";
+          '';
+          nativeBuildInputs = with pkgs; [
+            rust-analyzer
+            toolchain-wrapper
+          ];
+        };
 
         # Add your auto-formatters here.
         # cf. https://numtide.github.io/treefmt/
