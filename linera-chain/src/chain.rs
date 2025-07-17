@@ -947,7 +947,7 @@ where
             ensure!(
                 app_permissions.can_execute_operations(&operation.application_id()),
                 ChainError::AuthorizedApplications(
-                    app_permissions.execute_operations.clone().unwrap()
+                    app_permissions.execute_operations.as_ref().unwrap()
                 )
             );
             if let Operation::User { application_id, .. } = operation {
