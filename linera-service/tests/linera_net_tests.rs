@@ -1901,7 +1901,7 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example("delegated-fungible").await?;
+    let (contract, service) = client1.build_example("fungible").await?;
     let params = Parameters::new("DEL");
     let application_id = client1
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(

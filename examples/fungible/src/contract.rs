@@ -5,8 +5,6 @@
 
 mod state;
 
-use std::str::FromStr;
-
 use fungible::{
     Account, FungibleResponse, FungibleTokenAbi, InitialState, Message, Operation, Parameters,
 };
@@ -42,7 +40,7 @@ impl Contract for FungibleTokenContract {
         FungibleTokenContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, mut state: Self::InstantiationArgument) {
+    async fn instantiate(&mut self, state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         let _ = self.runtime.application_parameters();
 
