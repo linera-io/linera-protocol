@@ -27,6 +27,8 @@ mod storage;
 
 #[cfg(test)]
 mod test_utils;
+#[cfg(test)]
+mod tests;
 
 /// Options for running the linera block exporter.
 #[derive(clap::Parser, Debug, Clone)]
