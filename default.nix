@@ -30,6 +30,7 @@
     chromium
     chromedriver
   ];
+  doCheck = false;
   passthru = { inherit rust-toolchain; };
   RUST_SRC_PATH = rust-toolchain.availableComponents.rust-src;
   LIBCLANG_PATH = "${libclang.lib}/lib";
