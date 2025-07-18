@@ -68,8 +68,13 @@
 
         docker = pkgs.mkShell {
           shellHook = ''
-            docker images -q ${container.imageName}:${container.imageTag} || ${self'.packages.container-stream} | docker load
-            exec docker run --user $USER_ID:$GROUP_ID -v .:/build -it ${container.imageName}:${container.imageTag}
+            docker images \
+              -q ${container.imageName}:${container.imageTag} \
+              || ${self'.packages.container-stream} | docker load
+            exec docker run \
+              --user $USER_ID:$GROUP_ID \
+              -v .:/build \
+              -it ${container.imageName}:${container.imageTag}
           '';
         };
       };
