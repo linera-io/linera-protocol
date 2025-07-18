@@ -3,7 +3,7 @@
 
 //! The server component of the Linera faucet.
 
-use std::{future::IntoFuture, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{future::IntoFuture, net::SocketAddr, sync::Arc};
 
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
@@ -186,9 +186,9 @@ where
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
     storage: <C::Environment as linera_core::Environment>::Storage,
-    port: NonZeroU16,
+    port: u16,
     #[cfg(feature = "metrics")]
-    metrics_port: NonZeroU16,
+    metrics_port: u16,
     amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
@@ -218,9 +218,9 @@ where
 }
 
 pub struct FaucetConfig {
-    pub port: NonZeroU16,
+    pub port: u16,
     #[cfg(feature = "metrics")]
-    pub metrics_port: NonZeroU16,
+    pub metrics_port: u16,
     pub chain_id: ChainId,
     pub amount: Amount,
     pub end_timestamp: Timestamp,
@@ -278,13 +278,13 @@ where
 
     #[cfg(feature = "metrics")]
     fn metrics_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.metrics_port.get()))
+        SocketAddr::from(([0, 0, 0, 0], self.metrics_port))
     }
 
     /// Runs the faucet.
     #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
     pub async fn run(self, cancellation_token: CancellationToken) -> anyhow::Result<()> {
-        let port = self.port.get();
+        let port = self.port;
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
         #[cfg(feature = "metrics")]
