@@ -3,15 +3,14 @@
 
 /* ABI of the Fungible Token Example Application */
 
+use async_graphql::{scalar, Request, Response};
 pub use linera_sdk::abis::fungible::*;
-use async_graphql::{Request, Response, scalar};
 use linera_sdk::{
     abi::{ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount},
 };
 use serde::{Deserialize, Serialize};
-
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
     async_graphql::InputType,
@@ -131,8 +130,6 @@ pub enum Operation {
     },
 }
 
-
-
 /// Creates a fungible token application and distributes `initial_amounts` to new individual
 /// chains.
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
@@ -226,4 +223,3 @@ pub async fn query_account(
             .expect("Account balance cannot be parsed as a number"),
     )
 }
-

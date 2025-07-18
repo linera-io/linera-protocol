@@ -4,12 +4,12 @@
 /*! ABI of the Native Fungible Token Example Application */
 
 use async_graphql::{Request, Response, SimpleObject};
-use linera_sdk::graphql::GraphQLMutationRoot;
 use linera_sdk::{
     abi::{ContractAbi, ServiceAbi},
+    abis::fungible::{Account, FungibleResponse},
+    graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount},
 };
-use linera_sdk::abis::fungible::{Account, FungibleResponse};
 use serde::{Deserialize, Serialize};
 
 pub const TICKER_SYMBOL: &str = "NAT";
@@ -40,9 +40,9 @@ pub enum Operation {
         /// Owner to transfer from
         owner: AccountOwner,
         /// Amount to be transferred
-	amount: Amount,
+        amount: Amount,
         /// Target account to transfer the amount to
-	target_account: Account,
+        target_account: Account,
     },
     /// Same as `Transfer` but the source account may be remote. Depending on its
     /// configuration, the target chain may take time or refuse to process
@@ -53,7 +53,7 @@ pub enum Operation {
         /// Amount to be claimed
         amount: Amount,
         /// Target account to claim the amount into
-	target_account: Account,
+        target_account: Account,
     },
 }
 
@@ -69,4 +69,3 @@ impl ServiceAbi for NativeFungibleTokenAbi {
     type Query = Request;
     type QueryResponse = Response;
 }
-

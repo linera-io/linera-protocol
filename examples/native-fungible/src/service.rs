@@ -12,7 +12,7 @@ use linera_sdk::{
     linera_base_types::{AccountOwner, WithServiceAbi},
     Service, ServiceRuntime,
 };
-use native_fungible::{NativeFungibleTokenAbi, AccountEntry, Operation, TICKER_SYMBOL};
+use native_fungible::{AccountEntry, NativeFungibleTokenAbi, Operation, TICKER_SYMBOL};
 
 #[derive(Clone)]
 pub struct NativeFungibleTokenService {

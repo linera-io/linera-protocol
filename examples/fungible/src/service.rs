@@ -8,7 +8,7 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{Operation, Parameters, OwnerSpender};
+use fungible::{Operation, OwnerSpender, Parameters};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, WithServiceAbi},
