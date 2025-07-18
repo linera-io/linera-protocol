@@ -254,6 +254,9 @@ where
             .build_v1()?;
         let public_server = join_set.spawn_task(
             self.public_server()?
+                .max_concurrent_streams(Some(u32::MAX - 1)) // we subtract one to make sure
+                // that the value is not
+                // interpreted as "not set"
                 .layer(
                     ServiceBuilder::new()
                         .layer(PrometheusMetricsMiddlewareLayer)
