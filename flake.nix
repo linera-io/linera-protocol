@@ -61,7 +61,7 @@
             export PATH=$PWD/target/debug:$PATH
             export RUST_SRC_PATH="${linera.RUST_SRC_PATH}"
             export LIBCLANG_PATH="${linera.LIBCLANG_PATH}"
-            export ROCKSDB_LIB_DIR="${linera.ROCKSDB_LIB_DIR}";
+            export ROCKSDB_LIB_DIR="${linera.ROCKSDB_LIB_DIR}"
           '';
           nativeBuildInputs = [ pkgs.rust-analyzer ];
         };
