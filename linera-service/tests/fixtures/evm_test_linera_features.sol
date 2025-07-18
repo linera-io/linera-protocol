@@ -6,9 +6,9 @@ import "./Linera.sol";
 
 contract ExampleLineraFeatures {
     function test_chain_id() external {
-        LineraTypes.ChainId memory chain_id = Linera.chain_id();
-        LineraTypes.ChainId memory creator_chain_id = Linera.application_creator_chain_id();
-        require(chain_id.value.value == creator_chain_id.value.value);
+        Linera.ChainId memory chain_id = Linera.chain_id();
+        Linera.ChainId memory creator_chain_id = Linera.application_creator_chain_id();
+        require(chain_id.value == creator_chain_id.value);
     }
 
     function test_read_data_blob(bytes32 hash, uint32 len) external {
@@ -21,8 +21,30 @@ contract ExampleLineraFeatures {
     }
 
     function test_chain_ownership() external {
-        LineraTypes.ChainOwnership memory chain_ownership = Linera.chain_ownership();
+        Linera.ChainOwnership memory chain_ownership = Linera.chain_ownership();
         require(chain_ownership.super_owners.length == 0);
         require(chain_ownership.owners.length == 1);
+    }
+
+    function test_authenticated_signer_caller_id() external {
+        Linera.opt_AccountOwner memory signer = Linera.authenticated_signer();
+        require(signer.has_value);
+        require(signer.value.choice == 2);
+        address signer_address = address(signer.value.address20);
+        require(signer_address == msg.sender);
+        Linera.opt_ApplicationId memory caller_id = Linera.authenticated_caller_id();
+        require(caller_id.has_value == false);
+    }
+
+    function test_chain_balance(uint256 expected_balance) external {
+        uint256 balance = Linera.read_chain_balance();
+        require(balance == expected_balance);
+    }
+
+    function test_read_owners() external {
+        Linera.AccountOwnerBalance[] memory owner_balances = Linera.read_owner_balances();
+        require(owner_balances.length == 0);
+        Linera.AccountOwner[] memory owners = Linera.read_balance_owners();
+        require(owners.length == 0);
     }
 }

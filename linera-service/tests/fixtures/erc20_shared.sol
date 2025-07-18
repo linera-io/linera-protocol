@@ -22,7 +22,6 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "./Linera.sol";
-import "./LineraTypes.sol";
 
 /**
  * @dev Implementation of the {IERC20} interface.
@@ -73,9 +72,9 @@ contract ERC20_shared is Context, IERC20, IERC20Errors {
      */
     function execute_message(bytes memory input) external {
         (address source, address destination, uint256 amount) = abi.decode(input, (address, address, uint256));
-        LineraTypes.OptionBool result = Linera.message_is_bouncing().value;
-        require(result != LineraTypes.OptionBool.None);
-        if (result == LineraTypes.OptionBool.True) {
+        Linera.OptionBool result = Linera.message_is_bouncing();
+        require(result != Linera.OptionBool.None);
+        if (result == Linera.OptionBool.True) {
             _mint(source, amount);
         } else {
             _mint(destination, amount);

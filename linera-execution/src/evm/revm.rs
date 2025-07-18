@@ -28,12 +28,15 @@ use revm_interpreter::{
     CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl,
     InstructionResult, InterpreterResult,
 };
-use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind};
+use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind, U256};
 use revm_state::EvmState;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    evm::database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
+    evm::{
+        data_types::AmountU256,
+        database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
+    },
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime,
     ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
     UserContractModule, UserService, UserServiceInstance, UserServiceModule,
@@ -45,7 +48,7 @@ const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
 
 /// This is the selector of the `process_streams` that should be called
 /// only from a submitted message
-const PROCESS_STREAMS_SELECTOR: &[u8] = &[227, 9, 189, 153];
+const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 
 /// This is the selector of the `instantiate` that should be called
 /// only when creating a new instance of a shared contract
@@ -113,12 +116,8 @@ mod tests {
     fn check_process_streams_selector() {
         use alloy_sol_types::{sol, SolCall};
         sol! {
-            struct InternalCryptoHash {
-                bytes32 value;
-            }
-
             struct InternalApplicationId {
-                InternalCryptoHash application_description_hash;
+                bytes32 application_description_hash;
             }
 
             struct InternalGenericApplicationId {
@@ -136,7 +135,7 @@ mod tests {
             }
 
             struct InternalChainId {
-                InternalCryptoHash value;
+                bytes32 value;
             }
 
             struct InternalStreamUpdate {
@@ -150,7 +149,7 @@ mod tests {
         }
         assert_eq!(
             process_streamsCall::SIGNATURE,
-            "process_streams((((bytes32)),((uint8,((bytes32))),(bytes)),uint32,uint32)[])"
+            "process_streams(((bytes32),((uint8,(bytes32)),(bytes)),uint32,uint32)[])"
         );
         assert_eq!(process_streamsCall::SELECTOR, PROCESS_STREAMS_SELECTOR);
     }
@@ -223,12 +222,8 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     use alloy_sol_types::{sol, SolCall};
     use linera_base::identifiers::{GenericApplicationId, StreamId};
     sol! {
-        struct InternalCryptoHash {
-            bytes32 value;
-        }
-
         struct InternalApplicationId {
-            InternalCryptoHash application_description_hash;
+            bytes32 application_description_hash;
         }
 
         struct InternalGenericApplicationId {
@@ -246,7 +241,7 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
         }
 
         struct InternalChainId {
-            InternalCryptoHash value;
+            bytes32 value;
         }
 
         struct InternalStreamUpdate {
@@ -259,11 +254,10 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
         function process_streams(InternalStreamUpdate[] internal_streams);
     }
 
-    fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> InternalCryptoHash {
+    fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> B256 {
         let hash: [u64; 4] = <[u64; 4]>::from(hash);
         let hash: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(hash);
-        let value: B256 = hash.into();
-        InternalCryptoHash { value }
+        hash.into()
     }
 
     fn chain_id_to_internal_chain_id(chain_id: ChainId) -> InternalChainId {
@@ -291,7 +285,7 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     ) -> InternalGenericApplicationId {
         match generic_application_id {
             GenericApplicationId::System => {
-                let application_description_hash = InternalCryptoHash { value: B256::ZERO };
+                let application_description_hash = B256::ZERO;
                 InternalGenericApplicationId {
                     choice: 0,
                     user: InternalApplicationId {
@@ -484,35 +478,49 @@ fn address_to_user_application_id(address: Address) -> ApplicationId {
 enum BaseRuntimePrecompile {
     /// Calling `chain_id` of `BaseRuntime`
     ChainId,
+    /// Calling `block_height_id` of `BaseRuntime`
+    BlockHeight,
     /// Calling `application_creator_chain_id` of `BaseRuntime`
     ApplicationCreatorChainId,
+    /// Calling `read_system_timestamp` of `BaseRuntime`
+    ReadSystemTimestamp,
+    /// Calling `read_chain_balance` of `BaseRuntime`
+    ReadChainBalance,
+    /// Calling `read_owner_balance` of `BaseRuntime`
+    ReadOwnerBalance(AccountOwner),
+    /// Calling `read_owner_balances` of `BaseRuntime`
+    ReadOwnerBalances,
+    /// Calling `read_balance_owners` of `BaseRuntime`
+    ReadBalanceOwners,
     /// Calling `chain_ownership` of `BaseRuntime`
     ChainOwnership,
     /// Calling `read_data_blob` of `BaseRuntime`
-    ReadDataBlob { hash: CryptoHash },
+    ReadDataBlob(CryptoHash),
     /// Calling `assert_data_blob_exists` of `BaseRuntime`
-    AssertDataBlobExists { hash: CryptoHash },
+    AssertDataBlobExists(CryptoHash),
 }
 
 /// Some functionalities from the ContractRuntime not in BaseRuntime
 #[derive(Debug, Serialize, Deserialize)]
 enum ContractRuntimePrecompile {
-    /// Calling `try_call_application` of `ContractRuntime`
-    TryCallApplication {
-        target: ApplicationId,
-        argument: Vec<u8>,
-    },
-    /// Calling `validation_round` of `ContractRuntime`
-    ValidationRound,
+    /// Calling `authenticated_signer` of `ContractRuntime`
+    AuthenticatedSigner,
+    /// Calling `message_id` of `ContractRuntime`
+    MessageId,
+    /// Calling `message_is_bouncing` of `ContractRuntime`
+    MessageIsBouncing,
+    /// Calling `authenticated_caller_id` of `ContractRuntime`
+    AuthenticatedCallerId,
     /// Calling `send_message` of `ContractRuntime`
     SendMessage {
         destination: ChainId,
         message: Vec<u8>,
     },
-    /// Calling `message_id` of `ContractRuntime`
-    MessageId,
-    /// Calling `message_is_bouncing` of `ContractRuntime`
-    MessageIsBouncing,
+    /// Calling `try_call_application` of `ContractRuntime`
+    TryCallApplication {
+        target: ApplicationId,
+        argument: Vec<u8>,
+    },
     /// Calling `emit` of `ContractRuntime`
     Emit {
         stream_name: StreamName,
@@ -536,6 +544,13 @@ enum ContractRuntimePrecompile {
         application_id: ApplicationId,
         stream_name: StreamName,
     },
+    /// Calling `query_service` of `ContractRuntime`
+    QueryService {
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    },
+    /// Calling `validation_round` of `ContractRuntime`
+    ValidationRound,
 }
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
@@ -595,16 +610,46 @@ fn base_runtime_call<Runtime: BaseRuntime>(
             let chain_id = runtime.chain_id()?;
             Ok(bcs::to_bytes(&chain_id)?)
         }
+        BaseRuntimePrecompile::BlockHeight => {
+            let block_height = runtime.block_height()?;
+            Ok(bcs::to_bytes(&block_height)?)
+        }
         BaseRuntimePrecompile::ApplicationCreatorChainId => {
             let chain_id = runtime.application_creator_chain_id()?;
             Ok(bcs::to_bytes(&chain_id)?)
+        }
+        BaseRuntimePrecompile::ReadSystemTimestamp => {
+            let timestamp = runtime.read_system_timestamp()?;
+            Ok(bcs::to_bytes(&timestamp)?)
+        }
+        BaseRuntimePrecompile::ReadChainBalance => {
+            let balance: linera_base::data_types::Amount = runtime.read_chain_balance()?;
+            let balance: AmountU256 = balance.into();
+            Ok(bcs::to_bytes(&balance)?)
+        }
+        BaseRuntimePrecompile::ReadOwnerBalance(account_owner) => {
+            let balance = runtime.read_owner_balance(account_owner)?;
+            let balance = Into::<U256>::into(balance);
+            Ok(bcs::to_bytes(&balance)?)
+        }
+        BaseRuntimePrecompile::ReadOwnerBalances => {
+            let owner_balances = runtime.read_owner_balances()?;
+            let owner_balances = owner_balances
+                .into_iter()
+                .map(|(account_owner, balance)| (account_owner, balance.into()))
+                .collect::<Vec<(AccountOwner, AmountU256)>>();
+            Ok(bcs::to_bytes(&owner_balances)?)
+        }
+        BaseRuntimePrecompile::ReadBalanceOwners => {
+            let owners = runtime.read_balance_owners()?;
+            Ok(bcs::to_bytes(&owners)?)
         }
         BaseRuntimePrecompile::ChainOwnership => {
             let chain_ownership = runtime.chain_ownership()?;
             Ok(bcs::to_bytes(&chain_ownership)?)
         }
-        BaseRuntimePrecompile::ReadDataBlob { hash } => runtime.read_data_blob(&hash),
-        BaseRuntimePrecompile::AssertDataBlobExists { hash } => {
+        BaseRuntimePrecompile::ReadDataBlob(hash) => runtime.read_data_blob(&hash),
+        BaseRuntimePrecompile::AssertDataBlobExists(hash) => {
             runtime.assert_data_blob_exists(&hash)?;
             Ok(Vec::new())
         }
@@ -673,13 +718,21 @@ impl<'a> ContractPrecompile {
             .lock()
             .expect("The lock should be possible");
         match request {
-            ContractRuntimePrecompile::TryCallApplication { target, argument } => {
-                let authenticated = true;
-                runtime.try_call_application(authenticated, target, argument)
+            ContractRuntimePrecompile::AuthenticatedSigner => {
+                let account_owner = runtime.authenticated_signer()?;
+                Ok(bcs::to_bytes(&account_owner)?)
             }
-            ContractRuntimePrecompile::ValidationRound => {
-                let value = runtime.validation_round()?;
-                Ok(bcs::to_bytes(&value)?)
+            ContractRuntimePrecompile::MessageId => {
+                let message_id = runtime.message_id()?;
+                Ok(bcs::to_bytes(&message_id)?)
+            }
+            ContractRuntimePrecompile::MessageIsBouncing => {
+                let result = runtime.message_is_bouncing()?;
+                Ok(bcs::to_bytes(&result)?)
+            }
+            ContractRuntimePrecompile::AuthenticatedCallerId => {
+                let application_id = runtime.authenticated_caller_id()?;
+                Ok(bcs::to_bytes(&application_id)?)
             }
             ContractRuntimePrecompile::SendMessage {
                 destination,
@@ -698,13 +751,9 @@ impl<'a> ContractPrecompile {
                 runtime.send_message(send_message_request)?;
                 Ok(vec![])
             }
-            ContractRuntimePrecompile::MessageId => {
-                let message_id = runtime.message_id()?;
-                Ok(bcs::to_bytes(&message_id)?)
-            }
-            ContractRuntimePrecompile::MessageIsBouncing => {
-                let result = runtime.message_is_bouncing()?;
-                Ok(bcs::to_bytes(&result)?)
+            ContractRuntimePrecompile::TryCallApplication { target, argument } => {
+                let authenticated = true;
+                runtime.try_call_application(authenticated, target, argument)
             }
             ContractRuntimePrecompile::Emit { stream_name, value } => {
                 let result = runtime.emit(stream_name, value)?;
@@ -730,6 +779,14 @@ impl<'a> ContractPrecompile {
             } => {
                 runtime.unsubscribe_from_events(chain_id, application_id, stream_name)?;
                 Ok(vec![])
+            }
+            ContractRuntimePrecompile::QueryService {
+                application_id,
+                query,
+            } => runtime.query_service(application_id, query),
+            ContractRuntimePrecompile::ValidationRound => {
+                let value = runtime.validation_round()?;
+                Ok(bcs::to_bytes(&value)?)
             }
         }
     }
@@ -1147,7 +1204,7 @@ where
         ensure_selector_presence(
             &self.module,
             PROCESS_STREAMS_SELECTOR,
-            "function process_streams(LineraTypes.StreamUpdate[] memory streams)",
+            "function process_streams(Linera.StreamUpdate[] memory streams)",
         )?;
         // For process_streams, authenticated_signer and authenticated_called_id are None.
         let caller = Address::ZERO;
