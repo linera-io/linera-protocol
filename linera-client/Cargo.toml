@@ -57,8 +57,8 @@ web-default = ["web", "wasmer", "indexed-db"]
 anyhow = { workspace = true, optional = true }
 bcs.workspace = true
 clap.workspace = true
-futures.workspace = true
 fungible.workspace = true
+futures.workspace = true
 hdrhistogram = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-chain.workspace = true
