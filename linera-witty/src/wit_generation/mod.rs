@@ -66,13 +66,13 @@ impl FileContentGenerator for WitInterfaceWriter {
         writeln!(writer, "interface {} {{", self.name)?;
 
         for function in &self.functions {
-            writeln!(writer, "{}", function)?;
+            writeln!(writer, "{function}")?;
         }
 
         for type_declaration in self.types.values() {
             if !type_declaration.is_empty() {
                 writeln!(writer)?;
-                write!(writer, "{}", type_declaration)?;
+                write!(writer, "{type_declaration}")?;
             }
         }
 
@@ -124,13 +124,13 @@ impl WitWorldWriter {
 impl FileContentGenerator for WitWorldWriter {
     fn generate_file_contents(&self, mut writer: impl Write) -> std::io::Result<()> {
         if let Some(package) = &self.package {
-            writeln!(writer, "package {};\n", package)?;
+            writeln!(writer, "package {package};\n")?;
         }
 
         writeln!(writer, "world {} {{", &self.name)?;
 
         for import in &self.imports {
-            writeln!(writer, "    import {};", import)?;
+            writeln!(writer, "    import {import};")?;
         }
 
         if !self.imports.is_empty() {
@@ -138,7 +138,7 @@ impl FileContentGenerator for WitWorldWriter {
         }
 
         for export in &self.exports {
-            writeln!(writer, "    export {};", export)?;
+            writeln!(writer, "    export {export};")?;
         }
 
         writeln!(writer, "}}")?;
