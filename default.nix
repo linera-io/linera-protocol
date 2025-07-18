@@ -1,7 +1,10 @@
-{ crane, pkgs, rust-toolchain, libclang, rocksdb, git }:
+{ crane, pkgs, rust-toolchain, libclang, rocksdb, git, system, nix-gitignore }:
 ((crane.mkLib pkgs).overrideToolchain rust-toolchain).buildPackage {
   pname = "linera";
-  src = ./.;
+  src = nix-gitignore.gitignoreSource [] (builtins.path {
+    name = "source";
+    path = ./.;
+  });
   cargoExtraArgs = "-p linera-service";
   nativeBuildInputs = with pkgs; [
     clang
@@ -20,16 +23,17 @@
     pnpm
   ];
   checkInputs = with pkgs; [
-    # for native testing
     jq
     kubernetes-helm
     kind
     kubectl
-
+  ] ++ lib.optionals (system != "arm64-apple-darwin") [
     # for Wasm testing
+    # Chromium doesn't build on macOS so we can't run these tests there
     chromium
     chromedriver
   ];
+  doCheck = false;
   passthru = { inherit rust-toolchain; };
   RUST_SRC_PATH = rust-toolchain.availableComponents.rust-src;
   LIBCLANG_PATH = "${libclang.lib}/lib";
