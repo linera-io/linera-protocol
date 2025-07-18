@@ -1,4 +1,4 @@
-{ crane, pkgs, rust-toolchain, libclang, rocksdb, git }:
+{ crane, pkgs, rust-toolchain, libclang, rocksdb, git, system }:
 ((crane.mkLib pkgs).overrideToolchain rust-toolchain).buildPackage {
   pname = "linera";
   src = ./.;
@@ -20,13 +20,13 @@
     pnpm
   ];
   checkInputs = with pkgs; [
-    # for native testing
     jq
     kubernetes-helm
     kind
     kubectl
-
+  ] ++ lib.optionals (system != "arm64-apple-darwin") [
     # for Wasm testing
+    # Chromium doesn't build on macOS so we can't run these tests there
     chromium
     chromedriver
   ];
