@@ -105,7 +105,7 @@ pub enum Operation {
         /// Amount to be transferred
         amount: Amount,
         /// Target account to transfer the amount to
-	target_account: Account,
+        target_account: Account,
     },
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account by using the allowance.
     TransferFrom {
@@ -127,7 +127,7 @@ pub enum Operation {
         /// Amount to be claimed
         amount: Amount,
         /// Target account to claim the amount into
-	target_account: Account,
+        target_account: Account,
     },
 }
 

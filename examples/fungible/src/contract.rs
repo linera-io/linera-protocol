@@ -74,7 +74,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
-		self.state.approve(owner, spender, allowance).await;
+                self.state.approve(owner, spender, allowance).await;
                 FungibleResponse::Ok
             }
 
@@ -93,7 +93,7 @@ impl Contract for FungibleTokenContract {
             }
 
             Operation::TransferFrom {
-		owner,
+                owner,
                 spender,
                 amount,
                 target_account,
