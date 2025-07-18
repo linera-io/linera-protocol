@@ -378,6 +378,12 @@ where
         ApplicationId::from(application_id).with_abi::<Abi>()
     }
 
+    /// Creates a new data blob and returns its hash.
+    pub fn write_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
+        let blob_id = contract_wit::write_data_blob(&bytes);
+        DataBlobHash(blob_id.hash.into())
+    }
+
     /// Returns the round in which this block was validated.
     pub fn validation_round(&mut self) -> Option<u32> {
         contract_wit::validation_round()

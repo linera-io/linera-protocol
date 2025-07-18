@@ -13,7 +13,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, OracleResponse,
         SendMessageRequest, Timestamp,
     },
     ensure, http,
@@ -1588,6 +1588,13 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         self.inner().finish_call()?;
 
         Ok(app_id)
+    }
+
+    fn write_data_blob(&mut self, bytes: Vec<u8>) -> Result<BlobId, ExecutionError> {
+        let blob = Blob::new_data(bytes);
+        let blob_id = blob.id();
+        self.inner().transaction_tracker.add_created_blob(blob);
+        Ok(blob_id)
     }
 
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError> {
