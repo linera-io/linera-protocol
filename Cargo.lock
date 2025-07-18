@@ -5947,7 +5947,6 @@ dependencies = [
  "linera-rpc",
  "linera-storage",
  "linera-views",
- "log",
  "nonzero_lit",
  "num-traits",
  "serde",
