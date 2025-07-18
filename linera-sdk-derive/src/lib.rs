@@ -135,7 +135,7 @@ pub mod tests {
 
     fn assert_eq_no_whitespace(mut actual: String, mut expected: String) {
         // Intentionally left here for debugging purposes
-        println!("{}", actual);
+        println!("{actual}");
 
         actual.retain(|c| !c.is_whitespace());
         expected.retain(|c| !c.is_whitespace());
