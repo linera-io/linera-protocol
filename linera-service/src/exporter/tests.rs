@@ -46,6 +46,7 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
             port: 0,
         },
         limits: LimitsConfig::default(),
+        metrics_port: 1234,
     };
 
     let config = LocalNetConfig {

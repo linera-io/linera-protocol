@@ -4,8 +4,9 @@
 //! This module defines utility functions for interacting with Prometheus (logging metrics, etc)
 
 use prometheus::{
-    exponential_buckets, histogram_opts, linear_buckets, register_histogram_vec,
-    register_int_counter_vec, HistogramVec, IntCounterVec, Opts,
+    exponential_buckets, histogram_opts, linear_buckets, register_histogram,
+    register_histogram_vec, register_int_counter_vec, register_int_gauge_vec, Histogram,
+    HistogramVec, IntCounterVec, IntGaugeVec, Opts,
 };
 
 use crate::time::Instant;
@@ -36,6 +37,23 @@ pub fn register_histogram_vec(
     };
 
     register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created")
+}
+
+/// Wrapper around Prometheus `register_histogram!` macro which also sets the `linera` namespace
+pub fn register_histogram(name: &str, description: &str, buckets: Option<Vec<f64>>) -> Histogram {
+    let histogram_opts = if let Some(buckets) = buckets {
+        histogram_opts!(name, description, buckets).namespace(LINERA_NAMESPACE)
+    } else {
+        histogram_opts!(name, description).namespace(LINERA_NAMESPACE)
+    };
+
+    register_histogram!(histogram_opts).expect("Histogram can be created")
+}
+
+/// Wrapper around Prometheus `register_int_gauge_vec!` macro which also sets the `linera` namespace
+pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> IntGaugeVec {
+    let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
+    register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created")
 }
 
 /// Construct the bucket interval exponentially starting from a value and an ending value.
@@ -137,6 +155,19 @@ impl MeasureLatency for HistogramVec {
 
     fn finish_measurement(&self, milliseconds: f64) {
         self.with_label_values(&[]).observe(milliseconds);
+    }
+}
+
+impl MeasureLatency for Histogram {
+    fn measure_latency(&self) -> ActiveMeasurementGuard<'_, Self> {
+        ActiveMeasurementGuard {
+            start: Instant::now(),
+            metric: Some(self),
+        }
+    }
+
+    fn finish_measurement(&self, milliseconds: f64) {
+        self.observe(milliseconds);
     }
 }
 
