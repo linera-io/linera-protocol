@@ -1,7 +1,10 @@
 { crane, pkgs, rust-toolchain, libclang, rocksdb, git, system, nix-gitignore }:
 ((crane.mkLib pkgs).overrideToolchain rust-toolchain).buildPackage {
   pname = "linera";
-  src = nix-gitignore.gitignoreSource [] ./.;
+  src = nix-gitignore.gitignoreSource [] (builtins.path {
+    name = "source";
+    path = ./.;
+  });
   cargoExtraArgs = "-p linera-service";
   nativeBuildInputs = with pkgs; [
     clang
