@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use fungible::{self, FungibleTokenAbi};
+use fungible::{self, NativeFungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount, CryptoHash},
     test::{ActiveChain, Recipient, TestValidator},
@@ -21,7 +21,7 @@ async fn chain_balance_transfers() {
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
-        FungibleTokenAbi,
+        NativeFungibleTokenAbi,
         _,
         _,
     >(parameters, initial_state)
@@ -58,7 +58,7 @@ async fn transfer_to_owner() {
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
-        FungibleTokenAbi,
+        NativeFungibleTokenAbi,
         _,
         _,
     >(parameters, initial_state)
@@ -93,7 +93,7 @@ async fn transfer_to_multiple_owners() {
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
-        FungibleTokenAbi,
+        NativeFungibleTokenAbi,
         _,
         _,
     >(parameters, initial_state)
@@ -142,7 +142,7 @@ async fn emptied_account_disappears_from_queries() {
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
-        FungibleTokenAbi,
+        NativeFungibleTokenAbi,
         _,
         _,
     >(parameters, initial_state)
