@@ -70,7 +70,6 @@ linera-sdk = { workspace = true, optional = true }
 linera-storage.workspace = true
 linera-version = { workspace = true }
 linera-views.workspace = true
-native-fungible.workspace = true
 num-format = { workspace = true, optional = true }
 prometheus-parse = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }

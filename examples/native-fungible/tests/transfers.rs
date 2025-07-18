@@ -7,7 +7,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use fungible::{self, NativeFungibleTokenAbi};
+use fungible::{self};
+use native_fungible::NativeFungibleTokenAbi;
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount, CryptoHash},
     test::{ActiveChain, Recipient, TestValidator},
