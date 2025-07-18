@@ -3,7 +3,7 @@
 
 //! The server component of the Linera faucet.
 
-use std::{future::IntoFuture, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{future::IntoFuture, net::SocketAddr, sync::Arc};
 
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
@@ -20,6 +20,8 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
+#[cfg(feature = "metrics")]
+use linera_metrics::prometheus_server;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
@@ -184,7 +186,9 @@ where
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
     storage: <C::Environment as linera_core::Environment>::Storage,
-    port: NonZeroU16,
+    port: u16,
+    #[cfg(feature = "metrics")]
+    metrics_port: u16,
     amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
@@ -203,6 +207,8 @@ where
             config: self.config.clone(),
             storage: self.storage.clone(),
             port: self.port,
+            #[cfg(feature = "metrics")]
+            metrics_port: self.metrics_port,
             amount: self.amount,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
@@ -211,36 +217,43 @@ where
     }
 }
 
+pub struct FaucetConfig {
+    pub port: u16,
+    #[cfg(feature = "metrics")]
+    pub metrics_port: u16,
+    pub chain_id: ChainId,
+    pub amount: Amount,
+    pub end_timestamp: Timestamp,
+    pub genesis_config: Arc<GenesisConfig>,
+    pub chain_listener_config: ChainListenerConfig,
+}
+
 impl<C> FaucetService<C>
 where
     C: ClientContext + 'static,
 {
     /// Creates a new instance of the faucet service.
-    #[expect(clippy::too_many_arguments)]
     pub async fn new(
-        port: NonZeroU16,
-        chain_id: ChainId,
+        config: FaucetConfig,
         context: C,
-        amount: Amount,
-        end_timestamp: Timestamp,
-        genesis_config: Arc<GenesisConfig>,
-        config: ChainListenerConfig,
         storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
-        let client = context.make_chain_client(chain_id);
+        let client = context.make_chain_client(config.chain_id);
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
         Ok(Self {
-            chain_id,
+            chain_id: config.chain_id,
             context,
-            genesis_config,
-            config,
+            genesis_config: config.genesis_config,
+            config: config.chain_listener_config,
             storage,
-            port,
-            amount,
-            end_timestamp,
+            port: config.port,
+            #[cfg(feature = "metrics")]
+            metrics_port: config.metrics_port,
+            amount: config.amount,
+            end_timestamp: config.end_timestamp,
             start_timestamp,
             start_balance,
         })
@@ -263,11 +276,19 @@ where
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
 
+    #[cfg(feature = "metrics")]
+    fn metrics_address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.metrics_port))
+    }
+
     /// Runs the faucet.
     #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
     pub async fn run(self, cancellation_token: CancellationToken) -> anyhow::Result<()> {
-        let port = self.port.get();
+        let port = self.port;
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
+
+        #[cfg(feature = "metrics")]
+        prometheus_server::start_metrics(self.metrics_address(), cancellation_token.clone());
 
         let app = Router::new()
             .route("/", index_handler)

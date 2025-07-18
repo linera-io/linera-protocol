@@ -40,7 +40,7 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     WasmRuntime, WithWasmDefault as _,
 };
-use linera_faucet_server::FaucetService;
+use linera_faucet_server::{FaucetConfig, FaucetService};
 use linera_persistent::{self as persistent, Persist, PersistExt as _};
 use linera_service::{
     cli::{
@@ -919,6 +919,8 @@ impl Runnable for Job {
             Faucet {
                 chain_id,
                 port,
+                #[cfg(with_metrics)]
+                metrics_port,
                 amount,
                 limit_rate_until,
                 config,
@@ -940,17 +942,17 @@ impl Runnable for Job {
                     })
                     .unwrap_or_else(Timestamp::now);
                 let genesis_config = Arc::new(context.wallet().genesis_config().clone());
-                let faucet = FaucetService::new(
+                let config = FaucetConfig {
                     port,
+                    #[cfg(with_metrics)]
+                    metrics_port,
                     chain_id,
-                    context,
                     amount,
                     end_timestamp,
                     genesis_config,
-                    config,
-                    storage,
-                )
-                .await?;
+                    chain_listener_config: config,
+                };
+                let faucet = FaucetService::new(config, context, storage).await?;
                 let cancellation_token = CancellationToken::new();
                 let child_token = cancellation_token.child_token();
                 tokio::spawn(listen_for_shutdown_signals(cancellation_token));
