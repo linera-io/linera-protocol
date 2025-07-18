@@ -532,11 +532,11 @@ where
     }
 
     /// Creates a new data blob and returns its ID.
-    fn write_data_blob(caller: &mut Caller, bytes: Vec<u8>) -> Result<BlobId, RuntimeError> {
+    fn create_data_blob(caller: &mut Caller, bytes: Vec<u8>) -> Result<BlobId, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .write_data_blob(bytes)
+            .create_data_blob(bytes)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

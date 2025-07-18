@@ -820,7 +820,7 @@ pub trait ContractRuntime: BaseRuntime {
     ) -> Result<ApplicationId, ExecutionError>;
 
     /// Creates a new data blob and returns its ID.
-    fn write_data_blob(&mut self, bytes: Vec<u8>) -> Result<BlobId, ExecutionError>;
+    fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<BlobId, ExecutionError>;
 
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;

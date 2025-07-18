@@ -379,8 +379,8 @@ where
     }
 
     /// Creates a new data blob and returns its hash.
-    pub fn write_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
-        let blob_id = contract_wit::write_data_blob(&bytes);
+    pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
+        let blob_id = contract_wit::create_data_blob(&bytes);
         DataBlobHash(blob_id.hash.into())
     }
 

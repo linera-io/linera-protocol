@@ -1590,7 +1590,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(app_id)
     }
 
-    fn write_data_blob(&mut self, bytes: Vec<u8>) -> Result<BlobId, ExecutionError> {
+    fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<BlobId, ExecutionError> {
         let blob = Blob::new_data(bytes);
         let blob_id = blob.id();
         self.inner().transaction_tracker.add_created_blob(blob);

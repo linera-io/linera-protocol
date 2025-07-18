@@ -12,7 +12,7 @@ interface contract-runtime-api {
     close-chain: func() -> result<tuple<>, close-chain-error>;
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
     create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
-    write-data-blob: func(bytes: list<u8>) -> blob-id;
+    create-data-blob: func(bytes: list<u8>) -> blob-id;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, value: list<u8>) -> u32;
     read-event: func(chain-id: chain-id, name: stream-name, index: u32) -> list<u8>;

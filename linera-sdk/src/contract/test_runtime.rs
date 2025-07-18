@@ -33,7 +33,7 @@ struct ExpectedCreateApplicationCall {
     application_id: ApplicationId,
 }
 
-struct ExpectedWriteDataBlobCall {
+struct ExpectedCreateDataBlobCall {
     bytes: Vec<u8>,
     blob_id: BlobId,
 }
@@ -71,7 +71,7 @@ where
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_open_chain_calls: VecDeque<(ChainOwnership, ApplicationPermissions, Amount, ChainId)>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
-    expected_write_data_blob_calls: VecDeque<ExpectedWriteDataBlobCall>,
+    expected_create_data_blob_calls: VecDeque<ExpectedCreateDataBlobCall>,
     key_value_store: KeyValueStore,
 }
 
@@ -119,7 +119,7 @@ where
             expected_assert_data_blob_exists_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
             expected_create_application_calls: VecDeque::new(),
-            expected_write_data_blob_calls: VecDeque::new(),
+            expected_create_data_blob_calls: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -714,10 +714,10 @@ where
             });
     }
 
-    /// Adds a new expected call to `write_data_blob`.
-    pub fn add_expected_write_data_blob_call(&mut self, bytes: Vec<u8>, blob_id: BlobId) {
-        self.expected_write_data_blob_calls
-            .push_back(ExpectedWriteDataBlobCall { bytes, blob_id });
+    /// Adds a new expected call to `create_data_blob`.
+    pub fn add_expected_create_data_blob_call(&mut self, bytes: Vec<u8>, blob_id: BlobId) {
+        self.expected_create_data_blob_calls
+            .push_back(ExpectedCreateDataBlobCall { bytes, blob_id });
     }
 
     /// Creates a new on-chain application, based on the supplied bytecode and parameters.
@@ -756,14 +756,14 @@ where
     }
 
     /// Creates a new data blob and returns its hash.
-    pub fn write_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
-        let ExpectedWriteDataBlobCall {
+    pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
+        let ExpectedCreateDataBlobCall {
             bytes: expected_bytes,
             blob_id,
         } = self
-            .expected_write_data_blob_calls
+            .expected_create_data_blob_calls
             .pop_front()
-            .expect("Unexpected write_data_blob call");
+            .expect("Unexpected create_data_blob call");
         assert_eq!(bytes, expected_bytes);
         DataBlobHash(blob_id.hash)
     }
