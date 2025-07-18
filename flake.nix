@@ -18,56 +18,68 @@
     imports = [
       inputs.treefmt-nix.flakeModule
     ];
-    perSystem = { config, self', inputs', pkgs, lib, system, ... }:
-      let
-        linera = pkgs.callPackage ./. {
-          inherit (inputs) crane;
-          rust-toolchain = rust-stable;
-        };
-        toolchain-wrapper = pkgs.callPackage inputs.nixup { } {
-          default = rust-stable;
-          stable = rust-stable;
-          nightly = rust-nightly;
+    perSystem = { config, self', inputs', pkgs, lib, system, ... }: {
+      _module.args.pkgs = import inputs.nixpkgs {
+        inherit system;
+        overlays = [ (import inputs.rust-overlay) ];
+      };
+
+      packages = let
+        docker-opts = {
+          name = "linera-dev-container";
+          tag = "latest";
+          drv = linera;
         };
         rust-stable = pkgs.rust-bin.fromRustupToolchainFile
           ./toolchains/stable/rust-toolchain.toml;
-        rust-nightly = pkgs.rust-bin.fromRustupToolchainFile
-          ./toolchains/nightly/rust-toolchain.toml;
-      in {
-        _module.args.pkgs = import inputs.nixpkgs {
-          inherit system;
-          overlays = [ (import inputs.rust-overlay) ];
+        linera = pkgs.callPackage ./. {
+          inherit (inputs) crane;
+          rust-toolchain = rust-stable // pkgs.callPackage inputs.nixup { } {
+            default = rust-stable;
+            nightly = pkgs.rust-bin.fromRustupToolchainFile
+              ./toolchains/nightly/rust-toolchain.toml;
+          };
         };
+      in {
+        inherit linera;
+        default = linera;
+        container = pkgs.dockerTools.buildNixShellImage docker-opts;
+        container-stream = pkgs.dockerTools.streamNixShellImage docker-opts;
+      };
 
-        packages.default = linera;
-
-        # Rust dev environment
-        devShells.default = pkgs.mkShell {
+      # Rust dev environment
+      devShells = let
+        linera = self'.packages.linera;
+        container = self'.packages.container;
+      in {
+        default = pkgs.mkShell {
           inputsFrom = [
             config.treefmt.build.devShell
             linera
           ];
           shellHook = ''
-            # For rust-analyzer 'hover' tooltips to work.
-            export PATH=$PWD/target/debug:$PATH:~/.cargo/bin
+            export PATH=$PWD/target/debug:$PATH
             export RUST_SRC_PATH="${linera.RUST_SRC_PATH}"
             export LIBCLANG_PATH="${linera.LIBCLANG_PATH}"
             export ROCKSDB_LIB_DIR="${linera.ROCKSDB_LIB_DIR}";
           '';
-          nativeBuildInputs = with pkgs; [
-            rust-analyzer
-            toolchain-wrapper
-          ];
+          nativeBuildInputs = [ pkgs.rust-analyzer ];
         };
 
-        # Add your auto-formatters here.
-        # cf. https://numtide.github.io/treefmt/
-        treefmt.config = {
-          projectRootFile = "flake.nix";
-          programs = {
-            nixpkgs-fmt.enable = true;
-          };
+        docker = pkgs.mkShell {
+          shellHook = ''
+            docker images -q ${container.imageName}:${container.imageTag} || ${self'.packages.container-stream} | docker load
+            exec docker run --user $USER_ID:$GROUP_ID -v .:/build -it ${container.imageName}:${container.imageTag}
+          '';
         };
       };
+
+      # Add your auto-formatters here.
+      # cf. https://numtide.github.io/treefmt/
+      treefmt.config = {
+        projectRootFile = "flake.nix";
+        programs.nixpkgs-fmt.enable = true;
+      };
+    };
   };
 }
