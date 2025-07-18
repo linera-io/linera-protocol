@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, path::Path, time::Duration};
 
 use anyhow::{bail, Context as _, Result};
 use clap::Parser as _;
+use fungible::FungibleTokenAbi;
 use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
@@ -18,7 +19,6 @@ use linera_service::cli_wrappers::{
     local_net::{PathProvider, ProcessInbox},
     ApplicationWrapper, ClientWrapper, Faucet, Network, OnClientDrop,
 };
-use fungible::FungibleTokenAbi;
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
 use serde_json::Value;

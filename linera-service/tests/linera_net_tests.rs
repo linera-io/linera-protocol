@@ -1993,11 +1993,16 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     Ok(())
 }
 
-async fn publish_and_create_native_fungible(client: &ClientWrapper, name: &str, params: &fungible::Parameters, state: &fungible::InitialState, chain_id: Option<ChainId>) -> Result<ApplicationId<native_fungible::NativeFungibleTokenAbi>> {
+async fn publish_and_create_native_fungible(
+    client: &ClientWrapper,
+    name: &str,
+    params: &fungible::Parameters,
+    state: &fungible::InitialState,
+    chain_id: Option<ChainId>,
+) -> Result<ApplicationId<native_fungible::NativeFungibleTokenAbi>> {
     let (contract, service) = client.build_example(name).await?;
+    use fungible::{FungibleTokenAbi, InitialState, Parameters};
     use native_fungible::NativeFungibleTokenAbi;
-    use fungible::FungibleTokenAbi;
-    use fungible::{InitialState, Parameters};
     if name == "native-fungible" {
         client
             .publish_and_create::<NativeFungibleTokenAbi, Parameters, InitialState>(
@@ -2009,7 +2014,7 @@ async fn publish_and_create_native_fungible(client: &ClientWrapper, name: &str, 
                 &[],
                 chain_id,
             )
-           .await
+            .await
     } else {
         let application_id = client
             .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
@@ -2024,12 +2029,7 @@ async fn publish_and_create_native_fungible(client: &ClientWrapper, name: &str, 
             .await?;
         Ok(application_id.forget_abi().with_abi())
     }
-
 }
-
-
-
-
 
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.
@@ -2079,7 +2079,8 @@ async fn test_wasm_end_to_end_fungible(
     } else {
         Parameters::new("FUN")
     };
-    let application_id = publish_and_create_native_fungible(&client1, example_name, &params, &state, None).await?;
+    let application_id =
+        publish_and_create_native_fungible(&client1, example_name, &params, &state, None).await?;
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
@@ -2244,7 +2245,8 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     } else {
         Parameters::new("FUN")
     };
-    let application_id = publish_and_create_native_fungible(&client1, example_name, &params, &state, None).await?;
+    let application_id =
+        publish_and_create_native_fungible(&client1, example_name, &params, &state, None).await?;
 
     let port = get_node_port().await;
     let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
