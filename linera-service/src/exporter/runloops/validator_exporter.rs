@@ -113,6 +113,10 @@ where
         mut receiver: Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) -> anyhow::Result<()> {
         while let Some((block, blobs_ids)) = receiver.recv().await {
+            #[cfg(with_metrics)]
+            crate::metrics::VALIDATOR_EXPORTER_QUEUE_LENGTH
+                .with_label_values(&[self.node.address()])
+                .set(receiver.len() as i64);
             match self.dispatch_block((*block).clone()).await {
                 Ok(_) => {}
 
@@ -136,6 +140,10 @@ where
 
     fn increment_destination_state(&self) {
         let _ = self.destination_state.fetch_add(1, Ordering::Release);
+        #[cfg(with_metrics)]
+        crate::metrics::DESTINATION_STATE_COUNTER
+            .with_label_values(&[self.node.address()])
+            .inc();
     }
 
     async fn upload_blobs(&self, blobs: Vec<BlobId>) -> anyhow::Result<()> {
@@ -147,11 +155,19 @@ where
                         "dispatching blob with id: {:#?} from linera exporter",
                         blob.id()
                     );
-                    self.node
+                    #[cfg(with_metrics)]
+                    let start = std::time::Instant::now();
+                    let result = self
+                        .node
                         .upload_blob((*blob).clone().into())
                         .await
-                        .map_err(|e| ExporterError::GenericError(e.into()))
                         .map(|_| ())
+                        .map_err(|e| ExporterError::GenericError(e.into()));
+                    #[cfg(with_metrics)]
+                    crate::metrics::DISPATCH_BLOB_HISTOGRAM
+                        .with_label_values(&[self.node.address()])
+                        .observe(start.elapsed().as_secs_f64() * 1000.0);
+                    result
                 }
             }
         });
@@ -168,14 +184,25 @@ where
         let delivery = CrossChainMessageDelivery::NonBlocking;
         let block_id = BlockId::from_confirmed_block(certificate.value());
         tracing::info!(?block_id, "dispatching block");
+        #[cfg(with_metrics)]
+        let start = std::time::Instant::now();
         match self
             .node
             .handle_confirmed_certificate(certificate, delivery)
             .await
         {
-            Ok(_) => {}
+            Ok(_) => {
+                #[cfg(with_metrics)]
+                crate::metrics::DISPATCH_BLOCK_HISTOGRAM
+                    .with_label_values(&[self.node.address()])
+                    .observe(start.elapsed().as_secs_f64() * 1000.0);
+            }
             Err(e) => {
                 tracing::error!(error=%e, ?block_id, "error when dispatching block");
+                #[cfg(with_metrics)]
+                crate::metrics::DISPATCH_BLOCK_HISTOGRAM
+                    .with_label_values(&[self.node.address()])
+                    .observe(start.elapsed().as_secs_f64() * 1000.0);
                 Err(e)?
             }
         }

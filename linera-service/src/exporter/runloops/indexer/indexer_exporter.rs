@@ -129,6 +129,10 @@ impl AcknowledgementTask {
 
     fn increment_destination_state(&self) {
         let _ = self.destination_state.fetch_add(1, Ordering::Release);
+        // #[cfg(with_metrics)]
+        // crate::metrics::DESTINATION_STATE_COUNTER
+        //     .with_label_values(&[self.node.address()])
+        //     .inc();
     }
 }
 

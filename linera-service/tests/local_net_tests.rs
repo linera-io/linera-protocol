@@ -1279,6 +1279,7 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
             host: "".to_owned(),
             port: 0,
         },
+        metrics_port: 1234,
         limits: LimitsConfig::default(),
     };
 
