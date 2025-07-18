@@ -789,7 +789,7 @@ impl Runnable for Job {
             #[cfg(feature = "benchmark")]
             Benchmark(benchmark_config) => {
                 let BenchmarkCommand {
-                    dont_use_cross_chain_messages,
+                    num_chains_per_chain_group,
                     num_chain_groups,
                     tokens_per_chain,
                     transactions_per_block,
@@ -817,7 +817,6 @@ impl Runnable for Job {
                     "Number of transactions per block must be greater than 0"
                 );
                 assert!(bps > 0, "BPS must be greater than 0");
-                let num_chains_per_chain_group = if dont_use_cross_chain_messages { 1 } else { 2 };
 
                 let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
                     .take(num_chain_groups * num_chains_per_chain_group)

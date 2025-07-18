@@ -3,7 +3,6 @@
 
 use std::{
     collections::HashMap,
-    iter,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -861,22 +860,32 @@ impl<Env: Environment> Benchmark<Env> {
             let amount = Amount::from(1);
             for i in 0..chains_len {
                 let owner = chains[i].1;
-                let recipient_chain_id = chains[(i + chains_len - 1) % chains_len].0;
-                let operation = match fungible_application_id {
-                    Some(application_id) => Self::fungible_transfer(
-                        application_id,
-                        recipient_chain_id,
-                        owner,
-                        owner,
-                        amount,
-                    ),
-                    None => Operation::system(SystemOperation::Transfer {
-                        owner: AccountOwner::CHAIN,
-                        recipient: Recipient::chain(recipient_chain_id),
-                        amount,
-                    }),
-                };
-                let operations = iter::repeat_n(operation, transactions_per_block).collect();
+                let mut operations = Vec::new();
+                for (j, (recipient_chain_id, _)) in chains.iter().enumerate() {
+                    if i == j {
+                        continue;
+                    }
+                    let operation = match fungible_application_id {
+                        Some(application_id) => Self::fungible_transfer(
+                            application_id,
+                            *recipient_chain_id,
+                            owner,
+                            owner,
+                            amount,
+                        ),
+                        None => Operation::system(SystemOperation::Transfer {
+                            owner: AccountOwner::CHAIN,
+                            recipient: Recipient::chain(*recipient_chain_id),
+                            amount,
+                        }),
+                    };
+                    operations.push(operation);
+                }
+                let operations = operations
+                    .into_iter()
+                    .cycle()
+                    .take(transactions_per_block)
+                    .collect();
                 infos.push((operations, owner));
             }
             blocks_infos.push(infos);
