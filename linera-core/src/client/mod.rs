@@ -2224,7 +2224,7 @@ impl<Env: Environment> ChainClient<Env> {
             hash,
             blob_type: BlobType::Data,
         };
-        self.execute_operation(SystemOperation::ReadBlob { blob_id })
+        self.execute_operation(SystemOperation::VerifyBlob { blob_id })
             .await
     }
 

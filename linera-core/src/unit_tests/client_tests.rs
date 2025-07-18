@@ -1406,7 +1406,7 @@ where
 
     // Try to read a blob without publishing it first, should fail
     let result = client_1a
-        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id })
+        .execute_operation(SystemOperation::VerifyBlob { blob_id: blob0_id })
         .await;
     assert_matches!(
         result,
@@ -1437,7 +1437,7 @@ where
     // and cache locally the blobs that were published by `client_a`. So this will succeed.
     client_1b.prepare_chain().await?;
     let certificate = client_1b
-        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id })
+        .execute_operation(SystemOperation::VerifyBlob { blob_id: blob0_id })
         .await?
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
@@ -1456,7 +1456,7 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::VerifyBlob { blob_id: blob0_id }),
         Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
@@ -1610,7 +1610,7 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::VerifyBlob { blob_id: blob0_id }),
         Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
@@ -1852,7 +1852,7 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::VerifyBlob { blob_id: blob0_id }),
         Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
@@ -1920,7 +1920,7 @@ where
     let blob3_hash = blob3.id().hash;
 
     let blob_2_3_operations = vec![
-        Operation::system(SystemOperation::ReadBlob { blob_id: blob2_id }),
+        Operation::system(SystemOperation::VerifyBlob { blob_id: blob2_id }),
         Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob3_hash,
         }),
@@ -2639,7 +2639,7 @@ where
 
     // Client 3 should be able to update validator 3 about the blob and the message.
     let certificate = client3
-        .execute_operation(SystemOperation::ReadBlob { blob_id })
+        .execute_operation(SystemOperation::VerifyBlob { blob_id })
         .await
         .unwrap()
         .unwrap();
@@ -2712,8 +2712,7 @@ where
     assert_eq!(client.local_balance().await.unwrap(), expected_balance);
 
     client.read_data_blob(blob_id.hash).await.unwrap().unwrap();
-    expected_balance =
-        expected_balance - policy.blob_read - policy.blob_byte_read * (blob.bytes().len() as u128);
+    expected_balance = expected_balance - policy.blob_read;
     assert_eq!(client.local_balance().await.unwrap(), expected_balance);
     Ok(())
 }
