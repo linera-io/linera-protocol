@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FungibleResponse"],"struct":["Account","InitialState","InitialStateBuilder","Parameters"]};

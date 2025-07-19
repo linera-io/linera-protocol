@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DestinationKind"],"struct":["BlockExporterConfig","Destination","DestinationConfig","DestinationId","LimitsConfig"]};

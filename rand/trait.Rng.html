@@ -1,0 +1,202 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="User-level interface for RNGs"><title>Rng in rand - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rand" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../rand/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../rand/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt="logo"></a><h2><a href="../rand/index.html">rand</a><span class="version">0.9.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Rng</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#generic-usage" title="Generic usage">Generic usage</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.fill" title="fill">fill</a></li><li><a href="#method.gen" title="gen">gen</a></li><li><a href="#method.gen_bool" title="gen_bool">gen_bool</a></li><li><a href="#method.gen_range" title="gen_range">gen_range</a></li><li><a href="#method.gen_ratio" title="gen_ratio">gen_ratio</a></li><li><a href="#method.random" title="random">random</a></li><li><a href="#method.random_bool" title="random_bool">random_bool</a></li><li><a href="#method.random_iter" title="random_iter">random_iter</a></li><li><a href="#method.random_range" title="random_range">random_range</a></li><li><a href="#method.random_ratio" title="random_ratio">random_ratio</a></li><li><a href="#method.sample" title="sample">sample</a></li><li><a href="#method.sample_iter" title="sample_iter">sample_iter</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate rand</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">rand</a></div><h1>Trait <span class="trait">Rng</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/rand/rng.rs.html#58-355">Source</a> </span></div><pre class="rust item-decl"><code>pub trait Rng: <a class="trait" href="trait.RngCore.html" title="trait rand::RngCore">RngCore</a> {
+    // Provided methods
+    fn <a href="#method.random" class="fn">random</a>&lt;T&gt;(&amp;mut self) -&gt; T
+       <span class="where">where <a class="struct" href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform">StandardUniform</a>: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.random_iter" class="fn">random_iter</a>&lt;T&gt;(self) -&gt; <a class="struct" href="distr/struct.Iter.html" title="struct rand::distr::Iter">Iter</a>&lt;<a class="struct" href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform">StandardUniform</a>, Self, T&gt; <a href="#" class="tooltip" data-notable-ty="Iter&lt;StandardUniform, Self, T&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             <a class="struct" href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform">StandardUniform</a>: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.random_range" class="fn">random_range</a>&lt;T, R&gt;(&amp;mut self, range: R) -&gt; T
+       <span class="where">where T: <a class="trait" href="distr/uniform/trait.SampleUniform.html" title="trait rand::distr::uniform::SampleUniform">SampleUniform</a>,
+             R: <a class="trait" href="distr/uniform/trait.SampleRange.html" title="trait rand::distr::uniform::SampleRange">SampleRange</a>&lt;T&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.random_bool" class="fn">random_bool</a>(&amp;mut self, p: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.f64.html">f64</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.random_ratio" class="fn">random_ratio</a>(&amp;mut self, numerator: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>, denominator: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.sample" class="fn">sample</a>&lt;T, D: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;&gt;(&amp;mut self, distr: D) -&gt; T { ... }
+<span class="item-spacer"></span>    fn <a href="#method.sample_iter" class="fn">sample_iter</a>&lt;T, D&gt;(self, distr: D) -&gt; <a class="struct" href="distr/struct.Iter.html" title="struct rand::distr::Iter">Iter</a>&lt;D, Self, T&gt; <a href="#" class="tooltip" data-notable-ty="Iter&lt;D, Self, T&gt;">ⓘ</a>
+       <span class="where">where D: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.fill" class="fn">fill</a>&lt;T: <a class="trait" href="trait.Fill.html" title="trait rand::Fill">Fill</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(&amp;mut self, dest: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;mut T</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.gen" class="fn">gen</a>&lt;T&gt;(&amp;mut self) -&gt; T
+       <span class="where">where <a class="struct" href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform">StandardUniform</a>: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.gen_range" class="fn">gen_range</a>&lt;T, R&gt;(&amp;mut self, range: R) -&gt; T
+       <span class="where">where T: <a class="trait" href="distr/uniform/trait.SampleUniform.html" title="trait rand::distr::uniform::SampleUniform">SampleUniform</a>,
+             R: <a class="trait" href="distr/uniform/trait.SampleRange.html" title="trait rand::distr::uniform::SampleRange">SampleRange</a>&lt;T&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.gen_bool" class="fn">gen_bool</a>(&amp;mut self, p: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.f64.html">f64</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.gen_ratio" class="fn">gen_ratio</a>(&amp;mut self, numerator: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>, denominator: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>User-level interface for RNGs</p>
+<p><a href="trait.RngCore.html" title="trait rand::RngCore"><code>RngCore</code></a> is the <code>dyn</code>-safe implementation-level interface for Random
+(Number) Generators. This trait, <code>Rng</code>, provides a user-level interface on
+RNGs. It is implemented automatically for any <code>R: RngCore</code>.</p>
+<p>This trait must usually be brought into scope via <code>use rand::Rng;</code> or
+<code>use rand::prelude::*;</code>.</p>
+<h2 id="generic-usage"><a class="doc-anchor" href="#generic-usage">§</a>Generic usage</h2>
+<p>The basic pattern is <code>fn foo&lt;R: Rng + ?Sized&gt;(rng: &amp;mut R)</code>. Some
+things are worth noting here:</p>
+<ul>
+<li>Since <code>Rng: RngCore</code> and every <code>RngCore</code> implements <code>Rng</code>, it makes no
+difference whether we use <code>R: Rng</code> or <code>R: RngCore</code>.</li>
+<li>The <code>+ ?Sized</code> un-bounding allows functions to be called directly on
+type-erased references; i.e. <code>foo(r)</code> where <code>r: &amp;mut dyn RngCore</code>. Without
+this it would be necessary to write <code>foo(&amp;mut r)</code>.</li>
+</ul>
+<p>An alternative pattern is possible: <code>fn foo&lt;R: Rng&gt;(rng: R)</code>. This has some
+trade-offs. It allows the argument to be consumed directly without a <code>&amp;mut</code>
+(which is how <code>from_rng(rand::rng())</code> works); also it still works directly
+on references (including type-erased references). Unfortunately within the
+function <code>foo</code> it is not known whether <code>rng</code> is a reference type or not,
+hence many uses of <code>rng</code> require an extra reference, either explicitly
+(<code>distr.sample(&amp;mut rng)</code>) or implicitly (<code>rng.random()</code>); one may hope the
+optimiser can remove redundant references later.</p>
+<p>Example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+
+<span class="kw">fn </span>foo&lt;R: Rng + <span class="question-mark">?</span>Sized&gt;(rng: <span class="kw-2">&amp;mut </span>R) -&gt; f32 {
+    rng.random()
+}
+</code></pre></div>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.random" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#95-100">Source</a><h4 class="code-header">fn <a href="#method.random" class="fn">random</a>&lt;T&gt;(&amp;mut self) -&gt; T<div class="where">where
+    <a class="struct" href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform">StandardUniform</a>: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;,</div></h4></section></summary><div class="docblock"><p>Return a random value via the <a href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform"><code>StandardUniform</code></a> distribution.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+<span class="kw">let </span>x: u32 = rng.random();
+<span class="macro">println!</span>(<span class="string">"{}"</span>, x);
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, rng.random::&lt;(f64, bool)&gt;());</code></pre></div>
+<h5 id="arrays-and-tuples"><a class="doc-anchor" href="#arrays-and-tuples">§</a>Arrays and tuples</h5>
+<p>The <code>rng.random()</code> method is able to generate arrays
+and tuples (up to 12 elements), so long as all element types can be
+generated.</p>
+<p>For arrays of integers, especially for those with small element types
+(&lt; 64 bit), it will likely be faster to instead use <a href="trait.Rng.html#method.fill" title="method rand::Rng::fill"><code>Rng::fill</code></a>,
+though note that generated values will differ.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+<span class="kw">let </span>tuple: (u8, i32, char) = rng.random(); <span class="comment">// arbitrary tuple support
+
+</span><span class="kw">let </span>arr1: [f32; <span class="number">32</span>] = rng.random();        <span class="comment">// array construction
+</span><span class="kw">let </span><span class="kw-2">mut </span>arr2 = [<span class="number">0u8</span>; <span class="number">128</span>];
+rng.fill(<span class="kw-2">&amp;mut </span>arr2);                    <span class="comment">// array fill</span></code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.random_iter" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#120-126">Source</a><h4 class="code-header">fn <a href="#method.random_iter" class="fn">random_iter</a>&lt;T&gt;(self) -&gt; <a class="struct" href="distr/struct.Iter.html" title="struct rand::distr::Iter">Iter</a>&lt;<a class="struct" href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform">StandardUniform</a>, Self, T&gt; <a href="#" class="tooltip" data-notable-ty="Iter&lt;StandardUniform, Self, T&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    <a class="struct" href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform">StandardUniform</a>: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;,</div></h4></section></summary><div class="docblock"><p>Return an iterator over <a href="trait.Rng.html#method.random"><code>random</code></a> variates</p>
+<p>This is a just a wrapper over <a href="trait.Rng.html#method.sample_iter" title="method rand::Rng::sample_iter"><code>Rng::sample_iter</code></a> using
+<a href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform"><code>distr::StandardUniform</code></a>.</p>
+<p>Note: this method consumes its argument. Use
+<code>(&amp;mut rng).random_iter()</code> to avoid consuming the RNG.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::{rngs::mock::StepRng, Rng};
+
+<span class="kw">let </span>rng = StepRng::new(<span class="number">1</span>, <span class="number">1</span>);
+<span class="kw">let </span>v: Vec&lt;i32&gt; = rng.random_iter().take(<span class="number">5</span>).collect();
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>v, <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.random_range" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#161-168">Source</a><h4 class="code-header">fn <a href="#method.random_range" class="fn">random_range</a>&lt;T, R&gt;(&amp;mut self, range: R) -&gt; T<div class="where">where
+    T: <a class="trait" href="distr/uniform/trait.SampleUniform.html" title="trait rand::distr::uniform::SampleUniform">SampleUniform</a>,
+    R: <a class="trait" href="distr/uniform/trait.SampleRange.html" title="trait rand::distr::uniform::SampleRange">SampleRange</a>&lt;T&gt;,</div></h4></section></summary><div class="docblock"><p>Generate a random value in the given range.</p>
+<p>This function is optimised for the case that only a single sample is
+made from the given range. See also the <a href="distr/struct.Uniform.html" title="struct rand::distr::Uniform"><code>Uniform</code></a> distribution
+type which may be faster if sampling from the same range repeatedly.</p>
+<p>All types support <code>low..high_exclusive</code> and <code>low..=high</code> range syntax.
+Unsigned integer types also support <code>..high_exclusive</code> and <code>..=high</code> syntax.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>Panics if the range is empty, or if <code>high - low</code> overflows for floats.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+
+<span class="comment">// Exclusive range
+</span><span class="kw">let </span>n: u32 = rng.random_range(..<span class="number">10</span>);
+<span class="macro">println!</span>(<span class="string">"{}"</span>, n);
+<span class="kw">let </span>m: f64 = rng.random_range(-<span class="number">40.0</span>..<span class="number">1.3e5</span>);
+<span class="macro">println!</span>(<span class="string">"{}"</span>, m);
+
+<span class="comment">// Inclusive range
+</span><span class="kw">let </span>n: u32 = rng.random_range(..=<span class="number">10</span>);
+<span class="macro">println!</span>(<span class="string">"{}"</span>, n);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.random_bool" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#191-196">Source</a><h4 class="code-header">fn <a href="#method.random_bool" class="fn">random_bool</a>(&amp;mut self, p: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.f64.html">f64</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Return a bool with a probability <code>p</code> of being true.</p>
+<p>See also the <a href="distr/struct.Bernoulli.html" title="struct rand::distr::Bernoulli"><code>Bernoulli</code></a> distribution, which may be faster if
+sampling from the same probability repeatedly.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+<span class="macro">println!</span>(<span class="string">"{}"</span>, rng.random_bool(<span class="number">1.0 </span>/ <span class="number">3.0</span>));</code></pre></div>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>If <code>p &lt; 0</code> or <code>p &gt; 1</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.random_ratio" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#225-233">Source</a><h4 class="code-header">fn <a href="#method.random_ratio" class="fn">random_ratio</a>(&amp;mut self, numerator: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>, denominator: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Return a bool with a probability of <code>numerator/denominator</code> of being
+true.</p>
+<p>That is, <code>random_ratio(2, 3)</code> has chance of 2 in 3, or about 67%, of
+returning true. If <code>numerator == denominator</code>, then the returned value
+is guaranteed to be <code>true</code>. If <code>numerator == 0</code>, then the returned
+value is guaranteed to be <code>false</code>.</p>
+<p>See also the <a href="distr/struct.Bernoulli.html" title="struct rand::distr::Bernoulli"><code>Bernoulli</code></a> distribution, which may be faster if
+sampling from the same <code>numerator</code> and <code>denominator</code> repeatedly.</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>If <code>denominator == 0</code> or <code>numerator &gt; denominator</code>.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+<span class="macro">println!</span>(<span class="string">"{}"</span>, rng.random_ratio(<span class="number">2</span>, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.sample" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#249-251">Source</a><h4 class="code-header">fn <a href="#method.sample" class="fn">sample</a>&lt;T, D: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;&gt;(&amp;mut self, distr: D) -&gt; T</h4></section></summary><div class="docblock"><p>Sample a new value, using the given distribution.</p>
+<h6 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>rand::distr::Uniform;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+<span class="kw">let </span>x = rng.sample(Uniform::new(<span class="number">10u32</span>, <span class="number">15</span>).unwrap());
+<span class="comment">// Type annotation requires two types, the type and distribution; the
+// distribution can be inferred.
+</span><span class="kw">let </span>y = rng.sample::&lt;u16, <span class="kw">_</span>&gt;(Uniform::new(<span class="number">10</span>, <span class="number">15</span>).unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.sample_iter" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#286-292">Source</a><h4 class="code-header">fn <a href="#method.sample_iter" class="fn">sample_iter</a>&lt;T, D&gt;(self, distr: D) -&gt; <a class="struct" href="distr/struct.Iter.html" title="struct rand::distr::Iter">Iter</a>&lt;D, Self, T&gt; <a href="#" class="tooltip" data-notable-ty="Iter&lt;D, Self, T&gt;">ⓘ</a><div class="where">where
+    D: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Create an iterator that generates values using the given distribution.</p>
+<p>Note: this method consumes its arguments. Use
+<code>(&amp;mut rng).sample_iter(..)</code> to avoid consuming the RNG.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>rand::distr::{Alphanumeric, Uniform, StandardUniform};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+
+<span class="comment">// Vec of 16 x f32:
+</span><span class="kw">let </span>v: Vec&lt;f32&gt; = (<span class="kw-2">&amp;mut </span>rng).sample_iter(StandardUniform).take(<span class="number">16</span>).collect();
+
+<span class="comment">// String:
+</span><span class="kw">let </span>s: String = (<span class="kw-2">&amp;mut </span>rng).sample_iter(Alphanumeric)
+    .take(<span class="number">7</span>)
+    .map(char::from)
+    .collect();
+
+<span class="comment">// Combined values
+</span><span class="macro">println!</span>(<span class="string">"{:?}"</span>, (<span class="kw-2">&amp;mut </span>rng).sample_iter(StandardUniform).take(<span class="number">5</span>)
+                             .collect::&lt;Vec&lt;(f64, bool)&gt;&gt;());
+
+<span class="comment">// Dice-rolling:
+</span><span class="kw">let </span>die_range = Uniform::new_inclusive(<span class="number">1</span>, <span class="number">6</span>).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>roll_die = (<span class="kw-2">&amp;mut </span>rng).sample_iter(die_range);
+<span class="kw">while </span>roll_die.next().unwrap() != <span class="number">6 </span>{
+    <span class="macro">println!</span>(<span class="string">"Not a 6; rolling again!"</span>);
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.fill" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#314-316">Source</a><h4 class="code-header">fn <a href="#method.fill" class="fn">fill</a>&lt;T: <a class="trait" href="trait.Fill.html" title="trait rand::Fill">Fill</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(&amp;mut self, dest: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class="docblock"><p>Fill any type implementing <a href="trait.Fill.html" title="trait rand::Fill"><code>Fill</code></a> with random data</p>
+<p>This method is implemented for types which may be safely reinterpreted
+as an (aligned) <code>[u8]</code> slice then filled with random data. It is often
+faster than using <a href="trait.Rng.html#method.random" title="method rand::Rng::random"><code>Rng::random</code></a> but not value-equivalent.</p>
+<p>The distribution is expected to be uniform with portable results, but
+this cannot be guaranteed for third-party implementations.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+
+<span class="kw">let </span><span class="kw-2">mut </span>arr = [<span class="number">0i8</span>; <span class="number">20</span>];
+rand::rng().fill(<span class="kw-2">&amp;mut </span>arr[..]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.gen" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#324-329">Source</a><h4 class="code-header">fn <a href="#method.gen" class="fn">gen</a>&lt;T&gt;(&amp;mut self) -&gt; T<div class="where">where
+    <a class="struct" href="distr/struct.StandardUniform.html" title="struct rand::distr::StandardUniform">StandardUniform</a>: <a class="trait" href="distr/trait.Distribution.html" title="trait rand::distr::Distribution">Distribution</a>&lt;T&gt;,</div></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.9.0: Renamed to <code>random</code> to avoid conflict with the new <code>gen</code> keyword in Rust 2024.</span></div></span></summary><div class="docblock"><p>Alias for <a href="trait.Rng.html#method.random" title="method rand::Rng::random"><code>Rng::random</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.gen_range" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#334-340">Source</a><h4 class="code-header">fn <a href="#method.gen_range" class="fn">gen_range</a>&lt;T, R&gt;(&amp;mut self, range: R) -&gt; T<div class="where">where
+    T: <a class="trait" href="distr/uniform/trait.SampleUniform.html" title="trait rand::distr::uniform::SampleUniform">SampleUniform</a>,
+    R: <a class="trait" href="distr/uniform/trait.SampleRange.html" title="trait rand::distr::uniform::SampleRange">SampleRange</a>&lt;T&gt;,</div></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.9.0: Renamed to <code>random_range</code></span></div></span></summary><div class="docblock"><p>Alias for <a href="trait.Rng.html#method.random_range" title="method rand::Rng::random_range"><code>Rng::random_range</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.gen_bool" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#345-347">Source</a><h4 class="code-header">fn <a href="#method.gen_bool" class="fn">gen_bool</a>(&amp;mut self, p: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.f64.html">f64</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.9.0: Renamed to <code>random_bool</code></span></div></span></summary><div class="docblock"><p>Alias for <a href="trait.Rng.html#method.random_bool" title="method rand::Rng::random_bool"><code>Rng::random_bool</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.gen_ratio" class="method"><a class="src rightside" href="../src/rand/rng.rs.html#352-354">Source</a><h4 class="code-header">fn <a href="#method.gen_ratio" class="fn">gen_ratio</a>(&amp;mut self, numerator: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>, denominator: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.9.0: Renamed to <code>random_ratio</code></span></div></span></summary><div class="docblock"><p>Alias for <a href="trait.Rng.html#method.random_ratio" title="method rand::Rng::random_ratio"><code>Rng::random_ratio</code></a>.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Rng-for-R" class="impl"><a class="src rightside" href="../src/rand/rng.rs.html#357">Source</a><a href="#impl-Rng-for-R" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="trait.RngCore.html" title="trait rand::RngCore">RngCore</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.Rng.html" title="trait rand::Rng">Rng</a> for R</h3></section></div><script src="../trait.impl/rand/rng/trait.Rng.js" async></script><script type="text/json" id="notable-traits-data">{"Iter<D, Self, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"distr/struct.Iter.html\" title=\"struct rand::distr::Iter\">Iter</a>&lt;D, R, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;D, R, T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"distr/struct.Iter.html\" title=\"struct rand::distr::Iter\">Iter</a>&lt;D, R, T&gt;<div class=\"where\">where\n    D: <a class=\"trait\" href=\"distr/trait.Distribution.html\" title=\"trait rand::distr::Distribution\">Distribution</a>&lt;T&gt;,\n    R: <a class=\"trait\" href=\"trait.Rng.html\" title=\"trait rand::Rng\">Rng</a>,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = T;</div>","Iter<StandardUniform, Self, T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"distr/struct.Iter.html\" title=\"struct rand::distr::Iter\">Iter</a>&lt;D, R, T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;D, R, T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"distr/struct.Iter.html\" title=\"struct rand::distr::Iter\">Iter</a>&lt;D, R, T&gt;<div class=\"where\">where\n    D: <a class=\"trait\" href=\"distr/trait.Distribution.html\" title=\"trait rand::distr::Distribution\">Distribution</a>&lt;T&gt;,\n    R: <a class=\"trait\" href=\"trait.Rng.html\" title=\"trait rand::Rng\">Rng</a>,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = T;</div>"}</script></section></div></main></body></html>

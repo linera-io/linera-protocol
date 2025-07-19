@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TEST_MEMORY_MAX_STREAM_QUERIES"],"enum":["MemoryStoreError"],"fn":["create_test_memory_store"],"struct":["MemoryStore","MemoryStoreConfig"]};

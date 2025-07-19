@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["on_informational"],"struct":["Protocol","ReasonPhrase"]};

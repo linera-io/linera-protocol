@@ -1,0 +1,1 @@
+searchState.loadedDescShard("dynasm", 0, "The dynasm crate contains the procedural macros that power …\nThe whole point. This macro compiles given assembly/rust …\nSimilar to <code>dynasm!</code>, but the calls to the assembler are …")

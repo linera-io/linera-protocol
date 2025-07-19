@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DecodeResult","DecoderState","PushResult"],"fn":["decode","decode_in_place","decode_in_place_report","decode_in_place_with_sentinel","decode_with_sentinel","encode","encode_with_sentinel","max_encoding_length","try_encode"],"struct":["CobsDecoder","CobsEncoder","DecodeReport","EncoderState"]};
