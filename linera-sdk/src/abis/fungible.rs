@@ -5,61 +5,14 @@
 
 use std::collections::BTreeMap;
 
-use async_graphql::{InputObject, Request, Response, SimpleObject};
+use async_graphql::{InputObject, SimpleObject};
 use linera_base::{
-    abi::{ContractAbi, ServiceAbi},
     data_types::Amount,
     identifiers::{AccountOwner, ChainId},
 };
-use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
 
-/// An ABI for applications that implement a fungible token.
-pub struct FungibleTokenAbi;
-
-impl ContractAbi for FungibleTokenAbi {
-    type Operation = Operation;
-    type Response = FungibleResponse;
-}
-
-impl ServiceAbi for FungibleTokenAbi {
-    type Query = Request;
-    type QueryResponse = Response;
-}
-
-/// An operation
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
-pub enum Operation {
-    /// Requests an account balance.
-    Balance {
-        /// Owner to query the balance for
-        owner: AccountOwner,
-    },
-    /// Requests this fungible token's ticker symbol.
-    TickerSymbol,
-    /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
-    Transfer {
-        /// Owner to transfer from
-        owner: AccountOwner,
-        /// Amount to be transferred
-        amount: Amount,
-        /// Target account to transfer the amount to
-        target_account: Account,
-    },
-    /// Same as `Transfer` but the source account may be remote. Depending on its
-    /// configuration, the target chain may take time or refuse to process
-    /// the message.
-    Claim {
-        /// Source account to claim amount from
-        source_account: Account,
-        /// Amount to be claimed
-        amount: Amount,
-        /// Target account to claim the amount into
-        target_account: Account,
-    },
-}
-
-/// A fungible response
+/// A native fungible response
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub enum FungibleResponse {
     /// OK response

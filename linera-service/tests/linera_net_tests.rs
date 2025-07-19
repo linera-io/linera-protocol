@@ -82,13 +82,13 @@ fn test_iterations() -> Option<usize> {
     }
 }
 
-fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
+fn get_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
 
-struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
+struct NativeFungibleApp(ApplicationWrapper<native_fungible::NativeFungibleTokenAbi>);
 
-impl FungibleApp {
+impl NativeFungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
@@ -167,6 +167,103 @@ impl FungibleApp {
         );
 
         self.0.mutate(mutation).await.unwrap();
+    }
+}
+
+struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
+
+impl FungibleApp {
+    async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
+        let query = format!(
+            "accounts {{ entry(key: {}) {{ value }} }}",
+            account_owner.to_value()
+        );
+        let response_body = self.0.query(&query).await.unwrap();
+        let amount_option = serde_json::from_value::<Option<Amount>>(
+            response_body["accounts"]["entry"]["value"].clone(),
+        )
+        .unwrap();
+
+        amount_option.unwrap_or(Amount::ZERO)
+    }
+
+    async fn assert_balances(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
+        for (account_owner, amount) in accounts {
+            let value = self.get_amount(&account_owner).await;
+            assert_eq!(value, amount);
+        }
+    }
+
+    async fn get_allowance(&self, owner: &AccountOwner, spender: &AccountOwner) -> Amount {
+        let owner_spender = fungible::OwnerSpender::new(*owner, *spender);
+        let query = format!(
+            "allowances {{ entry(key: {}) {{ value }} }}",
+            owner_spender.to_value()
+        );
+        let response_body = self.0.query(&query).await.unwrap();
+        let amount_option = serde_json::from_value::<Option<Amount>>(
+            response_body["allowances"]["entry"]["value"].clone(),
+        )
+        .unwrap();
+
+        amount_option.unwrap_or(Amount::ZERO)
+    }
+
+    async fn assert_allowance(
+        &self,
+        owner: &AccountOwner,
+        spender: &AccountOwner,
+        allowance: Amount,
+    ) {
+        let value = self.get_allowance(owner, spender).await;
+        assert_eq!(value, allowance);
+    }
+
+    async fn approve(
+        &self,
+        owner: &AccountOwner,
+        spender: &AccountOwner,
+        allowance: Amount,
+    ) -> Value {
+        let mutation = format!(
+            "approve(owner: {}, spender: {}, allowance: \"{}\")",
+            owner.to_value(),
+            spender.to_value(),
+            allowance,
+        );
+        self.0.mutate(mutation).await.unwrap()
+    }
+
+    async fn transfer(
+        &self,
+        account_owner: &AccountOwner,
+        amount_transfer: Amount,
+        destination: fungible::Account,
+    ) -> Value {
+        let mutation = format!(
+            "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
+            account_owner.to_value(),
+            amount_transfer,
+            destination.to_value(),
+        );
+        self.0.mutate(mutation).await.unwrap()
+    }
+
+    async fn transfer_from(
+        &self,
+        owner: &AccountOwner,
+        spender: &AccountOwner,
+        amount_transfer: Amount,
+        destination: fungible::Account,
+    ) -> Value {
+        let mutation = format!(
+            "transferFrom(owner: {}, spender: {}, amount: \"{}\", targetAccount: {})",
+            owner.to_value(),
+            spender.to_value(),
+            amount_transfer,
+            destination.to_value(),
+        );
+        self.0.mutate(mutation).await.unwrap()
     }
 }
 
@@ -1746,6 +1843,194 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     Ok(())
 }
 
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) -> Result<()> {
+    use std::collections::BTreeMap;
+
+    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    // Create runner and three clients.
+    let (mut net, client1) = config.instantiate().await?;
+
+    let client2 = net.make_client().await;
+    client2.wallet_init(None).await?;
+
+    let client3 = net.make_client().await;
+    client3.wallet_init(None).await?;
+
+    let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
+
+    // Generate keys for all clients.
+    let owner1 = client1.keygen().await?;
+    let owner2 = client2.keygen().await?;
+    let owner3 = client3.keygen().await?;
+
+    // Open a chain owned by both clients.
+    let chain2 = client1
+        .open_multi_owner_chain(
+            chain1,
+            vec![owner1, owner2, owner3],
+            vec![100, 100, 100],
+            u32::MAX,
+            Amount::from_tokens(6),
+            10_000,
+        )
+        .await?;
+
+    // Assign chain2 to clients.
+    client1.assign(owner1, chain2).await?;
+    client2.assign(owner2, chain2).await?;
+    client3.assign(owner3, chain2).await?;
+
+    // Synchronizing the chains that need be.
+    client2.sync(chain2).await?;
+    client3.sync(chain2).await?;
+
+    // The initial accounts on chain1
+    let accounts = BTreeMap::from([
+        (owner1, Amount::from_tokens(9)),
+        (owner2, Amount::from_tokens(19)),
+    ]);
+    let state = InitialState { accounts };
+    // Setting up the application and verifying
+    let (contract, service) = client1.build_example("fungible").await?;
+    let params = Parameters::new("DEL");
+    let application_id = client1
+        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &params,
+            &state,
+            &[],
+            Some(chain2),
+        )
+        .await?;
+
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let port3 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut node_service3 = client3.run_node_service(port3, ProcessInbox::Skip).await?;
+
+    let app1 = FungibleApp(
+        node_service1
+            .make_application(&chain2, &application_id)
+            .await?,
+    );
+    let app2 = FungibleApp(
+        node_service2
+            .make_application(&chain2, &application_id)
+            .await?,
+    );
+    let app3 = FungibleApp(
+        node_service3
+            .make_application(&chain2, &application_id)
+            .await?,
+    );
+
+    let expected_balances = [
+        (owner1, Amount::from_tokens(9)),
+        (owner2, Amount::from_tokens(19)),
+    ];
+    app1.assert_balances(expected_balances).await;
+    app2.assert_balances(expected_balances).await;
+    app3.assert_balances(expected_balances).await;
+
+    // Approving a transfer
+    app1.approve(&owner1, &owner2, Amount::from_tokens(93))
+        .await;
+
+    app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
+        .await;
+
+    // Call process inbox in order to synchronize from validators
+    node_service2.process_inbox(&chain2).await?;
+    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
+        .await;
+
+    // Doing the transfer from
+    app2.transfer_from(
+        &owner1,
+        &owner2,
+        Amount::from_tokens(2),
+        fungible::Account {
+            chain_id: chain2,
+            owner: owner3,
+        },
+    )
+    .await;
+
+    // Checking the final values on chain1 and chain2.
+
+    let expected_balances = [
+        (owner1, Amount::from_tokens(7)),
+        (owner2, Amount::from_tokens(19)),
+        (owner3, Amount::from_tokens(2)),
+    ];
+    app2.assert_balances(expected_balances).await;
+    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(91))
+        .await;
+
+    // Winding down the system
+
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
+    node_service3.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+async fn publish_and_create_native_fungible(
+    client: &ClientWrapper,
+    name: &str,
+    params: &fungible::Parameters,
+    state: &fungible::InitialState,
+    chain_id: Option<ChainId>,
+) -> Result<ApplicationId<native_fungible::NativeFungibleTokenAbi>> {
+    let (contract, service) = client.build_example(name).await?;
+    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use native_fungible::NativeFungibleTokenAbi;
+    if name == "native-fungible" {
+        client
+            .publish_and_create::<NativeFungibleTokenAbi, Parameters, InitialState>(
+                contract,
+                service,
+                VmRuntime::Wasm,
+                params,
+                state,
+                &[],
+                chain_id,
+            )
+            .await
+    } else {
+        let application_id = client
+            .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
+                contract,
+                service,
+                VmRuntime::Wasm,
+                params,
+                state,
+                &[],
+                chain_id,
+            )
+            .await?;
+        Ok(application_id.forget_abi().with_abi())
+    }
+}
+
 // TODO(#2051): Enable the test `test_wasm_end_to_end_fungible::scylladb_grpc` that is frequently failing.
 // The failure is `Error: Could not find application URI: .... after 15 tries`.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
@@ -1765,7 +2050,7 @@ async fn test_wasm_end_to_end_fungible(
 ) -> Result<()> {
     use std::collections::BTreeMap;
 
-    use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -1779,8 +2064,8 @@ async fn test_wasm_end_to_end_fungible(
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
 
     // The players
-    let account_owner1 = get_fungible_account_owner(&client1);
-    let account_owner2 = get_fungible_account_owner(&client2);
+    let account_owner1 = get_account_owner(&client1);
+    let account_owner2 = get_account_owner(&client2);
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
         (account_owner1, Amount::from_tokens(5)),
@@ -1788,31 +2073,21 @@ async fn test_wasm_end_to_end_fungible(
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await?;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         Parameters::new("NAT")
     } else {
         Parameters::new("FUN")
     };
-    let application_id = client1
-        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
-            contract,
-            service,
-            VmRuntime::Wasm,
-            &params,
-            &state,
-            &[],
-            None,
-        )
-        .await?;
+    let application_id =
+        publish_and_create_native_fungible(&client1, example_name, &params, &state, None).await?;
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
-    let app1 = FungibleApp(
+    let app1 = NativeFungibleApp(
         node_service1
             .make_application(&chain1, &application_id)
             .await?,
@@ -1859,7 +2134,7 @@ async fn test_wasm_end_to_end_fungible(
     assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2 = FungibleApp(
+    let app2 = NativeFungibleApp(
         node_service2
             .make_application(&chain2, &application_id)
             .await?,
@@ -1937,7 +2212,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 ) -> Result<()> {
     use std::collections::BTreeMap;
 
-    use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
+    use fungible::{Account, InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -1954,7 +2229,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         .expect("Failed to obtain a chain ID from the wallet");
 
     // The players
-    let account_owner1 = get_fungible_account_owner(&client1);
+    let account_owner1 = get_account_owner(&client1);
     let account_owner2 = client1.keygen().await?;
 
     // The initial accounts on chain1
@@ -1964,29 +2239,19 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await?;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         Parameters::new("NAT")
     } else {
         Parameters::new("FUN")
     };
-    let application_id = client1
-        .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
-            contract,
-            service,
-            VmRuntime::Wasm,
-            &params,
-            &state,
-            &[],
-            None,
-        )
-        .await?;
+    let application_id =
+        publish_and_create_native_fungible(&client1, example_name, &params, &state, None).await?;
 
     let port = get_node_port().await;
     let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let app1 = FungibleApp(
+    let app1 = NativeFungibleApp(
         node_service
             .make_application(&chain1, &application_id)
             .await?,
@@ -2029,7 +2294,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     app1.assert_entries(expected_balances).await;
     app1.assert_keys([account_owner1, account_owner2]).await;
 
-    let app2 = FungibleApp(
+    let app2 = NativeFungibleApp(
         node_service
             .make_application(&chain2, &application_id)
             .await?,
@@ -2069,8 +2334,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
 
     // The players
-    let account_owner1 = get_fungible_account_owner(&client1);
-    let account_owner2 = get_fungible_account_owner(&client2);
+    let account_owner1 = get_account_owner(&client1);
+    let account_owner2 = get_account_owner(&client2);
 
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("non-fungible").await?;
@@ -2360,8 +2625,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
 
     // The players
-    let account_owner1 = get_fungible_account_owner(&client1); // operator
-    let account_owner2 = get_fungible_account_owner(&client2); // contributor
+    let account_owner1 = get_account_owner(&client1); // operator
+    let account_owner2 = get_account_owner(&client2); // contributor
 
     // The initial accounts on chain1
     let accounts = BTreeMap::from([(account_owner1, Amount::from_tokens(6))]);
@@ -2498,9 +2763,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let chain_b = client_admin.open_and_assign(&client_b, Amount::ONE).await?;
 
     // The players
-    let owner_admin = get_fungible_account_owner(&client_admin);
-    let owner_a = get_fungible_account_owner(&client_a);
-    let owner_b = get_fungible_account_owner(&client_b);
+    let owner_admin = get_account_owner(&client_admin);
+    let owner_a = get_account_owner(&client_a);
+    let owner_b = get_account_owner(&client_b);
     // The initial accounts on chain_a and chain_b
     let accounts0 = BTreeMap::from([(owner_a, Amount::from_tokens(10))]);
     let state_fungible0 = fungible::InitialState {
@@ -2757,11 +3022,11 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let chain1 = client_amm.open_and_assign(&client1, Amount::ONE).await?;
 
     // AMM user
-    let owner_amm_chain = get_fungible_account_owner(&client_amm);
+    let owner_amm_chain = get_account_owner(&client_amm);
 
     // Users
-    let owner0 = get_fungible_account_owner(&client0);
-    let owner1 = get_fungible_account_owner(&client1);
+    let owner0 = get_account_owner(&client0);
+    let owner1 = get_account_owner(&client1);
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
@@ -3471,7 +3736,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let owner1 = client.load_wallet()?.get(chain1).unwrap().owner.unwrap();
 
     // Create a fungible token application with 10 tokens for owner 1.
-    let owner = get_fungible_account_owner(&client);
+    let owner = get_account_owner(&client);
     let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
     let state = fungible::InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;

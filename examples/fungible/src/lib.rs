@@ -3,8 +3,13 @@
 
 /* ABI of the Fungible Token Example Application */
 
+use async_graphql::{scalar, Request, Response};
 pub use linera_sdk::abis::fungible::*;
-use linera_sdk::linera_base_types::{AccountOwner, Amount};
+use linera_sdk::{
+    abi::{ContractAbi, ServiceAbi},
+    graphql::GraphQLMutationRoot,
+    linera_base_types::{AccountOwner, Amount},
+};
 use serde::{Deserialize, Serialize};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
@@ -37,6 +42,90 @@ pub enum Message {
         /// Amount to be withdrawn
         amount: Amount,
         /// Target account to transfer amount to
+        target_account: Account,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct OwnerSpender {
+    /// Account to withdraw from
+    pub owner: AccountOwner,
+    /// Account to do the withdrawing
+    pub spender: AccountOwner,
+}
+
+scalar!(OwnerSpender);
+
+impl OwnerSpender {
+    pub fn new(owner: AccountOwner, spender: AccountOwner) -> Self {
+        if owner == spender {
+            panic!("owner should be different from spender");
+        }
+        Self { owner, spender }
+    }
+}
+
+/// An ABI for applications that implement a fungible token.
+pub struct FungibleTokenAbi;
+
+impl ContractAbi for FungibleTokenAbi {
+    type Operation = Operation;
+    type Response = FungibleResponse;
+}
+
+impl ServiceAbi for FungibleTokenAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+}
+
+/// An operation
+#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+pub enum Operation {
+    /// Requests an account balance.
+    Balance {
+        /// Owner to query the balance for
+        owner: AccountOwner,
+    },
+    /// Requests this fungible token's ticker symbol.
+    TickerSymbol,
+    /// Approve the transfer of tokens
+    Approve {
+        /// Owner to transfer from
+        owner: AccountOwner,
+        /// The spender account
+        spender: AccountOwner,
+        /// Maximum amount to be transferred
+        allowance: Amount,
+    },
+    /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
+    Transfer {
+        /// Owner to transfer from
+        owner: AccountOwner,
+        /// Amount to be transferred
+        amount: Amount,
+        /// Target account to transfer the amount to
+        target_account: Account,
+    },
+    /// Transfers tokens from a (locally owned) account to a (possibly remote) account by using the allowance.
+    TransferFrom {
+        /// Owner to transfer from
+        owner: AccountOwner,
+        /// The spender of the amount.
+        spender: AccountOwner,
+        /// Amount to be transferred
+        amount: Amount,
+        /// Target account to transfer the amount to
+        target_account: Account,
+    },
+    /// Same as `Transfer` but the source account may be remote. Depending on its
+    /// configuration, the target chain may take time or refuse to process
+    /// the message.
+    Claim {
+        /// Source account to claim amount from
+        source_account: Account,
+        /// Amount to be claimed
+        amount: Amount,
+        /// Target account to claim the amount into
         target_account: Account,
     },
 }

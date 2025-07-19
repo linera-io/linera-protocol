@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, path::Path, time::Duration};
 
 use anyhow::{bail, Context as _, Result};
 use clap::Parser as _;
+use fungible::FungibleTokenAbi;
 use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
@@ -13,7 +14,7 @@ use linera_base::{
     time::timer::Instant,
     vm::VmRuntime,
 };
-use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
+use linera_sdk::abis::fungible::{InitialState, Parameters};
 use linera_service::cli_wrappers::{
     local_net::{PathProvider, ProcessInbox},
     ApplicationWrapper, ClientWrapper, Faucet, Network, OnClientDrop,

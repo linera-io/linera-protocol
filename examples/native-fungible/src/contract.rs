@@ -3,12 +3,12 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
+use fungible::{FungibleResponse, InitialState, Parameters};
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, ChainId, WithContractAbi},
     Contract, ContractRuntime,
 };
-use native_fungible::{Message, TICKER_SYMBOL};
+use native_fungible::{Message, NativeFungibleTokenAbi, Operation, TICKER_SYMBOL};
 
 pub struct NativeFungibleTokenContract {
     runtime: ContractRuntime<Self>,
@@ -17,7 +17,7 @@ pub struct NativeFungibleTokenContract {
 linera_sdk::contract!(NativeFungibleTokenContract);
 
 impl WithContractAbi for NativeFungibleTokenContract {
-    type Abi = FungibleTokenAbi;
+    type Abi = NativeFungibleTokenAbi;
 }
 
 impl Contract for NativeFungibleTokenContract {
