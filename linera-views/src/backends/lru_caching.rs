@@ -268,8 +268,6 @@ where
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
-    type Keys = K::Keys;
-    type KeyValues = K::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -410,14 +408,14 @@ where
         Ok(result)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }

@@ -6,9 +6,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::DeletePrefixExpander,
     memory::MemoryStore,
-    store::{
-        KeyIterable, KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
-    },
+    store::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     views::MIN_VIEW_TAG,
 };
 
@@ -204,12 +202,6 @@ impl DeletePrefixExpander for MemoryContext<()> {
     type Error = crate::memory::MemoryStoreError;
 
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut vector_list = Vec::new();
-        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
-            &self.store().find_keys_by_prefix(key_prefix).await?,
-        ) {
-            vector_list.push(key?.to_vec());
-        }
-        Ok(vector_list)
+        self.store().find_keys_by_prefix(key_prefix).await
     }
 }

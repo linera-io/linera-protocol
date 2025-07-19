@@ -366,8 +366,6 @@ impl WithError for RocksDbStoreInternal {
 
 impl ReadableKeyValueStore for RocksDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Keys = Vec<Vec<u8>>;
-    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -427,7 +425,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::Keys, RocksDbStoreInternalError> {
+    ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
         self.spawn_mode
@@ -441,7 +439,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, RocksDbStoreInternalError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
         self.spawn_mode
