@@ -9,9 +9,6 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use linera_client::config::{
-    BlockExporterConfig, Destination, DestinationConfig, DestinationKind, LimitsConfig,
-};
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_rpc::config::{ExporterServiceConfig, TlsConfig};
 use linera_service::{
@@ -19,6 +16,7 @@ use linera_service::{
         local_net::{Database, LocalNet, LocalNetConfig},
         LineraNetConfig, Network,
     },
+    config::{BlockExporterConfig, Destination, DestinationConfig, DestinationKind, LimitsConfig},
     test_name,
 };
 use test_case::test_case;

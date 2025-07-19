@@ -26,7 +26,6 @@ use linera_chain::{
     test::{make_child_block, make_first_block, BlockTestExt},
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
 };
-use linera_client::config::DestinationKind;
 use linera_core::{
     data_types::{ChainInfo, ChainInfoResponse},
     node::NodeError,
@@ -39,6 +38,7 @@ use linera_rpc::{
     },
     HandleConfirmedCertificateRequest,
 };
+use linera_service::config::DestinationKind;
 use linera_storage::Storage;
 use tokio_stream::{wrappers::UnboundedReceiverStream, Stream};
 use tokio_util::sync::CancellationToken;

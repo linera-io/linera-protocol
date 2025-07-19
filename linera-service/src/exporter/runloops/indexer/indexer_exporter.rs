@@ -13,8 +13,8 @@ use std::{
 use futures::{stream::FuturesOrdered, StreamExt};
 use linera_base::data_types::Blob;
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_client::config::DestinationId;
 use linera_rpc::NodeOptions;
+use linera_service::config::DestinationId;
 use linera_storage::Storage;
 use tokio::{select, sync::mpsc::Sender, time::sleep};
 use tonic::Streaming;
