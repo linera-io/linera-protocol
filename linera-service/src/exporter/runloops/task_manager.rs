@@ -171,6 +171,10 @@ where
                     exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
                 )
             }
+
+            DestinationKind::Logging => {
+                unimplemented!("Logging exporter is not implemented yet");
+            }
         }
     }
 }

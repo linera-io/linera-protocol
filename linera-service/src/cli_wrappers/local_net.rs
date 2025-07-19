@@ -574,6 +574,7 @@ impl LocalNet {
             let kind = match destination.kind {
                 DestinationKind::Indexer => "Indexer",
                 DestinationKind::Validator => "Validator",
+                DestinationKind::Logging => "Logging",
             };
 
             let destination_string_to_push = format!(
