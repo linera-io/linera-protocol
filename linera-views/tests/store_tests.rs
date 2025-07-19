@@ -4,7 +4,6 @@
 use linera_views::{
     batch::Batch,
     context::{Context as _, MemoryContext},
-    key_value_store_view::ViewContainer,
     memory::MemoryStore,
     random::make_deterministic_rng,
     store::{ReadableKeyValueStore as _, TestKeyValueStore as _, WritableKeyValueStore as _},
@@ -124,15 +123,6 @@ async fn test_reads_indexed_db() {
 }
 
 #[tokio::test]
-async fn test_reads_key_value_store_view_memory() {
-    for scenario in get_random_test_scenarios() {
-        let context = MemoryContext::new_for_testing(());
-        let key_value_store = ViewContainer::new(context).await.unwrap();
-        run_reads(key_value_store, scenario).await;
-    }
-}
-
-#[tokio::test]
 async fn test_specific_reads_memory() {
     let store = MemoryStore::new_test_store().await.unwrap();
     let key_values = vec![
@@ -154,13 +144,6 @@ async fn test_test_memory_writes_from_blank() {
 async fn test_memory_writes_from_blank() {
     let store = MemoryStore::new_test_store().await.unwrap();
     run_writes_from_blank(&store).await;
-}
-
-#[tokio::test]
-async fn test_key_value_store_view_memory_writes_from_blank() {
-    let context = MemoryContext::new_for_testing(());
-    let key_value_store = ViewContainer::new(context).await.unwrap();
-    run_writes_from_blank(&key_value_store).await;
 }
 
 #[cfg(with_rocksdb)]
