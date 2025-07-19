@@ -11,6 +11,8 @@ use futures::FutureExt;
 use linera_base::listen_for_shutdown_signals;
 use linera_client::config::BlockExporterConfig;
 use linera_rpc::NodeOptions;
+#[cfg(with_metrics)]
+use linera_service::prometheus_server;
 use linera_service::{
     storage::{CommonStorageOptions, Runnable, StorageConfig},
     util,
@@ -21,6 +23,8 @@ use tokio_util::sync::CancellationToken;
 
 mod common;
 mod exporter_service;
+#[cfg(with_metrics)]
+mod metrics;
 mod runloops;
 mod state;
 mod storage;
@@ -87,6 +91,9 @@ impl Runnable for ExporterContext {
     {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+        #[cfg(with_metrics)]
+        prometheus_server::start_metrics(self.config.metrics_address(), shutdown_notifier.clone());
 
         let (sender, handle) = start_block_processor_task(
             storage,
