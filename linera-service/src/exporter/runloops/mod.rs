@@ -5,8 +5,8 @@ use std::future::{Future, IntoFuture};
 
 use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
-use linera_client::config::{DestinationConfig, LimitsConfig};
 use linera_rpc::NodeOptions;
+use linera_service::config::{DestinationConfig, LimitsConfig};
 use linera_storage::Storage;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use validator_exporter::Exporter as ValidatorExporter;
@@ -148,14 +148,16 @@ mod test {
         test::{make_child_block, make_first_block, BlockTestExt},
         types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
     };
-    use linera_client::config::{Destination, DestinationConfig, LimitsConfig};
     use linera_execution::{
         committee::{Committee, ValidatorState},
         system::AdminOperation,
         Operation, ResourceControlPolicy, SystemOperation,
     };
     use linera_rpc::{config::TlsConfig, NodeOptions};
-    use linera_service::cli_wrappers::local_net::LocalNet;
+    use linera_service::{
+        cli_wrappers::local_net::LocalNet,
+        config::{Destination, DestinationConfig, LimitsConfig},
+    };
     use linera_storage::{DbStorage, Storage};
     use linera_views::{memory::MemoryStore, ViewError};
     use test_case::test_case;

@@ -7,8 +7,8 @@ use std::{
     sync::Arc,
 };
 
-use linera_client::config::{Destination, DestinationId, DestinationKind};
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
+use linera_service::config::{Destination, DestinationId, DestinationKind};
 use linera_storage::Storage;
 
 use crate::storage::ExporterStorage;

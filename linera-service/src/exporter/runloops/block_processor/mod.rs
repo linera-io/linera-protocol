@@ -6,8 +6,8 @@ use std::{
     time::Duration,
 };
 
-use linera_client::config::DestinationId;
 use linera_execution::committee::Committee;
+use linera_service::config::DestinationId;
 use linera_storage::Storage;
 use tokio::time::{interval, MissedTickBehavior};
 
@@ -154,9 +154,9 @@ mod test {
         test::{make_child_block, make_first_block, BlockTestExt},
         types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
     };
-    use linera_client::config::LimitsConfig;
     use linera_rpc::NodeOptions;
     use linera_sdk::test::MessageAction;
+    use linera_service::config::LimitsConfig;
     use linera_storage::{DbStorage, Storage, TestClock};
     use linera_views::memory::MemoryStore;
     use tokio::sync::mpsc::unbounded_channel;

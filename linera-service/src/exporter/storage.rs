@@ -15,11 +15,11 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_client::config::{DestinationId, LimitsConfig};
 use linera_sdk::{
     ensure,
     views::{View, ViewError},
 };
+use linera_service::config::{DestinationId, LimitsConfig};
 use linera_storage::Storage;
 use linera_views::{
     batch::Batch, context::Context, log_view::LogView, store::WritableKeyValueStore as _,
