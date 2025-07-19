@@ -79,8 +79,6 @@ impl WithError for ServiceStoreClientInternal {
 
 impl ReadableKeyValueStore for ServiceStoreClientInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Keys = Vec<Vec<u8>>;
-    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries

@@ -45,10 +45,7 @@ use crate::{
     common::get_uleb128_size,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingConfig, LruCachingStore},
-    store::{
-        AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStoreError,
-        ReadableKeyValueStore, WithError,
-    },
+    store::{AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError},
     value_splitting::{ValueSplittingError, ValueSplittingStore},
     FutureSyncExt as _,
 };
@@ -260,16 +257,6 @@ fn extract_key_value(
     Ok((key, value))
 }
 
-/// Extracts the `(key, value)` pair attributes from an item (returned by value).
-fn extract_key_value_owned(
-    prefix_len: usize,
-    attributes: &mut HashMap<String, AttributeValue>,
-) -> Result<(Vec<u8>, Vec<u8>), DynamoDbStoreInternalError> {
-    let key = extract_key(prefix_len, attributes)?.to_vec();
-    let value = extract_value_owned(attributes)?;
-    Ok((key, value))
-}
-
 struct TransactionBuilder {
     start_key: Vec<u8>,
     transactions: Vec<TransactWriteItem>,
@@ -413,15 +400,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
         let mut store = Self::connect(config, namespace).await?;
         store.start_key = PARTITION_KEY_ROOT_KEY.to_vec();
-
-        let keys = store.find_keys_by_prefix(EMPTY_ROOT_KEY).await?;
-
-        let mut root_keys = Vec::new();
-        for key in keys.iterator() {
-            let key = key?;
-            root_keys.push(key.to_vec());
-        }
-        Ok(root_keys)
+        store.find_keys_by_prefix(EMPTY_ROOT_KEY).await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbStoreInternalError> {
@@ -697,10 +676,40 @@ struct QueryResponses {
     responses: Vec<QueryOutput>,
 }
 
+impl QueryResponses {
+    fn iterate_keys(&self) -> DynamoDbKeyBlockIterator<'_> {
+        let pos = 0;
+        let mut iters = Vec::new();
+        for response in &self.responses {
+            let iter = response.items.iter().flatten();
+            iters.push(iter);
+        }
+        DynamoDbKeyBlockIterator {
+            prefix_len: self.prefix_len,
+            pos,
+            iters,
+        }
+    }
+
+    fn iterate_key_values(&self) -> DynamoDbKeyValueIterator<'_> {
+        let pos = 0;
+        let mut iters = Vec::new();
+        for response in &self.responses {
+            let iter = response.items.iter().flatten();
+            iters.push(iter);
+        }
+        DynamoDbKeyValueIterator {
+            prefix_len: self.prefix_len,
+            pos,
+            iters,
+        }
+    }
+}
+
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 #[doc(hidden)]
 #[expect(clippy::type_complexity)]
-pub struct DynamoDbKeyBlockIterator<'a> {
+struct DynamoDbKeyBlockIterator<'a> {
     prefix_len: usize,
     pos: usize,
     iters: Vec<
@@ -730,40 +739,9 @@ impl<'a> Iterator for DynamoDbKeyBlockIterator<'a> {
     }
 }
 
-/// A set of keys returned by a search query on DynamoDB.
-pub struct DynamoDbKeys {
-    result_queries: QueryResponses,
-}
-
-impl KeyIterable<DynamoDbStoreInternalError> for DynamoDbKeys {
-    type Iterator<'a>
-        = DynamoDbKeyBlockIterator<'a>
-    where
-        Self: 'a;
-
-    fn iterator(&self) -> Self::Iterator<'_> {
-        let pos = 0;
-        let mut iters = Vec::new();
-        for response in &self.result_queries.responses {
-            let iter = response.items.iter().flatten();
-            iters.push(iter);
-        }
-        DynamoDbKeyBlockIterator {
-            prefix_len: self.result_queries.prefix_len,
-            pos,
-            iters,
-        }
-    }
-}
-
-/// A set of `(key, value)` returned by a search query on DynamoDB.
-pub struct DynamoDbKeyValues {
-    result_queries: QueryResponses,
-}
-
 #[doc(hidden)]
 #[expect(clippy::type_complexity)]
-pub struct DynamoDbKeyValueIterator<'a> {
+struct DynamoDbKeyValueIterator<'a> {
     prefix_len: usize,
     pos: usize,
     iters: Vec<
@@ -793,82 +771,12 @@ impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
     }
 }
 
-#[doc(hidden)]
-#[expect(clippy::type_complexity)]
-pub struct DynamoDbKeyValueIteratorOwned {
-    prefix_len: usize,
-    pos: usize,
-    iters: Vec<
-        std::iter::Flatten<
-            std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
-        >,
-    >,
-}
-
-impl Iterator for DynamoDbKeyValueIteratorOwned {
-    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbStoreInternalError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = self.iters[self.pos].next();
-        match result {
-            None => {
-                if self.pos == self.iters.len() - 1 {
-                    return None;
-                }
-                self.pos += 1;
-                self.iters[self.pos]
-                    .next()
-                    .map(|mut x| extract_key_value_owned(self.prefix_len, &mut x))
-            }
-            Some(mut result) => Some(extract_key_value_owned(self.prefix_len, &mut result)),
-        }
-    }
-}
-
-impl KeyValueIterable<DynamoDbStoreInternalError> for DynamoDbKeyValues {
-    type Iterator<'a>
-        = DynamoDbKeyValueIterator<'a>
-    where
-        Self: 'a;
-    type IteratorOwned = DynamoDbKeyValueIteratorOwned;
-
-    fn iterator(&self) -> Self::Iterator<'_> {
-        let pos = 0;
-        let mut iters = Vec::new();
-        for response in &self.result_queries.responses {
-            let iter = response.items.iter().flatten();
-            iters.push(iter);
-        }
-        DynamoDbKeyValueIterator {
-            prefix_len: self.result_queries.prefix_len,
-            pos,
-            iters,
-        }
-    }
-
-    fn into_iterator_owned(self) -> Self::IteratorOwned {
-        let pos = 0;
-        let mut iters = Vec::new();
-        for response in self.result_queries.responses.into_iter() {
-            let iter = response.items.into_iter().flatten();
-            iters.push(iter);
-        }
-        DynamoDbKeyValueIteratorOwned {
-            prefix_len: self.result_queries.prefix_len,
-            pos,
-            iters,
-        }
-    }
-}
-
 impl WithError for DynamoDbStoreInternal {
     type Error = DynamoDbStoreInternalError;
 }
 
 impl ReadableKeyValueStore for DynamoDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Keys = DynamoDbKeys;
-    type KeyValues = DynamoDbKeyValues;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -926,21 +834,30 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<DynamoDbKeys, DynamoDbStoreInternalError> {
+    ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
         let result_queries = self
             .get_list_responses(KEY_ATTRIBUTE, &self.start_key, key_prefix)
             .await?;
-        Ok(DynamoDbKeys { result_queries })
+        let mut keys = Vec::new();
+        for key in result_queries.iterate_keys() {
+            keys.push(key?.to_vec());
+        }
+        Ok(keys)
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<DynamoDbKeyValues, DynamoDbStoreInternalError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, DynamoDbStoreInternalError> {
         let result_queries = self
             .get_list_responses(KEY_VALUE_ATTRIBUTE, &self.start_key, key_prefix)
             .await?;
-        Ok(DynamoDbKeyValues { result_queries })
+        let mut entries = Vec::new();
+        for entry in result_queries.iterate_key_values() {
+            let (key, value) = entry?;
+            entries.push((key.to_vec(), value.to_vec()));
+        }
+        Ok(entries)
     }
 }
 

@@ -11,8 +11,8 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::Batch,
     store::{
-        AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStoreError,
-        ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
     },
 };
 
@@ -74,9 +74,6 @@ where
     } else {
         S2::MAX_KEY_SIZE
     };
-
-    type Keys = DualStoreKeys<S1::Keys, S2::Keys>;
-    type KeyValues = DualStoreKeyValues<S1::KeyValues, S2::KeyValues>;
 
     fn max_stream_queries(&self) -> usize {
         match self.store_in_use {
@@ -152,20 +149,18 @@ where
         Ok(result)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let result = match self.store_in_use {
-            StoreInUse::First => DualStoreKeys::First(
-                self.first_store
-                    .find_keys_by_prefix(key_prefix)
-                    .await
-                    .map_err(DualStoreError::First)?,
-            ),
-            StoreInUse::Second => DualStoreKeys::Second(
-                self.second_store
-                    .find_keys_by_prefix(key_prefix)
-                    .await
-                    .map_err(DualStoreError::Second)?,
-            ),
+            StoreInUse::First => self
+                .first_store
+                .find_keys_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::First)?,
+            StoreInUse::Second => self
+                .second_store
+                .find_keys_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::Second)?,
         };
         Ok(result)
     }
@@ -173,20 +168,18 @@ where
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
         let result = match self.store_in_use {
-            StoreInUse::First => DualStoreKeyValues::First(
-                self.first_store
-                    .find_key_values_by_prefix(key_prefix)
-                    .await
-                    .map_err(DualStoreError::First)?,
-            ),
-            StoreInUse::Second => DualStoreKeyValues::Second(
-                self.second_store
-                    .find_key_values_by_prefix(key_prefix)
-                    .await
-                    .map_err(DualStoreError::Second)?,
-            ),
+            StoreInUse::First => self
+                .first_store
+                .find_key_values_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::First)?,
+            StoreInUse::Second => self
+                .second_store
+                .find_key_values_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::Second)?,
         };
         Ok(result)
     }
@@ -400,149 +393,4 @@ where
     E2: KeyValueStoreError,
 {
     const BACKEND: &'static str = "dual_store";
-}
-
-/// A set of keys returned by [`DualStore::find_keys_by_prefix`].
-pub enum DualStoreKeys<K1, K2> {
-    /// A set of keys from the first store.
-    First(K1),
-    /// A set of Keys from the second store.
-    Second(K2),
-}
-
-/// An iterator over the keys in [`DualStoreKeys`].
-pub enum DualStoreKeyIterator<I1, I2> {
-    /// Iterating over keys from the first store.
-    First(I1),
-    /// Iterating over keys from the second store.
-    Second(I2),
-}
-
-/// A set of key-values returned by [`DualStore::find_key_values_by_prefix`].
-pub enum DualStoreKeyValues<K1, K2> {
-    /// A set of key-values from the first store.
-    First(K1),
-    /// A set of key-values from the second store.
-    Second(K2),
-}
-
-/// An iterator over the key-values in [`DualStoreKeyValues`].
-pub enum DualStoreKeyValueIterator<I1, I2> {
-    /// Iterating over key-values from the first store.
-    First(I1),
-    /// Iterating over key-values from the second store.
-    Second(I2),
-}
-
-/// An owning iterator over the key-values in [`DualStoreKeyValues`].
-pub enum DualStoreKeyValueIteratorOwned<I1, I2> {
-    /// Iterating over key-values from the first store.
-    First(I1),
-    /// Iterating over key-values from the second store.
-    Second(I2),
-}
-
-impl<E1, E2, K1, K2> KeyIterable<DualStoreError<E1, E2>> for DualStoreKeys<K1, K2>
-where
-    K1: KeyIterable<E1>,
-    K2: KeyIterable<E2>,
-{
-    type Iterator<'a>
-        = DualStoreKeyIterator<K1::Iterator<'a>, K2::Iterator<'a>>
-    where
-        K1: 'a,
-        K2: 'a;
-
-    fn iterator(&self) -> Self::Iterator<'_> {
-        match self {
-            Self::First(keys) => DualStoreKeyIterator::First(keys.iterator()),
-            Self::Second(keys) => DualStoreKeyIterator::Second(keys.iterator()),
-        }
-    }
-}
-
-impl<'a, I1, I2, E1, E2> Iterator for DualStoreKeyIterator<I1, I2>
-where
-    I1: Iterator<Item = Result<&'a [u8], E1>>,
-    I2: Iterator<Item = Result<&'a [u8], E2>>,
-{
-    type Item = Result<&'a [u8], DualStoreError<E1, E2>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            Self::First(iter) => iter
-                .next()
-                .map(|result| result.map_err(DualStoreError::First)),
-            Self::Second(iter) => iter
-                .next()
-                .map(|result| result.map_err(DualStoreError::Second)),
-        }
-    }
-}
-
-impl<E1, E2, K1, K2> KeyValueIterable<DualStoreError<E1, E2>> for DualStoreKeyValues<K1, K2>
-where
-    K1: KeyValueIterable<E1>,
-    K2: KeyValueIterable<E2>,
-{
-    type Iterator<'a>
-        = DualStoreKeyValueIterator<K1::Iterator<'a>, K2::Iterator<'a>>
-    where
-        K1: 'a,
-        K2: 'a;
-    type IteratorOwned = DualStoreKeyValueIteratorOwned<K1::IteratorOwned, K2::IteratorOwned>;
-
-    fn iterator(&self) -> Self::Iterator<'_> {
-        match self {
-            Self::First(keys) => DualStoreKeyValueIterator::First(keys.iterator()),
-            Self::Second(keys) => DualStoreKeyValueIterator::Second(keys.iterator()),
-        }
-    }
-
-    fn into_iterator_owned(self) -> Self::IteratorOwned {
-        match self {
-            Self::First(keys) => DualStoreKeyValueIteratorOwned::First(keys.into_iterator_owned()),
-            Self::Second(keys) => {
-                DualStoreKeyValueIteratorOwned::Second(keys.into_iterator_owned())
-            }
-        }
-    }
-}
-
-impl<'a, I1, I2, E1, E2> Iterator for DualStoreKeyValueIterator<I1, I2>
-where
-    I1: Iterator<Item = Result<(&'a [u8], &'a [u8]), E1>>,
-    I2: Iterator<Item = Result<(&'a [u8], &'a [u8]), E2>>,
-{
-    type Item = Result<(&'a [u8], &'a [u8]), DualStoreError<E1, E2>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            Self::First(iter) => iter
-                .next()
-                .map(|result| result.map_err(DualStoreError::First)),
-            Self::Second(iter) => iter
-                .next()
-                .map(|result| result.map_err(DualStoreError::Second)),
-        }
-    }
-}
-
-impl<I1, I2, E1, E2> Iterator for DualStoreKeyValueIteratorOwned<I1, I2>
-where
-    I1: Iterator<Item = Result<(Vec<u8>, Vec<u8>), E1>>,
-    I2: Iterator<Item = Result<(Vec<u8>, Vec<u8>), E2>>,
-{
-    type Item = Result<(Vec<u8>, Vec<u8>), DualStoreError<E1, E2>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            Self::First(iter) => iter
-                .next()
-                .map(|result| result.map_err(DualStoreError::First)),
-            Self::Second(iter) => iter
-                .next()
-                .map(|result| result.map_err(DualStoreError::Second)),
-        }
-    }
 }

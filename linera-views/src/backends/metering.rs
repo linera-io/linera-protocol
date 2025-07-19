@@ -18,10 +18,7 @@ use prometheus::{HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueStore;
 use crate::{
     batch::Batch,
-    store::{
-        AdminKeyValueStore, KeyIterable as _, KeyValueIterable as _, ReadableKeyValueStore,
-        WithError, WritableKeyValueStore,
-    },
+    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
 
 #[derive(Clone)]
@@ -288,8 +285,6 @@ where
     K: ReadableKeyValueStore,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
-    type Keys = K::Keys;
-    type KeyValues = K::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -360,7 +355,7 @@ where
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let _latency = self.counter.find_keys_by_prefix_latency.measure_latency();
         self.counter
             .find_keys_by_prefix_prefix_size
@@ -368,10 +363,8 @@ where
             .observe(key_prefix.len() as f64);
         let result = self.store.find_keys_by_prefix(key_prefix).await?;
         let (num_keys, keys_size) = result
-            .iterator()
-            .map(|key| key.map(|k| k.len()))
-            .collect::<Result<Vec<usize>, _>>()?
-            .into_iter()
+            .iter()
+            .map(|key| key.len())
             .fold((0, 0), |(count, size), len| (count + 1, size + len));
         self.counter
             .find_keys_by_prefix_num_keys
@@ -387,7 +380,7 @@ where
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
         let _latency = self
             .counter
             .find_key_values_by_prefix_latency
@@ -398,10 +391,8 @@ where
             .observe(key_prefix.len() as f64);
         let result = self.store.find_key_values_by_prefix(key_prefix).await?;
         let (num_keys, key_values_size) = result
-            .iterator()
-            .map(|key_value| key_value.map(|(key, value)| key.len() + value.len()))
-            .collect::<Result<Vec<usize>, _>>()?
-            .into_iter()
+            .iter()
+            .map(|(key, value)| key.len() + value.len())
             .fold((0, 0), |(count, size), len| (count + 1, size + len));
         self.counter
             .find_key_values_by_prefix_num_keys

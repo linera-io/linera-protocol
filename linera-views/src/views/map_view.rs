@@ -54,7 +54,7 @@ use crate::{
     },
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
-    store::{KeyIterable, KeyValueIterable, ReadableKeyValueStore as _},
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -440,29 +440,22 @@ where
                 .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_key().base_index(&prefix);
-            for index in self
-                .context
-                .store()
-                .find_keys_by_prefix(&base)
-                .await?
-                .iterator()
-            {
-                let index = index?;
+            for index in self.context.store().find_keys_by_prefix(&base).await? {
                 loop {
                     match update {
-                        Some((key, value)) if &key[prefix_len..] <= index => {
+                        Some((key, value)) if &key[prefix_len..] <= index.as_slice() => {
                             if let Update::Set(_) = value {
                                 if !f(&key[prefix_len..])? {
                                     return Ok(());
                                 }
                             }
                             update = updates.next();
-                            if &key[prefix_len..] == index {
+                            if key[prefix_len..] == index {
                                 break;
                             }
                         }
                         _ => {
-                            if !suffix_closed_set.find_key(index) && !f(index)? {
+                            if !suffix_closed_set.find_key(&index) && !f(&index)? {
                                 return Ok(());
                             }
                             break;
@@ -638,14 +631,12 @@ where
                 .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_key().base_index(&prefix);
-            for entry in self
+            for (index, bytes) in self
                 .context
                 .store()
                 .find_key_values_by_prefix(&base)
                 .await?
-                .into_iterator_owned()
             {
-                let (index, bytes) = entry?;
                 loop {
                     match update {
                         Some((key, value)) if key[prefix_len..] <= *index => {

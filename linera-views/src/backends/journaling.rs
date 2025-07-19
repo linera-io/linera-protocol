@@ -25,9 +25,7 @@ use thiserror::Error;
 
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
-    store::{
-        AdminKeyValueStore, KeyIterable, ReadableKeyValueStore, WithError, WritableKeyValueStore,
-    },
+    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     views::MIN_VIEW_TAG,
 };
 
@@ -113,12 +111,9 @@ where
     K: DirectKeyValueStore,
 {
     type Error = K::Error;
+
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut vector_list = Vec::new();
-        for key in self.store.find_keys_by_prefix(key_prefix).await?.iterator() {
-            vector_list.push(key?.to_vec());
-        }
-        Ok(vector_list)
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 }
 
@@ -136,9 +131,6 @@ where
 {
     /// The size constant do not change
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
-    /// The basic types do not change
-    type Keys = K::Keys;
-    type KeyValues = K::KeyValues;
 
     /// The read stuff does not change
     fn max_stream_queries(&self) -> usize {
@@ -164,14 +156,14 @@ where
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
