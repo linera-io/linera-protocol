@@ -101,7 +101,7 @@ where
 /// Benchmarks the `find_keys_by_prefix` operation.
 pub async fn find_keys_by_prefix<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
-    F: Fn(S::Keys) -> S::Keys,
+    F: Fn(Vec<Vec<u8>>) -> Vec<Vec<u8>>,
 {
     let store = S::new_test_store().await.unwrap();
     let mut total_time = Duration::ZERO;
@@ -129,7 +129,7 @@ where
 /// Benchmarks the `find_keys_by_prefix` operation.
 pub async fn find_key_values_by_prefix<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
-    F: Fn(S::KeyValues) -> S::KeyValues,
+    F: Fn(Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Vec<u8>, Vec<u8>)>,
 {
     let store = S::new_test_store().await.unwrap();
     let mut total_time = Duration::ZERO;

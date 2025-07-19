@@ -600,8 +600,6 @@ impl WithError for ScyllaDbStoreInternal {
 
 impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Keys = Vec<Vec<u8>>;
-    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -667,7 +665,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::Keys, ScyllaDbStoreInternalError> {
+    ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store
@@ -678,7 +676,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, ScyllaDbStoreInternalError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store
