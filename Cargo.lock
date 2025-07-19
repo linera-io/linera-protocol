@@ -5599,6 +5599,7 @@ dependencies = [
 name = "linera-service-graphql-client"
 version = "0.15.0"
 dependencies = [
+ "anyhow",
  "fungible",
  "graphql_client",
  "linera-base",
