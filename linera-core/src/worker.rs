@@ -27,7 +27,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
+use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -530,7 +530,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Block, ResourceTracker, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::StageBlockExecution {
                 block,

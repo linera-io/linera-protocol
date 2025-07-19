@@ -304,6 +304,7 @@ pub enum ExecutionError {
     UnauthenticatedTransferOwner,
     #[error("The transferred amount must not exceed the balance of the current account {account}: {balance}")]
     InsufficientBalance {
+        amount: Amount,
         balance: Amount,
         account: AccountOwner,
     },
