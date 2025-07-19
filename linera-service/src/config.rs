@@ -86,6 +86,8 @@ pub enum DestinationKind {
     Indexer,
     /// The validator description.
     Validator,
+    /// The logging target.
+    Logging,
 }
 
 /// The configuration file to impose various limits
@@ -139,6 +141,11 @@ impl Destination {
 
             DestinationKind::Validator => {
                 format!("{}:{}:{}", "grpc", self.endpoint, self.port)
+            }
+
+            DestinationKind::Logging => {
+                // Customary.
+                self.endpoint.to_string()
             }
         }
     }

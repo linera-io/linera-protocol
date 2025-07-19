@@ -317,7 +317,7 @@ where
                     %error,
                     nickname,
                     ?notification,
-                    "could not send notification",
+                    "proxy: could not send notification",
                 )
             }
 
@@ -329,7 +329,7 @@ where
                             %error,
                             nickname,
                             ?notification,
-                            "could not send notification",
+                            "block exporter: could not send notification",
                         )
                     }
                 }

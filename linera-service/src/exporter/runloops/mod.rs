@@ -19,6 +19,7 @@ use crate::{
 
 mod block_processor;
 mod indexer;
+mod logging_exporter;
 mod task_manager;
 mod validator_exporter;
 
