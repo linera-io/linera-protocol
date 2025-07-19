@@ -1,6 +1,5 @@
 ---
 source: linera-rpc/tests/format.rs
-assertion_line: 92
 expression: get_registry().unwrap()
 ---
 Account:
@@ -1175,7 +1174,7 @@ SystemOperation:
           - blob_hash:
               TYPENAME: CryptoHash
     8:
-      ReadBlob:
+      VerifyBlob:
         STRUCT:
           - blob_id:
               TYPENAME: BlobId

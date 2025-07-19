@@ -181,9 +181,8 @@ pub enum SystemOperation {
     PublishModule { module_id: ModuleId },
     /// Publishes a new data blob.
     PublishDataBlob { blob_hash: CryptoHash },
-    /// Reads a blob and discards the result.
-    // TODO(#2490): Consider removing this.
-    ReadBlob { blob_id: BlobId },
+    /// Verifies that the given blob exists. Otherwise the block fails.
+    VerifyBlob { blob_id: BlobId },
     /// Creates a new application.
     CreateApplication {
         module_id: ModuleId,
@@ -489,14 +488,12 @@ where
             PublishDataBlob { blob_hash } => {
                 self.blob_published(&BlobId::new(blob_hash, BlobType::Data), txn_tracker)?;
             }
-            ReadBlob { blob_id } => {
-                let content = self.read_blob_content(blob_id).await?;
-                if blob_id.blob_type == BlobType::Data {
-                    resource_controller
-                        .with_state(self)
-                        .await?
-                        .track_blob_read(content.bytes().len() as u64)?;
-                }
+            VerifyBlob { blob_id } => {
+                self.assert_blob_exists(blob_id).await?;
+                resource_controller
+                    .with_state(self)
+                    .await?
+                    .track_blob_read(0)?;
                 self.blob_used(txn_tracker, blob_id).await?;
             }
             ProcessNewEpoch(epoch) => {
