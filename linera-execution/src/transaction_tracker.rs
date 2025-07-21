@@ -31,7 +31,6 @@ pub struct TransactionTracker {
     local_time: Timestamp,
     /// The index of the current transaction in the block.
     transaction_index: u32,
-    next_message_index: u32,
     next_application_index: u32,
     next_chain_index: u32,
     /// Events recorded by contracts' `emit` calls.
@@ -57,7 +56,6 @@ pub struct TransactionOutcome {
     pub oracle_responses: Vec<OracleResponse>,
     #[debug(skip_if = Vec::is_empty)]
     pub outgoing_messages: Vec<OutgoingMessage>,
-    pub next_message_index: u32,
     pub next_application_index: u32,
     pub next_chain_index: u32,
     /// Events recorded by contracts' `emit` calls.
@@ -74,7 +72,6 @@ impl TransactionTracker {
     pub fn new(
         local_time: Timestamp,
         transaction_index: u32,
-        next_message_index: u32,
         next_application_index: u32,
         next_chain_index: u32,
         oracle_responses: Option<Vec<OracleResponse>>,
@@ -82,7 +79,6 @@ impl TransactionTracker {
         TransactionTracker {
             local_time,
             transaction_index,
-            next_message_index,
             next_application_index,
             next_chain_index,
             replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
@@ -107,10 +103,6 @@ impl TransactionTracker {
         self.transaction_index
     }
 
-    pub fn next_message_index(&self) -> u32 {
-        self.next_message_index
-    }
-
     pub fn next_application_index(&mut self) -> u32 {
         let index = self.next_application_index;
         self.next_application_index += 1;
@@ -127,10 +119,6 @@ impl TransactionTracker {
         &mut self,
         message: OutgoingMessage,
     ) -> Result<(), ArithmeticError> {
-        self.next_message_index = self
-            .next_message_index
-            .checked_add(1)
-            .ok_or(ArithmeticError::Overflow)?;
         self.outgoing_messages.push(message);
         Ok(())
     }
@@ -274,7 +262,6 @@ impl TransactionTracker {
             outgoing_messages,
             local_time: _,
             transaction_index: _,
-            next_message_index,
             next_application_index,
             next_chain_index,
             events,
@@ -296,7 +283,6 @@ impl TransactionTracker {
         Ok(TransactionOutcome {
             outgoing_messages,
             oracle_responses,
-            next_message_index,
             next_application_index,
             next_chain_index,
             events,
@@ -312,7 +298,7 @@ impl TransactionTracker {
     /// Creates a new [`TransactionTracker`] for testing, with default values and the given
     /// oracle responses.
     pub fn new_replaying(oracle_responses: Vec<OracleResponse>) -> Self {
-        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, 0, Some(oracle_responses))
+        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses))
     }
 
     /// Creates a new [`TransactionTracker`] for testing, with default values and oracle responses

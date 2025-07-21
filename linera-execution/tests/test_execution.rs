@@ -1226,7 +1226,6 @@ async fn test_open_chain() -> anyhow::Result<()> {
         1,
         first_message_index,
         0,
-        0,
         Some(blob_oracle_responses(blobs.iter())),
     );
     view.execute_operation(context, operation, &mut txn_tracker, &mut controller)
