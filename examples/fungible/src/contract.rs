@@ -6,7 +6,7 @@
 mod state;
 
 use fungible::{
-    Account, FungibleResponse, FungibleTokenAbi, InitialState, Message, Operation, Parameters,
+    Account, FungibleResponse, FungibleOperation, FungibleTokenAbi, InitialState, Message, Parameters,
 };
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
@@ -56,17 +56,17 @@ impl Contract for FungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            Operation::Balance { owner } => {
+            FungibleOperation::Balance { owner } => {
                 let balance = self.state.balance_or_default(&owner).await;
                 FungibleResponse::Balance(balance)
             }
 
-            Operation::TickerSymbol => {
+            FungibleOperation::TickerSymbol => {
                 let params = self.runtime.application_parameters();
                 FungibleResponse::TickerSymbol(params.ticker_symbol)
             }
 
-            Operation::Approve {
+            FungibleOperation::Approve {
                 owner,
                 spender,
                 allowance,
@@ -78,7 +78,7 @@ impl Contract for FungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            Operation::Transfer {
+            FungibleOperation::Transfer {
                 owner,
                 amount,
                 target_account,
@@ -92,7 +92,7 @@ impl Contract for FungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            Operation::TransferFrom {
+            FungibleOperation::TransferFrom {
                 owner,
                 spender,
                 amount,
@@ -109,7 +109,7 @@ impl Contract for FungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            Operation::Claim {
+            FungibleOperation::Claim {
                 source_account,
                 amount,
                 target_account,

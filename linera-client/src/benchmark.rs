@@ -23,7 +23,7 @@ use linera_execution::{
     system::{Recipient, SystemOperation},
     Operation,
 };
-use linera_sdk::abis::fungible;
+use linera_sdk::abis::fungible::{self, FungibleOperation};
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
 use tokio::{
@@ -896,7 +896,7 @@ impl<Env: Environment> Benchmark<Env> {
             chain_id,
             owner: receiver,
         };
-        let bytes = bcs::to_bytes(&::fungible::Operation::Transfer {
+        let bytes = bcs::to_bytes(&FungibleOperation::Transfer {
             owner: sender,
             amount,
             target_account,

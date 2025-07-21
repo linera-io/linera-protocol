@@ -33,6 +33,7 @@ use linera_base::{
 };
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
+    abis::fungible::NativeFungibleTokenAbi,
     linera_base_types::{BlobContent, BlockHeight},
     DataBlobHash,
 };
@@ -86,7 +87,7 @@ fn get_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
 
-struct NativeFungibleApp(ApplicationWrapper<native_fungible::NativeFungibleTokenAbi>);
+struct NativeFungibleApp(ApplicationWrapper<NativeFungibleTokenAbi>);
 
 impl NativeFungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
@@ -1999,10 +2000,9 @@ async fn publish_and_create_native_fungible(
     params: &fungible::Parameters,
     state: &fungible::InitialState,
     chain_id: Option<ChainId>,
-) -> Result<ApplicationId<native_fungible::NativeFungibleTokenAbi>> {
+) -> Result<ApplicationId<NativeFungibleTokenAbi>> {
     let (contract, service) = client.build_example(name).await?;
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
-    use native_fungible::NativeFungibleTokenAbi;
     if name == "native-fungible" {
         client
             .publish_and_create::<NativeFungibleTokenAbi, Parameters, InitialState>(
