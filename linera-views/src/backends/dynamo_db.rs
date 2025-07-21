@@ -677,97 +677,20 @@ struct QueryResponses {
 }
 
 impl QueryResponses {
-    fn iterate_keys(&self) -> DynamoDbKeyBlockIterator<'_> {
-        let pos = 0;
-        let mut iters = Vec::new();
-        for response in &self.responses {
-            let iter = response.items.iter().flatten();
-            iters.push(iter);
-        }
-        DynamoDbKeyBlockIterator {
-            prefix_len: self.prefix_len,
-            pos,
-            iters,
-        }
+    fn keys(&self) -> impl Iterator<Item = Result<&[u8], DynamoDbStoreInternalError>> {
+        self.responses
+            .iter()
+            .flat_map(|response| response.items.iter().flatten())
+            .map(|item| extract_key(self.prefix_len, item))
     }
 
-    fn iterate_key_values(&self) -> DynamoDbKeyValueIterator<'_> {
-        let pos = 0;
-        let mut iters = Vec::new();
-        for response in &self.responses {
-            let iter = response.items.iter().flatten();
-            iters.push(iter);
-        }
-        DynamoDbKeyValueIterator {
-            prefix_len: self.prefix_len,
-            pos,
-            iters,
-        }
-    }
-}
-
-// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
-#[doc(hidden)]
-#[expect(clippy::type_complexity)]
-struct DynamoDbKeyBlockIterator<'a> {
-    prefix_len: usize,
-    pos: usize,
-    iters: Vec<
-        std::iter::Flatten<
-            std::option::Iter<'a, Vec<HashMap<std::string::String, AttributeValue>>>,
-        >,
-    >,
-}
-
-impl<'a> Iterator for DynamoDbKeyBlockIterator<'a> {
-    type Item = Result<&'a [u8], DynamoDbStoreInternalError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = self.iters[self.pos].next();
-        match result {
-            None => {
-                if self.pos == self.iters.len() - 1 {
-                    return None;
-                }
-                self.pos += 1;
-                self.iters[self.pos]
-                    .next()
-                    .map(|x| extract_key(self.prefix_len, x))
-            }
-            Some(result) => Some(extract_key(self.prefix_len, result)),
-        }
-    }
-}
-
-#[doc(hidden)]
-#[expect(clippy::type_complexity)]
-struct DynamoDbKeyValueIterator<'a> {
-    prefix_len: usize,
-    pos: usize,
-    iters: Vec<
-        std::iter::Flatten<
-            std::option::Iter<'a, Vec<HashMap<std::string::String, AttributeValue>>>,
-        >,
-    >,
-}
-
-impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
-    type Item = Result<(&'a [u8], &'a [u8]), DynamoDbStoreInternalError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = self.iters[self.pos].next();
-        match result {
-            None => {
-                if self.pos == self.iters.len() - 1 {
-                    return None;
-                }
-                self.pos += 1;
-                self.iters[self.pos]
-                    .next()
-                    .map(|x| extract_key_value(self.prefix_len, x))
-            }
-            Some(result) => Some(extract_key_value(self.prefix_len, result)),
-        }
+    fn key_values(
+        &self,
+    ) -> impl Iterator<Item = Result<(&[u8], &[u8]), DynamoDbStoreInternalError>> {
+        self.responses
+            .iter()
+            .flat_map(|response| response.items.iter().flatten())
+            .map(|item| extract_key_value(self.prefix_len, item))
     }
 }
 
@@ -838,11 +761,10 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         let result_queries = self
             .get_list_responses(KEY_ATTRIBUTE, &self.start_key, key_prefix)
             .await?;
-        let mut keys = Vec::new();
-        for key in result_queries.iterate_keys() {
-            keys.push(key?.to_vec());
-        }
-        Ok(keys)
+        result_queries
+            .keys()
+            .map(|key| key.map(|k| k.to_vec()))
+            .collect()
     }
 
     async fn find_key_values_by_prefix(
@@ -852,12 +774,10 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         let result_queries = self
             .get_list_responses(KEY_VALUE_ATTRIBUTE, &self.start_key, key_prefix)
             .await?;
-        let mut entries = Vec::new();
-        for entry in result_queries.iterate_key_values() {
-            let (key, value) = entry?;
-            entries.push((key.to_vec(), value.to_vec()));
-        }
-        Ok(entries)
+        result_queries
+            .key_values()
+            .map(|entry| entry.map(|(key, value)| (key.to_vec(), value.to_vec())))
+            .collect()
     }
 }
 
