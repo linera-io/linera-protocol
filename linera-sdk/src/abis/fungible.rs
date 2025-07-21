@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use async_graphql::{InputObject, Response, Request, SimpleObject};
+use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::Amount,
@@ -58,7 +58,6 @@ impl ServiceAbi for NativeFungibleTokenAbi {
     type Query = Request;
     type QueryResponse = Response;
 }
-
 
 /// An operation
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]

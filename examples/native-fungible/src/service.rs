@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::Parameters;
 use linera_sdk::{
-    abis::fungible::{NativeFungibleTokenAbi, NativeFungibleOperation},
+    abis::fungible::{NativeFungibleOperation, NativeFungibleTokenAbi},
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, WithServiceAbi},
     Service, ServiceRuntime,

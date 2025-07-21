@@ -558,8 +558,7 @@ where
             .unwrap()
             .unwrap()
     };
-    let module_id = module_id
-        .with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
+    let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
     let sender_owner = sender.preferred_owner.unwrap();
     let receiver_owner = receiver.preferred_owner.unwrap();

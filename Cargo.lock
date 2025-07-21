@@ -3656,7 +3656,7 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "fungible"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "async-graphql",
  "futures",

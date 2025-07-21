@@ -6,7 +6,8 @@
 mod state;
 
 use fungible::{
-    Account, FungibleResponse, FungibleOperation, FungibleTokenAbi, InitialState, Message, Parameters,
+    Account, FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState, Message,
+    Parameters,
 };
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},

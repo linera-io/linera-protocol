@@ -4,7 +4,9 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use linera_sdk::{
-    abis::fungible::{FungibleResponse, NativeFungibleOperation, NativeFungibleTokenAbi, InitialState, Parameters},
+    abis::fungible::{
+        FungibleResponse, InitialState, NativeFungibleOperation, NativeFungibleTokenAbi, Parameters,
+    },
     linera_base_types::{Account, AccountOwner, ChainId, WithContractAbi},
     Contract, ContractRuntime,
 };
@@ -52,7 +54,9 @@ impl Contract for NativeFungibleTokenContract {
                 FungibleResponse::Balance(balance)
             }
 
-            NativeFungibleOperation::TickerSymbol => FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)),
+            NativeFungibleOperation::TickerSymbol => {
+                FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL))
+            }
 
             NativeFungibleOperation::Transfer {
                 owner,

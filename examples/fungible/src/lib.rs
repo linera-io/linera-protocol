@@ -5,9 +5,7 @@
 
 use async_graphql::scalar;
 pub use linera_sdk::abis::fungible::*;
-use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
-};
+use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
@@ -101,7 +99,7 @@ pub async fn create_with_accounts(
             .add_block(|block| {
                 block.with_operation(
                     application_id,
-                    Operation::Claim {
+                    FungibleOperation::Claim {
                         source_account: Account {
                             chain_id: token_chain.id(),
                             owner: *account,
