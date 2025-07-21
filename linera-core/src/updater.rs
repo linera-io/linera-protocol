@@ -375,17 +375,27 @@ where
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
         // Figure out which certificates this validator is missing.
-        let query = ChainInfoQuery::new(chain_id);
-        let remote_info = self.remote_node.handle_chain_info_query(query).await?;
+        let remote_info = if let Ok(height) = target_block_height.try_sub_one() {
+            let chain = self.local_node.chain_state_view(chain_id).await?;
+            let hash = chain.block_hashes(height..target_block_height).await?[0];
+            let certificate = self
+                .local_node
+                .storage_client()
+                .read_certificate(hash)
+                .await?
+                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+            self.send_confirmed_certificate(certificate, delivery)
+                .await?
+        } else {
+            let query = ChainInfoQuery::new(chain_id);
+            self.remote_node.handle_chain_info_query(query).await?
+        };
         let initial_block_height = remote_info.next_block_height;
         // Obtain the missing blocks and the manager state from the local node.
         let range = initial_block_height..target_block_height;
-        let (keys, timeout) = {
+        let keys = {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            (
-                chain.block_hashes(range).await?,
-                chain.manager.timeout.get().clone(),
-            )
+            chain.block_hashes(range).await?
         };
         if !keys.is_empty() {
             // Send the requested certificates in order.
@@ -402,11 +412,12 @@ where
                     .await?;
             }
         }
-        if let Some(cert) = timeout {
-            if cert.value().chain_id() == chain_id {
-                // Timeouts are small and don't have blobs, so we can call `handle_certificate`
-                // directly.
-                self.remote_node.handle_timeout_certificate(cert).await?;
+        let local_info = self.local_node.chain_info(chain_id).await?;
+        if let Some(cert) = local_info.manager.timeout {
+            if local_info.next_block_height == remote_info.next_block_height
+                && cert.round >= remote_info.manager.current_round
+            {
+                self.remote_node.handle_timeout_certificate(*cert).await?;
             }
         }
         Ok(())
