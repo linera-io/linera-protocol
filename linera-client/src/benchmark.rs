@@ -10,7 +10,6 @@ use std::{
     },
 };
 
-use hdrhistogram::Histogram;
 use linera_base::{
     data_types::Amount,
     identifiers::{AccountOwner, ApplicationId, ChainId},
@@ -32,6 +31,10 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
+
+use crate::client_metrics::{
+    BlockTimeTimings, BlockTimings, ClientMetricsError, SubmitFastBlockProposalTimings,
+};
 
 const PROXY_LATENCY_P99_THRESHOLD: f64 = 400.0;
 const LATENCY_METRIC_PREFIX: &str = "linera_proxy_request_latency";
@@ -66,117 +69,10 @@ pub enum BenchmarkError {
     UnexpectedEmptyBucket,
     #[error("Failed to send unit message: {0}")]
     TokioSendUnitError(#[from] mpsc::error::SendError<()>),
-    #[error("Failed to create histogram: {0}")]
-    HistogramCreationError(#[from] hdrhistogram::CreationError),
-    #[error("Failed to record histogram: {0}")]
-    HistogramRecordError(#[from] hdrhistogram::RecordError),
+    #[error("Client metrics error: {0}")]
+    ClientMetrics(#[from] ClientMetricsError),
     #[error("Failed to send block timings message: {0}")]
     TokioSendBlockTimingsError(#[from] mpsc::error::SendError<BlockTimings>),
-}
-
-struct SubmitFastBlockProposalTimings {
-    creating_proposal_ms: u64,
-    stage_block_execution_ms: u64,
-    creating_confirmed_block_ms: u64,
-    submitting_block_proposal_ms: u64,
-}
-
-struct BlockTimeTimings {
-    get_pending_message_bundles_ms: u64,
-    submit_fast_block_proposal_ms: u64,
-    submit_fast_block_proposal_timings: SubmitFastBlockProposalTimings,
-    communicate_chain_updates_ms: u64,
-}
-
-pub struct BlockTimings {
-    block_time_ms: u64,
-    block_time_timings: BlockTimeTimings,
-}
-
-struct SubmitFastBlockProposalTimingsHistograms {
-    creating_proposal_histogram: Histogram<u64>,
-    stage_block_execution_histogram: Histogram<u64>,
-    creating_confirmed_block_histogram: Histogram<u64>,
-    submitting_block_proposal_histogram: Histogram<u64>,
-}
-
-impl SubmitFastBlockProposalTimingsHistograms {
-    pub fn new() -> Result<Self, BenchmarkError> {
-        Ok(Self {
-            creating_proposal_histogram: Histogram::<u64>::new(2)?,
-            stage_block_execution_histogram: Histogram::<u64>::new(2)?,
-            creating_confirmed_block_histogram: Histogram::<u64>::new(2)?,
-            submitting_block_proposal_histogram: Histogram::<u64>::new(2)?,
-        })
-    }
-
-    pub fn record(
-        &mut self,
-        submit_fast_block_proposal_timings: SubmitFastBlockProposalTimings,
-    ) -> Result<(), BenchmarkError> {
-        self.creating_proposal_histogram
-            .record(submit_fast_block_proposal_timings.creating_proposal_ms)?;
-        self.stage_block_execution_histogram
-            .record(submit_fast_block_proposal_timings.stage_block_execution_ms)?;
-        self.creating_confirmed_block_histogram
-            .record(submit_fast_block_proposal_timings.creating_confirmed_block_ms)?;
-        self.submitting_block_proposal_histogram
-            .record(submit_fast_block_proposal_timings.submitting_block_proposal_ms)?;
-        Ok(())
-    }
-}
-
-struct BlockTimeTimingsHistograms {
-    get_pending_message_bundles_histogram: Histogram<u64>,
-    submit_fast_block_proposal_histogram: Histogram<u64>,
-    submit_fast_block_proposal_timings_histograms: SubmitFastBlockProposalTimingsHistograms,
-    communicate_chain_updates_histogram: Histogram<u64>,
-}
-
-impl BlockTimeTimingsHistograms {
-    pub fn new() -> Result<Self, BenchmarkError> {
-        Ok(Self {
-            get_pending_message_bundles_histogram: Histogram::<u64>::new(2)?,
-            submit_fast_block_proposal_histogram: Histogram::<u64>::new(2)?,
-            submit_fast_block_proposal_timings_histograms:
-                SubmitFastBlockProposalTimingsHistograms::new()?,
-            communicate_chain_updates_histogram: Histogram::<u64>::new(2)?,
-        })
-    }
-
-    pub fn record(&mut self, block_time_timings: BlockTimeTimings) -> Result<(), BenchmarkError> {
-        self.get_pending_message_bundles_histogram
-            .record(block_time_timings.get_pending_message_bundles_ms)?;
-        self.submit_fast_block_proposal_histogram
-            .record(block_time_timings.submit_fast_block_proposal_ms)?;
-        self.submit_fast_block_proposal_timings_histograms
-            .record(block_time_timings.submit_fast_block_proposal_timings)?;
-        self.communicate_chain_updates_histogram
-            .record(block_time_timings.communicate_chain_updates_ms)?;
-        Ok(())
-    }
-}
-
-struct BlockTimingsHistograms {
-    block_time_histogram: Histogram<u64>,
-    block_time_timings_histograms: BlockTimeTimingsHistograms,
-}
-
-impl BlockTimingsHistograms {
-    pub fn new() -> Result<Self, BenchmarkError> {
-        Ok(Self {
-            block_time_histogram: Histogram::<u64>::new(2)?,
-            block_time_timings_histograms: BlockTimeTimingsHistograms::new()?,
-        })
-    }
-
-    pub fn record(&mut self, block_timings: BlockTimings) -> Result<(), BenchmarkError> {
-        self.block_time_histogram
-            .record(block_timings.block_time_ms)?;
-        self.block_time_timings_histograms
-            .record(block_timings.block_time_timings)?;
-        Ok(())
-    }
 }
 
 #[derive(Debug)]
@@ -202,6 +98,7 @@ impl<Env: Environment> Benchmark<Env> {
         health_check_endpoints: Option<String>,
         runtime_in_seconds: Option<u64>,
         delay_between_chain_groups_ms: Option<u64>,
+        timing_sender: Option<mpsc::UnboundedSender<BlockTimings>>,
     ) -> Result<(), BenchmarkError> {
         let bps_counts = (0..num_chain_groups)
             .map(|_| Arc::new(AtomicUsize::new(0)))
@@ -221,9 +118,6 @@ impl<Env: Environment> Benchmark<Env> {
             bps,
         );
 
-        let (block_time_quantiles_sender, block_time_quantiles_task) =
-            Self::block_time_quantiles_task(&shutdown_notifier);
-
         let (runtime_control_task, runtime_control_sender) =
             Self::runtime_control_task(&shutdown_notifier, runtime_in_seconds, num_chain_groups);
 
@@ -238,7 +132,7 @@ impl<Env: Environment> Benchmark<Env> {
             let shutdown_notifier_clone = shutdown_notifier.clone();
             let committee = committee.clone();
             let barrier_clone = barrier.clone();
-            let block_time_quantiles_sender = block_time_quantiles_sender.clone();
+            let timing_sender_clone = timing_sender.clone();
             let bps_count_clone = bps_counts[chain_group_index].clone();
             let notifier_clone = notifier.clone();
             let runtime_control_sender_clone = runtime_control_sender.clone();
@@ -258,11 +152,11 @@ impl<Env: Environment> Benchmark<Env> {
                         shutdown_notifier_clone,
                         bps_count_clone,
                         committee,
-                        block_time_quantiles_sender,
                         barrier_clone,
                         notifier_clone,
                         runtime_control_sender_clone,
                         delay_between_chain_groups_ms,
+                        timing_sender_clone,
                     ))
                     .await?;
 
@@ -290,8 +184,6 @@ impl<Env: Environment> Benchmark<Env> {
         if let Some(runtime_control_task) = runtime_control_task {
             runtime_control_task.await?;
         }
-        drop(block_time_quantiles_sender);
-        block_time_quantiles_task.await??;
 
         Ok(())
     }
@@ -350,114 +242,6 @@ impl<Env: Environment> Benchmark<Env> {
             }
             .instrument(tracing::info_span!("bps_control")),
         )
-    }
-
-    fn block_time_quantiles_task(
-        shutdown_notifier: &CancellationToken,
-    ) -> (
-        mpsc::UnboundedSender<BlockTimings>,
-        task::JoinHandle<Result<(), BenchmarkError>>,
-    ) {
-        let shutdown_notifier = shutdown_notifier.clone();
-        let (block_time_quantiles_sender, mut block_time_quantiles_receiver) =
-            mpsc::unbounded_channel();
-        let block_time_quantiles_task: task::JoinHandle<Result<(), BenchmarkError>> = task::spawn(
-            async move {
-                let mut histograms = BlockTimingsHistograms::new()?;
-                let mut block_time_quantiles_timer = Instant::now();
-
-                while let Some(block_timings) = block_time_quantiles_receiver.recv().await {
-                    if shutdown_notifier.is_cancelled() {
-                        info!("Shutdown signal received on block time quantiles task");
-                        break;
-                    }
-
-                    histograms.record(block_timings)?;
-
-                    // Print block time quantiles every 5 seconds.
-                    if block_time_quantiles_timer.elapsed().as_secs() >= 5 {
-                        for quantile in [0.99, 0.95, 0.90, 0.50] {
-                            let formatted_quantile = (quantile * 100.0) as usize;
-
-                            // Overall block timing
-                            info!(
-                                "Block time p{}: {} ms",
-                                formatted_quantile,
-                                histograms.block_time_histogram.value_at_quantile(quantile)
-                            );
-
-                            // Block time breakdown
-                            info!(
-                                "  ├─ Get pending message bundles p{}: {} ms",
-                                formatted_quantile,
-                                histograms
-                                    .block_time_timings_histograms
-                                    .get_pending_message_bundles_histogram
-                                    .value_at_quantile(quantile)
-                            );
-                            info!(
-                                "  ├─ Submit fast block proposal p{}: {} ms",
-                                formatted_quantile,
-                                histograms
-                                    .block_time_timings_histograms
-                                    .submit_fast_block_proposal_histogram
-                                    .value_at_quantile(quantile)
-                            );
-                            info!(
-                                "  │  ├─ Creating proposal p{}: {} ms",
-                                formatted_quantile,
-                                histograms
-                                    .block_time_timings_histograms
-                                    .submit_fast_block_proposal_timings_histograms
-                                    .creating_proposal_histogram
-                                    .value_at_quantile(quantile)
-                            );
-                            info!(
-                                "  │  ├─ Stage block execution p{}: {} ms",
-                                formatted_quantile,
-                                histograms
-                                    .block_time_timings_histograms
-                                    .submit_fast_block_proposal_timings_histograms
-                                    .stage_block_execution_histogram
-                                    .value_at_quantile(quantile)
-                            );
-                            info!(
-                                "  │  ├─ Creating confirmed block p{}: {} ms",
-                                formatted_quantile,
-                                histograms
-                                    .block_time_timings_histograms
-                                    .submit_fast_block_proposal_timings_histograms
-                                    .creating_confirmed_block_histogram
-                                    .value_at_quantile(quantile)
-                            );
-                            info!(
-                                "  │  └─ Submitting block proposal p{}: {} ms",
-                                formatted_quantile,
-                                histograms
-                                    .block_time_timings_histograms
-                                    .submit_fast_block_proposal_timings_histograms
-                                    .submitting_block_proposal_histogram
-                                    .value_at_quantile(quantile)
-                            );
-                            info!(
-                                "  └─ Communicate chain updates p{}: {} ms",
-                                formatted_quantile,
-                                histograms
-                                    .block_time_timings_histograms
-                                    .communicate_chain_updates_histogram
-                                    .value_at_quantile(quantile)
-                            );
-                        }
-                        block_time_quantiles_timer = Instant::now();
-                    }
-                }
-
-                info!("Exiting block time quantiles task");
-                Ok(())
-            }
-            .instrument(tracing::info_span!("block_time_quantiles")),
-        );
-        (block_time_quantiles_sender, block_time_quantiles_task)
     }
 
     async fn metrics_watcher(
@@ -744,11 +528,11 @@ impl<Env: Environment> Benchmark<Env> {
         shutdown_notifier: CancellationToken,
         bps_count: Arc<AtomicUsize>,
         committee: Committee,
-        block_time_quantiles_sender: mpsc::UnboundedSender<BlockTimings>,
         barrier: Arc<Barrier>,
         notifier: Arc<Notify>,
         runtime_control_sender: Option<mpsc::Sender<()>>,
         delay_between_chain_groups_ms: Option<u64>,
+        timing_sender: Option<mpsc::UnboundedSender<BlockTimings>>,
     ) -> Result<(), BenchmarkError> {
         barrier.wait().await;
         if let Some(delay_between_chain_groups_ms) = delay_between_chain_groups_ms {
@@ -813,10 +597,11 @@ impl<Env: Environment> Benchmark<Env> {
                     communicate_chain_updates_ms,
                 },
             };
-            if let Err(e) = block_time_quantiles_sender.send(block_metrics) {
-                // The quantiles task might receive the shutdown signal first and exit before this
-                // one receives it.
-                warn!("Failed to send block time quantiles: {}", e);
+
+            if let Some(sender) = &timing_sender {
+                if let Err(e) = sender.send(block_metrics) {
+                    warn!("Failed to send block timing data to ClientContext: {}", e);
+                }
             }
 
             let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;

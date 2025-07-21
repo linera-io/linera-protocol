@@ -16,6 +16,8 @@ use linera_core::{
 };
 use linera_execution::ResourceControlPolicy;
 
+#[cfg(not(web))]
+use crate::client_metrics::TimingConfig;
 use crate::util;
 
 #[derive(Debug, thiserror::Error)]
@@ -106,6 +108,16 @@ pub struct ClientContextOptions {
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
+    /// Enable timing reports during operations
+    #[cfg(not(web))]
+    #[arg(long)]
+    pub timings: bool,
+
+    /// Interval in seconds between timing reports (defaults to 5)
+    #[cfg(not(web))]
+    #[arg(long, default_value = "5")]
+    pub timing_interval: u64,
+
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
     #[arg(long, default_value_t = DEFAULT_GRACE_PERIOD)]
@@ -135,6 +147,15 @@ impl ClientContextOptions {
             cross_chain_message_delivery,
             grace_period: self.grace_period,
             blob_download_timeout: self.blob_download_timeout,
+        }
+    }
+
+    /// Creates [`TimingConfig`] with the corresponding values.
+    #[cfg(not(web))]
+    pub fn to_timing_config(&self) -> TimingConfig {
+        TimingConfig {
+            enabled: self.timings,
+            report_interval_secs: self.timing_interval,
         }
     }
 }

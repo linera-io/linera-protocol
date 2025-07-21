@@ -53,6 +53,8 @@ use {
     std::{fs, path::PathBuf},
 };
 
+#[cfg(not(web))]
+use crate::client_metrics::ClientMetrics;
 use crate::{
     chain_listener::{self, ClientContext as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
@@ -69,6 +71,8 @@ pub struct ClientContext<Env: Environment, W> {
     pub retry_delay: Duration,
     pub max_retries: u32,
     pub chain_listeners: JoinSet,
+    #[cfg(not(web))]
+    pub client_metrics: Option<ClientMetrics>,
 }
 
 impl<Env: Environment, W> chain_listener::ClientContext for ClientContext<Env, W>
@@ -111,6 +115,8 @@ where
     W: Persist<Target = Wallet>,
 {
     pub fn new(storage: S, options: ClientContextOptions, wallet: W, signer: Si) -> Self {
+        #[cfg(not(web))]
+        let timing_config = options.to_timing_config();
         let node_provider = NodeProvider::new(NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -137,6 +143,13 @@ where
             options.to_chain_client_options(),
         );
 
+        #[cfg(not(web))]
+        let client_metrics = if timing_config.enabled {
+            Some(ClientMetrics::new(timing_config))
+        } else {
+            None
+        };
+
         ClientContext {
             client: Arc::new(client),
             wallet,
@@ -145,6 +158,8 @@ where
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
             chain_listeners: JoinSet::default(),
+            #[cfg(not(web))]
+            client_metrics,
         }
     }
 
@@ -193,6 +208,7 @@ where
             retry_delay,
             max_retries,
             chain_listeners: JoinSet::default(),
+            client_metrics: None,
         }
     }
 }
@@ -248,6 +264,11 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
             retry_delay: self.retry_delay,
             max_retries: self.max_retries,
         }
+    }
+
+    #[cfg(not(web))]
+    pub fn client_metrics(&self) -> Option<&ClientMetrics> {
+        self.client_metrics.as_ref()
     }
 
     pub async fn save_wallet(&mut self) -> Result<(), Error> {
