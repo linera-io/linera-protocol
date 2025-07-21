@@ -13,7 +13,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, OracleResponse,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Bytecode, OracleResponse,
         SendMessageRequest, Timestamp,
     },
     ensure, http,
@@ -1597,6 +1597,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(blob_id)
     }
 
+    fn publish_module(
+        &mut self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+    ) -> Result<ModuleId, ExecutionError> {
+        let (blobs, module_id) = crate::runtime::create_bytecode_blobs_sync(
+            contract, service, vm_runtime,
+        );
+        for blob in blobs {
+            self.inner().transaction_tracker.add_created_blob(blob);
+        }
+        Ok(module_id)
+    }
+
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError> {
         let mut this = self.inner();
         let round =
@@ -1832,6 +1847,35 @@ impl From<&MessageContext> for ExecutingMessage {
         ExecutingMessage {
             id: context.message_id,
             is_bouncing: context.is_bouncing,
+        }
+    }
+}
+
+/// Creates a compressed Contract, Service and bytecode synchronously.
+pub fn create_bytecode_blobs_sync(
+    contract: Bytecode,
+    service: Bytecode,
+    vm_runtime: VmRuntime,
+) -> (Vec<Blob>, ModuleId) {
+    match vm_runtime {
+        VmRuntime::Wasm => {
+            let compressed_contract = contract.compress();
+            let compressed_service = service.compress();
+            let contract_blob = Blob::new_contract_bytecode(compressed_contract);
+            let service_blob = Blob::new_service_bytecode(compressed_service);
+            let module_id =
+                ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+            (vec![contract_blob, service_blob], module_id)
+        }
+        VmRuntime::Evm => {
+            let compressed_contract = contract.compress();
+            let evm_contract_blob = Blob::new_evm_bytecode(compressed_contract);
+            let module_id = ModuleId::new(
+                evm_contract_blob.id().hash,
+                evm_contract_blob.id().hash,
+                vm_runtime,
+            );
+            (vec![evm_contract_blob], module_id)
         }
     }
 }

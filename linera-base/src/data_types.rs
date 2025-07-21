@@ -1088,7 +1088,7 @@ impl ApplicationDescription {
 }
 
 /// A WebAssembly module's bytecode.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, WitType, WitLoad, WitStore)]
 pub struct Bytecode {
     /// Bytes of the bytecode.
     #[serde(with = "serde_bytes")]

@@ -5,7 +5,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Bytecode, SendMessageRequest, Timestamp},
     http,
     identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, MessageId, StreamName},
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
@@ -537,6 +537,20 @@ where
             .user_data_mut()
             .runtime
             .create_data_blob(bytes)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Publishes a module with contract and service bytecode and returns the module ID.
+    fn publish_module(
+        caller: &mut Caller,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+    ) -> Result<ModuleId, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .publish_module(contract, service, vm_runtime)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

@@ -962,7 +962,6 @@ async fn test_create_data_blob_system_api() -> anyhow::Result<()> {
     let test_data = b"Hello, world! This is test data for the blob.";
     let expected_blob = Blob::new_data(test_data.to_vec());
     let expected_blob_id = expected_blob.id();
-    let blobs = [blobs[0], blobs[1], blobs[2], expected_blob_id];
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _operation| {
