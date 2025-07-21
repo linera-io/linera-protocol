@@ -36,7 +36,8 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate, Timestamp,
+        Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
+        Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{

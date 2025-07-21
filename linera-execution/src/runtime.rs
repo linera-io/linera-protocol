@@ -13,8 +13,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Bytecode, OracleResponse,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Bytecode,
+        OracleResponse, SendMessageRequest, Timestamp,
     },
     ensure, http,
     identifiers::{
@@ -1603,9 +1603,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         service: Bytecode,
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, ExecutionError> {
-        let (blobs, module_id) = crate::runtime::create_bytecode_blobs_sync(
-            contract, service, vm_runtime,
-        );
+        let (blobs, module_id) =
+            crate::runtime::create_bytecode_blobs_sync(contract, service, vm_runtime);
         for blob in blobs {
             self.inner().transaction_tracker.add_created_blob(blob);
         }

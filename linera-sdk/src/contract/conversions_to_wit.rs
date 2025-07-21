@@ -6,7 +6,8 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Bytecode, Resources, SendMessageRequest, TimeDelta,
+        Amount, ApplicationPermissions, BlockHeight, Bytecode, Resources, SendMessageRequest,
+        TimeDelta,
     },
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},

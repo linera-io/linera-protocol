@@ -5,7 +5,9 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, BlockHeight, Bytecode, SendMessageRequest, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, BlockHeight, Bytecode, SendMessageRequest, Timestamp,
+    },
     http,
     identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, MessageId, StreamName},
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},

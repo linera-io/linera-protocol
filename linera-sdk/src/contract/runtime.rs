@@ -6,8 +6,8 @@
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
-        Bytecode,
+        Amount, ApplicationPermissions, BlockHeight, Bytecode, Resources, SendMessageRequest,
+        Timestamp,
     },
     ensure, http,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
