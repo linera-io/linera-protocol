@@ -373,7 +373,8 @@ where
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        // Figure out which certificates this validator is missing.
+        // Figure out which certificates this validator is missing. In many cases, it's just the
+        // last one, so we optimistically send that one right away.
         let remote_info = if let Ok(height) = target_block_height.try_sub_one() {
             let chain = self.local_node.chain_state_view(chain_id).await?;
             let hash = chain.block_hashes(height..target_block_height).await?[0];
@@ -411,10 +412,14 @@ where
                     .await?;
             }
         }
+        // If the remote node is missing a timeout certificate, send it as well.
         let local_info = self.local_node.chain_info(chain_id).await?;
         if let Some(cert) = local_info.manager.timeout {
-            if local_info.next_block_height == remote_info.next_block_height
-                && cert.round >= remote_info.manager.current_round
+            if (local_info.next_block_height, cert.round)
+                >= (
+                    remote_info.next_block_height,
+                    remote_info.manager.current_round,
+                )
             {
                 self.remote_node.handle_timeout_certificate(*cert).await?;
             }
