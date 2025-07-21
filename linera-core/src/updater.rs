@@ -287,10 +287,7 @@ where
                 .await
             {
                 Ok(info) => return Ok(info),
-                Err(NodeError::MissingCrossChainUpdate { .. })
-                | Err(NodeError::InactiveChain(_))
-                    if !sent_cross_chain_updates =>
-                {
+                Err(NodeError::MissingCrossChainUpdate { .. }) if !sent_cross_chain_updates => {
                     sent_cross_chain_updates = true;
                     // Some received certificates may be missing for this validator
                     // (e.g. to create the chain or make the balance sufficient) so we are going to
@@ -319,7 +316,9 @@ where
                     )
                     .await?;
                 }
-                Err(NodeError::BlobsNotFound(_)) if !blob_ids.is_empty() => {
+                Err(NodeError::BlobsNotFound(_) | NodeError::InactiveChain(_))
+                    if !blob_ids.is_empty() =>
+                {
                     // For `BlobsNotFound`, we assume that the local node should already be
                     // updated with the needed blobs, so sending the chain information about the
                     // certificates that last used the blobs to the validator node should be enough.
