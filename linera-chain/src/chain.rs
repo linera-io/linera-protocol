@@ -632,14 +632,6 @@ where
         self.execution_state.system.ownership.get()
     }
 
-    pub fn admin_id(&self) -> Result<ChainId, ChainError> {
-        self.execution_state
-            .system
-            .admin_id
-            .get()
-            .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
-    }
-
     /// Removes the incoming message bundles in the block from the inboxes.
     pub async fn remove_bundles_from_inboxes(
         &mut self,

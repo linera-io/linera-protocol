@@ -317,7 +317,13 @@ where
             let committee = committees
                 .get(&epoch)
                 .ok_or(WorkerError::EventsNotFound(vec![EventId {
-                    chain_id: self.state.chain.admin_id()?,
+                    chain_id: self
+                        .state
+                        .storage
+                        .read_network_description()
+                        .await?
+                        .unwrap()
+                        .admin_chain_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: epoch.0,
                 }]))?;

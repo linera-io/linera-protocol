@@ -15,6 +15,7 @@ use futures::{
 };
 use linera_base::{
     data_types::{BlockHeight, Round},
+    ensure,
     identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
@@ -278,6 +279,7 @@ where
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = false;
+        let mut publisher_chain_ids_sent = BTreeSet::new();
         loop {
             match self
                 .remote_node
@@ -294,6 +296,28 @@ where
                     // (e.g. to create the chain or make the balance sufficient) so we are going to
                     // synchronize them now and retry.
                     self.send_chain_information_for_senders(chain_id).await?;
+                }
+                Err(NodeError::EventsNotFound(event_ids)) => {
+                    let mut publisher_heights = BTreeMap::new();
+                    let new_chain_ids = event_ids
+                        .iter()
+                        .map(|event_id| event_id.chain_id)
+                        .filter(|chain_id| !publisher_chain_ids_sent.contains(chain_id))
+                        .collect::<Vec<_>>();
+                    ensure!(
+                        !new_chain_ids.is_empty(),
+                        NodeError::EventsNotFound(event_ids)
+                    );
+                    for chain_id in new_chain_ids {
+                        let info = self.local_node.chain_info(chain_id).await?;
+                        publisher_heights.insert(chain_id, info.next_block_height);
+                        publisher_chain_ids_sent.insert(chain_id);
+                    }
+                    self.send_chain_info_up_to_heights(
+                        publisher_heights,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await?;
                 }
                 Err(NodeError::BlobsNotFound(_)) if !blob_ids.is_empty() => {
                     // For `BlobsNotFound`, we assume that the local node should already be

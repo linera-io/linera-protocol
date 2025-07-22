@@ -549,6 +549,7 @@ where
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
             }
             UpdateStreams(streams) => {
+                let mut missing_events = Vec::new();
                 for (chain_id, stream_id, next_index) in streams {
                     let subscriptions = self
                         .event_subscriptions
@@ -576,14 +577,19 @@ where
                         stream_id,
                         index,
                     };
-                    ensure!(
-                        self.context()
-                            .extra()
-                            .contains_event(event_id.clone())
-                            .await?,
-                        ExecutionError::EventNotFound(event_id)
-                    );
+                    if !self
+                        .context()
+                        .extra()
+                        .contains_event(event_id.clone())
+                        .await?
+                    {
+                        missing_events.push(event_id)
+                    }
                 }
+                ensure!(
+                    missing_events.is_empty(),
+                    ExecutionError::EventsNotFound(missing_events)
+                );
             }
         }
 
