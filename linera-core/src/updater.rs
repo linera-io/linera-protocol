@@ -303,7 +303,7 @@ where
                         .iter()
                         .map(|event_id| event_id.chain_id)
                         .filter(|chain_id| !publisher_chain_ids_sent.contains(chain_id))
-                        .collect::<Vec<_>>();
+                        .collect::<BTreeSet<_>>();
                     ensure!(
                         !new_chain_ids.is_empty(),
                         NodeError::EventsNotFound(event_ids)
