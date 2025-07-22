@@ -278,7 +278,6 @@ where
                 0,
                 0,
                 0,
-                0,
                 Some(vec![OracleResponse::Blob(application_description_blob_id)]),
             ),
             &mut controller,

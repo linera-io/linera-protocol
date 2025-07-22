@@ -98,12 +98,10 @@ async fn test_transfer_system_api(
     let TransactionOutcome {
         outgoing_messages,
         oracle_responses,
-        next_message_index,
         ..
     } = tracker.into_outcome()?;
     assert_eq!(outgoing_messages.len(), 1);
     assert_eq!(oracle_responses.len(), 3);
-    assert_eq!(next_message_index, 1);
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     view.execute_message(
@@ -274,12 +272,10 @@ async fn test_claim_system_api(
     let TransactionOutcome {
         outgoing_messages,
         oracle_responses,
-        next_message_index,
         ..
     } = tracker.into_outcome()?;
     assert_eq!(outgoing_messages.len(), 1);
     assert_eq!(oracle_responses.len(), 3);
-    assert_eq!(next_message_index, 1);
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     let mut tracker = TransactionTracker::new_replaying(Vec::new());
@@ -308,12 +304,10 @@ async fn test_claim_system_api(
     let TransactionOutcome {
         outgoing_messages,
         oracle_responses,
-        next_message_index,
         ..
     } = tracker.into_outcome()?;
     assert_eq!(outgoing_messages.len(), 1);
     assert!(oracle_responses.is_empty());
-    assert_eq!(next_message_index, 1);
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     let mut tracker = TransactionTracker::new_replaying(Vec::new());

@@ -84,7 +84,6 @@ where
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);
-        let next_message_index = 0;
         let next_application_index = application_description.application_index + 1;
         let next_chain_index = 0;
 
@@ -115,7 +114,6 @@ where
         let mut txn_tracker = TransactionTracker::new(
             local_time,
             0,
-            next_message_index,
             next_application_index,
             next_chain_index,
             None,
