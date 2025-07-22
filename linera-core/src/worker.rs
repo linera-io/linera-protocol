@@ -222,6 +222,8 @@ pub enum WorkerError {
     UnexpectedBlob,
     #[error("Number of published blobs per block must not exceed {0}")]
     TooManyPublishedBlobs(u64),
+    #[error("Missing network description")]
+    MissingNetworkDescription,
 }
 
 impl From<ChainError> for WorkerError {

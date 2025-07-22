@@ -314,19 +314,19 @@ where
             certificate.check(committee)?;
         } else {
             let committees = self.state.storage.committees_for(epoch..=epoch).await?;
-            let committee = committees
-                .get(&epoch)
-                .ok_or(WorkerError::EventsNotFound(vec![EventId {
-                    chain_id: self
-                        .state
-                        .storage
-                        .read_network_description()
-                        .await?
-                        .unwrap()
-                        .admin_chain_id,
+            let Some(committee) = committees.get(&epoch) else {
+                let net_description = self
+                    .state
+                    .storage
+                    .read_network_description()
+                    .await?
+                    .ok_or_else(|| WorkerError::MissingNetworkDescription)?;
+                return Err(WorkerError::EventsNotFound(vec![EventId {
+                    chain_id: net_description.admin_chain_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: epoch.0,
-                }]))?;
+                }]));
+            };
             // This line is duplicated, but this avoids cloning and a lifetimes error.
             certificate.check(committee)?;
         }
