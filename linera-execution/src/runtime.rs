@@ -1850,7 +1850,7 @@ impl From<&MessageContext> for ExecutingMessage {
     }
 }
 
-/// Creates a compressed Contract, Service and bytecode synchronously.
+/// Creates a compressed contract and service bytecode synchronously.
 pub fn create_bytecode_blobs_sync(
     contract: Bytecode,
     service: Bytecode,
