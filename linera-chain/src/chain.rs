@@ -15,7 +15,7 @@ use linera_base::{
         BlockHeightRangeBounds as _, Epoch, OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId},
+    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -193,7 +193,7 @@ pub(crate) mod metrics {
 }
 
 /// The BCS-serialized size of an empty [`Block`].
-pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
+pub(crate) const EMPTY_BLOCK_SIZE: usize = 95;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
@@ -272,6 +272,8 @@ where
     pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
     /// The heights of previous blocks that sent messages to the same recipients.
     pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
+    /// The heights of previous blocks that published events to the same streams.
+    pub previous_event_blocks: MapView<C, StreamId, BlockHeight>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
@@ -726,6 +728,7 @@ where
         chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,
         previous_message_blocks_view: &MapView<C, ChainId, BlockHeight>,
+        previous_event_blocks_view: &MapView<C, StreamId, BlockHeight>,
         block: &ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
@@ -792,6 +795,20 @@ where
             }
         }
 
+        let streams = block_execution_tracker.event_streams();
+        let mut previous_event_blocks = BTreeMap::new();
+        for stream in streams {
+            if let Some(height) = previous_event_blocks_view.get(&stream).await? {
+                let hash = confirmed_log
+                    .get(usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?)
+                    .await?
+                    .ok_or_else(|| {
+                        ChainError::InternalError("missing entry in confirmed_log".into())
+                    })?;
+                previous_event_blocks.insert(stream, (hash, height));
+            }
+        }
+
         let state_hash = {
             #[cfg(with_metrics)]
             let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
@@ -804,6 +821,7 @@ where
         Ok(BlockExecutionOutcome {
             messages,
             previous_message_blocks,
+            previous_event_blocks,
             state_hash,
             oracle_responses,
             events,
@@ -867,6 +885,7 @@ where
             &mut self.execution_state,
             &self.confirmed_log,
             &self.previous_message_blocks,
+            &self.previous_event_blocks,
             block,
             local_time,
             round,
@@ -891,6 +910,10 @@ where
         for recipient in recipients {
             self.previous_message_blocks
                 .insert(&recipient, block.header.height)?;
+        }
+        for event in block.body.events.iter().flatten() {
+            self.previous_event_blocks
+                .insert(&event.stream_id, block.header.height)?;
         }
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;

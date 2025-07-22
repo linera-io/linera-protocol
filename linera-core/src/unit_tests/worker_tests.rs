@@ -442,6 +442,7 @@ where
             BlockExecutionOutcome {
                 messages,
                 previous_message_blocks,
+                previous_event_blocks: BTreeMap::new(),
                 events,
                 blobs,
                 state_hash,
@@ -1023,6 +1024,7 @@ where
                 vec![direct_credit_message(chain_2, Amount::from_tokens(2))],
             ],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new(); 2],
             blobs: vec![Vec::new(); 2],
             state_hash: SystemExecutionState {
@@ -1049,6 +1051,7 @@ where
                 chain_2,
                 (certificate0.hash(), BlockHeight(0)),
             )]),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
@@ -1293,6 +1296,7 @@ where
                     vec![direct_credit_message(chain_3, Amount::ONE)],
                 ],
                 previous_message_blocks: BTreeMap::new(),
+                previous_event_blocks: BTreeMap::new(),
                 events: vec![Vec::new(); 2],
                 blobs: vec![Vec::new(); 2],
                 state_hash: env
@@ -1551,6 +1555,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![]],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![vec![]],
             blobs: vec![vec![]],
             state_hash: state.into_hash().await,
@@ -2517,6 +2522,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![]],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![vec![Blob::new_chain_description(&user_description)]],
             state_hash: env.system_execution_state(&admin_id).into_hash().await,
@@ -2573,6 +2579,7 @@ where
                 vec![direct_credit_message(user_id, Amount::from_tokens(2))],
             ],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![
                 vec![Event {
                     stream_id: event_id.stream_id.clone(),
@@ -2641,6 +2648,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new(); 2],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new(); 2],
             blobs: vec![Vec::new(); 2],
             state_hash: SystemExecutionState {
@@ -2730,6 +2738,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
@@ -2759,6 +2768,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![]],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![vec![Event {
                 stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                 index: 1,
@@ -2853,6 +2863,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
@@ -2871,7 +2882,7 @@ where
         ),
     ));
     // Have the admin chain create a new epoch and retire the old one immediately.
-    let committees3 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
+    let committees1 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
     storage.write_blob(&committee_blob).await?;
@@ -2880,6 +2891,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![]; 2],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![
                 vec![Event {
                     stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
@@ -2894,7 +2906,7 @@ where
             ],
             blobs: vec![Vec::new(); 2],
             state_hash: SystemExecutionState {
-                committees: committees3.clone(),
+                committees: committees1.clone(),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
                 epoch: Epoch::from(1),
                 ..env.system_execution_state(&admin_id)
@@ -2950,10 +2962,11 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
-                committees: committees3.clone(),
+                committees: committees1.clone(),
                 balance: Amount::ONE,
                 used_blobs: BTreeSet::from([committee_blob.id()]),
                 epoch: Epoch::from(1),
@@ -2965,7 +2978,7 @@ where
             operation_results: vec![],
         }
         .with(
-            make_child_block(&certificate1.into_value())
+            make_child_block(&certificate1.clone().into_value())
                 .with_epoch(1)
                 .with_incoming_bundle(IncomingBundle {
                     origin: user_id,
@@ -3008,6 +3021,53 @@ where
         assert!(admin_chain.is_active());
         admin_chain.validate_incoming_bundles().await?;
     }
+
+    // Let's make a certificate for a block creating another epoch.
+    // This one should contain previous_event_blocks.
+    let committees3 = BTreeMap::from_iter([
+        (Epoch::from(1), committee.clone()),
+        (Epoch::from(2), committee.clone()),
+    ]);
+    let certificate3 = env.make_certificate(ConfirmedBlock::new(
+        BlockExecutionOutcome {
+            messages: vec![Vec::new()],
+            previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::from([(
+                StreamId::system(NEW_EPOCH_STREAM_NAME),
+                (certificate1.hash(), BlockHeight(0)),
+            )]),
+            events: vec![vec![Event {
+                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                index: 2,
+                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+            }]],
+            blobs: vec![Vec::new()],
+            state_hash: SystemExecutionState {
+                committees: committees3.clone(),
+                balance: Amount::ONE,
+                used_blobs: BTreeSet::from([committee_blob.id()]),
+                epoch: Epoch::from(2),
+                ..env.system_execution_state(&admin_id)
+            }
+            .into_hash()
+            .await,
+            oracle_responses: vec![Vec::new()],
+            operation_results: vec![OperationResult::default()],
+        }
+        .with(
+            make_child_block(&certificate2.into_value())
+                .with_epoch(1)
+                .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+                    epoch: Epoch::from(2),
+                    blob_hash,
+                })),
+        ),
+    ));
+
+    env.worker()
+        .fully_handle_certificate_with_notifications(certificate3, &())
+        .await?;
+
     Ok(())
 }
 
@@ -4045,6 +4105,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![]],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![vec![]],
             blobs: vec![vec![]],
             state_hash: state.crypto_hash_mut().await?,

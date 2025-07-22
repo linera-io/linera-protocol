@@ -9,7 +9,7 @@ use linera_base::prometheus_util::MeasureLatency;
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Timestamp},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId, MessageId},
+    identifiers::{AccountOwner, BlobId, ChainId, MessageId, StreamId},
 };
 use linera_execution::{
     ExecutionRuntimeContext, ExecutionStateView, MessageContext, OperationContext, OutgoingMessage,
@@ -348,6 +348,15 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .iter()
             .flatten()
             .map(|msg| msg.destination)
+            .collect()
+    }
+
+    /// Returns stream ids for events published in the block.
+    pub fn event_streams(&self) -> BTreeSet<StreamId> {
+        self.events
+            .iter()
+            .flatten()
+            .map(|event| event.stream_id.clone())
             .collect()
     }
 

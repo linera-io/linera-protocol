@@ -13,7 +13,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{Blob, BlockHeight, Epoch, Event, OracleResponse, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
 };
 use linera_execution::{BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
@@ -259,6 +259,9 @@ impl<'de> Deserialize<'de> for Block {
         let previous_message_blocks_hash = CryptoHash::new(&PreviousMessageBlocksMap {
             inner: Cow::Borrowed(&inner.body.previous_message_blocks),
         });
+        let previous_event_blocks_hash = CryptoHash::new(&PreviousEventBlocksMap {
+            inner: Cow::Borrowed(&inner.body.previous_event_blocks),
+        });
         let operations_hash = hashing::hash_vec(&inner.body.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&inner.body.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&inner.body.events);
@@ -277,6 +280,7 @@ impl<'de> Deserialize<'de> for Block {
             operations_hash,
             messages_hash,
             previous_message_blocks_hash,
+            previous_event_blocks_hash,
             oracle_responses_hash,
             events_hash,
             blobs_hash,
@@ -324,6 +328,8 @@ pub struct BlockHeader {
     pub messages_hash: CryptoHash,
     /// Cryptographic hash of the lookup table for previous sending blocks.
     pub previous_message_blocks_hash: CryptoHash,
+    /// Cryptographic hash of the lookup table for previous blocks publishing events.
+    pub previous_event_blocks_hash: CryptoHash,
     /// Cryptographic hash of all the oracle responses in the block.
     pub oracle_responses_hash: CryptoHash,
     /// Cryptographic hash of all the events in the block.
@@ -344,8 +350,10 @@ pub struct BlockBody {
     pub operations: Vec<Operation>,
     /// The list of outgoing messages for each transaction.
     pub messages: Vec<Vec<OutgoingMessage>>,
-    /// The hashes of previous blocks that sent messages to the same recipients.
+    /// The hashes and heights of previous blocks that sent messages to the same recipients.
     pub previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
+    /// The hashes and heights of previous blocks that published events to the same channels.
+    pub previous_event_blocks: BTreeMap<StreamId, (CryptoHash, BlockHeight)>,
     /// The record of oracle responses for each transaction.
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
@@ -362,6 +370,9 @@ impl Block {
         let messages_hash = hashing::hash_vec_vec(&outcome.messages);
         let previous_message_blocks_hash = CryptoHash::new(&PreviousMessageBlocksMap {
             inner: Cow::Borrowed(&outcome.previous_message_blocks),
+        });
+        let previous_event_blocks_hash = CryptoHash::new(&PreviousEventBlocksMap {
+            inner: Cow::Borrowed(&outcome.previous_event_blocks),
         });
         let operations_hash = hashing::hash_vec(&block.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&outcome.oracle_responses);
@@ -381,6 +392,7 @@ impl Block {
             operations_hash,
             messages_hash,
             previous_message_blocks_hash,
+            previous_event_blocks_hash,
             oracle_responses_hash,
             events_hash,
             blobs_hash,
@@ -392,6 +404,7 @@ impl Block {
             operations: block.operations,
             messages: outcome.messages,
             previous_message_blocks: outcome.previous_message_blocks,
+            previous_event_blocks: outcome.previous_event_blocks,
             oracle_responses: outcome.oracle_responses,
             events: outcome.events,
             blobs: outcome.blobs,
@@ -565,6 +578,7 @@ impl Block {
             state_hash: self.header.state_hash,
             messages: self.body.messages,
             previous_message_blocks: self.body.previous_message_blocks,
+            previous_event_blocks: self.body.previous_event_blocks,
             oracle_responses: self.body.oracle_responses,
             events: self.body.events,
             blobs: self.body.blobs,
@@ -590,6 +604,13 @@ pub struct PreviousMessageBlocksMap<'a> {
 }
 
 impl<'de> BcsHashable<'de> for PreviousMessageBlocksMap<'de> {}
+
+#[derive(Serialize, Deserialize)]
+pub struct PreviousEventBlocksMap<'a> {
+    inner: Cow<'a, BTreeMap<StreamId, (CryptoHash, BlockHeight)>>,
+}
+
+impl<'de> BcsHashable<'de> for PreviousEventBlocksMap<'de> {}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "BlockHeader")]
