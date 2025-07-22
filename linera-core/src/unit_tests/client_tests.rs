@@ -49,6 +49,7 @@ use crate::{
         BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, MessageAction,
         MessagePolicy,
     },
+    data_types::ClientOutcomeResultExt as _,
     local_node::LocalNodeError,
     node::{
         NodeError::{self, ClientIoError},
@@ -111,8 +112,7 @@ where
                 Account::chain(chain_2.chain_id()),
             )
             .await
-            .unwrap()
-            .unwrap();
+            .unwrap_ok_committed();
         assert_eq!(
             sender.chain_info().await?.next_block_height,
             BlockHeight::from(1)
@@ -166,8 +166,7 @@ where
             Account::new(receiver_id, owner),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let cert = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -175,8 +174,7 @@ where
             Account::new(receiver_id, friend),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert_eq!(
         sender.local_balance().await.unwrap(),
         Amount::from_millis(900)
@@ -229,8 +227,7 @@ where
             Amount::from_tokens(2),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -280,8 +277,7 @@ where
     let certificate = sender
         .rotate_key_pair(new_public_key)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     sender.set_preferred_owner(new_owner);
     assert_eq!(
         sender.chain_info().await?.next_block_height,
@@ -375,8 +371,7 @@ where
     let certificate = sender
         .share_ownership(new_owner, 100)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert_eq!(
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
@@ -456,8 +451,7 @@ where
     client
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ONE);
 
     // The other client doesn't know the new round number yet:
@@ -469,8 +463,7 @@ where
     sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     // That's it, we spent all our money on this test!
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
@@ -504,8 +497,7 @@ where
             Amount::ZERO,
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let new_id = new_description.id();
 
     assert_eq!(
@@ -580,8 +572,7 @@ where
             Amount::ZERO,
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let new_id2 = new_description2.id();
     assert_eq!(new_id, new_id2);
     assert_eq!(
@@ -622,8 +613,7 @@ where
             Account::chain(new_id),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     client
         .receive_certificate_and_update_validators(certificate2)
         .await
@@ -661,8 +651,7 @@ where
     let (new_description, creation_certificate) = sender
         .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let new_id = new_description.id();
     // Transfer after creating the chain.
     let transfer_certificate = sender
@@ -672,8 +661,7 @@ where
             Account::chain(new_id),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert_eq!(
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(2)
@@ -769,8 +757,7 @@ where
             Account::chain(client1.chain_id()),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].block();
@@ -885,8 +872,7 @@ where
             Account::chain(client2.chain_id),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     assert_eq!(
         client1.chain_info().await?.next_block_height,
@@ -990,8 +976,7 @@ where
             Account::chain(client2.chain_id),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     // Transfer was executed locally.
     assert_eq!(
         client1.local_balance().await.unwrap(),
@@ -1072,8 +1057,7 @@ where
     assert!(client2
         .process_pending_block()
         .await
-        .unwrap()
-        .unwrap()
+        .unwrap_ok_committed()
         .is_none());
     // Retrying the whole command works after synchronization.
     client2.synchronize_from_validators().await.unwrap();
@@ -1084,8 +1068,7 @@ where
             Account::chain(client3.chain_id),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     // Blocks were executed locally.
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
     assert_eq!(
@@ -1170,8 +1153,7 @@ where
             Account::chain(user.chain_id()),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     admin
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -1179,8 +1161,7 @@ where
             Account::chain(user.chain_id()),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
@@ -1215,8 +1196,7 @@ where
             Account::chain(admin.chain_id()),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     admin
         .receive_certificate_and_update_validators(cert)
         .await
@@ -1231,8 +1211,7 @@ where
             Account::chain(admin.chain_id()),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     admin
         .receive_certificate_and_update_validators(cert)
         .await
@@ -1308,13 +1287,11 @@ where
             Account::chain(receiver_id),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let cert1 = sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let cert2 = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -1322,8 +1299,7 @@ where
             Account::chain(receiver_id),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     receiver.synchronize_from_validators().await?;
     receiver.process_inbox().await?;
@@ -1421,8 +1397,7 @@ where
     let publish_certificate = client_1a
         .publish_data_blob(blob0_bytes)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert!(publish_certificate
         .block()
         .requires_or_creates_blob(&blob0_id));
@@ -1515,8 +1490,7 @@ where
     let bt_certificate = client_2b
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     let certificate_values = client_2b
         .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
@@ -1595,8 +1569,7 @@ where
     let publish_certificate = client1
         .publish_data_blob(blob0_bytes)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert!(publish_certificate
         .block()
         .requires_or_creates_blob(&blob0_id));
@@ -1648,8 +1621,7 @@ where
     let bt_certificate = client2_b
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     let certificate_values = client2_b
         .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
@@ -1820,8 +1792,7 @@ where
     let publish_certificate0 = client1
         .publish_data_blob(blob0_bytes)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert!(publish_certificate0
         .block()
         .requires_or_creates_blob(&blob0_id));
@@ -1834,8 +1805,7 @@ where
     let publish_certificate2 = client2
         .publish_data_blob(blob2_bytes)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert!(publish_certificate2
         .block()
         .requires_or_creates_blob(&blob2_id));
@@ -1978,8 +1948,7 @@ where
     let bt_certificate = client3_c
         .publish_data_blob(blob4_data)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     let certificate_values = client3_c
         .read_confirmed_blocks_downward(bt_certificate.hash(), 3)
@@ -2127,8 +2096,7 @@ where
             Recipient::chain(observer_id),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert_eq!(
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -2539,8 +2507,7 @@ where
     let cert = sender
         .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert_eq!(
         sender.local_balance().await.unwrap(),
         Amount::from_tokens(3)
@@ -2617,8 +2584,7 @@ where
     let certificate = client1
         .publish_data_blob(blob_bytes)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert_eq!(certificate.round, Round::Fast);
 
     // Send a message from chain 2 to chain 3.
@@ -2629,8 +2595,7 @@ where
             Recipient::chain(chain_id3),
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     client3.synchronize_from_validators().await.unwrap();
     assert_eq!(certificate.round, Round::Fast);
 
@@ -2641,8 +2606,7 @@ where
     let certificate = client3
         .execute_operation(SystemOperation::VerifyBlob { blob_id })
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     // This read a new blob, so it cannot be a fast block.
     assert_eq!(certificate.round, Round::MultiLeader(0));
     let block = certificate.block();
@@ -2704,8 +2668,7 @@ where
     client
         .publish_data_blob(bytes.to_vec())
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     expected_balance = expected_balance
         - policy.blob_published
         - policy.blob_byte_published * (blob.bytes().len() as u128);

@@ -332,7 +332,7 @@ impl<T> ClientOutcome<T> {
     pub fn unwrap(self) -> T {
         match self {
             ClientOutcome::Committed(t) => t,
-            ClientOutcome::WaitForTimeout(_) => panic!(),
+            ClientOutcome::WaitForTimeout(timeout) => panic!("Unexpected timeout: {timeout:?}"),
         }
     }
 
@@ -361,5 +361,17 @@ impl<T> ClientOutcome<T> {
             ClientOutcome::Committed(t) => Ok(ClientOutcome::Committed(f(t)?)),
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
         }
+    }
+}
+
+#[cfg(with_testing)]
+pub trait ClientOutcomeResultExt<T, E> {
+    fn unwrap_ok_committed(self) -> T;
+}
+
+#[cfg(with_testing)]
+impl<T, E: std::fmt::Debug> ClientOutcomeResultExt<T, E> for Result<ClientOutcome<T>, E> {
+    fn unwrap_ok_committed(self) -> T {
+        self.unwrap().unwrap()
     }
 }

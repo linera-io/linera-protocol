@@ -48,6 +48,7 @@ use crate::{
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
         ChainClientError,
     },
+    data_types::ClientOutcomeResultExt as _,
     local_node::LocalNodeError,
     test_utils::FaultType,
     worker::WorkerError,
@@ -124,8 +125,7 @@ where
     let (module_id, _cert) = publisher
         .publish_module(contract_bytecode, service_bytecode, vm_runtime)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
 
     creator.synchronize_from_validators().await.unwrap();
@@ -139,8 +139,7 @@ where
     let (application_id, _) = creator
         .create_application(module_id, &(), &initial_value, vec![])
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     let increment = 5_u64;
     creator
@@ -311,8 +310,7 @@ where
                 vm_runtime,
             )
             .await
-            .unwrap()
-            .unwrap()
+            .unwrap_ok_committed()
     };
     let module_id1 = module_id1.with_abi::<counter::CounterAbi, (), u64>();
     let (module_id2, _cert2) = {
@@ -325,8 +323,7 @@ where
                 vm_runtime,
             )
             .await
-            .unwrap()
-            .unwrap()
+            .unwrap_ok_committed()
     };
     let module_id2 =
         module_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
@@ -337,8 +334,7 @@ where
     let (application_id1, _) = creator
         .create_application(module_id1, &(), &initial_value, vec![])
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let (application_id2, certificate) = creator
         .create_application(
             module_id2,
@@ -347,8 +343,7 @@ where
             vec![application_id1.forget_abi()],
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     assert_eq!(
         certificate.block().body.events,
         vec![vec![Event {
@@ -366,8 +361,7 @@ where
     let cert = creator
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let block = cert.block();
     let responses = &block.body.oracle_responses;
     let [_, responses] = &responses[..] else {
@@ -407,8 +401,7 @@ where
     let cert = creator
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -434,8 +427,7 @@ where
     let cert = creator
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -556,8 +548,7 @@ where
                 vm_runtime,
             )
             .await
-            .unwrap()
-            .unwrap()
+            .unwrap_ok_committed()
     };
     let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
@@ -571,8 +562,7 @@ where
     let (application_id, _cert) = sender
         .create_application(module_id, &params, &state, vec![])
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     // Make a transfer using the fungible app.
     let transfer = FungibleOperation::Transfer {
@@ -586,8 +576,7 @@ where
     let cert = sender
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     receiver.synchronize_from_validators().await.unwrap();
     {
@@ -625,8 +614,7 @@ where
     let cert = sender
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -667,8 +655,7 @@ where
     let certificate = receiver
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     receiver2
         .receive_certificate_and_update_validators(certificate)
@@ -745,16 +732,14 @@ where
                 vm_runtime,
             )
             .await
-            .unwrap()
-            .unwrap()
+            .unwrap_ok_committed()
     };
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
 
     let (application_id, _cert) = receiver
         .create_application(module_id, &(), &(), vec![])
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     // Request to subscribe to the sender.
     let request_subscribe = social::Operation::Subscribe {
@@ -763,8 +748,7 @@ where
     receiver
         .execute_operation(Operation::user(application_id, &request_subscribe)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     // Make a post.
     let text = "Please like and comment!".to_string();
@@ -775,8 +759,7 @@ where
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     receiver
         .receive_certificate_and_update_validators(cert.clone())
@@ -831,8 +814,7 @@ where
     let cert = receiver
         .execute_operation(Operation::user(application_id, &request_unsubscribe)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     // Unsubscribe the receiver.
     sender.synchronize_from_validators().await.unwrap();
@@ -850,8 +832,7 @@ where
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     // The post will not be received by the unsubscribed chain.
     receiver
@@ -916,8 +897,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
             vm_runtime,
         )
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
     let mut blobs = publisher
         .storage_client()
@@ -939,15 +919,13 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
     let (application_id, _) = publisher
         .create_application(module_id, &(), &initial_value, vec![])
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     let increment = 5_u64;
     publisher
         .execute_operation(Operation::user(application_id, &increment)?)
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap_ok_committed();
 
     assert!(publisher
         .execute_operations(
