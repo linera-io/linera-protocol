@@ -5,7 +5,7 @@
 
 mod state;
 
-use fungible::{Account, FungibleTokenAbi};
+use fungible::{Account, FungibleOperation, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{
         AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership, TimeoutConfig,
@@ -138,7 +138,7 @@ impl Contract for RfqContract {
 
                 // transfer tokens to the new chain
                 let token_pair = awaiting_tokens.token_pair;
-                let transfer = fungible::Operation::Transfer {
+                let transfer = FungibleOperation::Transfer {
                     owner,
                     amount: awaiting_tokens.amount_offered,
                     target_account: Account {
@@ -264,7 +264,7 @@ impl Contract for RfqContract {
                         self.runtime.call_application(
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
-                            &fungible::Operation::Transfer {
+                            &FungibleOperation::Transfer {
                                 owner,
                                 amount: tokens.amount,
                                 target_account: tokens.owner,
@@ -278,7 +278,7 @@ impl Contract for RfqContract {
                         self.runtime.call_application(
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
-                            &fungible::Operation::Transfer {
+                            &FungibleOperation::Transfer {
                                 owner,
                                 amount: tokens.amount,
                                 target_account: held_tokens.owner,
@@ -289,7 +289,7 @@ impl Contract for RfqContract {
                             held_tokens
                                 .token_id
                                 .with_abi::<fungible::FungibleTokenAbi>(),
-                            &fungible::Operation::Transfer {
+                            &FungibleOperation::Transfer {
                                 owner,
                                 amount: held_tokens.amount,
                                 target_account: tokens.owner,
@@ -337,7 +337,7 @@ impl RfqContract {
         let temp_chain_id = self.runtime.open_chain(ownership, permissions, fee_budget);
 
         // transfer tokens to the new chain
-        let transfer = fungible::Operation::Transfer {
+        let transfer = FungibleOperation::Transfer {
             owner,
             amount: quote_provided.get_amount(),
             target_account: Account {
@@ -380,7 +380,7 @@ impl RfqContract {
             self.runtime.call_application(
                 true,
                 tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
-                &fungible::Operation::Transfer {
+                &FungibleOperation::Transfer {
                     owner,
                     amount: tokens.amount,
                     target_account: tokens.owner,

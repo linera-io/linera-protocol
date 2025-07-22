@@ -191,7 +191,7 @@ impl MatchingEngineContract {
         target_account: Account,
         token_idx: u32,
     ) {
-        let transfer = fungible::Operation::Transfer {
+        let transfer = fungible::FungibleOperation::Transfer {
             owner,
             amount,
             target_account,

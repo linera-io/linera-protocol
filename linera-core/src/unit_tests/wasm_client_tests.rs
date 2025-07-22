@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
+use fungible::{FungibleOperation, InitialState, Parameters};
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Amount, Bytecode, Event, OracleResponse},
@@ -557,16 +558,15 @@ where
             .unwrap()
             .unwrap()
     };
-    let module_id = module_id
-        .with_abi::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>();
+    let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
     let sender_owner = sender.preferred_owner.unwrap();
     let receiver_owner = receiver.preferred_owner.unwrap();
     let receiver2_owner = receiver2.preferred_owner.unwrap();
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
-    let state = fungible::InitialState { accounts };
-    let params = fungible::Parameters::new("FUN");
+    let state = InitialState { accounts };
+    let params = Parameters::new("FUN");
     let (application_id, _cert) = sender
         .create_application(module_id, &params, &state, vec![])
         .await
@@ -574,7 +574,7 @@ where
         .unwrap();
 
     // Make a transfer using the fungible app.
-    let transfer = fungible::Operation::Transfer {
+    let transfer = FungibleOperation::Transfer {
         owner: sender_owner,
         amount: 100.into(),
         target_account: fungible::Account {
@@ -613,7 +613,7 @@ where
         .any(|msg| matches!(msg.message, Message::User { .. })));
 
     // Make another transfer.
-    let transfer = fungible::Operation::Transfer {
+    let transfer = FungibleOperation::Transfer {
         owner: sender_owner,
         amount: 200.into(),
         target_account: fungible::Account {
@@ -640,7 +640,7 @@ where
         .any(|msg| matches!(msg.message, Message::User { .. })));
 
     // Try another transfer except that the amount is too large.
-    let transfer = fungible::Operation::Transfer {
+    let transfer = FungibleOperation::Transfer {
         owner: receiver_owner,
         amount: 301.into(),
         target_account: fungible::Account {
@@ -655,7 +655,7 @@ where
     receiver.clear_pending_proposal();
 
     // Try another transfer with the correct amount.
-    let transfer = fungible::Operation::Transfer {
+    let transfer = FungibleOperation::Transfer {
         owner: receiver_owner,
         amount: 300.into(),
         target_account: fungible::Account {

@@ -6,8 +6,9 @@
 mod state;
 
 use amm::{AmmAbi, Message, Operation, Parameters};
-use fungible::{Account, FungibleTokenAbi};
+use fungible::Account;
 use linera_sdk::{
+    abis::fungible::{FungibleOperation, FungibleResponse, FungibleTokenAbi},
     linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -673,7 +674,7 @@ impl AmmContract {
         token_idx: u32,
     ) {
         let token = self.fungible_id(token_idx);
-        let operation = fungible::Operation::Transfer {
+        let operation = FungibleOperation::Transfer {
             owner: source_owner,
             amount,
             target_account,
@@ -683,10 +684,10 @@ impl AmmContract {
     }
 
     fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Amount {
-        let balance = fungible::Operation::Balance { owner: *owner };
+        let balance = FungibleOperation::Balance { owner: *owner };
         let token = self.fungible_id(token_idx);
         match self.runtime.call_application(true, token, &balance) {
-            fungible::FungibleResponse::Balance(balance) => balance,
+            FungibleResponse::Balance(balance) => balance,
             response => panic!("Unexpected response from fungible token application: {response:?}"),
         }
     }
