@@ -685,7 +685,7 @@ pub enum ClientCommand {
 
         /// The port on which to run the server
         #[arg(long, default_value = "8080")]
-        port: NonZeroU16,
+        port: u16,
 
         /// The port for prometheus to scrape.
         #[cfg(with_metrics)]
