@@ -202,7 +202,7 @@ revm-state = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
 rocksdb = "0.21.0"
-ruzstd = "0.7.1"
+ruzstd = "0.8.1"
 scylla = "1.1.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }

@@ -12,7 +12,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight,
+        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
         CompressedBytecode, OracleResponse,
     },
     http,
@@ -941,6 +941,118 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
         &mut controller,
     )
     .await?;
+
+    Ok(())
+}
+
+/// Tests creating multiple data blobs in a single transaction.
+#[test_log::test(tokio::test)]
+async fn test_create_multiple_data_blobs() -> anyhow::Result<()> {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    let mut view = SystemExecutionState::new(description).into_view().await;
+    let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
+
+    let test_data1 = b"First blob data";
+    let test_data2 = &[];
+    let expected_blob1 = Blob::new_data(test_data1.to_vec());
+    let expected_blob2 = Blob::new_data(test_data2.to_vec());
+    let expected_blob_id1 = expected_blob1.id();
+    let expected_blob_id2 = expected_blob2.id();
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _operation| {
+            let blob_id1 = runtime.create_data_blob(test_data1.to_vec()).unwrap();
+            let blob_id2 = runtime.create_data_blob(test_data2.to_vec()).unwrap();
+
+            assert_eq!(blob_id1, expected_blob_id1);
+            assert_eq!(blob_id2, expected_blob_id2);
+            assert_ne!(blob_id1, blob_id2); // Should be different blobs
+
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context(chain_id);
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    let mut tracker = TransactionTracker::new_replaying_blobs(blobs);
+    let result = view
+        .execute_operation(context, operation, &mut tracker, &mut controller)
+        .await;
+
+    assert!(result.is_ok());
+
+    // Verify both blobs were created and tracked
+    let created_blobs = tracker.created_blobs();
+    assert!(created_blobs.contains_key(&expected_blob_id1));
+    assert!(created_blobs.contains_key(&expected_blob_id2));
+
+    let created_blob1 = created_blobs.get(&expected_blob_id1).unwrap();
+    let created_blob2 = created_blobs.get(&expected_blob_id2).unwrap();
+    assert_eq!(created_blob1.bytes(), test_data1);
+    assert_eq!(created_blob2.bytes(), test_data2);
+
+    Ok(())
+}
+
+/// Tests that publish_module with different bytecode creates different modules.
+#[test_log::test(tokio::test)]
+async fn test_publish_module_different_bytecode() -> anyhow::Result<()> {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    let mut view = SystemExecutionState::new(description).into_view().await;
+    let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
+
+    let contract_bytes1 = b"contract bytecode 1".to_vec();
+    let service_bytes1 = b"service bytecode 1".to_vec();
+    let contract_bytes2 = b"contract bytecode 2".to_vec();
+    let service_bytes2 = b"service bytecode 2".to_vec();
+
+    let contract_bytecode1 = Bytecode::new(contract_bytes1);
+    let service_bytecode1 = Bytecode::new(service_bytes1);
+    let contract_bytecode2 = Bytecode::new(contract_bytes2);
+    let service_bytecode2 = Bytecode::new(service_bytes2);
+    let vm_runtime = VmRuntime::Wasm;
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _operation| {
+            let module_id1 = runtime
+                .publish_module(contract_bytecode1, service_bytecode1, vm_runtime)
+                .unwrap();
+            let module_id2 = runtime
+                .publish_module(contract_bytecode2, service_bytecode2, vm_runtime)
+                .unwrap();
+
+            // Different bytecode should produce different module IDs
+            assert_ne!(module_id1, module_id2);
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context(chain_id);
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    let mut tracker = TransactionTracker::new_replaying_blobs(blobs);
+    let result = view
+        .execute_operation(context, operation, &mut tracker, &mut controller)
+        .await;
+
+    assert!(result.is_ok());
+
+    // Should have created 4 blobs total (2 contract + 2 service for WASM)
+    let created_blobs = tracker.created_blobs();
+    assert_eq!(created_blobs.len(), 4);
 
     Ok(())
 }

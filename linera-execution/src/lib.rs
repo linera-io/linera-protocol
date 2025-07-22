@@ -36,7 +36,8 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate, Timestamp,
+        Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
+        Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -818,6 +819,17 @@ pub trait ContractRuntime: BaseRuntime {
         argument: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, ExecutionError>;
+
+    /// Creates a new data blob and returns its ID.
+    fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<BlobId, ExecutionError>;
+
+    /// Publishes a module with contract and service bytecode and returns the module ID.
+    fn publish_module(
+        &mut self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+    ) -> Result<ModuleId, ExecutionError>;
 
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;

@@ -5,9 +5,11 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, BlockHeight, Bytecode, SendMessageRequest, Timestamp,
+    },
     http,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, StreamName},
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, MessageId, StreamName},
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
     vm::VmRuntime,
 };
@@ -528,6 +530,29 @@ where
             .user_data_mut()
             .runtime
             .create_application(module_id, parameters, argument, required_application_ids)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Creates a new data blob and returns its ID.
+    fn create_data_blob(caller: &mut Caller, bytes: Vec<u8>) -> Result<BlobId, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .create_data_blob(bytes)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Publishes a module with contract and service bytecode and returns the module ID.
+    fn publish_module(
+        caller: &mut Caller,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+    ) -> Result<ModuleId, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .publish_module(contract, service, vm_runtime)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
