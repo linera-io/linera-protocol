@@ -22,7 +22,7 @@ use linera_execution::{
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     context::ViewContext,
-    store::{AdminKeyValueStore, KeyIterable as _, KeyValueStore},
+    store::{AdminKeyValueStore, KeyValueStore},
     views::View,
     ViewError,
 };
@@ -837,9 +837,8 @@ where
         prefix.extend(bcs::to_bytes(stream_id).unwrap());
         let mut keys = Vec::new();
         let mut indices = Vec::new();
-        for short_key in self.store.find_keys_by_prefix(&prefix).await?.iterator() {
-            let short_key = short_key?;
-            let index = bcs::from_bytes::<u32>(short_key)?;
+        for short_key in self.store.find_keys_by_prefix(&prefix).await? {
+            let index = bcs::from_bytes::<u32>(&short_key)?;
             if index >= start_index {
                 let mut key = prefix.clone();
                 key.extend(short_key);
@@ -1001,8 +1000,7 @@ where
         let prefix = &[INDEX_BLOB_ID];
         let keys = store.find_keys_by_prefix(prefix).await?;
         let mut blob_ids = Vec::new();
-        for key in keys.iterator() {
-            let key = key?;
+        for key in keys {
             let key_red = &key[..BLOB_ID_LENGTH];
             let blob_id = bcs::from_bytes(key_red)?;
             blob_ids.push(blob_id);
