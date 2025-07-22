@@ -94,139 +94,139 @@ impl KeyValueStoreMetrics {
         let var_name = name.replace(' ', "_");
         let title_name = name.to_case(Case::Snake);
 
-        let entry1 = format!("{}_read_value_bytes_latency", var_name);
-        let entry2 = format!("{} read value bytes latency", title_name);
+        let entry1 = format!("{var_name}_read_value_bytes_latency");
+        let entry2 = format!("{title_name} read value bytes latency");
         let read_value_bytes_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_contains_key_latency", var_name);
-        let entry2 = format!("{} contains key latency", title_name);
+        let entry1 = format!("{var_name}_contains_key_latency");
+        let entry2 = format!("{title_name} contains key latency");
         let contains_key_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_contains_keys_latency", var_name);
-        let entry2 = format!("{} contains keys latency", title_name);
+        let entry1 = format!("{var_name}_contains_keys_latency");
+        let entry2 = format!("{title_name} contains keys latency");
         let contains_keys_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_read_multi_value_bytes_latency", var_name);
-        let entry2 = format!("{} read multi value bytes latency", title_name);
+        let entry1 = format!("{var_name}_read_multi_value_bytes_latency");
+        let entry2 = format!("{title_name} read multi value bytes latency");
         let read_multi_values_bytes_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_find_keys_by_prefix_latency", var_name);
-        let entry2 = format!("{} find keys by prefix latency", title_name);
+        let entry1 = format!("{var_name}_find_keys_by_prefix_latency");
+        let entry2 = format!("{title_name} find keys by prefix latency");
         let find_keys_by_prefix_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_find_key_values_by_prefix_latency", var_name);
-        let entry2 = format!("{} find key values by prefix latency", title_name);
+        let entry1 = format!("{var_name}_find_key_values_by_prefix_latency");
+        let entry2 = format!("{title_name} find key values by prefix latency");
         let find_key_values_by_prefix_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_write_batch_latency", var_name);
-        let entry2 = format!("{} write batch latency", title_name);
+        let entry1 = format!("{var_name}_write_batch_latency");
+        let entry2 = format!("{title_name} write batch latency");
         let write_batch_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_clear_journal_latency", var_name);
-        let entry2 = format!("{} clear journal latency", title_name);
+        let entry1 = format!("{var_name}_clear_journal_latency");
+        let entry2 = format!("{title_name} clear journal latency");
         let clear_journal_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_connect_latency", var_name);
-        let entry2 = format!("{} connect latency", title_name);
+        let entry1 = format!("{var_name}_connect_latency");
+        let entry2 = format!("{title_name} connect latency");
         let connect_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_open_exclusive_latency", var_name);
-        let entry2 = format!("{} clone with root key latency", title_name);
+        let entry1 = format!("{var_name}_open_exclusive_latency");
+        let entry2 = format!("{title_name} clone with root key latency");
         let open_exclusive_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_list_all_latency", var_name);
-        let entry2 = format!("{} list all latency", title_name);
+        let entry1 = format!("{var_name}_list_all_latency");
+        let entry2 = format!("{title_name} list all latency");
         let list_all_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_list_root_keys_latency", var_name);
-        let entry2 = format!("{} list root keys latency", title_name);
+        let entry1 = format!("{var_name}_list_root_keys_latency");
+        let entry2 = format!("{title_name} list root keys latency");
         let list_root_keys_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_delete_all_latency", var_name);
-        let entry2 = format!("{} delete all latency", title_name);
+        let entry1 = format!("{var_name}_delete_all_latency");
+        let entry2 = format!("{title_name} delete all latency");
         let delete_all_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_exists_latency", var_name);
-        let entry2 = format!("{} exists latency", title_name);
+        let entry1 = format!("{var_name}_exists_latency");
+        let entry2 = format!("{title_name} exists latency");
         let exists_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_create_latency", var_name);
-        let entry2 = format!("{} create latency", title_name);
+        let entry1 = format!("{var_name}_create_latency");
+        let entry2 = format!("{title_name} create latency");
         let create_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_delete_latency", var_name);
-        let entry2 = format!("{} delete latency", title_name);
+        let entry1 = format!("{var_name}_delete_latency");
+        let entry2 = format!("{title_name} delete latency");
         let delete_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_read_value_none_cases", var_name);
-        let entry2 = format!("{} read value none cases", title_name);
+        let entry1 = format!("{var_name}_read_value_none_cases");
+        let entry2 = format!("{title_name} read value none cases");
         let read_value_none_cases = register_int_counter_vec(&entry1, &entry2, &[]);
 
-        let entry1 = format!("{}_read_value_key_size", var_name);
-        let entry2 = format!("{} read value key size", title_name);
+        let entry1 = format!("{var_name}_read_value_key_size");
+        let entry2 = format!("{title_name} read value key size");
         let read_value_key_size = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_read_value_value_size", var_name);
-        let entry2 = format!("{} read value value size", title_name);
+        let entry1 = format!("{var_name}_read_value_value_size");
+        let entry2 = format!("{title_name} read value value size");
         let read_value_value_size = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_read_multi_values_num_entries", var_name);
-        let entry2 = format!("{} read multi values num entries", title_name);
+        let entry1 = format!("{var_name}_read_multi_values_num_entries");
+        let entry2 = format!("{title_name} read multi values num entries");
         let read_multi_values_num_entries = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_read_multi_values_key_sizes", var_name);
-        let entry2 = format!("{} read multi values key sizes", title_name);
+        let entry1 = format!("{var_name}_read_multi_values_key_sizes");
+        let entry2 = format!("{title_name} read multi values key sizes");
         let read_multi_values_key_sizes = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_contains_keys_num_entries", var_name);
-        let entry2 = format!("{} contains keys num entries", title_name);
+        let entry1 = format!("{var_name}_contains_keys_num_entries");
+        let entry2 = format!("{title_name} contains keys num entries");
         let contains_keys_num_entries = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_contains_keys_key_sizes", var_name);
-        let entry2 = format!("{} contains keys key sizes", title_name);
+        let entry1 = format!("{var_name}_contains_keys_key_sizes");
+        let entry2 = format!("{title_name} contains keys key sizes");
         let contains_keys_key_sizes = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_contains_key_key_size", var_name);
-        let entry2 = format!("{} contains key key size", title_name);
+        let entry1 = format!("{var_name}_contains_key_key_size");
+        let entry2 = format!("{title_name} contains key key size");
         let contains_key_key_size = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_find_keys_by_prefix_prefix_size", var_name);
-        let entry2 = format!("{} find keys by prefix prefix size", title_name);
+        let entry1 = format!("{var_name}_find_keys_by_prefix_prefix_size");
+        let entry2 = format!("{title_name} find keys by prefix prefix size");
         let find_keys_by_prefix_prefix_size = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_find_keys_by_prefix_num_keys", var_name);
-        let entry2 = format!("{} find keys by prefix num keys", title_name);
+        let entry1 = format!("{var_name}_find_keys_by_prefix_num_keys");
+        let entry2 = format!("{title_name} find keys by prefix num keys");
         let find_keys_by_prefix_num_keys = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_find_keys_by_prefix_keys_size", var_name);
-        let entry2 = format!("{} find keys by prefix keys size", title_name);
+        let entry1 = format!("{var_name}_find_keys_by_prefix_keys_size");
+        let entry2 = format!("{title_name} find keys by prefix keys size");
         let find_keys_by_prefix_keys_size = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_find_key_values_by_prefix_prefix_size", var_name);
-        let entry2 = format!("{} find key values by prefix prefix size", title_name);
+        let entry1 = format!("{var_name}_find_key_values_by_prefix_prefix_size");
+        let entry2 = format!("{title_name} find key values by prefix prefix size");
         let find_key_values_by_prefix_prefix_size =
             register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_find_key_values_by_prefix_num_keys", var_name);
-        let entry2 = format!("{} find key values by prefix num keys", title_name);
+        let entry1 = format!("{var_name}_find_key_values_by_prefix_num_keys");
+        let entry2 = format!("{title_name} find key values by prefix num keys");
         let find_key_values_by_prefix_num_keys =
             register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_find_key_values_by_prefix_key_values_size", var_name);
-        let entry2 = format!("{} find key values by prefix key values size", title_name);
+        let entry1 = format!("{var_name}_find_key_values_by_prefix_key_values_size");
+        let entry2 = format!("{title_name} find key values by prefix key values size");
         let find_key_values_by_prefix_key_values_size =
             register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_write_batch_size", var_name);
-        let entry2 = format!("{} write batch size", title_name);
+        let entry1 = format!("{var_name}_write_batch_size");
+        let entry2 = format!("{title_name} write batch size");
         let write_batch_size = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_list_all_sizes", var_name);
-        let entry2 = format!("{} list all sizes", title_name);
+        let entry1 = format!("{var_name}_list_all_sizes");
+        let entry2 = format!("{title_name} list all sizes");
         let list_all_sizes = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_exists_true_cases", var_name);
-        let entry2 = format!("{} exists true cases", title_name);
+        let entry1 = format!("{var_name}_exists_true_cases");
+        let entry2 = format!("{title_name} exists true cases");
         let exists_true_cases = register_int_counter_vec(&entry1, &entry2, &[]);
 
         KeyValueStoreMetrics {

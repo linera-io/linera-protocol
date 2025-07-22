@@ -58,7 +58,7 @@ where
 {
     type Output = AnyFuture::Output;
 
-    fn blocking_wait(mut self) -> Self::Output {
+    fn blocking_wait(self) -> Self::Output {
         let waker = task::noop_waker();
         let mut task_context = Context::from_waker(&waker);
         let mut future = pin!(self);

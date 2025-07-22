@@ -102,7 +102,7 @@ pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
 fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
     if ethereum_type == "address" {
         let address = Address::from_word(entry);
-        let address = format!("{:?}", address);
+        let address = format!("{address:?}");
         return Ok(EthereumDataType::Address(address));
     }
     if ethereum_type == "uint256" {

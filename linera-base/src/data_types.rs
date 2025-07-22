@@ -615,9 +615,9 @@ impl Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Round::Fast => write!(f, "fast round"),
-            Round::MultiLeader(r) => write!(f, "multi-leader round {}", r),
-            Round::SingleLeader(r) => write!(f, "single-leader round {}", r),
-            Round::Validator(r) => write!(f, "validator round {}", r),
+            Round::MultiLeader(r) => write!(f, "multi-leader round {r}"),
+            Round::SingleLeader(r) => write!(f, "single-leader round {r}"),
+            Round::Validator(r) => write!(f, "validator round {r}"),
         }
     }
 }

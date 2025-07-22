@@ -41,7 +41,7 @@ fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {
                 .iter()
                 .filter_map(|x| {
                     let name = x["name"].as_str().unwrap();
-                    forge_arg_type(&x["type"], false).map(|arg| format!("{}: {}", name, arg))
+                    forge_arg_type(&x["type"], false).map(|arg| format!("{name}: {arg}"))
                 })
                 .collect::<Vec<_>>();
             Some(format!("{{{}}}", args.join(", ")))
@@ -126,7 +126,7 @@ pub async fn query(app: JsValue, query: JsValue, kind: String) {
     let name = fetch_json["name"].as_str().unwrap();
     let args = fetch_json["args"].as_array().unwrap().to_vec();
     let args = forge_args(args);
-    let input = format!("{}{}", name, args);
+    let input = format!("{name}{args}");
     let response = forge_response(&fetch_json["type"]);
     let body =
         serde_json::json!({ "query": format!("{} {{{} {}}}", kind, input, response) }).to_string();

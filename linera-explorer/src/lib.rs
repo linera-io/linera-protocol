@@ -167,7 +167,7 @@ fn url(config: &Config, protocol: Protocol, kind: AddressKind) -> String {
         AddressKind::Node => &config.node,
         AddressKind::Indexer => &config.indexer,
     };
-    format!("{}{}://{}", protocol, tls, address)
+    format!("{protocol}{tls}://{address}")
 }
 
 async fn get_chain(node: &str, chain_id: ChainId) -> Result<Box<Chain>> {
@@ -214,7 +214,7 @@ async fn get_applications(node: &str, chain_id: ChainId) -> Result<Vec<Applicati
 
 async fn get_operations(indexer: &str, chain_id: ChainId) -> Result<Vec<Operations>> {
     let client = reqwest_client();
-    let operations_indexer = format!("{}/operations", indexer);
+    let operations_indexer = format!("{indexer}/operations");
     let variables = operations::Variables {
         from: OperationsKeyKind::Last(chain_id),
         limit: None,
@@ -242,7 +242,7 @@ async fn home(node: &str, chain_id: ChainId) -> Result<(Page, String)> {
             blocks,
             apps,
         },
-        format!("/?chain={}", chain_id),
+        format!("/?chain={chain_id}"),
     ))
 }
 
@@ -255,7 +255,7 @@ async fn blocks(
 ) -> Result<(Page, String)> {
     // TODO: limit is not used in the UI, it should be implemented with some path arguments and select input
     let blocks = get_blocks(node, chain_id, from, limit).await?;
-    Ok((Page::Blocks(blocks), format!("/blocks?chain={}", chain_id)))
+    Ok((Page::Blocks(blocks), format!("/blocks?chain={chain_id}")))
 }
 
 /// Returns the block page.
@@ -269,7 +269,7 @@ async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Resul
     let hash = block.hash;
     Ok((
         Page::Block(Box::new(block)),
-        format!("/block/{}?chain={}", hash, chain_id),
+        format!("/block/{hash}?chain={chain_id}"),
     ))
 }
 
@@ -307,7 +307,7 @@ async fn applications(node: &str, chain_id: ChainId) -> Result<(Page, String)> {
     let applications = get_applications(node, chain_id).await?;
     Ok((
         Page::Applications(applications),
-        format!("/applications?chain={}", chain_id),
+        format!("/applications?chain={chain_id}"),
     ))
 }
 
@@ -316,7 +316,7 @@ async fn operations(indexer: &str, chain_id: ChainId) -> Result<(Page, String)> 
     let operations = get_operations(indexer, chain_id).await?;
     Ok((
         Page::Operations(operations),
-        format!("/operations?chain={}", chain_id),
+        format!("/operations?chain={chain_id}"),
     ))
 }
 
@@ -327,7 +327,7 @@ async fn operation(
     chain_id: ChainId,
 ) -> Result<(Page, String)> {
     let client = reqwest_client();
-    let operations_indexer = format!("{}/operations", indexer);
+    let operations_indexer = format!("{indexer}/operations");
     let key = match key {
         Some(key) => OperationKeyKind::Key(key),
         None => OperationKeyKind::Last(chain_id),
@@ -469,7 +469,7 @@ async fn application(app: Application) -> Result<(Page, String)> {
 
 /// Returns the plugin page.
 async fn plugin(plugin: &str, indexer: &str) -> Result<(Page, String)> {
-    let link = format!("{}/{}", indexer, plugin);
+    let link = format!("{indexer}/{plugin}");
     let schema = graphql::introspection(&link).await?;
     let sch = &schema["data"]["__schema"];
     let types = sch["types"]
@@ -479,7 +479,7 @@ async fn plugin(plugin: &str, indexer: &str) -> Result<(Page, String)> {
     let queries =
         list_entrypoints(&types, &sch["queryType"]["name"]).unwrap_or(Value::Array(Vec::new()));
     let queries = fill_type(&queries, &types);
-    let pathname = format!("/plugin?plugin={}", plugin);
+    let pathname = format!("/plugin?plugin={plugin}");
     Ok((
         Page::Plugin {
             name: plugin.to_string(),
@@ -685,7 +685,7 @@ pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
 #[wasm_bindgen]
 pub fn short_crypto_hash(s: String) -> String {
     let hash = CryptoHash::from_str(&s).expect("not a crypto hash");
-    format!("{:?}", hash)
+    format!("{hash:?}")
 }
 
 #[wasm_bindgen]
@@ -705,12 +705,10 @@ fn set_onpopstate(app: JsValue) {
 
 /// Subscribes to notifications for one chain
 async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
-    let (ws, mut wsio) = WsMeta::connect(
-        &format!("{}/ws", address),
-        Some(vec!["graphql-transport-ws"]),
-    )
-    .await
-    .expect("cannot connect to websocket");
+    let (ws, mut wsio) =
+        WsMeta::connect(&format!("{address}/ws"), Some(vec!["graphql-transport-ws"]))
+            .await
+            .expect("cannot connect to websocket");
     wsio.send(WsMessage::Text(
         "{\"type\": \"connection_init\", \"payload\": {}}".to_string(),
     ))
@@ -718,13 +716,9 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
     .expect("cannot send to websocket");
     wsio.next().await;
     let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, b"linera.dev");
-    let payload_query = format!(
-        r#"subscription {{ notifications(chainId: \"{}\") }}"#,
-        chain
-    );
+    let payload_query = format!(r#"subscription {{ notifications(chainId: \"{chain}\") }}"#);
     let query = format!(
-        r#"{{ "id": "{}", "type": "subscribe", "payload": {{"query": "{}"}} }}"#,
-        uuid, payload_query
+        r#"{{ "id": "{uuid}", "type": "subscribe", "payload": {{"query": "{payload_query}"}} }}"#
     );
     wsio.send(WsMessage::Text(query))
         .await
@@ -807,7 +801,7 @@ pub async fn start(app: JsValue) {
                         Some("block".to_string())
                     }
                     (_, Some(app_id)) => {
-                        let link = format!("{}/applications/{}", address, app_id);
+                        let link = format!("{address}/applications/{app_id}");
                         let app =
                             serde_json::json!({"id": app_id, "link": link, "description": ""})
                                 .to_string();

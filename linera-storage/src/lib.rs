@@ -187,7 +187,7 @@ pub trait Storage: Sized {
             let committee_blob = self
                 .read_blob(blob_id)
                 .await?
-                .ok_or_else(|| ViewError::NotFound(format!("blob {}", blob_id)))?;
+                .ok_or_else(|| ViewError::NotFound(format!("blob {blob_id}")))?;
             Ok(bcs::from_bytes(committee_blob.bytes())?)
         };
 

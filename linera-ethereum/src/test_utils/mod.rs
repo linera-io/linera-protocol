@@ -94,7 +94,7 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
 impl AnvilTest {
     pub fn get_address(&self, index: usize) -> String {
         let address = self.anvil_instance.addresses()[index];
-        format!("{:?}", address)
+        format!("{address:?}")
     }
 }
 
@@ -111,7 +111,7 @@ impl SimpleTokenContractFunction {
             SimpleTokenContract::deploy(&anvil_test.ethereum_client.provider, initial_supply)
                 .await?;
         let contract_address = simple_token.address();
-        let contract_address = format!("{:?}", contract_address);
+        let contract_address = format!("{contract_address:?}");
         Ok(Self {
             contract_address,
             anvil_test,
@@ -173,7 +173,7 @@ impl EventNumericsContractFunction {
                 .await?;
         // Getting the contract address
         let contract_address = event_numerics.address();
-        let contract_address = format!("{:?}", contract_address);
+        let contract_address = format!("{contract_address:?}");
         Ok(Self {
             contract_address,
             anvil_test,

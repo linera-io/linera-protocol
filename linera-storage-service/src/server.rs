@@ -70,12 +70,12 @@ impl ServiceStoreServer {
             ServiceStoreServerInternal::Memory(store) => store
                 .read_value_bytes(key)
                 .await
-                .map_err(|e| Status::unknown(format!("Memory error {:?} at read_value_bytes", e))),
+                .map_err(|e| Status::unknown(format!("Memory error {e:?} at read_value_bytes"))),
             #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .read_value_bytes(key)
                 .await
-                .map_err(|e| Status::unknown(format!("RocksDB error {:?} at read_value_bytes", e))),
+                .map_err(|e| Status::unknown(format!("RocksDB error {e:?} at read_value_bytes"))),
         }
     }
 
@@ -84,12 +84,12 @@ impl ServiceStoreServer {
             ServiceStoreServerInternal::Memory(store) => store
                 .contains_key(key)
                 .await
-                .map_err(|e| Status::unknown(format!("Memory error {:?} at contains_key", e))),
+                .map_err(|e| Status::unknown(format!("Memory error {e:?} at contains_key"))),
             #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .contains_key(key)
                 .await
-                .map_err(|e| Status::unknown(format!("RocksDB error {:?} at contains_key", e))),
+                .map_err(|e| Status::unknown(format!("RocksDB error {e:?} at contains_key"))),
         }
     }
 
@@ -98,12 +98,12 @@ impl ServiceStoreServer {
             ServiceStoreServerInternal::Memory(store) => store
                 .contains_keys(keys)
                 .await
-                .map_err(|e| Status::unknown(format!("Memory error {:?} at contains_keys", e))),
+                .map_err(|e| Status::unknown(format!("Memory error {e:?} at contains_keys"))),
             #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .contains_keys(keys)
                 .await
-                .map_err(|e| Status::unknown(format!("RocksDB error {:?} at contains_keys", e))),
+                .map_err(|e| Status::unknown(format!("RocksDB error {e:?} at contains_keys"))),
         }
     }
 
@@ -114,13 +114,13 @@ impl ServiceStoreServer {
         match &self.store {
             ServiceStoreServerInternal::Memory(store) => {
                 store.read_multi_values_bytes(keys).await.map_err(|e| {
-                    Status::unknown(format!("Memory error {:?} at read_multi_values_bytes", e))
+                    Status::unknown(format!("Memory error {e:?} at read_multi_values_bytes"))
                 })
             }
             #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => {
                 store.read_multi_values_bytes(keys).await.map_err(|e| {
-                    Status::unknown(format!("RocksDB error {:?} at read_multi_values_bytes", e))
+                    Status::unknown(format!("RocksDB error {e:?} at read_multi_values_bytes"))
                 })
             }
         }
@@ -128,15 +128,14 @@ impl ServiceStoreServer {
 
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         match &self.store {
-            ServiceStoreServerInternal::Memory(store) => {
-                store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
-                    Status::unknown(format!("Memory error {:?} at find_keys_by_prefix", e))
-                })
-            }
+            ServiceStoreServerInternal::Memory(store) => store
+                .find_keys_by_prefix(key_prefix)
+                .await
+                .map_err(|e| Status::unknown(format!("Memory error {e:?} at find_keys_by_prefix"))),
             #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => {
                 store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
-                    Status::unknown(format!("RocksDB error {:?} at find_keys_by_prefix", e))
+                    Status::unknown(format!("RocksDB error {e:?} at find_keys_by_prefix"))
                 })
             }
         }
@@ -151,17 +150,14 @@ impl ServiceStoreServer {
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|e| {
-                    Status::unknown(format!("Memory error {:?} at find_key_values_by_prefix", e))
+                    Status::unknown(format!("Memory error {e:?} at find_key_values_by_prefix"))
                 }),
             #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|e| {
-                    Status::unknown(format!(
-                        "RocksDB error {:?} at find_key_values_by_prefix",
-                        e
-                    ))
+                    Status::unknown(format!("RocksDB error {e:?} at find_key_values_by_prefix"))
                 }),
         }
     }
@@ -171,12 +167,12 @@ impl ServiceStoreServer {
             ServiceStoreServerInternal::Memory(store) => store
                 .write_batch(batch)
                 .await
-                .map_err(|e| Status::unknown(format!("Memory error {:?} at write_batch", e))),
+                .map_err(|e| Status::unknown(format!("Memory error {e:?} at write_batch"))),
             #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .write_batch(batch)
                 .await
-                .map_err(|e| Status::unknown(format!("RocksDB error {:?} at write_batch", e))),
+                .map_err(|e| Status::unknown(format!("RocksDB error {e:?} at write_batch"))),
         }
     }
 
@@ -610,7 +606,7 @@ async fn main() {
                         _ => panic!("test-log: RUST_LOG_SPAN_EVENTS must contain filters separated by `,`.\n\t\
                                      For example: `active` or `new,close`\n\t\
                                      Supported filters: new, enter, exit, close, active, full\n\t\
-                                     Got: {}", value),
+                                     Got: {value}"),
                     })
                     .fold(FmtSpan::NONE, |acc, filter| filter | acc)
             }
