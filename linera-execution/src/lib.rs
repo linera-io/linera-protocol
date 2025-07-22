@@ -336,8 +336,6 @@ pub enum ExecutionError {
     UnprocessedStreams,
     #[error("Internal error: {0}")]
     InternalError(&'static str),
-    #[error("UpdateStreams contains an unknown event")]
-    EventNotFound(EventId),
     #[error("UpdateStreams is outdated")]
     OutdatedUpdateStreams,
 }

@@ -10,7 +10,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Epoch, Timestamp},
     ensure,
-    identifiers::ChainId,
+    identifiers::{ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{
@@ -20,7 +20,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
@@ -314,9 +314,19 @@ where
             certificate.check(committee)?;
         } else {
             let committees = self.state.storage.committees_for(epoch..=epoch).await?;
-            let committee = committees
-                .get(&epoch)
-                .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;
+            let Some(committee) = committees.get(&epoch) else {
+                let net_description = self
+                    .state
+                    .storage
+                    .read_network_description()
+                    .await?
+                    .ok_or_else(|| WorkerError::MissingNetworkDescription)?;
+                return Err(WorkerError::EventsNotFound(vec![EventId {
+                    chain_id: net_description.admin_chain_id,
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                    index: epoch.0,
+                }]));
+            };
             // This line is duplicated, but this avoids cloning and a lifetimes error.
             certificate.check(committee)?;
         }
