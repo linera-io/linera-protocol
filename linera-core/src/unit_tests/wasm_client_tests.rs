@@ -48,6 +48,7 @@ use crate::{
         ChainClientError,
     },
     local_node::LocalNodeError,
+    test_utils::FaultType,
     worker::WorkerError,
 };
 
@@ -726,9 +727,11 @@ where
 {
     let keys = InMemorySigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
+    builder.set_fault_type([3], FaultType::Offline).await;
+
     let sender = builder.add_root_chain(0, Amount::ONE).await?;
     let receiver = builder.add_root_chain(1, Amount::ONE).await?;
 
@@ -757,19 +760,11 @@ where
     let request_subscribe = social::Operation::Subscribe {
         chain_id: sender.chain_id(),
     };
-    let cert = receiver
+    receiver
         .execute_operation(Operation::user(application_id, &request_subscribe)?)
         .await
         .unwrap()
         .unwrap();
-
-    // Subscribe the receiver. This also registers the application.
-    sender.synchronize_from_validators().await.unwrap();
-    sender
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    let _certs = sender.process_inbox().await.unwrap();
 
     // Make a post.
     let text = "Please like and comment!".to_string();
@@ -787,6 +782,10 @@ where
         .receive_certificate_and_update_validators(cert.clone())
         .await
         .unwrap();
+
+    builder.set_fault_type([3], FaultType::Honest).await;
+    builder.set_fault_type([2], FaultType::Offline).await;
+
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
