@@ -1975,14 +1975,15 @@ impl<Env: Environment> ChainClient<Env> {
         let creating_proposal_start = Instant::now();
         let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(incoming_bundles, info.timestamp);
-        let mut transactions = Vec::new();
-        // Add incoming bundles first, then operations to maintain order
-        for bundle in incoming_bundles {
-            transactions.push(Transaction::ReceiveMessages(bundle.clone()));
-        }
-        for operation in operations {
-            transactions.push(Transaction::ExecuteOperation(operation.clone()));
-        }
+        let transactions = incoming_bundles
+            .iter()
+            .map(|bundle| Transaction::ReceiveMessages(bundle.clone()))
+            .chain(
+                operations
+                    .iter()
+                    .map(|operation| Transaction::ExecuteOperation(operation.clone())),
+            )
+            .collect::<Vec<_>>();
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
@@ -2405,14 +2406,11 @@ impl<Env: Environment> ChainClient<Env> {
         );
         let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
-        let mut transactions = Vec::new();
-        // Add incoming bundles first, then operations to maintain order
-        for bundle in incoming_bundles {
-            transactions.push(Transaction::ReceiveMessages(bundle));
-        }
-        for operation in operations {
-            transactions.push(Transaction::ExecuteOperation(operation));
-        }
+        let transactions = incoming_bundles
+            .into_iter()
+            .map(Transaction::ReceiveMessages)
+            .chain(operations.into_iter().map(Transaction::ExecuteOperation))
+            .collect::<Vec<_>>();
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
@@ -2586,11 +2584,10 @@ impl<Env: Environment> ChainClient<Env> {
         }
         let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
-        let mut transactions = Vec::new();
-        // Add incoming bundles first (no operations in this case)
-        for bundle in incoming_bundles {
-            transactions.push(Transaction::ReceiveMessages(bundle));
-        }
+        let transactions = incoming_bundles
+            .into_iter()
+            .map(Transaction::ReceiveMessages)
+            .collect::<Vec<_>>();
         let block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
