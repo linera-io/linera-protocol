@@ -3,6 +3,7 @@
 
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -14,7 +15,10 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainId},
     time::Instant,
 };
-use linera_core::{client::ChainClient, Environment};
+use linera_core::{
+    client::{ChainClient, ChainClientError},
+    Environment,
+};
 use linera_execution::{
     system::{Recipient, SystemOperation},
     Operation,
@@ -23,6 +27,7 @@ use linera_sdk::abis::fungible::{self, FungibleOperation};
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
 use rand::{seq::SliceRandom, thread_rng};
+use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{mpsc, Barrier, Notify},
     task, time,
@@ -40,7 +45,7 @@ pub enum BenchmarkError {
     #[error("Failed to join task: {0}")]
     JoinError(#[from] task::JoinError),
     #[error("Chain client error: {0}")]
-    ChainClient(#[from] linera_core::client::ChainClientError),
+    ChainClient(#[from] ChainClientError),
     #[error("Current histogram count is less than previous histogram count")]
     HistogramCountMismatch,
     #[error("Expected histogram value, got {0:?}")]
@@ -65,6 +70,12 @@ pub enum BenchmarkError {
     UnexpectedEmptyBucket,
     #[error("Failed to send unit message: {0}")]
     TokioSendUnitError(#[from] mpsc::error::SendError<()>),
+    #[error("Config file not found: {0}")]
+    ConfigFileNotFound(std::path::PathBuf),
+    #[error("Failed to load config file: {0}")]
+    ConfigLoadError(#[from] anyhow::Error),
+    #[error("Could not find enough chains in wallet alone: needed {0}, but only found {1}")]
+    NotEnoughChainsInWallet(usize, usize),
 }
 
 #[derive(Debug)]
@@ -72,6 +83,26 @@ struct HistogramSnapshot {
     buckets: Vec<HistogramCount>,
     count: f64,
     sum: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct BenchmarkConfig {
+    pub chain_ids: Vec<ChainId>,
+}
+
+impl BenchmarkConfig {
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config = serde_yaml::from_str(&content)?;
+        Ok(config)
+    }
+
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> anyhow::Result<()> {
+        let content = serde_yaml::to_string(self)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
 }
 
 pub struct Benchmark<Env: Environment> {
@@ -162,6 +193,9 @@ impl<Env: Environment> Benchmark<Env> {
             );
         }
 
+        let metrics_watcher =
+            Self::metrics_watcher(health_check_endpoints, shutdown_notifier).await?;
+
         // Wait for tasks and fail immediately if any task returns an error or panics
         while let Some(result) = join_set.join_next().await {
             let inner_result = result?;
@@ -172,11 +206,8 @@ impl<Env: Environment> Benchmark<Env> {
                 return Err(e);
             }
         }
+        info!("All benchmark tasks completed successfully");
 
-        let metrics_watcher =
-            Self::metrics_watcher(health_check_endpoints, shutdown_notifier).await?;
-
-        info!("All benchmark tasks completed");
         bps_control_task.await?;
         if let Some(metrics_watcher) = metrics_watcher {
             metrics_watcher.await??;
@@ -549,20 +580,23 @@ impl<Env: Environment> Benchmark<Env> {
         }
 
         loop {
-            if shutdown_notifier.is_cancelled() {
-                info!("Shutdown signal received, stopping benchmark");
-                break;
-            }
+            tokio::select! {
+                biased;
 
-            chain_client
-                .execute_operations(operations.clone(), vec![])
-                .await
-                .map_err(BenchmarkError::ChainClient)?
-                .expect("should execute block with operations");
+                _ = shutdown_notifier.cancelled() => {
+                    info!("Shutdown signal received, stopping benchmark");
+                    break;
+                }
+                result = chain_client.execute_operations(operations.clone(), vec![]) => {
+                    result
+                        .map_err(BenchmarkError::ChainClient)?
+                        .expect("should execute block with operations");
 
-            let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
-            if current_bps_count >= bps {
-                notifier.notified().await;
+                    let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    if current_bps_count >= bps {
+                        notifier.notified().await;
+                    }
+                }
             }
         }
 
@@ -589,31 +623,48 @@ impl<Env: Environment> Benchmark<Env> {
         Ok(())
     }
 
+    pub fn get_all_chains(
+        chains_config_path: Option<&Path>,
+        benchmark_chains: &[(ChainId, AccountOwner)],
+    ) -> Result<Vec<ChainId>, BenchmarkError> {
+        let all_chains = if let Some(config_path) = chains_config_path {
+            if !config_path.exists() {
+                return Err(BenchmarkError::ConfigFileNotFound(
+                    config_path.to_path_buf(),
+                ));
+            }
+            let config = BenchmarkConfig::load_from_file(config_path)
+                .map_err(BenchmarkError::ConfigLoadError)?;
+            config.chain_ids
+        } else {
+            benchmark_chains.iter().map(|(id, _)| *id).collect()
+        };
+
+        Ok(all_chains)
+    }
+
     /// Generates information related to one block per chain.
     pub fn make_benchmark_block_info(
         benchmark_chains: Vec<(ChainId, AccountOwner)>,
         transactions_per_block: usize,
         fungible_application_id: Option<ApplicationId>,
-    ) -> Vec<Vec<Operation>> {
+        all_chains: Vec<ChainId>,
+    ) -> Result<Vec<Vec<Operation>>, BenchmarkError> {
         let mut blocks_infos = Vec::new();
-        for (i, (_, owner)) in benchmark_chains.iter().enumerate() {
+        for (current_chain_id, owner) in benchmark_chains.iter() {
             let amount = Amount::from(1);
             let mut operations = Vec::new();
 
-            let mut other_chains: Vec<_> = if benchmark_chains.len() == 1 {
+            let mut other_chains: Vec<_> = if all_chains.len() == 1 {
                 // If there's only one chain, just have it send to itself.
-                benchmark_chains
-                    .iter()
-                    .map(|(chain_id, _)| *chain_id)
-                    .collect()
+                all_chains.clone()
             } else {
                 // If there's more than one chain, have it send to all other chains, and don't
                 // send to self.
-                benchmark_chains
+                all_chains
                     .iter()
-                    .enumerate()
-                    .filter(|(j, _)| i != *j)
-                    .map(|(_, (chain_id, _))| *chain_id)
+                    .filter(|chain_id| **chain_id != *current_chain_id)
+                    .copied()
                     .collect()
             };
 
@@ -635,6 +686,7 @@ impl<Env: Environment> Benchmark<Env> {
                 };
                 operations.push(operation);
             }
+
             let operations = operations
                 .into_iter()
                 .cycle()
@@ -642,7 +694,7 @@ impl<Env: Environment> Benchmark<Env> {
                 .collect();
             blocks_infos.push(operations);
         }
-        blocks_infos
+        Ok(blocks_infos)
     }
 
     /// Creates a fungible token transfer operation.

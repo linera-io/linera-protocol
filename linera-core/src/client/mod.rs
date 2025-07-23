@@ -1760,7 +1760,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
     /// local chain.
     #[instrument(level = "trace")]
-    pub async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
+    async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
         if self.options.message_policy.is_ignore() {
             // Ignore all messages.
             return Ok(Vec::new());
@@ -3525,9 +3525,12 @@ impl<Env: Environment> ChainClient<Env> {
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<Env::Storage>,
     ) -> Option<Box<ChainInfo>> {
-        let Ok(info) = local_node.chain_info(chain_id).await else {
-            error!("Fail to read local chain info for {chain_id}");
-            return None;
+        let info = match local_node.chain_info(chain_id).await {
+            Ok(info) => info,
+            Err(error) => {
+                error!("Fail to read local chain info for {chain_id}: {error}");
+                return None;
+            }
         };
         // Useful in case `chain_id` is the same as the local chain.
         self.client.update_from_info(&info);
