@@ -363,15 +363,3 @@ impl<T> ClientOutcome<T> {
         }
     }
 }
-
-#[cfg(with_testing)]
-pub trait ClientOutcomeResultExt<T, E> {
-    fn unwrap_ok_committed(self) -> T;
-}
-
-#[cfg(with_testing)]
-impl<T, E: std::fmt::Debug> ClientOutcomeResultExt<T, E> for Result<ClientOutcome<T>, E> {
-    fn unwrap_ok_committed(self) -> T {
-        self.unwrap().unwrap()
-    }
-}

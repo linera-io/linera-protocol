@@ -48,9 +48,8 @@ use crate::{
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
         ChainClientError,
     },
-    data_types::ClientOutcomeResultExt as _,
     local_node::LocalNodeError,
-    test_utils::FaultType,
+    test_utils::{ClientOutcomeResultExt as _, FaultType},
     worker::WorkerError,
 };
 

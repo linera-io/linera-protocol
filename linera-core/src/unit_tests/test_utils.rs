@@ -1324,3 +1324,13 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
         &self.clock
     }
 }
+
+pub trait ClientOutcomeResultExt<T, E> {
+    fn unwrap_ok_committed(self) -> T;
+}
+
+impl<T, E: std::fmt::Debug> ClientOutcomeResultExt<T, E> for Result<ClientOutcome<T>, E> {
+    fn unwrap_ok_committed(self) -> T {
+        self.unwrap().unwrap()
+    }
+}

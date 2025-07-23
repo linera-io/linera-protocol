@@ -49,13 +49,14 @@ use crate::{
         BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, MessageAction,
         MessagePolicy,
     },
-    data_types::ClientOutcomeResultExt as _,
     local_node::LocalNodeError,
     node::{
         NodeError::{self, ClientIoError},
         ValidatorNode,
     },
-    test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
+    test_utils::{
+        ClientOutcomeResultExt as _, FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder,
+    },
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
     Environment,
