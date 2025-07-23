@@ -821,6 +821,10 @@ OracleResponse:
         TUPLE:
           - TYPENAME: EventId
           - SEQ: U8
+    6:
+      EventExists:
+        NEWTYPE:
+          TYPENAME: EventId
 OriginalProposal:
   ENUM:
     0:

@@ -577,14 +577,23 @@ where
                         stream_id,
                         index,
                     };
-                    if !self
-                        .context()
-                        .extra()
-                        .contains_event(event_id.clone())
-                        .await?
-                    {
-                        missing_events.push(event_id)
+                    match txn_tracker.next_replayed_oracle_response()? {
+                        None => {
+                            if !self
+                                .context()
+                                .extra()
+                                .contains_event(event_id.clone())
+                                .await?
+                            {
+                                missing_events.push(event_id);
+                                continue;
+                            }
+                        }
+                        Some(OracleResponse::EventExists(recorded_event_id))
+                            if recorded_event_id == event_id => {}
+                        Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                     }
+                    txn_tracker.add_oracle_response(OracleResponse::EventExists(event_id));
                 }
                 ensure!(
                     missing_events.is_empty(),

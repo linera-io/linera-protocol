@@ -16,7 +16,7 @@ use futures::{
 use linera_base::{
     data_types::{BlockHeight, Round},
     ensure,
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, GenericApplicationId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::{
@@ -384,8 +384,19 @@ where
                 .read_certificate(hash)
                 .await?
                 .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
-            self.send_confirmed_certificate(certificate, delivery)
-                .await?
+            match self.send_confirmed_certificate(certificate, delivery).await {
+                Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
+                    if event_ids.iter().all(|event_id| {
+                        event_id.stream_id.application_id == GenericApplicationId::System
+                    }) =>
+                {
+                    // The chain is missing epoch events. Send all blocks.
+                    let query = ChainInfoQuery::new(chain_id);
+                    self.remote_node.handle_chain_info_query(query).await?
+                }
+                Err(err) => return Err(err),
+                Ok(info) => info,
+            }
         } else {
             let query = ChainInfoQuery::new(chain_id);
             self.remote_node.handle_chain_info_query(query).await?
