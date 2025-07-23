@@ -120,8 +120,8 @@ impl ProposedBlock {
     }
 
     /// Returns an iterator over all transactions as references.
-    pub fn transaction_refs(&self) -> impl Iterator<Item = TransactionRef<'_>> {
-        self.transactions.iter().map(|tx| tx.as_ref())
+    pub fn transaction_refs(&self) -> impl Iterator<Item = &Transaction> {
+        self.transactions.iter()
     }
 
     /// Returns all operations in this block.
@@ -157,39 +157,6 @@ pub enum Transaction {
     ReceiveMessages(IncomingBundle),
     /// Execute an operation.
     ExecuteOperation(Operation),
-}
-
-/// A borrowed reference to a transaction in a block.
-#[derive(Debug, Clone)]
-pub enum TransactionRef<'a> {
-    /// Receive a bundle of incoming messages.
-    ReceiveMessages(&'a IncomingBundle),
-    /// Execute an operation.
-    ExecuteOperation(&'a Operation),
-}
-
-impl Transaction {
-    /// Returns a borrowed reference to this transaction.
-    pub fn as_ref(&self) -> TransactionRef<'_> {
-        match self {
-            Transaction::ReceiveMessages(bundle) => TransactionRef::ReceiveMessages(bundle),
-            Transaction::ExecuteOperation(operation) => TransactionRef::ExecuteOperation(operation),
-        }
-    }
-}
-
-impl TransactionRef<'_> {
-    /// Converts this reference to an owned transaction.
-    pub fn to_owned(&self) -> Transaction {
-        match self {
-            TransactionRef::ReceiveMessages(bundle) => {
-                Transaction::ReceiveMessages((*bundle).clone())
-            }
-            TransactionRef::ExecuteOperation(operation) => {
-                Transaction::ExecuteOperation((*operation).clone())
-            }
-        }
-    }
 }
 
 impl BcsHashable<'_> for Transaction {}
