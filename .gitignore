@@ -35,3 +35,4 @@ linera-web/**/*-lock.json
 # Claude
 .claude
 CLAUDE.md
+.serena
