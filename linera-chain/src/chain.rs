@@ -855,11 +855,7 @@ where
                 new: block.timestamp
             }
         );
-        ensure!(
-            !block.incoming_bundles().collect::<Vec<_>>().is_empty()
-                || !block.operations().collect::<Vec<_>>().is_empty(),
-            ChainError::EmptyBlock
-        );
+        ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
         ensure!(
             block.published_blob_ids()
