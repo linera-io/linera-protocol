@@ -20,7 +20,8 @@ pub use self::http_server::HttpServer;
 use crate::{
     block::ConfirmedBlock,
     data_types::{
-        BlockProposal, IncomingBundle, PostedMessage, ProposedBlock, SignatureAggregator, Vote,
+        BlockProposal, IncomingBundle, PostedMessage, ProposedBlock, SignatureAggregator,
+        Transaction, Vote,
     },
     types::{CertificateValue, GenericCertificate},
 };
@@ -31,8 +32,7 @@ pub fn make_child_block(parent: &ConfirmedBlock) -> ProposedBlock {
     ProposedBlock {
         epoch: parent_header.epoch,
         chain_id: parent_header.chain_id,
-        incoming_bundles: vec![],
-        operations: vec![],
+        transactions: vec![],
         previous_block_hash: Some(parent.hash()),
         height: parent_header.height.try_add_one().unwrap(),
         authenticated_signer: parent_header.authenticated_signer,
@@ -45,8 +45,7 @@ pub fn make_first_block(chain_id: ChainId) -> ProposedBlock {
     ProposedBlock {
         epoch: Epoch::ZERO,
         chain_id,
-        incoming_bundles: vec![],
-        operations: vec![],
+        transactions: vec![],
         previous_block_hash: None,
         height: BlockHeight::ZERO,
         authenticated_signer: None,
@@ -108,7 +107,8 @@ impl BlockTestExt for ProposedBlock {
     }
 
     fn with_operation(mut self, operation: impl Into<Operation>) -> Self {
-        self.operations.push(operation.into());
+        self.transactions
+            .push(Transaction::ExecuteOperation(operation.into()));
         self
     }
 
@@ -133,7 +133,8 @@ impl BlockTestExt for ProposedBlock {
     }
 
     fn with_incoming_bundle(mut self, incoming_bundle: IncomingBundle) -> Self {
-        self.incoming_bundles.push(incoming_bundle);
+        self.transactions
+            .push(Transaction::ReceiveMessages(incoming_bundle));
         self
     }
 

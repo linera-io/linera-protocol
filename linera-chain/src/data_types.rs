@@ -45,13 +45,11 @@ pub struct ProposedBlock {
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
     pub epoch: Epoch,
-    /// A selection of incoming messages to be executed first. Successive messages of same
-    /// sender and height are grouped together for conciseness.
+    /// The transactions to execute in this block. Each transaction can be either
+    /// incoming messages or an operation.
     #[debug(skip_if = Vec::is_empty)]
-    pub incoming_bundles: Vec<IncomingBundle>,
-    /// The operations to execute.
-    #[debug(skip_if = Vec::is_empty)]
-    pub operations: Vec<Operation>,
+    #[graphql(skip)]
+    pub transactions: Vec<Transaction>,
     /// The block height.
     pub height: BlockHeight,
     /// The timestamp when this block was created. This must be later than all messages received
@@ -71,8 +69,12 @@ pub struct ProposedBlock {
 impl ProposedBlock {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
-        self.operations
+        self.transactions
             .iter()
+            .filter_map(|tx| match tx {
+                Transaction::ExecuteOperation(operation) => Some(operation),
+                Transaction::ReceiveMessages(_) => None,
+            })
             .flat_map(Operation::published_blob_ids)
             .collect()
     }
@@ -80,38 +82,62 @@ impl ProposedBlock {
     /// Returns whether the block contains only rejected incoming messages, which
     /// makes it admissible even on closed chains.
     pub fn has_only_rejected_messages(&self) -> bool {
-        self.operations.is_empty()
+        !self
+            .transactions
+            .iter()
+            .any(|tx| matches!(tx, Transaction::ExecuteOperation(_)))
             && self
-                .incoming_bundles
+                .transactions
                 .iter()
-                .all(|message| message.action == MessageAction::Reject)
+                .filter_map(|tx| match tx {
+                    Transaction::ReceiveMessages(bundle) => Some(bundle),
+                    Transaction::ExecuteOperation(_) => None,
+                })
+                .all(|bundle| bundle.action == MessageAction::Reject)
     }
 
     /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
     pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
-        self.incoming_bundles
+        self.transactions
             .iter()
+            .filter_map(|tx| match tx {
+                Transaction::ReceiveMessages(bundle) => Some(bundle),
+                Transaction::ExecuteOperation(_) => None,
+            })
             .flat_map(|incoming_bundle| &incoming_bundle.bundle.messages)
     }
 
     /// Returns the number of incoming messages.
     pub fn message_count(&self) -> usize {
-        self.incoming_bundles
+        self.transactions
             .iter()
+            .filter_map(|tx| match tx {
+                Transaction::ReceiveMessages(bundle) => Some(bundle),
+                Transaction::ExecuteOperation(_) => None,
+            })
             .map(|im| im.bundle.messages.len())
             .sum()
     }
 
-    /// Returns an iterator over all transactions.
-    ///
-    /// First incoming bundles, then operations.
-    pub fn transactions(&self) -> impl Iterator<Item = Transaction<'_>> {
-        let bundles = self
-            .incoming_bundles
-            .iter()
-            .map(Transaction::ReceiveMessages);
-        let operations = self.operations.iter().map(Transaction::ExecuteOperation);
-        bundles.chain(operations)
+    /// Returns an iterator over all transactions as references.
+    pub fn transaction_refs(&self) -> impl Iterator<Item = TransactionRef<'_>> {
+        self.transactions.iter().map(|tx| tx.as_ref())
+    }
+
+    /// Returns all operations in this block.
+    pub fn operations(&self) -> impl Iterator<Item = &Operation> {
+        self.transactions.iter().filter_map(|tx| match tx {
+            Transaction::ExecuteOperation(operation) => Some(operation),
+            Transaction::ReceiveMessages(_) => None,
+        })
+    }
+
+    /// Returns all incoming bundles in this block.
+    pub fn incoming_bundles(&self) -> impl Iterator<Item = &IncomingBundle> {
+        self.transactions.iter().filter_map(|tx| match tx {
+            Transaction::ReceiveMessages(bundle) => Some(bundle),
+            Transaction::ExecuteOperation(_) => None,
+        })
     }
 
     pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
@@ -125,13 +151,48 @@ impl ProposedBlock {
 }
 
 /// A transaction in a block: incoming messages or an operation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Transaction {
+    /// Receive a bundle of incoming messages.
+    ReceiveMessages(IncomingBundle),
+    /// Execute an operation.
+    ExecuteOperation(Operation),
+}
+
+/// A borrowed reference to a transaction in a block.
 #[derive(Debug, Clone)]
-pub enum Transaction<'a> {
+pub enum TransactionRef<'a> {
     /// Receive a bundle of incoming messages.
     ReceiveMessages(&'a IncomingBundle),
     /// Execute an operation.
     ExecuteOperation(&'a Operation),
 }
+
+impl Transaction {
+    /// Returns a borrowed reference to this transaction.
+    pub fn as_ref(&self) -> TransactionRef<'_> {
+        match self {
+            Transaction::ReceiveMessages(bundle) => TransactionRef::ReceiveMessages(bundle),
+            Transaction::ExecuteOperation(operation) => TransactionRef::ExecuteOperation(operation),
+        }
+    }
+}
+
+impl TransactionRef<'_> {
+    /// Converts this reference to an owned transaction.
+    pub fn to_owned(&self) -> Transaction {
+        match self {
+            TransactionRef::ReceiveMessages(bundle) => {
+                Transaction::ReceiveMessages((*bundle).clone())
+            }
+            TransactionRef::ExecuteOperation(operation) => {
+                Transaction::ExecuteOperation((*operation).clone())
+            }
+        }
+    }
+}
+
+impl BcsHashable<'_> for Transaction {}
 
 /// A chain ID with a block height.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
@@ -771,8 +832,7 @@ mod signing {
         let proposed_block = ProposedBlock {
             chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
             epoch: Epoch(11),
-            incoming_bundles: vec![],
-            operations: vec![],
+            transactions: vec![],
             height: BlockHeight(11),
             timestamp: 190000000u64.into(),
             authenticated_signer: None,
@@ -788,8 +848,8 @@ mod signing {
         // personal_sign of the `proposal_hash` done via MetaMask.
         // Wrap with proper variant so that bytes match (include the enum variant tag).
         let signature = EvmSignature::from_str(
-            "f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b0\
-            4b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b",
+            "d69d31203f59be441fd02cdf68b2504cbcdd7215905c9b7dc3a7ccbf09afe14550\
+            3c93b391810ce9edd6ee36b1e817b2d0e9dabdf4a098da8c2f670ef4198e8a1b",
         )
         .unwrap();
         let metamask_signature = AccountSignature::EvmSecp256k1 {
