@@ -550,8 +550,8 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     tracing::info!("address2 = {address2}");
     let account1 = Account { chain_id: chain, owner: account_owner1 };
     let account2 = Account { chain_id: chain, owner: account_owner2 };
-    client.transfer_with_accounts(Amount::from_tokens(5), account_chain, account1).await?;
-    client.transfer_with_accounts(Amount::from_tokens(5), account_chain, account2).await?;
+    client.transfer_with_accounts(Amount::from_tokens(50), account_chain, account1).await?;
+    client.transfer_with_accounts(Amount::from_tokens(50), account_chain, account2).await?;
     tracing::info!("test_evm_end_to_end_balance_and_transfer, step 4");
 
     sol! {

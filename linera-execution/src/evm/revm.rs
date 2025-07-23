@@ -40,7 +40,7 @@ use crate::{
     evm::{
         database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
         inputs::{
-            get_internal_mutation, EvmInstantiation, ensure_message_length, ensure_selector_presence, forbid_execute_operation_origin,
+            get_internal_mutation, EvmInstantiation, EvmMutation, ensure_message_length, ensure_selector_presence, forbid_execute_operation_origin,
             get_revm_execute_message_bytes, get_revm_instantiation_bytes,
             get_revm_process_streams_bytes, has_selector, EXECUTE_MESSAGE_SELECTOR,
             INSTANTIATE_SELECTOR, PROCESS_STREAMS_SELECTOR,
@@ -701,10 +701,12 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         if self.precompile_addresses.contains(&inputs.target_address)
             || inputs.target_address == self.contract_address
         {
+            tracing::info!("CallInterceptorContract :: call_or_fail, exiting early");
             // Precompile calls are handled by the precompile code.
             // The EVM smart contract is being called
             return Ok(None);
         }
+        tracing::info!("CallInterceptorContract :: call_or_fail, more complicated");
         // Handling the balances.
         if let CallValue::Transfer(value) = inputs.value {
             if value != U256::ZERO {
@@ -883,11 +885,11 @@ where
         self.db.set_contract_address()?;
         let caller = self.get_msg_address()?;
         let instantiation_argument = serde_json::from_slice::<EvmInstantiation>(&argument)?;
-        self.db.deposit_funds(instantiation_argument.value)?;
-        self.initialize_contract(caller)?;
+        let value = instantiation_argument.value.into();
+        self.initialize_contract(value, caller)?;
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
             let argument = get_revm_instantiation_bytes(instantiation_argument.argument);
-            let result = self.transact_commit(EvmTxKind::Call, argument, caller)?;
+            let result = self.transact_commit(EvmTxKind::Call, argument, U256::ZERO, caller)?;
             self.write_logs(result.logs, "instantiate")?;
         }
         Ok(())
@@ -900,13 +902,13 @@ where
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
-            let operation = self.db.get_execute_operation_argument(&operation[4..])?;
-            let result = self.init_transact_commit(operation, caller)?;
+            let evm_call = bcs::from_bytes::<EvmMutation>(&operation[4..])?;
+            let result = self.init_transact_commit(evm_call.argument, evm_call.value, caller)?;
             result.interpreter_result_and_logs()?
         } else {
             forbid_execute_operation_origin(&operation[..4])?;
-            let operation = self.db.get_execute_operation_argument(&operation)?;
-            let result = self.init_transact_commit(operation, caller)?;
+            let evm_call = bcs::from_bytes::<EvmMutation>(&operation)?;
+            let result = self.init_transact_commit(evm_call.argument, evm_call.value, caller)?;
             result.output_and_logs()
         };
         self.consume_fuel(gas_final)?;
@@ -923,7 +925,8 @@ where
         )?;
         let operation = get_revm_execute_message_bytes(message);
         let caller = self.get_msg_address()?;
-        self.execute_no_return_operation(operation, "message", caller)
+        let value = U256::ZERO;
+        self.execute_no_return_operation(operation, "message", value, caller)
     }
 
     fn process_streams(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
@@ -936,7 +939,8 @@ where
         )?;
         // For process_streams, authenticated_signer and authenticated_called_id are None.
         let caller = Address::ZERO;
-        self.execute_no_return_operation(operation, "process_streams", caller)
+        let value = U256::ZERO;
+        self.execute_no_return_operation(operation, "process_streams", value, caller)
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {
@@ -998,9 +1002,10 @@ where
         &mut self,
         operation: Vec<u8>,
         origin: &str,
+        value: U256,
         caller: Address,
     ) -> Result<(), ExecutionError> {
-        let result = self.init_transact_commit(operation, caller)?;
+        let result = self.init_transact_commit(operation, value, caller)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
         self.write_logs(logs, origin)?;
@@ -1012,23 +1017,24 @@ where
     fn init_transact_commit(
         &mut self,
         vec: Vec<u8>,
+        value: U256,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
         if !self.db.is_initialized()? {
-            self.initialize_contract(caller)?;
+            self.initialize_contract(U256::ZERO, caller)?;
         }
-        self.transact_commit(EvmTxKind::Call, vec, caller)
+        self.transact_commit(EvmTxKind::Call, vec, value, caller)
     }
 
     /// Initializes the contract.
-    fn initialize_contract(&mut self, caller: Address) -> Result<(), ExecutionError> {
+    fn initialize_contract(&mut self, value: U256, caller: Address) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        let result = self.transact_commit(EvmTxKind::Create, vec_init, caller)?;
+        let result = self.transact_commit(EvmTxKind::Create, vec_init, value, caller)?;
         result
             .check_contract_initialization(self.db.contract_address)
             .map_err(EvmExecutionError::IncorrectContractCreation)?;
@@ -1068,6 +1074,7 @@ where
         &mut self,
         ch: EvmTxKind,
         input: Vec<u8>,
+        value: U256,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         let data = Bytes::from(input);
@@ -1087,7 +1094,6 @@ where
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
         let nonce = self.db.get_nonce(&caller)?;
-        let value = self.db.get_balance_increase()?;
         tracing::info!("transact_commit, caller = {caller}");
         tracing::info!("transact_commit, value = {value}");
         let result = {
@@ -1130,6 +1136,7 @@ where
         self.db.process_any_error()?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
+        tracing::info!("transact_commit, after commit_changes");
         let result = process_execution_result(storage_stats, result)?;
         Ok(result)
     }
@@ -1245,6 +1252,7 @@ where
         };
         let caller = SERVICE_ADDRESS;
         let nonce = self.db.get_nonce(&caller)?;
+        let value = U256::ZERO;
         let result_state = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1270,6 +1278,7 @@ where
                     kind,
                     data,
                     nonce,
+                    value,
                     caller,
                     gas_limit: EVM_SERVICE_GAS_LIMIT,
                     ..TxEnv::default()

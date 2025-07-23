@@ -9,11 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use linera_base::{
-    data_types::Amount,
-    identifiers::{Account, AccountOwner},
-    vm::VmRuntime,
-};
+use linera_base::vm::VmRuntime;
 use linera_views::common::from_bytes_option;
 use revm::{primitives::keccak256, Database, DatabaseCommit, DatabaseRef};
 use revm_context::BlockEnv;
@@ -23,7 +19,6 @@ use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
 use crate::{
-    evm::{read_amount, inputs::EvmMutation},
     ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError,
     ServiceRuntime,
 };
@@ -205,6 +200,7 @@ where
     Runtime: BaseRuntime,
 {
     fn commit(&mut self, changes: EvmState) {
+        tracing::info!("commit, changes={:?}", changes);
         self.changes = changes;
     }
 }
@@ -216,7 +212,7 @@ where
     type Error = ExecutionError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
-        tracing::info!("basic_ref, address = {address}");
+        tracing::info!("basic_ref, START, address = {address}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(Some(account.info.clone()));
@@ -254,6 +250,7 @@ where
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
+        tracing::info!("storage_ref, address={address} index={index}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(match account.storage.get(&index) {
@@ -354,30 +351,6 @@ impl<Runtime> DatabaseRuntime<Runtime>
 where
     Runtime: BaseRuntime,
 {
-    /// Gets the contract address balance
-    pub fn get_balance_increase(&self) -> Result<U256, ExecutionError> {
-        let existing_evm_balance = {
-            let account_info = self.basic_ref(self.contract_address)?;
-            match account_info {
-                None => U256::ZERO,
-                Some(account_info) => account_info.balance,
-            }
-        };
-        let linera_balance = {
-            let mut runtime = self.runtime.lock().expect("The lock should be possible");
-            let application_id = runtime.application_id()?;
-            let account_owner: AccountOwner = application_id.into();
-            let balance = runtime.read_owner_balance(account_owner)?;
-            let balance: U256 = balance.into();
-            balance
-        };
-        if existing_evm_balance > linera_balance {
-            return Err(EvmExecutionError::IncoherentBalance.into());
-        }
-        let increment = linera_balance - existing_evm_balance;
-        Ok(increment)
-    }
-
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
         let account_info = self.basic_ref(*address)?;
@@ -468,32 +441,6 @@ where
         let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
         block_env.gas_limit = gas_limit;
         Ok(block_env)
-    }
-
-    pub fn deposit_funds(&self, amount: Amount) -> Result<(), ExecutionError> {
-        if amount != Amount::ZERO {
-            let mut runtime = self.runtime.lock().expect("The lock should be possible");
-            let signer = runtime.authenticated_signer()?;
-            let Some(source) = signer else {
-                let error = EvmExecutionError::UnknownSigner;
-                return Err(error.into());
-            };
-            let chain_id = runtime.chain_id()?;
-            let application_id = runtime.application_id()?;
-            let owner: AccountOwner = application_id.into();
-            let destination = Account { chain_id, owner };
-            tracing::info!("deposit_funds, runtime.transfer, before");
-            runtime.transfer(source, destination, amount)?;
-            tracing::info!("deposit_funds, runtime.transfer, after");
-        }
-        Ok(())
-    }
-
-    pub fn get_execute_operation_argument(&self, operation: &[u8]) -> Result<Vec<u8>, ExecutionError> {
-        let evm_call = bcs::from_bytes::<EvmMutation>(operation)?;
-        let value = read_amount(evm_call.value)?;
-        self.deposit_funds(value)?;
-        Ok(evm_call.argument)
     }
 }
 
