@@ -38,7 +38,7 @@ use {
         system::{OpenChainConfig, SystemOperation},
         Operation,
     },
-    std::iter,
+    std::{collections::HashSet, iter, path::Path},
     tokio::task,
 };
 #[cfg(not(web))]
@@ -675,6 +675,7 @@ where
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
         pub_keys: Vec<AccountPublicKey>,
+        chains_config_path: Option<&Path>,
     ) -> Result<(Vec<ChainClient<Env>>, Vec<Vec<Operation>>), Error> {
         let start = Instant::now();
         // Below all block proposals are supposed to succeed without retries, we
@@ -688,7 +689,12 @@ where
 
         let start = Instant::now();
         let (benchmark_chains, chain_clients) = self
-            .make_benchmark_chains(num_chains, tokens_per_chain, pub_keys)
+            .make_benchmark_chains(
+                num_chains,
+                tokens_per_chain,
+                pub_keys,
+                chains_config_path.is_some(),
+            )
             .await?;
         info!(
             "Got {} chains in {} ms",
@@ -714,11 +720,28 @@ where
             );
         }
 
+        let all_chains = Benchmark::<Env>::get_all_chains(chains_config_path, &benchmark_chains)?;
+        let known_chain_ids: HashSet<_> = benchmark_chains.iter().map(|(id, _)| *id).collect();
+        let unknown_chain_ids: Vec<_> = all_chains
+            .iter()
+            .filter(|id| !known_chain_ids.contains(id))
+            .copied()
+            .collect();
+        if !unknown_chain_ids.is_empty() {
+            // The current client won't have the blobs for the chains in the other wallets. Even
+            // though it will eventually get those blobs, we're getting a head start here and
+            // fetching those blobs in advance.
+            for chain_id in &unknown_chain_ids {
+                self.client.get_chain_description(*chain_id).await?;
+            }
+        }
+
         let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
             benchmark_chains,
             transactions_per_block,
             fungible_application_id,
-        );
+            all_chains,
+        )?;
 
         Ok((chain_clients, blocks_infos))
     }
@@ -808,6 +831,7 @@ where
         num_chains: usize,
         balance: Amount,
         pub_keys: Vec<AccountPublicKey>,
+        wallet_only: bool,
     ) -> Result<(Vec<(ChainId, AccountOwner)>, Vec<ChainClient<Env>>), Error> {
         let mut chains_found_in_wallet = 0;
         let mut benchmark_chains = Vec::with_capacity(num_chains);
@@ -846,50 +870,58 @@ where
             .wallet
             .default_chain()
             .expect("should have default chain");
-        let operations_per_block = 900; // Over this we seem to hit the block size limits.
-
-        let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
         let default_chain_client = self.make_chain_client(default_chain_id);
 
-        for i in (0..num_chains_to_create).step_by(operations_per_block) {
-            let num_new_chains = operations_per_block.min(num_chains_to_create - i);
-            let pub_key = pub_keys_iter.next().unwrap();
-            let owner = pub_key.into();
-
-            let certificate = Self::execute_open_chains_operations(
-                num_new_chains,
-                &default_chain_client,
-                balance,
-                owner,
-            )
-            .await?;
-            info!("Block executed successfully");
-
-            let block = certificate.block();
-            for i in 0..num_new_chains {
-                let chain_id = block.body.blobs[i]
-                    .iter()
-                    .find(|blob| blob.id().blob_type == BlobType::ChainDescription)
-                    .map(|blob| ChainId(blob.id().hash))
-                    .expect("failed to create a new chain");
-                self.client.track_chain(chain_id);
-
-                let mut chain_client = self.client.create_chain_client(
-                    chain_id,
-                    None,
-                    BlockHeight::ZERO,
-                    None,
-                    Some(owner),
-                    self.timing_sender(),
-                );
-                chain_client.set_preferred_owner(owner);
-                chain_client.process_inbox().await?;
-                benchmark_chains.push((chain_id, owner));
-                chain_clients.push(chain_client);
-            }
-        }
-
         if num_chains_to_create > 0 {
+            if wallet_only {
+                return Err(
+                    error::Inner::Benchmark(BenchmarkError::NotEnoughChainsInWallet(
+                        num_chains,
+                        chains_found_in_wallet,
+                    ))
+                    .into(),
+                );
+            }
+            let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
+            let operations_per_block = 900; // Over this we seem to hit the block size limits.
+            for i in (0..num_chains_to_create).step_by(operations_per_block) {
+                let num_new_chains = operations_per_block.min(num_chains_to_create - i);
+                let pub_key = pub_keys_iter.next().unwrap();
+                let owner = pub_key.into();
+
+                let certificate = Self::execute_open_chains_operations(
+                    num_new_chains,
+                    &default_chain_client,
+                    balance,
+                    owner,
+                )
+                .await?;
+                info!("Block executed successfully");
+
+                let block = certificate.block();
+                for i in 0..num_new_chains {
+                    let chain_id = block.body.blobs[i]
+                        .iter()
+                        .find(|blob| blob.id().blob_type == BlobType::ChainDescription)
+                        .map(|blob| ChainId(blob.id().hash))
+                        .expect("failed to create a new chain");
+                    self.client.track_chain(chain_id);
+
+                    let mut chain_client = self.client.create_chain_client(
+                        chain_id,
+                        None,
+                        BlockHeight::ZERO,
+                        None,
+                        Some(owner),
+                        self.timing_sender(),
+                    );
+                    chain_client.set_preferred_owner(owner);
+                    chain_client.process_inbox().await?;
+                    benchmark_chains.push((chain_id, owner));
+                    chain_clients.push(chain_client);
+                }
+            }
+
             info!(
                 "Created {} chains in {} ms",
                 num_chains_to_create,
