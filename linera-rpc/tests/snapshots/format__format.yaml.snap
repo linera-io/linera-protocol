@@ -163,6 +163,14 @@ BlockBody:
             TUPLE:
               - TYPENAME: CryptoHash
               - TYPENAME: BlockHeight
+    - previous_event_blocks:
+        MAP:
+          KEY:
+            TYPENAME: StreamId
+          VALUE:
+            TUPLE:
+              - TYPENAME: CryptoHash
+              - TYPENAME: BlockHeight
     - oracle_responses:
         SEQ:
           SEQ:
@@ -188,6 +196,14 @@ BlockExecutionOutcome:
         MAP:
           KEY:
             TYPENAME: ChainId
+          VALUE:
+            TUPLE:
+              - TYPENAME: CryptoHash
+              - TYPENAME: BlockHeight
+    - previous_event_blocks:
+        MAP:
+          KEY:
+            TYPENAME: StreamId
           VALUE:
             TUPLE:
               - TYPENAME: CryptoHash

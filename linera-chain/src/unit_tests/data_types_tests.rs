@@ -25,6 +25,7 @@ fn test_signed_values() {
     let block = BlockExecutionOutcome {
         messages: vec![Vec::new()],
         previous_message_blocks: BTreeMap::new(),
+        previous_event_blocks: BTreeMap::new(),
         state_hash: CryptoHash::test_hash("state"),
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
@@ -95,6 +96,7 @@ fn test_certificates() {
     let block = BlockExecutionOutcome {
         messages: vec![Vec::new()],
         previous_message_blocks: BTreeMap::new(),
+        previous_event_blocks: BTreeMap::new(),
         state_hash: CryptoHash::test_hash("state"),
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
