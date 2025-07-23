@@ -669,7 +669,7 @@ where
             let bundles = bundles_by_origin.entry(*origin).or_default();
             bundles.push(bundle);
         }
-        let origins: Vec<_> = bundles_by_origin.keys().copied().collect();
+        let origins = bundles_by_origin.keys().copied().collect::<Vec<_>>();
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
         let mut removed_unskippable = HashSet::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
