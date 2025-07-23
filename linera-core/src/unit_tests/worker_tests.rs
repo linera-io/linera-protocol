@@ -1276,7 +1276,6 @@ where
     }
     {
         let block_proposal = make_first_block(chain_2)
-            .with_simple_transfer(chain_3, Amount::ONE)
             .with_incoming_bundle(IncomingBundle {
                 origin: chain_1,
                 bundle: MessageBundle {
@@ -1290,6 +1289,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
+            .with_simple_transfer(chain_3, Amount::ONE)
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
             .await
@@ -1323,7 +1323,6 @@ where
 
         // Then receive the next two messages.
         let block_proposal = make_child_block(&certificate.into_value())
-            .with_simple_transfer(chain_3, Amount::from_tokens(3))
             .with_incoming_bundle(IncomingBundle {
                 origin: chain_1,
                 bundle: MessageBundle {
@@ -1348,6 +1347,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
+            .with_simple_transfer(chain_3, Amount::from_tokens(3))
             .into_first_proposal(recipient_owner, &signer)
             .await
             .unwrap();
