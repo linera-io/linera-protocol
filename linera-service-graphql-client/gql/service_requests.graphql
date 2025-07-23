@@ -185,9 +185,15 @@ query Chain(
       }
     }
     previousEventBlocks {
-      keys
+      keys {
+        applicationId
+        streamName
+      }
       entries(input: $previousEventBlocksInput) {
-        key
+        key {
+          applicationId
+          streamName
+        }
         value
       }
     }
