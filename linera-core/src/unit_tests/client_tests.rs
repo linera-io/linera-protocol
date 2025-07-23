@@ -235,7 +235,7 @@ where
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
-        let messages: Vec<_> = cert.block().body.incoming_bundles().collect();
+        let messages = cert.block().body.incoming_bundles().collect::<Vec<_>>();
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
