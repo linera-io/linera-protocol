@@ -774,12 +774,12 @@ impl ClientWrapper {
         Ok((child, stdout_handle, stderr_handle))
     }
 
-    /// Runs `linera open-chain`.
-    pub async fn open_chain(
+    async fn open_chain_internal(
         &self,
         from: ChainId,
         owner: Option<AccountOwner>,
         initial_balance: Amount,
+        super_owner: bool,
     ) -> Result<(ChainId, AccountOwner)> {
         let mut command = self.command().await?;
         command
@@ -791,6 +791,10 @@ impl ClientWrapper {
             command.args(["--owner", &owner.to_string()]);
         }
 
+        if super_owner {
+            command.arg("--super-owner");
+        }
+
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut split = stdout.split('\n');
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
@@ -799,6 +803,29 @@ impl ClientWrapper {
             assert_eq!(owner, new_owner);
         }
         Ok((chain_id, new_owner))
+    }
+
+    /// Runs `linera open-chain --super-owner`.
+    #[cfg(feature = "benchmark")]
+    pub async fn open_chain_super_owner(
+        &self,
+        from: ChainId,
+        owner: Option<AccountOwner>,
+        initial_balance: Amount,
+    ) -> Result<(ChainId, AccountOwner)> {
+        self.open_chain_internal(from, owner, initial_balance, true)
+            .await
+    }
+
+    /// Runs `linera open-chain`.
+    pub async fn open_chain(
+        &self,
+        from: ChainId,
+        owner: Option<AccountOwner>,
+        initial_balance: Amount,
+    ) -> Result<(ChainId, AccountOwner)> {
+        self.open_chain_internal(from, owner, initial_balance, false)
+            .await
     }
 
     /// Runs `linera open-chain` then `linera assign`.
