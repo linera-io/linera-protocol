@@ -1260,28 +1260,27 @@ impl<Env: Environment> Client<Env> {
                         .transactions
                         .get_mut(*index as usize)
                         .expect("Transaction at given index should exist");
-                    if let Transaction::ReceiveMessages(message) = transaction {
-                        if message.bundle.is_protected() {
-                            error!(
-                                "Protected incoming message failed to execute locally: {message:?}"
-                            );
-                        } else {
-                            // Reject the faulty message from the block and continue.
-                            // TODO(#1420): This is potentially a bit heavy-handed for
-                            // retryable errors.
-                            info!(
-                                %error, origin = ?message.origin,
-                                "Message failed to execute locally and will be rejected."
-                            );
-                            message.action = MessageAction::Reject;
-                            continue;
-                        }
-                    } else {
-                        error!(
+                    let Transaction::ReceiveMessages(message) = transaction else {
+                        panic!(
                             "Expected incoming bundle at transaction index {}, found operation",
                             index
                         );
-                    }
+                    };
+                    ensure!(
+                        !message.bundle.is_protected(),
+                        ChainClientError::BlockProposalError(
+                            "Protected incoming message failed to execute locally"
+                        )
+                    );
+                    // Reject the faulty message from the block and continue.
+                    // TODO(#1420): This is potentially a bit heavy-handed for
+                    // retryable errors.
+                    info!(
+                        %error, origin = ?message.origin,
+                        "Message failed to execute locally and will be rejected."
+                    );
+                    message.action = MessageAction::Reject;
+                    continue;
                 }
             }
             return result;
