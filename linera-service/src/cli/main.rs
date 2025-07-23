@@ -801,6 +801,7 @@ impl Runnable for Job {
                     confirm_before_start,
                     runtime_in_seconds,
                     delay_between_chain_groups_ms,
+                    chains_config_path,
                 } = benchmark_config;
                 assert!(
                     options.context_options.max_pending_message_bundles >= transactions_per_block,
@@ -840,6 +841,7 @@ impl Runnable for Job {
                         tokens_per_chain,
                         fungible_application_id,
                         pub_keys,
+                        chains_config_path.as_deref(),
                     )
                     .await?;
 
@@ -2144,7 +2146,9 @@ Make sure to use a Linera client compatible with this network.
             client_state_dir,
             command,
             delay_between_processes,
+            cross_wallet_transfers,
         } => {
+            let mut command = command.clone();
             let faucet = linera_faucet_client::Faucet::new(faucet.clone());
             let on_drop = if command.close_chains {
                 OnClientDrop::CloseChains
@@ -2181,20 +2185,77 @@ Make sure to use a Linera client compatible with this network.
 
             info!("Initializing wallets...");
             let mut join_set = JoinSet::new();
-            for client in clients.clone() {
-                let faucet = faucet.clone();
-                join_set.spawn(async move {
-                    client.wallet_init(Some(&faucet)).await?;
-                    client.request_chain(&faucet, true).await?;
-                    Ok::<_, anyhow::Error>(())
-                });
-            }
 
-            join_set
-                .join_all()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
+            if *cross_wallet_transfers {
+                for client in clients.clone() {
+                    let faucet = faucet.clone();
+                    join_set.spawn(async move {
+                        client.wallet_init(Some(&faucet)).await?;
+                        Ok::<_, anyhow::Error>(())
+                    });
+                }
+
+                join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let chains_per_wallet = command.num_chains;
+                info!(
+                    "Creating {} chains per wallet ({} total chains)...",
+                    chains_per_wallet,
+                    chains_per_wallet * processes
+                );
+
+                let mut join_set = JoinSet::new();
+                for client in clients.clone() {
+                    let faucet = faucet.clone();
+                    join_set.spawn(async move {
+                        let mut chain_ids = Vec::new();
+                        for _ in 0..chains_per_wallet {
+                            let (chain_id, _account_owner) =
+                                client.request_chain(&faucet, true).await?;
+                            chain_ids.push(chain_id);
+                        }
+                        Ok::<Vec<linera_base::identifiers::ChainId>, anyhow::Error>(chain_ids)
+                    });
+                }
+
+                let all_chain_ids = join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                let config = linera_client::benchmark::BenchmarkChainsConfig {
+                    chain_ids: all_chain_ids,
+                };
+
+                let temp_file = tempfile::NamedTempFile::new()?;
+                let path = temp_file.path().to_path_buf();
+                config.save_to_file(&path)?;
+                info!("Saved chains configuration to {}", path.display());
+                command.chains_config_path = Some(path);
+            } else {
+                for client in clients.clone() {
+                    let faucet = faucet.clone();
+                    join_set.spawn(async move {
+                        client.wallet_init(Some(&faucet)).await?;
+                        client.request_chain(&faucet, true).await?;
+                        Ok::<_, anyhow::Error>(())
+                    });
+                }
+
+                join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
+            }
 
             info!("Starting benchmark processes...");
             let confirm_before_start = command.confirm_before_start;

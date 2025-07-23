@@ -93,6 +93,11 @@ pub struct BenchmarkCommand {
     /// TPS all at once.
     #[arg(long)]
     pub delay_between_chain_groups_ms: Option<u64>,
+
+    /// Path to YAML file containing chain IDs to send transfers to.
+    /// If not provided, only transfers between chains in the same wallet.
+    #[arg(long)]
+    pub chains_config_path: Option<PathBuf>,
 }
 
 #[cfg(feature = "benchmark")]
@@ -110,6 +115,7 @@ impl Default for BenchmarkCommand {
             confirm_before_start: false,
             runtime_in_seconds: None,
             delay_between_chain_groups_ms: None,
+            chains_config_path: None,
         }
     }
 }
@@ -488,6 +494,10 @@ pub enum ClientCommand {
         /// The delay between starting the benchmark processes, in seconds.
         #[arg(long, default_value = "10")]
         delay_between_processes: u64,
+
+        /// Whether to send transfers between chains in different wallets.
+        #[arg(long)]
+        cross_wallet_transfers: bool,
     },
 
     /// Create genesis configuration for a Linera deployment.
