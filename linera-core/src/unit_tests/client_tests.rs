@@ -17,7 +17,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{IncomingBundle, MessageBundle, PostedMessage},
+    data_types::{IncomingBundle, MessageBundle, PostedMessage, Transaction},
     manager::LockingBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
@@ -587,14 +587,8 @@ where
     assert!(sender.pending_proposal().is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     assert_matches!(
-        certificate
-            .block()
-            .body
-            .operations()
-            .next()
-            .unwrap()
-            .as_system_operation(),
-        Some(SystemOperation::OpenChain(_)),
+        &certificate.block().body.transactions[0],
+        Transaction::ExecuteOperation(Operation::System(system_op)) if matches!(**system_op, SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
     assert_eq!(
@@ -719,19 +713,13 @@ where
 
     let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
     assert_eq!(
-        certificate.block().body.operations().count(),
+        certificate.block().body.transactions.len(),
         1,
-        "Unexpected operations in certificate"
+        "Unexpected transactions in certificate"
     );
     assert_matches!(
-        certificate
-            .block()
-            .body
-            .operations()
-            .next()
-            .unwrap()
-            .as_system_operation(),
-        Some(SystemOperation::CloseChain),
+        &certificate.block().body.transactions[0],
+        Transaction::ExecuteOperation(Operation::System(system_op)) if matches!(**system_op, SystemOperation::CloseChain),
         "Unexpected certificate value",
     );
     assert_eq!(
@@ -774,7 +762,7 @@ where
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].block();
-    assert_eq!(block.body.operations().count(), 0);
+    assert!(block.body.transactions.iter().all(|t| matches!(t, Transaction::ReceiveMessages(_))));
     assert_eq!(block.body.incoming_bundles().count(), 1);
     assert_matches!(
         block.body.incoming_bundles().next().unwrap(),
