@@ -6,8 +6,7 @@ contract InnerContractCheck {
     constructor() payable {
     }
 
-    function send_cash(uint256 amount) external returns (uint64) {
-        address recipient = msg.sender;
+    function send_cash(address recipient, uint256 amount) external returns (uint64) {
         (bool success, ) = recipient.call{value: amount}("");
         require(success, "Ether transfer failed");
         return 1;

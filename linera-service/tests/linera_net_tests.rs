@@ -522,11 +522,11 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::{sol, SolCall, SolValue};
+    use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::{
         evm::inputs::{get_mutation, EvmInstantiation},
-        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
+        test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -534,21 +534,31 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
-    let account_owner = client.get_owner();
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let account_chain = Account::chain(chain);
+
+    let account_owner1 = client.get_owner().unwrap();
+    let address1 = account_owner1.to_evm_address().unwrap();
+    let account_owner2 = client.keygen().await?;
+    let address2 = account_owner2.to_evm_address().unwrap();
+    let account1 = Account { chain_id: chain, owner: account_owner1 };
+    let account2 = Account { chain_id: chain, owner: account_owner2 };
+    client.transfer_with_accounts(Amount::from_tokens(5), account_chain, account1).await?;
+    client.transfer_with_accounts(Amount::from_tokens(5), account_chain, account2).await?;
 
     sol! {
-        function send_cash();
+        function send_cash(address recipient, uint256 amount);
+        function get_balance(address account);
     }
 
     let constructor_argument = Vec::new();
 
-    let chain = client.load_wallet()?.default_chain().unwrap();
-    let account_chain = Account::chain(chain);
 
     let (evm_contract, _dir) =
         get_evm_contract_path("tests/fixtures/evm_balance_and_transfer.sol")?;
 
-    let instantiation_argument = EvmInstantiation { value, argument };
+    let start_value = Amount::ZERO;
+    let instantiation_argument = EvmInstantiation { value: start_value, argument: vec![] };
     let application_id = client
         .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
@@ -565,30 +575,52 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
 
-    let balance1 = node_service.balance(&account_chain).await?;
+    let balance_chain = node_service.balance(&account_chain).await?;
+    let balance1 = node_service.balance(&account1).await?;
+    let balance2 = node_service.balance(&account2).await?;
+    tracing::info!("balance_chain={balance_chain}");
+    tracing::info!("balance1={balance1}");
+    tracing::info!("balance2={balance2}");
 
-    
     let application = node_service
         .make_application(&chain, &application_id)
         .await?;
 
+    // Checking the balances on input
+
+    let query1 = get_balanceCall { account: address1 };
+    let query1 = EvmQuery::Query(query1.abi_encode());
+    let result = application.run_json_query(query1.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), balance1.into());
+
+    let query2 = get_balanceCall { account: address2 };
+    let query2 = EvmQuery::Query(query2.abi_encode());
+    let result = application.run_json_query(query2.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), balance2.into());
+
+    // Transfering amount
+
     let amount = Amount::from_tokens(1);
-    let query = get_balanceCall { address: };
-    let query = query.abi_encode();
-    let query = EvmQuery::Query(query);
-    let result = application.run_json_query(query.clone()).await?;
 
-    let counter_value = read_evm_u64_entry(result);
-    assert_eq!(counter_value, original_counter_value);
-
-    let mutation = incrementCall { input: increment };
+    let mutation = send_cashCall { recipient: address2, amount: amount.into() };
     let mutation = get_mutation(Amount::ZERO, mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     application.run_json_query(mutation).await?;
 
-    let result = application.run_json_query(query).await?;
-    let counter_value = read_evm_u64_entry(result);
-    assert_eq!(counter_value, original_counter_value + increment);
+    // Checking the balances
+
+    let balance1_after = node_service.balance(&account1).await?;
+    let balance2_after = node_service.balance(&account2).await?;
+    assert_eq!(balance1_after, balance1 - amount);
+    assert_eq!(balance2_after, balance2 + amount);
+
+    let result = application.run_json_query(query1).await?;
+    assert_eq!(read_evm_u256_entry(result), balance1_after.into());
+
+    let result = application.run_json_query(query2.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), balance2.into());
+
+    // Winding down
 
     node_service.ensure_is_running()?;
 
@@ -1378,9 +1410,8 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::Address;
     use alloy_sol_types::sol;
-    use linera_base::{identifiers::AccountOwner, vm::EvmQuery};
+    use linera_base::vm::EvmQuery;
     use linera_execution::{
         evm::inputs::{get_mutation, EvmInstantiation},
         test_utils::solidity::get_evm_contract_path,
@@ -1391,11 +1422,8 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
-    let account_owner = client.get_owner();
-    let Some(AccountOwner::Address20(address)) = account_owner else {
-        panic!("The owner should be of the form Some(Address20(...))");
-    };
-    let owner = Address::from(address);
+    let account_owner = client.get_owner().unwrap();
+    let owner = account_owner.to_evm_address().unwrap();
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     sol! {
