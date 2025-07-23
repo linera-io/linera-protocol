@@ -32,7 +32,7 @@ use revm_interpreter::{
     CallInput, CallInputs, CallOutcome, CallValue, CreateInputs, CreateOutcome, CreateScheme, Gas,
     InputsImpl, InstructionResult, InterpreterResult,
 };
-use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind, U256};
+use revm_primitives::{hardfork::SpecId, Address, Log, TxKind, U256};
 use revm_state::EvmState;
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +43,8 @@ use crate::{
             get_internal_mutation, EvmInstantiation, EvmMutation, ensure_message_length, ensure_selector_presence, forbid_execute_operation_origin,
             get_revm_execute_message_bytes, get_revm_instantiation_bytes,
             get_revm_process_streams_bytes, has_selector, EXECUTE_MESSAGE_SELECTOR,
-            INSTANTIATE_SELECTOR, PROCESS_STREAMS_SELECTOR,
+            INSTANTIATE_SELECTOR, PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS,
+            ZERO_ADDRESS, PRECOMPILE_ADDRESS,
         },
         read_amount,
     },
@@ -204,18 +205,6 @@ impl UserServiceModule for EvmServiceModule {
 }
 
 type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<Runtime>>>;
-
-// This is the precompile address that contains the Linera specific
-// functionalities accessed from the EVM.
-const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
-
-// This is the zero address used when no address can be obtained from `authenticated_signer`
-// and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
-// if an EVM contract calls another EVM contract.
-const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
-
-// This is the address being used for service calls.
-const SERVICE_ADDRESS: Address = address!("0000000000000000000000000000000000002000");
 
 fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
@@ -1077,6 +1066,9 @@ where
         value: U256,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
+        self.db.caller = caller;
+        self.db.value = value;
+        self.db.deposit_funds()?;
         let data = Bytes::from(input);
         let kind = match ch {
             EvmTxKind::Create => TxKind::Create,
@@ -1243,6 +1235,10 @@ where
         kind: TxKind,
         input: Vec<u8>,
     ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
+        let caller = SERVICE_ADDRESS;
+        let value = U256::ZERO;
+        self.db.caller = caller;
+        self.db.value = value;
         let data = Bytes::from(input);
         let block_env = self.db.get_service_block_env()?;
         let inspector = CallInterceptorService {
@@ -1250,9 +1246,7 @@ where
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
         };
-        let caller = SERVICE_ADDRESS;
         let nonce = self.db.get_nonce(&caller)?;
-        let value = U256::ZERO;
         let result_state = {
             let ctx: revm_context::Context<
                 BlockEnv,

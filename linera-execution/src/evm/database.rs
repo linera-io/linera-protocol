@@ -9,7 +9,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use linera_base::vm::VmRuntime;
+use linera_base::{
+    identifiers::{Account, AccountOwner},
+    vm::VmRuntime,
+};
 use linera_views::common::from_bytes_option;
 use revm::{primitives::keccak256, Database, DatabaseCommit, DatabaseRef};
 use revm_context::BlockEnv;
@@ -19,6 +22,7 @@ use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
 use crate::{
+    evm::{read_amount, inputs::ZERO_ADDRESS},
     ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError,
     ServiceRuntime,
 };
@@ -77,6 +81,10 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     /// This is the EVM address of the contract.
     /// At the creation, it is set to `Address::ZERO` and then later set to the correct value.
     pub contract_address: Address,
+    /// The caller to the smart contract
+    pub caller: Address,
+    /// The value of the smart contract
+    pub value: U256,
     /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
     /// The uncommitted changes to the contract.
@@ -90,6 +98,8 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
         Self {
             storage_stats: self.storage_stats.clone(),
             contract_address: self.contract_address,
+            caller: self.caller,
+            value: self.value,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
             error: self.error.clone(),
@@ -135,6 +145,8 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
         Self {
             storage_stats: Arc::new(Mutex::new(storage_stats)),
             contract_address: Address::ZERO,
+            caller: Address::ZERO,
+            value: U256::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
             error: Arc::new(Mutex::new(None)),
@@ -220,6 +232,8 @@ where
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let account_owner = address.into();
         tracing::info!("basic_ref, account_owner = {account_owner}");
+        // The balances being used are the ones of Linera. So, we need to
+        // access them at first.
         let balance = runtime.read_owner_balance(account_owner)?;
         tracing::info!("basic_ref, balance = {balance}");
 
@@ -227,20 +241,27 @@ where
         let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, address);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
-        let account_info = from_bytes_option::<AccountInfo>(&result)?;
-        if balance == U256::ZERO || address == self.contract_address {
-            tracing::info!("basic_ref, return(A) account_info = {account_info:?}");
-            return Ok(account_info);
-        }
-        if let Some(mut account_info) = account_info {
-            account_info.balance = balance;
-            tracing::info!("basic_ref, return(B) account_info = {account_info:?}");
-            return Ok(Some(account_info));
-        }
+        let mut account_info = match result {
+            None => AccountInfo::default(),
+            Some(bytes) => bcs::from_bytes(&bytes)?,
+        };
+        // The funds have been immediately deposited in deposit_funds.
+        // The EVM will do the same before even the execution of
+        // the constructor or function.
+        // Therefore, we need to adjust the values.
+        // This will ensure that at any time the balances in EVM
+        // and Linera are exactly matching during the execution.
+        let start_balance = if self.caller == address {
+            balance + self.value
+        } else if self.contract_address == address {
+            balance - self.value
+        } else {
+            balance
+        };
+        account_info.balance = start_balance;
         // The balance is non-zero. Therefore, the account exists.đ
         // However, the state is None. Therefore, we need to create
         // a default account first.
-        let account_info = AccountInfo { balance, ..Default::default() };
         tracing::info!("basic_ref, return(C) account_info = {account_info:?}");
         Ok(Some(account_info))
     }
@@ -441,6 +462,26 @@ where
         let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
         block_env.gas_limit = gas_limit;
         Ok(block_env)
+    }
+
+    pub fn deposit_funds(&self) -> Result<(), ExecutionError> {
+        if self.value != U256::ZERO {
+            let mut runtime = self.runtime.lock().expect("The lock should be possible");
+            if self.caller == ZERO_ADDRESS {
+                let error = EvmExecutionError::UnknownSigner;
+                return Err(error.into());
+            }
+            let source: AccountOwner = self.caller.into();
+            let chain_id = runtime.chain_id()?;
+            let application_id = runtime.application_id()?;
+            let owner: AccountOwner = application_id.into();
+            let destination = Account { chain_id, owner };
+            let amount = read_amount(self.value)?;
+            tracing::info!("deposit_funds, runtime.transfer, before, ");
+            runtime.transfer(source, destination, amount)?;
+            tracing::info!("deposit_funds, runtime.transfer, after");
+        }
+        Ok(())
     }
 }
 

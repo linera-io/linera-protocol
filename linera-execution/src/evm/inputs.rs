@@ -11,9 +11,21 @@ use linera_base::{
     ensure,
     identifiers::{ApplicationId, ChainId, StreamName},
 };
-use revm_primitives::U256;
+use revm_primitives::{address, Address, U256};
 use serde::{Deserialize, Serialize};
 use crate::{ExecutionError, EvmExecutionError};
+
+// This is the precompile address that contains the Linera specific
+// functionalities accessed from the EVM.
+pub(crate) const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
+
+// This is the zero address used when no address can be obtained from `authenticated_signer`
+// and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
+// if an EVM contract calls another EVM contract.
+pub(crate) const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
+
+// This is the address being used for service calls.
+pub(crate) const SERVICE_ADDRESS: Address = address!("0000000000000000000000000000000000002000");
 
 /// This is the selector of the `execute_message` that should be called
 /// only from a submitted message
