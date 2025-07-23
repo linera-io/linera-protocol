@@ -193,7 +193,7 @@ pub(crate) mod metrics {
 }
 
 /// The BCS-serialized size of an empty [`Block`].
-pub(crate) const EMPTY_BLOCK_SIZE: usize = 95;
+pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
@@ -775,7 +775,7 @@ where
             block,
         )?;
 
-        for transaction in block.transactions() {
+        for transaction in block.transaction_refs() {
             block_execution_tracker
                 .execute_transaction(transaction, round, chain)
                 .await?;
@@ -856,7 +856,8 @@ where
             }
         );
         ensure!(
-            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
+            !block.incoming_bundles().collect::<Vec<_>>().is_empty()
+                || !block.operations().collect::<Vec<_>>().is_empty(),
             ChainError::EmptyBlock
         );
 
@@ -871,7 +872,8 @@ where
 
         if *self.execution_state.system.closed.get() {
             ensure!(
-                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
+                !block.incoming_bundles().collect::<Vec<_>>().is_empty()
+                    && block.has_only_rejected_messages(),
                 ChainError::ClosedChain
             );
         }
@@ -922,11 +924,9 @@ where
         let tip = self.tip_state.get_mut();
         tip.block_hash = Some(hash);
         tip.next_block_height.try_add_assign_one()?;
-        tip.update_counters(
-            &block.body.incoming_bundles,
-            &block.body.operations,
-            &block.body.messages,
-        )?;
+        let incoming_bundles: Vec<_> = block.body.incoming_bundles().cloned().collect();
+        let operations: Vec<_> = block.body.operations().cloned().collect();
+        tip.update_counters(&incoming_bundles, &operations, &block.body.messages)?;
         self.confirmed_log.push(hash);
         self.preprocessed_blocks.remove(&block.header.height)?;
         Ok(())
@@ -962,7 +962,7 @@ where
         let mut mandatory = HashSet::<ApplicationId>::from_iter(
             app_permissions.mandatory_applications.iter().cloned(),
         );
-        for operation in &block.operations {
+        for operation in block.operations() {
             if operation.is_exempt_from_permissions() {
                 mandatory.clear();
                 continue;

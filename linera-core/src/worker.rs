@@ -847,9 +847,7 @@ where
         trace!("{} <-- {:?}", self.nickname, certificate);
         #[cfg(with_metrics)]
         {
-            let confirmed_transactions = (certificate.block().body.incoming_bundles.len()
-                + certificate.block().body.operations.len())
-                as u64;
+            let confirmed_transactions = certificate.block().body.transactions.len() as u64;
 
             metrics::NUM_ROUNDS_IN_CERTIFICATE
                 .with_label_values(&[

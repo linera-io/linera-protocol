@@ -23,7 +23,8 @@ use crate::chain::metrics;
 use crate::{
     chain::EMPTY_BLOCK_SIZE,
     data_types::{
-        IncomingBundle, MessageAction, OperationResult, PostedMessage, ProposedBlock, Transaction,
+        IncomingBundle, MessageAction, OperationResult, PostedMessage, ProposedBlock,
+        TransactionRef,
     },
     ChainError, ChainExecutionContext, ExecutionResultExt,
 };
@@ -95,14 +96,15 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
-            expected_outcomes_count: proposal.incoming_bundles.len() + proposal.operations.len(),
+            expected_outcomes_count: proposal.incoming_bundles().count()
+                + proposal.operations().count(),
         })
     }
 
     /// Executes a transaction in the context of the block.
     pub async fn execute_transaction<C>(
         &mut self,
-        transaction: Transaction<'_>,
+        transaction: TransactionRef<'_>,
         round: Option<u32>,
         chain: &mut ExecutionStateView<C>,
     ) -> Result<(), ChainError>
@@ -114,7 +116,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let mut txn_tracker = self.new_transaction_tracker()?;
 
         match transaction {
-            Transaction::ReceiveMessages(incoming_bundle) => {
+            TransactionRef::ReceiveMessages(incoming_bundle) => {
                 self.resource_controller_mut()
                     .track_block_size_of(&incoming_bundle)
                     .with_execution_context(chain_execution_context)?;
@@ -130,7 +132,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .await?;
                 }
             }
-            Transaction::ExecuteOperation(operation) => {
+            TransactionRef::ExecuteOperation(operation) => {
                 self.resource_controller_mut()
                     .with_state(&mut chain.system)
                     .await?
@@ -361,12 +363,15 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns the execution context for the current transaction.
-    pub fn chain_execution_context(&self, transaction: &Transaction<'_>) -> ChainExecutionContext {
+    pub fn chain_execution_context(
+        &self,
+        transaction: &TransactionRef<'_>,
+    ) -> ChainExecutionContext {
         match transaction {
-            Transaction::ReceiveMessages(_) => {
+            TransactionRef::ReceiveMessages(_) => {
                 ChainExecutionContext::IncomingBundle(self.transaction_index)
             }
-            Transaction::ExecuteOperation(_) => {
+            TransactionRef::ExecuteOperation(_) => {
                 ChainExecutionContext::Operation(self.transaction_index)
             }
         }

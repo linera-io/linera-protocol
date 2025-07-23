@@ -22,7 +22,7 @@ use thiserror::Error;
 use crate::{
     data_types::{
         BlockExecutionOutcome, IncomingBundle, MessageBundle, OperationResult, OutgoingMessageExt,
-        ProposedBlock,
+        ProposedBlock, Transaction,
     },
     types::CertificateValue,
 };
@@ -254,7 +254,7 @@ impl<'de> Deserialize<'de> for Block {
         }
         let inner = Inner::deserialize(deserializer)?;
 
-        let bundles_hash = hashing::hash_vec(&inner.body.incoming_bundles);
+        let transactions_hash = hashing::hash_vec(&inner.body.transactions);
         let messages_hash = hashing::hash_vec_vec(&inner.body.messages);
         let previous_message_blocks_hash = CryptoHash::new(&PreviousMessageBlocksMap {
             inner: Cow::Borrowed(&inner.body.previous_message_blocks),
@@ -262,7 +262,6 @@ impl<'de> Deserialize<'de> for Block {
         let previous_event_blocks_hash = CryptoHash::new(&PreviousEventBlocksMap {
             inner: Cow::Borrowed(&inner.body.previous_event_blocks),
         });
-        let operations_hash = hashing::hash_vec(&inner.body.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&inner.body.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&inner.body.events);
         let blobs_hash = hashing::hash_vec_vec(&inner.body.blobs);
@@ -276,8 +275,7 @@ impl<'de> Deserialize<'de> for Block {
             state_hash: inner.header.state_hash,
             previous_block_hash: inner.header.previous_block_hash,
             authenticated_signer: inner.header.authenticated_signer,
-            bundles_hash,
-            operations_hash,
+            transactions_hash,
             messages_hash,
             previous_message_blocks_hash,
             previous_event_blocks_hash,
@@ -318,10 +316,8 @@ pub struct BlockHeader {
     pub authenticated_signer: Option<AccountOwner>,
 
     // Inputs to the block, chosen by the block proposer.
-    /// Cryptographic hash of all the incoming bundles in the block.
-    pub bundles_hash: CryptoHash,
-    /// Cryptographic hash of all the operations in the block.
-    pub operations_hash: CryptoHash,
+    /// Cryptographic hash of all the transactions in the block.
+    pub transactions_hash: CryptoHash,
 
     // Outcome of the block execution.
     /// Cryptographic hash of all the messages in the block.
@@ -343,11 +339,10 @@ pub struct BlockHeader {
 /// The body of a block containing all the data included in the block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct BlockBody {
-    /// A selection of incoming messages to be executed first. Successive messages of the same
-    /// sender and height are grouped together for conciseness.
-    pub incoming_bundles: Vec<IncomingBundle>,
-    /// The operations to execute.
-    pub operations: Vec<Operation>,
+    /// The transactions to execute in this block. Each transaction can be either
+    /// incoming messages or an operation.
+    #[graphql(skip)]
+    pub transactions: Vec<Transaction>,
     /// The list of outgoing messages for each transaction.
     pub messages: Vec<Vec<OutgoingMessage>>,
     /// The hashes and heights of previous blocks that sent messages to the same recipients.
@@ -364,9 +359,27 @@ pub struct BlockBody {
     pub operation_results: Vec<OperationResult>,
 }
 
+impl BlockBody {
+    /// Returns all operations in this block body.
+    pub fn operations(&self) -> impl Iterator<Item = &Operation> {
+        self.transactions.iter().filter_map(|tx| match tx {
+            Transaction::ExecuteOperation(operation) => Some(operation),
+            Transaction::ReceiveMessages(_) => None,
+        })
+    }
+
+    /// Returns all incoming bundles in this block body.
+    pub fn incoming_bundles(&self) -> impl Iterator<Item = &IncomingBundle> {
+        self.transactions.iter().filter_map(|tx| match tx {
+            Transaction::ReceiveMessages(bundle) => Some(bundle),
+            Transaction::ExecuteOperation(_) => None,
+        })
+    }
+}
+
 impl Block {
     pub fn new(block: ProposedBlock, outcome: BlockExecutionOutcome) -> Self {
-        let bundles_hash = hashing::hash_vec(&block.incoming_bundles);
+        let transactions_hash = hashing::hash_vec(&block.transactions);
         let messages_hash = hashing::hash_vec_vec(&outcome.messages);
         let previous_message_blocks_hash = CryptoHash::new(&PreviousMessageBlocksMap {
             inner: Cow::Borrowed(&outcome.previous_message_blocks),
@@ -374,7 +387,6 @@ impl Block {
         let previous_event_blocks_hash = CryptoHash::new(&PreviousEventBlocksMap {
             inner: Cow::Borrowed(&outcome.previous_event_blocks),
         });
-        let operations_hash = hashing::hash_vec(&block.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&outcome.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&outcome.events);
         let blobs_hash = hashing::hash_vec_vec(&outcome.blobs);
@@ -388,8 +400,7 @@ impl Block {
             state_hash: outcome.state_hash,
             previous_block_hash: block.previous_block_hash,
             authenticated_signer: block.authenticated_signer,
-            bundles_hash,
-            operations_hash,
+            transactions_hash,
             messages_hash,
             previous_message_blocks_hash,
             previous_event_blocks_hash,
@@ -400,8 +411,7 @@ impl Block {
         };
 
         let body = BlockBody {
-            incoming_bundles: block.incoming_bundles,
-            operations: block.operations,
+            transactions: block.transactions,
             messages: outcome.messages,
             previous_message_blocks: outcome.previous_message_blocks,
             previous_event_blocks: outcome.previous_event_blocks,
@@ -479,8 +489,7 @@ impl Block {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
         self.body
-            .operations
-            .iter()
+            .operations()
             .flat_map(Operation::published_blob_ids)
             .collect()
     }
@@ -546,8 +555,7 @@ impl Block {
         let ProposedBlock {
             chain_id,
             epoch,
-            incoming_bundles,
-            operations,
+            transactions,
             height,
             timestamp,
             authenticated_signer,
@@ -555,8 +563,7 @@ impl Block {
         } = block;
         *chain_id == self.header.chain_id
             && *epoch == self.header.epoch
-            && *incoming_bundles == self.body.incoming_bundles
-            && *operations == self.body.operations
+            && *transactions == self.body.transactions
             && *height == self.header.height
             && *timestamp == self.header.timestamp
             && *authenticated_signer == self.header.authenticated_signer
@@ -567,8 +574,7 @@ impl Block {
         let proposed_block = ProposedBlock {
             chain_id: self.header.chain_id,
             epoch: self.header.epoch,
-            incoming_bundles: self.body.incoming_bundles,
-            operations: self.body.operations,
+            transactions: self.body.transactions,
             height: self.header.height,
             timestamp: self.header.timestamp,
             authenticated_signer: self.header.authenticated_signer,

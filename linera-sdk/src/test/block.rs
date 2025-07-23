@@ -14,6 +14,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock, SignatureAggregator,
+        Transaction,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
@@ -66,8 +67,7 @@ impl BlockBuilder {
             block: ProposedBlock {
                 epoch,
                 chain_id,
-                incoming_bundles: vec![],
-                operations: vec![],
+                transactions: vec![],
                 previous_block_hash,
                 height,
                 authenticated_signer: Some(owner),
@@ -99,7 +99,9 @@ impl BlockBuilder {
 
     /// Adds a [`SystemOperation`] to this block.
     pub(crate) fn with_system_operation(&mut self, operation: SystemOperation) -> &mut Self {
-        self.block.operations.push(operation.into());
+        self.block
+            .transactions
+            .push(Transaction::ExecuteOperation(operation.into()));
         self
     }
 
@@ -152,10 +154,12 @@ impl BlockBuilder {
         application_id: ApplicationId,
         operation: impl Into<Vec<u8>>,
     ) -> &mut Self {
-        self.block.operations.push(Operation::User {
-            application_id,
-            bytes: operation.into(),
-        });
+        self.block
+            .transactions
+            .push(Transaction::ExecuteOperation(Operation::User {
+                application_id,
+                bytes: operation.into(),
+            }));
         self
     }
 
@@ -167,7 +171,9 @@ impl BlockBuilder {
         &mut self,
         bundles: impl IntoIterator<Item = IncomingBundle>,
     ) -> &mut Self {
-        self.block.incoming_bundles.extend(bundles);
+        self.block
+            .transactions
+            .extend(bundles.into_iter().map(Transaction::ReceiveMessages));
         self
     }
 

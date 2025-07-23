@@ -130,7 +130,7 @@ where
     async fn register(&self, value: &ConfirmedBlock) -> Result<(), IndexerError> {
         let mut plugin = self.0.lock().await;
         let chain_id = value.chain_id();
-        for (index, content) in value.block().body.operations.iter().enumerate() {
+        for (index, content) in value.block().body.operations().enumerate() {
             let key = OperationKey {
                 chain_id,
                 height: value.height(),
