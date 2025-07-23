@@ -342,7 +342,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         Ok(())
     }
 
-    /// Returns recipient chain ids for outgoing messages in the block.
+    /// Returns recipient chain IDs for outgoing messages in the block.
     pub fn recipients(&self) -> BTreeSet<ChainId> {
         self.messages
             .iter()
@@ -351,7 +351,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .collect()
     }
 
-    /// Returns stream ids for events published in the block.
+    /// Returns stream IDs for events published in the block.
     pub fn event_streams(&self) -> BTreeSet<StreamId> {
         self.events
             .iter()
