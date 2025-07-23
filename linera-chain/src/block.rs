@@ -338,6 +338,7 @@ pub struct BlockHeader {
 
 /// The body of a block containing all the data included in the block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[graphql(complex)]
 pub struct BlockBody {
     /// The transactions to execute in this block. Each transaction can be either
     /// incoming messages or an operation.
@@ -374,6 +375,20 @@ impl BlockBody {
             Transaction::ReceiveMessages(bundle) => Some(bundle),
             Transaction::ExecuteOperation(_) => None,
         })
+    }
+}
+
+#[async_graphql::ComplexObject]
+impl BlockBody {
+    /// Metadata about the transactions in this block.
+    async fn transaction_metadata(&self) -> Vec<crate::data_types::TransactionMetadata> {
+        self.transactions
+            .iter()
+            .enumerate()
+            .map(|(i, tx)| {
+                crate::data_types::TransactionMetadata::from_transaction_with_index(tx, i as u32)
+            })
+            .collect()
     }
 }
 

@@ -13,8 +13,8 @@ use linera_base::{
         ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
-    doc_scalar, ensure, hex_debug,
-    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, StreamId},
+    doc_scalar, ensure, hex, hex_debug,
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, MessageId, StreamId},
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
@@ -40,6 +40,7 @@ mod data_types_tests;
 ///   received ahead of time in the inbox of the chain.
 /// * This constraint does not apply to the execution of confirmed blocks.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[graphql(complex)]
 pub struct ProposedBlock {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
@@ -150,6 +151,18 @@ impl ProposedBlock {
     }
 }
 
+#[async_graphql::ComplexObject]
+impl ProposedBlock {
+    /// Metadata about the transactions in this block.
+    async fn transaction_metadata(&self) -> Vec<TransactionMetadata> {
+        self.transactions
+            .iter()
+            .enumerate()
+            .map(|(i, tx)| TransactionMetadata::from_transaction_with_index(tx, i as u32))
+            .collect()
+    }
+}
+
 /// A transaction in a block: incoming messages or an operation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Transaction {
@@ -160,6 +173,69 @@ pub enum Transaction {
 }
 
 impl BcsHashable<'_> for Transaction {}
+
+/// GraphQL-compatible operation representation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct GraphQLOperation {
+    /// The type of operation: "System" or "User"
+    pub operation_type: String,
+    /// For user operations, the application ID
+    pub application_id: Option<ApplicationId>,
+    /// For user operations, the serialized bytes (as a hex string for GraphQL)
+    pub user_bytes_hex: Option<String>,
+}
+
+impl From<&Operation> for GraphQLOperation {
+    fn from(operation: &Operation) -> Self {
+        match operation {
+            Operation::System(_) => GraphQLOperation {
+                operation_type: "System".to_string(),
+                application_id: None,
+                user_bytes_hex: None,
+            },
+            Operation::User {
+                application_id,
+                bytes,
+            } => GraphQLOperation {
+                operation_type: "User".to_string(),
+                application_id: Some(*application_id),
+                user_bytes_hex: Some(hex::encode(bytes)),
+            },
+        }
+    }
+}
+
+/// GraphQL-compatible metadata about a transaction.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct TransactionMetadata {
+    /// The type of transaction: "ReceiveMessages" or "ExecuteOperation"
+    pub transaction_type: String,
+    /// The index of this transaction in the block
+    pub index: u32,
+    /// The incoming bundle, if this is a ReceiveMessages transaction
+    pub incoming_bundle: Option<IncomingBundle>,
+    /// The operation, if this is an ExecuteOperation transaction
+    pub operation: Option<GraphQLOperation>,
+}
+
+impl TransactionMetadata {
+    pub fn from_transaction_with_index(transaction: &Transaction, index: u32) -> Self {
+        match transaction {
+            Transaction::ReceiveMessages(bundle) => TransactionMetadata {
+                transaction_type: "ReceiveMessages".to_string(),
+                index,
+                incoming_bundle: Some(bundle.clone()),
+                operation: None,
+            },
+            Transaction::ExecuteOperation(op) => TransactionMetadata {
+                transaction_type: "ExecuteOperation".to_string(),
+                index,
+                incoming_bundle: None,
+                operation: Some(GraphQLOperation::from(op)),
+            },
+        }
+    }
+}
 
 /// A chain ID with a block height.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]

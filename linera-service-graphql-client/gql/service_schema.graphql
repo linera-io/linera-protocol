@@ -123,6 +123,10 @@ type BlockBody {
 	The execution result for each operation.
 	"""
 	operationResults: [OperationResult!]!
+	"""
+	Metadata about the transactions in this block.
+	"""
+	transactionMetadata: [TransactionMetadata!]!
 }
 
 """
@@ -547,6 +551,24 @@ A unique identifier for a user application or for the system application
 scalar GenericApplicationId
 
 """
+GraphQL-compatible operation representation.
+"""
+type GraphQLOperation {
+	"""
+	The type of operation: "System" or "User"
+	"""
+	operationType: String!
+	"""
+	For user operations, the application ID
+	"""
+	applicationId: ApplicationId
+	"""
+	For user operations, the serialized bytes (as a hex string for GraphQL)
+	"""
+	userBytesHex: String
+}
+
+"""
 The state of an inbox.
 * An inbox is used to track bundles received and executed locally.
 * A `MessageBundle` consists of a logical cursor `(height, index)` and some message
@@ -578,6 +600,24 @@ type InboxStateView {
 	At least one of `added_bundles` and `removed_bundles` should be empty.
 	"""
 	removedBundles: QueueView_MessageBundle_f4399f0b!
+}
+
+"""
+A bundle of cross-chain messages.
+"""
+type IncomingBundle {
+	"""
+	The origin of the messages.
+	"""
+	origin: ChainId!
+	"""
+	The messages to be delivered to the inbox identified by `origin`.
+	"""
+	bundle: MessageBundle!
+	"""
+	What to do with the message.
+	"""
+	action: MessageAction!
 }
 
 """
@@ -687,6 +727,11 @@ type MapView_StreamId_BlockHeight_e6657ad9 {
 A message to be sent and possibly executed in the receiver's block.
 """
 scalar Message
+
+"""
+Whether an incoming message is accepted or rejected.
+"""
+scalar MessageAction
 
 """
 A set of messages from a single block, for a single destination.
@@ -1200,6 +1245,28 @@ type TimestampedBundleInInbox {
 	The timestamp when the bundle was added to the inbox.
 	"""
 	seen: Timestamp!
+}
+
+"""
+GraphQL-compatible metadata about a transaction.
+"""
+type TransactionMetadata {
+	"""
+	The type of transaction: "ReceiveMessages" or "ExecuteOperation"
+	"""
+	transactionType: String!
+	"""
+	The index of this transaction in the block
+	"""
+	index: Int!
+	"""
+	The incoming bundle, if this is a ReceiveMessages transaction
+	"""
+	incomingBundle: IncomingBundle
+	"""
+	The operation, if this is an ExecuteOperation transaction
+	"""
+	operation: GraphQLOperation
 }
 
 scalar VersionInfo
