@@ -21,6 +21,7 @@ test('Blocks mounting', () => {
                 previousBlockHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
                 messagesHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 previousMessageBlocksHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
+                previousEventBlocksHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 eventsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 bundlesHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 operationsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
@@ -49,6 +50,7 @@ test('Blocks mounting', () => {
                   }
                 }]],
                 previousMessageBlocks: {},
+                previousEventBlocks: {},
                 events: [[]],
                 oracleResponses: [],
                 blobs: [[]],
