@@ -52,6 +52,7 @@ metrics = [
     "linera-base/metrics",
     "linera-client/metrics",
     "linera-faucet-server/metrics",
+    "linera-metrics",
 ]
 storage-service = ["linera-storage-service"]
 
