@@ -63,7 +63,7 @@ use linera_views::ViewError;
 use rand::prelude::SliceRandom as _;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::OwnedRwLockReadGuard;
+use tokio::sync::{mpsc, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
@@ -235,6 +235,7 @@ impl<Env: Environment> Client<Env> {
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
+        timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
     ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
@@ -249,6 +250,7 @@ impl<Env: Environment> Client<Env> {
             preferred_owner,
             initial_block_hash: block_hash,
             initial_next_block_height: next_block_height,
+            timing_sender,
         }
     }
 
@@ -1370,6 +1372,14 @@ impl MessagePolicy {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum TimingType {
+    ExecuteOperations,
+    ExecuteBlock,
+    SubmitBlockProposal,
+    UpdateValidators,
+}
+
 #[derive(Debug, Clone)]
 pub struct ChainClientOptions {
     /// Maximum number of pending message bundles processed at a time in a block.
@@ -1422,6 +1432,8 @@ pub struct ChainClient<Env: Environment> {
     initial_next_block_height: BlockHeight,
     /// The last block hash as read from the wallet.
     initial_block_hash: Option<CryptoHash>,
+    /// Optional timing sender for benchmarking.
+    timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
 }
 
 impl<Env: Environment> Clone for ChainClient<Env> {
@@ -1433,6 +1445,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
             preferred_owner: self.preferred_owner,
             initial_next_block_height: self.initial_next_block_height,
             initial_block_hash: self.initial_block_hash,
+            timing_sender: self.timing_sender.clone(),
         }
     }
 }
@@ -1625,6 +1638,11 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip(self))]
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
+    }
+
+    /// Gets a clone of the timing sender for benchmarking.
+    pub fn timing_sender(&self) -> Option<mpsc::UnboundedSender<(u64, TimingType)>> {
+        self.timing_sender.clone()
     }
 
     /// Gets the ID of the admin chain.
@@ -2295,14 +2313,23 @@ impl<Env: Environment> ChainClient<Env> {
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        loop {
+        let timing_start = std::time::Instant::now();
+
+        let result = loop {
+            let execute_block_start = std::time::Instant::now();
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
-                    return Ok(ClientOutcome::Committed(certificate));
+                    if let Some(sender) = &self.timing_sender {
+                        let _ = sender.send((
+                            execute_block_start.elapsed().as_millis() as u64,
+                            TimingType::ExecuteBlock,
+                        ));
+                    }
+                    break Ok(ClientOutcome::Committed(certificate));
                 }
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                    break Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
@@ -2311,7 +2338,16 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                 }
             };
+        };
+
+        if let Some(sender) = &self.timing_sender {
+            let _ = sender.send((
+                timing_start.elapsed().as_millis() as u64,
+                TimingType::ExecuteOperations,
+            ));
         }
+
+        result
     }
 
     /// Executes an operation.
@@ -2823,6 +2859,7 @@ impl<Env: Environment> ChainClient<Env> {
         let committee = self.local_committee().await?;
         let block = Block::new(proposed_block, outcome);
         // Send the query to validators.
+        let submit_block_proposal_start = std::time::Instant::now();
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             self.client
@@ -2836,8 +2873,22 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?;
             self.client.finalize_block(&committee, certificate).await?
         };
+        if let Some(sender) = &self.timing_sender {
+            let _ = sender.send((
+                submit_block_proposal_start.elapsed().as_millis() as u64,
+                TimingType::SubmitBlockProposal,
+            ));
+        }
+
         debug!(round = %certificate.round, "Sending confirmed block to validators");
+        let update_validators_start = std::time::Instant::now();
         self.update_validators(Some(&committee)).await?;
+        if let Some(sender) = &self.timing_sender {
+            let _ = sender.send((
+                update_validators_start.elapsed().as_millis() as u64,
+                TimingType::UpdateValidators,
+            ));
+        }
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 

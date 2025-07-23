@@ -61,6 +61,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 #[cfg(feature = "benchmark")]
 use {
+    linera_client::chain_listener::{ChainListener, ChainListenerConfig},
     linera_service::{
         cli::command::BenchmarkCommand,
         cli_wrappers::{local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
@@ -819,18 +820,23 @@ impl Runnable for Job {
                 assert!(bps > 0, "BPS must be greater than 0");
                 let num_chains_per_chain_group = if dont_use_cross_chain_messages { 1 } else { 2 };
 
+                let listener_config = ChainListenerConfig {
+                    skip_process_inbox: true,
+                    ..Default::default()
+                };
+
                 let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
                     .take(num_chain_groups * num_chains_per_chain_group)
                     .collect();
                 signer.persist().await?;
 
                 let mut context = ClientContext::new(
-                    storage,
+                    storage.clone(),
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
-                let (chain_clients, blocks_infos, committee) = context
+                let (chain_clients, blocks_infos) = context
                     .prepare_for_benchmark(
                         num_chain_groups,
                         num_chains_per_chain_group,
@@ -857,20 +863,33 @@ impl Runnable for Job {
                     }
                 }
 
+                let shutdown_notifier = CancellationToken::new();
+                tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+                let shared_context = std::sync::Arc::new(futures::lock::Mutex::new(context));
+                let chain_listener = ChainListener::new(
+                    listener_config,
+                    shared_context.clone(),
+                    storage.clone(),
+                    shutdown_notifier.clone(),
+                );
                 linera_client::benchmark::Benchmark::run_benchmark(
                     num_chain_groups,
                     transactions_per_block,
                     bps,
                     chain_clients.clone(),
                     blocks_infos,
-                    committee,
                     health_check_endpoints,
                     runtime_in_seconds,
                     delay_between_chain_groups_ms,
-                    context.client_metrics().map(|m| m.timing_sender.clone()),
+                    chain_listener,
+                    &shutdown_notifier,
                 )
                 .await?;
 
+                let mut context = std::sync::Arc::try_unwrap(shared_context)
+                    .map_err(|_| anyhow::anyhow!("Failed to unwrap shared context"))?
+                    .into_inner();
                 context
                     .wrap_up_benchmark(chain_clients, close_chains, wrap_up_max_in_flight)
                     .await?;
