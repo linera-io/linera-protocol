@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use hdrhistogram::Histogram;
+use linera_core::client::TimingType;
 use tokio::{sync::mpsc, task, time};
 use tracing::{debug, info, warn};
 
@@ -29,110 +30,74 @@ pub enum ClientMetricsError {
     HistogramRecordError(#[from] hdrhistogram::RecordError),
 }
 
-pub struct SubmitFastBlockProposalTimings {
-    pub creating_proposal_ms: u64,
-    pub stage_block_execution_ms: u64,
-    pub creating_confirmed_block_ms: u64,
-    pub submitting_block_proposal_ms: u64,
+pub struct ExecuteBlockTimingsHistograms {
+    pub submit_block_proposal_histogram: Histogram<u64>,
+    pub update_validators_histogram: Histogram<u64>,
 }
 
-pub struct BlockTimeTimings {
-    pub get_pending_message_bundles_ms: u64,
-    pub submit_fast_block_proposal_ms: u64,
-    pub submit_fast_block_proposal_timings: SubmitFastBlockProposalTimings,
-    pub communicate_chain_updates_ms: u64,
-}
-
-pub struct BlockTimings {
-    pub block_time_ms: u64,
-    pub block_time_timings: BlockTimeTimings,
-}
-
-pub struct SubmitFastBlockProposalTimingsHistograms {
-    pub creating_proposal_histogram: Histogram<u64>,
-    pub stage_block_execution_histogram: Histogram<u64>,
-    pub creating_confirmed_block_histogram: Histogram<u64>,
-    pub submitting_block_proposal_histogram: Histogram<u64>,
-}
-
-impl SubmitFastBlockProposalTimingsHistograms {
+impl ExecuteBlockTimingsHistograms {
     pub fn new() -> Result<Self, ClientMetricsError> {
         Ok(Self {
-            creating_proposal_histogram: Histogram::<u64>::new(2)?,
-            stage_block_execution_histogram: Histogram::<u64>::new(2)?,
-            creating_confirmed_block_histogram: Histogram::<u64>::new(2)?,
-            submitting_block_proposal_histogram: Histogram::<u64>::new(2)?,
+            submit_block_proposal_histogram: Histogram::<u64>::new(2)?,
+            update_validators_histogram: Histogram::<u64>::new(2)?,
         })
     }
-
-    pub fn record(
-        &mut self,
-        submit_fast_block_proposal_timings: SubmitFastBlockProposalTimings,
-    ) -> Result<(), ClientMetricsError> {
-        self.creating_proposal_histogram
-            .record(submit_fast_block_proposal_timings.creating_proposal_ms)?;
-        self.stage_block_execution_histogram
-            .record(submit_fast_block_proposal_timings.stage_block_execution_ms)?;
-        self.creating_confirmed_block_histogram
-            .record(submit_fast_block_proposal_timings.creating_confirmed_block_ms)?;
-        self.submitting_block_proposal_histogram
-            .record(submit_fast_block_proposal_timings.submitting_block_proposal_ms)?;
-        Ok(())
-    }
 }
 
-pub struct BlockTimeTimingsHistograms {
-    pub get_pending_message_bundles_histogram: Histogram<u64>,
-    pub submit_fast_block_proposal_histogram: Histogram<u64>,
-    pub submit_fast_block_proposal_timings_histograms: SubmitFastBlockProposalTimingsHistograms,
-    pub communicate_chain_updates_histogram: Histogram<u64>,
+pub struct ExecuteOperationsTimingsHistograms {
+    pub execute_block_histogram: Histogram<u64>,
+    pub execute_block_timings_histograms: ExecuteBlockTimingsHistograms,
 }
 
-impl BlockTimeTimingsHistograms {
+impl ExecuteOperationsTimingsHistograms {
     pub fn new() -> Result<Self, ClientMetricsError> {
         Ok(Self {
-            get_pending_message_bundles_histogram: Histogram::<u64>::new(2)?,
-            submit_fast_block_proposal_histogram: Histogram::<u64>::new(2)?,
-            submit_fast_block_proposal_timings_histograms:
-                SubmitFastBlockProposalTimingsHistograms::new()?,
-            communicate_chain_updates_histogram: Histogram::<u64>::new(2)?,
+            execute_block_histogram: Histogram::<u64>::new(2)?,
+            execute_block_timings_histograms: ExecuteBlockTimingsHistograms::new()?,
         })
-    }
-
-    pub fn record(
-        &mut self,
-        block_time_timings: BlockTimeTimings,
-    ) -> Result<(), ClientMetricsError> {
-        self.get_pending_message_bundles_histogram
-            .record(block_time_timings.get_pending_message_bundles_ms)?;
-        self.submit_fast_block_proposal_histogram
-            .record(block_time_timings.submit_fast_block_proposal_ms)?;
-        self.submit_fast_block_proposal_timings_histograms
-            .record(block_time_timings.submit_fast_block_proposal_timings)?;
-        self.communicate_chain_updates_histogram
-            .record(block_time_timings.communicate_chain_updates_ms)?;
-        Ok(())
     }
 }
 
 pub struct BlockTimingsHistograms {
-    pub block_time_histogram: Histogram<u64>,
-    pub block_time_timings_histograms: BlockTimeTimingsHistograms,
+    pub execute_operations_histogram: Histogram<u64>,
+    pub execute_operations_timings_histograms: ExecuteOperationsTimingsHistograms,
 }
 
 impl BlockTimingsHistograms {
     pub fn new() -> Result<Self, ClientMetricsError> {
         Ok(Self {
-            block_time_histogram: Histogram::<u64>::new(2)?,
-            block_time_timings_histograms: BlockTimeTimingsHistograms::new()?,
+            execute_operations_histogram: Histogram::<u64>::new(2)?,
+            execute_operations_timings_histograms: ExecuteOperationsTimingsHistograms::new()?,
         })
     }
 
-    pub fn record(&mut self, block_timings: BlockTimings) -> Result<(), ClientMetricsError> {
-        self.block_time_histogram
-            .record(block_timings.block_time_ms)?;
-        self.block_time_timings_histograms
-            .record(block_timings.block_time_timings)?;
+    pub fn record_timing(
+        &mut self,
+        duration_ms: u64,
+        timing_type: TimingType,
+    ) -> Result<(), ClientMetricsError> {
+        match timing_type {
+            TimingType::ExecuteOperations => {
+                self.execute_operations_histogram.record(duration_ms)?;
+            }
+            TimingType::ExecuteBlock => {
+                self.execute_operations_timings_histograms
+                    .execute_block_histogram
+                    .record(duration_ms)?;
+            }
+            TimingType::SubmitBlockProposal => {
+                self.execute_operations_timings_histograms
+                    .execute_block_timings_histograms
+                    .submit_block_proposal_histogram
+                    .record(duration_ms)?;
+            }
+            TimingType::UpdateValidators => {
+                self.execute_operations_timings_histograms
+                    .execute_block_timings_histograms
+                    .update_validators_histogram
+                    .record(duration_ms)?;
+            }
+        }
         Ok(())
     }
 }
@@ -140,7 +105,7 @@ impl BlockTimingsHistograms {
 #[cfg(not(web))]
 pub struct ClientMetrics {
     pub timing_config: TimingConfig,
-    pub timing_sender: mpsc::UnboundedSender<BlockTimings>,
+    pub timing_sender: mpsc::UnboundedSender<(u64, TimingType)>,
     pub timing_task: task::JoinHandle<()>,
 }
 
@@ -161,7 +126,7 @@ impl ClientMetrics {
     }
 
     async fn timing_collection(
-        mut receiver: mpsc::UnboundedReceiver<BlockTimings>,
+        mut receiver: mpsc::UnboundedReceiver<(u64, TimingType)>,
         report_interval_secs: u64,
     ) {
         let mut histograms =
@@ -174,8 +139,8 @@ impl ClientMetrics {
             tokio::select! {
                 timing_data = receiver.recv() => {
                     match timing_data {
-                        Some(block_timings) => {
-                            if let Err(e) = histograms.record(block_timings) {
+                        Some((duration_ms, timing_type)) => {
+                            if let Err(e) = histograms.record_timing(duration_ms, timing_type) {
                                 warn!("Failed to record timing data: {}", e);
                             }
                         }
@@ -197,69 +162,37 @@ impl ClientMetrics {
             let formatted_quantile = (quantile * 100.0) as usize;
 
             info!(
-                "Block time p{}: {} ms",
+                "Execute operations p{}: {} ms",
                 formatted_quantile,
-                histograms.block_time_histogram.value_at_quantile(quantile)
+                histograms
+                    .execute_operations_histogram
+                    .value_at_quantile(quantile)
             );
 
             info!(
-                "  ├─ Get pending message bundles p{}: {} ms",
+                "  └─ Execute block p{}: {} ms",
                 formatted_quantile,
                 histograms
-                    .block_time_timings_histograms
-                    .get_pending_message_bundles_histogram
+                    .execute_operations_timings_histograms
+                    .execute_block_histogram
                     .value_at_quantile(quantile)
             );
             info!(
-                "  ├─ Submit fast block proposal p{}: {} ms",
+                "    ├─ Submit block proposal p{}: {} ms",
                 formatted_quantile,
                 histograms
-                    .block_time_timings_histograms
-                    .submit_fast_block_proposal_histogram
+                    .execute_operations_timings_histograms
+                    .execute_block_timings_histograms
+                    .submit_block_proposal_histogram
                     .value_at_quantile(quantile)
             );
             info!(
-                "  │  ├─ Creating proposal p{}: {} ms",
+                "    └─ Update validators p{}: {} ms",
                 formatted_quantile,
                 histograms
-                    .block_time_timings_histograms
-                    .submit_fast_block_proposal_timings_histograms
-                    .creating_proposal_histogram
-                    .value_at_quantile(quantile)
-            );
-            info!(
-                "  │  ├─ Stage block execution p{}: {} ms",
-                formatted_quantile,
-                histograms
-                    .block_time_timings_histograms
-                    .submit_fast_block_proposal_timings_histograms
-                    .stage_block_execution_histogram
-                    .value_at_quantile(quantile)
-            );
-            info!(
-                "  │  ├─ Creating confirmed block p{}: {} ms",
-                formatted_quantile,
-                histograms
-                    .block_time_timings_histograms
-                    .submit_fast_block_proposal_timings_histograms
-                    .creating_confirmed_block_histogram
-                    .value_at_quantile(quantile)
-            );
-            info!(
-                "  │  └─ Submitting block proposal p{}: {} ms",
-                formatted_quantile,
-                histograms
-                    .block_time_timings_histograms
-                    .submit_fast_block_proposal_timings_histograms
-                    .submitting_block_proposal_histogram
-                    .value_at_quantile(quantile)
-            );
-            info!(
-                "  └─ Communicate chain updates p{}: {} ms",
-                formatted_quantile,
-                histograms
-                    .block_time_timings_histograms
-                    .communicate_chain_updates_histogram
+                    .execute_operations_timings_histograms
+                    .execute_block_timings_histograms
+                    .update_validators_histogram
                     .value_at_quantile(quantile)
             );
         }
