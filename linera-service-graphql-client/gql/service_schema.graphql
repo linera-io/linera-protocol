@@ -96,15 +96,6 @@ The body of a block containing all the data included in the block.
 """
 type BlockBody {
 	"""
-	A selection of incoming messages to be executed first. Successive messages of the same
-	sender and height are grouped together for conciseness.
-	"""
-	incomingBundles: [IncomingBundle!]!
-	"""
-	The operations to execute.
-	"""
-	operations: [Operation!]!
-	"""
 	The list of outgoing messages for each transaction.
 	"""
 	messages: [[OutgoingMessage!]!]!
@@ -172,13 +163,9 @@ type BlockHeader {
 	"""
 	authenticatedSigner: AccountOwner
 	"""
-	Cryptographic hash of all the incoming bundles in the block.
+	Cryptographic hash of all the transactions in the block.
 	"""
-	bundlesHash: CryptoHash!
-	"""
-	Cryptographic hash of all the operations in the block.
-	"""
-	operationsHash: CryptoHash!
+	transactionsHash: CryptoHash!
 	"""
 	Cryptographic hash of all the messages in the block.
 	"""
@@ -594,24 +581,6 @@ type InboxStateView {
 }
 
 """
-A bundle of cross-chain messages.
-"""
-type IncomingBundle {
-	"""
-	The origin of the messages.
-	"""
-	origin: ChainId!
-	"""
-	The messages to be delivered to the inbox identified by `origin`.
-	"""
-	bundle: MessageBundle!
-	"""
-	What to do with the message.
-	"""
-	action: MessageAction!
-}
-
-"""
 The result of an `events_from_index`.
 """
 type IndexAndEvent {
@@ -718,11 +687,6 @@ type MapView_StreamId_BlockHeight_e6657ad9 {
 A message to be sent and possibly executed in the receiver's block.
 """
 scalar Message
-
-"""
-Whether an incoming message is accepted or rejected.
-"""
-scalar MessageAction
 
 """
 A set of messages from a single block, for a single destination.
@@ -874,11 +838,6 @@ type MutationRoot {
 Notify that a chain has a new certified block or a new message
 """
 scalar Notification
-
-"""
-An operation to be executed in a block
-"""
-scalar Operation
 
 """
 The execution result of a single operation.

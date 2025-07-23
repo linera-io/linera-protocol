@@ -28,7 +28,7 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, LiteValue, LiteVote,
         MessageAction, MessageBundle, OperationResult, PostedMessage, ProposedBlock,
-        SignatureAggregator,
+        SignatureAggregator, Transaction,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -383,9 +383,16 @@ where
             })
             .collect::<Vec<_>>();
 
+        let mut transactions = block_template.transactions;
+        transactions.extend(
+            incoming_bundles
+                .into_iter()
+                .map(Transaction::ReceiveMessages),
+        );
+
         let block = ProposedBlock {
             epoch,
-            incoming_bundles,
+            transactions,
             authenticated_signer: Some(authenticated_signer),
             ..block_template
         }
@@ -404,13 +411,13 @@ where
             }
             Recipient::Burn => messages.push(Vec::new()),
         }
-        let tx_count = block.operations.len() + block.incoming_bundles.len();
+        let tx_count = block.operations().count() + block.incoming_bundles().count();
         let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
         let events = iter::repeat_with(Vec::new).take(tx_count).collect();
         let blobs = iter::repeat_with(Vec::new).take(tx_count).collect();
         let operation_results = iter::repeat_with(Vec::new)
             .map(OperationResult)
-            .take(block.operations.len())
+            .take(block.operations().count())
             .collect();
         let state_hash = system_state.into_hash().await;
         let previous_message_blocks = messages

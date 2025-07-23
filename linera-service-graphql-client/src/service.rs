@@ -141,68 +141,11 @@ mod from {
     use linera_base::{data_types::Event, identifiers::StreamId};
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
-        data_types::{IncomingBundle, MessageBundle, PostedMessage},
         types::ConfirmedBlock,
     };
     use linera_execution::OutgoingMessage;
 
     use super::*;
-
-    impl From<block::BlockBlockBlockBodyIncomingBundles> for IncomingBundle {
-        fn from(val: block::BlockBlockBlockBodyIncomingBundles) -> Self {
-            let block::BlockBlockBlockBodyIncomingBundles {
-                origin,
-                bundle,
-                action,
-            } = val;
-            IncomingBundle {
-                origin,
-                bundle: bundle.into(),
-                action,
-            }
-        }
-    }
-
-    impl From<block::BlockBlockBlockBodyIncomingBundlesBundle> for MessageBundle {
-        fn from(val: block::BlockBlockBlockBodyIncomingBundlesBundle) -> Self {
-            let block::BlockBlockBlockBodyIncomingBundlesBundle {
-                height,
-                timestamp,
-                certificate_hash,
-                transaction_index,
-                messages,
-            } = val;
-            let messages = messages.into_iter().map(PostedMessage::from).collect();
-            MessageBundle {
-                height,
-                timestamp,
-                certificate_hash,
-                transaction_index: transaction_index as u32,
-                messages,
-            }
-        }
-    }
-
-    impl From<block::BlockBlockBlockBodyIncomingBundlesBundleMessages> for PostedMessage {
-        fn from(val: block::BlockBlockBlockBodyIncomingBundlesBundleMessages) -> Self {
-            let block::BlockBlockBlockBodyIncomingBundlesBundleMessages {
-                authenticated_signer,
-                grant,
-                refund_grant_to,
-                kind,
-                index,
-                message,
-            } = val;
-            PostedMessage {
-                authenticated_signer,
-                grant,
-                refund_grant_to,
-                kind,
-                index: index as u32,
-                message,
-            }
-        }
-    }
 
     impl From<block::BlockBlockBlockBodyMessages> for OutgoingMessage {
         fn from(val: block::BlockBlockBlockBodyMessages) -> Self {
@@ -238,22 +181,19 @@ mod from {
                 authenticated_signer,
                 previous_block_hash,
                 state_hash,
-                bundles_hash,
+                transactions_hash,
                 messages_hash,
                 previous_message_blocks_hash,
                 previous_event_blocks_hash,
-                operations_hash,
                 oracle_responses_hash,
                 events_hash,
                 blobs_hash,
                 operation_results_hash,
             } = header;
             let block::BlockBlockBlockBody {
-                incoming_bundles,
                 messages,
                 previous_message_blocks,
                 previous_event_blocks,
-                operations,
                 oracle_responses,
                 events,
                 blobs,
@@ -268,28 +208,27 @@ mod from {
                 authenticated_signer,
                 previous_block_hash,
                 state_hash,
-                bundles_hash,
+                transactions_hash,
                 messages_hash,
                 previous_message_blocks_hash,
                 previous_event_blocks_hash,
-                operations_hash,
                 oracle_responses_hash,
                 events_hash,
                 blobs_hash,
                 operation_results_hash,
             };
+
+            // Create an empty transactions vector since GraphQL doesn't provide detailed transaction data
+            let transactions = Vec::new();
+
             let block_body = BlockBody {
-                incoming_bundles: incoming_bundles
-                    .into_iter()
-                    .map(IncomingBundle::from)
-                    .collect(),
+                transactions,
                 messages: messages
                     .into_iter()
                     .map(|messages| messages.into_iter().map(Into::into).collect())
                     .collect::<Vec<Vec<_>>>(),
                 previous_message_blocks: serde_json::from_value(previous_message_blocks)?,
                 previous_event_blocks: serde_json::from_value(previous_event_blocks)?,
-                operations,
                 oracle_responses: oracle_responses.into_iter().collect(),
                 events: events
                     .into_iter()

@@ -171,16 +171,15 @@ impl ProcessedBlock {
         let message_senders = block
             .block()
             .body
-            .incoming_bundles
-            .iter()
+            .incoming_bundles()
             .map(BlockId::from_incoming_bundle);
         dependencies.extend(message_senders);
 
-        let new_committee = block.block().body.operations.iter().find_map(|m| {
+        let new_committee = block.block().body.operations().find_map(|m| {
             if let Operation::System(boxed) = m {
                 if let SystemOperation::Admin(AdminOperation::CreateCommittee {
                     blob_hash, ..
-                }) = &**boxed
+                }) = boxed.as_ref()
                 {
                     let committee_blob = BlobId::new(*blob_hash, BlobType::Committee);
                     return Some(committee_blob);
