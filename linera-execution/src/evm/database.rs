@@ -216,29 +216,36 @@ where
     type Error = ExecutionError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
+        tracing::info!("basic_ref, address = {address}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let account_owner = address.into();
+        tracing::info!("basic_ref, account_owner = {account_owner}");
         let balance = runtime.read_owner_balance(account_owner)?;
+        tracing::info!("basic_ref, balance = {balance}");
+
         let balance: U256 = balance.into();
         let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, address);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo>(&result)?;
         if balance == U256::ZERO || address == self.contract_address {
+            tracing::info!("basic_ref, return(A) account_info = {account_info:?}");
             return Ok(account_info);
         }
         if let Some(mut account_info) = account_info {
             account_info.balance = balance;
+            tracing::info!("basic_ref, return(B) account_info = {account_info:?}");
             return Ok(Some(account_info));
         }
         // The balance is non-zero. Therefore, the account exists.đ
         // However, the state is None. Therefore, we need to create
         // a default account first.
         let account_info = AccountInfo { balance, ..Default::default() };
+        tracing::info!("basic_ref, return(C) account_info = {account_info:?}");
         Ok(Some(account_info))
     }
 
@@ -292,6 +299,7 @@ where
             if !account.is_touched() {
                 continue;
             }
+            tracing::info!("commit_changes, address = {address} account_info = {:?}", account.info);
             let key_prefix = Self::get_address_key(KeyCategory::Storage as u8, *address);
             let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, *address);
             let key_state = Self::get_address_key(KeyCategory::AccountState as u8, *address);
@@ -474,7 +482,9 @@ where
             let application_id = runtime.application_id()?;
             let owner: AccountOwner = application_id.into();
             let destination = Account { chain_id, owner };
-            return runtime.transfer(source, destination, amount);
+            tracing::info!("deposit_funds, runtime.transfer, before");
+            runtime.transfer(source, destination, amount)?;
+            tracing::info!("deposit_funds, runtime.transfer, after");
         }
         Ok(())
     }

@@ -720,7 +720,9 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 let chain_id = runtime.chain_id()?;
                 let owner: AccountOwner = inputs.bytecode_address.into();
                 let destination = Account { chain_id, owner };
+                tracing::info!("call_or_fail, runtime.transfer, before, value={value}");
                 runtime.transfer(source, destination, value)?;
+                tracing::info!("call_or_fail, runtime.transfer, after");
             }
         }
         // Other smart contracts calls are handled by the runtime
@@ -1086,6 +1088,8 @@ where
         };
         let nonce = self.db.get_nonce(&caller)?;
         let value = self.db.get_balance_increase()?;
+        tracing::info!("transact_commit, caller = {caller}");
+        tracing::info!("transact_commit, value = {value}");
         let result = {
             let ctx: revm_context::Context<
                 BlockEnv,
