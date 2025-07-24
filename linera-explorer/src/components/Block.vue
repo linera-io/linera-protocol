@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ConfirmedBlock } from '../../gql/service'
+import { getOperations, getIncomingBundles } from './utils'
 import Json from './Json.vue'
 import Op from './Op.vue'
 
-defineProps<{block: ConfirmedBlock, title: string}>()
+const props = defineProps<{block: ConfirmedBlock, title: string}>()
+
+const operations = computed(() => getOperations(props.block.block.body.transactionMetadata))
+const incomingBundles = computed(() => getIncomingBundles(props.block.block.body.transactionMetadata))
 </script>
 
 <template>
@@ -62,17 +67,17 @@ defineProps<{block: ConfirmedBlock, title: string}>()
           <span><strong>Status</strong></span>
           <span>{{ block.status }}</span>
         </li>
-        <li v-if="block.block.body.incomingBundles.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#in-messages-collapse-'+block.hash">
-          <span><strong>Incoming Messages</strong> ({{ block.block.body.incomingBundles.length }})</span>
+        <li v-if="incomingBundles.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#in-messages-collapse-'+block.hash">
+          <span><strong>Incoming Messages</strong> ({{ incomingBundles.length }})</span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
         <li v-else class="list-group-item d-flex justify-content-between">
           <span><strong>Incoming Messages</strong> (0)</span>
           <span></span>
         </li>
-        <div v-if="block.block.body.incomingBundles.length!==0" class="collapse" :id="'in-messages-collapse-'+block.hash">
+        <div v-if="incomingBundles.length!==0" class="collapse" :id="'in-messages-collapse-'+block.hash">
           <ul class="list-group">
-            <li v-for="(m, i) in block.block.body.incomingBundles" class="list-group-item p-0" key="block.hash+'-inmessage-'+i">
+            <li v-for="(m, i) in incomingBundles" class="list-group-item p-0" key="block.hash+'-inmessage-'+i">
               <div class="card">
                 <div class="card-header">Message {{ i+1 }}</div>
                 <div class="card-body">
@@ -82,17 +87,17 @@ defineProps<{block: ConfirmedBlock, title: string}>()
             </li>
           </ul>
         </div>
-        <li v-if="block.block.body.operations.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#operations-collapse-'+block.hash">
-          <span><strong>Operations</strong> ({{ block.block.body.operations.length }})</span>
+        <li v-if="operations.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#operations-collapse-'+block.hash">
+          <span><strong>Operations</strong> ({{ operations.length }})</span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
         <li v-else class="list-group-item d-flex justify-content-between">
           <span><strong>Operations</strong> (0)</span>
           <span></span>
         </li>
-        <div v-if="block.block.body.operations.length!==0" class="collapse" :id="'operations-collapse-'+block.hash">
+        <div v-if="operations.length!==0" class="collapse" :id="'operations-collapse-'+block.hash">
           <ul class="list-group">
-            <li v-for="(o, i) in block.block.body.operations" class="list-group-item p-0" key="block.hash+'-operation-'+i">
+            <li v-for="(o, i) in operations" class="list-group-item p-0" key="block.hash+'-operation-'+i">
               <div class="card card-body p-0">
                 <Op :op="o" :id="block.hash+'-operation-'+i" :index="i"/>
               </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ConfirmedBlock } from '../../gql/service'
+import { getOperations, getIncomingBundles } from './utils'
 
 defineProps<{blocks: ConfirmedBlock[]}>()
 </script>
@@ -30,9 +31,9 @@ defineProps<{blocks: ConfirmedBlock[]}>()
           <td>{{ (new Date(b.block.header.timestamp/1000)).toLocaleString() }}</td>
           <td :title="b.block.header.authenticatedSigner">{{ b.block.header.authenticatedSigner }}</td>
           <td>{{ b.status }}</td>
-          <td>{{ b.block.body.incomingBundles.length }}</td>
+          <td>{{ getIncomingBundles(b.block.body.transactionMetadata).length }}</td>
           <td>{{ b.block.body.messages.length }}</td>
-          <td>{{ b.block.body.operations.length }}</td>
+          <td>{{ getOperations(b.block.body.transactionMetadata).length }}</td>
           <td>
             <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+b.hash+'-modal'" @click="json_load(b.hash+'-json', b)">
               <i class="bi bi-braces"></i>
