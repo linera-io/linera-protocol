@@ -157,8 +157,7 @@ impl ProposedBlock {
     async fn transaction_metadata(&self) -> Vec<TransactionMetadata> {
         self.transactions
             .iter()
-            .enumerate()
-            .map(|(i, tx)| TransactionMetadata::from_transaction_with_index(tx, i as u32))
+            .map(TransactionMetadata::from_transaction)
             .collect()
     }
 }
@@ -210,8 +209,6 @@ impl From<&Operation> for GraphQLOperation {
 pub struct TransactionMetadata {
     /// The type of transaction: "ReceiveMessages" or "ExecuteOperation"
     pub transaction_type: String,
-    /// The index of this transaction in the block
-    pub index: u32,
     /// The incoming bundle, if this is a ReceiveMessages transaction
     pub incoming_bundle: Option<IncomingBundle>,
     /// The operation, if this is an ExecuteOperation transaction
@@ -219,17 +216,15 @@ pub struct TransactionMetadata {
 }
 
 impl TransactionMetadata {
-    pub fn from_transaction_with_index(transaction: &Transaction, index: u32) -> Self {
+    pub fn from_transaction(transaction: &Transaction) -> Self {
         match transaction {
             Transaction::ReceiveMessages(bundle) => TransactionMetadata {
                 transaction_type: "ReceiveMessages".to_string(),
-                index,
                 incoming_bundle: Some(bundle.clone()),
                 operation: None,
             },
             Transaction::ExecuteOperation(op) => TransactionMetadata {
                 transaction_type: "ExecuteOperation".to_string(),
-                index,
                 incoming_bundle: None,
                 operation: Some(GraphQLOperation::from(op)),
             },
