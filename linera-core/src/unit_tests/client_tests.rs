@@ -762,7 +762,11 @@ where
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].block();
-    assert!(block.body.transactions.iter().all(|t| matches!(t, Transaction::ReceiveMessages(_))));
+    assert!(block
+        .body
+        .transactions
+        .iter()
+        .all(|t| matches!(t, Transaction::ReceiveMessages(_))));
     assert_eq!(block.body.incoming_bundles().count(), 1);
     assert_matches!(
         block.body.incoming_bundles().next().unwrap(),
