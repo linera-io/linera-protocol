@@ -540,8 +540,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 
     let constructor_argument = Vec::new();
 
-    let increment = 5;
-
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     let module = load_solidity_example_by_name("tests/fixtures/evm_child_subcontract.sol", "CounterFactory")?;
@@ -567,7 +565,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
         .make_application(&chain, &application_id)
         .await?;
 
-    /*
 
     let mutation0 = createCounterCall { initialValue: U256::from(42) };
     let mutation0 = EvmQuery::Mutation(mutation0.abi_encode());
@@ -585,8 +582,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     let query1 = EvmQuery::Query(query1.abi_encode());
     let address1 = application.run_json_query(query1).await?;
     assert_ne!(address0, address1);
-
-   */
 
 
     node_service.ensure_is_running()?;
