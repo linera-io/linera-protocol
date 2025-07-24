@@ -70,12 +70,7 @@ pub struct ProposedBlock {
 impl ProposedBlock {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
-        self.transactions
-            .iter()
-            .filter_map(|tx| match tx {
-                Transaction::ExecuteOperation(operation) => Some(operation),
-                Transaction::ReceiveMessages(_) => None,
-            })
+        self.operations()
             .flat_map(Operation::published_blob_ids)
             .collect()
     }
@@ -83,39 +78,21 @@ impl ProposedBlock {
     /// Returns whether the block contains only rejected incoming messages, which
     /// makes it admissible even on closed chains.
     pub fn has_only_rejected_messages(&self) -> bool {
-        !self
-            .transactions
-            .iter()
-            .any(|tx| matches!(tx, Transaction::ExecuteOperation(_)))
+        self.operations().next().is_none()
             && self
-                .transactions
-                .iter()
-                .filter_map(|tx| match tx {
-                    Transaction::ReceiveMessages(bundle) => Some(bundle),
-                    Transaction::ExecuteOperation(_) => None,
-                })
+                .incoming_bundles()
                 .all(|bundle| bundle.action == MessageAction::Reject)
     }
 
     /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
     pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
-        self.transactions
-            .iter()
-            .filter_map(|tx| match tx {
-                Transaction::ReceiveMessages(bundle) => Some(bundle),
-                Transaction::ExecuteOperation(_) => None,
-            })
+        self.incoming_bundles()
             .flat_map(|incoming_bundle| &incoming_bundle.bundle.messages)
     }
 
     /// Returns the number of incoming messages.
     pub fn message_count(&self) -> usize {
-        self.transactions
-            .iter()
-            .filter_map(|tx| match tx {
-                Transaction::ReceiveMessages(bundle) => Some(bundle),
-                Transaction::ExecuteOperation(_) => None,
-            })
+        self.incoming_bundles()
             .map(|im| im.bundle.messages.len())
             .sum()
     }
