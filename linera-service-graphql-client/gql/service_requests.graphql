@@ -252,6 +252,33 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
         }
         blobs
         operationResults
+        transactionMetadata {
+          transactionType
+          index
+          incomingBundle {
+            origin
+            bundle {
+              height
+              timestamp
+              certificateHash
+              transactionIndex
+              messages {
+                authenticatedSigner
+                grant
+                refundGrantTo
+                kind
+                index
+                message
+              }
+            }
+            action
+          }
+          operation {
+            operationType
+            applicationId
+            userBytesHex
+          }
+        }
       }
     }
   }
@@ -301,6 +328,33 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
         }
         blobs
         operationResults
+        transactionMetadata {
+          transactionType
+          index
+          incomingBundle {
+            origin
+            bundle {
+              height
+              timestamp
+              certificateHash
+              transactionIndex
+              messages {
+                authenticatedSigner
+                grant
+                refundGrantTo
+                kind
+                index
+                message
+              }
+            }
+            action
+          }
+          operation {
+            operationType
+            applicationId
+            userBytesHex
+          }
+        }
       }
     }
   }

@@ -62,7 +62,7 @@ mod types {
         ownership::ChainOwnership,
     };
     pub use linera_chain::{
-        data_types::{MessageAction, MessageBundle, OperationResult},
+        data_types::{IncomingBundle, MessageAction, MessageBundle, OperationResult, Transaction},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
@@ -147,6 +147,105 @@ mod from {
 
     use super::*;
 
+    /// Convert GraphQL transaction metadata to a Transaction object
+    fn convert_transaction_metadata(
+        metadata: block::BlockBlockBlockBodyTransactionMetadata,
+    ) -> Result<Transaction, ConversionError> {
+        match metadata.transaction_type.as_str() {
+            "ReceiveMessages" => {
+                let incoming_bundle = metadata.incoming_bundle.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing incoming_bundle for ReceiveMessages transaction".to_string(),
+                    )
+                })?;
+
+                let bundle = IncomingBundle {
+                    origin: incoming_bundle.origin,
+                    bundle: MessageBundle {
+                        height: incoming_bundle.bundle.height,
+                        timestamp: incoming_bundle.bundle.timestamp,
+                        certificate_hash: incoming_bundle.bundle.certificate_hash,
+                        transaction_index: incoming_bundle.bundle.transaction_index as u32,
+                        messages: incoming_bundle
+                            .bundle
+                            .messages
+                            .into_iter()
+                            .map(|msg| linera_chain::data_types::PostedMessage {
+                                authenticated_signer: msg.authenticated_signer,
+                                grant: msg.grant,
+                                refund_grant_to: msg.refund_grant_to,
+                                kind: msg.kind,
+                                index: msg.index as u32,
+                                message: msg.message,
+                            })
+                            .collect(),
+                    },
+                    action: incoming_bundle.action,
+                };
+
+                Ok(Transaction::ReceiveMessages(bundle))
+            }
+            "ExecuteOperation" => {
+                let graphql_operation = metadata.operation.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing operation for ExecuteOperation transaction".to_string(),
+                    )
+                })?;
+
+                let operation = match graphql_operation.operation_type.as_str() {
+                    "System" => {
+                        // System operations are complex and would need detailed parsing
+                        // For now, we'll indicate this needs more implementation
+                        return Err(ConversionError::UnexpectedCertificateType(
+                            "System operations conversion not yet implemented".to_string(),
+                        ));
+                    }
+                    "User" => {
+                        let application_id = graphql_operation.application_id.ok_or_else(|| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Missing application_id for User operation".to_string(),
+                            )
+                        })?;
+
+                        let bytes_hex = graphql_operation.user_bytes_hex.ok_or_else(|| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Missing user_bytes_hex for User operation".to_string(),
+                            )
+                        })?;
+
+                        // Convert hex string to bytes
+                        let bytes = hex::decode(bytes_hex).map_err(|_| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Invalid hex in user_bytes_hex".to_string(),
+                            )
+                        })?;
+
+                        Operation::User {
+                            application_id: application_id.parse().map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid application_id format".to_string(),
+                                )
+                            })?,
+                            bytes,
+                        }
+                    }
+                    _ => {
+                        return Err(ConversionError::UnexpectedCertificateType(format!(
+                            "Unknown operation type: {}",
+                            graphql_operation.operation_type
+                        )));
+                    }
+                };
+
+                Ok(Transaction::ExecuteOperation(operation))
+            }
+            _ => Err(ConversionError::UnexpectedCertificateType(format!(
+                "Unknown transaction type: {}",
+                metadata.transaction_type
+            ))),
+        }
+    }
+
     impl From<block::BlockBlockBlockBodyMessages> for OutgoingMessage {
         fn from(val: block::BlockBlockBlockBodyMessages) -> Self {
             let block::BlockBlockBlockBodyMessages {
@@ -169,7 +268,7 @@ mod from {
     }
 
     impl TryFrom<block::BlockBlockBlock> for Block {
-        type Error = serde_json::Error;
+        type Error = ConversionError;
 
         fn try_from(val: block::BlockBlockBlock) -> Result<Self, Self::Error> {
             let block::BlockBlockBlock { header, body } = val;
@@ -198,6 +297,7 @@ mod from {
                 events,
                 blobs,
                 operation_results,
+                transaction_metadata,
             } = body;
 
             let block_header = BlockHeader {
@@ -218,8 +318,11 @@ mod from {
                 operation_results_hash,
             };
 
-            // Create an empty transactions vector since GraphQL doesn't provide detailed transaction data
-            let transactions = Vec::new();
+            // Convert GraphQL transaction metadata to Transaction objects
+            let transactions = transaction_metadata
+                .into_iter()
+                .map(convert_transaction_metadata)
+                .collect::<Result<Vec<_>, _>>()?;
 
             let block_body = BlockBody {
                 transactions,
@@ -227,8 +330,10 @@ mod from {
                     .into_iter()
                     .map(|messages| messages.into_iter().map(Into::into).collect())
                     .collect::<Vec<Vec<_>>>(),
-                previous_message_blocks: serde_json::from_value(previous_message_blocks)?,
-                previous_event_blocks: serde_json::from_value(previous_event_blocks)?,
+                previous_message_blocks: serde_json::from_value(previous_message_blocks)
+                    .map_err(ConversionError::Serde)?,
+                previous_event_blocks: serde_json::from_value(previous_event_blocks)
+                    .map_err(ConversionError::Serde)?,
                 oracle_responses: oracle_responses.into_iter().collect(),
                 events: events
                     .into_iter()
