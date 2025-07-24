@@ -340,13 +340,19 @@ fn get_call_service_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInp
     Ok(argument)
 }
 
-fn get_call_contract_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInputs) -> Result<Vec<u8>, ExecutionError> {
+fn get_call_contract_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInputs) -> Result<(Vec<u8>, usize), ExecutionError> {
     let mut final_argument = INTERPRETER_RESULT_SELECTOR.to_vec();
+    tracing::info!("get_call_contract_argument, inputs.value={:?}", inputs.value);
     let value = get_value(&inputs.value)?;
+    tracing::info!("get_call_contract_argument, value={}", value);
+    tracing::info!("get_call_contract_argument, inputs.input={:?}", inputs.input);
     let argument = get_argument(context, &inputs.input);
+    let n_input = argument.len();
+    tracing::info!("get_call_contract_argument, argument={:?} n_input={n_input}", argument);
     let argument = get_internal_mutation(value, argument)?;
+    tracing::info!("get_call_contract_argument, argument={:?}", argument);
     final_argument.extend(&argument);
-    Ok(final_argument)
+    Ok((final_argument, n_input))
 }
 
 fn base_runtime_call<Runtime: BaseRuntime>(
@@ -716,16 +722,28 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 tracing::info!("call_or_fail, runtime.transfer, after");
             }
         }
+        tracing::info!("CallInterceptorContract :: target_address={}", inputs.target_address);
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
-        let argument = get_call_contract_argument(context, inputs)?;
-        let authenticated = true;
-        let result = {
-            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-            runtime.try_call_application(authenticated, target, argument)?
+        let (argument, n_input) = get_call_contract_argument(context, inputs)?;
+        tracing::info!("CallInterceptorContract :: argument={argument:?}, n_input={n_input}");
+        let result = if n_input > 0 {
+            // The input is non-trivial, we are calling a real contract
+            let authenticated = true;
+            let result = {
+                let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+                runtime.try_call_application(authenticated, target, argument)?
+            };
+            get_interpreter_result(&result, inputs)?
+        } else {
+            InterpreterResult {
+                result: InstructionResult::Stop,
+                output: Bytes::default(),
+                gas: Gas::new(inputs.gas_limit),
+            }
         };
         let call_outcome = CallOutcome {
-            result: get_interpreter_result(&result, inputs)?,
+            result,
             memory_offset: inputs.return_memory_offset.clone(),
         };
         Ok(Some(call_outcome))
@@ -886,6 +904,7 @@ where
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
+        tracing::info!("execute_operation, operation = {operation:?}");
         ensure_message_length(operation.len(), 4)?;
         let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
@@ -933,6 +952,7 @@ where
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {
+        tracing::info!("-------------------------------------------------");
         Ok(())
     }
 }
@@ -1176,6 +1196,7 @@ where
     Runtime: ServiceRuntime,
 {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        tracing::info!("RevmServiceInstance :: handle_query");
         self.db.set_contract_address()?;
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {

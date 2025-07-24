@@ -23,7 +23,7 @@ use revm_state::{AccountInfo, Bytecode, EvmState};
 
 use crate::{
     evm::{read_amount, inputs::ZERO_ADDRESS},
-    ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError,
+    BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError,
     ServiceRuntime,
 };
 
@@ -112,12 +112,6 @@ pub enum KeyCategory {
     AccountInfo,
     AccountState,
     Storage,
-}
-
-fn application_id_to_address(application_id: ApplicationId) -> Address {
-    let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
-    let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
-    Address::from_slice(&application_id[0..20])
 }
 
 impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
@@ -230,7 +224,12 @@ where
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let account_owner = address.into();
+        let account_owner = if address == self.contract_address {
+            let application_id = runtime.application_id()?;
+            application_id.into()
+        } else {
+            address.into()
+        };
         tracing::info!("basic_ref, account_owner = {account_owner}");
         // The balances being used are the ones of Linera. So, we need to
         // access them at first.
@@ -389,7 +388,7 @@ where
     pub fn set_contract_address(&mut self) -> Result<(), ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let application_id = runtime.application_id()?;
-        self.contract_address = application_id_to_address(application_id);
+        self.contract_address = application_id.evm_address();
         Ok(())
     }
 

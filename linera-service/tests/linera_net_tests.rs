@@ -579,6 +579,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
             None,
         )
         .await?;
+    tracing::info!("application_id = {application_id:?}");
     let account_owner_app: AccountOwner = application_id.into();
     tracing::info!("test_evm_end_to_end_balance_and_transfer, step 6, account_owner_app = {account_owner_app}");
     let account_app = Account { chain_id: chain, owner: account_owner_app };
@@ -591,6 +592,9 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     let balance1 = node_service.balance(&account1).await?;
     let balance2 = node_service.balance(&account2).await?;
     let balance_app = node_service.balance(&account_app).await?;
+    assert_eq!(balance1, Amount::from_tokens(46));
+    assert_eq!(balance2, Amount::from_tokens(50));
+    assert_eq!(balance_app, Amount::from_tokens(4));
     tracing::info!("balance_chain = {balance_chain}");
     tracing::info!("balance1 = {balance1}");
     tracing::info!("balance2 = {balance2}");
@@ -602,6 +606,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     tracing::info!("test_evm_end_to_end_balance_and_transfer, step 7");
 
     // Checking the balances on input
+
 
     let query1 = get_balanceCall { account: address1 };
     let query1 = EvmQuery::Query(query1.abi_encode());
@@ -617,7 +622,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
 
     // Transfering amount
 
-    /*
     let amount = Amount::from_tokens(1);
 
     let mutation = send_cashCall { recipient: address2, amount: amount.into() };
@@ -625,16 +629,19 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     let mutation = EvmQuery::Mutation(mutation);
     application.run_json_query(mutation).await?;
     tracing::info!("test_evm_end_to_end_balance_and_transfer, step 10");
-*/
 
-    
     // Checking the balances
 
-    /*
     let balance1_after = node_service.balance(&account1).await?;
     let balance2_after = node_service.balance(&account2).await?;
-    assert_eq!(balance1_after, balance1 - amount);
+    let balance_app_after = node_service.balance(&account_app).await?;
+    tracing::info!("amount = {amount}");
+    tracing::info!("balance1_after = {balance1_after}");
+    tracing::info!("balance2_after = {balance2_after}");
+    tracing::info!("balance_app_after = {balance_app_after}");
+    assert_eq!(balance1_after, balance1);
     assert_eq!(balance2_after, balance2 + amount);
+    assert_eq!(balance_app_after, balance_app - amount);
     tracing::info!("test_evm_end_to_end_balance_and_transfer, step 11");
 
     let result = application.run_json_query(query1).await?;
@@ -642,9 +649,8 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     tracing::info!("test_evm_end_to_end_balance_and_transfer, step 12");
 
     let result = application.run_json_query(query2.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), balance2.into());
+    assert_eq!(read_evm_u256_entry(result), balance2_after.into());
     tracing::info!("test_evm_end_to_end_balance_and_transfer, step 13");
-    */
 
     // Winding down
 
@@ -653,7 +659,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     net.ensure_is_running().await?;
     net.terminate().await?;
 
-    assert!(false);
     Ok(())
 }
 
