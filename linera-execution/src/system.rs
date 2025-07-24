@@ -396,7 +396,13 @@ where
                 recipient,
             } => {
                 let maybe_message = self
-                    .transfer(context.authenticated_signer, None, owner, recipient, amount)
+                    .transfer(
+                        context.authenticated_signer,
+                        None,
+                        owner,
+                        recipient,
+                        amount,
+                    )
                     .await?;
                 txn_tracker.add_outgoing_messages(maybe_message)?;
             }
@@ -406,7 +412,7 @@ where
                 recipient,
                 amount,
             } => {
-                let message = self
+                let maybe_message = self
                     .claim(
                         context.authenticated_signer,
                         None,
@@ -416,7 +422,7 @@ where
                         amount,
                     )
                     .await?;
-                txn_tracker.add_outgoing_message(message)?;
+                txn_tracker.add_outgoing_messages(maybe_message)?;
             }
             Admin(admin_operation) => {
                 ensure!(
@@ -624,6 +630,7 @@ where
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
+        let source_chain_id = self.context().extra().chain_id();
         if source == AccountOwner::CHAIN {
             ensure!(
                 authenticated_signer.is_some()
@@ -647,28 +654,43 @@ where
         self.debit(&source, amount).await?;
         match recipient {
             Recipient::Account(account) => {
-                let message = SystemMessage::Credit {
-                    amount,
-                    source,
-                    target: account.owner,
-                };
-                Ok(Some(
-                    OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
-                ))
+                if account.chain_id == source_chain_id {
+                    // Handle same-chain transfer locally.
+                    let target = account.owner;
+                    if target == AccountOwner::CHAIN {
+                        let new_balance = self.balance.get().saturating_add(amount);
+                        self.balance.set(new_balance);
+                    } else {
+                        let balance = self.balances.get_mut_or_default(&target).await?;
+                        *balance = balance.saturating_add(amount);
+                    }
+                    Ok(None)
+                } else {
+                    // Handle cross-chain transfer with message.
+                    let message = SystemMessage::Credit {
+                        amount,
+                        source,
+                        target: account.owner,
+                    };
+                    Ok(Some(
+                        OutgoingMessage::new(account.chain_id, message)
+                            .with_kind(MessageKind::Tracked),
+                    ))
+                }
             }
             Recipient::Burn => Ok(None),
         }
     }
 
     pub async fn claim(
-        &self,
+        &mut self,
         authenticated_signer: Option<AccountOwner>,
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-    ) -> Result<OutgoingMessage, ExecutionError> {
+    ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         ensure!(
             authenticated_signer == Some(source)
                 || authenticated_application_id.map(AccountOwner::from) == Some(source),
@@ -676,15 +698,52 @@ where
         );
         ensure!(amount > Amount::ZERO, ExecutionError::IncorrectClaimAmount);
 
-        let message = SystemMessage::Withdraw {
-            amount,
-            owner: source,
-            recipient,
-        };
-        Ok(
-            OutgoingMessage::new(target_id, message)
-                .with_authenticated_signer(authenticated_signer),
-        )
+        let current_chain_id = self.context().extra().chain_id();
+        if target_id == current_chain_id {
+            // Handle same-chain claim locally by processing the withdraw operation directly
+            self.debit(&source, amount).await?;
+            match recipient {
+                Recipient::Account(account) => {
+                    if account.chain_id == current_chain_id {
+                        // Handle same-chain recipient locally
+                        let target = account.owner;
+                        if target == AccountOwner::CHAIN {
+                            let new_balance = self.balance.get().saturating_add(amount);
+                            self.balance.set(new_balance);
+                        } else {
+                            let balance = self.balances.get_mut_or_default(&target).await?;
+                            *balance = balance.saturating_add(amount);
+                        }
+                    } else {
+                        // Recipient is on a different chain, create outgoing Credit message
+                        let message = SystemMessage::Credit {
+                            amount,
+                            source,
+                            target: account.owner,
+                        };
+                        return Ok(Some(
+                            OutgoingMessage::new(account.chain_id, message)
+                                .with_kind(MessageKind::Tracked),
+                        ));
+                    }
+                }
+                Recipient::Burn => {
+                    // Amount is already debited, burn operation is complete
+                }
+            }
+            Ok(None)
+        } else {
+            // Handle cross-chain claim with Withdraw message
+            let message = SystemMessage::Withdraw {
+                amount,
+                owner: source,
+                recipient,
+            };
+            Ok(Some(
+                OutgoingMessage::new(target_id, message)
+                    .with_authenticated_signer(authenticated_signer),
+            ))
+        }
     }
 
     /// Debits an [`Amount`] of tokens from an account's balance.
@@ -749,15 +808,29 @@ where
                 self.debit(&owner, amount).await?;
                 match recipient {
                     Recipient::Account(account) => {
-                        let message = SystemMessage::Credit {
-                            amount,
-                            source: owner,
-                            target: account.owner,
-                        };
-                        outcome.push(
-                            OutgoingMessage::new(account.chain_id, message)
-                                .with_kind(MessageKind::Tracked),
-                        );
+                        let current_chain_id = self.context().extra().chain_id();
+                        if account.chain_id == current_chain_id {
+                            // Handle same-chain operation locally.
+                            let target = account.owner;
+                            if target == AccountOwner::CHAIN {
+                                let new_balance = self.balance.get().saturating_add(amount);
+                                self.balance.set(new_balance);
+                            } else {
+                                let balance = self.balances.get_mut_or_default(&target).await?;
+                                *balance = balance.saturating_add(amount);
+                            }
+                        } else {
+                            // Handle cross-chain operation with message.
+                            let message = SystemMessage::Credit {
+                                amount,
+                                source: owner,
+                                target: account.owner,
+                            };
+                            outcome.push(
+                                OutgoingMessage::new(account.chain_id, message)
+                                    .with_kind(MessageKind::Tracked),
+                            );
+                        }
                     }
                     Recipient::Burn => (),
                 }
