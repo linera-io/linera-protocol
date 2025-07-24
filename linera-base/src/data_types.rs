@@ -17,6 +17,7 @@ use std::{
     str::FromStr,
 };
 
+use alloy_primitives::U256;
 use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -76,6 +77,12 @@ impl<'de> Deserialize<'de> for Amount {
         } else {
             Ok(Amount(AmountU128::deserialize(deserializer)?.0))
         }
+    }
+}
+
+impl From<Amount> for U256 {
+    fn from(amount: Amount) -> U256 {
+        U256::from(amount.0)
     }
 }
 
