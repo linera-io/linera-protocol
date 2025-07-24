@@ -58,13 +58,13 @@ struct PendingBigReads {
     big_reads: BTreeMap<i64, BigRead>,
 }
 
-struct ServiceStoreServer {
+struct StorageServer {
     store: LocalStore,
     pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
     pending_big_reads: Arc<RwLock<PendingBigReads>>,
 }
 
-impl ServiceStoreServer {
+impl StorageServer {
     pub async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Status> {
         match &self.store {
             LocalStore::Memory(store) => store
@@ -251,7 +251,7 @@ impl ServiceStoreServer {
     version = linera_version::VersionInfo::default_clap_str(),
     about = "A server providing storage service",
 )]
-enum ServiceStoreServerOptions {
+enum StorageServerOptions {
     #[command(name = "memory")]
     Memory {
         /// The storage namespace.
@@ -293,7 +293,7 @@ enum ServiceStoreServerOptions {
 }
 
 #[tonic::async_trait]
-impl StoreProcessor for ServiceStoreServer {
+impl StoreProcessor for StorageServer {
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_read_value(
         &self,
@@ -622,9 +622,9 @@ async fn main() {
         .with_env_filter(env_filter)
         .init();
 
-    let options = <ServiceStoreServerOptions as clap::Parser>::parse();
+    let options = <StorageServerOptions as clap::Parser>::parse();
     let (store, endpoint) = match options {
-        ServiceStoreServerOptions::Memory {
+        StorageServerOptions::Memory {
             namespace,
             endpoint,
             max_stream_queries,
@@ -635,7 +635,7 @@ async fn main() {
         }
 
         #[cfg(with_rocksdb)]
-        ServiceStoreServerOptions::RocksDb {
+        StorageServerOptions::RocksDb {
             namespace,
             endpoint,
             path,
@@ -670,7 +670,7 @@ async fn main() {
     };
     let pending_big_puts = Arc::new(RwLock::new(BTreeMap::default()));
     let pending_big_reads = Arc::new(RwLock::new(PendingBigReads::default()));
-    let store = ServiceStoreServer {
+    let store = StorageServer {
         store,
         pending_big_puts,
         pending_big_reads,
