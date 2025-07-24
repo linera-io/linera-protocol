@@ -1256,10 +1256,6 @@ type TransactionMetadata {
 	"""
 	transactionType: String!
 	"""
-	The index of this transaction in the block
-	"""
-	index: Int!
-	"""
 	The incoming bundle, if this is a ReceiveMessages transaction
 	"""
 	incomingBundle: IncomingBundle
