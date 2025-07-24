@@ -396,7 +396,7 @@ where
                 recipient,
             } => {
                 let maybe_message = self
-                    .transfer(context.authenticated_signer, None, owner, recipient, amount)
+                    .transfer(context.authenticated_signer, None, owner, recipient, amount, context.chain_id)
                     .await?;
                 txn_tracker.add_outgoing_messages(maybe_message)?;
             }
@@ -608,6 +608,7 @@ where
         source: AccountOwner,
         recipient: Recipient,
         amount: Amount,
+        chain_id: ChainId,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         if source == AccountOwner::CHAIN {
             ensure!(
@@ -632,14 +633,31 @@ where
         self.debit(&source, amount).await?;
         match recipient {
             Recipient::Account(account) => {
-                let message = SystemMessage::Credit {
-                    amount,
-                    source,
-                    target: account.owner,
-                };
-                Ok(Some(
-                    OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
-                ))
+                // Check if destination is on the same chain
+                if account.chain_id == chain_id {
+                    // Handle same-chain transfer locally
+                    let target = account.owner;
+                    if target == AccountOwner::CHAIN {
+                        let new_balance = self.balance.get().saturating_add(amount);
+                        self.balance.set(new_balance);
+                    } else {
+                        let balance = self.balances.get_mut_or_default(&target).await?;
+                        *balance = balance.saturating_add(amount);
+                    }
+                    // No outgoing message for same-chain transfers
+                    Ok(None)
+                } else {
+                    // Handle cross-chain transfer with message
+                    let message = SystemMessage::Credit {
+                        amount,
+                        source,
+                        target: account.owner,
+                    };
+                    Ok(Some(
+                        OutgoingMessage::new(account.chain_id, message)
+                            .with_kind(MessageKind::Tracked),
+                    ))
+                }
             }
             Recipient::Burn => Ok(None),
         }

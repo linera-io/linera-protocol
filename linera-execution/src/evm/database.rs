@@ -235,7 +235,7 @@ where
         // The balances being used are the ones of Linera. So, we need to
         // access them at first.
         let balance = runtime.read_owner_balance(account_owner)?;
-        tracing::info!("basic_ref, balance = {balance}");
+        tracing::info!("basic_ref, balance = {balance} self.value={}", self.value);
 
         let balance: U256 = balance.into();
         let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, address);
@@ -252,10 +252,13 @@ where
         // This will ensure that at any time the balances in EVM
         // and Linera are exactly matching during the execution.
         let start_balance = if self.caller == address {
+            tracing::info!("caller case");
             balance + self.value
         } else if self.contract_address == address {
+            tracing::info!("contract case");
             balance - self.value
         } else {
+            tracing::info!("other case");
             balance
         };
         account_info.balance = start_balance;
@@ -477,9 +480,20 @@ where
             let owner: AccountOwner = application_id.into();
             let destination = Account { chain_id, owner };
             let amount = read_amount(self.value)?;
-            tracing::info!("deposit_funds, runtime.transfer, before, ");
+            let source_balance_before = runtime.read_owner_balance(source)?;
+            let owner_balance_before = runtime.read_owner_balance(owner)?;
+            tracing::info!("deposit_funds, source_balance_before={source_balance_before}");
+            tracing::info!("deposit_funds, owner_balance_before={owner_balance_before}");
+
+            tracing::info!("deposit_funds, source = {source}");
+            tracing::info!("deposit_funds, destination = {destination}");
+            tracing::info!("deposit_funds, runtime.transfer, before, amount={amount}");
             runtime.transfer(source, destination, amount)?;
             tracing::info!("deposit_funds, runtime.transfer, after");
+            let source_balance_after = runtime.read_owner_balance(source)?;
+            let owner_balance_after = runtime.read_owner_balance(owner)?;
+            tracing::info!("deposit_funds, source_balance_after={source_balance_after}");
+            tracing::info!("deposit_funds, owner_balance_after={owner_balance_after}");
         }
         Ok(())
     }

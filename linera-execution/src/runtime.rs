@@ -1274,6 +1274,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 amount,
                 signer,
                 application_id,
+                chain_id: this.chain_id,
                 callback,
             })?
             .recv_response()?;

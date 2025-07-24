@@ -1068,6 +1068,8 @@ where
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         self.db.caller = caller;
         self.db.value = value;
+        tracing::info!("transact_commit, caller = {caller}");
+        tracing::info!("transact_commit, value = {value}");
         self.db.deposit_funds()?;
         let data = Bytes::from(input);
         let kind = match ch {
