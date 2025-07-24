@@ -87,7 +87,7 @@ pub enum StoreConfig {
     },
     /// The storage service key-value store
     #[cfg(feature = "storage-service")]
-    Service {
+    StorageService {
         config: StorageServiceStoreConfig,
         namespace: String,
     },
@@ -450,7 +450,7 @@ impl StorageConfig {
                     inner_config,
                     storage_cache_config: options.storage_cache_config(),
                 };
-                Ok(StoreConfig::Service { config, namespace })
+                Ok(StoreConfig::StorageService { config, namespace })
             }
             #[cfg(feature = "rocksdb")]
             InnerStorageConfig::RocksDb { path, spawn_mode } => {
@@ -624,7 +624,7 @@ impl StoreConfig {
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "storage-service")]
-            StoreConfig::Service { config, namespace } => {
+            StoreConfig::StorageService { config, namespace } => {
                 let storage =
                     DbStorage::<StorageServiceStore, _>::connect(&config, &namespace, wasm_runtime)
                         .await?;
@@ -673,7 +673,7 @@ impl StoreConfig {
                 Err(anyhow!("Cannot run admin operations on the memory store"))
             }
             #[cfg(feature = "storage-service")]
-            StoreConfig::Service { config, namespace } => {
+            StoreConfig::StorageService { config, namespace } => {
                 Ok(job.run::<StorageServiceStore>(config, namespace).await?)
             }
             #[cfg(feature = "rocksdb")]
