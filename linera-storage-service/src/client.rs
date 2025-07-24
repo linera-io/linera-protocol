@@ -28,7 +28,9 @@ use tonic::transport::{Channel, Endpoint};
 #[cfg(with_testing)]
 use crate::common::storage_service_test_endpoint;
 use crate::{
-    common::{KeyPrefix, ServiceStoreError, ServiceStoreInternalConfig, MAX_PAYLOAD_SIZE},
+    common::{
+        KeyPrefix, StorageServiceStoreError, StorageServiceStoreInternalConfig, MAX_PAYLOAD_SIZE,
+    },
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
@@ -64,7 +66,7 @@ const MAX_KEY_SIZE: usize = 1000000;
 //   [`KeyPrefix::RootKey`] + namespace + root_key
 //   to indicate the existence of a root key.
 #[derive(Clone)]
-pub struct ServiceStoreInternal {
+pub struct StorageServiceStoreInternal {
     channel: Channel,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
@@ -73,19 +75,25 @@ pub struct ServiceStoreInternal {
     root_key_written: Arc<AtomicBool>,
 }
 
-impl WithError for ServiceStoreInternal {
-    type Error = ServiceStoreError;
+impl WithError for StorageServiceStoreInternal {
+    type Error = StorageServiceStoreError;
 }
 
-impl ReadableKeyValueStore for ServiceStoreInternal {
+impl ReadableKeyValueStore for StorageServiceStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ServiceStoreError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, StorageServiceStoreError> {
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            StorageServiceStoreError::KeyTooLong
+        );
         let mut full_key = self.start_key.clone();
         full_key.extend(key);
         let query = RequestReadValue { key: full_key };
@@ -107,8 +115,11 @@ impl ReadableKeyValueStore for ServiceStoreInternal {
         }
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, ServiceStoreError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, StorageServiceStoreError> {
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            StorageServiceStoreError::KeyTooLong
+        );
         let mut full_key = self.start_key.clone();
         full_key.extend(key);
         let query = RequestContainsKey { key: full_key };
@@ -122,10 +133,16 @@ impl ReadableKeyValueStore for ServiceStoreInternal {
         Ok(test)
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ServiceStoreError> {
+    async fn contains_keys(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<bool>, StorageServiceStoreError> {
         let mut full_keys = Vec::new();
         for key in keys {
-            ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                StorageServiceStoreError::KeyTooLong
+            );
             let mut full_key = self.start_key.clone();
             full_key.extend(&key);
             full_keys.push(full_key);
@@ -144,10 +161,13 @@ impl ReadableKeyValueStore for ServiceStoreInternal {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, ServiceStoreError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, StorageServiceStoreError> {
         let mut full_keys = Vec::new();
         for key in keys {
-            ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                StorageServiceStoreError::KeyTooLong
+            );
             let mut full_key = self.start_key.clone();
             full_key.extend(&key);
             full_keys.push(full_key);
@@ -178,10 +198,10 @@ impl ReadableKeyValueStore for ServiceStoreInternal {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, ServiceStoreError> {
+    ) -> Result<Vec<Vec<u8>>, StorageServiceStoreError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
-            ServiceStoreError::KeyTooLong
+            StorageServiceStoreError::KeyTooLong
         );
         let mut full_key_prefix = self.start_key.clone();
         full_key_prefix.extend(key_prefix);
@@ -212,10 +232,10 @@ impl ReadableKeyValueStore for ServiceStoreInternal {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ServiceStoreError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, StorageServiceStoreError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
-            ServiceStoreError::KeyTooLong
+            StorageServiceStoreError::KeyTooLong
         );
         let mut full_key_prefix = self.start_key.clone();
         full_key_prefix.extend(key_prefix);
@@ -248,10 +268,10 @@ impl ReadableKeyValueStore for ServiceStoreInternal {
     }
 }
 
-impl WritableKeyValueStore for ServiceStoreInternal {
+impl WritableKeyValueStore for StorageServiceStoreInternal {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), ServiceStoreError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), StorageServiceStoreError> {
         if batch.operations.is_empty() {
             return Ok(());
         }
@@ -280,7 +300,10 @@ impl WritableKeyValueStore for ServiceStoreInternal {
                 WriteOperation::DeletePrefix { key_prefix } => (key_prefix.len(), 0),
             };
             let operation_size = key_len + value_len + root_key_len;
-            ensure!(key_len <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
+            ensure!(
+                key_len <= MAX_KEY_SIZE,
+                StorageServiceStoreError::KeyTooLong
+            );
             if operation_size + chunk_size < MAX_PAYLOAD_SIZE {
                 let statement = self.get_statement(operation);
                 statements.push(statement);
@@ -324,12 +347,12 @@ impl WritableKeyValueStore for ServiceStoreInternal {
         self.submit_statements(mem::take(&mut statements)).await
     }
 
-    async fn clear_journal(&self) -> Result<(), ServiceStoreError> {
+    async fn clear_journal(&self) -> Result<(), StorageServiceStoreError> {
         Ok(())
     }
 }
 
-impl ServiceStoreInternal {
+impl StorageServiceStoreInternal {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
         match &self.semaphore {
@@ -338,7 +361,10 @@ impl ServiceStoreInternal {
         }
     }
 
-    async fn submit_statements(&self, statements: Vec<Statement>) -> Result<(), ServiceStoreError> {
+    async fn submit_statements(
+        &self,
+        statements: Vec<Statement>,
+    ) -> Result<(), StorageServiceStoreError> {
         if !statements.is_empty() {
             let query = RequestWriteBatchExtended { statements };
             let request = tonic::Request::new(query);
@@ -383,7 +409,7 @@ impl ServiceStoreInternal {
         &self,
         message_index: i64,
         index: i32,
-    ) -> Result<Vec<u8>, ServiceStoreError> {
+    ) -> Result<Vec<u8>, StorageServiceStoreError> {
         let channel = self.channel.clone();
         let query = RequestSpecificChunk {
             message_index,
@@ -401,7 +427,7 @@ impl ServiceStoreInternal {
         &self,
         message_index: i64,
         num_chunks: i32,
-    ) -> Result<S, ServiceStoreError> {
+    ) -> Result<S, StorageServiceStoreError> {
         let mut handles = Vec::new();
         for index in 0..num_chunks {
             let handle = self.read_single_entry(message_index, index);
@@ -416,14 +442,17 @@ impl ServiceStoreInternal {
     }
 }
 
-impl AdminKeyValueStore for ServiceStoreInternal {
-    type Config = ServiceStoreInternalConfig;
+impl AdminKeyValueStore for StorageServiceStoreInternal {
+    type Config = StorageServiceStoreInternalConfig;
 
     fn get_name() -> String {
         "service store".to_string()
     }
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceStoreError> {
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Self, StorageServiceStoreError> {
         let semaphore = config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
@@ -445,7 +474,7 @@ impl AdminKeyValueStore for ServiceStoreInternal {
         })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, StorageServiceStoreError> {
         let channel = self.channel.clone();
         let prefix_len = self.prefix_len;
         let semaphore = self.semaphore.clone();
@@ -462,7 +491,7 @@ impl AdminKeyValueStore for ServiceStoreInternal {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, StorageServiceStoreError> {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
@@ -479,7 +508,7 @@ impl AdminKeyValueStore for ServiceStoreInternal {
     async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
-    ) -> Result<Vec<Vec<u8>>, ServiceStoreError> {
+    ) -> Result<Vec<Vec<u8>>, StorageServiceStoreError> {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestListRootKeys { namespace };
         let request = tonic::Request::new(query);
@@ -492,7 +521,7 @@ impl AdminKeyValueStore for ServiceStoreInternal {
         Ok(root_keys)
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), ServiceStoreError> {
+    async fn delete_all(config: &Self::Config) -> Result<(), StorageServiceStoreError> {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
@@ -500,7 +529,10 @@ impl AdminKeyValueStore for ServiceStoreInternal {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ServiceStoreError> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<bool, StorageServiceStoreError> {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestExistsNamespace { namespace };
         let request = tonic::Request::new(query);
@@ -513,9 +545,12 @@ impl AdminKeyValueStore for ServiceStoreInternal {
         Ok(exists)
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
-        if ServiceStoreInternal::exists(config, namespace).await? {
-            return Err(ServiceStoreError::StoreAlreadyExists);
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<(), StorageServiceStoreError> {
+        if StorageServiceStoreInternal::exists(config, namespace).await? {
+            return Err(StorageServiceStoreError::StoreAlreadyExists);
         }
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestCreateNamespace { namespace };
@@ -527,7 +562,10 @@ impl AdminKeyValueStore for ServiceStoreInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<(), StorageServiceStoreError> {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestDeleteNamespace { namespace };
         let request = tonic::Request::new(query);
@@ -540,18 +578,19 @@ impl AdminKeyValueStore for ServiceStoreInternal {
 }
 
 #[cfg(with_testing)]
-impl TestKeyValueStore for ServiceStoreInternal {
-    async fn new_test_config() -> Result<ServiceStoreInternalConfig, ServiceStoreError> {
+impl TestKeyValueStore for StorageServiceStoreInternal {
+    async fn new_test_config() -> Result<StorageServiceStoreInternalConfig, StorageServiceStoreError>
+    {
         let endpoint = storage_service_test_endpoint()?;
         service_config_from_endpoint(&endpoint)
     }
 }
 
-/// Creates a `ServiceStoreConfig` from an endpoint.
+/// Creates a `StorageServiceStoreConfig` from an endpoint.
 pub fn service_config_from_endpoint(
     endpoint: &str,
-) -> Result<ServiceStoreInternalConfig, ServiceStoreError> {
-    Ok(ServiceStoreInternalConfig {
+) -> Result<StorageServiceStoreInternalConfig, StorageServiceStoreError> {
+    Ok(StorageServiceStoreInternalConfig {
         endpoint: endpoint.to_string(),
         max_concurrent_queries: None,
         max_stream_queries: 100,
@@ -559,26 +598,30 @@ pub fn service_config_from_endpoint(
 }
 
 /// Checks that endpoint is truly absent.
-pub async fn storage_service_check_absence(endpoint: &str) -> Result<bool, ServiceStoreError> {
+pub async fn storage_service_check_absence(
+    endpoint: &str,
+) -> Result<bool, StorageServiceStoreError> {
     let endpoint = Endpoint::from_shared(endpoint.to_string())?;
     let result = StoreProcessorClient::connect(endpoint).await;
     Ok(result.is_err())
 }
 
 /// Checks whether an endpoint is valid or not.
-pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), ServiceStoreError> {
+pub async fn storage_service_check_validity(
+    endpoint: &str,
+) -> Result<(), StorageServiceStoreError> {
     let config = service_config_from_endpoint(endpoint).unwrap();
     let namespace = "namespace";
-    let store = ServiceStoreInternal::connect(&config, namespace).await?;
+    let store = StorageServiceStoreInternal::connect(&config, namespace).await?;
     let _value = store.read_value_bytes(&[42]).await?;
     Ok(())
 }
 
 /// The service store client with metrics
 #[cfg(with_metrics)]
-pub type ServiceStore =
-    MeteredStore<LruCachingStore<MeteredStore<ServiceStoreInternal>>>;
+pub type StorageServiceStore =
+    MeteredStore<LruCachingStore<MeteredStore<StorageServiceStoreInternal>>>;
 
 /// The service store client without metrics
 #[cfg(not(with_metrics))]
-pub type ServiceStore = LruCachingStore<ServiceStoreInternal>;
+pub type StorageServiceStore = LruCachingStore<StorageServiceStoreInternal>;

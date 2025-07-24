@@ -4,7 +4,7 @@
 #![cfg(feature = "storage-service")]
 
 use anyhow::Result;
-use linera_storage_service::client::{ServiceStore, ServiceStoreInternal};
+use linera_storage_service::client::{StorageServiceStore, StorageServiceStoreInternal};
 use linera_views::{
     batch::Batch,
     store::TestKeyValueStore as _,
@@ -18,7 +18,7 @@ use linera_views::{
 #[tokio::test]
 async fn test_storage_service_reads() -> Result<()> {
     for scenario in get_random_test_scenarios() {
-        let store = ServiceStoreInternal::new_test_store().await?;
+        let store = StorageServiceStoreInternal::new_test_store().await?;
         run_reads(store, scenario).await;
     }
     Ok(())
@@ -26,31 +26,31 @@ async fn test_storage_service_reads() -> Result<()> {
 
 #[tokio::test]
 async fn test_storage_service_writes_from_blank() -> Result<()> {
-    let store = ServiceStoreInternal::new_test_store().await?;
+    let store = StorageServiceStoreInternal::new_test_store().await?;
     run_writes_from_blank(&store).await;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_service_writes_from_state() -> Result<()> {
-    let store = ServiceStoreInternal::new_test_store().await?;
+    let store = StorageServiceStoreInternal::new_test_store().await?;
     run_writes_from_state(&store).await;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_service_namespace_admin() {
-    namespace_admin_test::<ServiceStore>().await;
+    namespace_admin_test::<StorageServiceStore>().await;
 }
 
 #[tokio::test]
 async fn test_storage_service_root_key_admin() {
-    root_key_admin_test::<ServiceStore>().await;
+    root_key_admin_test::<StorageServiceStore>().await;
 }
 
 #[tokio::test]
 async fn test_storage_service_big_raw_write() -> Result<()> {
-    let store = ServiceStoreInternal::new_test_store().await?;
+    let store = StorageServiceStoreInternal::new_test_store().await?;
     let n = 5000000;
     let mut rng = linera_views::random::make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
