@@ -8,10 +8,8 @@ port = 8881
 committee_destination = true
 
 [[destination_config.destinations]]
-endpoint = "linera-exporter.log"
+file_name = "linera-exporter.log"
 kind = "Logging"
-tls = "ClearText"
-port = 0
 
 [limits]
 persistence_period_ms = 299000
