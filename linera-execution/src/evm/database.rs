@@ -78,6 +78,8 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     pub runtime: Arc<Mutex<Runtime>>,
     /// The uncommitted changes to the contract.
     pub changes: EvmState,
+    /// Whether the contract has been instantiated in REVM.
+    pub is_revm_instantiated: bool,
 }
 
 impl<Runtime> Clone for DatabaseRuntime<Runtime> {
@@ -87,6 +89,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
             contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
+            is_revm_instantiated: self.is_revm_instantiated,
         }
     }
 }
@@ -131,6 +134,7 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
             contract_address: Address::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
+            is_revm_instantiated: false,
         }
     }
 
