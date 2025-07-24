@@ -55,16 +55,18 @@ library Linera {
     }
 
     struct AccountOwnerBalance {
-        Linera.AccountOwner account_owner;
+        AccountOwner account_owner;
         uint256 balance;
     }
 
-    function accountownerbalance_from(LineraTypes.AccountOwnerBalance memory entry)
+    function accountownerbalance_from(LineraTypes.AccountOwnerBalanceInner memory entry)
         internal
         pure
         returns (AccountOwnerBalance memory)
     {
-        return AccountOwnerBalance(accountowner_from(entry.account_owner), entry.balance);
+        uint256 balance = uint256(entry.balance_.value);
+        AccountOwner memory account_owner = accountowner_from(entry.account_owner);
+        return AccountOwnerBalance(account_owner, balance);
     }
 
     struct TimeDelta {
@@ -349,9 +351,7 @@ library Linera {
         Linera.AccountOwnerBalance[] memory elist;
         elist = new Linera.AccountOwnerBalance[](len);
         for (uint256 i=0; i<len; i++) {
-            uint256 balance = uint256(output2.value[i].balance_.value);
-            Linera.AccountOwner memory owner = accountowner_from(output2.value[i].account_owner);
-            elist[i] = Linera.AccountOwnerBalance(owner, balance);
+            elist[i] = accountownerbalance_from(output2.value[i]);
         }
         return elist;
     }
