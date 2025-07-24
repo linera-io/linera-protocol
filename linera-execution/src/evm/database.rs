@@ -206,7 +206,6 @@ where
     Runtime: BaseRuntime,
 {
     fn commit(&mut self, changes: EvmState) {
-        tracing::info!("commit, changes={:?}", changes);
         self.changes = changes;
     }
 }
@@ -218,7 +217,6 @@ where
     type Error = ExecutionError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
-        tracing::info!("basic_ref, START, address = {address}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(Some(account.info.clone()));
@@ -230,11 +228,9 @@ where
         } else {
             address.into()
         };
-        tracing::info!("basic_ref, account_owner = {account_owner}");
         // The balances being used are the ones of Linera. So, we need to
         // access them at first.
         let balance = runtime.read_owner_balance(account_owner)?;
-        tracing::info!("basic_ref, balance = {balance} self.value={}", self.value);
 
         let balance: U256 = balance.into();
         let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, address);
@@ -251,20 +247,16 @@ where
         // This will ensure that at any time the balances in EVM
         // and Linera are exactly matching during the execution.
         let start_balance = if self.caller == address {
-            tracing::info!("caller case");
             balance + self.value
         } else if self.contract_address == address {
-            tracing::info!("contract case");
             balance - self.value
         } else {
-            tracing::info!("other case");
             balance
         };
         account_info.balance = start_balance;
         // The balance is non-zero. Therefore, the account exists.đ
         // However, the state is None. Therefore, we need to create
         // a default account first.
-        tracing::info!("basic_ref, return(C) account_info = {account_info:?}");
         Ok(Some(account_info))
     }
 
@@ -273,7 +265,6 @@ where
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
-        tracing::info!("storage_ref, address={address} index={index}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(match account.storage.get(&index) {
@@ -319,7 +310,6 @@ where
             if !account.is_touched() {
                 continue;
             }
-            tracing::info!("commit_changes, address = {address} account_info = {:?}", account.info);
             let key_prefix = Self::get_address_key(KeyCategory::Storage as u8, *address);
             let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, *address);
             let key_state = Self::get_address_key(KeyCategory::AccountState as u8, *address);
@@ -479,20 +469,8 @@ where
             let owner: AccountOwner = application_id.into();
             let destination = Account { chain_id, owner };
             let amount = read_amount(self.value)?;
-            let source_balance_before = runtime.read_owner_balance(source)?;
-            let owner_balance_before = runtime.read_owner_balance(owner)?;
-            tracing::info!("deposit_funds, source_balance_before={source_balance_before}");
-            tracing::info!("deposit_funds, owner_balance_before={owner_balance_before}");
 
-            tracing::info!("deposit_funds, source = {source}");
-            tracing::info!("deposit_funds, destination = {destination}");
-            tracing::info!("deposit_funds, runtime.transfer, before, amount={amount}");
             runtime.transfer(source, destination, amount)?;
-            tracing::info!("deposit_funds, runtime.transfer, after");
-            let source_balance_after = runtime.read_owner_balance(source)?;
-            let owner_balance_after = runtime.read_owner_balance(owner)?;
-            tracing::info!("deposit_funds, source_balance_after={source_balance_after}");
-            tracing::info!("deposit_funds, owner_balance_after={owner_balance_after}");
         }
         Ok(())
     }

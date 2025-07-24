@@ -342,15 +342,10 @@ fn get_call_service_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInp
 
 fn get_call_contract_argument<Ctx: ContextTr>(context: &mut Ctx, inputs: &CallInputs) -> Result<(Vec<u8>, usize), ExecutionError> {
     let mut final_argument = INTERPRETER_RESULT_SELECTOR.to_vec();
-    tracing::info!("get_call_contract_argument, inputs.value={:?}", inputs.value);
     let value = get_value(&inputs.value)?;
-    tracing::info!("get_call_contract_argument, value={}", value);
-    tracing::info!("get_call_contract_argument, inputs.input={:?}", inputs.input);
     let argument = get_argument(context, &inputs.input);
     let n_input = argument.len();
-    tracing::info!("get_call_contract_argument, argument={:?} n_input={n_input}", argument);
     let argument = get_internal_mutation(value, argument)?;
-    tracing::info!("get_call_contract_argument, argument={:?}", argument);
     final_argument.extend(&argument);
     Ok((final_argument, n_input))
 }
@@ -696,12 +691,10 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         if self.precompile_addresses.contains(&inputs.target_address)
             || inputs.target_address == self.contract_address
         {
-            tracing::info!("CallInterceptorContract :: call_or_fail, exiting early");
             // Precompile calls are handled by the precompile code.
             // The EVM smart contract is being called
             return Ok(None);
         }
-        tracing::info!("CallInterceptorContract :: call_or_fail, more complicated");
         // Handling the balances.
         if let CallValue::Transfer(value) = inputs.value {
             if value != U256::ZERO {
@@ -717,18 +710,23 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 let chain_id = runtime.chain_id()?;
                 let owner: AccountOwner = inputs.bytecode_address.into();
                 let destination = Account { chain_id, owner };
-                tracing::info!("call_or_fail, runtime.transfer, before, value={value}");
                 runtime.transfer(source, destination, value)?;
-                tracing::info!("call_or_fail, runtime.transfer, after");
             }
         }
-        tracing::info!("CallInterceptorContract :: target_address={}", inputs.target_address);
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
         let (argument, n_input) = get_call_contract_argument(context, inputs)?;
-        tracing::info!("CallInterceptorContract :: argument={argument:?}, n_input={n_input}");
         let result = if n_input > 0 {
-            // The input is non-trivial, we are calling a real contract
+            // The input is non-trivial, we assume that we are calling a contract.
+            //
+            // The correct behavior is the following:
+            // * If a contract exists and input is empty, then the fallback function is called
+            //   if existing. Otherwise failure.
+            // * If not, then it is a user account and no execution occurs.
+            //
+            // So, the correct way is instead to test the existence of the application
+            // given the application_id. So, we need following function in BaseRuntime:
+            //  fn is_existing_application(&mut self, application_id: ApplicationId) -> Result<bool, ExecutionError>;
             let authenticated = true;
             let result = {
                 let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
@@ -736,6 +734,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             };
             get_interpreter_result(&result, inputs)?
         } else {
+            // User account, no call needed.
             InterpreterResult {
                 result: InstructionResult::Stop,
                 output: Bytes::default(),
@@ -904,7 +903,6 @@ where
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
-        tracing::info!("execute_operation, operation = {operation:?}");
         ensure_message_length(operation.len(), 4)?;
         let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
@@ -952,7 +950,6 @@ where
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {
-        tracing::info!("-------------------------------------------------");
         Ok(())
     }
 }
@@ -1088,8 +1085,6 @@ where
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         self.db.caller = caller;
         self.db.value = value;
-        tracing::info!("transact_commit, caller = {caller}");
-        tracing::info!("transact_commit, value = {value}");
         self.db.deposit_funds()?;
         let data = Bytes::from(input);
         let kind = match ch {
@@ -1108,8 +1103,6 @@ where
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
         let nonce = self.db.get_nonce(&caller)?;
-        tracing::info!("transact_commit, caller = {caller}");
-        tracing::info!("transact_commit, value = {value}");
         let result = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1150,7 +1143,6 @@ where
         self.db.process_any_error()?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
-        tracing::info!("transact_commit, after commit_changes");
         let result = process_execution_result(storage_stats, result)?;
         Ok(result)
     }
@@ -1196,7 +1188,6 @@ where
     Runtime: ServiceRuntime,
 {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
-        tracing::info!("RevmServiceInstance :: handle_query");
         self.db.set_contract_address()?;
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
