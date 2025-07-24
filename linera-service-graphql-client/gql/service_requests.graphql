@@ -254,7 +254,6 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
         operationResults
         transactionMetadata {
           transactionType
-          index
           incomingBundle {
             origin
             bundle {
@@ -330,7 +329,6 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
         operationResults
         transactionMetadata {
           transactionType
-          index
           incomingBundle {
             origin
             bundle {

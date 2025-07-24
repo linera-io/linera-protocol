@@ -384,10 +384,7 @@ impl BlockBody {
     async fn transaction_metadata(&self) -> Vec<crate::data_types::TransactionMetadata> {
         self.transactions
             .iter()
-            .enumerate()
-            .map(|(i, tx)| {
-                crate::data_types::TransactionMetadata::from_transaction_with_index(tx, i as u32)
-            })
+            .map(crate::data_types::TransactionMetadata::from_transaction)
             .collect()
     }
 }
