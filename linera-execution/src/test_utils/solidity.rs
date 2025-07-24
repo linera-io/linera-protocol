@@ -135,8 +135,6 @@ pub fn load_solidity_example_by_name(path: &str, contract_name: &str) -> anyhow:
     get_bytecode(&source_code, contract_name)
 }
 
-
-
 pub fn temporary_write_evm_module(module: Vec<u8>) -> anyhow::Result<(PathBuf, TempDir)> {
     let dir = tempfile::tempdir()?;
     let path = dir.path();

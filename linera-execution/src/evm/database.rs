@@ -18,7 +18,10 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError, ServiceRuntime};
+use crate::{
+    ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError,
+    ServiceRuntime,
+};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -321,7 +324,9 @@ where
         Ok(match account_info {
             None => Vec::new(),
             Some(account_info) => {
-                let bytecode = account_info.code.ok_or(EvmExecutionError::MissingBytecode)?;
+                let bytecode = account_info
+                    .code
+                    .ok_or(EvmExecutionError::MissingBytecode)?;
                 bytecode.bytes_ref().to_vec()
             }
         })
