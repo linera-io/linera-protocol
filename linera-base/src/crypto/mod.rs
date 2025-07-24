@@ -399,7 +399,7 @@ where
     fn write(&self, hasher: &mut Hasher) {
         let name = <Self as HasTypeName>::type_name();
         // Note: This assumes that names never contain the separator `::`.
-        write!(hasher, "{}::", name).expect("Hasher should not fail");
+        write!(hasher, "{name}::").expect("Hasher should not fail");
         bcs::serialize_into(hasher, &self).expect("Message serialization should not fail");
     }
 }

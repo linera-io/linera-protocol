@@ -205,7 +205,7 @@ impl BlobType {
 
 impl fmt::Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -213,8 +213,7 @@ impl std::str::FromStr for BlobType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(&format!("\"{s}\""))
-            .with_context(|| format!("Invalid BlobType: {}", s))
+        serde_json::from_str(&format!("\"{s}\"")).with_context(|| format!("Invalid BlobType: {s}"))
     }
 }
 
@@ -1015,7 +1014,7 @@ impl fmt::Display for AccountOwner {
             AccountOwner::Reserved(value) => {
                 write!(f, "0x{}", hex::encode(&value.to_be_bytes()[..]))?
             }
-            AccountOwner::Address32(value) => write!(f, "0x{}", value)?,
+            AccountOwner::Address32(value) => write!(f, "0x{value}")?,
             AccountOwner::Address20(value) => write!(f, "0x{}", hex::encode(&value[..]))?,
         };
 

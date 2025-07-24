@@ -588,7 +588,7 @@ where
             Ok(certificates) => match ResultReadCertificates::new(certificates, hashes) {
                 ResultReadCertificates::Certificates(certificates) => Ok(certificates),
                 ResultReadCertificates::InvalidHashes(hashes) => {
-                    panic!("Missing certificates: {:?}", hashes)
+                    panic!("Missing certificates: {hashes:?}")
                 }
             },
         };
@@ -802,7 +802,7 @@ where
             let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
             let state = WorkerState::new(
-                format!("Node {}", i),
+                format!("Node {i}"),
                 Some(validator_keypair.secret_key),
                 storage.clone(),
             )
@@ -999,7 +999,7 @@ where
             self.admin_id(),
             false,
             [chain_id],
-            format!("Client node for {:.8}", chain_id),
+            format!("Client node for {chain_id:.8}"),
             Duration::from_secs(30),
             ChainClientOptions::test_default(),
         ));

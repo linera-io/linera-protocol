@@ -239,7 +239,7 @@ impl TryFrom<&[u8]> for EvmPublicKey {
 impl fmt::Display for EvmPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let str = hex::encode(self.as_bytes());
-        write!(f, "{}", str)
+        write!(f, "{str}")
     }
 }
 
@@ -553,7 +553,7 @@ impl<'de> Deserialize<'de> for EvmSignature {
 impl fmt::Display for EvmSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = hex::encode(self.as_bytes());
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

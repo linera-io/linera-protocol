@@ -184,7 +184,7 @@ impl TryFrom<&[u8]> for Secp256k1PublicKey {
 impl fmt::Display for Secp256k1PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let str = hex::encode(self.as_bytes());
-        write!(f, "{}", str)
+        write!(f, "{str}")
     }
 }
 
@@ -459,7 +459,7 @@ impl<'de> Deserialize<'de> for Secp256k1Signature {
 impl fmt::Display for Secp256k1Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = hex::encode(self.as_bytes());
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

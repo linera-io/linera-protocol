@@ -95,7 +95,7 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
         ] {
             let test_code_path = path.join(file_name);
             let mut test_code_file = File::create(&test_code_path)?;
-            writeln!(test_code_file, "{}", literal_path)?;
+            writeln!(test_code_file, "{literal_path}")?;
         }
     }
     if source_code.contains("@openzeppelin") {
@@ -111,7 +111,7 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
     let file_name = "test_code.sol";
     let test_code_path = path.join(file_name);
     let mut test_code_file = File::create(&test_code_path)?;
-    writeln!(test_code_file, "{}", source_code)?;
+    writeln!(test_code_file, "{source_code}")?;
     get_bytecode_path(path, file_name, contract_name)
 }
 
