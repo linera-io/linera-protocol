@@ -126,8 +126,16 @@ pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
         .split_whitespace()
         .next()
         .ok_or(anyhow::anyhow!("No space found after the contract name"))?;
+    tracing::info!("load_solidity_example, contract_name={contract_name}");
     get_bytecode(&source_code, contract_name)
 }
+
+pub fn load_solidity_example_by_name(path: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
+    let source_code = std::fs::read_to_string(path)?;
+    get_bytecode(&source_code, contract_name)
+}
+
+
 
 pub fn temporary_write_evm_module(module: Vec<u8>) -> anyhow::Result<(PathBuf, TempDir)> {
     let dir = tempfile::tempdir()?;
