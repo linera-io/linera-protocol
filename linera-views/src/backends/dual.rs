@@ -7,14 +7,25 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
+use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
     store::{
-        AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
+
+/// A dual database.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DualDatabase<D1, D2, A> {
+    /// The first database.
+    pub first_database: D1,
+    /// The second database.
+    pub second_database: D2,
+    /// Marker for the static root key assignment.
+    _marker: std::marker::PhantomData<A>,
+}
 
 /// The initial configuration of the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,20 +52,24 @@ pub trait DualStoreRootKeyAssignment {
     fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error>;
 }
 
-/// A store made of two existing stores.
+/// A partition opened in one of the two databases.
 #[derive(Clone)]
-pub struct DualStore<S1, S2, A> {
-    /// The first underlying store.
-    first_store: S1,
-    /// The second underlying store.
-    second_store: S2,
-    /// Which store is currently in use given the root key. (The root key in the other store will be set arbitrarily.)
-    store_in_use: StoreInUse,
-    /// Marker for the static root key assignment.
-    _marker: std::marker::PhantomData<A>,
+pub enum DualStore<S1, S2> {
+    /// The first store.
+    First(S1),
+    /// The second store.
+    Second(S2),
 }
 
-impl<S1, S2, A> WithError for DualStore<S1, S2, A>
+impl<D1, D2, A> WithError for DualDatabase<D1, D2, A>
+where
+    D1: WithError,
+    D2: WithError,
+{
+    type Error = DualStoreError<D1::Error, D2::Error>;
+}
+
+impl<S1, S2> WithError for DualStore<S1, S2>
 where
     S1: WithError,
     S2: WithError,
@@ -62,11 +77,10 @@ where
     type Error = DualStoreError<S1::Error, S2::Error>;
 }
 
-impl<S1, S2, A> ReadableKeyValueStore for DualStore<S1, S2, A>
+impl<S1, S2> ReadableKeyValueStore for DualStore<S1, S2>
 where
     S1: ReadableKeyValueStore,
     S2: ReadableKeyValueStore,
-    A: DualStoreRootKeyAssignment,
 {
     // TODO(#2524): consider changing MAX_KEY_SIZE into a function.
     const MAX_KEY_SIZE: usize = if S1::MAX_KEY_SIZE < S2::MAX_KEY_SIZE {
@@ -76,21 +90,19 @@ where
     };
 
     fn max_stream_queries(&self) -> usize {
-        match self.store_in_use {
-            StoreInUse::First => self.first_store.max_stream_queries(),
-            StoreInUse::Second => self.second_store.max_stream_queries(),
+        match self {
+            Self::First(store) => store.max_stream_queries(),
+            Self::Second(store) => store.max_stream_queries(),
         }
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let result = match self.store_in_use {
-            StoreInUse::First => self
-                .first_store
+        let result = match self {
+            Self::First(store) => store
                 .read_value_bytes(key)
                 .await
                 .map_err(DualStoreError::First)?,
-            StoreInUse::Second => self
-                .second_store
+            Self::Second(store) => store
                 .read_value_bytes(key)
                 .await
                 .map_err(DualStoreError::Second)?,
@@ -99,14 +111,12 @@ where
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        let result = match self.store_in_use {
-            StoreInUse::First => self
-                .first_store
+        let result = match self {
+            Self::First(store) => store
                 .contains_key(key)
                 .await
                 .map_err(DualStoreError::First)?,
-            StoreInUse::Second => self
-                .second_store
+            Self::Second(store) => store
                 .contains_key(key)
                 .await
                 .map_err(DualStoreError::Second)?,
@@ -115,14 +125,12 @@ where
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
-        let result = match self.store_in_use {
-            StoreInUse::First => self
-                .first_store
+        let result = match self {
+            Self::First(store) => store
                 .contains_keys(keys)
                 .await
                 .map_err(DualStoreError::First)?,
-            StoreInUse::Second => self
-                .second_store
+            Self::Second(store) => store
                 .contains_keys(keys)
                 .await
                 .map_err(DualStoreError::Second)?,
@@ -134,14 +142,12 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let result = match self.store_in_use {
-            StoreInUse::First => self
-                .first_store
+        let result = match self {
+            Self::First(store) => store
                 .read_multi_values_bytes(keys)
                 .await
                 .map_err(DualStoreError::First)?,
-            StoreInUse::Second => self
-                .second_store
+            Self::Second(store) => store
                 .read_multi_values_bytes(keys)
                 .await
                 .map_err(DualStoreError::Second)?,
@@ -150,14 +156,12 @@ where
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let result = match self.store_in_use {
-            StoreInUse::First => self
-                .first_store
+        let result = match self {
+            Self::First(store) => store
                 .find_keys_by_prefix(key_prefix)
                 .await
                 .map_err(DualStoreError::First)?,
-            StoreInUse::Second => self
-                .second_store
+            Self::Second(store) => store
                 .find_keys_by_prefix(key_prefix)
                 .await
                 .map_err(DualStoreError::Second)?,
@@ -169,14 +173,12 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-        let result = match self.store_in_use {
-            StoreInUse::First => self
-                .first_store
+        let result = match self {
+            Self::First(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(DualStoreError::First)?,
-            StoreInUse::Second => self
-                .second_store
+            Self::Second(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(DualStoreError::Second)?,
@@ -185,23 +187,20 @@ where
     }
 }
 
-impl<S1, S2, A> WritableKeyValueStore for DualStore<S1, S2, A>
+impl<S1, S2> WritableKeyValueStore for DualStore<S1, S2>
 where
     S1: WritableKeyValueStore,
     S2: WritableKeyValueStore,
-    A: DualStoreRootKeyAssignment,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        match self.store_in_use {
-            StoreInUse::First => self
-                .first_store
+        match self {
+            Self::First(store) => store
                 .write_batch(batch)
                 .await
                 .map_err(DualStoreError::First)?,
-            StoreInUse::Second => self
-                .second_store
+            Self::Second(store) => store
                 .write_batch(batch)
                 .await
                 .map_err(DualStoreError::Second)?,
@@ -210,14 +209,9 @@ where
     }
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
-        match self.store_in_use {
-            StoreInUse::First => self
-                .first_store
-                .clear_journal()
-                .await
-                .map_err(DualStoreError::First)?,
-            StoreInUse::Second => self
-                .second_store
+        match self {
+            Self::First(store) => store.clear_journal().await.map_err(DualStoreError::First)?,
+            Self::Second(store) => store
                 .clear_journal()
                 .await
                 .map_err(DualStoreError::Second)?,
@@ -226,59 +220,79 @@ where
     }
 }
 
-impl<S1, S2, A> AdminKeyValueStore for DualStore<S1, S2, A>
+impl<D1, D2, A> KeyValueDatabase for DualDatabase<D1, D2, A>
 where
-    S1: AdminKeyValueStore,
-    S2: AdminKeyValueStore,
+    D1: KeyValueDatabase,
+    D2: KeyValueDatabase,
     A: DualStoreRootKeyAssignment,
 {
-    type Config = DualStoreConfig<S1::Config, S2::Config>;
+    type Config = DualStoreConfig<D1::Config, D2::Config>;
+    type Store = DualStore<D1::Store, D2::Store>;
 
     fn get_name() -> String {
-        format!("dual {} and {}", S1::get_name(), S2::get_name())
+        format!("dual {} and {}", D1::get_name(), D2::get_name())
     }
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
-        let first_store = S1::connect(&config.first_config, namespace)
+        let first_database = D1::connect(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?;
-        let second_store = S2::connect(&config.second_config, namespace)
+        let second_database = D2::connect(&config.second_config, namespace)
             .await
             .map_err(DualStoreError::Second)?;
-        let store_in_use = A::assigned_store(&[])?;
-        Ok(Self {
-            first_store,
-            second_store,
-            store_in_use,
+        let database = Self {
+            first_database,
+            second_database,
             _marker: std::marker::PhantomData,
-        })
+        };
+        Ok(database)
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let first_store = self
-            .first_store
-            .open_exclusive(root_key)
-            .map_err(DualStoreError::First)?;
-        let second_store = self
-            .second_store
-            .open_exclusive(root_key)
-            .map_err(DualStoreError::Second)?;
-        let store_in_use = A::assigned_store(root_key)?;
-        Ok(Self {
-            first_store,
-            second_store,
-            store_in_use,
-            _marker: std::marker::PhantomData,
-        })
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        match A::assigned_store(root_key)? {
+            StoreInUse::First => {
+                let store = self
+                    .first_database
+                    .open_exclusive(root_key)
+                    .map_err(DualStoreError::First)?;
+                Ok(DualStore::First(store))
+            }
+            StoreInUse::Second => {
+                let store = self
+                    .second_database
+                    .open_exclusive(root_key)
+                    .map_err(DualStoreError::Second)?;
+                Ok(DualStore::Second(store))
+            }
+        }
+    }
+
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        match A::assigned_store(root_key)? {
+            StoreInUse::First => {
+                let store = self
+                    .first_database
+                    .open_shared(root_key)
+                    .map_err(DualStoreError::First)?;
+                Ok(DualStore::First(store))
+            }
+            StoreInUse::Second => {
+                let store = self
+                    .second_database
+                    .open_shared(root_key)
+                    .map_err(DualStoreError::Second)?;
+                Ok(DualStore::Second(store))
+            }
+        }
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        let namespaces1 = S1::list_all(&config.first_config)
+        let namespaces1 = D1::list_all(&config.first_config)
             .await
             .map_err(DualStoreError::First)?;
         let mut namespaces = Vec::new();
         for namespace in namespaces1 {
-            if S2::exists(&config.second_config, &namespace)
+            if D2::exists(&config.second_config, &namespace)
                 .await
                 .map_err(DualStoreError::Second)?
             {
@@ -294,11 +308,11 @@ where
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut root_keys = S1::list_root_keys(&config.first_config, namespace)
+        let mut root_keys = D1::list_root_keys(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?;
         root_keys.extend(
-            S2::list_root_keys(&config.second_config, namespace)
+            D2::list_root_keys(&config.second_config, namespace)
                 .await
                 .map_err(DualStoreError::Second)?,
         );
@@ -306,31 +320,31 @@ where
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        Ok(S1::exists(&config.first_config, namespace)
+        Ok(D1::exists(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?
-            && S2::exists(&config.second_config, namespace)
+            && D2::exists(&config.second_config, namespace)
                 .await
                 .map_err(DualStoreError::Second)?)
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        let exists1 = S1::exists(&config.first_config, namespace)
+        let exists1 = D1::exists(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?;
-        let exists2 = S2::exists(&config.second_config, namespace)
+        let exists2 = D2::exists(&config.second_config, namespace)
             .await
             .map_err(DualStoreError::Second)?;
         if exists1 && exists2 {
             return Err(DualStoreError::StoreAlreadyExists);
         }
         if !exists1 {
-            S1::create(&config.first_config, namespace)
+            D1::create(&config.first_config, namespace)
                 .await
                 .map_err(DualStoreError::First)?;
         }
         if !exists2 {
-            S2::create(&config.second_config, namespace)
+            D2::create(&config.second_config, namespace)
                 .await
                 .map_err(DualStoreError::Second)?;
         }
@@ -338,10 +352,10 @@ where
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        S1::delete(&config.first_config, namespace)
+        D1::delete(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?;
-        S2::delete(&config.second_config, namespace)
+        D2::delete(&config.second_config, namespace)
             .await
             .map_err(DualStoreError::Second)?;
         Ok(())
@@ -349,15 +363,15 @@ where
 }
 
 #[cfg(with_testing)]
-impl<S1, S2, A> TestKeyValueStore for DualStore<S1, S2, A>
+impl<D1, D2, A> TestKeyValueDatabase for DualDatabase<D1, D2, A>
 where
-    S1: TestKeyValueStore,
-    S2: TestKeyValueStore,
+    D1: TestKeyValueDatabase,
+    D2: TestKeyValueDatabase,
     A: DualStoreRootKeyAssignment,
 {
     async fn new_test_config() -> Result<Self::Config, Self::Error> {
-        let first_config = S1::new_test_config().await.map_err(DualStoreError::First)?;
-        let second_config = S2::new_test_config()
+        let first_config = D1::new_test_config().await.map_err(DualStoreError::First)?;
+        let second_config = D2::new_test_config()
             .await
             .map_err(DualStoreError::Second)?;
         Ok(DualStoreConfig {

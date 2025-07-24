@@ -29,7 +29,7 @@ use linera_execution::{
     ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
-use linera_views::memory::MemoryStore;
+use linera_views::memory::MemoryDatabase;
 use serde::Serialize;
 
 use super::ActiveChain;
@@ -52,8 +52,8 @@ pub struct TestValidator {
     validator_secret: ValidatorSecretKey,
     account_secret: AccountSecretKey,
     committee: Arc<Mutex<(Epoch, Committee)>>,
-    storage: DbStorage<MemoryStore, TestClock>,
-    worker: WorkerState<DbStorage<MemoryStore, TestClock>>,
+    storage: DbStorage<MemoryDatabase, TestClock>,
+    worker: WorkerState<DbStorage<MemoryDatabase, TestClock>>,
     clock: TestClock,
     admin_chain_id: ChainId,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
@@ -85,7 +85,7 @@ impl TestValidator {
             account_secret.public(),
         )]);
         let wasm_runtime = Some(WasmRuntime::default());
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(wasm_runtime)
             .now_or_never()
             .expect("execution of DbStorage::new should not await anything");
         let clock = storage.clock().clone();
@@ -200,12 +200,12 @@ impl TestValidator {
     }
 
     /// Returns this validator's storage.
-    pub(crate) fn storage(&self) -> &DbStorage<MemoryStore, TestClock> {
+    pub(crate) fn storage(&self) -> &DbStorage<MemoryDatabase, TestClock> {
         &self.storage
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
-    pub(crate) fn worker(&self) -> WorkerState<DbStorage<MemoryStore, TestClock>> {
+    pub(crate) fn worker(&self) -> WorkerState<DbStorage<MemoryDatabase, TestClock>> {
         self.worker.clone()
     }
 

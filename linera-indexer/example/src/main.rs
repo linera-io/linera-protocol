@@ -18,7 +18,7 @@ async fn main() -> Result<(), IndexerError> {
 
     let mut runner = RocksDbRunner::load().await?;
     runner
-        .add_plugin(OperationsPlugin::load(runner.store.clone()).await?)
+        .add_plugin(OperationsPlugin::load(runner.database.clone()).await?)
         .await?;
     runner.run().await
 }

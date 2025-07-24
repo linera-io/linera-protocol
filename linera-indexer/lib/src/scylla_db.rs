@@ -3,8 +3,8 @@
 
 use linera_views::{
     lru_caching::StorageCacheConfig,
-    scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
-    store::AdminKeyValueStore,
+    scylla_db::{ScyllaDbDatabase, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
+    store::KeyValueDatabase,
 };
 
 use crate::{
@@ -47,7 +47,7 @@ pub struct ScyllaDbConfig {
     pub replication_factor: u32,
 }
 
-pub type ScyllaDbRunner = Runner<ScyllaDbStore, ScyllaDbConfig>;
+pub type ScyllaDbRunner = Runner<ScyllaDbDatabase, ScyllaDbConfig>;
 
 impl ScyllaDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
@@ -68,7 +68,7 @@ impl ScyllaDbRunner {
             storage_cache_config,
         };
         let namespace = config.client.table.clone();
-        let store = ScyllaDbStore::connect(&store_config, &namespace).await?;
-        Self::new(config, store).await
+        let database = ScyllaDbDatabase::connect(&store_config, &namespace).await?;
+        Self::new(config, database).await
     }
 }

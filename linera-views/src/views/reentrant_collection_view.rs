@@ -2116,7 +2116,7 @@ mod graphql {
     {
         fn type_name() -> Cow<'static, str> {
             format!(
-                "ReentrantCollectionView_{}_{}_{}",
+                "ReentrantCollectionView_{}_{}_{:08x}",
                 mangle(K::type_name()),
                 mangle(V::type_name()),
                 hash_name::<(K, V)>(),

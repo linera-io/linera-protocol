@@ -5,13 +5,13 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 #[cfg(with_dynamodb)]
-use linera_views::dynamo_db::DynamoDbStore;
+use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]
-use linera_views::rocks_db::RocksDbStore;
+use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::scylla_db::ScyllaDbDatabase;
 #[cfg(any(with_scylladb, with_rocksdb, with_dynamodb))]
-use linera_views::store::AdminKeyValueStore as _;
+use linera_views::store::TestKeyValueDatabase as _;
 use linera_views::{
     batch::{
         Batch, WriteOperation,
@@ -21,7 +21,7 @@ use linera_views::{
     context::{Context, MemoryContext, ViewContext},
     key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
-    lru_caching::{LruCachingMemoryStore, LruCachingStore, DEFAULT_STORAGE_CACHE_CONFIG},
+    lru_caching::{LruCachingMemoryDatabase, LruCachingStore, DEFAULT_STORAGE_CACHE_CONFIG},
     map_view::{ByteMapView, HashedMapView},
     memory::MemoryStore,
     queue_view::HashedQueueView,
@@ -29,7 +29,7 @@ use linera_views::{
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    store::{TestKeyValueStore as _, WritableKeyValueStore as _},
+    store::{KeyValueDatabase, WritableKeyValueStore as _},
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         span_random_reordering_put_delete,
@@ -124,11 +124,11 @@ pub struct LruMemoryStorage {
 }
 
 impl StateStorage for LruMemoryStorage {
-    type Context = ViewContext<usize, LruCachingMemoryStore>;
+    type Context = ViewContext<usize, <LruCachingMemoryDatabase as KeyValueDatabase>::Store>;
 
     async fn new() -> Self {
         let store = MemoryStore::new_test_store().await.unwrap();
-        let store = LruCachingStore::new(store, DEFAULT_STORAGE_CACHE_CONFIG);
+        let store = LruCachingStore::new(store, DEFAULT_STORAGE_CACHE_CONFIG, false);
         LruMemoryStorage {
             accessed_chains: BTreeSet::new(),
             store,
@@ -146,19 +146,19 @@ impl StateStorage for LruMemoryStorage {
 
 #[cfg(with_rocksdb)]
 pub struct RocksDbTestStorage {
-    store: RocksDbStore,
+    database: RocksDbDatabase,
     accessed_chains: BTreeSet<usize>,
 }
 
 #[cfg(with_rocksdb)]
 impl StateStorage for RocksDbTestStorage {
-    type Context = ViewContext<usize, RocksDbStore>;
+    type Context = ViewContext<usize, <RocksDbDatabase as KeyValueDatabase>::Store>;
 
     async fn new() -> Self {
-        let store = RocksDbStore::new_test_store().await.unwrap();
+        let database = RocksDbDatabase::connect_test_namespace().await.unwrap();
         let accessed_chains = BTreeSet::new();
         RocksDbTestStorage {
-            store,
+            database,
             accessed_chains,
         }
     }
@@ -166,7 +166,7 @@ impl StateStorage for RocksDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.open_exclusive(&root_key)?;
+        let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -174,19 +174,19 @@ impl StateStorage for RocksDbTestStorage {
 
 #[cfg(with_scylladb)]
 pub struct ScyllaDbTestStorage {
-    store: ScyllaDbStore,
+    database: ScyllaDbDatabase,
     accessed_chains: BTreeSet<usize>,
 }
 
 #[cfg(with_scylladb)]
 impl StateStorage for ScyllaDbTestStorage {
-    type Context = ViewContext<usize, ScyllaDbStore>;
+    type Context = ViewContext<usize, <ScyllaDbDatabase as KeyValueDatabase>::Store>;
 
     async fn new() -> Self {
-        let store = ScyllaDbStore::new_test_store().await.unwrap();
+        let database = ScyllaDbDatabase::connect_test_namespace().await.unwrap();
         let accessed_chains = BTreeSet::new();
         ScyllaDbTestStorage {
-            store,
+            database,
             accessed_chains,
         }
     }
@@ -194,7 +194,7 @@ impl StateStorage for ScyllaDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.open_exclusive(&root_key)?;
+        let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -202,19 +202,19 @@ impl StateStorage for ScyllaDbTestStorage {
 
 #[cfg(with_dynamodb)]
 pub struct DynamoDbTestStorage {
-    store: DynamoDbStore,
+    database: DynamoDbDatabase,
     accessed_chains: BTreeSet<usize>,
 }
 
 #[cfg(with_dynamodb)]
 impl StateStorage for DynamoDbTestStorage {
-    type Context = ViewContext<usize, DynamoDbStore>;
+    type Context = ViewContext<usize, <DynamoDbDatabase as KeyValueDatabase>::Store>;
 
     async fn new() -> Self {
-        let store = DynamoDbStore::new_test_store().await.unwrap();
+        let database = DynamoDbDatabase::connect_test_namespace().await.unwrap();
         let accessed_chains = BTreeSet::new();
         DynamoDbTestStorage {
-            store,
+            database,
             accessed_chains,
         }
     }
@@ -222,7 +222,7 @@ impl StateStorage for DynamoDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.open_exclusive(&root_key)?;
+        let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }

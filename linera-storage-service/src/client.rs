@@ -13,13 +13,13 @@ use async_lock::{Semaphore, SemaphoreGuard};
 use futures::future::join_all;
 use linera_base::ensure;
 #[cfg(with_metrics)]
-use linera_views::metering::MeteredStore;
+use linera_views::metering::MeteredDatabase;
 #[cfg(with_testing)]
-use linera_views::store::TestKeyValueStore;
+use linera_views::store::TestKeyValueDatabase;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    lru_caching::LruCachingStore,
-    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    lru_caching::LruCachingDatabase,
+    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     FutureSyncExt,
 };
 use serde::de::DeserializeOwned;
@@ -66,6 +66,14 @@ const MAX_KEY_SIZE: usize = 1000000;
 //   [`KeyPrefix::RootKey`] + namespace + root_key
 //   to indicate the existence of a root key.
 #[derive(Clone)]
+pub struct StorageServiceDatabaseInternal {
+    channel: Channel,
+    semaphore: Option<Arc<Semaphore>>,
+    max_stream_queries: usize,
+    namespace: Vec<u8>,
+}
+
+#[derive(Clone)]
 pub struct StorageServiceStoreInternal {
     channel: Channel,
     semaphore: Option<Arc<Semaphore>>,
@@ -73,6 +81,10 @@ pub struct StorageServiceStoreInternal {
     prefix_len: usize,
     start_key: Vec<u8>,
     root_key_written: Arc<AtomicBool>,
+}
+
+impl WithError for StorageServiceDatabaseInternal {
+    type Error = StorageServiceStoreError;
 }
 
 impl WithError for StorageServiceStoreInternal {
@@ -442,8 +454,9 @@ impl StorageServiceStoreInternal {
     }
 }
 
-impl AdminKeyValueStore for StorageServiceStoreInternal {
+impl KeyValueDatabase for StorageServiceDatabaseInternal {
     type Config = StorageServiceStoreInternalConfig;
+    type Store = StorageServiceStoreInternal;
 
     fn get_name() -> String {
         "service store".to_string()
@@ -458,13 +471,26 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
             .map(|n| Arc::new(Semaphore::new(n)));
         let namespace = bcs::to_bytes(namespace)?;
         let max_stream_queries = config.max_stream_queries;
-        let mut start_key = vec![KeyPrefix::Key as u8];
-        start_key.extend(&namespace);
-        let prefix_len = namespace.len() + 1;
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let channel = endpoint.connect_lazy();
         Ok(Self {
+            channel,
+            semaphore,
+            max_stream_queries,
+            namespace,
+        })
+    }
+
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, StorageServiceStoreError> {
+        let channel = self.channel.clone();
+        let semaphore = self.semaphore.clone();
+        let max_stream_queries = self.max_stream_queries;
+        let mut start_key = vec![KeyPrefix::Key as u8];
+        start_key.extend(&self.namespace);
+        start_key.extend(root_key);
+        let prefix_len = self.namespace.len() + 1;
+        Ok(StorageServiceStoreInternal {
             channel,
             semaphore,
             max_stream_queries,
@@ -474,21 +500,8 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
         })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, StorageServiceStoreError> {
-        let channel = self.channel.clone();
-        let prefix_len = self.prefix_len;
-        let semaphore = self.semaphore.clone();
-        let max_stream_queries = self.max_stream_queries;
-        let mut start_key = self.start_key[..prefix_len].to_vec();
-        start_key.extend(root_key);
-        Ok(Self {
-            channel,
-            semaphore,
-            max_stream_queries,
-            prefix_len,
-            start_key,
-            root_key_written: Arc::new(AtomicBool::new(false)),
-        })
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        self.open_exclusive(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, StorageServiceStoreError> {
@@ -549,7 +562,7 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
         config: &Self::Config,
         namespace: &str,
     ) -> Result<(), StorageServiceStoreError> {
-        if StorageServiceStoreInternal::exists(config, namespace).await? {
+        if StorageServiceDatabaseInternal::exists(config, namespace).await? {
             return Err(StorageServiceStoreError::StoreAlreadyExists);
         }
         let namespace = bcs::to_bytes(namespace)?;
@@ -578,7 +591,7 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
 }
 
 #[cfg(with_testing)]
-impl TestKeyValueStore for StorageServiceStoreInternal {
+impl TestKeyValueDatabase for StorageServiceDatabaseInternal {
     async fn new_test_config() -> Result<StorageServiceStoreInternalConfig, StorageServiceStoreError>
     {
         let endpoint = storage_service_test_endpoint()?;
@@ -612,16 +625,17 @@ pub async fn storage_service_check_validity(
 ) -> Result<(), StorageServiceStoreError> {
     let config = service_config_from_endpoint(endpoint).unwrap();
     let namespace = "namespace";
-    let store = StorageServiceStoreInternal::connect(&config, namespace).await?;
+    let database = StorageServiceDatabaseInternal::connect(&config, namespace).await?;
+    let store = database.open_shared(&[])?;
     let _value = store.read_value_bytes(&[42]).await?;
     Ok(())
 }
 
-/// The service store client with metrics
+/// The service database client with metrics
 #[cfg(with_metrics)]
-pub type StorageServiceStore =
-    MeteredStore<LruCachingStore<MeteredStore<StorageServiceStoreInternal>>>;
+pub type StorageServiceDatabase =
+    MeteredDatabase<LruCachingDatabase<MeteredDatabase<StorageServiceDatabaseInternal>>>;
 
-/// The service store client without metrics
+/// The service database client without metrics
 #[cfg(not(with_metrics))]
-pub type StorageServiceStore = LruCachingStore<StorageServiceStoreInternal>;
+pub type StorageServiceDatabase = LruCachingDatabase<StorageServiceDatabaseInternal>;
