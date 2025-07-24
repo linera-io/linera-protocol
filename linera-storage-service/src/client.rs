@@ -32,7 +32,7 @@ use crate::{
         KeyPrefix, StorageServiceStoreError, StorageServiceStoreInternalConfig, MAX_PAYLOAD_SIZE,
     },
     key_value_store::{
-        statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
+        statement::Operation, storage_service_client::StorageServiceClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
         ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
         ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
@@ -99,7 +99,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         let query = RequestReadValue { key: full_key };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
-        let mut client = StoreProcessorClient::new(channel);
+        let mut client = StorageServiceClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_read_value(request).make_sync().await?;
         let response = response.into_inner();
@@ -125,7 +125,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         let query = RequestContainsKey { key: full_key };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
-        let mut client = StoreProcessorClient::new(channel);
+        let mut client = StorageServiceClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_contains_key(request).make_sync().await?;
         let response = response.into_inner();
@@ -150,7 +150,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         let query = RequestContainsKeys { keys: full_keys };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
-        let mut client = StoreProcessorClient::new(channel);
+        let mut client = StorageServiceClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_contains_keys(request).make_sync().await?;
         let response = response.into_inner();
@@ -175,7 +175,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         let query = RequestReadMultiValues { keys: full_keys };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
-        let mut client = StoreProcessorClient::new(channel);
+        let mut client = StorageServiceClient::new(channel);
         let _guard = self.acquire().await;
         let response = client
             .process_read_multi_values(request)
@@ -210,7 +210,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
-        let mut client = StoreProcessorClient::new(channel);
+        let mut client = StorageServiceClient::new(channel);
         let _guard = self.acquire().await;
         let response = client
             .process_find_keys_by_prefix(request)
@@ -244,7 +244,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
-        let mut client = StoreProcessorClient::new(channel);
+        let mut client = StorageServiceClient::new(channel);
         let _guard = self.acquire().await;
         let response = client
             .process_find_key_values_by_prefix(request)
@@ -369,7 +369,7 @@ impl StorageServiceStoreInternal {
             let query = RequestWriteBatchExtended { statements };
             let request = tonic::Request::new(query);
             let channel = self.channel.clone();
-            let mut client = StoreProcessorClient::new(channel);
+            let mut client = StorageServiceClient::new(channel);
             let _guard = self.acquire().await;
             let _response = client
                 .process_write_batch_extended(request)
@@ -416,7 +416,7 @@ impl StorageServiceStoreInternal {
             index,
         };
         let request = tonic::Request::new(query);
-        let mut client = StoreProcessorClient::new(channel);
+        let mut client = StorageServiceClient::new(channel);
         let response = client.process_specific_chunk(request).make_sync().await?;
         let response = response.into_inner();
         let ReplySpecificChunk { chunk } = response;
@@ -494,7 +494,7 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, StorageServiceStoreError> {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let mut client = StorageServiceClient::connect(endpoint).make_sync().await?;
         let response = client.process_list_all(()).make_sync().await?;
         let response = response.into_inner();
         let ReplyListAll { namespaces } = response;
@@ -514,7 +514,7 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let mut client = StorageServiceClient::connect(endpoint).make_sync().await?;
         let response = client.process_list_root_keys(request).make_sync().await?;
         let response = response.into_inner();
         let ReplyListRootKeys { root_keys } = response;
@@ -524,7 +524,7 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
     async fn delete_all(config: &Self::Config) -> Result<(), StorageServiceStoreError> {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let mut client = StorageServiceClient::connect(endpoint).make_sync().await?;
         let _response = client.process_delete_all(()).make_sync().await?;
         Ok(())
     }
@@ -538,7 +538,7 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let mut client = StorageServiceClient::connect(endpoint).make_sync().await?;
         let response = client.process_exists_namespace(request).make_sync().await?;
         let response = response.into_inner();
         let ReplyExistsNamespace { exists } = response;
@@ -557,7 +557,7 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let mut client = StorageServiceClient::connect(endpoint).make_sync().await?;
         let _response = client.process_create_namespace(request).make_sync().await?;
         Ok(())
     }
@@ -571,7 +571,7 @@ impl AdminKeyValueStore for StorageServiceStoreInternal {
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let mut client = StoreProcessorClient::connect(endpoint).make_sync().await?;
+        let mut client = StorageServiceClient::connect(endpoint).make_sync().await?;
         let _response = client.process_delete_namespace(request).make_sync().await?;
         Ok(())
     }
@@ -602,7 +602,7 @@ pub async fn storage_service_check_absence(
     endpoint: &str,
 ) -> Result<bool, StorageServiceStoreError> {
     let endpoint = Endpoint::from_shared(endpoint.to_string())?;
-    let result = StoreProcessorClient::connect(endpoint).await;
+    let result = StorageServiceClient::connect(endpoint).await;
     Ok(result.is_err())
 }
 

@@ -26,7 +26,7 @@ use tracing_subscriber::fmt::format::FmtSpan;
 
 use crate::key_value_store::{
     statement::Operation,
-    store_processor_server::{StoreProcessor, StoreProcessorServer},
+    storage_service_server::{StorageService, StorageServiceServer},
     KeyValue, OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
     ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
     ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
@@ -293,7 +293,7 @@ enum StorageServerOptions {
 }
 
 #[tonic::async_trait]
-impl StoreProcessor for StorageServer {
+impl StorageService for StorageServer {
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_read_value(
         &self,
@@ -678,7 +678,7 @@ async fn main() {
     let endpoint = endpoint.parse().unwrap();
     info!("Starting linera_storage_service on endpoint={}", endpoint);
     Server::builder()
-        .add_service(StoreProcessorServer::new(store))
+        .add_service(StorageServiceServer::new(store))
         .serve(endpoint)
         .await
         .expect("a successful running of the server");
