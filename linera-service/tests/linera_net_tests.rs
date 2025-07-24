@@ -577,7 +577,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
 
-    let balance_chain = node_service.balance(&account_chain).await?;
     let balance1 = node_service.balance(&account1).await?;
     let balance2 = node_service.balance(&account2).await?;
     let balance_app = node_service.balance(&account_app).await?;
@@ -1665,7 +1664,10 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
+    use linera_execution::{
+        evm::inputs::{get_mutation, EvmInstantiation},
+        test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
+    };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -1697,12 +1699,12 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let constructor_argument = ConstructorArgs { the_supply };
     let constructor_argument = constructor_argument.abi_encode();
 
-    let instantiation_argument = U256::abi_encode(&the_supply);
+    let instantiation_argument = EvmInstantiation { value: Amount::ZERO, argument: U256::abi_encode(&the_supply) };
 
     let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/erc20_shared.sol")?;
 
     let application_id = client1
-        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
             VmRuntime::Evm,
@@ -1740,7 +1742,8 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         to: address2,
         value: transfer1,
     };
-    let mutation = EvmQuery::Mutation(mutation.abi_encode());
+    let mutation = get_mutation(Amount::ZERO, mutation)?;
+    let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
 
     let query = balanceOfCall { account: address1 };
@@ -1763,7 +1766,8 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         destination: address2,
         value: transfer2,
     };
-    let mutation = EvmQuery::Mutation(mutation.abi_encode());
+    let mutation = get_mutation(Amount::ZERO, mutation)?;
+    let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
 
     node_service2.process_inbox(&chain2).await?;
