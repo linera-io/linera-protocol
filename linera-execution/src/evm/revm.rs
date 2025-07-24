@@ -54,6 +54,9 @@ const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 /// only when creating a new instance of a shared contract
 const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
+/// Returns the deployed bytecode of the contract.
+const GET_DEPLOYED_BYTECODE: &[u8] = &[21, 34, 55, 89];
+
 fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
     if vec == EXECUTE_MESSAGE_SELECTOR {
         return Err(EvmExecutionError::IllegalOperationCall(
@@ -1033,10 +1036,16 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             let argument = Vec::new(); // No call to "fn instantiate"
             let required_application_ids = Vec::new();
             let application_id = runtime.create_application(module_id, parameters, argument, required_application_ids)?;
+            let argument = GET_DEPLOYED_BYTECODE.to_vec();
+            let deployed_bytecode: Vec<u8> = runtime.try_call_application(false, application_id, argument)?;
+            let result = InterpreterResult {
+                result: InstructionResult::Return, // Only possibility if no error occured.
+                output: Bytes::from(deployed_bytecode),
+                gas: Gas::new(inputs.gas_limit),
+            };
             let address = application_id.evm_address();
-            inputs.scheme = CreateScheme::Custom { address };
-            // We have a repeat of the initialization. That is unfortunate.
-            Ok(None)
+            let creation_outcome = CreateOutcome { result, address: Some(address) };
+            Ok(Some(creation_outcome))
         }
     }
 
@@ -1227,6 +1236,9 @@ where
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
+        if operation == GET_DEPLOYED_BYTECODE {
+            return self.db.get_deployed_bytecode();
+        }
         let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
