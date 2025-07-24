@@ -80,6 +80,13 @@ mod in_mem {
     #[derive(Clone)]
     pub struct InMemorySigner(Arc<RwLock<InMemSignerInner>>);
 
+    #[cfg(not(with_getrandom))]
+    impl Default for InMemorySigner {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl InMemorySigner {
         /// Creates a new [`InMemorySigner`] seeded with `prng_seed`.
         /// If `prng_seed` is `None`, an `OsRng` will be used.

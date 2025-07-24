@@ -7,17 +7,16 @@ use async_lock::RwLock;
 use linera_storage_service::common::{KeyPrefix, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
-    memory::MemoryStore,
-    store::{ReadableKeyValueStore, WritableKeyValueStore},
+    memory::{MemoryDatabase, MemoryStore, MemoryStoreConfig},
+    store::{KeyValueDatabase, ReadableKeyValueStore, WritableKeyValueStore},
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
     lru_caching::StorageCacheConfig,
     rocks_db::{
-        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
+        PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
     },
-    store::AdminKeyValueStore as _,
 };
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
@@ -629,8 +628,15 @@ async fn main() {
             endpoint,
             max_stream_queries,
         } => {
-            let store = MemoryStore::new(max_stream_queries, &namespace).unwrap();
-            let store = LocalStore::Memory(store);
+            let config = MemoryStoreConfig {
+                max_stream_queries,
+                kill_on_drop: false,
+            };
+            let database = MemoryDatabase::maybe_create_and_connect(&config, &namespace)
+                .await
+                .unwrap();
+            let store_impl = database.open_exclusive(&[]).unwrap();
+            let store = LocalStore::Memory(store_impl);
             (store, endpoint)
         }
 
@@ -661,10 +667,11 @@ async fn main() {
                 inner_config,
                 storage_cache_config,
             };
-            let store = RocksDbStore::maybe_create_and_connect(&config, &namespace)
+            let database = RocksDbDatabase::maybe_create_and_connect(&config, &namespace)
                 .await
                 .expect("store");
-            let store = LocalStore::RocksDb(store);
+            let store_impl = database.open_exclusive(&[]).expect("Failed to open store");
+            let store = LocalStore::RocksDb(store_impl);
             (store, endpoint)
         }
     };

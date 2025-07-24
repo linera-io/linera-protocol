@@ -25,9 +25,9 @@ use linera_rpc::config::{CrossChainConfig, ExporterServiceConfig, TlsConfig};
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "rocksdb", feature = "scylladb", with_testing))]
-use linera_views::rocks_db::{RocksDbSpawnMode, RocksDbStore};
+use linera_views::rocks_db::{RocksDbDatabase, RocksDbSpawnMode};
 #[cfg(all(feature = "scylladb", with_testing))]
-use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
+use linera_views::{scylla_db::ScyllaDbDatabase, store::TestKeyValueDatabase as _};
 use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
 use tonic::transport::{channel::ClientTlsConfig, Endpoint};
@@ -89,7 +89,7 @@ async fn make_testing_config(database: Database) -> Result<InnerStorageConfig> {
         Database::ScyllaDb => {
             #[cfg(feature = "scylladb")]
             {
-                let config = ScyllaDbStore::new_test_config().await?;
+                let config = ScyllaDbDatabase::new_test_config().await?;
                 Ok(InnerStorageConfig::ScyllaDb {
                     uri: config.inner_config.uri,
                 })
@@ -100,8 +100,8 @@ async fn make_testing_config(database: Database) -> Result<InnerStorageConfig> {
         Database::DualRocksDbScyllaDb => {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             {
-                let rocksdb_config = RocksDbStore::new_test_config().await?;
-                let scylla_config = ScyllaDbStore::new_test_config().await?;
+                let rocksdb_config = RocksDbDatabase::new_test_config().await?;
+                let scylla_config = ScyllaDbDatabase::new_test_config().await?;
                 let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
                 Ok(InnerStorageConfig::DualRocksDbScyllaDb {
                     path_with_guard: rocksdb_config.inner_config.path_with_guard,

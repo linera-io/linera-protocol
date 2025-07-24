@@ -15,7 +15,7 @@ use linera_views::{
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
-    store::KeyValueStore,
+    store::{KeyValueDatabase, KeyValueStore},
     views::{RootView, View},
 };
 use tokio::sync::Mutex;
@@ -40,9 +40,12 @@ pub struct State<C>(Arc<Mutex<StateView<C>>>);
 
 type StateSchema<S> = Schema<State<ViewContext<(), S>>, EmptyMutation, EmptySubscription>;
 
-pub struct Indexer<S> {
-    pub state: State<ViewContext<(), S>>,
-    pub plugins: BTreeMap<String, Box<dyn Plugin<S>>>,
+pub struct Indexer<D>
+where
+    D: KeyValueDatabase,
+{
+    pub state: State<ViewContext<(), D::Store>>,
+    pub plugins: BTreeMap<String, Box<dyn Plugin<D>>>,
 }
 
 pub enum IndexerCommand {
@@ -56,15 +59,16 @@ enum LatestBlock {
     StartHeight(BlockHeight),
 }
 
-impl<S> Indexer<S>
+impl<D> Indexer<D>
 where
-    S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: Send + Sync + std::error::Error + 'static,
+    D: KeyValueDatabase + Clone + Send + Sync + 'static,
+    D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+    D::Error: Send + Sync + std::error::Error + 'static,
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
-    pub async fn load(store: S) -> Result<Self, IndexerError> {
+    pub async fn load(database: D) -> Result<Self, IndexerError> {
         let root_key = "indexer".as_bytes().to_vec();
-        let store = store
+        let store = database
             .open_exclusive(&root_key)
             .map_err(|_e| IndexerError::OpenExclusiveError)?;
         let context = ViewContext::create_root_context(store, ())
@@ -81,7 +85,7 @@ where
     /// the indexer.
     pub async fn process_value(
         &self,
-        state: &mut StateView<ViewContext<(), S>>,
+        state: &mut StateView<ViewContext<(), D::Store>>,
         value: &ConfirmedBlock,
     ) -> Result<(), IndexerError> {
         for plugin in self.plugins.values() {
@@ -107,7 +111,7 @@ where
         let chain_id = value.chain_id();
         let hash = value.hash();
         let height = value.height();
-        let state = &mut self.state.0.lock().await;
+        let mut state = self.state.0.lock().await;
         if height < listener.start {
             return Ok(());
         };
@@ -144,7 +148,7 @@ where
         }
 
         while let Some(value) = values.pop() {
-            self.process_value(state, &value).await?
+            self.process_value(&mut state, &value).await?
         }
         Ok(())
     }
@@ -171,7 +175,7 @@ where
     /// Registers a new plugin in the indexer
     pub async fn add_plugin(
         &mut self,
-        plugin: impl Plugin<S> + 'static,
+        plugin: impl Plugin<D> + 'static,
     ) -> Result<(), IndexerError> {
         let name = plugin.name();
         self.plugins
@@ -182,7 +186,10 @@ where
     }
 
     /// Handles queries made to the root of the indexer
-    async fn handler(schema: Extension<StateSchema<S>>, req: GraphQLRequest) -> GraphQLResponse {
+    async fn handler(
+        schema: Extension<StateSchema<D::Store>>,
+        req: GraphQLRequest,
+    ) -> GraphQLResponse {
         schema.execute(req.into_inner()).await.into()
     }
 

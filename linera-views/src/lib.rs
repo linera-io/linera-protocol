@@ -26,7 +26,7 @@ We provide support for the following databases:
 The corresponding trait in the code is the [`crate::store::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueStore.html).
 The trait decomposes into a [`store::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.ReadableKeyValueStore.html)
 and a [`store::WritableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.WritableKeyValueStore.html).
-In addition, there is a [`store::AdminKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.AdminKeyValueStore.html)
+In addition, there is a [`store::KeyValueDatabase`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueDatabase.html)
 which gives some functionalities for working with stores.
 A context is the combination of a client and a base key (of type `Vec<u8>`).
 

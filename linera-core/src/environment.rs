@@ -60,7 +60,7 @@ impl<St: Storage, N: Network, Si: Signer> Environment for Impl<St, N, Si> {
 
 cfg_if::cfg_if! {
     if #[cfg(with_testing)] {
-        pub type TestStorage = linera_storage::DbStorage<linera_views::memory::MemoryStore, linera_storage::TestClock>;
+        pub type TestStorage = linera_storage::DbStorage<linera_views::memory::MemoryDatabase, linera_storage::TestClock>;
         pub type TestNetwork = crate::test_utils::NodeProvider<TestStorage>;
         pub type TestSigner = linera_base::crypto::InMemorySigner;
         pub type Test = Impl<TestStorage, TestNetwork, TestSigner>;
