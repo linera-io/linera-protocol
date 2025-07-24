@@ -511,7 +511,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     Ok(())
 }
 
-
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -523,7 +522,9 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     use alloy_primitives::U256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_execution::test_utils::solidity::{load_solidity_example_by_name, temporary_write_evm_module, read_evm_u64_entry};
+    use linera_execution::test_utils::solidity::{
+        load_solidity_example_by_name, read_evm_u64_entry, temporary_write_evm_module,
+    };
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -542,7 +543,10 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    let module = load_solidity_example_by_name("tests/fixtures/evm_child_subcontract.sol", "CounterFactory")?;
+    let module = load_solidity_example_by_name(
+        "tests/fixtures/evm_child_subcontract.sol",
+        "CounterFactory",
+    )?;
     let (evm_contract, _dir) = temporary_write_evm_module(module)?;
 
     let instantiation_argument = Vec::new();
@@ -565,24 +569,30 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
         .make_application(&chain, &application_id)
         .await?;
 
-
-    let mutation0 = createCounterCall { initialValue: U256::from(42) };
+    let mutation0 = createCounterCall {
+        initialValue: U256::from(42),
+    };
     let mutation0 = EvmQuery::Mutation(mutation0.abi_encode());
     application.run_json_query(mutation0).await?;
 
-    let mutation1 = createCounterCall { initialValue: U256::from(149) };
+    let mutation1 = createCounterCall {
+        initialValue: U256::from(149),
+    };
     let mutation1 = EvmQuery::Mutation(mutation1.abi_encode());
     application.run_json_query(mutation1).await?;
 
-    let query0 = get_addressCall { index: U256::from(0) };
+    let query0 = get_addressCall {
+        index: U256::from(0),
+    };
     let query0 = EvmQuery::Query(query0.abi_encode());
     let address0 = application.run_json_query(query0).await?;
 
-    let query1 = get_addressCall { index: U256::from(1) };
+    let query1 = get_addressCall {
+        index: U256::from(1),
+    };
     let query1 = EvmQuery::Query(query1.abi_encode());
     let address1 = application.run_json_query(query1).await?;
     assert_ne!(address0, address1);
-
 
     node_service.ensure_is_running()?;
 
@@ -591,10 +601,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 
     Ok(())
 }
-
-
-
-
 
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]

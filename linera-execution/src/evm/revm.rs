@@ -910,10 +910,7 @@ fn map_result_create_outcome(
         }
         Ok(result) => result,
     }
-
 }
-
-
 
 fn map_result_call_outcome(
     result: Result<Option<CallOutcome>, ExecutionError>,
@@ -1035,16 +1032,25 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             let parameters = Vec::new(); // No constructor
             let argument = Vec::new(); // No call to "fn instantiate"
             let required_application_ids = Vec::new();
-            let application_id = runtime.create_application(module_id, parameters, argument, required_application_ids)?;
+            let application_id = runtime.create_application(
+                module_id,
+                parameters,
+                argument,
+                required_application_ids,
+            )?;
             let argument = GET_DEPLOYED_BYTECODE.to_vec();
-            let deployed_bytecode: Vec<u8> = runtime.try_call_application(false, application_id, argument)?;
+            let deployed_bytecode: Vec<u8> =
+                runtime.try_call_application(false, application_id, argument)?;
             let result = InterpreterResult {
                 result: InstructionResult::Return, // Only possibility if no error occured.
                 output: Bytes::from(deployed_bytecode),
                 gas: Gas::new(inputs.gas_limit),
             };
             let address = application_id.evm_address();
-            let creation_outcome = CreateOutcome { result, address: Some(address) };
+            let creation_outcome = CreateOutcome {
+                result,
+                address: Some(address),
+            };
             Ok(Some(creation_outcome))
         }
     }
