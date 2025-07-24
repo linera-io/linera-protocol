@@ -40,7 +40,7 @@ use crate::{
     cli_wrappers::{
         ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
     },
-    config::{BlockExporterConfig, DestinationConfig, DestinationKind},
+    config::{BlockExporterConfig, Destination, DestinationConfig},
     storage::{InnerStorageConfig, StorageConfig},
     util::ChildExt,
 };
@@ -599,29 +599,46 @@ impl LocalNet {
         }
 
         for destination in destinations {
-            let tls = match destination.tls {
-                TlsConfig::ClearText => "ClearText",
-                TlsConfig::Tls => "Tls",
+            let destination_string_to_push = match destination {
+                Destination::Indexer {
+                    tls,
+                    endpoint,
+                    port,
+                } => {
+                    let tls = match tls {
+                        TlsConfig::ClearText => "ClearText",
+                        TlsConfig::Tls => "Tls",
+                    };
+                    format!(
+                        r#"
+                        [[destination_config.destinations]]
+                        tls = "{tls}"
+                        endpoint = "{endpoint}"
+                        port = {port}
+                        kind = "Indexer"
+                        "#
+                    )
+                }
+                Destination::Validator { endpoint, port } => {
+                    format!(
+                        r#"
+                        [[destination_config.destinations]]
+                        endpoint = "{endpoint}"
+                        port = {port}
+                        kind = "Validator"
+                        "#
+                    )
+                }
+                Destination::Logging { file_name } => {
+                    format!(
+                        r#"
+                        [[destination_config.destinations]]
+                        file_name = "{file_name}"
+                        kind = "Logging"
+                        "#
+                    )
+                }
             };
-
-            let endpoint = &destination.endpoint;
-            let port = destination.port;
-            let kind = match destination.kind {
-                DestinationKind::Indexer => "Indexer",
-                DestinationKind::Validator => "Validator",
-                DestinationKind::Logging => "Logging",
-            };
-
-            let destination_string_to_push = format!(
-                r#"
-
-                [[destination_config.destinations]]
-                tls = "{tls}"
-                endpoint = "{endpoint}"
-                port = {port}
-                kind = "{kind}"
-                "#
-            );
 
             config.push_str(&destination_string_to_push);
         }

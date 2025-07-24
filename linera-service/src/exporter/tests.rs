@@ -10,13 +10,13 @@ use std::time::Duration;
 
 use anyhow::Result;
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
-use linera_rpc::config::{ExporterServiceConfig, TlsConfig};
+use linera_rpc::config::ExporterServiceConfig;
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, ExportersSetup, LocalNet, LocalNetConfig},
         LineraNetConfig, Network,
     },
-    config::{BlockExporterConfig, Destination, DestinationConfig, DestinationKind, LimitsConfig},
+    config::{BlockExporterConfig, Destination, DestinationConfig, LimitsConfig},
     test_name,
 };
 use test_case::test_case;
@@ -28,9 +28,7 @@ use test_case::test_case;
 async fn test_linera_exporter(database: Database, network: Network) -> Result<()> {
     tracing::info!("Starting test {}", test_name!());
 
-    let destination = Destination {
-        tls: TlsConfig::ClearText,
-        kind: DestinationKind::Validator,
+    let destination = Destination::Validator {
         endpoint: "127.0.0.1".to_owned(),
         port: LocalNet::proxy_public_port(1, 0) as u16,
     };

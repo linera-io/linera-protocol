@@ -66,16 +66,25 @@ impl DestinationId {
 
 /// The uri to provide export services to.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Destination {
-    /// The gRPC network protocol.
-    pub tls: TlsConfig,
-    /// The host name of the target destination (IP or hostname).
-    pub endpoint: String,
-    /// The port number of the target destination.
-    pub port: u16,
-    /// The description for the gRPC based destination.
-    /// Discriminates the export mode and the client to use.
-    pub kind: DestinationKind,
+pub enum Destination {
+    Indexer {
+        /// The gRPC network protocol.
+        tls: TlsConfig,
+        /// The host name of the target destination (IP or hostname).
+        endpoint: String,
+        /// The port number of the target destination.
+        port: u16,
+    },
+    Validator {
+        /// The host name of the target destination (IP or hostname).
+        endpoint: String,
+        /// The port number of the target destination.
+        port: u16,
+    },
+    Logging {
+        /// The host name of the target destination (IP or hostname).
+        file_name: String,
+    },
 }
 
 /// The description for the gRPC based destination.
@@ -129,31 +138,37 @@ impl Default for LimitsConfig {
 
 impl Destination {
     pub fn address(&self) -> String {
-        match self.kind {
-            DestinationKind::Indexer => {
-                let tls = match self.tls {
+        match &self {
+            Destination::Indexer {
+                tls,
+                endpoint,
+                port,
+            } => {
+                let tls = match tls {
                     TlsConfig::ClearText => "http",
                     TlsConfig::Tls => "https",
                 };
 
-                format!("{}://{}:{}", tls, self.endpoint, self.port)
+                format!("{}://{}:{}", tls, endpoint, port)
             }
 
-            DestinationKind::Validator => {
-                format!("{}:{}:{}", "grpc", self.endpoint, self.port)
+            Destination::Validator { endpoint, port } => {
+                format!("{}:{}:{}", "grpc", endpoint, port)
             }
 
-            DestinationKind::Logging => {
-                // Customary.
-                self.endpoint.to_string()
-            }
+            Destination::Logging { file_name } => file_name.to_string(),
         }
     }
 
     pub fn id(&self) -> DestinationId {
+        let kind = match self {
+            Destination::Indexer { .. } => DestinationKind::Indexer,
+            Destination::Validator { .. } => DestinationKind::Validator,
+            Destination::Logging { .. } => DestinationKind::Logging,
+        };
         DestinationId {
             address: self.address(),
-            kind: self.kind,
+            kind,
         }
     }
 }
