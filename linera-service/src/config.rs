@@ -316,14 +316,14 @@ mod tests {
 
     #[test]
     fn parse_from_str() {
-        let input = format!(
-            r#"
+        let input = r#"
                         tls = "ClearText"
                         endpoint = "127.0.0.1"
                         port = 8080
                         kind = "Indexer"
             "#
-        );
+        .to_string();
+
         let destination: Destination = toml::from_str(&input).unwrap();
         assert_eq!(
             destination,
@@ -334,13 +334,12 @@ mod tests {
             }
         );
 
-        let input = format!(
-            r#"
+        let input = r#"
                         endpoint = "127.0.0.1"
                         port = 8080
                         kind = "Validator"
         "#
-        );
+        .to_string();
         let destination: Destination = toml::from_str(&input).unwrap();
         assert_eq!(
             destination,
@@ -350,12 +349,11 @@ mod tests {
             }
         );
 
-        let input = format!(
-            r#"
+        let input = r#"
                         file_name = "export.log"
                         kind = "Logging"
         "#
-        );
+        .to_string();
         let destination: Destination = toml::from_str(&input).unwrap();
         assert_eq!(
             destination,
