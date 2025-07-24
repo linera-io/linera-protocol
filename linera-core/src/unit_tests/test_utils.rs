@@ -30,7 +30,7 @@ use linera_chain::{
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
 use linera_storage::{DbStorage, ResultReadCertificates, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
-use linera_storage_service::client::ServiceStoreClient;
+use linera_storage_service::client::ServiceStore;
 use linera_version::VersionInfo;
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::DynamoDbStore;
@@ -1215,11 +1215,11 @@ impl ServiceStorageBuilder {
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 #[async_trait]
 impl StorageBuilder for ServiceStorageBuilder {
-    type Storage = DbStorage<ServiceStoreClient, TestClock>;
+    type Storage = DbStorage<ServiceStore, TestClock>;
 
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         self.instance_counter += 1;
-        let config = ServiceStoreClient::new_test_config().await?;
+        let config = ServiceStore::new_test_config().await?;
         if self.namespace.is_empty() {
             self.namespace = generate_test_namespace();
         }

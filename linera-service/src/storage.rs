@@ -10,7 +10,7 @@ use linera_execution::WasmRuntime;
 use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
-    client::ServiceStoreClient,
+    client::ServiceStore,
     common::{ServiceStoreConfig, ServiceStoreInternalConfig},
 };
 #[cfg(feature = "dynamodb")]
@@ -626,7 +626,7 @@ impl StoreConfig {
             #[cfg(feature = "storage-service")]
             StoreConfig::Service { config, namespace } => {
                 let storage =
-                    DbStorage::<ServiceStoreClient, _>::connect(&config, &namespace, wasm_runtime)
+                    DbStorage::<ServiceStore, _>::connect(&config, &namespace, wasm_runtime)
                         .await?;
                 Ok(job.run(storage).await)
             }
@@ -674,7 +674,7 @@ impl StoreConfig {
             }
             #[cfg(feature = "storage-service")]
             StoreConfig::Service { config, namespace } => {
-                Ok(job.run::<ServiceStoreClient>(config, namespace).await?)
+                Ok(job.run::<ServiceStore>(config, namespace).await?)
             }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb { config, namespace } => {

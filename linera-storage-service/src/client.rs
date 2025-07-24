@@ -64,7 +64,7 @@ const MAX_KEY_SIZE: usize = 1000000;
 //   [`KeyPrefix::RootKey`] + namespace + root_key
 //   to indicate the existence of a root key.
 #[derive(Clone)]
-pub struct ServiceStoreClientInternal {
+pub struct ServiceStoreInternal {
     channel: Channel,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
@@ -73,11 +73,11 @@ pub struct ServiceStoreClientInternal {
     root_key_written: Arc<AtomicBool>,
 }
 
-impl WithError for ServiceStoreClientInternal {
+impl WithError for ServiceStoreInternal {
     type Error = ServiceStoreError;
 }
 
-impl ReadableKeyValueStore for ServiceStoreClientInternal {
+impl ReadableKeyValueStore for ServiceStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
     fn max_stream_queries(&self) -> usize {
@@ -248,7 +248,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
     }
 }
 
-impl WritableKeyValueStore for ServiceStoreClientInternal {
+impl WritableKeyValueStore for ServiceStoreInternal {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ServiceStoreError> {
@@ -329,7 +329,7 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
     }
 }
 
-impl ServiceStoreClientInternal {
+impl ServiceStoreInternal {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
         match &self.semaphore {
@@ -416,7 +416,7 @@ impl ServiceStoreClientInternal {
     }
 }
 
-impl AdminKeyValueStore for ServiceStoreClientInternal {
+impl AdminKeyValueStore for ServiceStoreInternal {
     type Config = ServiceStoreInternalConfig;
 
     fn get_name() -> String {
@@ -514,7 +514,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
-        if ServiceStoreClientInternal::exists(config, namespace).await? {
+        if ServiceStoreInternal::exists(config, namespace).await? {
             return Err(ServiceStoreError::StoreAlreadyExists);
         }
         let namespace = bcs::to_bytes(namespace)?;
@@ -540,7 +540,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
 }
 
 #[cfg(with_testing)]
-impl TestKeyValueStore for ServiceStoreClientInternal {
+impl TestKeyValueStore for ServiceStoreInternal {
     async fn new_test_config() -> Result<ServiceStoreInternalConfig, ServiceStoreError> {
         let endpoint = storage_service_test_endpoint()?;
         service_config_from_endpoint(&endpoint)
@@ -569,16 +569,16 @@ pub async fn storage_service_check_absence(endpoint: &str) -> Result<bool, Servi
 pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), ServiceStoreError> {
     let config = service_config_from_endpoint(endpoint).unwrap();
     let namespace = "namespace";
-    let store = ServiceStoreClientInternal::connect(&config, namespace).await?;
+    let store = ServiceStoreInternal::connect(&config, namespace).await?;
     let _value = store.read_value_bytes(&[42]).await?;
     Ok(())
 }
 
 /// The service store client with metrics
 #[cfg(with_metrics)]
-pub type ServiceStoreClient =
-    MeteredStore<LruCachingStore<MeteredStore<ServiceStoreClientInternal>>>;
+pub type ServiceStore =
+    MeteredStore<LruCachingStore<MeteredStore<ServiceStoreInternal>>>;
 
 /// The service store client without metrics
 #[cfg(not(with_metrics))]
-pub type ServiceStoreClient = LruCachingStore<ServiceStoreClientInternal>;
+pub type ServiceStore = LruCachingStore<ServiceStoreInternal>;
