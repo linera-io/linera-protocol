@@ -27,7 +27,7 @@ const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
 #[cfg(feature = "benchmark")]
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 #[cfg(feature = "benchmark")]
-const DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP: usize = 2;
+const DEFAULT_NUM_CHAINS: usize = 10;
 #[cfg(feature = "benchmark")]
 const DEFAULT_BPS: usize = 10;
 
@@ -36,13 +36,9 @@ const DEFAULT_BPS: usize = 10;
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkCommand {
-    /// How many chains to use in each chain group.
-    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP)]
-    pub num_chains_per_chain_group: usize,
-
-    /// How many chain groups to use. If not provided, the number of CPUs will be used.
-    #[arg(long)]
-    pub num_chain_groups: Option<usize>,
+    /// How many chains to use.
+    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS)]
+    pub num_chains: usize,
 
     /// How many tokens to assign to each newly created chain.
     /// These need to cover the transaction fees per chain for the benchmark.
@@ -103,8 +99,7 @@ pub struct BenchmarkCommand {
 impl Default for BenchmarkCommand {
     fn default() -> Self {
         Self {
-            num_chains_per_chain_group: DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP,
-            num_chain_groups: None,
+            num_chains: DEFAULT_NUM_CHAINS,
             tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
             transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
             wrap_up_max_in_flight: DEFAULT_WRAP_UP_MAX_IN_FLIGHT,

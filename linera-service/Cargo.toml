@@ -31,7 +31,6 @@ benchmark = [
     "linera-base/test",
     "linera-client/benchmark",
     "linera-chain/benchmark",
-    "dep:num_cpus",
 ]
 wasmer = [
     "linera-client/wasmer",
@@ -105,7 +104,6 @@ linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
 mini-moka.workspace = true
-num_cpus = { workspace = true, optional = true }
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
