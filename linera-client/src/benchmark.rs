@@ -3,6 +3,7 @@
 
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -23,6 +24,7 @@ use linera_sdk::abis::fungible::{self, FungibleOperation};
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
 use rand::{seq::SliceRandom, thread_rng};
+use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{mpsc, Barrier, Notify},
     task, time,
@@ -65,6 +67,10 @@ pub enum BenchmarkError {
     UnexpectedEmptyBucket,
     #[error("Failed to send unit message: {0}")]
     TokioSendUnitError(#[from] mpsc::error::SendError<()>),
+    #[error("Config file not found: {0}")]
+    ConfigFileNotFound(std::path::PathBuf),
+    #[error("Failed to load config file: {0}")]
+    ConfigLoadError(#[from] anyhow::Error),
 }
 
 #[derive(Debug)]
@@ -72,6 +78,26 @@ struct HistogramSnapshot {
     buckets: Vec<HistogramCount>,
     count: f64,
     sum: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct BenchmarkChainsConfig {
+    pub chain_ids: Vec<ChainId>,
+}
+
+impl BenchmarkChainsConfig {
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config = serde_yaml::from_str(&content)?;
+        Ok(config)
+    }
+
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> anyhow::Result<()> {
+        let content = serde_yaml::to_string(self)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
 }
 
 pub struct Benchmark<Env: Environment> {
@@ -588,17 +614,31 @@ impl<Env: Environment> Benchmark<Env> {
         benchmark_chains: Vec<(ChainId, AccountOwner)>,
         transactions_per_block: usize,
         fungible_application_id: Option<ApplicationId>,
-    ) -> Vec<Vec<Operation>> {
+        chains_config_path: Option<&Path>,
+    ) -> Result<Vec<Vec<Operation>>, BenchmarkError> {
         let mut blocks_infos = Vec::new();
-        for (i, (_, owner)) in benchmark_chains.iter().enumerate() {
+
+        let all_chains = if let Some(config_path) = chains_config_path {
+            if !config_path.exists() {
+                return Err(BenchmarkError::ConfigFileNotFound(
+                    config_path.to_path_buf(),
+                ));
+            }
+            let config = BenchmarkChainsConfig::load_from_file(config_path)
+                .map_err(BenchmarkError::ConfigLoadError)?;
+            config.chain_ids
+        } else {
+            benchmark_chains.iter().map(|(id, _)| *id).collect()
+        };
+
+        for (current_chain_id, owner) in benchmark_chains.iter() {
             let amount = Amount::from(1);
             let mut operations = Vec::new();
 
-            let mut other_chains: Vec<_> = benchmark_chains
+            let mut other_chains: Vec<_> = all_chains
                 .iter()
-                .enumerate()
-                .filter(|(j, _)| i != *j)
-                .map(|(_, (chain_id, _))| *chain_id)
+                .filter(|chain_id| **chain_id != *current_chain_id)
+                .copied()
                 .collect();
 
             other_chains.shuffle(&mut thread_rng());
@@ -619,6 +659,7 @@ impl<Env: Environment> Benchmark<Env> {
                 };
                 operations.push(operation);
             }
+
             let operations = operations
                 .into_iter()
                 .cycle()
@@ -626,7 +667,7 @@ impl<Env: Environment> Benchmark<Env> {
                 .collect();
             blocks_infos.push(operations);
         }
-        blocks_infos
+        Ok(blocks_infos)
     }
 
     /// Creates a fungible token transfer operation.

@@ -675,6 +675,7 @@ where
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
         pub_keys: Vec<AccountPublicKey>,
+        chains_config_path: Option<&std::path::Path>,
     ) -> Result<(Vec<ChainClient<Env>>, Vec<Vec<Operation>>), Error> {
         let start = Instant::now();
         // Below all block proposals are supposed to succeed without retries, we
@@ -718,7 +719,8 @@ where
             benchmark_chains,
             transactions_per_block,
             fungible_application_id,
-        );
+            chains_config_path,
+        )?;
 
         Ok((chain_clients, blocks_infos))
     }
