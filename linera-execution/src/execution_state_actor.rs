@@ -158,7 +158,6 @@ where
                 amount,
                 signer,
                 application_id,
-                chain_id,
                 callback,
             } => callback.respond(
                 self.system
@@ -168,7 +167,6 @@ where
                         source,
                         Recipient::Account(destination),
                         amount,
-                        chain_id,
                     )
                     .await?,
             ),
@@ -615,7 +613,6 @@ pub enum ExecutionRequest {
         #[debug(skip_if = Option::is_none)]
         signer: Option<AccountOwner>,
         application_id: ApplicationId,
-        chain_id: ChainId,
         #[debug(skip)]
         callback: Sender<Option<OutgoingMessage>>,
     },

@@ -402,7 +402,6 @@ where
                         owner,
                         recipient,
                         amount,
-                        context.chain_id,
                     )
                     .await?;
                 txn_tracker.add_outgoing_messages(maybe_message)?;
@@ -621,9 +620,8 @@ where
         source: AccountOwner,
         recipient: Recipient,
         amount: Amount,
-        source_chain_id: ChainId,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
-        assert_eq!(source_chain_id, self.context().extra().chain_id());
+        let source_chain_id = self.context().extra().chain_id();
         if source == AccountOwner::CHAIN {
             ensure!(
                 authenticated_signer.is_some()
