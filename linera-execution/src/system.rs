@@ -621,8 +621,9 @@ where
         source: AccountOwner,
         recipient: Recipient,
         amount: Amount,
-        chain_id: ChainId,
+        source_chain_id: ChainId,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
+        assert_eq!(source_chain_id, self.context().extra().chain_id());
         if source == AccountOwner::CHAIN {
             ensure!(
                 authenticated_signer.is_some()
@@ -646,9 +647,8 @@ where
         self.debit(&source, amount).await?;
         match recipient {
             Recipient::Account(account) => {
-                // Check if destination is on the same chain
-                if account.chain_id == chain_id {
-                    // Handle same-chain transfer locally
+                if account.chain_id == source_chain_id {
+                    // Handle same-chain transfer locally.
                     let target = account.owner;
                     if target == AccountOwner::CHAIN {
                         let new_balance = self.balance.get().saturating_add(amount);
@@ -657,10 +657,9 @@ where
                         let balance = self.balances.get_mut_or_default(&target).await?;
                         *balance = balance.saturating_add(amount);
                     }
-                    // No outgoing message for same-chain transfers
                     Ok(None)
                 } else {
-                    // Handle cross-chain transfer with message
+                    // Handle cross-chain transfer with message.
                     let message = SystemMessage::Credit {
                         amount,
                         source,
