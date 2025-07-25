@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TeamPrivacy"],"struct":["RequestedReviewers","RequestedTeam","Team","TeamInvitation"]};

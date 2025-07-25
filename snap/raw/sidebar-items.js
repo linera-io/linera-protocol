@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["decompress_len","max_compress_len"],"struct":["Decoder","Encoder"]};
