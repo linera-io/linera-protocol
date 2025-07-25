@@ -711,7 +711,12 @@ where
         let balance = if account == &AccountOwner::CHAIN {
             self.balance.get_mut()
         } else {
-            self.balances.get_mut_or_default(account).await?
+            self.balances.get_mut(account).await?.ok_or_else(|| {
+                ExecutionError::InsufficientBalance {
+                    balance: Amount::ZERO,
+                    account: *account,
+                }
+            })?
         };
 
         balance
