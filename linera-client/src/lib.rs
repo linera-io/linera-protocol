@@ -9,6 +9,8 @@
 
 pub mod chain_listener;
 pub mod client_context;
+#[cfg(not(web))]
+pub mod client_metrics;
 pub mod client_options;
 pub mod config;
 mod error;

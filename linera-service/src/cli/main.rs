@@ -867,6 +867,7 @@ impl Runnable for Job {
                     health_check_endpoints,
                     runtime_in_seconds,
                     delay_between_chain_groups_ms,
+                    context.client_metrics().map(|m| m.timing_sender.clone()),
                 )
                 .await?;
 
@@ -2154,7 +2155,11 @@ Make sure to use a Linera client compatible with this network.
                         None,
                         n,
                         on_drop,
-                        vec!["--storage-max-stream-queries".to_string(), "50".to_string()],
+                        vec![
+                            "--storage-max-stream-queries".to_string(),
+                            "50".to_string(),
+                            "--timings".to_string(),
+                        ],
                     )))
                 })
                 .collect::<Result<Vec<_>, anyhow::Error>>()?;
