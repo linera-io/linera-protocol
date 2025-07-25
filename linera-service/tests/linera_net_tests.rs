@@ -520,10 +520,10 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::U256;
-    use alloy_sol_types::{sol, SolCall, SolValue};
+    use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{
-        load_solidity_example_by_name, read_evm_u64_entry, temporary_write_evm_module,
+        load_solidity_example_by_name, temporary_write_evm_module,
     };
     use linera_sdk::abis::evm::EvmAbi;
 
