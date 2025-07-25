@@ -201,6 +201,10 @@ where
     pub(crate) fn clone(&mut self) -> Result<Self, ExporterError> {
         Ok(ExporterStorage::new(self.shared_storage.clone()?))
     }
+
+    pub(crate) fn get_latest_index(&self) -> usize {
+        self.shared_storage.shared_canonical_state.latest_index()
+    }
 }
 
 impl<S> BlockProcessorStorage<S>
@@ -401,6 +405,11 @@ where
             state_updates_buffer: self.state_updates_buffer.clone(),
             state_context: self.state_context.clone_unchecked()?,
         })
+    }
+
+    /// Returns the latest index of the canonical state.
+    fn latest_index(&self) -> usize {
+        self.count
     }
 
     async fn get(&self, index: usize) -> Result<CanonicalBlock, ExporterError> {

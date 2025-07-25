@@ -1,8 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt;
+
 use linera_rpc::config::{ExporterServiceConfig, TlsConfig};
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{Error, MapAccess, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 /// The configuration file for the linera-exporter.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -65,17 +70,26 @@ impl DestinationId {
 }
 
 /// The uri to provide export services to.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Destination {
-    /// The gRPC network protocol.
-    pub tls: TlsConfig,
-    /// The host name of the target destination (IP or hostname).
-    pub endpoint: String,
-    /// The port number of the target destination.
-    pub port: u16,
-    /// The description for the gRPC based destination.
-    /// Discriminates the export mode and the client to use.
-    pub kind: DestinationKind,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Destination {
+    Indexer {
+        /// The gRPC network protocol.
+        tls: TlsConfig,
+        /// The host name of the target destination (IP or hostname).
+        endpoint: String,
+        /// The port number of the target destination.
+        port: u16,
+    },
+    Validator {
+        /// The host name of the target destination (IP or hostname).
+        endpoint: String,
+        /// The port number of the target destination.
+        port: u16,
+    },
+    Logging {
+        /// The host name of the target destination (IP or hostname).
+        file_name: String,
+    },
 }
 
 /// The description for the gRPC based destination.
@@ -86,8 +100,142 @@ pub enum DestinationKind {
     Indexer,
     /// The validator description.
     Validator,
+    /// The logging target.
+    Logging,
 }
 
+impl Serialize for Destination {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeMap;
+
+        match self {
+            Destination::Indexer {
+                tls,
+                endpoint,
+                port,
+            } => {
+                let mut map = serializer.serialize_map(Some(4))?;
+                map.serialize_entry("kind", "Indexer")?;
+                map.serialize_entry("tls", tls)?;
+                map.serialize_entry("endpoint", endpoint)?;
+                map.serialize_entry("port", port)?;
+                map.end()
+            }
+            Destination::Validator { endpoint, port } => {
+                let mut map = serializer.serialize_map(Some(3))?;
+                map.serialize_entry("kind", "Validator")?;
+                map.serialize_entry("endpoint", endpoint)?;
+                map.serialize_entry("port", port)?;
+                map.end()
+            }
+            Destination::Logging { file_name } => {
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("kind", "Logging")?;
+                map.serialize_entry("file_name", file_name)?;
+                map.end()
+            }
+        }
+    }
+}
+
+struct DestinationVisitor;
+
+impl<'de> Visitor<'de> for DestinationVisitor {
+    type Value = Destination;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a map with a 'kind' field")
+    }
+
+    fn visit_map<V>(self, mut map: V) -> Result<Destination, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        let mut kind: Option<String> = None;
+        let mut tls: Option<TlsConfig> = None;
+        let mut endpoint: Option<String> = None;
+        let mut port: Option<u16> = None;
+        let mut file_name: Option<String> = None;
+
+        while let Some(key) = map.next_key::<String>()? {
+            match key.as_str() {
+                "kind" => {
+                    if kind.is_some() {
+                        return Err(V::Error::duplicate_field("kind"));
+                    }
+                    kind = Some(map.next_value()?);
+                }
+                "tls" => {
+                    if tls.is_some() {
+                        return Err(V::Error::duplicate_field("tls"));
+                    }
+                    tls = Some(map.next_value()?);
+                }
+                "endpoint" => {
+                    if endpoint.is_some() {
+                        return Err(V::Error::duplicate_field("endpoint"));
+                    }
+                    endpoint = Some(map.next_value()?);
+                }
+                "port" => {
+                    if port.is_some() {
+                        return Err(V::Error::duplicate_field("port"));
+                    }
+                    port = Some(map.next_value()?);
+                }
+                "file_name" => {
+                    if file_name.is_some() {
+                        return Err(V::Error::duplicate_field("file_name"));
+                    }
+                    file_name = Some(map.next_value()?);
+                }
+                _ => {
+                    // Ignore unknown fields
+                    let _: serde::de::IgnoredAny = map.next_value()?;
+                }
+            }
+        }
+
+        let kind = kind.ok_or_else(|| V::Error::missing_field("kind"))?;
+
+        match kind.as_str() {
+            "Indexer" => {
+                let tls = tls.ok_or_else(|| V::Error::missing_field("tls"))?;
+                let endpoint = endpoint.ok_or_else(|| V::Error::missing_field("endpoint"))?;
+                let port = port.ok_or_else(|| V::Error::missing_field("port"))?;
+                Ok(Destination::Indexer {
+                    tls,
+                    endpoint,
+                    port,
+                })
+            }
+            "Validator" => {
+                let endpoint = endpoint.ok_or_else(|| V::Error::missing_field("endpoint"))?;
+                let port = port.ok_or_else(|| V::Error::missing_field("port"))?;
+                Ok(Destination::Validator { endpoint, port })
+            }
+            "Logging" => {
+                let file_name = file_name.ok_or_else(|| V::Error::missing_field("file_name"))?;
+                Ok(Destination::Logging { file_name })
+            }
+            _ => Err(V::Error::unknown_variant(
+                &kind,
+                &["Indexer", "Validator", "Logging"],
+            )),
+        }
+    }
+}
+impl<'de> Deserialize<'de> for Destination {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_map(DestinationVisitor)
+    }
+}
 /// The configuration file to impose various limits
 /// on the resources used by the linera-exporter.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -127,26 +275,91 @@ impl Default for LimitsConfig {
 
 impl Destination {
     pub fn address(&self) -> String {
-        match self.kind {
-            DestinationKind::Indexer => {
-                let tls = match self.tls {
+        match &self {
+            Destination::Indexer {
+                tls,
+                endpoint,
+                port,
+            } => {
+                let tls = match tls {
                     TlsConfig::ClearText => "http",
                     TlsConfig::Tls => "https",
                 };
 
-                format!("{}://{}:{}", tls, self.endpoint, self.port)
+                format!("{}://{}:{}", tls, endpoint, port)
             }
 
-            DestinationKind::Validator => {
-                format!("{}:{}:{}", "grpc", self.endpoint, self.port)
+            Destination::Validator { endpoint, port } => {
+                format!("{}:{}:{}", "grpc", endpoint, port)
             }
+
+            Destination::Logging { file_name } => file_name.to_string(),
         }
     }
 
     pub fn id(&self) -> DestinationId {
+        let kind = match self {
+            Destination::Indexer { .. } => DestinationKind::Indexer,
+            Destination::Validator { .. } => DestinationKind::Validator,
+            Destination::Logging { .. } => DestinationKind::Logging,
+        };
         DestinationId {
             address: self.address(),
-            kind: self.kind,
+            kind,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_from_str() {
+        let input = r#"
+                        tls = "ClearText"
+                        endpoint = "127.0.0.1"
+                        port = 8080
+                        kind = "Indexer"
+            "#
+        .to_string();
+
+        let destination: Destination = toml::from_str(&input).unwrap();
+        assert_eq!(
+            destination,
+            Destination::Indexer {
+                tls: TlsConfig::ClearText,
+                endpoint: "127.0.0.1".to_owned(),
+                port: 8080,
+            }
+        );
+
+        let input = r#"
+                        endpoint = "127.0.0.1"
+                        port = 8080
+                        kind = "Validator"
+        "#
+        .to_string();
+        let destination: Destination = toml::from_str(&input).unwrap();
+        assert_eq!(
+            destination,
+            Destination::Validator {
+                endpoint: "127.0.0.1".to_owned(),
+                port: 8080,
+            }
+        );
+
+        let input = r#"
+                        file_name = "export.log"
+                        kind = "Logging"
+        "#
+        .to_string();
+        let destination: Destination = toml::from_str(&input).unwrap();
+        assert_eq!(
+            destination,
+            Destination::Logging {
+                file_name: "export.log".to_owned(),
+            }
+        );
     }
 }

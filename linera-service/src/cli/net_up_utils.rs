@@ -6,7 +6,7 @@ use std::{num::NonZeroU16, str::FromStr};
 use colored::Colorize as _;
 use linera_base::{data_types::Amount, listen_for_shutdown_signals, time::Duration};
 use linera_client::client_options::ResourceControlPolicyConfig;
-use linera_rpc::config::CrossChainConfig;
+use linera_rpc::config::{CrossChainConfig, ExporterServiceConfig};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
     child::{StorageService, StorageServiceGuard},
@@ -22,7 +22,9 @@ use {
 
 use crate::{
     cli_wrappers::{
-        local_net::{Database, InnerStorageConfigBuilder, LocalNetConfig, PathProvider},
+        local_net::{
+            Database, ExportersSetup, InnerStorageConfigBuilder, LocalNetConfig, PathProvider,
+        },
         ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
     },
     storage::{InnerStorageConfig, StorageConfig},
@@ -176,6 +178,8 @@ pub async fn handle_net_up_service(
     testing_prng_seed: Option<u64>,
     policy_config: ResourceControlPolicyConfig,
     cross_chain_config: CrossChainConfig,
+    with_block_exporter: bool,
+    block_exporter_port: NonZeroU16,
     path: &Option<String>,
     storage: &Option<String>,
     external_protocol: String,
@@ -208,6 +212,15 @@ pub async fn handle_net_up_service(
     let network = NetworkConfig { external, internal };
     let path_provider = PathProvider::from_path_option(path)?;
     let num_proxies = 1; // Local networks currently support exactly 1 proxy.
+    let block_exporters = if with_block_exporter {
+        let exporter_config = ExporterServiceConfig {
+            host: "localhost".to_owned(),
+            port: block_exporter_port.into(),
+        };
+        ExportersSetup::Remote(vec![exporter_config])
+    } else {
+        ExportersSetup::Local(vec![])
+    };
     let config = LocalNetConfig {
         network,
         database,
@@ -222,7 +235,7 @@ pub async fn handle_net_up_service(
         cross_chain_config,
         storage_config_builder,
         path_provider,
-        block_exporters: vec![],
+        block_exporters,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
@@ -234,6 +247,7 @@ pub async fn handle_net_up_service(
         num_other_initial_chains,
     )
     .await?;
+
     wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
 }
 

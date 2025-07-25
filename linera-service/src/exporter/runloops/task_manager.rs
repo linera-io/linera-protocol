@@ -4,6 +4,7 @@
 use std::{
     collections::{HashMap, HashSet},
     future::{Future, IntoFuture},
+    path::Path,
     sync::Arc,
 };
 
@@ -11,7 +12,7 @@ use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_service::config::{Destination, DestinationId, DestinationKind};
 use linera_storage::Storage;
 
-use crate::storage::ExporterStorage;
+use crate::{runloops::logging_exporter::LoggingExporter, storage::ExporterStorage};
 
 /// This type manages tasks like spawning different exporters on the different
 /// threads, discarding the committees and joining every thread properly at the
@@ -167,6 +168,14 @@ where
                     self.work_queue_size,
                 );
 
+                tokio::task::spawn(
+                    exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
+                )
+            }
+
+            DestinationKind::Logging => {
+                let path = Path::new(id.address());
+                let exporter_task = LoggingExporter::new(path);
                 tokio::task::spawn(
                     exporter_task.run_with_shutdown(self.shutdown_signal.clone(), storage),
                 )

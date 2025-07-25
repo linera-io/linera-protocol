@@ -127,7 +127,10 @@ where
                             tracing::error!("error {:?} when resolving block with hash: {}", e, next_block_notification.hash)
                         },
 
-                        Err(e) => unreachable!("unexpected error: {:?}", e),
+                        Err(e) => {
+                            tracing::error!("unexpected error: {:?}", e);
+                            return Err(e);
+                        }
                     }
                 },
 

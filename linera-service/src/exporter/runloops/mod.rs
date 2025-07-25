@@ -19,6 +19,7 @@ use crate::{
 
 mod block_processor;
 mod indexer;
+mod logging_exporter;
 mod task_manager;
 mod validator_exporter;
 
@@ -156,7 +157,7 @@ mod test {
     use linera_rpc::{config::TlsConfig, NodeOptions};
     use linera_service::{
         cli_wrappers::local_net::LocalNet,
-        config::{Destination, DestinationConfig, LimitsConfig},
+        config::{Destination, DestinationConfig, DestinationKind, LimitsConfig},
     };
     use linera_storage::{DbStorage, Storage};
     use linera_views::{memory::MemoryStore, ViewError};
@@ -186,11 +187,19 @@ mod test {
 
         let signal = ExporterCancellationSignal::new(cancellation_token.clone());
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
-        let destination_address = Destination {
-            port,
-            tls: TlsConfig::ClearText,
-            endpoint: "127.0.0.1".to_owned(),
-            kind: destination.kind(),
+        let destination_address = match destination.kind() {
+            DestinationKind::Indexer => Destination::Indexer {
+                port,
+                tls: TlsConfig::ClearText,
+                endpoint: "127.0.0.1".to_owned(),
+            },
+            DestinationKind::Validator => Destination::Validator {
+                port,
+                endpoint: "127.0.0.1".to_owned(),
+            },
+            DestinationKind::Logging => {
+                unreachable!("Logging destination is not supported in tests")
+            }
         };
 
         // make some blocks
@@ -561,11 +570,10 @@ mod test {
         let destination = DummyIndexer::default();
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("dummy indexer", port as usize, "http").await?;
-        let destination_address = Destination {
+        let destination_address = Destination::Indexer {
             port,
             tls: TlsConfig::ClearText,
             endpoint: "127.0.0.1".to_owned(),
-            kind: destination.kind(),
         };
 
         destinations.push(destination_address);
@@ -580,11 +588,9 @@ mod test {
         let destination = DummyValidator::new(port);
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("dummy validator", port as usize, "http").await?;
-        let destination_address = Destination {
+        let destination_address = Destination::Validator {
             port,
-            tls: TlsConfig::ClearText,
             endpoint: get_address(port as u16).ip().to_string(),
-            kind: destination.kind(),
         };
 
         destinations.push(destination_address);
@@ -600,11 +606,10 @@ mod test {
         destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("faulty indexer", port as usize, "http").await?;
-        let destination_address = Destination {
+        let destination_address = Destination::Indexer {
             port,
             tls: TlsConfig::ClearText,
             endpoint: "127.0.0.1".to_owned(),
-            kind: destination.kind(),
         };
 
         destinations.push(destination_address);
@@ -620,11 +625,9 @@ mod test {
         destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
         LocalNet::ensure_grpc_server_has_started("falty validator", port as usize, "http").await?;
-        let destination_address = Destination {
+        let destination_address = Destination::Validator {
             port,
-            tls: TlsConfig::ClearText,
             endpoint: "127.0.0.1".to_owned(),
-            kind: destination.kind(),
         };
 
         destinations.push(destination_address);

@@ -1819,7 +1819,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let description = genesis_config.add_root_chain(public_key, *initial_funding);
                 let chain = UserChain::make_initial(public_key.into(), description, timestamp);
-                // Private keys.
                 chains.push(chain);
             }
             genesis_config.persist().await?;
@@ -1934,6 +1933,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                with_block_exporter,
+                exporter_port: block_exporter_port,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1944,6 +1945,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *testing_prng_seed,
                     *policy_config,
                     cross_chain_config.clone(),
+                    *with_block_exporter,
+                    *block_exporter_port,
                     path,
                     // Not using the default value for storage
                     &options.storage_config,

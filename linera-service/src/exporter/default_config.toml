@@ -1,0 +1,21 @@
+id = 1
+
+[service_config]
+host = "localhost"
+port = 8881
+
+[destination_config]
+committee_destination = true
+
+[[destination_config.destinations]]
+file_name = "linera-exporter.log"
+kind = "Logging"
+
+[limits]
+persistence_period_ms = 299000
+work_queue_size = 256
+blob_cache_weight_mb = 1024
+blob_cache_items_capacity = 8192
+block_cache_weight_mb = 1024
+block_cache_items_capacity = 8192
+auxiliary_cache_size_mb = 1024

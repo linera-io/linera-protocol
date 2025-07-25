@@ -1089,9 +1089,13 @@ pub enum NetCommand {
         #[arg(long, default_value = "1000")]
         faucet_amount: Amount,
 
-        /// The number of block exporters per validator in the local test network. Default is 0.
-        #[arg(long, default_value = "0")]
-        block_exporters: u32,
+        /// Whether to start a block exporter for each validator.
+        #[arg(long, default_value = "false")]
+        with_block_exporter: bool,
+
+        /// The port on which to run the block exporter.
+        #[arg(long, default_value = "8081")]
+        exporter_port: NonZeroU16,
 
         /// Use dual store (rocksdb and scylladb) instead of just scylladb. This is exclusive for
         /// kubernetes deployments.

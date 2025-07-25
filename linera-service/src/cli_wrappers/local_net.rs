@@ -21,7 +21,7 @@ use linera_base::{
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_core::node::ValidatorNodeProvider;
-use linera_rpc::config::{CrossChainConfig, TlsConfig};
+use linera_rpc::config::{CrossChainConfig, ExporterServiceConfig, TlsConfig};
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "rocksdb", feature = "scylladb", with_testing))]
@@ -40,7 +40,7 @@ use crate::{
     cli_wrappers::{
         ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
     },
-    config::{BlockExporterConfig, DestinationConfig, DestinationKind},
+    config::{BlockExporterConfig, Destination, DestinationConfig},
     storage::{InnerStorageConfig, StorageConfig},
     util::ChildExt,
 };
@@ -185,7 +185,15 @@ pub struct LocalNetConfig {
     pub cross_chain_config: CrossChainConfig,
     pub storage_config_builder: InnerStorageConfigBuilder,
     pub path_provider: PathProvider,
-    pub block_exporters: Vec<BlockExporterConfig>,
+    pub block_exporters: ExportersSetup,
+}
+
+/// The setup for the block exporters.
+pub enum ExportersSetup {
+    // Block exporters are meant to be started and managed by the testing framework.
+    Local(Vec<BlockExporterConfig>),
+    // Block exporters are already started and we just need to connect to them.
+    Remote(Vec<ExporterServiceConfig>),
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -203,7 +211,7 @@ pub struct LocalNet {
     common_storage_config: InnerStorageConfig,
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
-    block_exporters: Vec<BlockExporterConfig>,
+    block_exporters: ExportersSetup,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -253,10 +261,6 @@ impl Validator {
         self.servers.push(server)
     }
 
-    fn add_block_exporter(&mut self, exporter: Child) {
-        self.exporters.push(exporter);
-    }
-
     #[cfg(with_testing)]
     async fn terminate_server(&mut self, index: usize) -> Result<()> {
         let mut server = self.servers.remove(index);
@@ -267,16 +271,18 @@ impl Validator {
         Ok(())
     }
 
+    fn add_block_exporter(&mut self, exporter: Child) {
+        self.exporters.push(exporter);
+    }
+
     fn ensure_is_running(&mut self) -> Result<()> {
         self.proxy.ensure_is_running()?;
         for child in &mut self.servers {
             child.ensure_is_running()?;
         }
-
         for exporter in &mut self.exporters {
             exporter.ensure_is_running()?;
         }
-
         Ok(())
     }
 }
@@ -306,7 +312,7 @@ impl LocalNetConfig {
             num_proxies,
             storage_config_builder,
             path_provider,
-            block_exporters: vec![],
+            block_exporters: ExportersSetup::Local(vec![]),
         }
     }
 }
@@ -392,7 +398,7 @@ impl LocalNet {
         common_storage_config: InnerStorageConfig,
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
-        block_exporters: Vec<BlockExporterConfig>,
+        block_exporters: ExportersSetup,
     ) -> Result<Self> {
         Ok(Self {
             network,
@@ -502,26 +508,50 @@ impl LocalNet {
             ));
         }
 
-        for j in 0..self.block_exporters.len() {
-            let host = Network::Grpc.localhost();
-            let port = Self::block_exporter_port(n, j);
-            let config_content = format!(
-                r#"
+        match self.block_exporters {
+            ExportersSetup::Local(ref exporters) => {
+                for (j, exporter) in exporters.iter().enumerate() {
+                    let host = Network::Grpc.localhost();
+                    let port = Self::block_exporter_port(n, j);
+                    let config_content = format!(
+                        r#"
 
-                [[block_exporters]]
-                host = "{host}"
-                port = {port}
-                "#
-            );
+                        [[block_exporters]]
+                        host = "{host}"
+                        port = {port}
+                        "#
+                    );
 
-            content.push_str(&config_content);
-            let exporter_config = self.generate_block_exporter_config(n, j as u32);
-            let config_path = self
-                .path_provider
-                .path()
-                .join(format!("exporter_config_{n}:{j}.toml"));
+                    content.push_str(&config_content);
+                    let exporter_config = self.generate_block_exporter_config(
+                        n,
+                        j as u32,
+                        &exporter.destination_config,
+                    );
+                    let config_path = self
+                        .path_provider
+                        .path()
+                        .join(format!("exporter_config_{n}:{j}.toml"));
 
-            fs_err::write(&config_path, &exporter_config)?;
+                    fs_err::write(&config_path, &exporter_config)?;
+                }
+            }
+            ExportersSetup::Remote(ref exporters) => {
+                for exporter in exporters.iter() {
+                    let host = exporter.host.clone();
+                    let port = exporter.port;
+                    let config_content = format!(
+                        r#"
+
+                        [[block_exporters]]
+                        host = "{host}"
+                        port = {port}
+                        "#
+                    );
+
+                    content.push_str(&config_content);
+                }
+            }
         }
 
         fs_err::write(&path, content)?;
@@ -533,7 +563,12 @@ impl LocalNet {
         })
     }
 
-    fn generate_block_exporter_config(&self, validator: usize, exporter_id: u32) -> String {
+    fn generate_block_exporter_config(
+        &self,
+        validator: usize,
+        exporter_id: u32,
+        destination_config: &DestinationConfig,
+    ) -> String {
         let n = validator;
         let host = Network::Grpc.localhost();
         let port = Self::block_exporter_port(n, exporter_id as usize);
@@ -550,7 +585,7 @@ impl LocalNet {
         let DestinationConfig {
             destinations,
             committee_destination,
-        } = &self.block_exporters[exporter_id as usize].destination_config;
+        } = destination_config;
 
         if *committee_destination {
             let destination_string_to_push = r#"
@@ -564,28 +599,46 @@ impl LocalNet {
         }
 
         for destination in destinations {
-            let tls = match destination.tls {
-                TlsConfig::ClearText => "ClearText",
-                TlsConfig::Tls => "Tls",
+            let destination_string_to_push = match destination {
+                Destination::Indexer {
+                    tls,
+                    endpoint,
+                    port,
+                } => {
+                    let tls = match tls {
+                        TlsConfig::ClearText => "ClearText",
+                        TlsConfig::Tls => "Tls",
+                    };
+                    format!(
+                        r#"
+                        [[destination_config.destinations]]
+                        tls = "{tls}"
+                        endpoint = "{endpoint}"
+                        port = {port}
+                        kind = "Indexer"
+                        "#
+                    )
+                }
+                Destination::Validator { endpoint, port } => {
+                    format!(
+                        r#"
+                        [[destination_config.destinations]]
+                        endpoint = "{endpoint}"
+                        port = {port}
+                        kind = "Validator"
+                        "#
+                    )
+                }
+                Destination::Logging { file_name } => {
+                    format!(
+                        r#"
+                        [[destination_config.destinations]]
+                        file_name = "{file_name}"
+                        kind = "Logging"
+                        "#
+                    )
+                }
             };
-
-            let endpoint = &destination.endpoint;
-            let port = destination.port;
-            let kind = match destination.kind {
-                DestinationKind::Indexer => "Indexer",
-                DestinationKind::Validator => "Validator",
-            };
-
-            let destination_string_to_push = format!(
-                r#"
-
-                [[destination_config.destinations]]
-                tls = "{tls}"
-                endpoint = "{endpoint}"
-                port = {port}
-                kind = "{kind}"
-                "#
-            );
 
             config.push_str(&destination_string_to_push);
         }
@@ -663,6 +716,8 @@ impl LocalNet {
             .get(&validator)
             .expect("initialized storage");
 
+        tracing::debug!(config=?config_path, storage=?storage.to_string(), "starting block exporter");
+
         let child = self
             .command_for_binary("linera-exporter")
             .await?
@@ -685,6 +740,8 @@ impl LocalNet {
                 unreachable!("Only allowed options are grpc and grpcs")
             }
         }
+
+        tracing::info!("block exporter started {validator}:{exporter_id}");
 
         Ok(child)
     }
@@ -762,7 +819,6 @@ impl LocalNet {
             inner_storage_config,
             namespace,
         };
-
         let mut command = self.command_for_binary("linera").await?;
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
@@ -843,10 +899,13 @@ impl LocalNet {
             let server = self.run_server(index, shard).await?;
             validator.add_server(server);
         }
-        for block_exporter in 0..self.block_exporters.len() {
-            let exporter = self.run_exporter(index, block_exporter as u32).await?;
-            validator.add_block_exporter(exporter);
+        if let ExportersSetup::Local(ref exporters) = self.block_exporters {
+            for block_exporter in 0..exporters.len() {
+                let exporter = self.run_exporter(index, block_exporter as u32).await?;
+                validator.add_block_exporter(exporter);
+            }
         }
+
         self.running_validators.insert(index, validator);
         Ok(())
     }
