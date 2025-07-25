@@ -39,7 +39,6 @@ const IS_WITH_METRICS: bool = false;
 #[cfg(feature = "metrics")]
 const IS_WITH_METRICS: bool = true;
 
-
 /// Options for running the linera block exporter.
 #[derive(clap::Parser, Debug, Clone)]
 #[command(
@@ -158,7 +157,9 @@ impl ExporterOptions {
                 tracing::info!("overriding metrics port to {}", port);
                 config.metrics_port = port;
             } else {
-                tracing::warn!("Metrics are not enabled in this build, ignoring metrics port configuration.");
+                tracing::warn!(
+                    "Metrics are not enabled in this build, ignoring metrics port configuration."
+                );
             }
         }
 

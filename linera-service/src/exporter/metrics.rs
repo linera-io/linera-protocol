@@ -8,7 +8,7 @@ use prometheus::{Histogram, HistogramVec, IntCounterVec, IntGaugeVec};
 
 pub(crate) static GET_BLOB_HISTOGRAM: LazyLock<Histogram> = LazyLock::new(|| {
     prometheus_util::register_histogram(
-        "get_blob_histogram",
+        "get_blob_histogram_ms",
         "Time it took to read a blob from the storage",
         None,
     )
@@ -24,7 +24,7 @@ pub(crate) static GET_CERTIFICATE_HISTOGRAM: LazyLock<Histogram> = LazyLock::new
 
 pub(crate) static GET_CANONICAL_BLOCK_HISTOGRAM: LazyLock<Histogram> = LazyLock::new(|| {
     prometheus_util::register_histogram(
-        "get_canonical_block_histogram",
+        "get_canonical_block_histogram_ms",
         "Time it took to read a canonical block from the storage",
         None,
     )
@@ -32,7 +32,7 @@ pub(crate) static GET_CANONICAL_BLOCK_HISTOGRAM: LazyLock<Histogram> = LazyLock:
 
 pub(crate) static SAVE_HISTOGRAM: LazyLock<Histogram> = LazyLock::new(|| {
     prometheus_util::register_histogram(
-        "block_processor_state_save_histogram",
+        "block_processor_state_save_histogram_ms",
         "Time it took to save the exporter state to the storage",
         None,
     )
@@ -40,7 +40,7 @@ pub(crate) static SAVE_HISTOGRAM: LazyLock<Histogram> = LazyLock::new(|| {
 
 pub(crate) static DISPATCH_BLOCK_HISTOGRAM: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
-        "dispatch_block_histogram",
+        "dispatch_block_histogram_ms",
         "Time it took to dispatch a block to a destination",
         &["destination"],
         None,
@@ -49,7 +49,7 @@ pub(crate) static DISPATCH_BLOCK_HISTOGRAM: LazyLock<HistogramVec> = LazyLock::n
 
 pub(crate) static DISPATCH_BLOB_HISTOGRAM: LazyLock<HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
-        "dispatch_blob_histogram",
+        "dispatch_blob_histogram_ms",
         "Time it took to dispatch a blob to a validator destination",
         &["destination"],
         None,
