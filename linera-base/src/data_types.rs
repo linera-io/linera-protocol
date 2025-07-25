@@ -1042,6 +1042,8 @@ pub enum OracleResponse {
     Round(Option<u32>),
     /// An event was read.
     Event(EventId, Vec<u8>),
+    /// An event exists.
+    EventExists(EventId),
 }
 
 impl BcsHashable<'_> for OracleResponse {}
