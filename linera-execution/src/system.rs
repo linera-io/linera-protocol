@@ -762,15 +762,29 @@ where
                 self.debit(&owner, amount).await?;
                 match recipient {
                     Recipient::Account(account) => {
-                        let message = SystemMessage::Credit {
-                            amount,
-                            source: owner,
-                            target: account.owner,
-                        };
-                        outcome.push(
-                            OutgoingMessage::new(account.chain_id, message)
-                                .with_kind(MessageKind::Tracked),
-                        );
+                        let current_chain_id = self.context().extra().chain_id();
+                        if account.chain_id == current_chain_id {
+                            // Handle same-chain operation locally.
+                            let target = account.owner;
+                            if target == AccountOwner::CHAIN {
+                                let new_balance = self.balance.get().saturating_add(amount);
+                                self.balance.set(new_balance);
+                            } else {
+                                let balance = self.balances.get_mut_or_default(&target).await?;
+                                *balance = balance.saturating_add(amount);
+                            }
+                        } else {
+                            // Handle cross-chain operation with message.
+                            let message = SystemMessage::Credit {
+                                amount,
+                                source: owner,
+                                target: account.owner,
+                            };
+                            outcome.push(
+                                OutgoingMessage::new(account.chain_id, message)
+                                    .with_kind(MessageKind::Tracked),
+                            );
+                        }
                     }
                     Recipient::Burn => (),
                 }
