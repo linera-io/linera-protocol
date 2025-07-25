@@ -871,7 +871,7 @@ where
     ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
 
-        let blob_ids = self.check_bytecode_blobs(&module_id).await?;
+        let blob_ids = self.check_bytecode_blobs(&module_id, &txn_tracker).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
@@ -925,7 +925,9 @@ where
         self.blob_used(txn_tracker, blob_id).await?;
         let description: ApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
 
-        let blob_ids = self.check_bytecode_blobs(&description.module_id).await?;
+        let blob_ids = self
+            .check_bytecode_blobs(&description.module_id, txn_tracker)
+            .await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
@@ -1023,11 +1025,17 @@ where
     async fn check_bytecode_blobs(
         &mut self,
         module_id: &ModuleId,
+        txn_tracker: &TransactionTracker,
     ) -> Result<Vec<BlobId>, ExecutionError> {
         let blob_ids = module_id.bytecode_blob_ids();
 
         let mut missing_blobs = Vec::new();
         for blob_id in &blob_ids {
+            // First check if blob is present in created_blobs
+            if txn_tracker.created_blobs().contains_key(blob_id) {
+                continue; // Blob found in created_blobs, it's ok
+            }
+            // If not in created_blobs, check storage
             if !self.context().extra().contains_blob(*blob_id).await? {
                 missing_blobs.push(*blob_id);
             }
