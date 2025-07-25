@@ -34,6 +34,12 @@ mod test_utils;
 #[cfg(test)]
 mod tests;
 
+#[cfg(not(feature = "metrics"))]
+const IS_WITH_METRICS: bool = false;
+#[cfg(feature = "metrics")]
+const IS_WITH_METRICS: bool = true;
+
+
 /// Options for running the linera block exporter.
 #[derive(clap::Parser, Debug, Clone)]
 #[command(
@@ -76,6 +82,10 @@ struct ExporterOptions {
     /// Number of times to retry connecting to a destination.
     #[arg(long, default_value = "10")]
     pub max_retries: u32,
+
+    /// Port for the metrics server.
+    #[arg(long)]
+    pub metrics_port: Option<u16>,
 }
 
 struct ExporterContext {
@@ -133,7 +143,7 @@ impl ExporterOptions {
     fn run(&self) -> anyhow::Result<()> {
         let config_string = fs_err::read_to_string(&self.config_path)
             .expect("Unable to read the configuration file");
-        let config: BlockExporterConfig =
+        let mut config: BlockExporterConfig =
             toml::from_str(&config_string).expect("Invalid configuration file format");
 
         let node_options = NodeOptions {
@@ -142,6 +152,15 @@ impl ExporterOptions {
             retry_delay: self.retry_delay,
             max_retries: self.max_retries,
         };
+
+        if let Some(port) = self.metrics_port {
+            if IS_WITH_METRICS {
+                tracing::info!("overriding metrics port to {}", port);
+                config.metrics_port = port;
+            } else {
+                tracing::warn!("Metrics are not enabled in this build, ignoring metrics port configuration.");
+            }
+        }
 
         let context = ExporterContext::new(node_options, config);
 
