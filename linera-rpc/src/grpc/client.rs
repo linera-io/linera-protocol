@@ -62,6 +62,10 @@ impl GrpcClient {
         }
     }
 
+    pub fn address(&self) -> &str {
+        &self.address
+    }
+
     /// Returns whether this gRPC status means the server stream should be reconnected to, or not.
     /// Logs a warning on unexpected status codes.
     fn is_retryable(status: &Status) -> bool {

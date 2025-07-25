@@ -1,5 +1,7 @@
 id = 1
 
+metrics_port = 9090
+
 [service_config]
 host = "localhost"
 port = 8881
