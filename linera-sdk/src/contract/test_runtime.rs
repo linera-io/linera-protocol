@@ -14,7 +14,9 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     ensure, http,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, BlobId, ChainId, MessageId, ModuleId, StreamName,
+    },
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
@@ -29,6 +31,11 @@ struct ExpectedCreateApplicationCall {
     argument: Vec<u8>,
     required_application_ids: Vec<ApplicationId>,
     application_id: ApplicationId,
+}
+
+struct ExpectedCreateDataBlobCall {
+    bytes: Vec<u8>,
+    blob_id: BlobId,
 }
 
 /// A mock of the common runtime to interface with the host executing the contract.
@@ -64,6 +71,7 @@ where
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_open_chain_calls: VecDeque<(ChainOwnership, ApplicationPermissions, Amount, ChainId)>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
+    expected_create_data_blob_calls: VecDeque<ExpectedCreateDataBlobCall>,
     key_value_store: KeyValueStore,
 }
 
@@ -111,6 +119,7 @@ where
             expected_assert_data_blob_exists_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
             expected_create_application_calls: VecDeque::new(),
+            expected_create_data_blob_calls: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -705,6 +714,12 @@ where
             });
     }
 
+    /// Adds a new expected call to `create_data_blob`.
+    pub fn add_expected_create_data_blob_call(&mut self, bytes: Vec<u8>, blob_id: BlobId) {
+        self.expected_create_data_blob_calls
+            .push_back(ExpectedCreateDataBlobCall { bytes, blob_id });
+    }
+
     /// Creates a new on-chain application, based on the supplied bytecode and parameters.
     pub fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
@@ -738,6 +753,19 @@ where
         assert_eq!(argument, expected_argument);
         assert_eq!(required_application_ids, expected_required_app_ids);
         application_id.with_abi::<Abi>()
+    }
+
+    /// Creates a new data blob and returns its hash.
+    pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
+        let ExpectedCreateDataBlobCall {
+            bytes: expected_bytes,
+            blob_id,
+        } = self
+            .expected_create_data_blob_calls
+            .pop_front()
+            .expect("Unexpected create_data_blob call");
+        assert_eq!(bytes, expected_bytes);
+        DataBlobHash(blob_id.hash)
     }
 
     /// Configures the handler for cross-application calls made during the test.

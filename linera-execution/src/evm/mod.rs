@@ -7,6 +7,7 @@
 
 #![cfg(with_revm)]
 
+mod data_types;
 mod database;
 pub mod revm;
 

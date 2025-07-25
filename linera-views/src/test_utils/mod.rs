@@ -17,9 +17,7 @@ use crate::{
         WriteOperation::{Delete, Put},
     },
     random::{generate_test_namespace, make_deterministic_rng, make_nondeterministic_rng},
-    store::{
-        KeyIterable, KeyValueIterable, KeyValueStore, RestrictedKeyValueStore, TestKeyValueStore,
-    },
+    store::{KeyValueStore, RestrictedKeyValueStore, TestKeyValueStore},
 };
 
 /// The size of the small value used for tests.
@@ -179,17 +177,13 @@ pub async fn run_reads<S: RestrictedKeyValueStore>(store: S, key_values: Vec<(Ve
     {
         // Getting the find_keys_by_prefix / find_key_values_by_prefix
         let len_prefix = key_prefix.len();
-        let keys_by_prefix = store.find_keys_by_prefix(key_prefix).await.unwrap();
-        let keys_request = keys_by_prefix
-            .iterator()
-            .map(Result::unwrap)
-            .collect::<Vec<_>>();
+        let keys_request = store.find_keys_by_prefix(key_prefix).await.unwrap();
         let mut set_key_value1 = HashSet::new();
         let mut keys_request_deriv = Vec::new();
         let key_values_by_prefix = store.find_key_values_by_prefix(key_prefix).await.unwrap();
-        for (key, value) in key_values_by_prefix.iterator().map(Result::unwrap) {
+        for (key, value) in key_values_by_prefix {
+            keys_request_deriv.push(key.clone());
             set_key_value1.insert((key, value));
-            keys_request_deriv.push(key);
         }
         // Check find_keys / find_key_values
         assert_eq!(keys_request, keys_request_deriv);
@@ -201,7 +195,7 @@ pub async fn run_reads<S: RestrictedKeyValueStore>(store: S, key_values: Vec<(Ve
         let mut set_key_value2 = HashSet::new();
         for (key, value) in &key_values {
             if key.starts_with(key_prefix) {
-                set_key_value2.insert((&key[len_prefix..], &value[..]));
+                set_key_value2.insert((key[len_prefix..].to_vec(), value[..].to_vec()));
             }
         }
         assert_eq!(set_key_value1, set_key_value2);
@@ -385,13 +379,11 @@ async fn read_keys_prefix<C: RestrictedKeyValueStore>(
     key_prefix: &[u8],
 ) -> BTreeSet<Vec<u8>> {
     let mut keys = BTreeSet::new();
-    for key in key_value_store
+    for key_suffix in key_value_store
         .find_keys_by_prefix(key_prefix)
         .await
         .unwrap()
-        .iterator()
     {
-        let key_suffix = key.unwrap();
         let mut key = key_prefix.to_vec();
         key.extend(key_suffix);
         keys.insert(key);
@@ -408,9 +400,8 @@ async fn read_key_values_prefix<C: RestrictedKeyValueStore>(
         .find_key_values_by_prefix(key_prefix)
         .await
         .unwrap()
-        .iterator()
     {
-        let (key_suffix, value) = key_value.unwrap();
+        let (key_suffix, value) = key_value;
         let mut key = key_prefix.to_vec();
         key.extend(key_suffix);
         key_values.insert(key, value.to_vec());
@@ -823,8 +814,7 @@ pub async fn root_key_admin_test<S: TestKeyValueStore>() {
             .open_exclusive(&root_key)
             .expect("open_exclusive");
         let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
-        for key in keys.iterator() {
-            let key = key.expect("key");
+        for key in keys {
             let mut big_key = prefix.clone();
             let key = key.to_vec();
             big_key.extend(key);

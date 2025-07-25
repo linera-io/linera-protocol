@@ -6,7 +6,8 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta,
+        Amount, ApplicationPermissions, BlockHeight, Bytecode, Resources, SendMessageRequest,
+        TimeDelta,
     },
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -256,6 +257,14 @@ impl From<WriteOperation> for wit_contract_api::WriteOperation {
             WriteOperation::Put { key, value } => {
                 wit_contract_api::WriteOperation::Put((key, value))
             }
+        }
+    }
+}
+
+impl From<Bytecode> for wit_contract_api::Bytecode {
+    fn from(bytecode: Bytecode) -> Self {
+        wit_contract_api::Bytecode {
+            bytes: bytecode.bytes,
         }
     }
 }

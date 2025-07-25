@@ -31,3 +31,8 @@ node_modules
 # as a library, so we don't want to
 # include their lock files.
 linera-web/**/*-lock.json
+
+# Claude
+.claude
+CLAUDE.md
+.serena

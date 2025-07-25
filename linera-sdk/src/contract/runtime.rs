@@ -6,13 +6,15 @@
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Bytecode, Resources, SendMessageRequest,
+        Timestamp,
     },
     ensure, http,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
+    vm::VmRuntime,
 };
 use serde::Serialize;
 
@@ -376,6 +378,22 @@ where
             &converted_application_ids,
         );
         ApplicationId::from(application_id).with_abi::<Abi>()
+    }
+
+    /// Creates a new data blob and returns its hash.
+    pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
+        let blob_id = contract_wit::create_data_blob(&bytes);
+        DataBlobHash(blob_id.hash.into())
+    }
+
+    /// Publishes a module with contract and service bytecode and returns the module ID.
+    pub fn publish_module(
+        &mut self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+    ) -> ModuleId {
+        contract_wit::publish_module(&contract.into(), &service.into(), vm_runtime.into()).into()
     }
 
     /// Returns the round in which this block was validated.

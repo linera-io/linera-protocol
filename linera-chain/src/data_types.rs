@@ -14,7 +14,7 @@ use linera_base::{
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
-    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId},
+    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, StreamId},
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
@@ -295,8 +295,10 @@ doc_scalar!(
 pub struct BlockExecutionOutcome {
     /// The list of outgoing messages for each transaction.
     pub messages: Vec<Vec<OutgoingMessage>>,
-    /// The hashes of previous blocks that sent messages to the same recipients.
+    /// The hashes and heights of previous blocks that sent messages to the same recipients.
     pub previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
+    /// The hashes and heights of previous blocks that published events to the same channels.
+    pub previous_event_blocks: BTreeMap<StreamId, (CryptoHash, BlockHeight)>,
     /// The hash of the chain's execution state after this block.
     pub state_hash: CryptoHash,
     /// The record of oracle responses for each transaction.

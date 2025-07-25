@@ -17,6 +17,7 @@ use std::{
     str::FromStr,
 };
 
+use alloy_primitives::U256;
 use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -76,6 +77,12 @@ impl<'de> Deserialize<'de> for Amount {
         } else {
             Ok(Amount(AmountU128::deserialize(deserializer)?.0))
         }
+    }
+}
+
+impl From<Amount> for U256 {
+    fn from(amount: Amount) -> U256 {
+        U256::from(amount.0)
     }
 }
 
@@ -1088,7 +1095,7 @@ impl ApplicationDescription {
 }
 
 /// A WebAssembly module's bytecode.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, WitType, WitLoad, WitStore)]
 pub struct Bytecode {
     /// Bytes of the bytecode.
     #[serde(with = "serde_bytes")]
@@ -1115,6 +1122,23 @@ impl Bytecode {
         let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
         let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
             .expect("Compressing bytes in memory should not fail");
+
+        CompressedBytecode { compressed_bytes }
+    }
+
+    /// Compresses the [`Bytecode`] into a [`CompressedBytecode`].
+    #[cfg(target_arch = "wasm32")]
+    pub fn compress(&self) -> CompressedBytecode {
+        use ruzstd::encoding::{CompressionLevel, FrameCompressor};
+
+        #[cfg(with_metrics)]
+        let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
+
+        let mut compressed_bytes = Vec::new();
+        let mut compressor = FrameCompressor::new(CompressionLevel::Fastest);
+        compressor.set_source(&*self.bytes);
+        compressor.set_drain(&mut compressed_bytes);
+        compressor.compress();
 
         CompressedBytecode { compressed_bytes }
     }
@@ -1180,10 +1204,10 @@ impl CompressedBytecode {
         compressed_bytes: &[u8],
         limit: u64,
     ) -> Result<bool, DecompressionError> {
+        use ruzstd::decoding::StreamingDecoder;
         let limit = usize::try_from(limit).unwrap_or(usize::MAX);
         let mut writer = LimitedWriter::new(io::sink(), limit);
-        let mut decoder = ruzstd::streaming_decoder::StreamingDecoder::new(compressed_bytes)
-            .map_err(io::Error::other)?;
+        let mut decoder = StreamingDecoder::new(compressed_bytes).map_err(io::Error::other)?;
 
         // TODO(#2710): Decode multiple frames, if present
         match io::copy(&mut decoder, &mut writer) {
@@ -1197,7 +1221,7 @@ impl CompressedBytecode {
 
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
-        use ruzstd::{io::Read, streaming_decoder::StreamingDecoder};
+        use ruzstd::{decoding::StreamingDecoder, io::Read};
 
         #[cfg(with_metrics)]
         let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();

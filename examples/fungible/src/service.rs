@@ -8,8 +8,9 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{Operation, OwnerSpender, Parameters};
+use fungible::{OwnerSpender, Parameters};
 use linera_sdk::{
+    abis::fungible::FungibleOperation,
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, WithServiceAbi},
     views::{MapView, View},
@@ -46,7 +47,7 @@ impl Service for FungibleTokenService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.clone(),
-            Operation::mutation_root(self.runtime.clone()),
+            FungibleOperation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();

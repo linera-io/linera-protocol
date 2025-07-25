@@ -9,9 +9,9 @@ use common::{ExporterCancellationSignal, ExporterError};
 use exporter_service::ExporterService;
 use futures::FutureExt;
 use linera_base::listen_for_shutdown_signals;
-use linera_rpc::NodeOptions;
 #[cfg(with_metrics)]
-use linera_service::prometheus_server;
+use linera_metrics::prometheus_server;
+use linera_rpc::NodeOptions;
 use linera_service::{
     config::BlockExporterConfig,
     storage::{CommonStorageOptions, Runnable, StorageConfig},

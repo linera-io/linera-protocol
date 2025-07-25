@@ -138,7 +138,7 @@ message ReplyListRootKeys {
 }
 
 
-service StoreProcessor {
+service StorageService {
   rpc ProcessReadValue (RequestReadValue) returns (ReplyReadValue) {}
   rpc ProcessContainsKey (RequestContainsKey) returns (ReplyContainsKey) {}
   rpc ProcessContainsKeys (RequestContainsKeys) returns (ReplyContainsKeys) {}

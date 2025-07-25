@@ -109,9 +109,13 @@ type BlockBody {
 	"""
 	messages: [[OutgoingMessage!]!]!
 	"""
-	The hashes of previous blocks that sent messages to the same recipients.
+	The hashes and heights of previous blocks that sent messages to the same recipients.
 	"""
 	previousMessageBlocks: JSONObject!
+	"""
+	The hashes and heights of previous blocks that published events to the same channels.
+	"""
+	previousEventBlocks: JSONObject!
 	"""
 	The record of oracle responses for each transaction.
 	"""
@@ -183,6 +187,10 @@ type BlockHeader {
 	Cryptographic hash of the lookup table for previous sending blocks.
 	"""
 	previousMessageBlocksHash: CryptoHash!
+	"""
+	Cryptographic hash of the lookup table for previous blocks publishing events.
+	"""
+	previousEventBlocksHash: CryptoHash!
 	"""
 	Cryptographic hash of all the oracle responses in the block.
 	"""
@@ -352,6 +360,10 @@ type ChainStateExtendedView {
 	"""
 	previousMessageBlocks: MapView_ChainId_BlockHeight_f2e56e12!
 	"""
+	The heights of previous blocks that published events to the same streams.
+	"""
+	previousEventBlocks: MapView_StreamId_BlockHeight_e6657ad9!
+	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
 	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_1536326071!
@@ -508,6 +520,14 @@ type Entry_ChainId_OutboxStateView_258a4684 {
 }
 
 """
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_StreamId_BlockHeight_50cd702e {
+	key: StreamId!
+	value: BlockHeight
+}
+
+"""
 A number identifying the configuration of the chain (aka the committee)
 """
 scalar Epoch
@@ -634,6 +654,10 @@ input MapFilters_ChainId_37f83aa9 {
 	keys: [ChainId!]
 }
 
+input MapFilters_StreamIdInput_b7c3909d {
+	keys: [StreamIdInput!]
+}
+
 input MapInput_AccountOwner_d6668c53 {
 	filters: MapFilters_AccountOwner_d6668c53
 }
@@ -648,6 +672,10 @@ input MapInput_BlockHeight_e824a938 {
 
 input MapInput_ChainId_37f83aa9 {
 	filters: MapFilters_ChainId_37f83aa9
+}
+
+input MapInput_StreamIdInput_b7c3909d {
+	filters: MapFilters_StreamIdInput_b7c3909d
 }
 
 type MapView_AccountOwner_Amount_11ef1379 {
@@ -678,6 +706,12 @@ type MapView_ChainId_BlockHeight_f2e56e12 {
 	keys(count: Int): [ChainId!]!
 	entry(key: ChainId!): Entry_ChainId_BlockHeight_2fe78645!
 	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_BlockHeight_2fe78645!]!
+}
+
+type MapView_StreamId_BlockHeight_e6657ad9 {
+	keys(count: Int): [StreamId!]!
+	entry(key: StreamIdInput!): Entry_StreamId_BlockHeight_50cd702e!
+	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_BlockHeight_50cd702e!]!
 }
 
 """

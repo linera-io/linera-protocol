@@ -9,8 +9,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStoreError,
-        ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
@@ -77,8 +77,6 @@ where
     K::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
-    type Keys = Vec<Vec<u8>>;
-    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -186,12 +184,11 @@ where
         Ok(big_values)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut keys = Vec::new();
-        for big_key in self.store.find_keys_by_prefix(key_prefix).await?.iterator() {
-            let big_key = big_key?;
+        for big_key in self.store.find_keys_by_prefix(key_prefix).await? {
             let len = big_key.len();
-            if Self::read_index_from_key(big_key)? == 0 {
+            if Self::read_index_from_key(&big_key)? == 0 {
                 let key = big_key[0..len - 4].to_vec();
                 keys.push(key);
             }
@@ -202,12 +199,11 @@ where
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
         let small_key_values = self.store.find_key_values_by_prefix(key_prefix).await?;
-        let mut small_kv_iterator = small_key_values.into_iterator_owned();
+        let mut small_kv_iterator = small_key_values.into_iter();
         let mut key_values = Vec::new();
-        while let Some(result) = small_kv_iterator.next() {
-            let (mut big_key, value) = result?;
+        while let Some((mut big_key, value)) = small_kv_iterator.next() {
             if Self::read_index_from_key(&big_key)? != 0 {
                 continue; // Leftover segment from an earlier value.
             }
@@ -218,7 +214,7 @@ where
             for idx in 1..count {
                 let (big_key, value) = small_kv_iterator
                     .next()
-                    .ok_or(ValueSplittingError::MissingSegment)??;
+                    .ok_or(ValueSplittingError::MissingSegment)?;
                 ensure!(
                     Self::read_index_from_key(&big_key)? == idx
                         && big_key.starts_with(&key)
@@ -409,8 +405,6 @@ impl WithError for LimitedTestMemoryStore {
 #[cfg(with_testing)]
 impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
-    type Keys = Vec<Vec<u8>>;
-    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
         TEST_MEMORY_MAX_STREAM_QUERIES
@@ -435,14 +429,17 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, MemoryStoreError> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, MemoryStoreError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }

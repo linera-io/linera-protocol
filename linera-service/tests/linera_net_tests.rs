@@ -33,6 +33,7 @@ use linera_base::{
 };
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
+    abis::fungible::NativeFungibleTokenAbi,
     linera_base_types::{BlobContent, BlockHeight},
     DataBlobHash,
 };
@@ -86,7 +87,7 @@ fn get_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
 
-struct NativeFungibleApp(ApplicationWrapper<native_fungible::NativeFungibleTokenAbi>);
+struct NativeFungibleApp(ApplicationWrapper<NativeFungibleTokenAbi>);
 
 impl NativeFungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
@@ -1367,7 +1368,7 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::B256;
+    use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::get_evm_contract_path;
@@ -1378,6 +1379,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     let (mut net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
+    let account_chain = Account::chain(chain);
 
     // Creating the EVM smart contract
 
@@ -1386,6 +1388,9 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         function test_read_data_blob(bytes32 hash, uint32 len);
         function test_assert_data_blob_exists(bytes32 hash);
         function test_chain_ownership();
+        function test_authenticated_signer_caller_id();
+        function test_chain_balance(uint256 expected_balance);
+        function test_read_owners();
     }
 
     let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
@@ -1418,21 +1423,51 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         .make_application(&chain, &application_id)
         .await?;
 
+    // Testing the ChainId.
+
     let query = test_chain_idCall {};
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
+
+    // Testing Chain Ownership
 
     let query = test_chain_ownershipCall {};
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
 
+    // Testing existence of blob.
+
     let query = test_assert_data_blob_existsCall { hash };
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
 
+    // Reading the blob
+
     let query = test_read_data_blobCall { hash, len };
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
+
+    // Checking authenticated signer/caller_id
+
+    let mutation = test_authenticated_signer_caller_idCall {};
+    let mutation = EvmQuery::Mutation(mutation.abi_encode());
+    application.run_json_query(mutation).await?;
+
+    // Testing the chain balance
+
+    let expected_balance = node_service.balance(&account_chain).await?;
+    let expected_balance: U256 = expected_balance.into();
+    let query = test_chain_balanceCall { expected_balance };
+    let query = EvmQuery::Query(query.abi_encode());
+    application.run_json_query(query).await?;
+
+    // Testing the owner balances
+
+    let query = test_read_ownersCall {};
+    let query = EvmQuery::Query(query.abi_encode());
+    application.run_json_query(query).await?;
+
+    // Winding down
 
     node_service.ensure_is_running()?;
 
@@ -1999,10 +2034,9 @@ async fn publish_and_create_native_fungible(
     params: &fungible::Parameters,
     state: &fungible::InitialState,
     chain_id: Option<ChainId>,
-) -> Result<ApplicationId<native_fungible::NativeFungibleTokenAbi>> {
+) -> Result<ApplicationId<NativeFungibleTokenAbi>> {
     let (contract, service) = client.build_example(name).await?;
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
-    use native_fungible::NativeFungibleTokenAbi;
     if name == "native-fungible" {
         client
             .publish_and_create::<NativeFungibleTokenAbi, Parameters, InitialState>(

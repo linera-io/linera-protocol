@@ -3,7 +3,6 @@
 pragma solidity ^0.8.0;
 
 import "./Linera.sol";
-import "./LineraTypes.sol";
 
 contract ExampleProcessStreams {
     uint64 total_value;
@@ -22,12 +21,12 @@ contract ExampleProcessStreams {
         Linera.linera_emit(stream_name, value);
     }
 
-    function process_streams(LineraTypes.StreamUpdate[] memory streams) external {
+    function process_streams(Linera.StreamUpdate[] memory streams) external {
         bytes memory stream_name = abi.encodePacked(stream_key);
         uint256 n_entries = streams.length;
         for (uint256 i=0; i<n_entries; i++) {
-            LineraTypes.StreamUpdate memory update = streams[i];
-            bytes32 chain_id = update.chain_id.value.value;
+            Linera.StreamUpdate memory update = streams[i];
+            bytes32 chain_id = update.chain_id.value;
             for (uint32 index=update.previous_index; index<update.next_index; index++) {
                 bytes memory result = Linera.read_event(chain_id, stream_name, index);
                 uint64 value = abi.decode(result, (uint64));

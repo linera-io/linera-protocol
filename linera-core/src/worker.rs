@@ -14,7 +14,7 @@ use linera_base::{
     data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round},
     doc_scalar,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId},
     time::timer::{sleep, timeout},
 };
 #[cfg(with_testing)]
@@ -174,8 +174,9 @@ pub enum WorkerError {
         chain_epoch: Epoch,
         epoch: Epoch,
     },
-    #[error("Proposal on chain {chain_id:} claims an unknown epoch {epoch:}")]
-    UnknownEpoch { chain_id: ChainId, epoch: Epoch },
+
+    #[error("Events not found: {0:?}")]
+    EventsNotFound(Vec<EventId>),
 
     // Other server-side errors
     #[error("Invalid cross-chain request")]
@@ -221,6 +222,8 @@ pub enum WorkerError {
     UnexpectedBlob,
     #[error("Number of published blobs per block must not exceed {0}")]
     TooManyPublishedBlobs(u64),
+    #[error("Missing network description")]
+    MissingNetworkDescription,
 }
 
 impl From<ChainError> for WorkerError {

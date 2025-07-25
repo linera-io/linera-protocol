@@ -137,6 +137,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: publisher_state_hash,
@@ -214,6 +215,7 @@ where
         BlockExecutionOutcome {
             messages: vec![vec![]],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![vec![
@@ -278,7 +280,6 @@ where
                 0,
                 0,
                 0,
-                0,
                 Some(vec![OracleResponse::Blob(application_description_blob_id)]),
             ),
             &mut controller,
@@ -293,6 +294,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             previous_message_blocks: BTreeMap::new(),
+            previous_event_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,

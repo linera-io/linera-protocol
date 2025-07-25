@@ -336,7 +336,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
     sol! {
         function failing_function();
         function test_precompile_sha256();
-    function check_contract_address(address evm_address);
+        function check_contract_address(address evm_address);
     }
 
     let constructor_argument = Vec::<u8>::new();

@@ -7,12 +7,11 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use fungible::{self};
+use fungible::{self, NativeFungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount, CryptoHash},
     test::{ActiveChain, Recipient, TestValidator},
 };
-use native_fungible::NativeFungibleTokenAbi;
 
 /// Tests if tokens from the shared chain balance can be sent to a different chain.
 #[test_log::test(tokio::test)]

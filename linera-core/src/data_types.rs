@@ -332,7 +332,7 @@ impl<T> ClientOutcome<T> {
     pub fn unwrap(self) -> T {
         match self {
             ClientOutcome::Committed(t) => t,
-            ClientOutcome::WaitForTimeout(_) => panic!(),
+            ClientOutcome::WaitForTimeout(timeout) => panic!("Unexpected timeout: {timeout:?}"),
         }
     }
 

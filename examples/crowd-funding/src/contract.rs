@@ -8,6 +8,7 @@ mod state;
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
+    abis::fungible::FungibleOperation,
     linera_base_types::{AccountOwner, Amount, ApplicationId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -100,7 +101,7 @@ impl CrowdFundingContract {
         // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
         // of all messages created in the same operation/message.
         let target_account = Account { chain_id, owner };
-        let call = fungible::Operation::Transfer {
+        let call = FungibleOperation::Transfer {
             owner,
             amount,
             target_account,
@@ -195,11 +196,9 @@ impl CrowdFundingContract {
     fn balance(&mut self) -> Amount {
         let owner = self.runtime.application_id().into();
         let fungible_id = self.fungible_id();
-        let response = self.runtime.call_application(
-            true,
-            fungible_id,
-            &fungible::Operation::Balance { owner },
-        );
+        let response =
+            self.runtime
+                .call_application(true, fungible_id, &FungibleOperation::Balance { owner });
         match response {
             fungible::FungibleResponse::Balance(balance) => balance,
             response => panic!("Unexpected response from fungible token application: {response:?}"),
@@ -212,7 +211,7 @@ impl CrowdFundingContract {
             chain_id: self.runtime.chain_id(),
             owner,
         };
-        let transfer = fungible::Operation::Transfer {
+        let transfer = FungibleOperation::Transfer {
             owner: self.runtime.application_id().into(),
             amount,
             target_account,
@@ -227,7 +226,7 @@ impl CrowdFundingContract {
             chain_id: self.runtime.chain_id(),
             owner: self.runtime.application_id().into(),
         };
-        let transfer = fungible::Operation::Transfer {
+        let transfer = FungibleOperation::Transfer {
             owner,
             amount,
             target_account,

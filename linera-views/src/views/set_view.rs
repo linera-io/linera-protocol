@@ -12,7 +12,7 @@ use crate::{
     common::{CustomSerialize, HasherOutput, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
-    store::{KeyIterable, ReadableKeyValueStore as _},
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -266,29 +266,22 @@ impl<C: Context> ByteSetView<C> {
         let mut update = updates.next();
         if !self.delete_storage_first {
             let base = &self.context.base_key().bytes;
-            for index in self
-                .context
-                .store()
-                .find_keys_by_prefix(base)
-                .await?
-                .iterator()
-            {
-                let index = index?;
+            for index in self.context.store().find_keys_by_prefix(base).await? {
                 loop {
                     match update {
-                        Some((key, value)) if key.as_slice() <= index => {
+                        Some((key, value)) if key <= &index => {
                             if let Update::Set(_) = value {
                                 if !f(key)? {
                                     return Ok(());
                                 }
                             }
                             update = updates.next();
-                            if key == index {
+                            if key == &index {
                                 break;
                             }
                         }
                         _ => {
-                            if !f(index)? {
+                            if !f(&index)? {
                                 return Ok(());
                             }
                             break;

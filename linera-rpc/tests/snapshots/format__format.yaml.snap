@@ -163,6 +163,14 @@ BlockBody:
             TUPLE:
               - TYPENAME: CryptoHash
               - TYPENAME: BlockHeight
+    - previous_event_blocks:
+        MAP:
+          KEY:
+            TYPENAME: StreamId
+          VALUE:
+            TUPLE:
+              - TYPENAME: CryptoHash
+              - TYPENAME: BlockHeight
     - oracle_responses:
         SEQ:
           SEQ:
@@ -188,6 +196,14 @@ BlockExecutionOutcome:
         MAP:
           KEY:
             TYPENAME: ChainId
+          VALUE:
+            TUPLE:
+              - TYPENAME: CryptoHash
+              - TYPENAME: BlockHeight
+    - previous_event_blocks:
+        MAP:
+          KEY:
+            TYPENAME: StreamId
           VALUE:
             TUPLE:
               - TYPENAME: CryptoHash
@@ -695,51 +711,56 @@ NodeError:
           SEQ:
             TYPENAME: BlobId
     8:
-      MissingCertificateValue: UNIT
+      EventsNotFound:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: EventId
     9:
+      MissingCertificateValue: UNIT
+    10:
       MissingCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    10:
-      MissingVoteInValidatorResponse: UNIT
     11:
-      InvalidChainInfoResponse: UNIT
+      MissingVoteInValidatorResponse: UNIT
     12:
-      UnexpectedCertificateValue: UNIT
+      InvalidChainInfoResponse: UNIT
     13:
-      InvalidDecoding: UNIT
+      UnexpectedCertificateValue: UNIT
     14:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     15:
+      UnexpectedMessage: UNIT
+    16:
       GrpcError:
         STRUCT:
           - error: STR
-    16:
+    17:
       ClientIoError:
         STRUCT:
           - error: STR
-    17:
+    18:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    18:
+    19:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    19:
+    20:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    20:
+    21:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    21:
-      DuplicatesInBlobsNotFound: UNIT
     22:
-      UnexpectedEntriesInBlobsNotFound: UNIT
+      DuplicatesInBlobsNotFound: UNIT
     23:
+      UnexpectedEntriesInBlobsNotFound: UNIT
+    24:
       UnexpectedCertificates:
         STRUCT:
           - returned:
@@ -748,9 +769,9 @@ NodeError:
           - requested:
               SEQ:
                 TYPENAME: CryptoHash
-    24:
-      EmptyBlobsNotFound: UNIT
     25:
+      EmptyBlobsNotFound: UNIT
+    26:
       ResponseHandlingError:
         STRUCT:
           - error: STR

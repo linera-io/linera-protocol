@@ -9,7 +9,7 @@ use linera_base::prometheus_util::MeasureLatency;
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Timestamp},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId, MessageId},
+    identifiers::{AccountOwner, BlobId, ChainId, MessageId, StreamId},
 };
 use linera_execution::{
     ExecutionRuntimeContext, ExecutionStateView, MessageContext, OperationContext, OutgoingMessage,
@@ -40,7 +40,6 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     local_time: Timestamp,
     #[debug(skip_if = Option::is_none)]
     pub replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    pub next_message_index: u32,
     pub next_application_index: u32,
     pub next_chain_index: u32,
     #[debug(skip_if = Vec::is_empty)]
@@ -87,7 +86,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             resource_controller,
             local_time,
             replaying_oracle_responses,
-            next_message_index: 0,
             next_application_index: 0,
             next_chain_index: 0,
             oracle_responses: Vec::new(),
@@ -177,7 +175,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         Ok(TransactionTracker::new(
             self.local_time,
             self.transaction_index,
-            self.next_message_index,
             self.next_application_index,
             self.next_chain_index,
             self.oracle_responses()?,
@@ -288,7 +285,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     where
         C: Context + Clone + Send + Sync + 'static,
     {
-        self.next_message_index = txn_outcome.next_message_index;
         self.next_application_index = txn_outcome.next_application_index;
         self.next_chain_index = txn_outcome.next_chain_index;
         self.oracle_responses
@@ -346,12 +342,21 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         Ok(())
     }
 
-    /// Returns recipient chain ids for outgoing messages in the block.
+    /// Returns recipient chain IDs for outgoing messages in the block.
     pub fn recipients(&self) -> BTreeSet<ChainId> {
         self.messages
             .iter()
             .flatten()
             .map(|msg| msg.destination)
+            .collect()
+    }
+
+    /// Returns stream IDs for events published in the block.
+    pub fn event_streams(&self) -> BTreeSet<StreamId> {
+        self.events
+            .iter()
+            .flatten()
+            .map(|event| event.stream_id.clone())
             .collect()
     }
 
