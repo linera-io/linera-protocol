@@ -54,6 +54,9 @@ const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 /// only when creating a new instance of a shared contract
 const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
+/// Returns the deployed bytecode of the contract.
+const GET_DEPLOYED_BYTECODE: &[u8] = &[21, 34, 55, 89];
+
 fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
     if vec == EXECUTE_MESSAGE_SELECTOR {
         return Err(EvmExecutionError::IllegalOperationCall(
@@ -884,6 +887,31 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
     }
 }
 
+fn map_result_create_outcome(
+    result: Result<Option<CreateOutcome>, ExecutionError>,
+) -> Option<CreateOutcome> {
+    match result {
+        Err(_error) => {
+            // An alternative way would be to return None, which would induce
+            // Revm to call the smart contract in its database, where it is
+            // non-existent.
+            let result = InstructionResult::Revert;
+            let output = Bytes::default();
+            let gas = Gas::default();
+            let result = InterpreterResult {
+                result,
+                output,
+                gas,
+            };
+            Some(CreateOutcome {
+                result,
+                address: None,
+            })
+        }
+        Ok(result) => result,
+    }
+}
+
 fn map_result_call_outcome(
     result: Result<Option<CallOutcome>, ExecutionError>,
 ) -> Option<CallOutcome> {
@@ -962,13 +990,11 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
 {
     fn create(
         &mut self,
-        _context: &mut Ctx<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
-        inputs.scheme = CreateScheme::Custom {
-            address: self.contract_address,
-        };
-        None
+        let result = self.create_or_fail(context, inputs);
+        map_result_create_outcome(result)
     }
 
     fn call(
@@ -982,6 +1008,53 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
 }
 
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
+    fn create_or_fail(
+        &mut self,
+        context: &mut Ctx<'_, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Result<Option<CreateOutcome>, ExecutionError> {
+        if !self.db.is_revm_instantiated {
+            self.db.is_revm_instantiated = true;
+            inputs.scheme = CreateScheme::Custom {
+                address: self.contract_address,
+            };
+            Ok(None)
+        } else {
+            let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
+            let service = linera_base::data_types::Bytecode::new(vec![]);
+            let mut runtime = context
+                .db()
+                .0
+                .runtime
+                .lock()
+                .expect("The lock should be possible");
+            let module_id = runtime.publish_module(contract, service, VmRuntime::Evm)?;
+            let parameters = Vec::new(); // No constructor
+            let argument = Vec::new(); // No call to "fn instantiate"
+            let required_application_ids = Vec::new();
+            let application_id = runtime.create_application(
+                module_id,
+                parameters,
+                argument,
+                required_application_ids,
+            )?;
+            let argument = GET_DEPLOYED_BYTECODE.to_vec();
+            let deployed_bytecode: Vec<u8> =
+                runtime.try_call_application(false, application_id, argument)?;
+            let result = InterpreterResult {
+                result: InstructionResult::Return, // Only possibility if no error occured.
+                output: Bytes::from(deployed_bytecode),
+                gas: Gas::new(inputs.gas_limit),
+            };
+            let address = application_id.evm_address();
+            let creation_outcome = CreateOutcome {
+                result,
+                address: Some(address),
+            };
+            Ok(Some(creation_outcome))
+        }
+    }
+
     fn call_or_fail(
         &mut self,
         context: &mut Ctx<'_, Runtime>,
@@ -1169,6 +1242,9 @@ where
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
+        if operation == GET_DEPLOYED_BYTECODE {
+            return self.db.get_deployed_bytecode();
+        }
         let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
