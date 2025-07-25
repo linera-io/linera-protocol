@@ -10,8 +10,8 @@ use linera_execution::WasmRuntime;
 use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
-    client::ServiceStoreClient,
-    common::{ServiceStoreConfig, ServiceStoreInternalConfig},
+    client::StorageServiceStore,
+    common::{StorageServiceStoreConfig, StorageServiceStoreInternalConfig},
 };
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig, DynamoDbStoreInternalConfig};
@@ -87,8 +87,8 @@ pub enum StoreConfig {
     },
     /// The storage service key-value store
     #[cfg(feature = "storage-service")]
-    Service {
-        config: ServiceStoreConfig,
+    StorageService {
+        config: StorageServiceStoreConfig,
         namespace: String,
     },
     /// The RocksDB key value store
@@ -441,16 +441,16 @@ impl StorageConfig {
             }
             #[cfg(feature = "storage-service")]
             InnerStorageConfig::Service { endpoint } => {
-                let inner_config = ServiceStoreInternalConfig {
+                let inner_config = StorageServiceStoreInternalConfig {
                     endpoint: endpoint.clone(),
                     max_concurrent_queries: options.storage_max_concurrent_queries,
                     max_stream_queries: options.storage_max_stream_queries,
                 };
-                let config = ServiceStoreConfig {
+                let config = StorageServiceStoreConfig {
                     inner_config,
                     storage_cache_config: options.storage_cache_config(),
                 };
-                Ok(StoreConfig::Service { config, namespace })
+                Ok(StoreConfig::StorageService { config, namespace })
             }
             #[cfg(feature = "rocksdb")]
             InnerStorageConfig::RocksDb { path, spawn_mode } => {
@@ -624,9 +624,9 @@ impl StoreConfig {
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "storage-service")]
-            StoreConfig::Service { config, namespace } => {
+            StoreConfig::StorageService { config, namespace } => {
                 let storage =
-                    DbStorage::<ServiceStoreClient, _>::connect(&config, &namespace, wasm_runtime)
+                    DbStorage::<StorageServiceStore, _>::connect(&config, &namespace, wasm_runtime)
                         .await?;
                 Ok(job.run(storage).await)
             }
@@ -673,8 +673,8 @@ impl StoreConfig {
                 Err(anyhow!("Cannot run admin operations on the memory store"))
             }
             #[cfg(feature = "storage-service")]
-            StoreConfig::Service { config, namespace } => {
-                Ok(job.run::<ServiceStoreClient>(config, namespace).await?)
+            StoreConfig::StorageService { config, namespace } => {
+                Ok(job.run::<StorageServiceStore>(config, namespace).await?)
             }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb { config, namespace } => {

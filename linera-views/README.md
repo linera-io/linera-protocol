@@ -19,7 +19,7 @@ We provide support for the following databases:
 * `RocksDbStore` is a disk-based key-value store
 * `DynamoDbStore` is the AWS-based DynamoDB service.
 * `ScyllaDbStore` is a cloud-based Cassandra-compatible database.
-* `ServiceStoreClient` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
+* `StorageServiceStore` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
 
 The corresponding trait in the code is the [`crate::store::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueStore.html).
 The trait decomposes into a [`store::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.ReadableKeyValueStore.html)
