@@ -160,7 +160,7 @@ mod test {
         config::{Destination, DestinationConfig, DestinationKind, LimitsConfig},
     };
     use linera_storage::{DbStorage, Storage};
-    use linera_views::{memory::MemoryStore, ViewError};
+    use linera_views::{memory::MemoryDatabase, ViewError};
     use test_case::test_case;
     use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
@@ -186,7 +186,7 @@ mod test {
         LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
 
         let signal = ExporterCancellationSignal::new(cancellation_token.clone());
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
         let destination_address = match destination.kind() {
             DestinationKind::Indexer => Destination::Indexer {
                 port,
@@ -254,7 +254,7 @@ mod test {
 
         let child = cancellation_token.child_token();
         let signal = ExporterCancellationSignal::new(child.clone());
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
 
         let (notification, _state) = make_simple_state_with_blobs(&storage).await;
 
@@ -359,7 +359,7 @@ mod test {
     async fn test_committee_destination() -> anyhow::Result<()> {
         tracing::info!("Starting test_committee_destination test");
 
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
         let test_chain = TestChain::new(storage.clone());
         let cancellation_token = CancellationToken::new();
         let child = cancellation_token.child_token();

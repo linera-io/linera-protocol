@@ -18,7 +18,7 @@ use linera_indexer::{
 use linera_views::{
     context::{Context, ViewContext},
     map_view::MapView,
-    store::KeyValueStore,
+    store::{KeyValueDatabase, KeyValueStore},
     views::RootView,
 };
 use serde::{Deserialize, Serialize};
@@ -110,20 +110,21 @@ static NAME: &str = "operations";
 
 /// Implements `Plugin`
 #[async_trait::async_trait]
-impl<S> Plugin<S> for OperationsPlugin<ViewContext<(), S>>
+impl<D> Plugin<D> for OperationsPlugin<ViewContext<(), D::Store>>
 where
-    S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    D: KeyValueDatabase + Clone + Send + Sync + 'static,
+    D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+    D::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {
     fn name(&self) -> String {
         NAME.to_string()
     }
 
-    async fn load(store: S) -> Result<Self, IndexerError>
+    async fn load(database: D) -> Result<Self, IndexerError>
     where
         Self: Sized,
     {
-        Ok(Self(load(store, NAME).await?))
+        Ok(Self(load(database, NAME).await?))
     }
 
     async fn register(&self, value: &ConfirmedBlock) -> Result<(), IndexerError> {
@@ -151,7 +152,7 @@ where
     }
 
     fn route(&self, app: Router) -> Router {
-        route(&self.name(), self.clone(), app)
+        route(NAME, self.clone(), app)
     }
 }
 

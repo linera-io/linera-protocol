@@ -30,20 +30,20 @@ use linera_chain::{
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
 use linera_storage::{DbStorage, ResultReadCertificates, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
-use linera_storage_service::client::StorageServiceStore;
+use linera_storage_service::client::StorageServiceDatabase;
 use linera_version::VersionInfo;
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbStore;
+use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::scylla_db::ScyllaDbDatabase;
 use linera_views::{
-    memory::MemoryStore, random::generate_test_namespace, store::TestKeyValueStore as _,
+    memory::MemoryDatabase, random::generate_test_namespace, store::TestKeyValueDatabase as _,
 };
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "rocksdb")]
 use {
-    linera_views::rocks_db::RocksDbStore,
+    linera_views::rocks_db::RocksDbDatabase,
     tokio::sync::{Semaphore, SemaphorePermit},
 };
 
@@ -1100,11 +1100,11 @@ pub struct MemoryStorageBuilder {
 
 #[async_trait]
 impl StorageBuilder for MemoryStorageBuilder {
-    type Storage = DbStorage<MemoryStore, TestClock>;
+    type Storage = DbStorage<MemoryDatabase, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let config = MemoryStore::new_test_config().await?;
+        let config = MemoryDatabase::new_test_config().await?;
         if self.namespace.is_empty() {
             self.namespace = generate_test_namespace();
         }
@@ -1167,11 +1167,11 @@ impl RocksDbStorageBuilder {
 #[cfg(feature = "rocksdb")]
 #[async_trait]
 impl StorageBuilder for RocksDbStorageBuilder {
-    type Storage = DbStorage<RocksDbStore, TestClock>;
+    type Storage = DbStorage<RocksDbDatabase, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let config = RocksDbStore::new_test_config().await?;
+        let config = RocksDbDatabase::new_test_config().await?;
         if self.namespace.is_empty() {
             self.namespace = generate_test_namespace();
         }
@@ -1215,11 +1215,11 @@ impl ServiceStorageBuilder {
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 #[async_trait]
 impl StorageBuilder for ServiceStorageBuilder {
-    type Storage = DbStorage<StorageServiceStore, TestClock>;
+    type Storage = DbStorage<StorageServiceDatabase, TestClock>;
 
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         self.instance_counter += 1;
-        let config = StorageServiceStore::new_test_config().await?;
+        let config = StorageServiceDatabase::new_test_config().await?;
         if self.namespace.is_empty() {
             self.namespace = generate_test_namespace();
         }
@@ -1260,11 +1260,11 @@ impl DynamoDbStorageBuilder {
 #[cfg(feature = "dynamodb")]
 #[async_trait]
 impl StorageBuilder for DynamoDbStorageBuilder {
-    type Storage = DbStorage<DynamoDbStore, TestClock>;
+    type Storage = DbStorage<DynamoDbDatabase, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let config = DynamoDbStore::new_test_config().await?;
+        let config = DynamoDbDatabase::new_test_config().await?;
         if self.namespace.is_empty() {
             self.namespace = generate_test_namespace();
         }
@@ -1305,11 +1305,11 @@ impl ScyllaDbStorageBuilder {
 #[cfg(feature = "scylladb")]
 #[async_trait]
 impl StorageBuilder for ScyllaDbStorageBuilder {
-    type Storage = DbStorage<ScyllaDbStore, TestClock>;
+    type Storage = DbStorage<ScyllaDbDatabase, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let config = ScyllaDbStore::new_test_config().await?;
+        let config = ScyllaDbDatabase::new_test_config().await?;
         if self.namespace.is_empty() {
             self.namespace = generate_test_namespace();
         }

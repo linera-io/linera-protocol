@@ -35,18 +35,19 @@ use crate::signer::JsSigner;
 
 // TODO(#12): convert to IndexedDbStore once we refactor Context
 type WebStorage =
-    linera_storage::DbStorage<linera_views::memory::MemoryStore, linera_storage::WallClock>;
+    linera_storage::DbStorage<linera_views::memory::MemoryDatabase, linera_storage::WallClock>;
 
 type WebEnvironment =
     linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider, JsSigner>;
 
 type JsResult<T> = Result<T, JsError>;
 
-async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore as WithError>::Error>
-{
+async fn get_storage(
+) -> Result<WebStorage, <linera_views::memory::MemoryDatabase as WithError>::Error> {
     linera_storage::DbStorage::maybe_create_and_connect(
         &linera_views::memory::MemoryStoreConfig {
             max_stream_queries: 1,
+            kill_on_drop: false,
         },
         "linera",
         Some(linera_execution::WasmRuntime::Wasmer),

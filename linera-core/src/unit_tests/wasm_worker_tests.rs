@@ -32,14 +32,14 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbStore;
+use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::RocksDbStore;
+use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::scylla_db::ScyllaDbDatabase;
 use linera_views::{
     context::Context,
-    memory::MemoryStore,
+    memory::MemoryDatabase,
     views::{CryptoHashView, View},
 };
 use test_case::test_case;
@@ -53,7 +53,7 @@ use crate::worker::WorkerError;
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<MemoryStore, _>::make_test_storage(Some(wasm_runtime)).await;
+    let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
@@ -64,7 +64,7 @@ async fn test_memory_handle_certificates_to_create_application(
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<RocksDbStore, _>::make_test_storage(Some(wasm_runtime)).await;
+    let storage = DbStorage::<RocksDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
@@ -75,7 +75,7 @@ async fn test_rocks_db_handle_certificates_to_create_application(
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<DynamoDbStore, _>::make_test_storage(Some(wasm_runtime)).await;
+    let storage = DbStorage::<DynamoDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
@@ -86,7 +86,7 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
 async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<ScyllaDbStore, _>::make_test_storage(Some(wasm_runtime)).await;
+    let storage = DbStorage::<ScyllaDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 

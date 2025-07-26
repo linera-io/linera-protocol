@@ -15,10 +15,10 @@ use linera_base::prometheus_util::{
 use prometheus::{HistogramVec, IntCounterVec};
 
 #[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
+use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
 
 #[derive(Clone)]
@@ -264,27 +264,43 @@ impl KeyValueStoreMetrics {
     }
 }
 
-/// A metered wrapper that keeps track of every operation
+/// A metered database that keeps track of every operation.
 #[derive(Clone)]
-pub struct MeteredStore<K> {
-    /// the metrics being stored
+pub struct MeteredDatabase<D> {
+    /// The metrics being computed.
     counter: Arc<KeyValueStoreMetrics>,
-    /// The underlying store of the metered store
-    store: K,
+    /// The underlying database.
+    database: D,
 }
 
-impl<K> WithError for MeteredStore<K>
-where
-    K: WithError,
-{
-    type Error = K::Error;
+/// A metered store that keeps track of every operation.
+#[derive(Clone)]
+pub struct MeteredStore<S> {
+    /// The metrics being computed.
+    counter: Arc<KeyValueStoreMetrics>,
+    /// The underlying store.
+    store: S,
 }
 
-impl<K> ReadableKeyValueStore for MeteredStore<K>
+impl<D> WithError for MeteredDatabase<D>
 where
-    K: ReadableKeyValueStore,
+    D: WithError,
 {
-    const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
+    type Error = D::Error;
+}
+
+impl<S> WithError for MeteredStore<S>
+where
+    S: WithError,
+{
+    type Error = S::Error;
+}
+
+impl<S> ReadableKeyValueStore for MeteredStore<S>
+where
+    S: ReadableKeyValueStore,
+{
+    const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -406,11 +422,11 @@ where
     }
 }
 
-impl<K> WritableKeyValueStore for MeteredStore<K>
+impl<S> WritableKeyValueStore for MeteredStore<S>
 where
-    K: WritableKeyValueStore,
+    S: WritableKeyValueStore,
 {
-    const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
+    const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         let _latency = self.counter.write_batch_latency.measure_latency();
@@ -427,37 +443,45 @@ where
     }
 }
 
-impl<K> AdminKeyValueStore for MeteredStore<K>
+impl<D> KeyValueDatabase for MeteredDatabase<D>
 where
-    K: AdminKeyValueStore,
+    D: KeyValueDatabase,
 {
-    type Config = K::Config;
+    type Config = D::Config;
+    type Store = MeteredStore<D::Store>;
 
     fn get_name() -> String {
-        K::get_name()
+        D::get_name()
     }
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
-        let name = K::get_name();
+        let name = D::get_name();
         let counter = get_counter(&name);
         let _latency = counter.connect_latency.measure_latency();
-        let store = K::connect(config, namespace).await?;
+        let database = D::connect(config, namespace).await?;
         let counter = get_counter(&name);
-        Ok(Self { counter, store })
+        Ok(Self { counter, database })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
         let _latency = self.counter.open_exclusive_latency.measure_latency();
-        let store = self.store.open_exclusive(root_key)?;
+        let store = self.database.open_exclusive(root_key)?;
         let counter = self.counter.clone();
-        Ok(Self { counter, store })
+        Ok(MeteredStore { counter, store })
+    }
+
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let _latency = self.counter.open_exclusive_latency.measure_latency();
+        let store = self.database.open_shared(root_key)?;
+        let counter = self.counter.clone();
+        Ok(MeteredStore { counter, store })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        let name = K::get_name();
+        let name = D::get_name();
         let counter = get_counter(&name);
         let _latency = counter.list_all_latency.measure_latency();
-        let namespaces = K::list_all(config).await?;
+        let namespaces = D::list_all(config).await?;
         let counter = get_counter(&name);
         counter
             .list_all_sizes
@@ -470,24 +494,24 @@ where
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let name = K::get_name();
+        let name = D::get_name();
         let counter = get_counter(&name);
         let _latency = counter.list_root_keys_latency.measure_latency();
-        K::list_root_keys(config, namespace).await
+        D::list_root_keys(config, namespace).await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
-        let name = K::get_name();
+        let name = D::get_name();
         let counter = get_counter(&name);
         let _latency = counter.delete_all_latency.measure_latency();
-        K::delete_all(config).await
+        D::delete_all(config).await
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        let name = K::get_name();
+        let name = D::get_name();
         let counter = get_counter(&name);
         let _latency = counter.exists_latency.measure_latency();
-        let result = K::exists(config, namespace).await?;
+        let result = D::exists(config, namespace).await?;
         if result {
             let counter = get_counter(&name);
             counter.exists_true_cases.with_label_values(&[]).inc();
@@ -496,26 +520,26 @@ where
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        let name = K::get_name();
+        let name = D::get_name();
         let counter = get_counter(&name);
         let _latency = counter.create_latency.measure_latency();
-        K::create(config, namespace).await
+        D::create(config, namespace).await
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        let name = K::get_name();
+        let name = D::get_name();
         let counter = get_counter(&name);
         let _latency = counter.delete_latency.measure_latency();
-        K::delete(config, namespace).await
+        D::delete(config, namespace).await
     }
 }
 
 #[cfg(with_testing)]
-impl<K> TestKeyValueStore for MeteredStore<K>
+impl<D> TestKeyValueDatabase for MeteredDatabase<D>
 where
-    K: TestKeyValueStore,
+    D: TestKeyValueDatabase,
 {
-    async fn new_test_config() -> Result<K::Config, Self::Error> {
-        K::new_test_config().await
+    async fn new_test_config() -> Result<D::Config, Self::Error> {
+        D::new_test_config().await
     }
 }

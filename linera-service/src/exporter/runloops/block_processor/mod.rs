@@ -161,7 +161,7 @@ mod test {
     use linera_sdk::test::MessageAction;
     use linera_service::config::LimitsConfig;
     use linera_storage::{DbStorage, Storage, TestClock};
-    use linera_views::memory::MemoryStore;
+    use linera_views::memory::MemoryDatabase;
     use tokio::sync::mpsc::unbounded_channel;
     use tokio_util::sync::CancellationToken;
 
@@ -180,20 +180,22 @@ mod test {
             queue_rear: tx.clone(),
             queue_front: rx,
         };
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
         let (block_processor_storage, mut exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
-        let exporters_tracker =
-            ExportersTracker::<ExporterCancellationSignal, DbStorage<MemoryStore, TestClock>>::new(
-                NodeOptions::default(),
-                0,
-                signal.clone(),
-                exporter_storage.clone().unwrap(),
-                vec![],
-            );
+        let exporters_tracker = ExportersTracker::<
+            ExporterCancellationSignal,
+            DbStorage<MemoryDatabase, TestClock>,
+        >::new(
+            NodeOptions::default(),
+            0,
+            signal.clone(),
+            exporter_storage.clone().unwrap(),
+            vec![],
+        );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
             block_processor_storage,
@@ -314,20 +316,22 @@ mod test {
             queue_rear: tx.clone(),
             queue_front: rx,
         };
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
         let (block_processor_storage, mut exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
-        let exporters_tracker =
-            ExportersTracker::<ExporterCancellationSignal, DbStorage<MemoryStore, TestClock>>::new(
-                NodeOptions::default(),
-                0,
-                signal.clone(),
-                exporter_storage.clone().unwrap(),
-                vec![],
-            );
+        let exporters_tracker = ExportersTracker::<
+            ExporterCancellationSignal,
+            DbStorage<MemoryDatabase, TestClock>,
+        >::new(
+            NodeOptions::default(),
+            0,
+            signal.clone(),
+            exporter_storage.clone().unwrap(),
+            vec![],
+        );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
             block_processor_storage,
@@ -428,20 +432,22 @@ mod test {
             queue_rear: tx.clone(),
             queue_front: rx,
         };
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
         let (block_processor_storage, mut exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
-        let exporters_tracker =
-            ExportersTracker::<ExporterCancellationSignal, DbStorage<MemoryStore, TestClock>>::new(
-                NodeOptions::default(),
-                0,
-                signal.clone(),
-                exporter_storage.clone().unwrap(),
-                vec![],
-            );
+        let exporters_tracker = ExportersTracker::<
+            ExporterCancellationSignal,
+            DbStorage<MemoryDatabase, TestClock>,
+        >::new(
+            NodeOptions::default(),
+            0,
+            signal.clone(),
+            exporter_storage.clone().unwrap(),
+            vec![],
+        );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
             block_processor_storage,
@@ -513,20 +519,22 @@ mod test {
             queue_rear: tx.clone(),
             queue_front: rx,
         };
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
         let (block_processor_storage, mut exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
-        let exporters_tracker =
-            ExportersTracker::<ExporterCancellationSignal, DbStorage<MemoryStore, TestClock>>::new(
-                NodeOptions::default(),
-                0,
-                signal.clone(),
-                exporter_storage.clone().unwrap(),
-                vec![],
-            );
+        let exporters_tracker = ExportersTracker::<
+            ExporterCancellationSignal,
+            DbStorage<MemoryDatabase, TestClock>,
+        >::new(
+            NodeOptions::default(),
+            0,
+            signal.clone(),
+            exporter_storage.clone().unwrap(),
+            vec![],
+        );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
             block_processor_storage,
@@ -620,20 +628,22 @@ mod test {
             queue_rear: tx.clone(),
             queue_front: rx,
         };
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let storage = DbStorage::<MemoryDatabase, _>::make_test_storage(None).await;
         let (block_processor_storage, mut exporter_storage) =
             BlockProcessorStorage::load(storage.clone(), 0, vec![], LimitsConfig::default())
                 .await?;
         let token = CancellationToken::new();
         let signal = ExporterCancellationSignal::new(token.clone());
-        let exporters_tracker =
-            ExportersTracker::<ExporterCancellationSignal, DbStorage<MemoryStore, TestClock>>::new(
-                NodeOptions::default(),
-                0,
-                signal.clone(),
-                exporter_storage.clone().unwrap(),
-                vec![],
-            );
+        let exporters_tracker = ExportersTracker::<
+            ExporterCancellationSignal,
+            DbStorage<MemoryDatabase, TestClock>,
+        >::new(
+            NodeOptions::default(),
+            0,
+            signal.clone(),
+            exporter_storage.clone().unwrap(),
+            vec![],
+        );
         let mut block_processor = BlockProcessor::new(
             exporters_tracker,
             block_processor_storage,

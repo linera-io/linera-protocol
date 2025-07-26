@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use linera_storage_service::client::StorageServiceStore;
+use linera_storage_service::client::StorageServiceDatabase;
 use linera_views::test_utils::performance;
 use tokio::runtime::Runtime;
 
@@ -11,7 +11,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::contains_key::<StorageServiceStore, _>(iterations, black_box).await
+                performance::contains_key::<StorageServiceDatabase, _>(iterations, black_box).await
             })
     });
 
@@ -19,7 +19,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::contains_keys::<StorageServiceStore, _>(iterations, black_box).await
+                performance::contains_keys::<StorageServiceDatabase, _>(iterations, black_box).await
             })
     });
 
@@ -27,7 +27,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::find_keys_by_prefix::<StorageServiceStore, _>(iterations, black_box)
+                performance::find_keys_by_prefix::<StorageServiceDatabase, _>(iterations, black_box)
                     .await
             })
     });
@@ -38,7 +38,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
             bencher
                 .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
                 .iter_custom(|iterations| async move {
-                    performance::find_key_values_by_prefix::<StorageServiceStore, _>(
+                    performance::find_key_values_by_prefix::<StorageServiceDatabase, _>(
                         iterations, black_box,
                     )
                     .await
@@ -50,7 +50,8 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::read_value_bytes::<StorageServiceStore, _>(iterations, black_box).await
+                performance::read_value_bytes::<StorageServiceDatabase, _>(iterations, black_box)
+                    .await
             })
     });
 
@@ -58,7 +59,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::read_multi_values_bytes::<StorageServiceStore, _>(
+                performance::read_multi_values_bytes::<StorageServiceDatabase, _>(
                     iterations, black_box,
                 )
                 .await
@@ -69,7 +70,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::write_batch::<StorageServiceStore>(iterations).await
+                performance::write_batch::<StorageServiceDatabase>(iterations).await
             })
     });
 }

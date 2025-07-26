@@ -5,13 +5,13 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 #[cfg(with_dynamodb)]
-use linera_views::dynamo_db::DynamoDbStore;
+use linera_views::dynamo_db::{DynamoDbDatabase, DynamoDbStore};
 #[cfg(with_rocksdb)]
-use linera_views::rocks_db::RocksDbStore;
+use linera_views::rocks_db::{RocksDbDatabase, RocksDbStore};
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::scylla_db::{ScyllaDbDatabase, ScyllaDbStore};
 #[cfg(any(with_scylladb, with_rocksdb, with_dynamodb))]
-use linera_views::store::AdminKeyValueStore as _;
+use linera_views::store::{KeyValueDatabase as _, TestKeyValueDatabase as _};
 use linera_views::{
     batch::{
         Batch, WriteOperation,
@@ -29,7 +29,7 @@ use linera_views::{
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    store::{TestKeyValueStore as _, WritableKeyValueStore as _},
+    store::WritableKeyValueStore as _,
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         span_random_reordering_put_delete,
@@ -128,7 +128,7 @@ impl StateStorage for LruMemoryStorage {
 
     async fn new() -> Self {
         let store = MemoryStore::new_test_store().await.unwrap();
-        let store = LruCachingStore::new(store, DEFAULT_STORAGE_CACHE_CONFIG);
+        let store = LruCachingStore::new(store, DEFAULT_STORAGE_CACHE_CONFIG, false);
         LruMemoryStorage {
             accessed_chains: BTreeSet::new(),
             store,
@@ -146,7 +146,7 @@ impl StateStorage for LruMemoryStorage {
 
 #[cfg(with_rocksdb)]
 pub struct RocksDbTestStorage {
-    store: RocksDbStore,
+    database: RocksDbDatabase,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -155,10 +155,10 @@ impl StateStorage for RocksDbTestStorage {
     type Context = ViewContext<usize, RocksDbStore>;
 
     async fn new() -> Self {
-        let store = RocksDbStore::new_test_store().await.unwrap();
+        let database = RocksDbDatabase::connect_test_namespace().await.unwrap();
         let accessed_chains = BTreeSet::new();
         RocksDbTestStorage {
-            store,
+            database,
             accessed_chains,
         }
     }
@@ -166,7 +166,7 @@ impl StateStorage for RocksDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.open_exclusive(&root_key)?;
+        let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -174,7 +174,7 @@ impl StateStorage for RocksDbTestStorage {
 
 #[cfg(with_scylladb)]
 pub struct ScyllaDbTestStorage {
-    store: ScyllaDbStore,
+    database: ScyllaDbDatabase,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -183,10 +183,10 @@ impl StateStorage for ScyllaDbTestStorage {
     type Context = ViewContext<usize, ScyllaDbStore>;
 
     async fn new() -> Self {
-        let store = ScyllaDbStore::new_test_store().await.unwrap();
+        let database = ScyllaDbDatabase::connect_test_namespace().await.unwrap();
         let accessed_chains = BTreeSet::new();
         ScyllaDbTestStorage {
-            store,
+            database,
             accessed_chains,
         }
     }
@@ -194,7 +194,7 @@ impl StateStorage for ScyllaDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.open_exclusive(&root_key)?;
+        let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -202,7 +202,7 @@ impl StateStorage for ScyllaDbTestStorage {
 
 #[cfg(with_dynamodb)]
 pub struct DynamoDbTestStorage {
-    store: DynamoDbStore,
+    database: DynamoDbDatabase,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -211,10 +211,10 @@ impl StateStorage for DynamoDbTestStorage {
     type Context = ViewContext<usize, DynamoDbStore>;
 
     async fn new() -> Self {
-        let store = DynamoDbStore::new_test_store().await.unwrap();
+        let database = DynamoDbDatabase::connect_test_namespace().await.unwrap();
         let accessed_chains = BTreeSet::new();
         DynamoDbTestStorage {
-            store,
+            database,
             accessed_chains,
         }
     }
@@ -222,7 +222,7 @@ impl StateStorage for DynamoDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.open_exclusive(&root_key)?;
+        let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
