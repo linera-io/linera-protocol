@@ -421,7 +421,7 @@ where
         let local_time = self.state.storage.clock().current_time();
         let chain = &mut self.state.chain;
         chain
-            .remove_bundles_from_inboxes(block.header.timestamp, &block.body.incoming_bundles)
+            .remove_bundles_from_inboxes(block.header.timestamp, block.body.incoming_bundles())
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
