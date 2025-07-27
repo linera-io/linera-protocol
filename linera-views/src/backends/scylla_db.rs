@@ -1038,5 +1038,5 @@ pub type ScyllaDbDatabase = LruCachingDatabase<
 /// The `ScyllaDbStoreConfig` input type
 pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
 
-/// The combined error type for the `ScyllaDbStore`.
+/// The combined error type for the `ScyllaDbDatabase`.
 pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;

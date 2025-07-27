@@ -17,8 +17,8 @@ The databases supported are of the NoSQL variety and they are key-value stores.
 We provide support for the following databases:
 * `MemoryStore` is using the memory
 * `RocksDbStore` is a disk-based key-value store
-* `DynamoDbStore` is the AWS-based DynamoDB service.
-* `ScyllaDbStore` is a cloud-based Cassandra-compatible database.
+* `DynamoDbDatabase` is the AWS-based DynamoDB service.
+* `ScyllaDbDatabase` is a cloud-based Cassandra-compatible database.
 * `StorageServiceStore` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
 
 The corresponding trait in the code is the [`crate::store::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueStore.html).

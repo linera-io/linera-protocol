@@ -1019,10 +1019,10 @@ impl TestKeyValueDatabase for JournalingKeyValueDatabase<DynamoDbDatabaseInterna
     }
 }
 
-/// The combined error type for [`DynamoDbStore`].
+/// The combined error type for [`DynamoDbDatabase`].
 pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
 
-/// The config type for [`DynamoDbStore`]`
+/// The config type for [`DynamoDbDatabase`]`
 pub type DynamoDbStoreConfig = LruCachingConfig<DynamoDbStoreInternalConfig>;
 
 /// A shared DB client for DynamoDB with metrics
