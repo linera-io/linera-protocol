@@ -12,8 +12,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(with_testing)]
-use crate::random::generate_test_namespace;
-#[cfg(with_testing)]
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
@@ -35,7 +33,8 @@ pub struct MemoryStoreConfig {
 }
 
 /// The number of streams for the test
-pub const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
+#[cfg(with_testing)]
+const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
 
 /// The values in a partition.
 type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
@@ -243,57 +242,13 @@ impl WritableKeyValueStore for MemoryStore {
 }
 
 impl MemoryStore {
-    /// Creates a `MemoryStore` for testing purposes.
+    /// Creates a `MemoryStore` that doesn't belong to any registered namespace.
     #[cfg(with_testing)]
-    pub async fn new_test_store() -> Result<Self, MemoryStoreError> {
-        Ok(create_test_memory_store())
-    }
-
-    /// Creates a `MemoryStore` from a number of queries and a namespace.
-    pub fn new(max_stream_queries: usize, namespace: &str) -> Result<Self, MemoryStoreError> {
-        let config = MemoryStoreConfig {
-            max_stream_queries,
-            kill_on_drop: false,
-        };
-        Self::sync_maybe_create_and_connect(&config, namespace, false)
-    }
-
-    /// Synchronously creates and connects to a MemoryDatabase, then opens a store.
-    fn sync_maybe_create_and_connect(
-        config: &MemoryStoreConfig,
-        namespace: &str,
-        kill_on_drop: bool,
-    ) -> Result<Self, MemoryStoreError> {
-        let mut databases = MEMORY_DATABASES
-            .lock()
-            .expect("MEMORY_DATABASES lock should not be poisoned");
-
-        if !databases.sync_exists(namespace) {
-            databases.sync_create(namespace);
+    pub fn new_for_testing() -> Self {
+        Self {
+            map: Arc::default(),
+            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
         }
-
-        // Create a database instance
-        let database = MemoryDatabase {
-            namespace: namespace.to_string(),
-            max_stream_queries: config.max_stream_queries,
-            kill_on_drop,
-        };
-
-        // Open a store with empty root key
-        databases.sync_open(&database.namespace, database.max_stream_queries, &[])
-    }
-
-    /// Creates a `MemoryStore` from a number of queries and a namespace for testing.
-    #[cfg(with_testing)]
-    pub fn new_for_testing(
-        max_stream_queries: usize,
-        namespace: &str,
-    ) -> Result<Self, MemoryStoreError> {
-        let config = MemoryStoreConfig {
-            max_stream_queries,
-            kill_on_drop: true,
-        };
-        Self::sync_maybe_create_and_connect(&config, namespace, true)
     }
 }
 
@@ -394,16 +349,9 @@ impl TestKeyValueDatabase for MemoryDatabase {
     async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
         Ok(MemoryStoreConfig {
             max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
-            kill_on_drop: true,
+            kill_on_drop: false,
         })
     }
-}
-
-/// Creates a test memory store for working.
-#[cfg(with_testing)]
-pub fn create_test_memory_store() -> MemoryStore {
-    let namespace = generate_test_namespace();
-    MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap()
 }
 
 /// The error type for [`MemoryStore`].

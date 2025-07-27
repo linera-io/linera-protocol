@@ -15,8 +15,7 @@ use crate::{
 };
 #[cfg(with_testing)]
 use crate::{
-    memory::{MemoryStore, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
-    random::generate_test_namespace,
+    memory::{MemoryStore, MemoryStoreError},
     store::TestKeyValueDatabase,
 };
 
@@ -429,7 +428,7 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
     fn max_stream_queries(&self) -> usize {
-        TEST_MEMORY_MAX_STREAM_QUERIES
+        self.inner.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
@@ -488,10 +487,8 @@ impl WritableKeyValueStore for LimitedTestMemoryStore {
 impl LimitedTestMemoryStore {
     /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
-        let namespace = generate_test_namespace();
-        let store =
-            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap();
-        LimitedTestMemoryStore { inner: store }
+        let inner = MemoryStore::new_for_testing();
+        LimitedTestMemoryStore { inner }
     }
 }
 
