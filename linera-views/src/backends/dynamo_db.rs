@@ -152,13 +152,6 @@ const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
 const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 
-/// Keys of length 0 are not allowed, so we extend by having a prefix on start
-fn extend_root_key(root_key: &[u8]) -> Vec<u8> {
-    let mut start_key = EMPTY_ROOT_KEY.to_vec();
-    start_key.extend(root_key);
-    start_key
-}
-
 /// Builds the key attributes for a table item.
 ///
 /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -370,35 +363,13 @@ impl KeyValueDatabase for DynamoDbDatabaseInternal {
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
-        let client = self.client.clone();
-        let namespace = self.namespace.clone();
-        let semaphore = self.semaphore.clone();
-        let max_stream_queries = self.max_stream_queries;
-        let start_key = extend_root_key(root_key);
-        Ok(DynamoDbStoreInternal {
-            client,
-            namespace,
-            semaphore,
-            max_stream_queries,
-            start_key,
-            root_key_written: Arc::new(AtomicBool::new(false)),
-        })
+        let mut start_key = EMPTY_ROOT_KEY.to_vec();
+        start_key.extend(root_key);
+        self.open_internal(start_key)
     }
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
-        let client = self.client.clone();
-        let namespace = self.namespace.clone();
-        let semaphore = self.semaphore.clone();
-        let max_stream_queries = self.max_stream_queries;
-        let start_key = extend_root_key(root_key);
-        Ok(DynamoDbStoreInternal {
-            client,
-            namespace,
-            semaphore,
-            max_stream_queries,
-            start_key,
-            root_key_written: Arc::new(AtomicBool::new(false)),
-        })
+        self.open_exclusive(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreInternalError> {
@@ -429,7 +400,7 @@ impl KeyValueDatabase for DynamoDbDatabaseInternal {
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
         let database = Self::connect(config, namespace).await?;
-        let store = database.open_exclusive(PARTITION_KEY_ROOT_KEY)?;
+        let store = database.open_internal(PARTITION_KEY_ROOT_KEY.to_vec())?;
         store.find_keys_by_prefix(EMPTY_ROOT_KEY).await
     }
 
@@ -562,6 +533,24 @@ impl DynamoDbDatabaseInternal {
             return Err(InvalidNamespace::InvalidCharacter);
         }
         Ok(())
+    }
+
+    fn open_internal(
+        &self,
+        start_key: Vec<u8>,
+    ) -> Result<DynamoDbStoreInternal, DynamoDbStoreInternalError> {
+        let client = self.client.clone();
+        let namespace = self.namespace.clone();
+        let semaphore = self.semaphore.clone();
+        let max_stream_queries = self.max_stream_queries;
+        Ok(DynamoDbStoreInternal {
+            client,
+            namespace,
+            semaphore,
+            max_stream_queries,
+            start_key,
+            root_key_written: Arc::new(AtomicBool::new(false)),
+        })
     }
 }
 
