@@ -100,7 +100,7 @@ where
         let code = self
             .context()
             .extra()
-            .get_user_service(&description)
+            .get_user_service(&description, txn_tracker.created_blobs())
             .await?;
         Ok((code, description))
     }

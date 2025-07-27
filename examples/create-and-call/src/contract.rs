@@ -5,7 +5,7 @@
 
 mod state;
 
-use counter_no_graphql::{CounterNoGraphQlAbi, CounterOperation};
+use counter_no_graphql::{CounterNoGraphQlAbi, CounterOperation, CounterRequest};
 use create_and_call::{CreateAndCallAbi, CreateAndCallOperation};
 use linera_sdk::{
     linera_base_types::{Bytecode, VmRuntime, WithContractAbi},
@@ -70,14 +70,18 @@ impl Contract for CreateAndCallContract {
                 &initialization_value,
                 vec![],
             );
-
-        // Step 3: Call the contract with counter increment operation
-        let counter_operation = CounterOperation::Increment(increment_value);
-        let value = self
-            .runtime
-            .call_application(true, application_id, &counter_operation);
         self.state.value.set(Some(application_id));
-        value
+
+        // Step 3: Call the service. It should return the value before
+        // the initialization of this contract and thus zero.
+        let counter_request = CounterRequest::Query;
+        let value = self.runtime.query_service(application_id, counter_request);
+        assert_eq!(value, 0);
+
+        // Step 4: Call the contract with counter increment operation
+        let counter_operation = CounterOperation::Increment(increment_value);
+        self.runtime
+            .call_application(true, application_id, &counter_operation)
     }
 
     async fn execute_message(&mut self, _message: ()) {
