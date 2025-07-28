@@ -20,7 +20,6 @@ benchmark = [
     "dep:reqwest",
     "dep:anyhow",
     "dep:prometheus-parse",
-    "dep:hdrhistogram",
 ]
 wasmer = [
     "linera-core/wasmer",
@@ -58,7 +57,7 @@ anyhow = { workspace = true, optional = true }
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
-hdrhistogram = { workspace = true, optional = true }
+hdrhistogram = { workspace = true }
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
