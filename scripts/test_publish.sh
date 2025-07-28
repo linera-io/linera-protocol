@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Use a local registry to simulate publishing crates from the current workspace.
 #
