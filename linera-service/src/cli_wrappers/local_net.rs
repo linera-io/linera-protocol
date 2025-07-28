@@ -444,6 +444,10 @@ impl LocalNet {
         12000 + validator * 100 + exporter_id + 1
     }
 
+    fn block_exporter_metrics_port(exporter_id: usize) -> usize {
+        13000 + exporter_id + 1
+    }
+
     fn configuration_string(&self, server_number: usize) -> Result<String> {
         let n = server_number;
         let path = self
@@ -519,9 +523,12 @@ impl LocalNet {
         let n = validator;
         let host = Network::Grpc.localhost();
         let port = Self::block_exporter_port(n, exporter_id as usize);
+        let metrics_port = Self::block_exporter_metrics_port(exporter_id as usize);
         let mut config = format!(
             r#"
             id = {exporter_id}
+
+            metrics_port = {metrics_port}
 
             [service_config]
             host = "{host}"
@@ -640,7 +647,7 @@ impl LocalNet {
         let child = self
             .command_for_binary("linera-exporter")
             .await?
-            .args(["--config_path", &config_path])
+            .args(["--config-path", &config_path])
             .args(["--storage", &storage])
             .args(["--genesis", "genesis.json"])
             .spawn_into()?;

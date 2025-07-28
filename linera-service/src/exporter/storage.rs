@@ -9,6 +9,8 @@ use std::{
 
 use dashmap::DashMap;
 use futures::future::try_join_all;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -25,6 +27,8 @@ use linera_views::{batch::Batch, context::Context, log_view::LogView, views::Clo
 use mini_moka::unsync::Cache as LfuCache;
 use quick_cache::{sync::Cache as FifoCache, Weighter};
 
+#[cfg(with_metrics)]
+use crate::metrics;
 use crate::{
     common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
     state::{BlockExporterStateView, DestinationStates},
@@ -39,6 +43,9 @@ where
     shared_storage: SharedStorage<S::BlockExporterContext, S>,
 }
 
+type BlobCache = FifoCache<BlobId, Arc<Blob>, BlobCacheWeighter>;
+type BlockCache = FifoCache<CryptoHash, Arc<ConfirmedBlockCertificate>, BlockCacheWeighter>;
+
 struct SharedStorage<C, S>
 where
     S: Storage + Clone + Send + Sync + 'static,
@@ -46,8 +53,8 @@ where
     storage: S,
     destination_states: DestinationStates,
     shared_canonical_state: CanonicalState<C>,
-    blobs_cache: Arc<FifoCache<BlobId, Arc<Blob>, BlobCacheWeighter>>,
-    blocks_cache: Arc<FifoCache<CryptoHash, Arc<ConfirmedBlockCertificate>, BlockCacheWeighter>>,
+    blobs_cache: Arc<BlobCache>,
+    blocks_cache: Arc<BlockCache>,
 }
 
 pub(super) struct BlockProcessorStorage<S>
@@ -57,6 +64,7 @@ where
     blob_state_cache: LfuCache<BlobId, ()>,
     chain_states_cache: LfuCache<ChainId, LiteBlockId>,
     shared_storage: SharedStorage<S::BlockExporterContext, S>,
+    // Handle on the persistent storage where the exporter state is pushed to periodically.
     exporter_state_view: BlockExporterStateView<<S as Storage>::BlockExporterContext>,
 }
 
@@ -100,6 +108,8 @@ where
         match self.blocks_cache.get_value_or_guard_async(&hash).await {
             Ok(value) => Ok(value),
             Err(guard) => {
+                #[cfg(with_metrics)]
+                metrics::GET_CERTIFICATE_HISTOGRAM.measure_latency();
                 let block = self.storage.read_certificate(hash).await?;
                 let heaped_block = Arc::new(block);
                 let _ = guard.insert(heaped_block.clone());
@@ -112,6 +122,8 @@ where
         match self.blobs_cache.get_value_or_guard_async(&blob_id).await {
             Ok(blob) => Ok(blob),
             Err(guard) => {
+                #[cfg(with_metrics)]
+                metrics::GET_BLOB_HISTOGRAM.measure_latency();
                 let blob = self.storage.read_blob(blob_id).await?;
                 let heaped_blob = Arc::new(blob);
                 let _ = guard.insert(heaped_blob.clone());
@@ -318,6 +330,12 @@ where
             let state = match self.shared_storage.destination_states.get(&id) {
                 None => {
                     tracing::trace!(id=?id, "adding new committee member");
+                    #[cfg(with_metrics)]
+                    {
+                        metrics::DESTINATION_STATE_COUNTER
+                            .with_label_values(&[id.address()])
+                            .reset();
+                    }
                     Arc::new(AtomicU64::new(0))
                 }
                 Some(state) => state.clone(),
@@ -338,6 +356,8 @@ where
 
         self.exporter_state_view.flush(&mut batch)?;
         self.exporter_state_view.rollback();
+        #[cfg(with_metrics)]
+        metrics::SAVE_HISTOGRAM.measure_latency();
         if let Err(e) = self.exporter_state_view.context().write_batch(batch).await {
             Err(ExporterError::ViewError(e.into()))?;
         };
@@ -350,11 +370,23 @@ where
     }
 }
 
+/// A view of the canonical state that is used to store blocks in the exporter.
 struct CanonicalState<C> {
+    /// The number of blocks in the canonical state.
     count: usize,
+    /// The (persistent) storage view that is used to access the canonical state.
     state_context: LogView<C, CanonicalBlock>,
-    state_updates_buffer: Arc<DashMap<usize, CanonicalBlock>>,
+    /// A cache that stores the canonical blocks.
+    /// This cache is used to speed up access to the canonical state.
+    /// It uses a FIFO eviction policy and is limited by the size of the cache.
+    /// The cache is used to avoid reading the canonical state from the persistent storage
+    /// for every request.
     state_cache: Arc<FifoCache<usize, CanonicalBlock, CanonicalStateCacheWeighter>>,
+    /// A buffer that stores the updates to the canonical state.
+    ///
+    /// This buffer is used to temporarily hold updates to the canonical state before they are
+    /// flushed to the persistent storage.
+    state_updates_buffer: Arc<DashMap<usize, CanonicalBlock>>,
 }
 
 impl<C> CanonicalState<C>
@@ -400,6 +432,8 @@ where
                 {
                     entry
                 } else {
+                    #[cfg(with_metrics)]
+                    metrics::GET_CANONICAL_BLOCK_HISTOGRAM.measure_latency();
                     self.state_context
                         .get(index)
                         .await?
