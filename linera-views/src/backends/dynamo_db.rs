@@ -37,16 +37,19 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::metering::MeteredStore;
+use crate::metering::MeteredDatabase;
 #[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
+use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::SimpleUnorderedBatch,
     common::get_uleb128_size,
-    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingConfig, LruCachingStore},
-    store::{AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError},
-    value_splitting::{ValueSplittingError, ValueSplittingStore},
+    journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
+    lru_caching::{LruCachingConfig, LruCachingDatabase},
+    store::{
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError,
+    },
+    value_splitting::{ValueSplittingDatabase, ValueSplittingError},
     FutureSyncExt as _,
 };
 
@@ -148,13 +151,6 @@ const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 /// Fundamental constants in DynamoDB: The maximum size of a [`TransactWriteItem`] is 100.
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
 const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
-
-/// Keys of length 0 are not allowed, so we extend by having a prefix on start
-fn extend_root_key(root_key: &[u8]) -> Vec<u8> {
-    let mut start_key = EMPTY_ROOT_KEY.to_vec();
-    start_key.extend(root_key);
-    start_key
-}
 
 /// Builds the key attributes for a table item.
 ///
@@ -303,6 +299,19 @@ pub struct DynamoDbStoreInternal {
     root_key_written: Arc<AtomicBool>,
 }
 
+/// Database-level connection to DynamoDB for managing namespaces and partitions.
+#[derive(Clone)]
+pub struct DynamoDbDatabaseInternal {
+    client: Client,
+    namespace: String,
+    semaphore: Option<Arc<Semaphore>>,
+    max_stream_queries: usize,
+}
+
+impl WithError for DynamoDbDatabaseInternal {
+    type Error = DynamoDbStoreInternalError;
+}
+
 /// The initial configuration of the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamoDbStoreInternalConfig {
@@ -325,8 +334,9 @@ impl DynamoDbStoreInternalConfig {
     }
 }
 
-impl AdminKeyValueStore for DynamoDbStoreInternal {
+impl KeyValueDatabase for DynamoDbDatabaseInternal {
     type Config = DynamoDbStoreInternalConfig;
+    type Store = DynamoDbStoreInternal;
 
     fn get_name() -> String {
         "dynamodb internal".to_string()
@@ -343,32 +353,23 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.max_stream_queries;
         let namespace = namespace.to_string();
-        let start_key = extend_root_key(&[]);
         let store = Self {
             client,
             namespace,
             semaphore,
             max_stream_queries,
-            start_key,
-            root_key_written: Arc::new(AtomicBool::new(false)),
         };
         Ok(store)
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreInternalError> {
-        let client = self.client.clone();
-        let namespace = self.namespace.clone();
-        let semaphore = self.semaphore.clone();
-        let max_stream_queries = self.max_stream_queries;
-        let start_key = extend_root_key(root_key);
-        Ok(Self {
-            client,
-            namespace,
-            semaphore,
-            max_stream_queries,
-            start_key,
-            root_key_written: Arc::new(AtomicBool::new(false)),
-        })
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
+        let mut start_key = EMPTY_ROOT_KEY.to_vec();
+        start_key.extend(root_key);
+        self.open_internal(start_key)
+    }
+
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreInternalError> {
@@ -398,8 +399,8 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
-        let mut store = Self::connect(config, namespace).await?;
-        store.start_key = PARTITION_KEY_ROOT_KEY.to_vec();
+        let database = Self::connect(config, namespace).await?;
+        let store = database.open_internal(PARTITION_KEY_ROOT_KEY.to_vec())?;
         store.find_keys_by_prefix(EMPTY_ROOT_KEY).await
     }
 
@@ -512,7 +513,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     }
 }
 
-impl DynamoDbStoreInternal {
+impl DynamoDbDatabaseInternal {
     /// Namespaces are named table names in DynamoDB [naming
     /// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
     /// so we need to check correctness of the namespace
@@ -534,6 +535,26 @@ impl DynamoDbStoreInternal {
         Ok(())
     }
 
+    fn open_internal(
+        &self,
+        start_key: Vec<u8>,
+    ) -> Result<DynamoDbStoreInternal, DynamoDbStoreInternalError> {
+        let client = self.client.clone();
+        let namespace = self.namespace.clone();
+        let semaphore = self.semaphore.clone();
+        let max_stream_queries = self.max_stream_queries;
+        Ok(DynamoDbStoreInternal {
+            client,
+            namespace,
+            semaphore,
+            max_stream_queries,
+            start_key,
+            root_key_written: Arc::new(AtomicBool::new(false)),
+        })
+    }
+}
+
+impl DynamoDbStoreInternal {
     fn build_delete_transaction(
         &self,
         start_key: &[u8],
@@ -977,7 +998,7 @@ impl KeyValueStoreError for DynamoDbStoreInternalError {
 }
 
 #[cfg(with_testing)]
-impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
+impl TestKeyValueDatabase for JournalingKeyValueDatabase<DynamoDbDatabaseInternal> {
     async fn new_test_config() -> Result<DynamoDbStoreInternalConfig, DynamoDbStoreInternalError> {
         Ok(DynamoDbStoreInternalConfig {
             use_dynamodb_local: true,
@@ -987,26 +1008,28 @@ impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
     }
 }
 
-/// A shared DB client for DynamoDB implementing LRU caching and metrics
+/// The combined error type for [`DynamoDbDatabase`].
+pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
+
+/// The config type for [`DynamoDbDatabase`]`
+pub type DynamoDbStoreConfig = LruCachingConfig<DynamoDbStoreInternalConfig>;
+
+/// A shared DB client for DynamoDB with metrics
 #[cfg(with_metrics)]
-pub type DynamoDbStore = MeteredStore<
-    LruCachingStore<
-        MeteredStore<
-            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
+pub type DynamoDbDatabase = MeteredDatabase<
+    LruCachingDatabase<
+        MeteredDatabase<
+            ValueSplittingDatabase<
+                MeteredDatabase<JournalingKeyValueDatabase<DynamoDbDatabaseInternal>>,
+            >,
         >,
     >,
 >;
-
-/// A shared DB client for DynamoDB implementing LRU caching
+/// A shared DB client for DynamoDB
 #[cfg(not(with_metrics))]
-pub type DynamoDbStore =
-    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>;
-
-/// The combined error type for [`DynamoDbStore`].
-pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
-
-/// The config type for [`DynamoDbStore`]`
-pub type DynamoDbStoreConfig = LruCachingConfig<DynamoDbStoreInternalConfig>;
+pub type DynamoDbDatabase = LruCachingDatabase<
+    ValueSplittingDatabase<JournalingKeyValueDatabase<DynamoDbDatabaseInternal>>,
+>;
 
 #[cfg(test)]
 mod tests {

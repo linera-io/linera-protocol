@@ -7,13 +7,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 
 #[cfg(with_dynamodb)]
-use crate::dynamo_db::DynamoDbStore;
+use crate::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]
-use crate::rocks_db::RocksDbStore;
+use crate::rocks_db::RocksDbDatabase;
 #[cfg(with_scylladb)]
-use crate::scylla_db::ScyllaDbStore;
+use crate::scylla_db::ScyllaDbDatabase;
 #[cfg(any(with_scylladb, with_dynamodb, with_rocksdb))]
-use crate::store::TestKeyValueStore;
+use crate::store::{KeyValueDatabase, TestKeyValueDatabase};
 use crate::{
     batch::Batch,
     context::{Context, MemoryContext},
@@ -28,7 +28,7 @@ use crate::{
     views::{HashableView, View},
 };
 #[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
-use crate::{context::ViewContext, random::generate_test_namespace, store::AdminKeyValueStore};
+use crate::{context::ViewContext, random::generate_test_namespace};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -205,12 +205,13 @@ struct RocksDbContextFactory;
 
 #[cfg(with_rocksdb)]
 impl TestContextFactory for RocksDbContextFactory {
-    type Context = ViewContext<(), RocksDbStore>;
+    type Context = ViewContext<(), <RocksDbDatabase as KeyValueDatabase>::Store>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = RocksDbStore::new_test_config().await?;
+        let config = RocksDbDatabase::new_test_config().await?;
         let namespace = generate_test_namespace();
-        let store = RocksDbStore::recreate_and_connect(&config, &namespace).await?;
+        let database = RocksDbDatabase::recreate_and_connect(&config, &namespace).await?;
+        let store = database.open_shared(&[])?;
         let context = ViewContext::create_root_context(store, ()).await?;
 
         Ok(context)
@@ -222,12 +223,13 @@ struct DynamoDbContextFactory;
 
 #[cfg(with_dynamodb)]
 impl TestContextFactory for DynamoDbContextFactory {
-    type Context = ViewContext<(), DynamoDbStore>;
+    type Context = ViewContext<(), <DynamoDbDatabase as KeyValueDatabase>::Store>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = DynamoDbStore::new_test_config().await?;
+        let config = DynamoDbDatabase::new_test_config().await?;
         let namespace = generate_test_namespace();
-        let store = DynamoDbStore::recreate_and_connect(&config, &namespace).await?;
+        let database = DynamoDbDatabase::recreate_and_connect(&config, &namespace).await?;
+        let store = database.open_shared(&[])?;
         Ok(ViewContext::create_root_context(store, ()).await?)
     }
 }
@@ -237,12 +239,13 @@ struct ScyllaDbContextFactory;
 
 #[cfg(with_scylladb)]
 impl TestContextFactory for ScyllaDbContextFactory {
-    type Context = ViewContext<(), ScyllaDbStore>;
+    type Context = ViewContext<(), <ScyllaDbDatabase as KeyValueDatabase>::Store>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = ScyllaDbStore::new_test_config().await?;
+        let config = ScyllaDbDatabase::new_test_config().await?;
         let namespace = generate_test_namespace();
-        let store = ScyllaDbStore::recreate_and_connect(&config, &namespace).await?;
+        let database = ScyllaDbDatabase::recreate_and_connect(&config, &namespace).await?;
+        let store = database.open_shared(&[])?;
         let context = ViewContext::create_root_context(store, ()).await?;
         Ok(context)
     }

@@ -7,10 +7,10 @@ use clap::Parser as _;
 use linera_views::{
     lru_caching::StorageCacheConfig,
     rocks_db::{
-        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
+        PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
     },
-    store::AdminKeyValueStore as _,
+    store::KeyValueDatabase as _,
 };
 
 use crate::{
@@ -49,7 +49,7 @@ pub struct RocksDbConfig {
     pub max_cache_entries: usize,
 }
 
-pub type RocksDbRunner = Runner<RocksDbStore, RocksDbConfig>;
+pub type RocksDbRunner = Runner<RocksDbDatabase, RocksDbConfig>;
 
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
@@ -74,7 +74,7 @@ impl RocksDbRunner {
             storage_cache_config,
         };
         let namespace = config.client.namespace.clone();
-        let store = RocksDbStore::maybe_create_and_connect(&store_config, &namespace).await?;
-        Self::new(config, store).await
+        let database = RocksDbDatabase::maybe_create_and_connect(&store_config, &namespace).await?;
+        Self::new(config, database).await
     }
 }

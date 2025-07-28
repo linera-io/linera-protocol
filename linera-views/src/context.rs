@@ -187,11 +187,7 @@ impl<E> MemoryContext<E> {
     #[cfg(with_testing)]
     pub fn new_for_testing(extra: E) -> Self {
         Self {
-            store: MemoryStore::new_for_testing(
-                crate::memory::TEST_MEMORY_MAX_STREAM_QUERIES,
-                &crate::random::generate_test_namespace(),
-            )
-            .unwrap(),
+            store: MemoryStore::new_for_testing(),
             base_key: BaseKey::default(),
             extra,
         }

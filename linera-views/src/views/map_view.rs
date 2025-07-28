@@ -2081,7 +2081,13 @@ mod graphql {
         async_graphql::TypeName for CustomMapView<C, I, V>
     {
         fn type_name() -> Cow<'static, str> {
-            format!("CustomMapView_{}_{}", I::type_name(), V::type_name()).into()
+            format!(
+                "CustomMapView_{}_{}_{:08x}",
+                mangle(I::type_name()),
+                mangle(V::type_name()),
+                hash_name::<(I, V)>(),
+            )
+            .into()
         }
     }
 

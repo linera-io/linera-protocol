@@ -4,7 +4,7 @@
 //! This module defines the trait for indexer runners.
 
 use linera_base::identifiers::ChainId;
-use linera_views::store::KeyValueStore;
+use linera_views::store::{KeyValueDatabase, KeyValueStore};
 use tokio::select;
 use tracing::{info, warn};
 
@@ -35,27 +35,31 @@ pub struct IndexerConfig<Config: clap::Args> {
     pub command: IndexerCommand,
 }
 
-pub struct Runner<S, Config: clap::Args> {
-    pub store: S,
+pub struct Runner<D, Config: clap::Args>
+where
+    D: KeyValueDatabase,
+{
+    pub database: D,
     pub config: IndexerConfig<Config>,
-    pub indexer: Indexer<S>,
+    pub indexer: Indexer<D>,
 }
 
-impl<S, Config> Runner<S, Config>
+impl<D, Config> Runner<D, Config>
 where
     Self: Send,
     Config: Clone + std::fmt::Debug + Send + Sync + clap::Parser + clap::Args,
-    S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: Send + Sync + std::error::Error + 'static,
+    D: KeyValueDatabase + Clone + Send + Sync + 'static,
+    D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+    D::Error: Send + Sync + std::error::Error + 'static,
 {
     /// Loads a new runner
-    pub async fn new(config: IndexerConfig<Config>, store: S) -> Result<Self, IndexerError>
+    pub async fn new(config: IndexerConfig<Config>, database: D) -> Result<Self, IndexerError>
     where
         Self: Sized,
     {
-        let indexer = Indexer::load(store.clone()).await?;
+        let indexer = Indexer::load(database.clone()).await?;
         Ok(Self {
-            store,
+            database,
             config,
             indexer,
         })
@@ -64,13 +68,13 @@ where
     /// Registers a new plugin to the indexer
     pub async fn add_plugin(
         &mut self,
-        plugin: impl Plugin<S> + 'static,
+        plugin: impl Plugin<D> + 'static,
     ) -> Result<(), IndexerError> {
         self.indexer.add_plugin(plugin).await
     }
 
     /// Runs a server from the indexer and the plugins
-    async fn server(port: u16, indexer: &Indexer<S>) -> Result<(), IndexerError> {
+    async fn server(port: u16, indexer: &Indexer<D>) -> Result<(), IndexerError> {
         let mut app = indexer.route(None);
         for plugin in indexer.plugins.values() {
             app = plugin.route(app);

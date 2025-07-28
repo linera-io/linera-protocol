@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 
 use crate::{
     batch::Batch,
-    store::{KeyValueStore, TestKeyValueStore},
+    store::{
+        KeyValueStore, ReadableKeyValueStore as _, TestKeyValueDatabase, WritableKeyValueStore as _,
+    },
     test_utils::{add_prefix, get_random_key_values_with_small_keys},
 };
 
@@ -37,11 +39,14 @@ async fn clear_store<S: KeyValueStore>(store: &S) {
 }
 
 /// Benchmarks the `contains_key` operation.
-pub async fn contains_key<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
+pub async fn contains_key<D, F>(iterations: u64, f: F) -> Duration
 where
+    D: TestKeyValueDatabase,
+    D::Store: KeyValueStore,
     F: Fn(bool) -> bool,
 {
-    let store = S::new_test_store().await.unwrap();
+    let namespace = D::connect_test_namespace().await.unwrap();
+    let store = namespace.open_shared(&[]).unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
         let key_values = add_prefix(
@@ -67,11 +72,14 @@ where
 }
 
 /// Benchmarks the `contains_keys` operation.
-pub async fn contains_keys<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
+pub async fn contains_keys<D, F>(iterations: u64, f: F) -> Duration
 where
+    D: TestKeyValueDatabase,
+    D::Store: KeyValueStore,
     F: Fn(Vec<bool>) -> Vec<bool>,
 {
-    let store = S::new_test_store().await.unwrap();
+    let namespace = D::connect_test_namespace().await.unwrap();
+    let store = namespace.open_shared(&[]).unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
         let key_values = add_prefix(
@@ -99,11 +107,14 @@ where
 }
 
 /// Benchmarks the `find_keys_by_prefix` operation.
-pub async fn find_keys_by_prefix<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
+pub async fn find_keys_by_prefix<D, F>(iterations: u64, f: F) -> Duration
 where
+    D: TestKeyValueDatabase,
+    D::Store: KeyValueStore,
     F: Fn(Vec<Vec<u8>>) -> Vec<Vec<u8>>,
 {
-    let store = S::new_test_store().await.unwrap();
+    let namespace = D::connect_test_namespace().await.unwrap();
+    let store = namespace.open_shared(&[]).unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
         let key_values = add_prefix(
@@ -127,11 +138,14 @@ where
 }
 
 /// Benchmarks the `find_keys_by_prefix` operation.
-pub async fn find_key_values_by_prefix<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
+pub async fn find_key_values_by_prefix<D, F>(iterations: u64, f: F) -> Duration
 where
+    D: TestKeyValueDatabase,
+    D::Store: KeyValueStore,
     F: Fn(Vec<(Vec<u8>, Vec<u8>)>) -> Vec<(Vec<u8>, Vec<u8>)>,
 {
-    let store = S::new_test_store().await.unwrap();
+    let namespace = D::connect_test_namespace().await.unwrap();
+    let store = namespace.open_shared(&[]).unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
         let key_values = add_prefix(
@@ -158,11 +172,14 @@ where
 }
 
 /// Benchmarks the `read_value_bytes` operation.
-pub async fn read_value_bytes<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
+pub async fn read_value_bytes<D, F>(iterations: u64, f: F) -> Duration
 where
+    D: TestKeyValueDatabase,
+    D::Store: KeyValueStore,
     F: Fn(Option<Vec<u8>>) -> Option<Vec<u8>>,
 {
-    let store = S::new_test_store().await.unwrap();
+    let namespace = D::connect_test_namespace().await.unwrap();
+    let store = namespace.open_shared(&[]).unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
         let key_values = add_prefix(
@@ -188,11 +205,14 @@ where
 }
 
 /// Benchmarks the `read_multi_values_bytes` operation.
-pub async fn read_multi_values_bytes<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
+pub async fn read_multi_values_bytes<D, F>(iterations: u64, f: F) -> Duration
 where
+    D: TestKeyValueDatabase,
+    D::Store: KeyValueStore,
     F: Fn(Vec<Option<Vec<u8>>>) -> Vec<Option<Vec<u8>>>,
 {
-    let store = S::new_test_store().await.unwrap();
+    let namespace = D::connect_test_namespace().await.unwrap();
+    let store = namespace.open_shared(&[]).unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
         let key_values = add_prefix(
@@ -220,8 +240,12 @@ where
 }
 
 /// Benchmarks the `write_batch` operation.
-pub async fn write_batch<S: TestKeyValueStore>(iterations: u64) -> Duration {
-    let store = S::new_test_store().await.unwrap();
+pub async fn write_batch<D>(iterations: u64) -> Duration
+where
+    D: TestKeyValueDatabase,
+    D::Store: KeyValueStore,
+{
+    let store = D::new_test_store().await.unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
         let key_values = add_prefix(

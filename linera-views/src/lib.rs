@@ -17,22 +17,24 @@ See `DESIGN.md` for more details.
 The databases supported are of the NoSQL variety and they are key-value stores.
 
 We provide support for the following databases:
-* `MemoryStore` is using the memory
-* `RocksDbStore` is a disk-based key-value store
-* `DynamoDbStore` is the AWS-based DynamoDB service.
-* `ScyllaDbStore` is a cloud-based Cassandra-compatible database.
-* `StorageServiceStore` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
+* `MemoryDatabase` is using the memory
+* `RocksDbDatabase` is a disk-based key-value store
+* `DynamoDbDatabase` is the AWS-based DynamoDB service.
+* `ScyllaDbDatabase` is a cloud-based Cassandra-compatible database.
+* `StorageServiceDatabase` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
 
-The corresponding trait in the code is the [`crate::store::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueStore.html).
-The trait decomposes into a [`store::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.ReadableKeyValueStore.html)
+The corresponding trait in the code is the [`crate::store::KeyValueDatabase`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueDatabase.html).
+as well as [`crate::store::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueStore.html).
+
+The latter trait decomposes into a [`store::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.ReadableKeyValueStore.html)
 and a [`store::WritableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.WritableKeyValueStore.html).
-In addition, there is a [`store::AdminKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.AdminKeyValueStore.html)
-which gives some functionalities for working with stores.
+
 A context is the combination of a client and a base key (of type `Vec<u8>`).
 
 ## Views.
 
 A view is a container whose data lies in one of the above-mentioned databases.
+
 When the container is modified the modification lies first in the view before
 being committed to the database. In technical terms, a view implements the trait `View`.
 
@@ -64,7 +66,7 @@ The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analo
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
-/// The `KeyValueStore` trait and related definitions.
+/// The `KeyValueDatabase` and `KeyValueStore` traits and related definitions.
 pub mod store;
 
 /// The `Context` trait and related definitions.

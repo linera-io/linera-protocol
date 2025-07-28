@@ -9,16 +9,34 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
 use crate::{
-    memory::{MemoryStore, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
-    random::generate_test_namespace,
-    store::TestKeyValueStore,
+    memory::{MemoryStore, MemoryStoreError},
+    store::TestKeyValueDatabase,
 };
+
+/// A key-value database with no size limit for values.
+///
+/// It wraps a key-value store, potentially _with_ a size limit, and automatically
+/// splits up large values into smaller ones. A single logical key-value pair is
+/// stored as multiple smaller key-value pairs in the wrapped store.
+/// See the `README.md` for additional details.
+#[derive(Clone)]
+pub struct ValueSplittingDatabase<D> {
+    /// The underlying database.
+    database: D,
+}
+
+/// A key-value store with no size limit for values.
+#[derive(Clone)]
+pub struct ValueSplittingStore<S> {
+    /// The underlying store.
+    store: S,
+}
 
 /// The composed error type built from the inner error type.
 #[derive(Error, Debug)]
@@ -51,32 +69,28 @@ impl<E: KeyValueStoreError + 'static> KeyValueStoreError for ValueSplittingError
     const BACKEND: &'static str = "value splitting";
 }
 
-/// A key-value store with no size limit for values.
-///
-/// It wraps a key-value store, potentially _with_ a size limit, and automatically
-/// splits up large values into smaller ones. A single logical key-value pair is
-/// stored as multiple smaller key-value pairs in the wrapped store.
-/// See the `README.md` for additional details.
-#[derive(Clone)]
-pub struct ValueSplittingStore<K> {
-    /// The underlying store of the transformed store.
-    store: K,
+impl<S> WithError for ValueSplittingDatabase<S>
+where
+    S: WithError,
+    S::Error: 'static,
+{
+    type Error = ValueSplittingError<S::Error>;
 }
 
-impl<K> WithError for ValueSplittingStore<K>
+impl<D> WithError for ValueSplittingStore<D>
 where
-    K: WithError,
-    K::Error: 'static,
+    D: WithError,
+    D::Error: 'static,
 {
-    type Error = ValueSplittingError<K::Error>;
+    type Error = ValueSplittingError<D::Error>;
 }
 
-impl<K> ReadableKeyValueStore for ValueSplittingStore<K>
+impl<S> ReadableKeyValueStore for ValueSplittingStore<S>
 where
-    K: ReadableKeyValueStore,
-    K::Error: 'static,
+    S: ReadableKeyValueStore,
+    S::Error: 'static,
 {
-    const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
+    const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -274,76 +288,83 @@ where
     }
 }
 
-impl<K> AdminKeyValueStore for ValueSplittingStore<K>
+impl<D> KeyValueDatabase for ValueSplittingDatabase<D>
 where
-    K: AdminKeyValueStore,
-    K::Error: 'static,
+    D: KeyValueDatabase,
+    D::Error: 'static,
 {
-    type Config = K::Config;
+    type Config = D::Config;
+
+    type Store = ValueSplittingStore<D::Store>;
 
     fn get_name() -> String {
-        format!("value splitting {}", K::get_name())
+        format!("value splitting {}", D::get_name())
     }
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
-        let store = K::connect(config, namespace).await?;
-        Ok(Self { store })
+        let database = D::connect(config, namespace).await?;
+        Ok(Self { database })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.open_exclusive(root_key)?;
-        Ok(Self { store })
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_shared(root_key)?;
+        Ok(ValueSplittingStore { store })
+    }
+
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_exclusive(root_key)?;
+        Ok(ValueSplittingStore { store })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        Ok(K::list_all(config).await?)
+        Ok(D::list_all(config).await?)
     }
 
     async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        Ok(K::list_root_keys(config, namespace).await?)
+        Ok(D::list_root_keys(config, namespace).await?)
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
-        Ok(K::delete_all(config).await?)
+        Ok(D::delete_all(config).await?)
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        Ok(K::exists(config, namespace).await?)
+        Ok(D::exists(config, namespace).await?)
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        Ok(K::create(config, namespace).await?)
+        Ok(D::create(config, namespace).await?)
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        Ok(K::delete(config, namespace).await?)
+        Ok(D::delete(config, namespace).await?)
     }
 }
 
 #[cfg(with_testing)]
-impl<K> TestKeyValueStore for ValueSplittingStore<K>
+impl<D> TestKeyValueDatabase for ValueSplittingDatabase<D>
 where
-    K: TestKeyValueStore,
-    K::Error: 'static,
+    D: TestKeyValueDatabase,
+    D::Error: 'static,
 {
-    async fn new_test_config() -> Result<K::Config, Self::Error> {
-        Ok(K::new_test_config().await?)
+    async fn new_test_config() -> Result<D::Config, Self::Error> {
+        Ok(D::new_test_config().await?)
     }
 }
 
-impl<K> ValueSplittingStore<K>
+impl<D> ValueSplittingStore<D>
 where
-    K: WithError,
+    D: WithError,
 {
     /// Creates a new store that deals with big values from one that does not.
-    pub fn new(store: K) -> Self {
+    pub fn new(store: D) -> Self {
         ValueSplittingStore { store }
     }
 
-    fn get_segment_key(key: &[u8], index: u32) -> Result<Vec<u8>, ValueSplittingError<K::Error>> {
+    fn get_segment_key(key: &[u8], index: u32) -> Result<Vec<u8>, ValueSplittingError<D::Error>> {
         let mut big_key_segment = key.to_vec();
         let mut bytes = bcs::to_bytes(&index)?;
         bytes.reverse();
@@ -354,7 +375,7 @@ where
     fn get_initial_count_first_chunk(
         count: u32,
         first_chunk: &[u8],
-    ) -> Result<Vec<u8>, ValueSplittingError<K::Error>> {
+    ) -> Result<Vec<u8>, ValueSplittingError<D::Error>> {
         let mut bytes = bcs::to_bytes(&count)?;
         bytes.reverse();
         let mut value_ext = Vec::new();
@@ -363,7 +384,7 @@ where
         Ok(value_ext)
     }
 
-    fn read_count_from_value(value: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
+    fn read_count_from_value(value: &[u8]) -> Result<u32, ValueSplittingError<D::Error>> {
         if value.len() < 4 {
             return Err(ValueSplittingError::NoCountAvailable);
         }
@@ -372,7 +393,7 @@ where
         Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
 
-    fn read_index_from_key(key: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
+    fn read_index_from_key(key: &[u8]) -> Result<u32, ValueSplittingError<D::Error>> {
         let len = key.len();
         if len < 4 {
             return Err(ValueSplittingError::TooShortKey);
@@ -387,7 +408,7 @@ where
 #[derive(Clone)]
 #[cfg(with_testing)]
 pub struct LimitedTestMemoryStore {
-    store: MemoryStore,
+    inner: MemoryStore,
 }
 
 #[cfg(with_testing)]
@@ -407,40 +428,40 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
     fn max_stream_queries(&self) -> usize {
-        TEST_MEMORY_MAX_STREAM_QUERIES
+        self.inner.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
-        self.store.read_value_bytes(key).await
+        self.inner.read_value_bytes(key).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
-        self.store.contains_key(key).await
+        self.inner.contains_key(key).await
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, MemoryStoreError> {
-        self.store.contains_keys(keys).await
+        self.inner.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
-        self.store.read_multi_values_bytes(keys).await
+        self.inner.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
-        self.store.find_keys_by_prefix(key_prefix).await
+        self.inner.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
-        self.store.find_key_values_by_prefix(key_prefix).await
+        self.inner.find_key_values_by_prefix(key_prefix).await
     }
 }
 
@@ -454,11 +475,11 @@ impl WritableKeyValueStore for LimitedTestMemoryStore {
         if !batch.check_value_size(Self::MAX_VALUE_SIZE) {
             panic!("The batch size is not adequate for this test");
         }
-        self.store.write_batch(batch).await
+        self.inner.write_batch(batch).await
     }
 
     async fn clear_journal(&self) -> Result<(), MemoryStoreError> {
-        self.store.clear_journal().await
+        self.inner.clear_journal().await
     }
 }
 
@@ -466,10 +487,8 @@ impl WritableKeyValueStore for LimitedTestMemoryStore {
 impl LimitedTestMemoryStore {
     /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
-        let namespace = generate_test_namespace();
-        let store =
-            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap();
-        LimitedTestMemoryStore { store }
+        let inner = MemoryStore::new_for_testing();
+        LimitedTestMemoryStore { inner }
     }
 }
 

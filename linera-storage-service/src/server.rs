@@ -7,17 +7,16 @@ use async_lock::RwLock;
 use linera_storage_service::common::{KeyPrefix, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
-    memory::MemoryStore,
-    store::{ReadableKeyValueStore, WritableKeyValueStore},
+    memory::{MemoryDatabase, MemoryStoreConfig},
+    store::{KeyValueDatabase, ReadableKeyValueStore, WritableKeyValueStore},
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
     lru_caching::StorageCacheConfig,
     rocks_db::{
-        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
+        PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
     },
-    store::AdminKeyValueStore as _,
 };
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
@@ -40,10 +39,10 @@ pub mod key_value_store {
 }
 
 enum LocalStore {
-    Memory(MemoryStore),
+    Memory(<MemoryDatabase as KeyValueDatabase>::Store),
     /// The RocksDB key value store
     #[cfg(with_rocksdb)]
-    RocksDb(RocksDbStore),
+    RocksDb(<RocksDbDatabase as KeyValueDatabase>::Store),
 }
 
 #[derive(Default)]
@@ -629,7 +628,14 @@ async fn main() {
             endpoint,
             max_stream_queries,
         } => {
-            let store = MemoryStore::new(max_stream_queries, &namespace).unwrap();
+            let config = MemoryStoreConfig {
+                max_stream_queries,
+                kill_on_drop: false,
+            };
+            let database = MemoryDatabase::maybe_create_and_connect(&config, &namespace)
+                .await
+                .unwrap();
+            let store = database.open_shared(&[]).unwrap();
             let store = LocalStore::Memory(store);
             (store, endpoint)
         }
@@ -661,9 +667,10 @@ async fn main() {
                 inner_config,
                 storage_cache_config,
             };
-            let store = RocksDbStore::maybe_create_and_connect(&config, &namespace)
+            let database = RocksDbDatabase::maybe_create_and_connect(&config, &namespace)
                 .await
                 .expect("store");
+            let store = database.open_shared(&[]).expect("Failed to open store");
             let store = LocalStore::RocksDb(store);
             (store, endpoint)
         }

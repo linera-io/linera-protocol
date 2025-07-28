@@ -39,16 +39,19 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::metering::MeteredStore;
+use crate::metering::MeteredDatabase;
 #[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
+use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::UnorderedBatch,
     common::{get_uleb128_size, get_upper_bound_option},
-    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingConfig, LruCachingStore},
-    store::{AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError},
-    value_splitting::{ValueSplittingError, ValueSplittingStore},
+    journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
+    lru_caching::{LruCachingConfig, LruCachingDatabase},
+    store::{
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError,
+    },
+    value_splitting::{ValueSplittingDatabase, ValueSplittingError},
     FutureSyncExt as _,
 };
 
@@ -526,6 +529,18 @@ pub struct ScyllaDbStoreInternal {
     root_key: Vec<u8>,
 }
 
+/// Database-level connection to ScyllaDB for managing namespaces and partitions.
+#[derive(Clone)]
+pub struct ScyllaDbDatabaseInternal {
+    store: Arc<ScyllaDbClient>,
+    semaphore: Option<Arc<Semaphore>>,
+    max_stream_queries: usize,
+}
+
+impl WithError for ScyllaDbDatabaseInternal {
+    type Error = ScyllaDbStoreInternalError;
+}
+
 /// The error type for [`ScyllaDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum ScyllaDbStoreInternalError {
@@ -724,8 +739,9 @@ pub struct ScyllaDbStoreInternalConfig {
     pub replication_factor: u32,
 }
 
-impl AdminKeyValueStore for ScyllaDbStoreInternal {
+impl KeyValueDatabase for ScyllaDbDatabaseInternal {
     type Config = ScyllaDbStoreInternalConfig;
+    type Store = ScyllaDbStoreInternal;
 
     fn get_name() -> String {
         "scylladb internal".to_string()
@@ -743,8 +759,19 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.max_stream_queries;
-        let root_key = get_big_root_key(&[]);
         Ok(Self {
+            store,
+            semaphore,
+            max_stream_queries,
+        })
+    }
+
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
+        let store = self.store.clone();
+        let semaphore = self.semaphore.clone();
+        let max_stream_queries = self.max_stream_queries;
+        let root_key = get_big_root_key(root_key);
+        Ok(ScyllaDbStoreInternal {
             store,
             semaphore,
             max_stream_queries,
@@ -752,17 +779,8 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, ScyllaDbStoreInternalError> {
-        let store = self.store.clone();
-        let semaphore = self.semaphore.clone();
-        let max_stream_queries = self.max_stream_queries;
-        let root_key = get_big_root_key(root_key);
-        Ok(Self {
-            store,
-            semaphore,
-            max_stream_queries,
-            root_key,
-        })
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreInternalError> {
@@ -960,7 +978,9 @@ impl ScyllaDbStoreInternal {
             Some(count) => Some(count.acquire().await),
         }
     }
+}
 
+impl ScyllaDbDatabaseInternal {
     fn check_namespace(namespace: &str) -> Result<(), ScyllaDbStoreInternalError> {
         if !namespace.is_empty()
             && namespace.len() <= 48
@@ -975,7 +995,7 @@ impl ScyllaDbStoreInternal {
 }
 
 #[cfg(with_testing)]
-impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
+impl TestKeyValueDatabase for JournalingKeyValueDatabase<ScyllaDbDatabaseInternal> {
     async fn new_test_config() -> Result<ScyllaDbStoreInternalConfig, ScyllaDbStoreInternalError> {
         // TODO(#4114): Read the port from an environment variable.
         let uri = "localhost:9042".to_string();
@@ -988,23 +1008,26 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
     }
 }
 
-/// The `ScyllaDbStore` composed type with metrics
+/// The `ScyllaDbDatabase` composed type with metrics
 #[cfg(with_metrics)]
-pub type ScyllaDbStore = MeteredStore<
-    LruCachingStore<
-        MeteredStore<
-            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>,
+pub type ScyllaDbDatabase = MeteredDatabase<
+    LruCachingDatabase<
+        MeteredDatabase<
+            ValueSplittingDatabase<
+                MeteredDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>,
+            >,
         >,
     >,
 >;
 
-/// The `ScyllaDbStore` composed type
+/// The `ScyllaDbDatabase` composed type
 #[cfg(not(with_metrics))]
-pub type ScyllaDbStore =
-    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
+pub type ScyllaDbDatabase = LruCachingDatabase<
+    ValueSplittingDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>,
+>;
 
 /// The `ScyllaDbStoreConfig` input type
 pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
 
-/// The combined error type for the `ScyllaDbStore`.
+/// The combined error type for the `ScyllaDbDatabase`.
 pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;

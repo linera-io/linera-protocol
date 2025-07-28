@@ -329,7 +329,7 @@ type ChainStateExtendedView {
 	"""
 	The incomplete sets of blobs for upcoming proposals.
 	"""
-	pendingProposedBlobs: ReentrantCollectionView_AccountOwner_PendingBlobsView_1774202114!
+	pendingProposedBlobs: ReentrantCollectionView_AccountOwner_PendingBlobsView_d58d342d!
 	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -346,7 +346,7 @@ type ChainStateExtendedView {
 	"""
 	Mailboxes used to receive messages indexed by their origin.
 	"""
-	inboxes: ReentrantCollectionView_ChainId_InboxStateView_1502311823!
+	inboxes: ReentrantCollectionView_ChainId_InboxStateView_466640be!
 	"""
 	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
@@ -366,7 +366,7 @@ type ChainStateExtendedView {
 	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
-	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_1536326071!
+	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_06c2376d!
 	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
@@ -466,7 +466,7 @@ type Entry_AccountOwner_Amount_aaf96548 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_AccountOwner_PendingBlobsView_2740f04d {
+type Entry_AccountOwner_PendingBlobsView_5d91edcf {
 	key: AccountOwner!
 	value: PendingBlobsView!
 }
@@ -506,7 +506,7 @@ type Entry_ChainId_BlockHeight_2fe78645 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChainId_InboxStateView_685a16a3 {
+type Entry_ChainId_InboxStateView_a9e4d828 {
 	key: ChainId!
 	value: InboxStateView!
 }
@@ -514,7 +514,7 @@ type Entry_ChainId_InboxStateView_685a16a3 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChainId_OutboxStateView_258a4684 {
+type Entry_ChainId_OutboxStateView_855dcf53 {
 	key: ChainId!
 	value: OutboxStateView!
 }
@@ -1015,22 +1015,22 @@ The recipient of a transfer
 """
 scalar Recipient
 
-type ReentrantCollectionView_AccountOwner_PendingBlobsView_1774202114 {
+type ReentrantCollectionView_AccountOwner_PendingBlobsView_d58d342d {
 	keys: [AccountOwner!]!
-	entry(key: AccountOwner!): Entry_AccountOwner_PendingBlobsView_2740f04d!
-	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_PendingBlobsView_2740f04d!]!
+	entry(key: AccountOwner!): Entry_AccountOwner_PendingBlobsView_5d91edcf!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_PendingBlobsView_5d91edcf!]!
 }
 
-type ReentrantCollectionView_ChainId_InboxStateView_1502311823 {
+type ReentrantCollectionView_ChainId_InboxStateView_466640be {
 	keys: [ChainId!]!
-	entry(key: ChainId!): Entry_ChainId_InboxStateView_685a16a3!
-	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_InboxStateView_685a16a3!]!
+	entry(key: ChainId!): Entry_ChainId_InboxStateView_a9e4d828!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_InboxStateView_a9e4d828!]!
 }
 
-type ReentrantCollectionView_ChainId_OutboxStateView_1536326071 {
+type ReentrantCollectionView_ChainId_OutboxStateView_06c2376d {
 	keys: [ChainId!]!
-	entry(key: ChainId!): Entry_ChainId_OutboxStateView_258a4684!
-	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_OutboxStateView_258a4684!]!
+	entry(key: ChainId!): Entry_ChainId_OutboxStateView_855dcf53!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_OutboxStateView_855dcf53!]!
 }
 
 """

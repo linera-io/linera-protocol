@@ -22,7 +22,9 @@ use linera_execution::{
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     context::ViewContext,
-    store::{AdminKeyValueStore, KeyValueStore},
+    store::{
+        KeyValueDatabase, KeyValueStore, ReadableKeyValueStore as _, WritableKeyValueStore as _,
+    },
     views::View,
     ViewError,
 };
@@ -30,7 +32,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
-    linera_views::{random::generate_test_namespace, store::TestKeyValueStore},
+    linera_views::{random::generate_test_namespace, store::TestKeyValueDatabase},
     std::{cmp::Reverse, collections::BTreeMap},
 };
 
@@ -296,8 +298,8 @@ impl Batch {
 
 /// Main implementation of the [`Storage`] trait.
 #[derive(Clone)]
-pub struct DbStorage<Store, Clock = WallClock> {
-    store: Arc<Store>,
+pub struct DbStorage<Database, Clock = WallClock> {
+    database: Arc<Database>,
     clock: Clock,
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
@@ -528,15 +530,16 @@ impl TestClock {
 
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
-impl<Store, C> Storage for DbStorage<Store, C>
+impl<Database, C> Storage for DbStorage<Database, C>
 where
-    Store: KeyValueStore + Clone + Send + Sync + 'static,
+    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
+    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    Store::Error: Send + Sync,
+    Database::Error: Send + Sync,
 {
-    type Context = ViewContext<ChainRuntimeContext<Self>, Store>;
+    type Context = ViewContext<ChainRuntimeContext<Self>, Database::Store>;
     type Clock = C;
-    type BlockExporterContext = ViewContext<u32, Store>;
+    type BlockExporterContext = ViewContext<u32, Database::Store>;
 
     fn clock(&self) -> &C {
         &self.clock
@@ -556,26 +559,28 @@ where
             user_services: self.user_services.clone(),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let store = self.store.open_exclusive(&root_key)?;
+        let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let test = self.store.contains_key(&blob_key).await?;
+        let test = store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
     }
 
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let mut keys = Vec::new();
         for blob_id in blob_ids {
             let key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
             keys.push(key);
         }
-        let results = self.store.contains_keys(keys).await?;
+        let results = store.contains_keys(keys).await?;
         let mut missing_blobs = Vec::new();
         for (blob_id, result) in blob_ids.iter().zip(results) {
             if !result {
@@ -588,8 +593,9 @@ where
     }
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let test = self.store.contains_key(&blob_key).await?;
+        let test = store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -601,8 +607,9 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
-        let value = self.store.read_value(&block_key).await?;
+        let value = store.read_value(&block_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
@@ -611,8 +618,9 @@ where
     }
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
+        let maybe_blob_bytes = store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
@@ -626,7 +634,8 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
-        let maybe_blob_bytes = self.store.read_multi_values_bytes(blob_keys).await?;
+        let store = self.database.open_shared(&[])?;
+        let maybe_blob_bytes = store.read_multi_values_bytes(blob_keys).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER
             .with_label_values(&[])
@@ -642,8 +651,9 @@ where
     }
 
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
+        let blob_state = store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -662,8 +672,8 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
             .collect::<Result<_, _>>()?;
-        let blob_states = self
-            .store
+        let store = self.database.open_shared(&[])?;
+        let blob_states = store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
         #[cfg(with_metrics)]
@@ -692,8 +702,8 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
             .collect::<Result<_, _>>()?;
-        let maybe_blob_states = self
-            .store
+        let store = self.database.open_shared(&[])?;
+        let maybe_blob_states = store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
         let mut batch = Batch::new();
@@ -724,7 +734,8 @@ where
             .iter()
             .map(|blob| bcs::to_bytes(&BaseKey::BlobState(blob.id())))
             .collect::<Result<_, _>>()?;
-        let blob_states = self.store.contains_keys(blob_state_keys).await?;
+        let store = self.database.open_shared(&[])?;
+        let blob_states = store.contains_keys(blob_state_keys).await?;
         let mut batch = Batch::new();
         for (blob, has_state) in blobs.iter().zip(&blob_states) {
             if *has_state {
@@ -761,7 +772,8 @@ where
 
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let keys = Self::get_keys_for_certificates(&[hash])?;
-        let results = self.store.contains_keys(keys).await?;
+        let store = self.database.open_shared(&[])?;
+        let results = store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_CERTIFICATE_COUNTER
             .with_label_values(&[])
@@ -773,8 +785,9 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let keys = Self::get_keys_for_certificates(&[hash])?;
-        let values = self.store.read_multi_values_bytes(keys).await;
+        let values = store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
             metrics::READ_CERTIFICATE_COUNTER
@@ -794,7 +807,8 @@ where
             return Ok(Vec::new());
         }
         let keys = Self::get_keys_for_certificates(&hashes)?;
-        let values = self.store.read_multi_values_bytes(keys).await;
+        let store = self.database.open_shared(&[])?;
+        let values = store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
             metrics::READ_CERTIFICATES_COUNTER
@@ -811,16 +825,18 @@ where
     }
 
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
-        let event = self.store.read_value_bytes(&event_key).await?;
+        let event = store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(event)
     }
 
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
-        let exists = self.store.contains_key(&event_key).await?;
+        let exists = store.contains_key(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(exists)
@@ -837,7 +853,8 @@ where
         prefix.extend(bcs::to_bytes(stream_id).unwrap());
         let mut keys = Vec::new();
         let mut indices = Vec::new();
-        for short_key in self.store.find_keys_by_prefix(&prefix).await? {
+        let store = self.database.open_shared(&[])?;
+        for short_key in store.find_keys_by_prefix(&prefix).await? {
             let index = bcs::from_bytes::<u32>(&short_key)?;
             if index >= start_index {
                 let mut key = prefix.clone();
@@ -846,7 +863,7 @@ where
                 indices.push(index);
             }
         }
-        let values = self.store.read_multi_values_bytes(keys).await?;
+        let values = store.read_multi_values_bytes(keys).await?;
         let mut returned_values = Vec::new();
         for (index, value) in indices.into_iter().zip(values) {
             let event = value.unwrap();
@@ -867,8 +884,9 @@ where
     }
 
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        let store = self.database.open_shared(&[])?;
         let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
-        let maybe_value = self.store.read_value(&key).await?;
+        let maybe_value = store.read_value(&key).await?;
         #[cfg(with_metrics)]
         metrics::READ_NETWORK_DESCRIPTION
             .with_label_values(&[])
@@ -895,16 +913,17 @@ where
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
         let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
-        let store = self.store.open_exclusive(&root_key)?;
+        let store = self.database.open_exclusive(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
 }
 
-impl<Store, C> DbStorage<Store, C>
+impl<Database, C> DbStorage<Database, C>
 where
-    Store: KeyValueStore + Clone + Send + Sync + 'static,
+    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
+    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
-    Store::Error: Send + Sync,
+    Database::Error: Send + Sync,
 {
     fn get_keys_for_certificates(hashes: &[CryptoHash]) -> Result<Vec<Vec<u8>>, ViewError> {
         Ok(hashes
@@ -936,7 +955,11 @@ where
         Ok(Some(certificate))
     }
 
-    async fn write_entry(store: &Store, key: Vec<u8>, bytes: Vec<u8>) -> Result<(), ViewError> {
+    async fn write_entry(
+        store: &Database::Store,
+        key: Vec<u8>,
+        bytes: Vec<u8>,
+    ) -> Result<(), ViewError> {
         let mut batch = linera_views::batch::Batch::new();
         batch.put_key_value_bytes(key, bytes);
         store.write_batch(batch).await?;
@@ -949,16 +972,18 @@ where
         }
         let mut futures = Vec::new();
         for (key, bytes) in batch.key_value_bytes.into_iter() {
-            let store = self.store.clone();
+            let store = self.database.open_shared(&[])?;
             futures.push(async move { Self::write_entry(&store, key, bytes).await });
         }
         futures::future::try_join_all(futures).await?;
         Ok(())
     }
+}
 
-    fn new(store: Store, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
+impl<Database, C> DbStorage<Database, C> {
+    fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
         Self {
-            store: Arc::new(store),
+            database: Arc::new(database),
             clock,
             wasm_runtime,
             user_contracts: Arc::new(DashMap::new()),
@@ -968,35 +993,37 @@ where
     }
 }
 
-impl<Store> DbStorage<Store, WallClock>
+impl<Database> DbStorage<Database, WallClock>
 where
-    Store: KeyValueStore + Clone + Send + Sync + 'static,
-    Store::Error: Send + Sync,
+    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
+    Database::Error: Send + Sync,
+    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
 {
     pub async fn maybe_create_and_connect(
-        config: &Store::Config,
+        config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Store::Error> {
-        let store = Store::maybe_create_and_connect(config, namespace).await?;
-        Ok(Self::new(store, wasm_runtime, WallClock))
+    ) -> Result<Self, Database::Error> {
+        let database = Database::maybe_create_and_connect(config, namespace).await?;
+        Ok(Self::new(database, wasm_runtime, WallClock))
     }
 
     pub async fn connect(
-        config: &Store::Config,
+        config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, Store::Error> {
-        let store = Store::connect(config, namespace).await?;
-        Ok(Self::new(store, wasm_runtime, WallClock))
+    ) -> Result<Self, Database::Error> {
+        let database = Database::connect(config, namespace).await?;
+        Ok(Self::new(database, wasm_runtime, WallClock))
     }
 
     /// Lists the blob IDs of the storage.
     pub async fn list_blob_ids(
-        config: &Store::Config,
+        config: &Database::Config,
         namespace: &str,
     ) -> Result<Vec<BlobId>, ViewError> {
-        let store = Store::maybe_create_and_connect(config, namespace).await?;
+        let database = Database::maybe_create_and_connect(config, namespace).await?;
+        let store = database.open_shared(&[])?;
         let prefix = &[INDEX_BLOB_ID];
         let keys = store.find_keys_by_prefix(prefix).await?;
         let mut blob_ids = Vec::new();
@@ -1009,17 +1036,17 @@ where
     }
 }
 
-impl<Store> DbStorage<Store, WallClock>
+impl<Database> DbStorage<Database, WallClock>
 where
-    Store: AdminKeyValueStore + Clone + Send + Sync + 'static,
-    Store::Error: Send + Sync,
+    Database: KeyValueDatabase + Clone + Send + Sync + 'static,
+    Database::Error: Send + Sync,
 {
     /// Lists the chain IDs of the storage.
     pub async fn list_chain_ids(
-        config: &Store::Config,
+        config: &Database::Config,
         namespace: &str,
     ) -> Result<Vec<ChainId>, ViewError> {
-        let root_keys = Store::list_root_keys(config, namespace).await?;
+        let root_keys = Database::list_root_keys(config, namespace).await?;
         let mut chain_ids = Vec::new();
         for root_key in root_keys {
             if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == INDEX_CHAIN_ID {
@@ -1033,15 +1060,16 @@ where
 }
 
 #[cfg(with_testing)]
-impl<Store> DbStorage<Store, TestClock>
+impl<Database> DbStorage<Database, TestClock>
 where
-    Store: TestKeyValueStore + Clone + Send + Sync + 'static,
-    Store::Error: Send + Sync,
+    Database: TestKeyValueDatabase + Clone + Send + Sync + 'static,
+    Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
+    Database::Error: Send + Sync,
 {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let config = Store::new_test_config().await.unwrap();
+        let config = Database::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
-        DbStorage::<Store, TestClock>::new_for_testing(
+        DbStorage::<Database, TestClock>::new_for_testing(
             config,
             &namespace,
             wasm_runtime,
@@ -1052,12 +1080,12 @@ where
     }
 
     pub async fn new_for_testing(
-        config: Store::Config,
+        config: Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, Store::Error> {
-        let store = Store::recreate_and_connect(&config, namespace).await?;
-        Ok(Self::new(store, wasm_runtime, clock))
+    ) -> Result<Self, Database::Error> {
+        let database = Database::recreate_and_connect(&config, namespace).await?;
+        Ok(Self::new(database, wasm_runtime, clock))
     }
 }

@@ -11,13 +11,15 @@ use std::{
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 
+#[cfg(with_testing)]
+use crate::memory::MemoryDatabase;
+#[cfg(with_testing)]
+use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
-    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
-#[cfg(with_testing)]
-use crate::{memory::MemoryStore, store::TestKeyValueStore};
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -63,7 +65,7 @@ mod metrics {
     });
 }
 
-/// The parametrization of the cache
+/// The parametrization of the cache.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StorageCacheConfig {
     /// The maximum size of the cache, in bytes (keys size + value sizes)
@@ -105,7 +107,7 @@ impl CacheEntry {
 struct LruPrefixCache {
     map: BTreeMap<Vec<u8>, CacheEntry>,
     queue: LinkedHashMap<Vec<u8>, usize, RandomState>,
-    storage_cache_config: StorageCacheConfig,
+    config: StorageCacheConfig,
     total_size: usize,
     /// Whether we have exclusive R/W access to the keys under the root key of the store.
     has_exclusive_access: bool,
@@ -113,20 +115,20 @@ struct LruPrefixCache {
 
 impl LruPrefixCache {
     /// Creates an `LruPrefixCache`.
-    pub fn new(storage_cache_config: StorageCacheConfig) -> Self {
+    pub fn new(config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
         Self {
             map: BTreeMap::new(),
             queue: LinkedHashMap::new(),
-            storage_cache_config,
+            config,
             total_size: 0,
-            has_exclusive_access: false,
+            has_exclusive_access,
         }
     }
 
     /// Trim the cache so that it fits within the constraints.
     fn trim_cache(&mut self) {
-        while self.total_size > self.storage_cache_config.max_cache_size
-            || self.queue.len() > self.storage_cache_config.max_cache_entries
+        while self.total_size > self.config.max_cache_size
+            || self.queue.len() > self.config.max_cache_entries
         {
             let Some((key, key_value_size)) = self.queue.pop_front() else {
                 break;
@@ -140,7 +142,7 @@ impl LruPrefixCache {
     pub fn insert(&mut self, key: Vec<u8>, cache_entry: CacheEntry) {
         let key_value_size = key.len() + cache_entry.size();
         if (matches!(cache_entry, CacheEntry::DoesNotExist) && !self.has_exclusive_access)
-            || key_value_size > self.storage_cache_config.max_entry_size
+            || key_value_size > self.config.max_entry_size
         {
             // Just forget about the entry.
             if let Some(old_key_value_size) = self.queue.remove(&key) {
@@ -246,20 +248,36 @@ impl LruPrefixCache {
     }
 }
 
-/// We take a store, a maximum size and build a LRU-based system.
+/// A key-value database with added LRU caching.
 #[derive(Clone)]
-pub struct LruCachingStore<K> {
+pub struct LruCachingDatabase<D> {
     /// The inner store that is called by the LRU cache one
-    store: K,
+    database: D,
+    /// The configuration.
+    config: StorageCacheConfig,
+}
+
+/// A key-value store with added LRU caching.
+#[derive(Clone)]
+pub struct LruCachingStore<S> {
+    /// The inner store that is called by the LRU cache one
+    store: S,
     /// The LRU cache of values.
     cache: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
-impl<K> WithError for LruCachingStore<K>
+impl<D> WithError for LruCachingDatabase<D>
 where
-    K: WithError,
+    D: WithError,
 {
-    type Error = K::Error;
+    type Error = D::Error;
+}
+
+impl<S> WithError for LruCachingStore<S>
+where
+    S: WithError,
+{
+    type Error = S::Error;
 }
 
 impl<K> ReadableKeyValueStore for LruCachingStore<K>
@@ -467,66 +485,102 @@ pub struct LruCachingConfig<C> {
     pub storage_cache_config: StorageCacheConfig,
 }
 
-impl<K> AdminKeyValueStore for LruCachingStore<K>
+impl<D> KeyValueDatabase for LruCachingDatabase<D>
 where
-    K: AdminKeyValueStore,
+    D: KeyValueDatabase,
 {
-    type Config = LruCachingConfig<K::Config>;
+    type Config = LruCachingConfig<D::Config>;
+
+    type Store = LruCachingStore<D::Store>;
 
     fn get_name() -> String {
-        format!("lru caching {}", K::get_name())
+        format!("lru caching {}", D::get_name())
     }
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
-        let store = K::connect(&config.inner_config, namespace).await?;
-        Ok(LruCachingStore::new(
-            store,
-            config.storage_cache_config.clone(),
-        ))
+        let database = D::connect(&config.inner_config, namespace).await?;
+        Ok(LruCachingDatabase {
+            database,
+            config: config.storage_cache_config.clone(),
+        })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.open_exclusive(root_key)?;
-        let store = LruCachingStore::new(store, self.storage_cache_config());
-        store.enable_exclusive_access();
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_shared(root_key)?;
+        let store = LruCachingStore::new(
+            store,
+            self.config.clone(),
+            /* has_exclusive_access */ false,
+        );
+        Ok(store)
+    }
+
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_exclusive(root_key)?;
+        let store = LruCachingStore::new(
+            store,
+            self.config.clone(),
+            /* has_exclusive_access */ true,
+        );
         Ok(store)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        K::list_all(&config.inner_config).await
+        D::list_all(&config.inner_config).await
     }
 
     async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        K::list_root_keys(&config.inner_config, namespace).await
+        D::list_root_keys(&config.inner_config, namespace).await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
-        K::delete_all(&config.inner_config).await
+        D::delete_all(&config.inner_config).await
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        K::exists(&config.inner_config, namespace).await
+        D::exists(&config.inner_config, namespace).await
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        K::create(&config.inner_config, namespace).await
+        D::create(&config.inner_config, namespace).await
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        K::delete(&config.inner_config, namespace).await
+        D::delete(&config.inner_config, namespace).await
     }
 }
 
+impl<S> LruCachingStore<S> {
+    /// Creates a new key-value store that provides LRU caching at top of the given store.
+    pub fn new(store: S, config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
+        let cache = {
+            if config.max_cache_entries == 0 {
+                None
+            } else {
+                Some(Arc::new(Mutex::new(LruPrefixCache::new(
+                    config,
+                    has_exclusive_access,
+                ))))
+            }
+        };
+        Self { store, cache }
+    }
+}
+
+/// A memory darabase with caching.
 #[cfg(with_testing)]
-impl<K> TestKeyValueStore for LruCachingStore<K>
+pub type LruCachingMemoryDatabase = LruCachingDatabase<MemoryDatabase>;
+
+#[cfg(with_testing)]
+impl<D> TestKeyValueDatabase for LruCachingDatabase<D>
 where
-    K: TestKeyValueStore,
+    D: TestKeyValueDatabase,
 {
-    async fn new_test_config() -> Result<LruCachingConfig<K::Config>, K::Error> {
-        let inner_config = K::new_test_config().await?;
+    async fn new_test_config() -> Result<LruCachingConfig<D::Config>, D::Error> {
+        let inner_config = D::new_test_config().await?;
         let storage_cache_config = DEFAULT_STORAGE_CACHE_CONFIG;
         Ok(LruCachingConfig {
             inner_config,
@@ -534,46 +588,3 @@ where
         })
     }
 }
-
-impl<K> LruCachingStore<K> {
-    /// Creates a new key-value store that provides LRU caching at top of the given store.
-    pub fn new(store: K, storage_cache_config: StorageCacheConfig) -> Self {
-        let cache = {
-            if storage_cache_config.max_cache_entries == 0 {
-                None
-            } else {
-                Some(Arc::new(Mutex::new(LruPrefixCache::new(
-                    storage_cache_config,
-                ))))
-            }
-        };
-        Self { store, cache }
-    }
-
-    /// Gets the `cache_size`.
-    pub fn storage_cache_config(&self) -> StorageCacheConfig {
-        match &self.cache {
-            None => StorageCacheConfig {
-                max_cache_size: 0,
-                max_entry_size: 0,
-                max_cache_entries: 0,
-            },
-            Some(cache) => {
-                let cache = cache.lock().unwrap();
-                cache.storage_cache_config.clone()
-            }
-        }
-    }
-
-    /// Sets the value `has_exclusive_access` to `true`, if applicable.
-    pub fn enable_exclusive_access(&self) {
-        if let Some(cache) = &self.cache {
-            let mut cache = cache.lock().unwrap();
-            cache.has_exclusive_access = true;
-        }
-    }
-}
-
-/// A memory store with caching.
-#[cfg(with_testing)]
-pub type LruCachingMemoryStore = LruCachingStore<MemoryStore>;

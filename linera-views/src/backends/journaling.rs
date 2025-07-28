@@ -19,21 +19,33 @@
 //! time the data in a block are written, the journal header is updated in the same
 //! transaction to mark the block as processed.
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use thiserror::Error;
 
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
-    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
     views::MIN_VIEW_TAG,
 };
 
-/// The tag used for the journal stuff.
-const JOURNAL_TAG: u8 = 0;
-// To prevent collisions, the tag value 0 is reserved for journals.
-// The tags used by views must be greater or equal than `MIN_VIEW_TAG`.
-sa::const_assert!(JOURNAL_TAG < MIN_VIEW_TAG);
+/// A journaling key-value database.
+#[derive(Clone)]
+pub struct JournalingKeyValueDatabase<D> {
+    database: D,
+}
+
+/// A journaling key-value store.
+#[derive(Clone)]
+pub struct JournalingKeyValueStore<S> {
+    /// The inner store.
+    store: S,
+    /// Whether we have exclusive R/W access to the keys under root key.
+    has_exclusive_access: bool,
+}
 
 /// Data type indicating that the database is not consistent
 #[derive(Error, Debug)]
@@ -45,6 +57,12 @@ pub enum JournalConsistencyError {
     #[error("Refusing to use the journal without exclusive database access to the root object.")]
     JournalRequiresExclusiveAccess,
 }
+
+/// The tag used for the journal stuff.
+const JOURNAL_TAG: u8 = 0;
+// To prevent collisions, the tag value 0 is reserved for journals.
+// The tags used by views must be greater or equal than `MIN_VIEW_TAG`.
+sa::const_assert!(JOURNAL_TAG < MIN_VIEW_TAG);
 
 #[repr(u8)]
 enum KeyTag {
@@ -61,76 +79,44 @@ fn get_journaling_key(tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
     Ok(key)
 }
 
-/// Low-level, asynchronous direct write key-value operations with simplified batch
-#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
-pub trait DirectWritableKeyValueStore: WithError {
-    /// The maximal number of items in a batch.
-    const MAX_BATCH_SIZE: usize;
-
-    /// The maximal number of bytes of a batch.
-    const MAX_BATCH_TOTAL_SIZE: usize;
-
-    /// The maximal size of values that can be stored.
-    const MAX_VALUE_SIZE: usize;
-
-    /// The batch type.
-    type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
-
-    /// Writes the batch to the database.
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error>;
-}
-
-/// Low-level, asynchronous direct read/write key-value operations with simplified batch
-pub trait DirectKeyValueStore:
-    ReadableKeyValueStore + DirectWritableKeyValueStore + AdminKeyValueStore
-{
-}
-
-impl<T> DirectKeyValueStore for T where
-    T: ReadableKeyValueStore + DirectWritableKeyValueStore + AdminKeyValueStore
-{
-}
-
 /// The header that contains the current state of the journal.
 #[derive(Serialize, Deserialize, Debug, Default)]
 struct JournalHeader {
     block_count: u32,
 }
 
-/// A journaling Key Value Store built from an inner [`DirectKeyValueStore`].
-#[derive(Clone)]
-pub struct JournalingKeyValueStore<K> {
-    /// The inner store.
-    store: K,
-    /// Whether we have exclusive R/W access to the keys under root key.
-    has_exclusive_access: bool,
-}
-
-impl<K> DeletePrefixExpander for &JournalingKeyValueStore<K>
+impl<S> DeletePrefixExpander for &JournalingKeyValueStore<S>
 where
-    K: DirectKeyValueStore,
+    S: DirectKeyValueStore,
 {
-    type Error = K::Error;
+    type Error = S::Error;
 
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 }
 
-impl<K> WithError for JournalingKeyValueStore<K>
+impl<D> WithError for JournalingKeyValueDatabase<D>
 where
-    K: WithError,
+    D: WithError,
 {
-    type Error = K::Error;
+    type Error = D::Error;
 }
 
-impl<K> ReadableKeyValueStore for JournalingKeyValueStore<K>
+impl<S> WithError for JournalingKeyValueStore<S>
 where
-    K: ReadableKeyValueStore,
-    K::Error: From<JournalConsistencyError>,
+    S: WithError,
+{
+    type Error = S::Error;
+}
+
+impl<S> ReadableKeyValueStore for JournalingKeyValueStore<S>
+where
+    S: ReadableKeyValueStore,
+    S::Error: From<JournalConsistencyError>,
 {
     /// The size constant do not change
-    const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
+    const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
 
     /// The read stuff does not change
     fn max_stream_queries(&self) -> usize {
@@ -168,70 +154,76 @@ where
     }
 }
 
-impl<K> AdminKeyValueStore for JournalingKeyValueStore<K>
+impl<D> KeyValueDatabase for JournalingKeyValueDatabase<D>
 where
-    K: AdminKeyValueStore,
+    D: KeyValueDatabase,
 {
-    type Config = K::Config;
+    type Config = D::Config;
+    type Store = JournalingKeyValueStore<D::Store>;
 
     fn get_name() -> String {
-        format!("journaling {}", K::get_name())
+        format!("journaling {}", D::get_name())
     }
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
-        let store = K::connect(config, namespace).await?;
-        Ok(Self {
+        let database = D::connect(config, namespace).await?;
+        Ok(Self { database })
+    }
+
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_shared(root_key)?;
+        Ok(JournalingKeyValueStore {
             store,
             has_exclusive_access: false,
         })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.open_exclusive(root_key)?;
-        Ok(Self {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_exclusive(root_key)?;
+        Ok(JournalingKeyValueStore {
             store,
             has_exclusive_access: true,
         })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        K::list_all(config).await
+        D::list_all(config).await
     }
 
     async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        K::list_root_keys(config, namespace).await
+        D::list_root_keys(config, namespace).await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
-        K::delete_all(config).await
+        D::delete_all(config).await
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        K::exists(config, namespace).await
+        D::exists(config, namespace).await
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        K::create(config, namespace).await
+        D::create(config, namespace).await
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        K::delete(config, namespace).await
+        D::delete(config, namespace).await
     }
 }
 
-impl<K> WritableKeyValueStore for JournalingKeyValueStore<K>
+impl<S> WritableKeyValueStore for JournalingKeyValueStore<S>
 where
-    K: DirectKeyValueStore,
-    K::Error: From<JournalConsistencyError>,
+    S: DirectKeyValueStore,
+    S::Error: From<JournalConsistencyError>,
 {
     /// The size constant do not change
-    const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
+    const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        let batch = K::Batch::from_batch(self, batch).await?;
+        let batch = S::Batch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&batch) {
             self.store.write_batch(batch).await
         } else {
@@ -253,10 +245,10 @@ where
     }
 }
 
-impl<K> JournalingKeyValueStore<K>
+impl<S> JournalingKeyValueStore<S>
 where
-    K: DirectKeyValueStore,
-    K::Error: From<JournalConsistencyError>,
+    S: DirectKeyValueStore,
+    S::Error: From<JournalConsistencyError>,
 {
     /// Resolves the pending operations that were previously stored in the database
     /// journal.
@@ -268,24 +260,24 @@ where
     /// This function respects the constraints of the underlying key-value store `K` if
     /// the following conditions are met:
     ///
-    /// (1) each block contains at most `K::MAX_BATCH_SIZE - 2` operations;
+    /// (1) each block contains at most `S::MAX_BATCH_SIZE - 2` operations;
     ///
     /// (2) the total size of the all operations in a block doesn't exceed:
-    /// `K::MAX_BATCH_TOTAL_SIZE - sizeof(block_key) - sizeof(header_key) - sizeof(bcs_header)`
+    /// `S::MAX_BATCH_TOTAL_SIZE - sizeof(block_key) - sizeof(header_key) - sizeof(bcs_header)`
     ///
     /// (3) every operation in a block satisfies the constraints on individual database
-    /// operations represented by `K::MAX_KEY_SIZE` and `K::MAX_VALUE_SIZE`.
+    /// operations represented by `S::MAX_KEY_SIZE` and `S::MAX_VALUE_SIZE`.
     ///
-    /// (4) `block_key` and `header_key` don't exceed `K::MAX_KEY_SIZE` and `bcs_header`
-    /// doesn't exceed `K::MAX_VALUE_SIZE`.
-    async fn coherently_resolve_journal(&self, mut header: JournalHeader) -> Result<(), K::Error> {
+    /// (4) `block_key` and `header_key` don't exceed `S::MAX_KEY_SIZE` and `bcs_header`
+    /// doesn't exceed `S::MAX_VALUE_SIZE`.
+    async fn coherently_resolve_journal(&self, mut header: JournalHeader) -> Result<(), S::Error> {
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         while header.block_count > 0 {
             let block_key = get_journaling_key(KeyTag::Entry as u8, header.block_count - 1)?;
             // Read the batch of updates (aka. "block") previously saved in the journal.
             let mut batch = self
                 .store
-                .read_value::<K::Batch>(&block_key)
+                .read_value::<S::Batch>(&block_key)
                 .await?
                 .ok_or(JournalConsistencyError::FailureToRetrieveJournalBlock)?;
             // Execute the block and delete it from the journal atomically.
@@ -317,13 +309,13 @@ where
     /// As a result, the constraints of the underlying database are respected if the
     /// following conditions are met while a "transaction" batch is being built:
     ///
-    /// (1) The number of blocks per transaction doesn't exceed `K::MAX_BATCH_SIZE`.
-    /// But it is perfectly possible to have `K::MAX_BATCH_SIZE = usize::MAX`.
+    /// (1) The number of blocks per transaction doesn't exceed `S::MAX_BATCH_SIZE`.
+    /// But it is perfectly possible to have `S::MAX_BATCH_SIZE = usize::MAX`.
     ///
     /// (2) The total size of BCS-serialized blocks together with their corresponding keys
-    /// does not exceed `K::MAX_BATCH_TOTAL_SIZE`.
+    /// does not exceed `S::MAX_BATCH_TOTAL_SIZE`.
     ///
-    /// (3) The size of each BCS-serialized block doesn't exceed `K::MAX_VALUE_SIZE`.
+    /// (3) The size of each BCS-serialized block doesn't exceed `S::MAX_VALUE_SIZE`.
     ///
     /// (4) When processing a journal block, we have to do two other operations.
     ///   (a) removing the existing block. The cost is `key_len`.
@@ -331,38 +323,38 @@ where
     ///       or `key_len`. An upper bound is thus
     ///       `journal_len_upper_bound = key_len + header_value_len`.
     ///   Thus the following has to be taken as upper bound on the block size:
-    ///   `K::MAX_BATCH_TOTAL_SIZE - key_len - journal_len_upper_bound`.
+    ///   `S::MAX_BATCH_TOTAL_SIZE - key_len - journal_len_upper_bound`.
     ///
     /// NOTE:
     /// * Since a block must contain at least one operation and M bytes of the
     ///   serialization overhead (typically M is 2 or 3 bytes of vector sizes), condition (3)
     ///   requires that each operation in the original batch satisfies:
-    ///   `sizeof(key) + sizeof(value) + M <= K::MAX_VALUE_SIZE`
+    ///   `sizeof(key) + sizeof(value) + M <= S::MAX_VALUE_SIZE`
     ///
     /// * Similarly, a transaction must contain at least one block so it is desirable that
-    ///   the maximum size of a block insertion `1 + sizeof(block_key) + K::MAX_VALUE_SIZE`
+    ///   the maximum size of a block insertion `1 + sizeof(block_key) + S::MAX_VALUE_SIZE`
     ///   plus M bytes of overhead doesn't exceed the threshold of condition (2).
-    async fn write_journal(&self, batch: K::Batch) -> Result<JournalHeader, K::Error> {
+    async fn write_journal(&self, batch: S::Batch) -> Result<JournalHeader, S::Error> {
         let header_key = get_journaling_key(KeyTag::Journal as u8, 0)?;
         let key_len = header_key.len();
         let header_value_len = bcs::serialized_size(&JournalHeader::default())?;
         let journal_len_upper_bound = key_len + header_value_len;
         // Each block in a transaction comes with a key.
-        let max_transaction_size = K::MAX_BATCH_TOTAL_SIZE;
+        let max_transaction_size = S::MAX_BATCH_TOTAL_SIZE;
         let max_block_size = std::cmp::min(
-            K::MAX_VALUE_SIZE,
-            K::MAX_BATCH_TOTAL_SIZE - key_len - journal_len_upper_bound,
+            S::MAX_VALUE_SIZE,
+            S::MAX_BATCH_TOTAL_SIZE - key_len - journal_len_upper_bound,
         );
 
         let mut iter = batch.into_iter();
-        let mut block_batch = K::Batch::default();
+        let mut block_batch = S::Batch::default();
         let mut block_size = 0;
         let mut block_count = 0;
-        let mut transaction_batch = K::Batch::default();
+        let mut transaction_batch = S::Batch::default();
         let mut transaction_size = 0;
         while iter.write_next_value(&mut block_batch, &mut block_size)? {
             let (block_flush, transaction_flush) = {
-                if iter.is_empty() || transaction_batch.len() == K::MAX_BATCH_SIZE - 1 {
+                if iter.is_empty() || transaction_batch.len() == S::MAX_BATCH_SIZE - 1 {
                     (true, true)
                 } else {
                     let next_block_size = iter
@@ -371,7 +363,7 @@ where
                     let next_transaction_size = transaction_size + next_block_size + key_len;
                     let transaction_flush = next_transaction_size > max_transaction_size;
                     let block_flush = transaction_flush
-                        || block_batch.len() == K::MAX_BATCH_SIZE - 2
+                        || block_batch.len() == S::MAX_BATCH_SIZE - 2
                         || next_block_size > max_block_size;
                     (block_flush, transaction_flush)
                 }
@@ -379,7 +371,7 @@ where
             if block_flush {
                 block_size += block_batch.overhead_size();
                 let value = bcs::to_bytes(&block_batch)?;
-                block_batch = K::Batch::default();
+                block_batch = S::Batch::default();
                 assert_eq!(value.len(), block_size);
                 let key = get_journaling_key(KeyTag::Entry as u8, block_count)?;
                 transaction_batch.add_insert(key, value);
@@ -396,21 +388,21 @@ where
         let header = JournalHeader { block_count };
         if block_count > 0 {
             let value = bcs::to_bytes(&header)?;
-            let mut batch = K::Batch::default();
+            let mut batch = S::Batch::default();
             batch.add_insert(header_key, value);
             self.store.write_batch(batch).await?;
         }
         Ok(header)
     }
 
-    fn is_fastpath_feasible(batch: &K::Batch) -> bool {
-        batch.len() <= K::MAX_BATCH_SIZE && batch.num_bytes() <= K::MAX_BATCH_TOTAL_SIZE
+    fn is_fastpath_feasible(batch: &S::Batch) -> bool {
+        batch.len() <= S::MAX_BATCH_SIZE && batch.num_bytes() <= S::MAX_BATCH_TOTAL_SIZE
     }
 }
 
-impl<K> JournalingKeyValueStore<K> {
+impl<S> JournalingKeyValueStore<S> {
     /// Creates a new journaling store.
-    pub fn new(store: K) -> Self {
+    pub fn new(store: S) -> Self {
         Self {
             store,
             has_exclusive_access: false,

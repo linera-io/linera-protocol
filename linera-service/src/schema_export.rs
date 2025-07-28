@@ -33,7 +33,7 @@ use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
 use linera_storage::DbStorage;
 use linera_version::VersionInfo;
-use linera_views::memory::MemoryStore;
+use linera_views::memory::MemoryDatabase;
 
 #[derive(Clone)]
 struct DummyValidatorNode;
@@ -169,7 +169,7 @@ struct DummyContext;
 
 impl ClientContext for DummyContext {
     type Environment = linera_core::environment::Impl<
-        DbStorage<MemoryStore>,
+        DbStorage<MemoryDatabase>,
         DummyValidatorNodeProvider,
         linera_base::crypto::InMemorySigner,
     >;
@@ -178,7 +178,7 @@ impl ClientContext for DummyContext {
         unimplemented!()
     }
 
-    fn storage(&self) -> &DbStorage<MemoryStore> {
+    fn storage(&self) -> &DbStorage<MemoryDatabase> {
         unimplemented!()
     }
 

@@ -1,7 +1,7 @@
 <!-- cargo-rdme start -->
 
 This module provides a shared key-value store server based on the RocksDB store and the in-memory store of `linera-views`.
-The corresponding client implements the `KeyValueStore` and `AdminKeyValueStore` traits.
+The corresponding client implements the `KeyValueStore` and `KeyValueDatabase` traits.
 
 <!-- cargo-rdme end -->
 

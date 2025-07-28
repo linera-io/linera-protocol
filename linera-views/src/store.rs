@@ -5,11 +5,15 @@
 
 use std::{fmt::Debug, future::Future};
 
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 
 #[cfg(with_testing)]
 use crate::random::generate_test_namespace;
-use crate::{batch::Batch, common::from_bytes_option, ViewError};
+use crate::{
+    batch::{Batch, SimplifiedBatch},
+    common::from_bytes_option,
+    ViewError,
+};
 
 /// The error type for the key-value stores.
 pub trait KeyValueStoreError:
@@ -34,7 +38,7 @@ pub trait WithError {
     type Error: KeyValueStoreError;
 }
 
-/// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
+/// Asynchronous read key-value operations.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
@@ -94,7 +98,7 @@ pub trait ReadableKeyValueStore: WithError {
     }
 }
 
-/// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
+/// Asynchronous write key-value operations.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait WritableKeyValueStore: WithError {
     /// The maximal size of values that can be stored.
@@ -108,24 +112,53 @@ pub trait WritableKeyValueStore: WithError {
     async fn clear_journal(&self) -> Result<(), Self::Error>;
 }
 
-/// Low-level trait for the administration of stores and their namespaces.
+/// Asynchronous direct write key-value operations with simplified batch.
+///
+/// Some backend cannot implement `WritableKeyValueStore` directly and will require
+/// journaling.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
-pub trait AdminKeyValueStore: WithError + Sized {
-    /// The configuration needed to interact with a new store.
+pub trait DirectWritableKeyValueStore: WithError {
+    /// The maximal number of items in a batch.
+    const MAX_BATCH_SIZE: usize;
+
+    /// The maximal number of bytes of a batch.
+    const MAX_BATCH_TOTAL_SIZE: usize;
+
+    /// The maximal size of values that can be stored.
+    const MAX_VALUE_SIZE: usize;
+
+    /// The batch type.
+    type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
+
+    /// Writes the batch to the database.
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), Self::Error>;
+}
+
+/// The definition of a key-value database.
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
+pub trait KeyValueDatabase: WithError + Sized {
+    /// The configuration needed to interact with a new backend.
     type Config: Send + Sync;
-    /// The name of this class of stores
+
+    /// The result of opening a partition.
+    type Store;
+
+    /// The name of this database.
     fn get_name() -> String;
 
     /// Connects to an existing namespace using the given configuration.
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
 
-    /// Opens the key partition starting at `root_key` and returns a clone of the
-    /// connection to work in this partition.
+    /// Opens a shared partition starting at `root_key`. It is understood that the
+    /// partition MAY be read and written simultaneously from other clients.
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error>;
+
+    /// Opens an exclusive partition starting at `root_key`. It is assumed that the
+    /// partition WILL NOT be read and written simultaneously by other clients.
     ///
-    /// IMPORTANT: It is assumed that the returned connection is the only user of the
-    /// partition (for both read and write) and will remain so until it is ended. Future
-    /// implementations of this method may fail if this is not the case.
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
+    /// IMPORTANT: This assumption is not enforced at the moment. However, future
+    /// implementations may choose to return an error if another client is detected.
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error>;
 
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;
@@ -185,32 +218,40 @@ pub trait AdminKeyValueStore: WithError + Sized {
     }
 }
 
-/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
-pub trait RestrictedKeyValueStore: ReadableKeyValueStore + WritableKeyValueStore {}
+/// A key-value store that can perform both read and direct write operations.
+///
+/// This trait combines the capabilities of [`ReadableKeyValueStore`] and
+/// [`DirectWritableKeyValueStore`], providing a full interface for stores
+/// that can handle simplified batches directly without journaling.
+pub trait DirectKeyValueStore: ReadableKeyValueStore + DirectWritableKeyValueStore {}
 
-impl<T> RestrictedKeyValueStore for T where T: ReadableKeyValueStore + WritableKeyValueStore {}
+impl<T> DirectKeyValueStore for T where T: ReadableKeyValueStore + DirectWritableKeyValueStore {}
 
-/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
-pub trait KeyValueStore:
-    ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore
-{
-}
+/// A key-value store that can perform both read and write operations.
+///
+/// This trait combines the capabilities of [`ReadableKeyValueStore`] and
+/// [`WritableKeyValueStore`], providing a full interface for stores that
+/// can handle complex batches with journaling support.
+pub trait KeyValueStore: ReadableKeyValueStore + WritableKeyValueStore {}
 
-impl<T> KeyValueStore for T where
-    T: ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore
-{
-}
+impl<T> KeyValueStore for T where T: ReadableKeyValueStore + WritableKeyValueStore {}
 
 /// The functions needed for testing purposes
 #[cfg(with_testing)]
-pub trait TestKeyValueStore: KeyValueStore {
+pub trait TestKeyValueDatabase: KeyValueDatabase {
     /// Obtains a test config
     async fn new_test_config() -> Result<Self::Config, Self::Error>;
 
-    /// Creates a store for testing purposes
-    async fn new_test_store() -> Result<Self, Self::Error> {
+    /// Creates a database for testing purposes
+    async fn connect_test_namespace() -> Result<Self, Self::Error> {
         let config = Self::new_test_config().await?;
         let namespace = generate_test_namespace();
         Self::recreate_and_connect(&config, &namespace).await
+    }
+
+    /// Creates a store for testing purposes
+    async fn new_test_store() -> Result<Self::Store, Self::Error> {
+        let database = Self::connect_test_namespace().await?;
+        database.open_shared(&[])
     }
 }

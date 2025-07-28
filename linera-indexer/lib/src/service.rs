@@ -19,7 +19,7 @@ use linera_base::{
 use linera_chain::types::ConfirmedBlock;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
-use linera_views::store::KeyValueStore;
+use linera_views::store::{KeyValueDatabase, KeyValueStore};
 use tokio::runtime::Handle;
 use tracing::error;
 
@@ -123,14 +123,15 @@ pub struct Listener {
 
 impl Listener {
     /// Connects to the WebSocket of the service node for a particular chain
-    pub async fn listen<S>(
+    pub async fn listen<D>(
         &self,
-        indexer: &Indexer<S>,
+        indexer: &Indexer<D>,
         chain_id: ChainId,
     ) -> Result<ChainId, IndexerError>
     where
-        S: KeyValueStore + Clone + Send + Sync + 'static,
-        S::Error: Send + Sync + std::error::Error + 'static,
+        D: KeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync + std::error::Error + 'static,
     {
         let mut request = self.service.websocket().into_client_request()?;
         request.headers_mut().insert(

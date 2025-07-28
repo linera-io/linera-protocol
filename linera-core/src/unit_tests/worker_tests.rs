@@ -52,9 +52,9 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
-    memory::MemoryStore,
+    memory::MemoryDatabase,
     random::generate_test_namespace,
-    store::TestKeyValueStore as _,
+    store::TestKeyValueDatabase as _,
     views::{CryptoHashView, RootView},
 };
 use test_case::test_case;
@@ -3073,9 +3073,9 @@ where
 
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
-    let store_config = MemoryStore::new_test_config().await?;
+    let store_config = MemoryDatabase::new_test_config().await?;
     let namespace = generate_test_namespace();
-    let store = DbStorage::<MemoryStore, _>::new_for_testing(
+    let store = DbStorage::<MemoryDatabase, _>::new_for_testing(
         store_config,
         &namespace,
         None,

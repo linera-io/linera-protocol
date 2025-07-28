@@ -21,18 +21,18 @@ use tempfile::TempDir;
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::metering::MeteredStore;
+use crate::metering::MeteredDatabase;
 #[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
+use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound_option,
-    lru_caching::{LruCachingConfig, LruCachingStore},
+    lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        AdminKeyValueStore, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
-    value_splitting::{ValueSplittingError, ValueSplittingStore},
+    value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
 
 /// The prefixes being used in the system
@@ -266,6 +266,19 @@ pub struct RocksDbStoreInternal {
     root_key_written: Arc<AtomicBool>,
 }
 
+/// Database-level connection to RocksDB for managing namespaces and partitions.
+#[derive(Clone)]
+pub struct RocksDbDatabaseInternal {
+    executor: RocksDbStoreExecutor,
+    _path_with_guard: PathWithGuard,
+    max_stream_queries: usize,
+    spawn_mode: RocksDbSpawnMode,
+}
+
+impl WithError for RocksDbDatabaseInternal {
+    type Error = RocksDbStoreInternalError;
+}
+
 /// The initial configuration of the system
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RocksDbStoreInternalConfig {
@@ -277,7 +290,7 @@ pub struct RocksDbStoreInternalConfig {
     pub max_stream_queries: usize,
 }
 
-impl RocksDbStoreInternal {
+impl RocksDbDatabaseInternal {
     fn check_namespace(namespace: &str) -> Result<(), RocksDbStoreInternalError> {
         if !namespace
             .chars()
@@ -291,9 +304,26 @@ impl RocksDbStoreInternal {
     fn build(
         config: &RocksDbStoreInternalConfig,
         namespace: &str,
+    ) -> Result<RocksDbDatabaseInternal, RocksDbStoreInternalError> {
+        let start_key = ROOT_KEY_DOMAIN.to_vec();
+        // Create a store to extract its executor and configuration
+        let temp_store = RocksDbStoreInternal::build(config, namespace, start_key)?;
+        Ok(RocksDbDatabaseInternal {
+            executor: temp_store.executor,
+            _path_with_guard: temp_store._path_with_guard,
+            max_stream_queries: temp_store.max_stream_queries,
+            spawn_mode: temp_store.spawn_mode,
+        })
+    }
+}
+
+impl RocksDbStoreInternal {
+    fn build(
+        config: &RocksDbStoreInternalConfig,
+        namespace: &str,
         start_key: Vec<u8>,
     ) -> Result<RocksDbStoreInternal, RocksDbStoreInternalError> {
-        Self::check_namespace(namespace)?;
+        RocksDbDatabaseInternal::check_namespace(namespace)?;
         let mut path_buf = config.path_with_guard.path_buf.clone();
         let mut path_with_guard = config.path_with_guard.clone();
         path_buf.push(namespace);
@@ -470,8 +500,9 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
     }
 }
 
-impl AdminKeyValueStore for RocksDbStoreInternal {
+impl KeyValueDatabase for RocksDbDatabaseInternal {
     type Config = RocksDbStoreInternalConfig;
+    type Store = RocksDbStoreInternal;
 
     fn get_name() -> String {
         "rocksdb internal".to_string()
@@ -481,17 +512,25 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Self, RocksDbStoreInternalError> {
-        let start_key = ROOT_KEY_DOMAIN.to_vec();
-        RocksDbStoreInternal::build(config, namespace, start_key)
+        Self::build(config, namespace)
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreInternalError> {
-        let mut store = self.clone();
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, RocksDbStoreInternalError> {
         let mut start_key = ROOT_KEY_DOMAIN.to_vec();
         start_key.extend(root_key);
-        store.executor.start_key = start_key;
-        store.root_key_written = Arc::new(AtomicBool::new(false));
-        Ok(store)
+        let mut executor = self.executor.clone();
+        executor.start_key = start_key;
+        Ok(RocksDbStoreInternal {
+            executor,
+            _path_with_guard: self._path_with_guard.clone(),
+            max_stream_queries: self.max_stream_queries,
+            spawn_mode: self.spawn_mode,
+            root_key_written: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, RocksDbStoreInternalError> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreInternalError> {
@@ -523,7 +562,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), RocksDbStoreInternalError> {
-        let namespaces = RocksDbStoreInternal::list_all(config).await?;
+        let namespaces = Self::list_all(config).await?;
         for namespace in namespaces {
             let mut path_buf = config.path_with_guard.path_buf.clone();
             path_buf.push(&namespace);
@@ -571,7 +610,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 }
 
 #[cfg(with_testing)]
-impl TestKeyValueStore for RocksDbStoreInternal {
+impl TestKeyValueDatabase for RocksDbDatabaseInternal {
     async fn new_test_config() -> Result<RocksDbStoreInternalConfig, RocksDbStoreInternalError> {
         let path_with_guard = PathWithGuard::new_testing();
         let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
@@ -664,18 +703,19 @@ impl KeyValueStoreError for RocksDbStoreInternalError {
     const BACKEND: &'static str = "rocks_db";
 }
 
-/// The `RocksDbStore` composed type with metrics
-#[cfg(with_metrics)]
-pub type RocksDbStore = MeteredStore<
-    LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
->;
-
-/// The `RocksDbStore` composed type
-#[cfg(not(with_metrics))]
-pub type RocksDbStore = LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>;
-
 /// The composed error type for the `RocksDbStore`
 pub type RocksDbStoreError = ValueSplittingError<RocksDbStoreInternalError>;
 
 /// The composed config type for the `RocksDbStore`
 pub type RocksDbStoreConfig = LruCachingConfig<RocksDbStoreInternalConfig>;
+
+/// The `RocksDbDatabase` composed type with metrics
+#[cfg(with_metrics)]
+pub type RocksDbDatabase = MeteredDatabase<
+    LruCachingDatabase<
+        MeteredDatabase<ValueSplittingDatabase<MeteredDatabase<RocksDbDatabaseInternal>>>,
+    >,
+>;
+/// The `RocksDbDatabase` composed type
+#[cfg(not(with_metrics))]
+pub type RocksDbDatabase = LruCachingDatabase<ValueSplittingDatabase<RocksDbDatabaseInternal>>;

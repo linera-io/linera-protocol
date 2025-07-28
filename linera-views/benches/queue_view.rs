@@ -5,18 +5,18 @@ use std::time::{Duration, Instant};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 #[cfg(with_dynamodb)]
-use linera_views::dynamo_db::DynamoDbStore;
+use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]
-use linera_views::rocks_db::RocksDbStore;
+use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::scylla_db::ScyllaDbDatabase;
 use linera_views::{
     bucket_queue_view::BucketQueueView,
     context::ViewContext,
-    memory::MemoryStore,
+    memory::MemoryDatabase,
     queue_view::QueueView,
     random::{make_deterministic_rng, DeterministicRng},
-    store::TestKeyValueStore,
+    store::{ReadableKeyValueStore, TestKeyValueDatabase, WritableKeyValueStore},
     views::{CryptoHashRootView, RootView, View},
 };
 use rand::Rng;
@@ -55,11 +55,15 @@ pub struct QueueStateView<C> {
     pub queue: QueueView<C, u8>,
 }
 
-pub async fn performance_queue_view<S: TestKeyValueStore + Clone + 'static>(
+pub async fn performance_queue_view<D: TestKeyValueDatabase + Clone + 'static>(
     iterations: u64,
-) -> Duration {
-    let store = S::new_test_store().await.unwrap();
-    let context = ViewContext::<(), S>::create_root_context(store, ())
+) -> Duration
+where
+    D::Store: ReadableKeyValueStore + WritableKeyValueStore + Clone + 'static,
+{
+    let database = D::connect_test_namespace().await.unwrap();
+    let store = database.open_shared(&[]).unwrap();
+    let context = ViewContext::<(), D::Store>::create_root_context(store, ())
         .await
         .unwrap();
     let mut total_time = Duration::ZERO;
@@ -95,7 +99,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_queue_view::<MemoryStore>(iterations).await
+                performance_queue_view::<MemoryDatabase>(iterations).await
             })
     });
 
@@ -104,7 +108,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_queue_view::<RocksDbStore>(iterations).await
+                performance_queue_view::<RocksDbDatabase>(iterations).await
             })
     });
 
@@ -113,7 +117,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_queue_view::<DynamoDbStore>(iterations).await
+                performance_queue_view::<DynamoDbDatabase>(iterations).await
             })
     });
 
@@ -122,7 +126,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_queue_view::<ScyllaDbStore>(iterations).await
+                performance_queue_view::<ScyllaDbDatabase>(iterations).await
             })
     });
 }
@@ -132,11 +136,15 @@ pub struct BucketQueueStateView<C> {
     pub queue: BucketQueueView<C, u8, 100>,
 }
 
-pub async fn performance_bucket_queue_view<S: TestKeyValueStore + Clone + 'static>(
+pub async fn performance_bucket_queue_view<D: TestKeyValueDatabase + Clone + 'static>(
     iterations: u64,
-) -> Duration {
-    let store = S::new_test_store().await.unwrap();
-    let context = ViewContext::<(), S>::create_root_context(store, ())
+) -> Duration
+where
+    D::Store: ReadableKeyValueStore + WritableKeyValueStore + Clone + 'static,
+{
+    let database = D::connect_test_namespace().await.unwrap();
+    let store = database.open_shared(&[]).unwrap();
+    let context = ViewContext::<(), D::Store>::create_root_context(store, ())
         .await
         .unwrap();
     let mut total_time = Duration::ZERO;
@@ -173,7 +181,7 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_bucket_queue_view::<MemoryStore>(iterations).await
+                performance_bucket_queue_view::<MemoryDatabase>(iterations).await
             })
     });
 
@@ -182,7 +190,7 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_bucket_queue_view::<RocksDbStore>(iterations).await
+                performance_bucket_queue_view::<RocksDbDatabase>(iterations).await
             })
     });
 
@@ -191,7 +199,7 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_bucket_queue_view::<DynamoDbStore>(iterations).await
+                performance_bucket_queue_view::<DynamoDbDatabase>(iterations).await
             })
     });
 
@@ -200,7 +208,7 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_bucket_queue_view::<ScyllaDbStore>(iterations).await
+                performance_bucket_queue_view::<ScyllaDbDatabase>(iterations).await
             })
     });
 }

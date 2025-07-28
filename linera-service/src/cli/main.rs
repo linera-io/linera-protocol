@@ -54,7 +54,7 @@ use linera_service::{
     util, wallet,
 };
 use linera_storage::{DbStorage, Storage};
-use linera_views::store::KeyValueStore;
+use linera_views::store::{KeyValueDatabase, KeyValueStore};
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -1533,33 +1533,34 @@ struct DatabaseToolJob<'a>(&'a DatabaseToolCommand);
 impl RunnableWithStore for DatabaseToolJob<'_> {
     type Output = i32;
 
-    async fn run<S>(
+    async fn run<D>(
         self,
-        config: S::Config,
+        config: D::Config,
         namespace: String,
     ) -> Result<Self::Output, anyhow::Error>
     where
-        S: KeyValueStore + Clone + Send + Sync + 'static,
-        S::Error: Send + Sync,
+        D: KeyValueDatabase + Clone + Send + Sync + 'static,
+        D::Store: KeyValueStore + Clone + Send + Sync + 'static,
+        D::Error: Send + Sync,
     {
         let start_time = Instant::now();
         match self.0 {
             DatabaseToolCommand::DeleteAll => {
-                S::delete_all(&config).await?;
+                D::delete_all(&config).await?;
                 info!(
                     "All namespaces deleted in {} ms",
                     start_time.elapsed().as_millis()
                 );
             }
             DatabaseToolCommand::DeleteNamespace => {
-                S::delete(&config, &namespace).await?;
+                D::delete(&config, &namespace).await?;
                 info!(
                     "Namespace {namespace} deleted in {} ms",
                     start_time.elapsed().as_millis()
                 );
             }
             DatabaseToolCommand::CheckExistence => {
-                let test = S::exists(&config, &namespace).await?;
+                let test = D::exists(&config, &namespace).await?;
                 info!(
                     "Existence of a namespace {namespace} checked in {} ms",
                     start_time.elapsed().as_millis()
@@ -1577,7 +1578,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
             } => {
                 let genesis_config: GenesisConfig = util::read_json(genesis_config_path)?;
                 let mut storage =
-                    DbStorage::<S, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                    DbStorage::<D, _>::maybe_create_and_connect(&config, &namespace, None).await?;
                 genesis_config.initialize_storage(&mut storage).await?;
                 info!(
                     "Namespace {namespace} was initialized in {} ms",
@@ -1585,7 +1586,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 );
             }
             DatabaseToolCommand::ListNamespaces => {
-                let namespaces = S::list_all(&config).await?;
+                let namespaces = D::list_all(&config).await?;
                 info!(
                     "Namespaces listed in {} ms",
                     start_time.elapsed().as_millis()
@@ -1596,7 +1597,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListBlobIds => {
-                let blob_ids = DbStorage::<S, _>::list_blob_ids(&config, &namespace).await?;
+                let blob_ids = DbStorage::<D, _>::list_blob_ids(&config, &namespace).await?;
                 info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                 info!("The list of blob IDs is:");
                 for id in blob_ids {
@@ -1604,7 +1605,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 }
             }
             DatabaseToolCommand::ListChainIds => {
-                let chain_ids = DbStorage::<S, _>::list_chain_ids(&config, &namespace).await?;
+                let chain_ids = DbStorage::<D, _>::list_chain_ids(&config, &namespace).await?;
                 info!(
                     "Chain IDs listed in {} ms",
                     start_time.elapsed().as_millis()
