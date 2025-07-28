@@ -248,25 +248,6 @@ where
         Ok(database)
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
-        match A::assigned_store(root_key)? {
-            StoreInUse::First => {
-                let store = self
-                    .first_database
-                    .open_exclusive(root_key)
-                    .map_err(DualStoreError::First)?;
-                Ok(DualStore::First(store))
-            }
-            StoreInUse::Second => {
-                let store = self
-                    .second_database
-                    .open_exclusive(root_key)
-                    .map_err(DualStoreError::Second)?;
-                Ok(DualStore::Second(store))
-            }
-        }
-    }
-
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
         match A::assigned_store(root_key)? {
             StoreInUse::First => {
@@ -280,6 +261,25 @@ where
                 let store = self
                     .second_database
                     .open_shared(root_key)
+                    .map_err(DualStoreError::Second)?;
+                Ok(DualStore::Second(store))
+            }
+        }
+    }
+
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        match A::assigned_store(root_key)? {
+            StoreInUse::First => {
+                let store = self
+                    .first_database
+                    .open_exclusive(root_key)
+                    .map_err(DualStoreError::First)?;
+                Ok(DualStore::First(store))
+            }
+            StoreInUse::Second => {
+                let store = self
+                    .second_database
+                    .open_exclusive(root_key)
                     .map_err(DualStoreError::Second)?;
                 Ok(DualStore::Second(store))
             }

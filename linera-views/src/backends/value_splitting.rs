@@ -306,13 +306,13 @@ where
         Ok(Self { database })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
-        let store = self.database.open_exclusive(root_key)?;
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_shared(root_key)?;
         Ok(ValueSplittingStore { store })
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
-        let store = self.database.open_shared(root_key)?;
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_exclusive(root_key)?;
         Ok(ValueSplittingStore { store })
     }
 

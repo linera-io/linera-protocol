@@ -149,15 +149,16 @@ pub trait KeyValueDatabase: WithError + Sized {
     /// Connects to an existing namespace using the given configuration.
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
 
-    /// Opens the key partition starting at `root_key` in an exclusive way.
-    ///
-    /// IMPORTANT: It is assumed that the returned connection is the only user of the
-    /// partition (for both read and write) and will remain so until it is ended. Future
-    /// implementations of this method may fail if this is not the case.
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error>;
-
-    /// Opens the key partition starting at `root_key` in a shared way.
+    /// Opens a shared partition starting at `root_key`. It is understood that the
+    /// partition MAY be read and written simultaneously from other clients.
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error>;
+
+    /// Opens an exclusive partition starting at `root_key`. It is assumed that the
+    /// partition WILL NOT be read and written simultaneously by other clients.
+    ///
+    /// IMPORTANT: This assumption is not enforced at the moment. However, future
+    /// implementations may choose to return an error if another client is detected.
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error>;
 
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;

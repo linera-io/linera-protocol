@@ -515,7 +515,7 @@ impl KeyValueDatabase for RocksDbDatabaseInternal {
         Self::build(config, namespace)
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, RocksDbStoreInternalError> {
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, RocksDbStoreInternalError> {
         let mut start_key = ROOT_KEY_DOMAIN.to_vec();
         start_key.extend(root_key);
         let mut executor = self.executor.clone();
@@ -529,18 +529,8 @@ impl KeyValueDatabase for RocksDbDatabaseInternal {
         })
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, RocksDbStoreInternalError> {
-        let mut start_key = ROOT_KEY_DOMAIN.to_vec();
-        start_key.extend(root_key);
-        let mut executor = self.executor.clone();
-        executor.start_key = start_key;
-        Ok(RocksDbStoreInternal {
-            executor,
-            _path_with_guard: self._path_with_guard.clone(),
-            max_stream_queries: self.max_stream_queries,
-            spawn_mode: self.spawn_mode,
-            root_key_written: Arc::new(AtomicBool::new(false)),
-        })
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, RocksDbStoreInternalError> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreInternalError> {

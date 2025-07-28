@@ -362,14 +362,14 @@ impl KeyValueDatabase for DynamoDbDatabaseInternal {
         Ok(store)
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
         let mut start_key = EMPTY_ROOT_KEY.to_vec();
         start_key.extend(root_key);
         self.open_internal(start_key)
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
-        self.open_exclusive(root_key)
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreInternalError> {

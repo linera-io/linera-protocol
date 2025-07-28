@@ -286,18 +286,15 @@ impl KeyValueDatabase for MemoryDatabase {
         })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, MemoryStoreError> {
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, MemoryStoreError> {
         let mut databases = MEMORY_DATABASES
             .lock()
             .expect("MEMORY_DATABASES lock should not be poisoned");
         databases.sync_open(&self.namespace, self.max_stream_queries, root_key)
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, MemoryStoreError> {
-        let mut databases = MEMORY_DATABASES
-            .lock()
-            .expect("MEMORY_DATABASES lock should not be poisoned");
-        databases.sync_open(&self.namespace, self.max_stream_queries, root_key)
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, MemoryStoreError> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(_config: &Self::Config) -> Result<Vec<String>, MemoryStoreError> {

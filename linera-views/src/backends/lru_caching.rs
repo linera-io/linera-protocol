@@ -505,22 +505,22 @@ where
         })
     }
 
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let store = self.database.open_shared(root_key)?;
+        let store = LruCachingStore::new(
+            store,
+            self.config.clone(),
+            /* has_exclusive_access */ false,
+        );
+        Ok(store)
+    }
+
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
         let store = self.database.open_exclusive(root_key)?;
         let store = LruCachingStore::new(
             store,
             self.config.clone(),
             /* has_exclusive_access */ true,
-        );
-        Ok(store)
-    }
-
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
-        let store = self.database.open_exclusive(root_key)?;
-        let store = LruCachingStore::new(
-            store,
-            self.config.clone(),
-            /* has_exclusive_access */ false,
         );
         Ok(store)
     }

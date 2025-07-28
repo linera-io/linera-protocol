@@ -766,7 +766,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
@@ -779,17 +779,8 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         })
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
-        let store = self.store.clone();
-        let semaphore = self.semaphore.clone();
-        let max_stream_queries = self.max_stream_queries;
-        let root_key = get_big_root_key(root_key);
-        Ok(ScyllaDbStoreInternal {
-            store,
-            semaphore,
-            max_stream_queries,
-            root_key,
-        })
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreInternalError> {

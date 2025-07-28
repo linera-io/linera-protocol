@@ -482,7 +482,7 @@ impl KeyValueDatabase for StorageServiceDatabaseInternal {
         })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, StorageServiceStoreError> {
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, StorageServiceStoreError> {
         let channel = self.channel.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
@@ -500,8 +500,8 @@ impl KeyValueDatabase for StorageServiceDatabaseInternal {
         })
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
-        self.open_exclusive(root_key)
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, StorageServiceStoreError> {

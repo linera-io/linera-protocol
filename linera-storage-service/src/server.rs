@@ -635,8 +635,8 @@ async fn main() {
             let database = MemoryDatabase::maybe_create_and_connect(&config, &namespace)
                 .await
                 .unwrap();
-            let store_impl = database.open_shared(&[]).unwrap();
-            let store = LocalStore::Memory(store_impl);
+            let store = database.open_shared(&[]).unwrap();
+            let store = LocalStore::Memory(store);
             (store, endpoint)
         }
 
@@ -670,8 +670,8 @@ async fn main() {
             let database = RocksDbDatabase::maybe_create_and_connect(&config, &namespace)
                 .await
                 .expect("store");
-            let store_impl = database.open_shared(&[]).expect("Failed to open store");
-            let store = LocalStore::RocksDb(store_impl);
+            let store = database.open_shared(&[]).expect("Failed to open store");
+            let store = LocalStore::RocksDb(store);
             (store, endpoint)
         }
     };

@@ -33,6 +33,7 @@ pub struct KeyValueStoreMetrics {
     write_batch_latency: HistogramVec,
     clear_journal_latency: HistogramVec,
     connect_latency: HistogramVec,
+    open_shared_latency: HistogramVec,
     open_exclusive_latency: HistogramVec,
     list_all_latency: HistogramVec,
     list_root_keys_latency: HistogramVec,
@@ -127,8 +128,12 @@ impl KeyValueStoreMetrics {
         let entry2 = format!("{} connect latency", title_name);
         let connect_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
+        let entry1 = format!("{}_open_shared_latency", var_name);
+        let entry2 = format!("{} open shared partition", title_name);
+        let open_shared_latency = register_histogram_vec(&entry1, &entry2, &[], None);
+
         let entry1 = format!("{}_open_exclusive_latency", var_name);
-        let entry2 = format!("{} clone with root key latency", title_name);
+        let entry2 = format!("{} open exclusive partition", title_name);
         let open_exclusive_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
         let entry1 = format!("{}_list_all_latency", var_name);
@@ -236,6 +241,7 @@ impl KeyValueStoreMetrics {
             write_batch_latency,
             clear_journal_latency,
             connect_latency,
+            open_shared_latency,
             open_exclusive_latency,
             list_all_latency,
             list_root_keys_latency,
@@ -463,16 +469,16 @@ where
         Ok(Self { counter, database })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
-        let _latency = self.counter.open_exclusive_latency.measure_latency();
-        let store = self.database.open_exclusive(root_key)?;
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+        let _latency = self.counter.open_shared_latency.measure_latency();
+        let store = self.database.open_shared(root_key)?;
         let counter = self.counter.clone();
         Ok(MeteredStore { counter, store })
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
         let _latency = self.counter.open_exclusive_latency.measure_latency();
-        let store = self.database.open_shared(root_key)?;
+        let store = self.database.open_exclusive(root_key)?;
         let counter = self.counter.clone();
         Ok(MeteredStore { counter, store })
     }

@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 
 use crate::{
     batch::Batch,
-    store::{KeyValueStore, ReadableKeyValueStore, TestKeyValueDatabase, WritableKeyValueStore},
+    store::{
+        KeyValueStore, ReadableKeyValueStore as _, TestKeyValueDatabase, WritableKeyValueStore as _,
+    },
     test_utils::{add_prefix, get_random_key_values_with_small_keys},
 };
 
@@ -243,8 +245,7 @@ where
     D: TestKeyValueDatabase,
     D::Store: KeyValueStore,
 {
-    let namespace = D::connect_test_namespace().await.unwrap();
-    let store = namespace.open_shared(&[]).unwrap();
+    let store = D::new_test_store().await.unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
         let key_values = add_prefix(

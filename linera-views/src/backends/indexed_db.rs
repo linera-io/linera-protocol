@@ -283,14 +283,14 @@ impl KeyValueDatabase for IndexedDbDatabase {
         })
     }
 
-    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
+    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
         let mut start_key = ROOT_KEY_DOMAIN.to_vec();
         start_key.extend(root_key);
         self.open_internal(start_key)
     }
 
-    fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
-        self.open_exclusive(root_key)
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
+        self.open_shared(root_key)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, IndexedDbStoreError> {
