@@ -4,6 +4,7 @@
 
 use std::{
     iter::IntoIterator,
+    net::SocketAddr,
     ops::{Deref, DerefMut},
 };
 
@@ -264,6 +265,16 @@ pub struct BlockExporterConfig {
     /// on the resources used by the linera-exporter.
     #[serde(default)]
     pub limits: LimitsConfig,
+
+    /// The address to expose the `/metrics` endpoint on.
+    pub metrics_port: u16,
+}
+
+impl BlockExporterConfig {
+    /// Returns the address to expose the `/metrics` endpoint on.
+    pub fn metrics_address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.metrics_port))
+    }
 }
 
 /// Configuration file for the exports.
