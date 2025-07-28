@@ -88,6 +88,14 @@ mod metrics {
             &["validator_name"],
         )
     });
+
+    pub static CHAIN_INFO_QUERIES: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "chain_info_queries",
+            "Number of chain info queries processed",
+            &[],
+        )
+    });
 }
 
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.
@@ -917,6 +925,8 @@ where
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
+        #[cfg(with_metrics)]
+        metrics::CHAIN_INFO_QUERIES.with_label_values(&[]).inc();
         let result = self
             .query_chain_worker(query.chain_id, move |callback| {
                 ChainWorkerRequest::HandleChainInfoQuery { query, callback }
