@@ -46,7 +46,7 @@ const IS_WITH_METRICS: bool = true;
 )]
 struct ExporterOptions {
     /// Path to the TOML file describing the configuration for the block exporter.
-    #[arg(long = "config_path")]
+    #[arg(long)]
     config_path: PathBuf,
 
     /// Storage configuration for the blockchain history, chain states and binary blobs.
