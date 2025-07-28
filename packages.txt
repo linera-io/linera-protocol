@@ -14,6 +14,7 @@ linera-storage-service
 linera-storage
 linera-core
 linera-ethereum
+linera-metrics
 linera-sdk-derive
 linera-sdk
 linera-rpc
