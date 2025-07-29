@@ -123,6 +123,7 @@ mod test {
         let reason = Reason::NewBlock {
             height: 4.into(),
             hash: CryptoHash::test_hash("s"),
+            event_streams: Default::default(),
         };
         let request = Notification {
             chain_id: ChainId::default(),

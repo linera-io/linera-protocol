@@ -1093,6 +1093,7 @@ where
                 reason: NewBlock {
                     height: BlockHeight(0),
                     hash: certificate0.hash(),
+                    event_streams: BTreeSet::new(),
                 }
             },
             Notification {
@@ -1107,6 +1108,7 @@ where
                 reason: NewBlock {
                     height: BlockHeight(1),
                     hash: certificate1.hash(),
+                    event_streams: BTreeSet::new(),
                 }
             },
             Notification {
