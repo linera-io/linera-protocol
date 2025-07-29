@@ -2837,7 +2837,7 @@ impl<Env: Environment> ChainClient<Env> {
             self.client.finalize_block(&committee, certificate).await?
         };
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        self.update_validators(Some(&committee)).await?;
+        // self.update_validators(Some(&committee)).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
