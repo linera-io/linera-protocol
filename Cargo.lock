@@ -5089,6 +5089,7 @@ dependencies = [
  "num-format",
  "prometheus-parse",
  "proptest",
+ "rand 0.8.5",
  "reqwest 0.11.27",
  "serde",
  "serde-wasm-bindgen 0.6.5",

@@ -790,7 +790,7 @@ impl Runnable for Job {
             #[cfg(feature = "benchmark")]
             Benchmark(benchmark_config) => {
                 let BenchmarkCommand {
-                    dont_use_cross_chain_messages,
+                    num_chains_per_chain_group,
                     num_chain_groups,
                     tokens_per_chain,
                     transactions_per_block,
@@ -814,11 +814,22 @@ impl Runnable for Job {
                     "Number of chain groups must be greater than 0"
                 );
                 assert!(
+                    num_chains_per_chain_group > 0,
+                    "Number of chains per chain group must be greater than 0"
+                );
+                assert!(
                     transactions_per_block > 0,
                     "Number of transactions per block must be greater than 0"
                 );
                 assert!(bps > 0, "BPS must be greater than 0");
-                let num_chains_per_chain_group = if dont_use_cross_chain_messages { 1 } else { 2 };
+                if num_chains_per_chain_group > 1 {
+                    assert!(
+                        transactions_per_block % (num_chains_per_chain_group - 1) == 0,
+                        "Number of transactions per block must be a multiple of the number of \
+                         chains per chain group minus 1, to make sure transactions always cancel \
+                         each other out"
+                    );
+                }
 
                 let listener_config = ChainListenerConfig {
                     skip_process_inbox: true,

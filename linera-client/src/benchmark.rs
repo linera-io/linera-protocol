@@ -3,7 +3,6 @@
 
 use std::{
     collections::HashMap,
-    iter,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -23,6 +22,7 @@ use linera_execution::{
 use linera_sdk::abis::fungible::{self, FungibleOperation};
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
+use rand::{seq::SliceRandom, thread_rng};
 use tokio::{
     sync::{mpsc, Barrier, Notify},
     task, time,
@@ -599,22 +599,46 @@ impl<Env: Environment> Benchmark<Env> {
             let amount = Amount::from(1);
             for i in 0..chains_len {
                 let owner = chains[i].1;
-                let recipient_chain_id = chains[(i + chains_len - 1) % chains_len].0;
-                let operation = match fungible_application_id {
-                    Some(application_id) => Self::fungible_transfer(
-                        application_id,
-                        recipient_chain_id,
-                        owner,
-                        owner,
-                        amount,
-                    ),
-                    None => Operation::system(SystemOperation::Transfer {
-                        owner: AccountOwner::CHAIN,
-                        recipient: Recipient::chain(recipient_chain_id),
-                        amount,
-                    }),
+                let mut operations = Vec::new();
+
+                let mut other_chains: Vec<_> = if chains_len == 1 {
+                    // If there's only one chain, just have it send to itself.
+                    chains.iter().map(|(chain_id, _)| *chain_id).collect()
+                } else {
+                    // If there's more than one chain, have it send to all other chains, and don't
+                    // send to self.
+                    chains
+                        .iter()
+                        .enumerate()
+                        .filter(|(j, _)| i != *j)
+                        .map(|(_, (chain_id, _))| *chain_id)
+                        .collect()
                 };
-                let operations = iter::repeat_n(operation, transactions_per_block).collect();
+
+                other_chains.shuffle(&mut thread_rng());
+
+                for recipient_chain_id in other_chains {
+                    let operation = match fungible_application_id {
+                        Some(application_id) => Self::fungible_transfer(
+                            application_id,
+                            recipient_chain_id,
+                            owner,
+                            owner,
+                            amount,
+                        ),
+                        None => Operation::system(SystemOperation::Transfer {
+                            owner: AccountOwner::CHAIN,
+                            recipient: Recipient::chain(recipient_chain_id),
+                            amount,
+                        }),
+                    };
+                    operations.push(operation);
+                }
+                let operations = operations
+                    .into_iter()
+                    .cycle()
+                    .take(transactions_per_block)
+                    .collect();
                 infos.push(operations);
             }
             blocks_infos.push(infos);
