@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -14,7 +14,7 @@ use linera_base::{
     data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round},
     doc_scalar,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
     time::timer::{sleep, timeout},
 };
 #[cfg(with_testing)]
@@ -124,6 +124,7 @@ pub enum Reason {
     NewBlock {
         height: BlockHeight,
         hash: CryptoHash,
+        event_streams: BTreeSet<StreamId>,
     },
     NewIncomingBundle {
         origin: ChainId,

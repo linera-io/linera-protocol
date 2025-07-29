@@ -458,9 +458,22 @@ where
         let mut actions = self.state.create_network_actions().await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         let hash = certificate.hash();
+        let event_streams = certificate
+            .value()
+            .block()
+            .body
+            .events
+            .iter()
+            .flatten()
+            .map(|event| event.stream_id.clone())
+            .collect();
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock { height, hash },
+            reason: Reason::NewBlock {
+                height,
+                hash,
+                event_streams,
+            },
         });
         // Persist chain.
         self.save().await?;
