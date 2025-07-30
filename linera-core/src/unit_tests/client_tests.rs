@@ -2608,6 +2608,7 @@ where
         .execute_operation(SystemOperation::VerifyBlob { blob_id })
         .await
         .unwrap_ok_committed();
+
     // This read a new blob, so it cannot be a fast block.
     assert_eq!(certificate.round, Round::MultiLeader(0));
     let block = certificate.block();
