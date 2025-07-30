@@ -2826,9 +2826,12 @@ impl<Env: Environment> ChainClient<Env> {
         // Send the query to validators.
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
-            self.client
+            let certificate = self
+                .client
                 .submit_block_proposal(&committee, proposal, hashed_value)
-                .await?
+                .await?;
+            self.update_validators(Some(&committee)).await?;
+            certificate
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
@@ -2841,7 +2844,6 @@ impl<Env: Environment> ChainClient<Env> {
             round = %certificate.round,
             "Sending confirmed block to validators",
         );
-        self.update_validators(Some(&committee)).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
