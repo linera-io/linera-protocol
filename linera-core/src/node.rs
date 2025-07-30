@@ -279,6 +279,20 @@ pub enum NodeError {
     ResponseHandlingError { error: String },
 }
 
+impl NodeError {
+    pub fn is_missing_data(&self) -> bool {
+        // TODO: Should we include other errors here?
+        // It is unclear why `ChainError { error: "Round number should be Fast" }` is returned in some cases.
+        matches!(
+            self,
+            NodeError::ChainError { .. } | NodeError::MissingCrossChainUpdate { .. }
+                | NodeError::MissingCertificateValue
+                | NodeError::BlobsNotFound(_)
+                | NodeError::EventsNotFound(_)
+        )
+    }
+}
+
 impl From<tonic::Status> for NodeError {
     fn from(status: tonic::Status) -> Self {
         Self::GrpcError {
