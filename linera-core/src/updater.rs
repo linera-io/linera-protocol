@@ -287,6 +287,30 @@ where
                 .await
             {
                 Ok(info) => return Ok(info),
+                Err(NodeError::WrongRound(_round)) => {
+                    // The proposal is for a different round, so we need to update the validator.
+                    // TODO: this should probably be more specific as to which rounds are retried.
+                    self.send_chain_information(
+                        chain_id,
+                        proposal.content.block.height,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await?;
+                }
+                Err(NodeError::UnexpectedBlockHeight {
+                    expected_block_height,
+                    found_block_height,
+                }) => {
+                    if expected_block_height < found_block_height {
+                        // The proposal is for a a later block height, so we need to update the validator.
+                        self.send_chain_information(
+                            chain_id,
+                            found_block_height,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await?;
+                    }
+                }
                 Err(NodeError::MissingCrossChainUpdate { .. }) if !sent_cross_chain_updates => {
                     sent_cross_chain_updates = true;
                     // Some received certificates may be missing for this validator
@@ -482,7 +506,7 @@ where
         &mut self,
         action: CommunicateAction,
     ) -> Result<LiteVote, ChainClientError> {
-        let (target_block_height, chain_id) = match &action {
+        let (_target_block_height, chain_id) = match &action {
             CommunicateAction::SubmitBlock { proposal, .. } => {
                 let block = &proposal.content.block;
                 (block.height, block.chain_id)
@@ -498,52 +522,17 @@ where
         // Send the block proposal, certificate or timeout request and return a vote.
         let vote = match action {
             CommunicateAction::SubmitBlock { proposal, blob_ids } => {
-                match self
-                    .send_block_proposal(proposal.clone(), blob_ids.clone())
-                    .await
-                {
-                    Ok(info) => info.manager.pending,
-                    Err(ChainClientError::RemoteNodeError(err)) if err.is_missing_data() => {
-                        // Update the validator with missing information, if needed.
-                        self.send_chain_information(
-                            chain_id,
-                            target_block_height,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
-                        // Retry sending the block proposal.
-                        self.send_block_proposal(proposal, blob_ids)
-                            .await?
-                            .manager
-                            .pending
-                    }
-                    Err(err) => return Err(err),
-                }
+                let info = self.send_block_proposal(proposal, blob_ids).await?;
+                info.manager.pending
             }
             CommunicateAction::FinalizeBlock {
                 certificate,
                 delivery,
             } => {
-                match self
-                    .send_validated_certificate(*certificate.clone(), delivery)
-                    .await
-                {
-                    Ok(info) => info.manager.pending,
-                    Err(ChainClientError::RemoteNodeError(err)) if err.is_missing_data() => {
-                        // Update the validator with missing information, if needed.
-                        self.send_chain_information(
-                            chain_id,
-                            target_block_height,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
-                        // Retry sending the certificate.
-                        self.send_validated_certificate(*certificate, delivery)
-                            .await
-                            .map(|info| info.manager.pending)?
-                    }
-                    Err(err) => return Err(err),
-                }
+                let info = self
+                    .send_validated_certificate(*certificate, delivery)
+                    .await?;
+                info.manager.pending
             }
             CommunicateAction::RequestTimeout { .. } => {
                 let query = ChainInfoQuery::new(chain_id).with_timeout();

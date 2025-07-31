@@ -9,7 +9,7 @@ use futures::stream::LocalBoxStream as BoxStream;
 use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription},
+    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round},
     identifiers::{BlobId, ChainId, EventId},
 };
 use linera_chain::{
@@ -213,6 +213,17 @@ pub enum NodeError {
     #[error("The chain {0} is not active in validator")]
     InactiveChain(ChainId),
 
+    #[error("Round number should be {0:?}")]
+    WrongRound(Round),
+
+    #[error(
+        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
+    )]
+    UnexpectedBlockHeight {
+        expected_block_height: BlockHeight,
+        found_block_height: BlockHeight,
+    },
+
     // This error must be normalized during conversions.
     #[error(
         "Cannot vote for block proposal of chain {chain_id:?} because a message \
@@ -277,20 +288,6 @@ pub enum NodeError {
     EmptyBlobsNotFound,
     #[error("Local error handling validator response: {error}")]
     ResponseHandlingError { error: String },
-}
-
-impl NodeError {
-    pub fn is_missing_data(&self) -> bool {
-        // TODO: Should we include other errors here?
-        // It is unclear why `ChainError { error: "Round number should be Fast" }` is returned in some cases.
-        matches!(
-            self,
-            NodeError::ChainError { .. } | NodeError::InactiveChain(_) // | NodeError::MissingCrossChainUpdate { .. }
-                                                                       // | NodeError::MissingCertificateValue
-                                                                       // | NodeError::BlobsNotFound(_)
-                                                                       // | NodeError::EventsNotFound(_)
-        )
-    }
 }
 
 impl From<tonic::Status> for NodeError {
@@ -362,6 +359,14 @@ impl From<ChainError> for NodeError {
                     error: ChainError::ExecutionError(execution_error, context).to_string(),
                 },
             },
+            ChainError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            } => Self::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            },
+            ChainError::WrongRound(round) => Self::WrongRound(round),
             error => Self::ChainError {
                 error: error.to_string(),
             },
