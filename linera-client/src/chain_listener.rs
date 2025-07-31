@@ -218,7 +218,6 @@ impl<C: ClientContext> ChainListener<C> {
             }
             Reason::NewRound { .. } => self.update_validators(&notification).await?,
             Reason::NewBlock { hash, .. } => {
-                // self.update_validators(&notification).await?;
                 self.update_wallet(notification.chain_id).await?;
                 self.add_new_chains(*hash).await?;
                 let publishers = self
