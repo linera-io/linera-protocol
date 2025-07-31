@@ -807,32 +807,32 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 2, signer).await?;
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    builder.set_fault_type([0, 1], FaultType::Malicious).await;
+    let chain_1 = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let chain_2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
-    let result = sender
+    let result = chain_1
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
             Account::chain(chain_2.chain_id()),
         )
         .await;
-    // The faulty validators will not have a chain with this ID (as the initial balance
-    // being zero changes it) - they will fail with `BlobsNotFound`.
+    // Malicious validators always return ArithmeticError when handling a proposal.
     assert_matches!(
         result,
         Err(ChainClientError::CommunicationError(
-            CommunicationError::Trusted(crate::node::NodeError::BlobsNotFound(_))
+            CommunicationError::Trusted(NodeError::ArithmeticError { .. })
         )),
         "unexpected result"
     );
     assert_eq!(
-        sender.chain_info().await?.next_block_height,
+        chain_1.chain_info().await?.next_block_height,
         BlockHeight::ZERO
     );
-    assert!(sender.pending_proposal().is_some());
+    assert!(chain_1.pending_proposal().is_some());
     assert_eq!(
-        sender.local_balance().await.unwrap(),
+        chain_1.local_balance().await.unwrap(),
         Amount::from_tokens(4)
     );
     Ok(())
@@ -2587,6 +2587,23 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(certificate.round, Round::Fast);
+
+    let nodes = client1.client.validator_nodes().await.unwrap();
+    let _ = client1
+        .client
+        .update_local_node_with_blobs_from(vec![blob_id], &nodes)
+        .await
+        .unwrap();
+    let _ = client2
+        .client
+        .update_local_node_with_blobs_from(vec![blob_id], &nodes)
+        .await
+        .unwrap();
+    let _ = client3
+        .client
+        .update_local_node_with_blobs_from(vec![blob_id], &nodes)
+        .await
+        .unwrap();
 
     // Send a message from chain 2 to chain 3.
     let certificate = client2
