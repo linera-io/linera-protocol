@@ -2588,23 +2588,6 @@ where
         .unwrap_ok_committed();
     assert_eq!(certificate.round, Round::Fast);
 
-    let nodes = client1.client.validator_nodes().await.unwrap();
-    let _ = client1
-        .client
-        .update_local_node_with_blobs_from(vec![blob_id], &nodes)
-        .await
-        .unwrap();
-    let _ = client2
-        .client
-        .update_local_node_with_blobs_from(vec![blob_id], &nodes)
-        .await
-        .unwrap();
-    let _ = client3
-        .client
-        .update_local_node_with_blobs_from(vec![blob_id], &nodes)
-        .await
-        .unwrap();
-
     // Send a message from chain 2 to chain 3.
     let certificate = client2
         .transfer(
