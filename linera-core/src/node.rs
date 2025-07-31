@@ -285,11 +285,10 @@ impl NodeError {
         // It is unclear why `ChainError { error: "Round number should be Fast" }` is returned in some cases.
         matches!(
             self,
-            NodeError::ChainError { .. }
-                | NodeError::MissingCrossChainUpdate { .. }
-                | NodeError::MissingCertificateValue
-                | NodeError::BlobsNotFound(_)
-                | NodeError::EventsNotFound(_)
+            NodeError::ChainError { .. } | NodeError::InactiveChain(_) // | NodeError::MissingCrossChainUpdate { .. }
+                                                                       // | NodeError::MissingCertificateValue
+                                                                       // | NodeError::BlobsNotFound(_)
+                                                                       // | NodeError::EventsNotFound(_)
         )
     }
 }
