@@ -3,6 +3,7 @@
 
 //! SQLite database module for storing blocks and blobs.
 
+use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
@@ -14,6 +15,14 @@ use sqlx::{
     Row, Sqlite, Transaction,
 };
 use thiserror::Error;
+
+use crate::{
+    database_trait::{DatabaseTransaction, IndexerDatabase},
+    sqlite::{
+        CREATE_BLOBS_TABLE, CREATE_BLOCKS_TABLE, CREATE_INCOMING_BUNDLES_TABLE,
+        CREATE_POSTED_MESSAGES_TABLE,
+    },
+};
 
 #[derive(Error, Debug)]
 pub enum SqliteError {
@@ -46,81 +55,17 @@ impl SqliteDatabase {
 
     /// Initialize the database schema
     async fn initialize_schema(&self) -> Result<(), SqliteError> {
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS blocks (
-                hash TEXT PRIMARY KEY NOT NULL,
-                chain_id TEXT NOT NULL,
-                height INTEGER NOT NULL,
-                data BLOB NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-            
-            CREATE INDEX IF NOT EXISTS idx_blocks_chain_height ON blocks(chain_id, height);
-            CREATE INDEX IF NOT EXISTS idx_blocks_chain_id ON blocks(chain_id);
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query(CREATE_BLOCKS_TABLE).execute(&self.pool).await?;
 
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS blobs (
-                hash TEXT PRIMARY KEY NOT NULL,
-                type TEXT NOT NULL,
-                data BLOB NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query(CREATE_BLOBS_TABLE).execute(&self.pool).await?;
 
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS incoming_bundles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                block_hash TEXT NOT NULL,
-                bundle_index INTEGER NOT NULL,
-                origin_chain_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                source_height INTEGER NOT NULL,
-                source_timestamp INTEGER NOT NULL,
-                source_cert_hash TEXT NOT NULL,
-                transaction_index INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (block_hash) REFERENCES blocks(hash)
-            );
-            
-            CREATE INDEX IF NOT EXISTS idx_incoming_bundles_block_hash ON incoming_bundles(block_hash);
-            CREATE INDEX IF NOT EXISTS idx_incoming_bundles_origin_chain ON incoming_bundles(origin_chain_id);
-            CREATE INDEX IF NOT EXISTS idx_incoming_bundles_action ON incoming_bundles(action);
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query(CREATE_INCOMING_BUNDLES_TABLE)
+            .execute(&self.pool)
+            .await?;
 
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS posted_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                bundle_id INTEGER NOT NULL,
-                message_index INTEGER NOT NULL,
-                authenticated_signer TEXT,
-                grant_amount INTEGER NOT NULL,
-                refund_grant_to TEXT,
-                message_kind TEXT NOT NULL,
-                message_data BLOB NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (bundle_id) REFERENCES incoming_bundles(id)
-            );
-            
-            CREATE INDEX IF NOT EXISTS idx_posted_messages_bundle_id ON posted_messages(bundle_id);
-            CREATE INDEX IF NOT EXISTS idx_posted_messages_kind ON posted_messages(message_kind);
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query(CREATE_POSTED_MESSAGES_TABLE)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
@@ -128,6 +73,11 @@ impl SqliteDatabase {
     /// Start a new transaction
     async fn begin_transaction(&self) -> Result<Transaction<'_, Sqlite>, SqliteError> {
         Ok(self.pool.begin().await?)
+    }
+
+    /// Commit a transaction
+    async fn commit_transaction(&self, tx: Transaction<'_, Sqlite>) -> Result<(), SqliteError> {
+        tx.commit().await.map_err(SqliteError::Database)
     }
 
     /// Insert a blob within a transaction
@@ -386,39 +336,6 @@ impl SqliteDatabase {
         Ok(row.is_some())
     }
 
-    /// Atomically store a block with its required blobs and incoming bundles
-    /// This is the high-level API that manages the transaction internally
-    pub async fn store_block_with_blobs_and_bundles(
-        &self,
-        block_hash: &CryptoHash,
-        chain_id: &ChainId,
-        height: BlockHeight,
-        block_data: &[u8],
-        blobs: &[(BlobId, Vec<u8>)],
-        incoming_bundles: Vec<IncomingBundle>,
-    ) -> Result<(), SqliteError> {
-        // Start atomic transaction
-        let mut tx = self.begin_transaction().await?;
-
-        // Insert all blobs first
-        for (blob_id, blob_data) in blobs {
-            self.insert_blob_tx(&mut tx, blob_id, blob_data).await?;
-        }
-
-        // Insert the block
-        self.insert_block_tx(&mut tx, block_hash, chain_id, height, block_data)
-            .await?;
-
-        // Store incoming bundles and their messages
-        self.store_incoming_bundles_tx(&mut tx, block_hash, incoming_bundles)
-            .await?;
-
-        // Commit transaction - this is the only point where data becomes visible
-        tx.commit().await?;
-
-        Ok(())
-    }
-
     /// Get incoming bundles for a specific block
     pub async fn get_incoming_bundles_for_block(
         &self,
@@ -549,6 +466,101 @@ impl SqliteDatabase {
     }
 }
 
+#[async_trait]
+impl IndexerDatabase for SqliteDatabase {
+    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
+        self.begin_transaction().await
+    }
+
+    async fn insert_blob_tx(
+        &self,
+        tx: &mut DatabaseTransaction<'_>,
+        blob_id: &BlobId,
+        data: &[u8],
+    ) -> Result<(), SqliteError> {
+        self.insert_blob_tx(tx, blob_id, data).await
+    }
+
+    async fn insert_block_tx(
+        &self,
+        tx: &mut DatabaseTransaction<'_>,
+        hash: &CryptoHash,
+        chain_id: &ChainId,
+        height: BlockHeight,
+        data: &[u8],
+    ) -> Result<(), SqliteError> {
+        self.insert_block_tx(tx, hash, chain_id, height, data).await
+    }
+
+    async fn store_incoming_bundles_tx(
+        &self,
+        tx: &mut DatabaseTransaction<'_>,
+        block_hash: &CryptoHash,
+        incoming_bundles: Vec<IncomingBundle>,
+    ) -> Result<(), SqliteError> {
+        self.store_incoming_bundles_tx(tx, block_hash, incoming_bundles)
+            .await
+    }
+
+    async fn commit_transaction(&self, tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
+        self.commit_transaction(tx).await
+    }
+
+    async fn get_block(&self, hash: &CryptoHash) -> Result<Vec<u8>, SqliteError> {
+        self.get_block(hash).await
+    }
+
+    async fn get_blob(&self, blob_id: &BlobId) -> Result<Vec<u8>, SqliteError> {
+        self.get_blob(blob_id).await
+    }
+
+    async fn get_latest_block_for_chain(
+        &self,
+        chain_id: &ChainId,
+    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
+        self.get_latest_block_for_chain(chain_id).await
+    }
+
+    async fn get_blocks_for_chain_range(
+        &self,
+        chain_id: &ChainId,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
+        self.get_blocks_for_chain_range(chain_id, start_height, end_height)
+            .await
+    }
+
+    async fn blob_exists(&self, blob_id: &BlobId) -> Result<bool, SqliteError> {
+        self.blob_exists(blob_id).await
+    }
+
+    async fn block_exists(&self, hash: &CryptoHash) -> Result<bool, SqliteError> {
+        self.block_exists(hash).await
+    }
+
+    async fn get_incoming_bundles_for_block(
+        &self,
+        block_hash: &CryptoHash,
+    ) -> Result<Vec<(i64, IncomingBundleInfo)>, SqliteError> {
+        self.get_incoming_bundles_for_block(block_hash).await
+    }
+
+    async fn get_posted_messages_for_bundle(
+        &self,
+        bundle_id: i64,
+    ) -> Result<Vec<PostedMessageInfo>, SqliteError> {
+        self.get_posted_messages_for_bundle(bundle_id).await
+    }
+
+    async fn get_bundles_from_origin_chain(
+        &self,
+        origin_chain_id: &ChainId,
+    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, SqliteError> {
+        self.get_bundles_from_origin_chain(origin_chain_id).await
+    }
+}
+
 /// Information about an incoming bundle (denormalized for queries)
 #[derive(Debug, Clone)]
 pub struct IncomingBundleInfo {
@@ -582,7 +594,9 @@ mod tests {
     };
     use linera_chain::data_types::MessageAction;
 
-    use crate::{grpc_server::IndexerGrpcServer, sqlite_db::SqliteDatabase};
+    use crate::{
+        database_trait::IndexerDatabase, grpc_server::IndexerGrpcServer, sqlite_db::SqliteDatabase,
+    };
 
     async fn create_test_database() -> SqliteDatabase {
         SqliteDatabase::new("sqlite::memory:")

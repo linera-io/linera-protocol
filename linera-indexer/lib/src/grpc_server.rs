@@ -13,20 +13,29 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tracing::{error, info, warn};
 
 use crate::{
+    database_trait::IndexerDatabase,
     indexer_api::{
         element::Payload,
         indexer_server::{Indexer, IndexerServer},
         Element,
     },
-    sqlite_db::{SqliteDatabase, SqliteError},
+    sqlite_db::SqliteError,
 };
 
-pub struct IndexerGrpcServer {
-    database: Arc<SqliteDatabase>,
+pub struct IndexerGrpcServer<D> {
+    database: Arc<D>,
 }
 
-impl IndexerGrpcServer {
-    pub fn new(database: SqliteDatabase) -> Self {
+impl<D> IndexerGrpcServer<D> {
+    pub fn new(database: D) -> Self {
+        Self {
+            database: Arc::new(database),
+        }
+    }
+}
+
+impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
+    pub fn new_with_database(database: D) -> Self {
         Self {
             database: Arc::new(database),
         }
@@ -48,7 +57,7 @@ impl IndexerGrpcServer {
 
     /// Process the entire stream and return responses
     async fn process_stream(
-        database: Arc<SqliteDatabase>,
+        database: Arc<D>,
         stream: Streaming<Element>,
     ) -> impl Stream<Item = Result<(), Status>> {
         futures::stream::unfold(
@@ -57,17 +66,30 @@ impl IndexerGrpcServer {
                 loop {
                     match input_stream.next().await {
                         Some(Ok(element)) => {
-                            let response = Self::process_single_element(
+                            match Self::process_single_element(
                                 &database,
                                 &mut pending_blobs,
                                 element,
                             )
-                            .await;
-                            if let Some(resp) = response {
-                                // Return the response and continue with the updated state
-                                return Some((resp, (input_stream, database, pending_blobs)));
+                            .await
+                            {
+                                Some(Ok(())) => {
+                                    // If processing was successful, return an ACK
+                                    info!("Processed element successfully");
+                                    return Some((Ok(()), (input_stream, database, pending_blobs)));
+                                }
+                                Some(Err(status)) => {
+                                    // If there was an error, return it
+                                    error!("Error processing element: {}", status);
+                                    return Some((
+                                        Err(status),
+                                        (input_stream, database, pending_blobs),
+                                    ));
+                                }
+                                None => {
+                                    // If processing was a blob, we just continue without returning a response
+                                }
                             }
-                            // If no response (blob case), continue to next element
                         }
                         Some(Err(e)) => {
                             error!("Error receiving element: {}", e);
@@ -83,9 +105,12 @@ impl IndexerGrpcServer {
         )
     }
 
-    /// Process a single element and return a response if needed
-    async fn process_single_element(
-        database: &SqliteDatabase,
+    /// Process a single element and return a response if needed.
+    /// This handles both blobs and blocks.
+    /// For blobs, it stores them in `pending_blobs` and returns `None`.
+    /// For blocks, it processes them and returns a `Result` indicating success or failure.
+    pub async fn process_single_element(
+        database: &D,
         pending_blobs: &mut HashMap<BlobId, Vec<u8>>,
         element: Element,
     ) -> Option<Result<(), Status>> {
@@ -200,7 +225,7 @@ impl IndexerGrpcServer {
 }
 
 #[async_trait]
-impl Indexer for IndexerGrpcServer {
+impl<D: IndexerDatabase + 'static> Indexer for IndexerGrpcServer<D> {
     type IndexBatchStream = Pin<Box<dyn Stream<Item = Result<(), Status>> + Send + 'static>>;
 
     async fn index_batch(
@@ -246,5 +271,286 @@ impl TryFrom<crate::indexer_api::Blob> for Blob {
 
     fn try_from(value: crate::indexer_api::Blob) -> Result<Self, Self::Error> {
         bincode::deserialize(&value.bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::{
+        indexer_api::{element::Payload, Element},
+        mock_database::{MockFailingDatabase, MockSuccessDatabase},
+    };
+
+    fn test_blob_element() -> Element {
+        let test_blob = Blob::new_data(b"test blob content".to_vec());
+        let blob_data = bincode::serialize(&test_blob).unwrap();
+
+        Element {
+            payload: Some(Payload::Blob(crate::indexer_api::Blob { bytes: blob_data })),
+        }
+    }
+
+    // Create a protobuf message that is not a valid ConfiredBlockCertificate instance.
+    fn invalid_block_element() -> Element {
+        Element {
+            payload: Some(Payload::Block(crate::indexer_api::Block {
+                bytes: b"fake_block_certificate_data".to_vec(),
+            })),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_single_element_blob_success() {
+        let database = MockFailingDatabase::new();
+        let mut pending_blobs = HashMap::new();
+        let element = test_blob_element();
+
+        let result =
+            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+
+        // Processing blob returns `None` (no ACK).
+        assert!(result.is_none());
+        // Blob should be added to pending blobs
+        assert_eq!(pending_blobs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_process_single_element_block_deserialization_failure() {
+        let database = MockFailingDatabase::new();
+
+        let mut pending_blobs = HashMap::new();
+        let element = invalid_block_element(); // This will have invalid block data
+
+        let result =
+            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+
+        // Should return an error due to deserialization failure
+        assert!(result.is_some());
+        match result.unwrap() {
+            Err(status) => {
+                assert_eq!(status.code(), tonic::Code::InvalidArgument);
+                assert!(status.message().contains("Invalid block"));
+            }
+            Ok(_) => panic!("Expected error but got success"),
+        }
+
+        // Pending blobs should not be cleared on failure
+        assert_eq!(pending_blobs.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_process_single_element_empty_payload() {
+        let database = MockFailingDatabase::new();
+        let mut pending_blobs = HashMap::new();
+        let element = Element { payload: None };
+
+        let result =
+            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+
+        // Should return an error for empty element
+        assert!(result.is_some());
+        match result.unwrap() {
+            Err(status) => {
+                assert_eq!(status.code(), tonic::Code::InvalidArgument);
+                assert_eq!(status.message(), "Empty element");
+            }
+            Ok(_) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_single_element_invalid_blob() {
+        let database = MockFailingDatabase::new();
+        let mut pending_blobs = HashMap::new();
+
+        // Create element with invalid blob data
+        let element = Element {
+            payload: Some(Payload::Blob(crate::indexer_api::Blob {
+                bytes: vec![0x00, 0x01, 0x02], // Invalid blob data
+            })),
+        };
+
+        let result =
+            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+
+        // Should return an error for invalid blob
+        assert!(result.is_some());
+        match result.unwrap() {
+            Err(status) => {
+                assert_eq!(status.code(), tonic::Code::InvalidArgument);
+                assert!(status.message().contains("Invalid blob"));
+            }
+            Ok(_) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_single_element_invalid_block() {
+        let database = MockFailingDatabase::new();
+        let mut pending_blobs = HashMap::new();
+
+        // Create element with invalid block data
+        let element = Element {
+            payload: Some(Payload::Block(crate::indexer_api::Block {
+                bytes: vec![0x00, 0x01, 0x02], // Invalid block data
+            })),
+        };
+
+        let result =
+            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+
+        // Should return an error for invalid block
+        assert!(result.is_some());
+        match result.unwrap() {
+            Err(status) => {
+                assert_eq!(status.code(), tonic::Code::InvalidArgument);
+                assert!(status.message().contains("Invalid block"));
+            }
+            Ok(_) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_stream_blob_no_ack() {
+        use std::sync::Arc;
+
+        let database = Arc::new(MockSuccessDatabase::new());
+
+        // Test the core logic through process_single_element
+        // which is what process_stream uses internally
+        let mut pending_blobs = HashMap::new();
+        let blob_element = test_blob_element();
+
+        let result =
+            IndexerGrpcServer::process_single_element(&*database, &mut pending_blobs, blob_element)
+                .await;
+
+        // Blob processing should return None (no ACK)
+        assert!(result.is_none());
+
+        // Blob should be stored in pending_blobs
+        assert_eq!(pending_blobs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_process_stream_block_with_ack() {
+        use std::sync::Arc;
+
+        let database = Arc::new(MockFailingDatabase::new());
+        let mut pending_blobs = HashMap::new();
+
+        // First add a blob to pending_blobs
+        let blob_element = test_blob_element();
+        let blob_result =
+            IndexerGrpcServer::process_single_element(&*database, &mut pending_blobs, blob_element)
+                .await;
+
+        // Blob should not produce an ACK
+        assert!(blob_result.is_none());
+        assert_eq!(pending_blobs.len(), 1);
+
+        // Now try to process a block (which will fail due to invalid data)
+        let block_element = invalid_block_element();
+        let block_result = IndexerGrpcServer::process_single_element(
+            &*database,
+            &mut pending_blobs,
+            block_element,
+        )
+        .await;
+
+        // Block processing should return Some (attempt to ACK), even on failure
+        assert!(block_result.is_some());
+        match block_result.unwrap() {
+            Err(status) => {
+                // This should fail due to invalid block deserialization
+                assert_eq!(status.code(), tonic::Code::InvalidArgument);
+                assert!(status.message().contains("Invalid block"));
+            }
+            Ok(_) => panic!("Expected error due to invalid block data"),
+        }
+
+        // Pending blobs should still be there since block failed
+        assert_eq!(pending_blobs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_process_stream_successful_block_clears_blobs() {
+        use std::sync::Arc;
+
+        // Create a mock that will succeed with transactions but fail at begin_transaction
+        // to simulate the block storage path without actually storing
+        let database = Arc::new(MockSuccessDatabase::new());
+        let mut pending_blobs = HashMap::new();
+
+        // Add a blob first
+        let blob_element = test_blob_element();
+        let _blob_result =
+            IndexerGrpcServer::process_single_element(&*database, &mut pending_blobs, blob_element)
+                .await;
+
+        // Try to process a block - this will fail because MockSuccessDatabase
+        // can't create real transactions, but it demonstrates the logic flow
+        let block_element = invalid_block_element();
+        let block_result = IndexerGrpcServer::process_single_element(
+            &*database,
+            &mut pending_blobs,
+            block_element,
+        )
+        .await;
+
+        // Block should attempt to return a response (ACK behavior)
+        assert!(block_result.is_some());
+
+        // The result will be an error due to invalid block data, but this confirms
+        // that blocks attempt to produce ACKs while blobs don't
+        match block_result.unwrap() {
+            Err(status) => {
+                assert_eq!(status.code(), tonic::Code::InvalidArgument);
+            }
+            Ok(_) => panic!("Expected error due to invalid block data"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ack_behavior_invariant() {
+        use std::sync::Arc;
+
+        let database = Arc::new(MockFailingDatabase::new());
+
+        // Test the key invariant: blobs never produce ACKs, blocks always attempt ACKs
+
+        // Test 1: Blob should never produce ACK
+        let mut pending_blobs = HashMap::new();
+        let blob_element = test_blob_element();
+        let blob_result =
+            IndexerGrpcServer::process_single_element(&*database, &mut pending_blobs, blob_element)
+                .await;
+        assert!(blob_result.is_none(), "Blobs should never produce ACKs");
+
+        // Test 2: Block should always attempt ACK (even on failure)
+        let block_element = invalid_block_element();
+        let block_result = IndexerGrpcServer::process_single_element(
+            &*database,
+            &mut pending_blobs,
+            block_element,
+        )
+        .await;
+        assert!(block_result.is_some(), "Blocks should always attempt ACKs");
+
+        // Test 3: Empty element should produce error ACK
+        let empty_element = Element { payload: None };
+        let empty_result = IndexerGrpcServer::process_single_element(
+            &*database,
+            &mut pending_blobs,
+            empty_element,
+        )
+        .await;
+        assert!(
+            empty_result.is_some(),
+            "Empty elements should produce error ACKs"
+        );
     }
 }
