@@ -142,6 +142,8 @@ impl Runnable for Job {
                 chain_id,
                 owner,
                 balance,
+                #[cfg(feature = "benchmark")]
+                super_owner,
             } => {
                 let new_owner = owner.unwrap_or_else(|| signer.generate_new().into());
                 signer.persist().await?;
@@ -157,7 +159,15 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 let (description, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
+                        #[cfg(feature = "benchmark")]
+                        let ownership = if super_owner {
+                            ChainOwnership::single_super(new_owner)
+                        } else {
+                            ChainOwnership::single(new_owner)
+                        };
+                        #[cfg(not(feature = "benchmark"))]
                         let ownership = ChainOwnership::single(new_owner);
+
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
@@ -805,6 +815,7 @@ impl Runnable for Job {
                     confirm_before_start,
                     runtime_in_seconds,
                     delay_between_chains_ms,
+                    chains_config_path,
                 } = benchmark_config;
                 assert!(
                     options.context_options.max_pending_message_bundles >= transactions_per_block,
@@ -851,6 +862,7 @@ impl Runnable for Job {
                         tokens_per_chain,
                         fungible_application_id,
                         pub_keys,
+                        chains_config_path.as_deref(),
                     )
                     .await?;
 
@@ -2168,7 +2180,9 @@ Make sure to use a Linera client compatible with this network.
             client_state_dir,
             command,
             delay_between_processes,
+            cross_wallet_transfers,
         } => {
+            let mut command = command.clone();
             let faucet = linera_faucet_client::Faucet::new(faucet.clone());
             let on_drop = if command.close_chains {
                 OnClientDrop::CloseChains
@@ -2205,20 +2219,84 @@ Make sure to use a Linera client compatible with this network.
 
             info!("Initializing wallets...");
             let mut join_set = JoinSet::new();
-            for client in clients.clone() {
-                let faucet = faucet.clone();
-                join_set.spawn(async move {
-                    client.wallet_init(Some(&faucet)).await?;
-                    client.request_chain(&faucet, true).await?;
-                    Ok::<_, anyhow::Error>(())
-                });
-            }
 
-            join_set
-                .join_all()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
+            if *cross_wallet_transfers {
+                for client in clients.clone() {
+                    let faucet = faucet.clone();
+                    join_set.spawn(async move {
+                        client.wallet_init(Some(&faucet)).await?;
+                        client.request_chain(&faucet, true).await?;
+                        Ok::<_, anyhow::Error>(())
+                    });
+                }
+
+                join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let chains_per_wallet = command.num_chains;
+                info!(
+                    "Creating {} chains per wallet ({} total chains)...",
+                    chains_per_wallet,
+                    chains_per_wallet * processes
+                );
+
+                let mut join_set = JoinSet::new();
+                for client in clients.clone() {
+                    let default_chain_id = client
+                        .default_chain()
+                        .ok_or_else(|| anyhow::anyhow!("No default chain found for client"))?;
+                    join_set.spawn(async move {
+                        let mut chain_ids = Vec::new();
+                        for _ in 0..chains_per_wallet {
+                            let (chain_id, _owner) = client
+                                .open_chain_super_owner(
+                                    default_chain_id,
+                                    None,
+                                    command.tokens_per_chain,
+                                )
+                                .await?;
+                            chain_ids.push(chain_id);
+                        }
+                        Ok::<Vec<linera_base::identifiers::ChainId>, anyhow::Error>(chain_ids)
+                    });
+                }
+
+                let all_chain_ids = join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                let config = linera_client::benchmark::BenchmarkChainsConfig {
+                    chain_ids: all_chain_ids,
+                };
+
+                let (_, path) = tempfile::NamedTempFile::new()?.keep()?;
+                config.save_to_file(&path)?;
+                info!("Saved chains configuration to {}", path.display());
+                command.chains_config_path = Some(path);
+            } else {
+                for client in clients.clone() {
+                    let faucet = faucet.clone();
+                    join_set.spawn(async move {
+                        client.wallet_init(Some(&faucet)).await?;
+                        client.request_chain(&faucet, true).await?;
+                        Ok::<_, anyhow::Error>(())
+                    });
+                }
+
+                join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
+            }
 
             info!("Starting benchmark processes...");
             let confirm_before_start = command.confirm_before_start;
@@ -2290,7 +2368,7 @@ Make sure to use a Linera client compatible with this network.
                 for child in &mut children {
                     if first {
                         first = false;
-                    } else {
+                    } else if !*cross_wallet_transfers {
                         let time_elapsed = previous.elapsed();
                         if time_elapsed < Duration::from_secs(*delay_between_processes) {
                             tokio::time::sleep(

@@ -5093,6 +5093,7 @@ dependencies = [
  "reqwest 0.11.27",
  "serde",
  "serde-wasm-bindgen 0.6.5",
+ "serde_yaml",
  "social",
  "tempfile",
  "test-case",
