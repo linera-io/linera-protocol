@@ -670,13 +670,12 @@ where
 {
     pub async fn prepare_for_benchmark(
         &mut self,
-        num_chain_groups: usize,
-        num_chains_per_chain_group: usize,
+        num_chains: usize,
         transactions_per_block: usize,
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
         pub_keys: Vec<AccountPublicKey>,
-    ) -> Result<(Vec<Vec<ChainClient<Env>>>, Vec<Vec<Vec<Operation>>>), Error> {
+    ) -> Result<(Vec<ChainClient<Env>>, Vec<Vec<Operation>>), Error> {
         let start = Instant::now();
         // Below all block proposals are supposed to succeed without retries, we
         // must make sure that all incoming payments have been accepted on-chain
@@ -689,16 +688,11 @@ where
 
         let start = Instant::now();
         let (benchmark_chains, chain_clients) = self
-            .make_benchmark_chains(
-                num_chain_groups,
-                num_chains_per_chain_group,
-                tokens_per_chain,
-                pub_keys,
-            )
+            .make_benchmark_chains(num_chains, tokens_per_chain, pub_keys)
             .await?;
         info!(
             "Got {} chains in {} ms",
-            num_chain_groups * num_chains_per_chain_group,
+            num_chains,
             start.elapsed().as_millis()
         );
 
@@ -711,7 +705,7 @@ where
             );
             // Need to process inboxes to make sure the chains receive the supplied tokens.
             let start = Instant::now();
-            for chain_client in chain_clients.iter().flatten() {
+            for chain_client in &chain_clients {
                 chain_client.process_inbox().await?;
             }
             info!(
@@ -731,13 +725,13 @@ where
 
     pub async fn wrap_up_benchmark(
         &mut self,
-        chain_clients: Vec<Vec<ChainClient<Env>>>,
+        chain_clients: Vec<ChainClient<Env>>,
         close_chains: bool,
         wrap_up_max_in_flight: usize,
     ) -> Result<(), Error> {
         if close_chains {
             info!("Closing chains...");
-            let stream = stream::iter(chain_clients.into_iter().flatten())
+            let stream = stream::iter(chain_clients)
                 .map(|chain_client| async move {
                     Benchmark::<Env>::close_benchmark_chain(&chain_client).await?;
                     info!("Closed chain {:?}", chain_client.chain_id());
@@ -747,7 +741,7 @@ where
             stream.try_collect::<Vec<_>>().await?;
         } else {
             info!("Processing inbox for all chains...");
-            let stream = stream::iter(chain_clients.iter().flatten().cloned())
+            let stream = stream::iter(chain_clients.clone())
                 .map(|chain_client| async move {
                     chain_client.process_inbox().await?;
                     info!("Processed inbox for chain {:?}", chain_client.chain_id());
@@ -757,7 +751,7 @@ where
             stream.try_collect::<Vec<_>>().await?;
 
             info!("Updating wallet from chain clients...");
-            for chain_client in chain_clients.iter().flatten() {
+            for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
                 let pending_proposal = chain_client.pending_proposal().clone();
@@ -807,54 +801,20 @@ where
         Ok(certificates)
     }
 
-    #[expect(clippy::too_many_arguments)]
-    fn insert_chain(
-        benchmark_chains: &mut Vec<Vec<(ChainId, AccountOwner)>>,
-        chain_clients: &mut Vec<Vec<ChainClient<Env>>>,
-        chain_group: &mut Vec<(ChainId, AccountOwner)>,
-        chain_clients_group: &mut Vec<ChainClient<Env>>,
-        num_chains_per_chain_group: usize,
-        chain_id: ChainId,
-        owner: AccountOwner,
-        chain_client: ChainClient<Env>,
-    ) {
-        chain_group.push((chain_id, owner));
-        chain_clients_group.push(chain_client);
-
-        if chain_group.len() == num_chains_per_chain_group
-            && chain_clients_group.len() == num_chains_per_chain_group
-        {
-            benchmark_chains.push(chain_group.clone());
-            chain_clients.push(chain_clients_group.clone());
-            chain_group.clear();
-            chain_clients_group.clear();
-        }
-    }
-
     /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
     /// with key pairs, as well as a map of the chain clients.
     async fn make_benchmark_chains(
         &mut self,
-        num_chain_groups: usize,
-        num_chains_per_chain_group: usize,
+        num_chains: usize,
         balance: Amount,
         pub_keys: Vec<AccountPublicKey>,
-    ) -> Result<
-        (
-            Vec<Vec<(ChainId, AccountOwner)>>,
-            Vec<Vec<ChainClient<Env>>>,
-        ),
-        Error,
-    > {
-        let total_chains_to_create = num_chain_groups * num_chains_per_chain_group;
+    ) -> Result<(Vec<(ChainId, AccountOwner)>, Vec<ChainClient<Env>>), Error> {
         let mut chains_found_in_wallet = 0;
-        let mut benchmark_chains = Vec::with_capacity(num_chain_groups);
-        let mut chain_clients = Vec::with_capacity(num_chain_groups);
-        let mut chain_group = Vec::with_capacity(num_chains_per_chain_group);
-        let mut chain_clients_group = Vec::with_capacity(num_chains_per_chain_group);
+        let mut benchmark_chains = Vec::with_capacity(num_chains);
+        let mut chain_clients = Vec::with_capacity(num_chains);
         let start = Instant::now();
         for chain_id in self.wallet.owned_chain_ids() {
-            if chains_found_in_wallet == total_chains_to_create {
+            if chains_found_in_wallet == num_chains {
                 break;
             }
             // This should never panic, because `owned_chain_ids` only returns the owned chains that
@@ -870,16 +830,8 @@ where
                 continue;
             }
             chain_client.process_inbox().await?;
-            Self::insert_chain(
-                &mut benchmark_chains,
-                &mut chain_clients,
-                &mut chain_group,
-                &mut chain_clients_group,
-                num_chains_per_chain_group,
-                chain_id,
-                owner,
-                chain_client,
-            );
+            benchmark_chains.push((chain_id, owner));
+            chain_clients.push(chain_client);
             chains_found_in_wallet += 1;
         }
         info!(
@@ -888,7 +840,7 @@ where
             start.elapsed().as_millis()
         );
 
-        let num_chains_to_create = total_chains_to_create - chains_found_in_wallet;
+        let num_chains_to_create = num_chains - chains_found_in_wallet;
 
         let default_chain_id = self
             .wallet
@@ -932,16 +884,8 @@ where
                 );
                 chain_client.set_preferred_owner(owner);
                 chain_client.process_inbox().await?;
-                Self::insert_chain(
-                    &mut benchmark_chains,
-                    &mut chain_clients,
-                    &mut chain_group,
-                    &mut chain_clients_group,
-                    num_chains_per_chain_group,
-                    chain_id,
-                    owner,
-                    chain_client,
-                );
+                benchmark_chains.push((chain_id, owner));
+                chain_clients.push(chain_client);
             }
         }
 
@@ -993,7 +937,7 @@ where
     /// Supplies fungible tokens to the chains.
     async fn supply_fungible_tokens(
         &mut self,
-        key_pairs: &[Vec<(ChainId, AccountOwner)>],
+        key_pairs: &[(ChainId, AccountOwner)],
         application_id: ApplicationId,
     ) -> Result<(), Error> {
         let default_chain_id = self
@@ -1005,19 +949,14 @@ where
         let amount = Amount::from_nanos(4);
         let operations: Vec<Operation> = key_pairs
             .iter()
-            .flat_map(|chain_group| {
-                chain_group
-                    .iter()
-                    .map(|(chain_id, owner)| {
-                        Benchmark::<Env>::fungible_transfer(
-                            application_id,
-                            *chain_id,
-                            default_key,
-                            *owner,
-                            amount,
-                        )
-                    })
-                    .collect::<Vec<_>>()
+            .map(|(chain_id, owner)| {
+                Benchmark::<Env>::fungible_transfer(
+                    application_id,
+                    *chain_id,
+                    default_key,
+                    *owner,
+                    amount,
+                )
             })
             .collect();
         let chain_client = self.make_chain_client(default_chain_id);

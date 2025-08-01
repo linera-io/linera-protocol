@@ -27,7 +27,7 @@ const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
 #[cfg(feature = "benchmark")]
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 #[cfg(feature = "benchmark")]
-const DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP: usize = 2;
+const DEFAULT_NUM_CHAINS: usize = 10;
 #[cfg(feature = "benchmark")]
 const DEFAULT_BPS: usize = 10;
 
@@ -36,13 +36,9 @@ const DEFAULT_BPS: usize = 10;
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkCommand {
-    /// How many chains to use in each chain group.
-    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP)]
-    pub num_chains_per_chain_group: usize,
-
-    /// How many chain groups to use. If not provided, the number of CPUs will be used.
-    #[arg(long)]
-    pub num_chain_groups: Option<usize>,
+    /// How many chains to use.
+    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS)]
+    pub num_chains: usize,
 
     /// How many tokens to assign to each newly created chain.
     /// These need to cover the transaction fees per chain for the benchmark.
@@ -90,21 +86,20 @@ pub struct BenchmarkCommand {
     #[arg(long)]
     pub runtime_in_seconds: Option<u64>,
 
-    /// The delay between chain groups, in milliseconds. For example, if set to 200ms, the first
-    /// chain group will start, then the second will start 200 ms after the first one, the third
+    /// The delay between chains, in milliseconds. For example, if set to 200ms, the first
+    /// chain will start, then the second will start 200 ms after the first one, the third
     /// 200 ms after the second one, and so on.
     /// This is used for slowly ramping up the TPS, so we don't pound the validators with the full
     /// TPS all at once.
     #[arg(long)]
-    pub delay_between_chain_groups_ms: Option<u64>,
+    pub delay_between_chains_ms: Option<u64>,
 }
 
 #[cfg(feature = "benchmark")]
 impl Default for BenchmarkCommand {
     fn default() -> Self {
         Self {
-            num_chains_per_chain_group: DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP,
-            num_chain_groups: None,
+            num_chains: DEFAULT_NUM_CHAINS,
             tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
             transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
             wrap_up_max_in_flight: DEFAULT_WRAP_UP_MAX_IN_FLIGHT,
@@ -114,7 +109,7 @@ impl Default for BenchmarkCommand {
             health_check_endpoints: None,
             confirm_before_start: false,
             runtime_in_seconds: None,
-            delay_between_chain_groups_ms: None,
+            delay_between_chains_ms: None,
         }
     }
 }
