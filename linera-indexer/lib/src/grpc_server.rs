@@ -21,23 +21,6 @@ use crate::{
     sqlite_db::{SqliteDatabase, SqliteError},
 };
 
-/// Type conversions between protobuf and linera types
-impl TryFrom<crate::indexer_api::Block> for ConfirmedBlockCertificate {
-    type Error = bincode::Error;
-
-    fn try_from(value: crate::indexer_api::Block) -> Result<Self, Self::Error> {
-        bincode::deserialize(&value.bytes)
-    }
-}
-
-impl TryFrom<crate::indexer_api::Blob> for Blob {
-    type Error = bincode::Error;
-
-    fn try_from(value: crate::indexer_api::Blob) -> Result<Self, Self::Error> {
-        bincode::deserialize(&value.bytes)
-    }
-}
-
 pub struct IndexerGrpcServer {
     database: Arc<SqliteDatabase>,
 }
@@ -47,6 +30,57 @@ impl IndexerGrpcServer {
         Self {
             database: Arc::new(database),
         }
+    }
+
+    /// Start the gRPC indexer server
+    pub async fn serve(self, port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let addr = format!("0.0.0.0:{}", port).parse()?;
+
+        info!("Starting gRPC indexer server on {}", addr);
+
+        Server::builder()
+            .add_service(IndexerServer::new(self))
+            .serve(addr)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Process the entire stream and return responses
+    async fn process_stream(
+        database: Arc<SqliteDatabase>,
+        stream: Streaming<Element>,
+    ) -> impl Stream<Item = Result<(), Status>> {
+        futures::stream::unfold(
+            (stream, database, HashMap::<BlobId, Vec<u8>>::new()),
+            |(mut input_stream, database, mut pending_blobs)| async move {
+                loop {
+                    match input_stream.next().await {
+                        Some(Ok(element)) => {
+                            let response = Self::process_single_element(
+                                &database,
+                                &mut pending_blobs,
+                                element,
+                            )
+                            .await;
+                            if let Some(resp) = response {
+                                // Return the response and continue with the updated state
+                                return Some((resp, (input_stream, database, pending_blobs)));
+                            }
+                            // If no response (blob case), continue to next element
+                        }
+                        Some(Err(e)) => {
+                            error!("Error receiving element: {}", e);
+                            return Some((Err(e), (input_stream, database, pending_blobs)));
+                        }
+                        None => {
+                            // Stream ended
+                            return None;
+                        }
+                    }
+                }
+            },
+        )
     }
 
     /// Process a single element and return a response if needed
@@ -102,6 +136,7 @@ impl IndexerGrpcServer {
                 let block_hash = block_cert.hash();
                 let chain_id = block_cert.inner().chain_id();
                 let height = block_cert.inner().height();
+                let incoming_bundles = block_cert.value().block().body.incoming_bundles.clone();
 
                 info!(
                     "Received block: {} for chain: {} at height: {}",
@@ -126,9 +161,16 @@ impl IndexerGrpcServer {
                     .map(|(blob_id, blob_data)| (*blob_id, blob_data.clone()))
                     .collect();
 
-                // Use the high-level atomic API - this manages all locking internally
+                // Use the high-level atomic API with incoming bundles - this manages all locking internally
                 match database
-                    .store_block_with_blobs(&block_hash, &chain_id, height, &block_data, &blobs)
+                    .store_block_with_blobs_and_bundles(
+                        &block_hash,
+                        &chain_id,
+                        height,
+                        &block_data,
+                        &blobs,
+                        incoming_bundles,
+                    )
                     .await
                 {
                     Ok(()) => {
@@ -154,43 +196,6 @@ impl IndexerGrpcServer {
                 Some(Err(Status::invalid_argument("Empty element")))
             }
         }
-    }
-
-    /// Process the entire stream and return responses
-    async fn process_stream(
-        database: Arc<SqliteDatabase>,
-        stream: Streaming<Element>,
-    ) -> impl Stream<Item = Result<(), Status>> {
-        futures::stream::unfold(
-            (stream, database, HashMap::<BlobId, Vec<u8>>::new()),
-            |(mut input_stream, database, mut pending_blobs)| async move {
-                loop {
-                    match input_stream.next().await {
-                        Some(Ok(element)) => {
-                            let response = Self::process_single_element(
-                                &database,
-                                &mut pending_blobs,
-                                element,
-                            )
-                            .await;
-                            if let Some(resp) = response {
-                                // Return the response and continue with the updated state
-                                return Some((resp, (input_stream, database, pending_blobs)));
-                            }
-                            // If no response (blob case), continue to next element
-                        }
-                        Some(Err(e)) => {
-                            error!("Error receiving element: {}", e);
-                            return Some((Err(e), (input_stream, database, pending_blobs)));
-                        }
-                        None => {
-                            // Stream ended
-                            return None;
-                        }
-                    }
-                }
-            },
-        )
     }
 }
 
@@ -227,18 +232,19 @@ impl From<SqliteError> for Status {
     }
 }
 
-impl IndexerGrpcServer {
-    /// Start the gRPC indexer server
-    pub async fn serve(self, port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let addr = format!("0.0.0.0:{}", port).parse()?;
+/// Type conversions between protobuf and linera types
+impl TryFrom<crate::indexer_api::Block> for ConfirmedBlockCertificate {
+    type Error = bincode::Error;
 
-        info!("Starting gRPC indexer server on {}", addr);
+    fn try_from(value: crate::indexer_api::Block) -> Result<Self, Self::Error> {
+        bincode::deserialize(&value.bytes)
+    }
+}
 
-        Server::builder()
-            .add_service(IndexerServer::new(self))
-            .serve(addr)
-            .await?;
+impl TryFrom<crate::indexer_api::Blob> for Blob {
+    type Error = bincode::Error;
 
-        Ok(())
+    fn try_from(value: crate::indexer_api::Blob) -> Result<Self, Self::Error> {
+        bincode::deserialize(&value.bytes)
     }
 }

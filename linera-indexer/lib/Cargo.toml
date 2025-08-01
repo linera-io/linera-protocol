@@ -31,7 +31,7 @@ clap.workspace = true
 futures.workspace = true
 graphql-ws-client = { version = "0.5", features = ["client-graphql-client"] }
 graphql_client = { version = "0.13", features = ["reqwest-rustls"] }
-linera-base.workspace = true
+linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-service-graphql-client.workspace = true
@@ -46,6 +46,9 @@ tokio-stream = "0.1"
 tonic = { workspace = true, features = ["server", "codegen", "prost"] }
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
+
+[dev-dependencies]
+assert_matches.workspace = true
 
 [build-dependencies]
 tonic-build = { workspace = true, features = ["prost"] }

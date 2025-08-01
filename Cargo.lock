@@ -5387,6 +5387,7 @@ dependencies = [
 name = "linera-indexer"
 version = "0.15.0"
 dependencies = [
+ "assert_matches",
  "async-graphql",
  "async-graphql-axum",
  "async-trait",
