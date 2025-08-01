@@ -40,6 +40,8 @@ pub enum IndexerError {
     PluginAlreadyRegistered,
     #[error("Open exclusive error")]
     OpenExclusiveError,
+    #[error("Other error: {0}")]
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 
     #[cfg(feature = "rocksdb")]
     #[error(transparent)]
