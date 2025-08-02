@@ -54,8 +54,16 @@ const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 /// only when creating a new instance of a shared contract
 const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
-/// Returns the deployed bytecode of the contract.
-const GET_DEPLOYED_BYTECODE: &[u8] = &[21, 34, 55, 89];
+/// The selector when calling for `InterpreterResult`. This is a fictional
+/// selector that does not correspond to a real function.
+const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
+
+/// The selector when accessing for the deployed bytecode. This is a fictional
+/// selector that does not correspond to a real function.
+const GET_DEPLOYED_BYTECODE_SELECTOR: &[u8] = &[21, 34, 55, 89];
+
+/// The serde serialization of a trivial vector.
+const SERDE_EMPTY_VECTOR: &[u8] = &[91, 93];
 
 fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
     if vec == EXECUTE_MESSAGE_SELECTOR {
@@ -94,10 +102,6 @@ fn ensure_selector_presence(
     }
     Ok(())
 }
-
-/// The selector when calling for `InterpreterResult`. This is a fictional
-/// selector that does not correspond to a real function.
-const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
 
 #[cfg(test)]
 mod tests {
@@ -1029,10 +1033,8 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 .lock()
                 .expect("The lock should be possible");
             let module_id = runtime.publish_module(contract, service, VmRuntime::Evm)?;
-            let parameters = Vec::<u8>::new(); // No constructor
-            let parameters = serde_json::to_vec(&parameters)?;
-            let argument = Vec::<u8>::new(); // No call to "fn instantiate"
-            let argument = serde_json::to_vec(&argument)?;
+            let parameters = SERDE_EMPTY_VECTOR.to_vec(); // No constructor
+            let argument = SERDE_EMPTY_VECTOR.to_vec(); // No call to "fn instantiate"
             let required_application_ids = Vec::new();
             let application_id = runtime.create_application(
                 module_id,
@@ -1040,7 +1042,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 argument,
                 required_application_ids,
             )?;
-            let argument = GET_DEPLOYED_BYTECODE.to_vec();
+            let argument = GET_DEPLOYED_BYTECODE_SELECTOR.to_vec();
             let deployed_bytecode: Vec<u8> =
                 runtime.try_call_application(false, application_id, argument)?;
             let result = InterpreterResult {
@@ -1260,7 +1262,7 @@ where
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
-        if operation == GET_DEPLOYED_BYTECODE {
+        if operation == GET_DEPLOYED_BYTECODE_SELECTOR {
             return self.db.get_deployed_bytecode();
         }
         let caller = self.get_msg_address()?;
