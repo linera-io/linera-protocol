@@ -6,8 +6,7 @@ in the `test_create_and_call_end_to_end` end-to-end test.
 
 ## Note
 
-In the block in which `publish_module`, `create_application` and `call_application` are done,
-we cannot call the `query_application` cannot be called since the service are about the previous
-block.
+In the operation in which `publish_module`, `create_application` and `call_application` are done,
+we can call `query_application` but it uses default values.
 
 ## Usage
