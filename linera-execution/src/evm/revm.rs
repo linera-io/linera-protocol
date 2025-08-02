@@ -1140,7 +1140,9 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
             };
             Ok(None)
         } else {
-            Err(ExecutionError::EvmError(EvmExecutionError::NoContractCreationInService))
+            Err(ExecutionError::EvmError(
+                EvmExecutionError::NoContractCreationInService,
+            ))
         }
     }
 
