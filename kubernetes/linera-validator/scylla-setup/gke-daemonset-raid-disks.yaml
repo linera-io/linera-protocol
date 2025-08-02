@@ -19,7 +19,7 @@ spec:
       hostPID: true
       containers:
         - name: startup-script
-          image: registry.k8s.io/startup-script:v1
+          image: registry.k8s.io/startup-script:v2
           securityContext:
             privileged: true
           env:
