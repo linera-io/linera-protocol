@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wit_bindgen_rt", 0, "NB: this function is called by a generated function in the …\nThis function is called from generated bindings and will …")

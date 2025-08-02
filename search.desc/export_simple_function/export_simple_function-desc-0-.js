@@ -1,0 +1,1 @@
+searchState.loadedDescShard("export_simple_function", 0, "Helper Wasm module with a minimal function without …\nDeclares the export of the component’s world for the …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

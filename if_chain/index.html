@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides a single macro called `if_chain!`."><title>if_chain - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="if_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../if_chain/index.html">if_<wbr>chain</a><span class="version">1.0.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#note-about-recursion-limits" title="Note about recursion limits">Note about recursion limits</a></li><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#quick-start" title="Quick start">Quick start</a></li><li><a href="#fallback-values-with-else" title="Fallback values with `else`">Fallback values with <code>else</code></a></li><li><a href="#intermediate-variables-with-let" title="Intermediate variables with `let`">Intermediate variables with <code>let</code></a></li><li><a href="#type-ascription" title="Type ascription">Type ascription</a></li><li><a href="#multiple-patterns" title="Multiple patterns">Multiple patterns</a></li></ul></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>if_chain</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/if_chain/lib.rs.html#1-314">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides a single macro called <code>if_chain!</code>.</p>
+<p><code>if_chain!</code> lets you write long chains of nested <code>if</code> and <code>if let</code>
+statements without the associated rightward drift. It also supports multiple
+patterns (e.g. <code>if let Foo(a) | Bar(a) = b</code>) in places where Rust would
+normally not allow them.</p>
+<p>See the associated <a href="https://lambda.xyz/blog/if-chain">blog post</a> for the background behind this crate.</p>
+<h2 id="note-about-recursion-limits"><a class="doc-anchor" href="#note-about-recursion-limits">§</a>Note about recursion limits</h2>
+<p>If you run into “recursion limit reached” errors while using this macro, try
+adding</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![recursion_limit = <span class="string">"1000"</span>]</span></code></pre></div>
+<p>to the top of your crate.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="quick-start"><a class="doc-anchor" href="#quick-start">§</a>Quick start</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">if_chain!</span> {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(y) = x;
+    <span class="kw">if </span>y.len() == <span class="number">2</span>;
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(z) = y;
+    then {
+        do_stuff_with(z);
+    }
+}</code></pre></div>
+<p>becomes</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">if let </span><span class="prelude-val">Some</span>(y) = x {
+    <span class="kw">if </span>y.len() == <span class="number">2 </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(z) = y {
+            do_stuff_with(z);
+        }
+    }
+}</code></pre></div>
+<h3 id="fallback-values-with-else"><a class="doc-anchor" href="#fallback-values-with-else">§</a>Fallback values with <code>else</code></h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">if_chain!</span> {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(y) = x;
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(z) = y;
+    then {
+        do_stuff_with(z)
+    } <span class="kw">else </span>{
+        do_something_else()
+    }
+}</code></pre></div>
+<p>becomes</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">if let </span><span class="prelude-val">Some</span>(y) = x {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(z) = y {
+        do_stuff_with(z)
+    } <span class="kw">else </span>{
+        do_something_else()
+    }
+} <span class="kw">else </span>{
+    do_something_else()
+}</code></pre></div>
+<h3 id="intermediate-variables-with-let"><a class="doc-anchor" href="#intermediate-variables-with-let">§</a>Intermediate variables with <code>let</code></h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">if_chain!</span> {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(y) = x;
+    <span class="kw">let </span>z = y.some().complicated().expression();
+    <span class="kw">if </span>z == <span class="number">42</span>;
+    then {
+       do_stuff_with(y);
+    }
+}</code></pre></div>
+<p>becomes</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">if let </span><span class="prelude-val">Some</span>(y) = x {
+    <span class="kw">let </span>z = y.some().complicated().expression();
+    <span class="kw">if </span>z == <span class="number">42 </span>{
+        do_stuff_with(y);
+    }
+}</code></pre></div>
+<h3 id="type-ascription"><a class="doc-anchor" href="#type-ascription">§</a>Type ascription</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>x = some_generic_computation();
+<span class="macro">if_chain!</span> {
+    <span class="kw">if </span>x &gt; <span class="number">7</span>;
+    <span class="kw">let </span>y: u32 = another_generic_computation();
+    then { x += y }
+    <span class="kw">else </span>{ x += <span class="number">1 </span>}
+}</code></pre></div>
+<p>becomes</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>x = some_generic_computation();
+<span class="kw">if </span>x &gt; <span class="number">7 </span>{
+    <span class="kw">let </span>y: u32 = another_generic_computation();
+    x += y
+} <span class="kw">else </span>{
+    x += <span class="number">1
+</span>}</code></pre></div>
+<h3 id="multiple-patterns"><a class="doc-anchor" href="#multiple-patterns">§</a>Multiple patterns</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">if_chain!</span> {
+    <span class="kw">if let </span>Foo(y) | Bar(y) | Baz(y) = x;
+    <span class="kw">let </span>Bubbles(z) | Buttercup(z) | Blossom(z) = y;
+    then { do_stuff_with(z) }
+}</code></pre></div>
+<p>becomes</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">match </span>x {
+    Foo(y) | Bar(y) | Baz(y) =&gt; <span class="kw">match </span>y {
+        Bubbles(z) | Buttercup(z) | Blossom(z) =&gt; do_stuff_with(z)
+    },
+    <span class="kw">_ </span>=&gt; {}
+}</code></pre></div>
+<p>Note that if you use a plain <code>let</code>, then <code>if_chain!</code> assumes that the
+pattern is <em>irrefutable</em> (always matches) and doesn’t add a fallback branch.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.if_chain.html" title="macro if_chain::if_chain">if_<wbr>chain</a></dt><dd>Macro for writing nested <code>if let</code> expressions.</dd></dl></section></div></main></body></html>

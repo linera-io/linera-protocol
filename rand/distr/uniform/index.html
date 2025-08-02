@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A distribution uniformly sampling numbers within a given range."><title>rand::distr::uniform - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rand" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../rand/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../rand/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt="logo"></a><h2><a href="../../../rand/index.html">rand</a><span class="version">0.9.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module uniform</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example-usage" title="Example usage">Example usage</a></li><li><a href="#extending-uniform-to-support-a-custom-type" title="Extending `Uniform` to support a custom type">Extending <code>Uniform</code> to support a custom type</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In rand::<wbr>distr</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">rand</a>::<wbr><a href="../index.html">distr</a></div><h1>Module <span>uniform</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/rand/distr/uniform.rs.html#10-622">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A distribution uniformly sampling numbers within a given range.</p>
+<p><a href="../struct.Uniform.html" title="struct rand::distr::Uniform"><code>Uniform</code></a> is the standard distribution to sample uniformly from a range;
+e.g. <code>Uniform::new_inclusive(1, 6).unwrap()</code> can sample integers from 1 to 6, like a
+standard die. <a href="../../trait.Rng.html#method.random_range" title="method rand::Rng::random_range"><code>Rng::random_range</code></a> is implemented over <a href="../struct.Uniform.html" title="struct rand::distr::Uniform"><code>Uniform</code></a>.</p>
+<h2 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>rand::distr::Uniform;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+<span class="kw">let </span>side = Uniform::new(-<span class="number">10.0</span>, <span class="number">10.0</span>).unwrap();
+
+<span class="comment">// sample between 1 and 10 points
+</span><span class="kw">for _ in </span><span class="number">0</span>..rng.random_range(<span class="number">1</span>..=<span class="number">10</span>) {
+    <span class="comment">// sample a point from the square with sides -10 - 10 in two dimensions
+    </span><span class="kw">let </span>(x, y) = (rng.sample(side), rng.sample(side));
+    <span class="macro">println!</span>(<span class="string">"Point: {}, {}"</span>, x, y);
+}</code></pre></div>
+<h2 id="extending-uniform-to-support-a-custom-type"><a class="doc-anchor" href="#extending-uniform-to-support-a-custom-type">§</a>Extending <code>Uniform</code> to support a custom type</h2>
+<p>To extend <a href="../struct.Uniform.html" title="struct rand::distr::Uniform"><code>Uniform</code></a> to support your own types, write a back-end which
+implements the <a href="trait.UniformSampler.html" title="trait rand::distr::uniform::UniformSampler"><code>UniformSampler</code></a> trait, then implement the <a href="trait.SampleUniform.html" title="trait rand::distr::uniform::SampleUniform"><code>SampleUniform</code></a>
+helper trait to “register” your back-end. See the <code>MyF32</code> example below.</p>
+<p>At a minimum, the back-end needs to store any parameters needed for sampling
+(e.g. the target range) and implement <code>new</code>, <code>new_inclusive</code> and <code>sample</code>.
+Those methods should include an assertion to check the range is valid (i.e.
+<code>low &lt; high</code>). The example below merely wraps another back-end.</p>
+<p>The <code>new</code>, <code>new_inclusive</code>, <code>sample_single</code> and <code>sample_single_inclusive</code>
+functions use arguments of
+type <code>SampleBorrow&lt;X&gt;</code> to support passing in values by reference or
+by value. In the implementation of these functions, you can choose to
+simply use the reference returned by <a href="trait.SampleBorrow.html#tymethod.borrow" title="method rand::distr::uniform::SampleBorrow::borrow"><code>SampleBorrow::borrow</code></a>, or you can choose
+to copy or clone the value, whatever is appropriate for your type.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>rand::distr::uniform::{Uniform, SampleUniform,
+        UniformSampler, UniformFloat, SampleBorrow, Error};
+
+<span class="kw">struct </span>MyF32(f32);
+
+<span class="attr">#[derive(Clone, Copy, Debug)]
+</span><span class="kw">struct </span>UniformMyF32(UniformFloat&lt;f32&gt;);
+
+<span class="kw">impl </span>UniformSampler <span class="kw">for </span>UniformMyF32 {
+    <span class="kw">type </span>X = MyF32;
+
+    <span class="kw">fn </span>new&lt;B1, B2&gt;(low: B1, high: B2) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt;
+        <span class="kw">where </span>B1: SampleBorrow&lt;<span class="self">Self</span>::X&gt; + Sized,
+              B2: SampleBorrow&lt;<span class="self">Self</span>::X&gt; + Sized
+    {
+        UniformFloat::&lt;f32&gt;::new(low.borrow().<span class="number">0</span>, high.borrow().<span class="number">0</span>).map(UniformMyF32)
+    }
+    <span class="kw">fn </span>new_inclusive&lt;B1, B2&gt;(low: B1, high: B2) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt;
+        <span class="kw">where </span>B1: SampleBorrow&lt;<span class="self">Self</span>::X&gt; + Sized,
+              B2: SampleBorrow&lt;<span class="self">Self</span>::X&gt; + Sized
+    {
+        UniformFloat::&lt;f32&gt;::new_inclusive(low.borrow().<span class="number">0</span>, high.borrow().<span class="number">0</span>).map(UniformMyF32)
+    }
+    <span class="kw">fn </span>sample&lt;R: Rng + <span class="question-mark">?</span>Sized&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: <span class="kw-2">&amp;mut </span>R) -&gt; <span class="self">Self</span>::X {
+        MyF32(<span class="self">self</span>.<span class="number">0</span>.sample(rng))
+    }
+}
+
+<span class="kw">impl </span>SampleUniform <span class="kw">for </span>MyF32 {
+    <span class="kw">type </span>Sampler = UniformMyF32;
+}
+
+<span class="kw">let </span>(low, high) = (MyF32(<span class="number">17.0f32</span>), MyF32(<span class="number">22.0f32</span>));
+<span class="kw">let </span>uniform = Uniform::new(low, high).unwrap();
+<span class="kw">let </span>x = uniform.sample(<span class="kw-2">&amp;mut </span>rand::rng());</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Uniform.html" title="struct rand::distr::uniform::Uniform">Uniform</a></dt><dd>Sample values uniformly between two bounds.</dd><dt><a class="struct" href="struct.UniformChar.html" title="struct rand::distr::uniform::UniformChar">Uniform<wbr>Char</a></dt><dd>The back-end implementing <a href="trait.UniformSampler.html" title="trait rand::distr::uniform::UniformSampler"><code>UniformSampler</code></a> for <code>char</code>.</dd><dt><a class="struct" href="struct.UniformDuration.html" title="struct rand::distr::uniform::UniformDuration">Uniform<wbr>Duration</a></dt><dd>The back-end implementing <a href="trait.UniformSampler.html" title="trait rand::distr::uniform::UniformSampler"><code>UniformSampler</code></a> for <code>Duration</code>.</dd><dt><a class="struct" href="struct.UniformFloat.html" title="struct rand::distr::uniform::UniformFloat">Uniform<wbr>Float</a></dt><dd>The back-end implementing <a href="trait.UniformSampler.html" title="trait rand::distr::uniform::UniformSampler"><code>UniformSampler</code></a> for floating-point types.</dd><dt><a class="struct" href="struct.UniformInt.html" title="struct rand::distr::uniform::UniformInt">Uniform<wbr>Int</a></dt><dd>The back-end implementing <a href="trait.UniformSampler.html" title="trait rand::distr::uniform::UniformSampler"><code>UniformSampler</code></a> for integer types.</dd><dt><a class="struct" href="struct.UniformUsize.html" title="struct rand::distr::uniform::UniformUsize">Uniform<wbr>Usize</a></dt><dd>The back-end implementing <a href="trait.UniformSampler.html" title="trait rand::distr::uniform::UniformSampler"><code>UniformSampler</code></a> for <code>usize</code>.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Error.html" title="enum rand::distr::uniform::Error">Error</a></dt><dd>Error type returned from <a href="../struct.Uniform.html#method.new" title="associated function rand::distr::Uniform::new"><code>Uniform::new</code></a> and <code>new_inclusive</code>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.SampleBorrow.html" title="trait rand::distr::uniform::SampleBorrow">Sample<wbr>Borrow</a></dt><dd>Helper trait similar to <a href="https://doc.rust-lang.org/1.86.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow"><code>Borrow</code></a> but implemented
+only for <a href="trait.SampleUniform.html" title="trait rand::distr::uniform::SampleUniform"><code>SampleUniform</code></a> and references to <a href="trait.SampleUniform.html" title="trait rand::distr::uniform::SampleUniform"><code>SampleUniform</code></a>
+in order to resolve ambiguity issues.</dd><dt><a class="trait" href="trait.SampleRange.html" title="trait rand::distr::uniform::SampleRange">Sample<wbr>Range</a></dt><dd>Range that supports generating a single sample efficiently.</dd><dt><a class="trait" href="trait.SampleUniform.html" title="trait rand::distr::uniform::SampleUniform">Sample<wbr>Uniform</a></dt><dd>Helper trait for creating objects using the correct implementation of
+<a href="trait.UniformSampler.html" title="trait rand::distr::uniform::UniformSampler"><code>UniformSampler</code></a> for the sampling type.</dd><dt><a class="trait" href="trait.UniformSampler.html" title="trait rand::distr::uniform::UniformSampler">Uniform<wbr>Sampler</a></dt><dd>Helper trait handling actual uniform sampling.</dd></dl></section></div></main></body></html>

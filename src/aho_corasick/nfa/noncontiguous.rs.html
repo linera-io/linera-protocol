@@ -1,0 +1,1762 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aho-corasick-1.1.3/src/nfa/noncontiguous.rs`."><title>noncontiguous.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">aho_corasick/nfa/</div>noncontiguous.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">/*!
+<a href=#2 id=2 data-nosnippet>2</a>Provides a noncontiguous NFA implementation of Aho-Corasick.
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a>This is a low-level API that generally only needs to be used in niche
+<a href=#5 id=5 data-nosnippet>5</a>circumstances. When possible, prefer using [`AhoCorasick`](crate::AhoCorasick)
+<a href=#6 id=6 data-nosnippet>6</a>instead of a noncontiguous NFA directly. Using an `NFA` directly is typically
+<a href=#7 id=7 data-nosnippet>7</a>only necessary when one needs access to the [`Automaton`] trait implementation.
+<a href=#8 id=8 data-nosnippet>8</a>*/
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">use </span>alloc::{
+<a href=#11 id=11 data-nosnippet>11</a>    collections::{BTreeSet, VecDeque},
+<a href=#12 id=12 data-nosnippet>12</a>    vec,
+<a href=#13 id=13 data-nosnippet>13</a>    vec::Vec,
+<a href=#14 id=14 data-nosnippet>14</a>};
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use crate</span>::{
+<a href=#17 id=17 data-nosnippet>17</a>    automaton::Automaton,
+<a href=#18 id=18 data-nosnippet>18</a>    util::{
+<a href=#19 id=19 data-nosnippet>19</a>        alphabet::{ByteClassSet, ByteClasses},
+<a href=#20 id=20 data-nosnippet>20</a>        error::{BuildError, MatchError},
+<a href=#21 id=21 data-nosnippet>21</a>        prefilter::{<span class="self">self</span>, opposite_ascii_case, Prefilter},
+<a href=#22 id=22 data-nosnippet>22</a>        primitives::{IteratorIndexExt, PatternID, SmallIndex, StateID},
+<a href=#23 id=23 data-nosnippet>23</a>        remapper::Remapper,
+<a href=#24 id=24 data-nosnippet>24</a>        search::{Anchored, MatchKind},
+<a href=#25 id=25 data-nosnippet>25</a>        special::Special,
+<a href=#26 id=26 data-nosnippet>26</a>    },
+<a href=#27 id=27 data-nosnippet>27</a>};
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="doccomment">/// A noncontiguous NFA implementation of Aho-Corasick.
+<a href=#30 id=30 data-nosnippet>30</a>///
+<a href=#31 id=31 data-nosnippet>31</a>/// When possible, prefer using [`AhoCorasick`](crate::AhoCorasick) instead of
+<a href=#32 id=32 data-nosnippet>32</a>/// this type directly. Using an `NFA` directly is typically only necessary
+<a href=#33 id=33 data-nosnippet>33</a>/// when one needs access to the [`Automaton`] trait implementation.
+<a href=#34 id=34 data-nosnippet>34</a>///
+<a href=#35 id=35 data-nosnippet>35</a>/// This NFA represents the "core" implementation of Aho-Corasick in this
+<a href=#36 id=36 data-nosnippet>36</a>/// crate. Namely, constructing this NFA involving building a trie and then
+<a href=#37 id=37 data-nosnippet>37</a>/// filling in the failure transitions between states, similar to what is
+<a href=#38 id=38 data-nosnippet>38</a>/// described in any standard textbook description of Aho-Corasick.
+<a href=#39 id=39 data-nosnippet>39</a>///
+<a href=#40 id=40 data-nosnippet>40</a>/// In order to minimize heap usage and to avoid additional construction costs,
+<a href=#41 id=41 data-nosnippet>41</a>/// this implementation represents the transitions of all states as distinct
+<a href=#42 id=42 data-nosnippet>42</a>/// sparse memory allocations. This is where it gets its name from. That is,
+<a href=#43 id=43 data-nosnippet>43</a>/// this NFA has no contiguous memory allocation for its transition table. Each
+<a href=#44 id=44 data-nosnippet>44</a>/// state gets its own allocation.
+<a href=#45 id=45 data-nosnippet>45</a>///
+<a href=#46 id=46 data-nosnippet>46</a>/// While the sparse representation keeps memory usage to somewhat reasonable
+<a href=#47 id=47 data-nosnippet>47</a>/// levels, it is still quite large and also results in somewhat mediocre
+<a href=#48 id=48 data-nosnippet>48</a>/// search performance. For this reason, it is almost always a good idea to
+<a href=#49 id=49 data-nosnippet>49</a>/// use a [`contiguous::NFA`](crate::nfa::contiguous::NFA) instead. It is
+<a href=#50 id=50 data-nosnippet>50</a>/// marginally slower to build, but has higher throughput and can sometimes use
+<a href=#51 id=51 data-nosnippet>51</a>/// an order of magnitude less memory. The main reason to use a noncontiguous
+<a href=#52 id=52 data-nosnippet>52</a>/// NFA is when you need the fastest possible construction time, or when a
+<a href=#53 id=53 data-nosnippet>53</a>/// contiguous NFA does not have the desired capacity. (The total number of NFA
+<a href=#54 id=54 data-nosnippet>54</a>/// states it can have is fewer than a noncontiguous NFA.)
+<a href=#55 id=55 data-nosnippet>55</a>///
+<a href=#56 id=56 data-nosnippet>56</a>/// # Example
+<a href=#57 id=57 data-nosnippet>57</a>///
+<a href=#58 id=58 data-nosnippet>58</a>/// This example shows how to build an `NFA` directly and use it to execute
+<a href=#59 id=59 data-nosnippet>59</a>/// [`Automaton::try_find`]:
+<a href=#60 id=60 data-nosnippet>60</a>///
+<a href=#61 id=61 data-nosnippet>61</a>/// ```
+<a href=#62 id=62 data-nosnippet>62</a>/// use aho_corasick::{
+<a href=#63 id=63 data-nosnippet>63</a>///     automaton::Automaton,
+<a href=#64 id=64 data-nosnippet>64</a>///     nfa::noncontiguous::NFA,
+<a href=#65 id=65 data-nosnippet>65</a>///     Input, Match,
+<a href=#66 id=66 data-nosnippet>66</a>/// };
+<a href=#67 id=67 data-nosnippet>67</a>///
+<a href=#68 id=68 data-nosnippet>68</a>/// let patterns = &amp;["b", "abc", "abcd"];
+<a href=#69 id=69 data-nosnippet>69</a>/// let haystack = "abcd";
+<a href=#70 id=70 data-nosnippet>70</a>///
+<a href=#71 id=71 data-nosnippet>71</a>/// let nfa = NFA::new(patterns).unwrap();
+<a href=#72 id=72 data-nosnippet>72</a>/// assert_eq!(
+<a href=#73 id=73 data-nosnippet>73</a>///     Some(Match::must(0, 1..2)),
+<a href=#74 id=74 data-nosnippet>74</a>///     nfa.try_find(&amp;Input::new(haystack))?,
+<a href=#75 id=75 data-nosnippet>75</a>/// );
+<a href=#76 id=76 data-nosnippet>76</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#77 id=77 data-nosnippet>77</a>/// ```
+<a href=#78 id=78 data-nosnippet>78</a>///
+<a href=#79 id=79 data-nosnippet>79</a>/// It is also possible to implement your own version of `try_find`. See the
+<a href=#80 id=80 data-nosnippet>80</a>/// [`Automaton`] documentation for an example.
+<a href=#81 id=81 data-nosnippet>81</a></span><span class="attr">#[derive(Clone)]
+<a href=#82 id=82 data-nosnippet>82</a></span><span class="kw">pub struct </span>NFA {
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="doccomment">/// The match semantics built into this NFA.
+<a href=#84 id=84 data-nosnippet>84</a>    </span>match_kind: MatchKind,
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="doccomment">/// A set of states. Each state defines its own transitions, a fail
+<a href=#86 id=86 data-nosnippet>86</a>    /// transition and a set of indices corresponding to matches.
+<a href=#87 id=87 data-nosnippet>87</a>    ///
+<a href=#88 id=88 data-nosnippet>88</a>    /// The first state is always the fail state, which is used only as a
+<a href=#89 id=89 data-nosnippet>89</a>    /// sentinel. Namely, in the final NFA, no transition into the fail state
+<a href=#90 id=90 data-nosnippet>90</a>    /// exists. (Well, they do, but they aren't followed. Instead, the state's
+<a href=#91 id=91 data-nosnippet>91</a>    /// failure transition is followed.)
+<a href=#92 id=92 data-nosnippet>92</a>    ///
+<a href=#93 id=93 data-nosnippet>93</a>    /// The second state (index 1) is always the dead state. Dead states are
+<a href=#94 id=94 data-nosnippet>94</a>    /// in every automaton, but only used when leftmost-{first,longest} match
+<a href=#95 id=95 data-nosnippet>95</a>    /// semantics are enabled. Specifically, they instruct search to stop
+<a href=#96 id=96 data-nosnippet>96</a>    /// at specific points in order to report the correct match location. In
+<a href=#97 id=97 data-nosnippet>97</a>    /// the standard Aho-Corasick construction, there are no transitions to
+<a href=#98 id=98 data-nosnippet>98</a>    /// the dead state.
+<a href=#99 id=99 data-nosnippet>99</a>    ///
+<a href=#100 id=100 data-nosnippet>100</a>    /// The third state (index 2) is generally intended to be the starting or
+<a href=#101 id=101 data-nosnippet>101</a>    /// "root" state.
+<a href=#102 id=102 data-nosnippet>102</a>    </span>states: Vec&lt;State&gt;,
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="doccomment">/// Transitions stored in a sparse representation via a linked list.
+<a href=#104 id=104 data-nosnippet>104</a>    ///
+<a href=#105 id=105 data-nosnippet>105</a>    /// Each transition contains three pieces of information: the byte it
+<a href=#106 id=106 data-nosnippet>106</a>    /// is defined for, the state it transitions to and a link to the next
+<a href=#107 id=107 data-nosnippet>107</a>    /// transition in the same state (or `StateID::ZERO` if it is the last
+<a href=#108 id=108 data-nosnippet>108</a>    /// transition).
+<a href=#109 id=109 data-nosnippet>109</a>    ///
+<a href=#110 id=110 data-nosnippet>110</a>    /// The first transition for each state is determined by `State::sparse`.
+<a href=#111 id=111 data-nosnippet>111</a>    ///
+<a href=#112 id=112 data-nosnippet>112</a>    /// Note that this contains a complete set of all transitions in this NFA,
+<a href=#113 id=113 data-nosnippet>113</a>    /// including states that have a dense representation for transitions.
+<a href=#114 id=114 data-nosnippet>114</a>    /// (Adding dense transitions for a state doesn't remove its sparse
+<a href=#115 id=115 data-nosnippet>115</a>    /// transitions, since deleting transitions from this particular sparse
+<a href=#116 id=116 data-nosnippet>116</a>    /// representation would be fairly expensive.)
+<a href=#117 id=117 data-nosnippet>117</a>    </span>sparse: Vec&lt;Transition&gt;,
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="doccomment">/// Transitions stored in a dense representation.
+<a href=#119 id=119 data-nosnippet>119</a>    ///
+<a href=#120 id=120 data-nosnippet>120</a>    /// A state has a row in this table if and only if `State::dense` is
+<a href=#121 id=121 data-nosnippet>121</a>    /// not equal to `StateID::ZERO`. When not zero, there are precisely
+<a href=#122 id=122 data-nosnippet>122</a>    /// `NFA::byte_classes::alphabet_len()` entries beginning at `State::dense`
+<a href=#123 id=123 data-nosnippet>123</a>    /// in this table.
+<a href=#124 id=124 data-nosnippet>124</a>    ///
+<a href=#125 id=125 data-nosnippet>125</a>    /// Generally a very small minority of states have a dense representation
+<a href=#126 id=126 data-nosnippet>126</a>    /// since it uses so much memory.
+<a href=#127 id=127 data-nosnippet>127</a>    </span>dense: Vec&lt;StateID&gt;,
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="doccomment">/// Matches stored in linked list for each state.
+<a href=#129 id=129 data-nosnippet>129</a>    ///
+<a href=#130 id=130 data-nosnippet>130</a>    /// Like sparse transitions, each match has a link to the next match in the
+<a href=#131 id=131 data-nosnippet>131</a>    /// state.
+<a href=#132 id=132 data-nosnippet>132</a>    ///
+<a href=#133 id=133 data-nosnippet>133</a>    /// The first match for each state is determined by `State::matches`.
+<a href=#134 id=134 data-nosnippet>134</a>    </span>matches: Vec&lt;Match&gt;,
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="doccomment">/// The length, in bytes, of each pattern in this NFA. This slice is
+<a href=#136 id=136 data-nosnippet>136</a>    /// indexed by `PatternID`.
+<a href=#137 id=137 data-nosnippet>137</a>    ///
+<a href=#138 id=138 data-nosnippet>138</a>    /// The number of entries in this vector corresponds to the total number of
+<a href=#139 id=139 data-nosnippet>139</a>    /// patterns in this automaton.
+<a href=#140 id=140 data-nosnippet>140</a>    </span>pattern_lens: Vec&lt;SmallIndex&gt;,
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="doccomment">/// A prefilter for quickly skipping to candidate matches, if pertinent.
+<a href=#142 id=142 data-nosnippet>142</a>    </span>prefilter: <span class="prelude-ty">Option</span>&lt;Prefilter&gt;,
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="doccomment">/// A set of equivalence classes in terms of bytes. We compute this while
+<a href=#144 id=144 data-nosnippet>144</a>    /// building the NFA, but don't use it in the NFA's states. Instead, we
+<a href=#145 id=145 data-nosnippet>145</a>    /// use this for building the DFA. We store it on the NFA since it's easy
+<a href=#146 id=146 data-nosnippet>146</a>    /// to compute while visiting the patterns.
+<a href=#147 id=147 data-nosnippet>147</a>    </span>byte_classes: ByteClasses,
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="doccomment">/// The length, in bytes, of the shortest pattern in this automaton. This
+<a href=#149 id=149 data-nosnippet>149</a>    /// information is useful for detecting whether an automaton matches the
+<a href=#150 id=150 data-nosnippet>150</a>    /// empty string or not.
+<a href=#151 id=151 data-nosnippet>151</a>    </span>min_pattern_len: usize,
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="doccomment">/// The length, in bytes, of the longest pattern in this automaton. This
+<a href=#153 id=153 data-nosnippet>153</a>    /// information is useful for keeping correct buffer sizes when searching
+<a href=#154 id=154 data-nosnippet>154</a>    /// on streams.
+<a href=#155 id=155 data-nosnippet>155</a>    </span>max_pattern_len: usize,
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="doccomment">/// The information required to deduce which states are "special" in this
+<a href=#157 id=157 data-nosnippet>157</a>    /// NFA.
+<a href=#158 id=158 data-nosnippet>158</a>    ///
+<a href=#159 id=159 data-nosnippet>159</a>    /// Since the DEAD and FAIL states are always the first two states and
+<a href=#160 id=160 data-nosnippet>160</a>    /// there are only ever two start states (which follow all of the match
+<a href=#161 id=161 data-nosnippet>161</a>    /// states), it follows that we can determine whether a state is a fail,
+<a href=#162 id=162 data-nosnippet>162</a>    /// dead, match or start with just a few comparisons on the ID itself:
+<a href=#163 id=163 data-nosnippet>163</a>    ///
+<a href=#164 id=164 data-nosnippet>164</a>    ///    is_dead(sid): sid == NFA::DEAD
+<a href=#165 id=165 data-nosnippet>165</a>    ///    is_fail(sid): sid == NFA::FAIL
+<a href=#166 id=166 data-nosnippet>166</a>    ///   is_match(sid): NFA::FAIL &lt; sid &amp;&amp; sid &lt;= max_match_id
+<a href=#167 id=167 data-nosnippet>167</a>    ///   is_start(sid): sid == start_unanchored_id || sid == start_anchored_id
+<a href=#168 id=168 data-nosnippet>168</a>    ///
+<a href=#169 id=169 data-nosnippet>169</a>    /// Note that this only applies to the NFA after it has been constructed.
+<a href=#170 id=170 data-nosnippet>170</a>    /// During construction, the start states are the first ones added and the
+<a href=#171 id=171 data-nosnippet>171</a>    /// match states are inter-leaved with non-match states. Once all of the
+<a href=#172 id=172 data-nosnippet>172</a>    /// states have been added, the states are shuffled such that the above
+<a href=#173 id=173 data-nosnippet>173</a>    /// predicates hold.
+<a href=#174 id=174 data-nosnippet>174</a>    </span>special: Special,
+<a href=#175 id=175 data-nosnippet>175</a>}
+<a href=#176 id=176 data-nosnippet>176</a>
+<a href=#177 id=177 data-nosnippet>177</a><span class="kw">impl </span>NFA {
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="doccomment">/// Create a new Aho-Corasick noncontiguous NFA using the default
+<a href=#179 id=179 data-nosnippet>179</a>    /// configuration.
+<a href=#180 id=180 data-nosnippet>180</a>    ///
+<a href=#181 id=181 data-nosnippet>181</a>    /// Use a [`Builder`] if you want to change the configuration.
+<a href=#182 id=182 data-nosnippet>182</a>    </span><span class="kw">pub fn </span>new&lt;I, P&gt;(patterns: I) -&gt; <span class="prelude-ty">Result</span>&lt;NFA, BuildError&gt;
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="kw">where
+<a href=#184 id=184 data-nosnippet>184</a>        </span>I: IntoIterator&lt;Item = P&gt;,
+<a href=#185 id=185 data-nosnippet>185</a>        P: AsRef&lt;[u8]&gt;,
+<a href=#186 id=186 data-nosnippet>186</a>    {
+<a href=#187 id=187 data-nosnippet>187</a>        NFA::builder().build(patterns)
+<a href=#188 id=188 data-nosnippet>188</a>    }
+<a href=#189 id=189 data-nosnippet>189</a>
+<a href=#190 id=190 data-nosnippet>190</a>    <span class="doccomment">/// A convenience method for returning a new Aho-Corasick noncontiguous NFA
+<a href=#191 id=191 data-nosnippet>191</a>    /// builder.
+<a href=#192 id=192 data-nosnippet>192</a>    ///
+<a href=#193 id=193 data-nosnippet>193</a>    /// This usually permits one to just import the `NFA` type.
+<a href=#194 id=194 data-nosnippet>194</a>    </span><span class="kw">pub fn </span>builder() -&gt; Builder {
+<a href=#195 id=195 data-nosnippet>195</a>        Builder::new()
+<a href=#196 id=196 data-nosnippet>196</a>    }
+<a href=#197 id=197 data-nosnippet>197</a>}
+<a href=#198 id=198 data-nosnippet>198</a>
+<a href=#199 id=199 data-nosnippet>199</a><span class="kw">impl </span>NFA {
+<a href=#200 id=200 data-nosnippet>200</a>    <span class="doccomment">/// The DEAD state is a sentinel state like the FAIL state. The DEAD state
+<a href=#201 id=201 data-nosnippet>201</a>    /// instructs any search to stop and return any currently recorded match,
+<a href=#202 id=202 data-nosnippet>202</a>    /// or no match otherwise. Generally speaking, it is impossible for an
+<a href=#203 id=203 data-nosnippet>203</a>    /// unanchored standard search to enter a DEAD state. But an anchored
+<a href=#204 id=204 data-nosnippet>204</a>    /// search can, and so to can a leftmost search.
+<a href=#205 id=205 data-nosnippet>205</a>    ///
+<a href=#206 id=206 data-nosnippet>206</a>    /// We put DEAD before FAIL so that DEAD is always 0. We repeat this
+<a href=#207 id=207 data-nosnippet>207</a>    /// decision across the other Aho-Corasicm automata, so that DEAD
+<a href=#208 id=208 data-nosnippet>208</a>    /// states there are always 0 too. It's not that we need all of the
+<a href=#209 id=209 data-nosnippet>209</a>    /// implementations to agree, but rather, the contiguous NFA and the DFA
+<a href=#210 id=210 data-nosnippet>210</a>    /// use a sort of "premultiplied" state identifier where the only state
+<a href=#211 id=211 data-nosnippet>211</a>    /// whose ID is always known and constant is the first state. Subsequent
+<a href=#212 id=212 data-nosnippet>212</a>    /// state IDs depend on how much space has already been used in the
+<a href=#213 id=213 data-nosnippet>213</a>    /// transition table.
+<a href=#214 id=214 data-nosnippet>214</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>DEAD: StateID = StateID::new_unchecked(<span class="number">0</span>);
+<a href=#215 id=215 data-nosnippet>215</a>    <span class="doccomment">/// The FAIL state mostly just corresponds to the ID of any transition on a
+<a href=#216 id=216 data-nosnippet>216</a>    /// state that isn't explicitly defined. When one transitions into the FAIL
+<a href=#217 id=217 data-nosnippet>217</a>    /// state, one must follow the previous state's failure transition before
+<a href=#218 id=218 data-nosnippet>218</a>    /// doing the next state lookup. In this way, FAIL is more of a sentinel
+<a href=#219 id=219 data-nosnippet>219</a>    /// than a state that one actually transitions into. In particular, it is
+<a href=#220 id=220 data-nosnippet>220</a>    /// never exposed in the `Automaton` interface.
+<a href=#221 id=221 data-nosnippet>221</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>FAIL: StateID = StateID::new_unchecked(<span class="number">1</span>);
+<a href=#222 id=222 data-nosnippet>222</a>
+<a href=#223 id=223 data-nosnippet>223</a>    <span class="doccomment">/// Returns the equivalence classes of bytes found while constructing
+<a href=#224 id=224 data-nosnippet>224</a>    /// this NFA.
+<a href=#225 id=225 data-nosnippet>225</a>    ///
+<a href=#226 id=226 data-nosnippet>226</a>    /// Note that the NFA doesn't actually make use of these equivalence
+<a href=#227 id=227 data-nosnippet>227</a>    /// classes. Instead, these are useful for building the DFA when desired.
+<a href=#228 id=228 data-nosnippet>228</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>byte_classes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ByteClasses {
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.byte_classes
+<a href=#230 id=230 data-nosnippet>230</a>    }
+<a href=#231 id=231 data-nosnippet>231</a>
+<a href=#232 id=232 data-nosnippet>232</a>    <span class="doccomment">/// Returns a slice containing the length of each pattern in this searcher.
+<a href=#233 id=233 data-nosnippet>233</a>    /// It is indexed by `PatternID` and has length `NFA::patterns_len`.
+<a href=#234 id=234 data-nosnippet>234</a>    ///
+<a href=#235 id=235 data-nosnippet>235</a>    /// This is exposed for convenience when building a contiguous NFA. But it
+<a href=#236 id=236 data-nosnippet>236</a>    /// can be reconstructed from the `Automaton` API if necessary.
+<a href=#237 id=237 data-nosnippet>237</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pattern_lens_raw(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[SmallIndex] {
+<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.pattern_lens
+<a href=#239 id=239 data-nosnippet>239</a>    }
+<a href=#240 id=240 data-nosnippet>240</a>
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="doccomment">/// Returns a slice of all states in this non-contiguous NFA.
+<a href=#242 id=242 data-nosnippet>242</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[State] {
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.states
+<a href=#244 id=244 data-nosnippet>244</a>    }
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="doccomment">/// Returns the underlying "special" state information for this NFA.
+<a href=#247 id=247 data-nosnippet>247</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>special(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Special {
+<a href=#248 id=248 data-nosnippet>248</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.special
+<a href=#249 id=249 data-nosnippet>249</a>    }
+<a href=#250 id=250 data-nosnippet>250</a>
+<a href=#251 id=251 data-nosnippet>251</a>    <span class="doccomment">/// Swaps the states at `id1` and `id2`.
+<a href=#252 id=252 data-nosnippet>252</a>    ///
+<a href=#253 id=253 data-nosnippet>253</a>    /// This does not update the transitions of any state to account for the
+<a href=#254 id=254 data-nosnippet>254</a>    /// state swap.
+<a href=#255 id=255 data-nosnippet>255</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>swap_states(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id1: StateID, id2: StateID) {
+<a href=#256 id=256 data-nosnippet>256</a>        <span class="self">self</span>.states.swap(id1.as_usize(), id2.as_usize());
+<a href=#257 id=257 data-nosnippet>257</a>    }
+<a href=#258 id=258 data-nosnippet>258</a>
+<a href=#259 id=259 data-nosnippet>259</a>    <span class="doccomment">/// Re-maps all state IDs in this NFA according to the `map` function
+<a href=#260 id=260 data-nosnippet>260</a>    /// given.
+<a href=#261 id=261 data-nosnippet>261</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>remap(<span class="kw-2">&amp;mut </span><span class="self">self</span>, map: <span class="kw">impl </span>Fn(StateID) -&gt; StateID) {
+<a href=#262 id=262 data-nosnippet>262</a>        <span class="kw">let </span>alphabet_len = <span class="self">self</span>.byte_classes.alphabet_len();
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">for </span>state <span class="kw">in </span><span class="self">self</span>.states.iter_mut() {
+<a href=#264 id=264 data-nosnippet>264</a>            state.fail = map(state.fail);
+<a href=#265 id=265 data-nosnippet>265</a>            <span class="kw">let </span><span class="kw-2">mut </span>link = state.sparse;
+<a href=#266 id=266 data-nosnippet>266</a>            <span class="kw">while </span>link != StateID::ZERO {
+<a href=#267 id=267 data-nosnippet>267</a>                <span class="kw">let </span>t = <span class="kw-2">&amp;mut </span><span class="self">self</span>.sparse[link];
+<a href=#268 id=268 data-nosnippet>268</a>                t.next = map(t.next);
+<a href=#269 id=269 data-nosnippet>269</a>                link = t.link;
+<a href=#270 id=270 data-nosnippet>270</a>            }
+<a href=#271 id=271 data-nosnippet>271</a>            <span class="kw">if </span>state.dense != StateID::ZERO {
+<a href=#272 id=272 data-nosnippet>272</a>                <span class="kw">let </span>start = state.dense.as_usize();
+<a href=#273 id=273 data-nosnippet>273</a>                <span class="kw">for </span>next <span class="kw">in </span><span class="self">self</span>.dense[start..][..alphabet_len].iter_mut() {
+<a href=#274 id=274 data-nosnippet>274</a>                    <span class="kw-2">*</span>next = map(<span class="kw-2">*</span>next);
+<a href=#275 id=275 data-nosnippet>275</a>                }
+<a href=#276 id=276 data-nosnippet>276</a>            }
+<a href=#277 id=277 data-nosnippet>277</a>        }
+<a href=#278 id=278 data-nosnippet>278</a>    }
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="doccomment">/// Iterate over all of the transitions for the given state ID.
+<a href=#281 id=281 data-nosnippet>281</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter_trans(
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#283 id=283 data-nosnippet>283</a>        sid: StateID,
+<a href=#284 id=284 data-nosnippet>284</a>    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = Transition&gt; + <span class="lifetime">'_ </span>{
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="kw">let </span><span class="kw-2">mut </span>link = <span class="self">self</span>.states[sid].sparse;
+<a href=#286 id=286 data-nosnippet>286</a>        core::iter::from_fn(<span class="kw">move </span>|| {
+<a href=#287 id=287 data-nosnippet>287</a>            <span class="kw">if </span>link == StateID::ZERO {
+<a href=#288 id=288 data-nosnippet>288</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#289 id=289 data-nosnippet>289</a>            }
+<a href=#290 id=290 data-nosnippet>290</a>            <span class="kw">let </span>t = <span class="self">self</span>.sparse[link];
+<a href=#291 id=291 data-nosnippet>291</a>            link = t.link;
+<a href=#292 id=292 data-nosnippet>292</a>            <span class="prelude-val">Some</span>(t)
+<a href=#293 id=293 data-nosnippet>293</a>        })
+<a href=#294 id=294 data-nosnippet>294</a>    }
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a>    <span class="doccomment">/// Iterate over all of the matches for the given state ID.
+<a href=#297 id=297 data-nosnippet>297</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter_matches(
+<a href=#298 id=298 data-nosnippet>298</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#299 id=299 data-nosnippet>299</a>        sid: StateID,
+<a href=#300 id=300 data-nosnippet>300</a>    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PatternID&gt; + <span class="lifetime">'_ </span>{
+<a href=#301 id=301 data-nosnippet>301</a>        <span class="kw">let </span><span class="kw-2">mut </span>link = <span class="self">self</span>.states[sid].matches;
+<a href=#302 id=302 data-nosnippet>302</a>        core::iter::from_fn(<span class="kw">move </span>|| {
+<a href=#303 id=303 data-nosnippet>303</a>            <span class="kw">if </span>link == StateID::ZERO {
+<a href=#304 id=304 data-nosnippet>304</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#305 id=305 data-nosnippet>305</a>            }
+<a href=#306 id=306 data-nosnippet>306</a>            <span class="kw">let </span>m = <span class="self">self</span>.matches[link];
+<a href=#307 id=307 data-nosnippet>307</a>            link = m.link;
+<a href=#308 id=308 data-nosnippet>308</a>            <span class="prelude-val">Some</span>(m.pid)
+<a href=#309 id=309 data-nosnippet>309</a>        })
+<a href=#310 id=310 data-nosnippet>310</a>    }
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>    <span class="doccomment">/// Return the link following the one given. If the one given is the last
+<a href=#313 id=313 data-nosnippet>313</a>    /// link for the given state, then return `None`.
+<a href=#314 id=314 data-nosnippet>314</a>    ///
+<a href=#315 id=315 data-nosnippet>315</a>    /// If no previous link is given, then this returns the first link in the
+<a href=#316 id=316 data-nosnippet>316</a>    /// state, if one exists.
+<a href=#317 id=317 data-nosnippet>317</a>    ///
+<a href=#318 id=318 data-nosnippet>318</a>    /// This is useful for manually iterating over the transitions in a single
+<a href=#319 id=319 data-nosnippet>319</a>    /// state without borrowing the NFA. This permits mutating other parts of
+<a href=#320 id=320 data-nosnippet>320</a>    /// the NFA during iteration. Namely, one can access the transition pointed
+<a href=#321 id=321 data-nosnippet>321</a>    /// to by the link via `self.sparse[link]`.
+<a href=#322 id=322 data-nosnippet>322</a>    </span><span class="kw">fn </span>next_link(
+<a href=#323 id=323 data-nosnippet>323</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#324 id=324 data-nosnippet>324</a>        sid: StateID,
+<a href=#325 id=325 data-nosnippet>325</a>        prev: <span class="prelude-ty">Option</span>&lt;StateID&gt;,
+<a href=#326 id=326 data-nosnippet>326</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;StateID&gt; {
+<a href=#327 id=327 data-nosnippet>327</a>        <span class="kw">let </span>link =
+<a href=#328 id=328 data-nosnippet>328</a>            prev.map_or(<span class="self">self</span>.states[sid].sparse, |p| <span class="self">self</span>.sparse[p].link);
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">if </span>link == StateID::ZERO {
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="prelude-val">None
+<a href=#331 id=331 data-nosnippet>331</a>        </span>} <span class="kw">else </span>{
+<a href=#332 id=332 data-nosnippet>332</a>            <span class="prelude-val">Some</span>(link)
+<a href=#333 id=333 data-nosnippet>333</a>        }
+<a href=#334 id=334 data-nosnippet>334</a>    }
+<a href=#335 id=335 data-nosnippet>335</a>
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="doccomment">/// Follow the transition for the given byte in the given state. If no such
+<a href=#337 id=337 data-nosnippet>337</a>    /// transition exists, then the FAIL state ID is returned.
+<a href=#338 id=338 data-nosnippet>338</a>    </span><span class="attr">#[inline(always)]
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">fn </span>follow_transition(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID, byte: u8) -&gt; StateID {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">let </span>s = <span class="kw-2">&amp;</span><span class="self">self</span>.states[sid];
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="comment">// This is a special case that targets starting states and states
+<a href=#342 id=342 data-nosnippet>342</a>        // near a start state. Namely, after the initial trie is constructed,
+<a href=#343 id=343 data-nosnippet>343</a>        // we look for states close to the start state to convert to a dense
+<a href=#344 id=344 data-nosnippet>344</a>        // representation for their transitions. This winds up using a lot more
+<a href=#345 id=345 data-nosnippet>345</a>        // memory per state in exchange for faster transition lookups. But
+<a href=#346 id=346 data-nosnippet>346</a>        // since we only do this for a small number of states (by default), the
+<a href=#347 id=347 data-nosnippet>347</a>        // memory usage is usually minimal.
+<a href=#348 id=348 data-nosnippet>348</a>        //
+<a href=#349 id=349 data-nosnippet>349</a>        // This has *massive* benefit when executing searches because the
+<a href=#350 id=350 data-nosnippet>350</a>        // unanchored starting state is by far the hottest state and is
+<a href=#351 id=351 data-nosnippet>351</a>        // frequently visited. Moreover, the 'for' loop below that works
+<a href=#352 id=352 data-nosnippet>352</a>        // decently on an actually sparse state is disastrous on a state that
+<a href=#353 id=353 data-nosnippet>353</a>        // is nearly or completely dense.
+<a href=#354 id=354 data-nosnippet>354</a>        </span><span class="kw">if </span>s.dense == StateID::ZERO {
+<a href=#355 id=355 data-nosnippet>355</a>            <span class="self">self</span>.follow_transition_sparse(sid, byte)
+<a href=#356 id=356 data-nosnippet>356</a>        } <span class="kw">else </span>{
+<a href=#357 id=357 data-nosnippet>357</a>            <span class="kw">let </span>class = usize::from(<span class="self">self</span>.byte_classes.get(byte));
+<a href=#358 id=358 data-nosnippet>358</a>            <span class="self">self</span>.dense[s.dense.as_usize() + class]
+<a href=#359 id=359 data-nosnippet>359</a>        }
+<a href=#360 id=360 data-nosnippet>360</a>    }
+<a href=#361 id=361 data-nosnippet>361</a>
+<a href=#362 id=362 data-nosnippet>362</a>    <span class="doccomment">/// Like `follow_transition`, but always uses the sparse representation.
+<a href=#363 id=363 data-nosnippet>363</a>    </span><span class="attr">#[inline(always)]
+<a href=#364 id=364 data-nosnippet>364</a>    </span><span class="kw">fn </span>follow_transition_sparse(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID, byte: u8) -&gt; StateID {
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="kw">for </span>t <span class="kw">in </span><span class="self">self</span>.iter_trans(sid) {
+<a href=#366 id=366 data-nosnippet>366</a>            <span class="kw">if </span>byte &lt;= t.byte {
+<a href=#367 id=367 data-nosnippet>367</a>                <span class="kw">if </span>byte == t.byte {
+<a href=#368 id=368 data-nosnippet>368</a>                    <span class="kw">return </span>t.next;
+<a href=#369 id=369 data-nosnippet>369</a>                }
+<a href=#370 id=370 data-nosnippet>370</a>                <span class="kw">break</span>;
+<a href=#371 id=371 data-nosnippet>371</a>            }
+<a href=#372 id=372 data-nosnippet>372</a>        }
+<a href=#373 id=373 data-nosnippet>373</a>        NFA::FAIL
+<a href=#374 id=374 data-nosnippet>374</a>    }
+<a href=#375 id=375 data-nosnippet>375</a>
+<a href=#376 id=376 data-nosnippet>376</a>    <span class="doccomment">/// Set the transition for the given byte to the state ID given.
+<a href=#377 id=377 data-nosnippet>377</a>    ///
+<a href=#378 id=378 data-nosnippet>378</a>    /// Note that one should not set transitions to the FAIL state. It is not
+<a href=#379 id=379 data-nosnippet>379</a>    /// technically incorrect, but it wastes space. If a transition is not
+<a href=#380 id=380 data-nosnippet>380</a>    /// defined, then it is automatically assumed to lead to the FAIL state.
+<a href=#381 id=381 data-nosnippet>381</a>    </span><span class="kw">fn </span>add_transition(
+<a href=#382 id=382 data-nosnippet>382</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#383 id=383 data-nosnippet>383</a>        prev: StateID,
+<a href=#384 id=384 data-nosnippet>384</a>        byte: u8,
+<a href=#385 id=385 data-nosnippet>385</a>        next: StateID,
+<a href=#386 id=386 data-nosnippet>386</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#387 id=387 data-nosnippet>387</a>        <span class="kw">if </span><span class="self">self</span>.states[prev].dense != StateID::ZERO {
+<a href=#388 id=388 data-nosnippet>388</a>            <span class="kw">let </span>dense = <span class="self">self</span>.states[prev].dense;
+<a href=#389 id=389 data-nosnippet>389</a>            <span class="kw">let </span>class = usize::from(<span class="self">self</span>.byte_classes.get(byte));
+<a href=#390 id=390 data-nosnippet>390</a>            <span class="self">self</span>.dense[dense.as_usize() + class] = next;
+<a href=#391 id=391 data-nosnippet>391</a>        }
+<a href=#392 id=392 data-nosnippet>392</a>
+<a href=#393 id=393 data-nosnippet>393</a>        <span class="kw">let </span>head = <span class="self">self</span>.states[prev].sparse;
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">if </span>head == StateID::ZERO || byte &lt; <span class="self">self</span>.sparse[head].byte {
+<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw">let </span>new_link = <span class="self">self</span>.alloc_transition()<span class="question-mark">?</span>;
+<a href=#396 id=396 data-nosnippet>396</a>            <span class="self">self</span>.sparse[new_link] = Transition { byte, next, link: head };
+<a href=#397 id=397 data-nosnippet>397</a>            <span class="self">self</span>.states[prev].sparse = new_link;
+<a href=#398 id=398 data-nosnippet>398</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#399 id=399 data-nosnippet>399</a>        } <span class="kw">else if </span>byte == <span class="self">self</span>.sparse[head].byte {
+<a href=#400 id=400 data-nosnippet>400</a>            <span class="self">self</span>.sparse[head].next = next;
+<a href=#401 id=401 data-nosnippet>401</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#402 id=402 data-nosnippet>402</a>        }
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="comment">// We handled the only cases where the beginning of the transition
+<a href=#405 id=405 data-nosnippet>405</a>        // chain needs to change. At this point, we now know that there is
+<a href=#406 id=406 data-nosnippet>406</a>        // at least one entry in the transition chain and the byte for that
+<a href=#407 id=407 data-nosnippet>407</a>        // transition is less than the byte for the transition we're adding.
+<a href=#408 id=408 data-nosnippet>408</a>        </span><span class="kw">let </span>(<span class="kw-2">mut </span>link_prev, <span class="kw-2">mut </span>link_next) = (head, <span class="self">self</span>.sparse[head].link);
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="kw">while </span>link_next != StateID::ZERO &amp;&amp; byte &gt; <span class="self">self</span>.sparse[link_next].byte
+<a href=#410 id=410 data-nosnippet>410</a>        {
+<a href=#411 id=411 data-nosnippet>411</a>            link_prev = link_next;
+<a href=#412 id=412 data-nosnippet>412</a>            link_next = <span class="self">self</span>.sparse[link_next].link;
+<a href=#413 id=413 data-nosnippet>413</a>        }
+<a href=#414 id=414 data-nosnippet>414</a>        <span class="kw">if </span>link_next == StateID::ZERO || byte &lt; <span class="self">self</span>.sparse[link_next].byte {
+<a href=#415 id=415 data-nosnippet>415</a>            <span class="kw">let </span>link = <span class="self">self</span>.alloc_transition()<span class="question-mark">?</span>;
+<a href=#416 id=416 data-nosnippet>416</a>            <span class="self">self</span>.sparse[link] = Transition { byte, next, link: link_next };
+<a href=#417 id=417 data-nosnippet>417</a>            <span class="self">self</span>.sparse[link_prev].link = link;
+<a href=#418 id=418 data-nosnippet>418</a>        } <span class="kw">else </span>{
+<a href=#419 id=419 data-nosnippet>419</a>            <span class="macro">assert_eq!</span>(byte, <span class="self">self</span>.sparse[link_next].byte);
+<a href=#420 id=420 data-nosnippet>420</a>            <span class="self">self</span>.sparse[link_next].next = next;
+<a href=#421 id=421 data-nosnippet>421</a>        }
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="prelude-val">Ok</span>(())
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="doccomment">/// This sets every possible transition (all 255 of them) for the given
+<a href=#426 id=426 data-nosnippet>426</a>    /// state to the name `next` value.
+<a href=#427 id=427 data-nosnippet>427</a>    ///
+<a href=#428 id=428 data-nosnippet>428</a>    /// This is useful for efficiently initializing start/dead states.
+<a href=#429 id=429 data-nosnippet>429</a>    ///
+<a href=#430 id=430 data-nosnippet>430</a>    /// # Panics
+<a href=#431 id=431 data-nosnippet>431</a>    ///
+<a href=#432 id=432 data-nosnippet>432</a>    /// This requires that the state has no transitions added to it already.
+<a href=#433 id=433 data-nosnippet>433</a>    /// If it has any transitions, then this panics. It will also panic if
+<a href=#434 id=434 data-nosnippet>434</a>    /// the state has been densified prior to calling this.
+<a href=#435 id=435 data-nosnippet>435</a>    </span><span class="kw">fn </span>init_full_state(
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#437 id=437 data-nosnippet>437</a>        prev: StateID,
+<a href=#438 id=438 data-nosnippet>438</a>        next: StateID,
+<a href=#439 id=439 data-nosnippet>439</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="macro">assert_eq!</span>(
+<a href=#441 id=441 data-nosnippet>441</a>            StateID::ZERO,
+<a href=#442 id=442 data-nosnippet>442</a>            <span class="self">self</span>.states[prev].dense,
+<a href=#443 id=443 data-nosnippet>443</a>            <span class="string">"state must not be dense yet"
+<a href=#444 id=444 data-nosnippet>444</a>        </span>);
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="macro">assert_eq!</span>(
+<a href=#446 id=446 data-nosnippet>446</a>            StateID::ZERO,
+<a href=#447 id=447 data-nosnippet>447</a>            <span class="self">self</span>.states[prev].sparse,
+<a href=#448 id=448 data-nosnippet>448</a>            <span class="string">"state must have zero transitions"
+<a href=#449 id=449 data-nosnippet>449</a>        </span>);
+<a href=#450 id=450 data-nosnippet>450</a>        <span class="kw">let </span><span class="kw-2">mut </span>prev_link = StateID::ZERO;
+<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">for </span>byte <span class="kw">in </span><span class="number">0</span>..=<span class="number">255 </span>{
+<a href=#452 id=452 data-nosnippet>452</a>            <span class="kw">let </span>new_link = <span class="self">self</span>.alloc_transition()<span class="question-mark">?</span>;
+<a href=#453 id=453 data-nosnippet>453</a>            <span class="self">self</span>.sparse[new_link] =
+<a href=#454 id=454 data-nosnippet>454</a>                Transition { byte, next, link: StateID::ZERO };
+<a href=#455 id=455 data-nosnippet>455</a>            <span class="kw">if </span>prev_link == StateID::ZERO {
+<a href=#456 id=456 data-nosnippet>456</a>                <span class="self">self</span>.states[prev].sparse = new_link;
+<a href=#457 id=457 data-nosnippet>457</a>            } <span class="kw">else </span>{
+<a href=#458 id=458 data-nosnippet>458</a>                <span class="self">self</span>.sparse[prev_link].link = new_link;
+<a href=#459 id=459 data-nosnippet>459</a>            }
+<a href=#460 id=460 data-nosnippet>460</a>            prev_link = new_link;
+<a href=#461 id=461 data-nosnippet>461</a>        }
+<a href=#462 id=462 data-nosnippet>462</a>        <span class="prelude-val">Ok</span>(())
+<a href=#463 id=463 data-nosnippet>463</a>    }
+<a href=#464 id=464 data-nosnippet>464</a>
+<a href=#465 id=465 data-nosnippet>465</a>    <span class="doccomment">/// Add a match for the given pattern ID to the state for the given ID.
+<a href=#466 id=466 data-nosnippet>466</a>    </span><span class="kw">fn </span>add_match(
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#468 id=468 data-nosnippet>468</a>        sid: StateID,
+<a href=#469 id=469 data-nosnippet>469</a>        pid: PatternID,
+<a href=#470 id=470 data-nosnippet>470</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">let </span>head = <span class="self">self</span>.states[sid].matches;
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">let </span><span class="kw-2">mut </span>link = head;
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">while </span><span class="self">self</span>.matches[link].link != StateID::ZERO {
+<a href=#474 id=474 data-nosnippet>474</a>            link = <span class="self">self</span>.matches[link].link;
+<a href=#475 id=475 data-nosnippet>475</a>        }
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">let </span>new_match_link = <span class="self">self</span>.alloc_match()<span class="question-mark">?</span>;
+<a href=#477 id=477 data-nosnippet>477</a>        <span class="self">self</span>.matches[new_match_link].pid = pid;
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">if </span>link == StateID::ZERO {
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="self">self</span>.states[sid].matches = new_match_link;
+<a href=#480 id=480 data-nosnippet>480</a>        } <span class="kw">else </span>{
+<a href=#481 id=481 data-nosnippet>481</a>            <span class="self">self</span>.matches[link].link = new_match_link;
+<a href=#482 id=482 data-nosnippet>482</a>        }
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="prelude-val">Ok</span>(())
+<a href=#484 id=484 data-nosnippet>484</a>    }
+<a href=#485 id=485 data-nosnippet>485</a>
+<a href=#486 id=486 data-nosnippet>486</a>    <span class="doccomment">/// Copy matches from the `src` state to the `dst` state. This is useful
+<a href=#487 id=487 data-nosnippet>487</a>    /// when a match state can be reached via a failure transition. In which
+<a href=#488 id=488 data-nosnippet>488</a>    /// case, you'll want to copy the matches (if any) from the state reached
+<a href=#489 id=489 data-nosnippet>489</a>    /// by the failure transition to the original state you were at.
+<a href=#490 id=490 data-nosnippet>490</a>    </span><span class="kw">fn </span>copy_matches(
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#492 id=492 data-nosnippet>492</a>        src: StateID,
+<a href=#493 id=493 data-nosnippet>493</a>        dst: StateID,
+<a href=#494 id=494 data-nosnippet>494</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#495 id=495 data-nosnippet>495</a>        <span class="kw">let </span>head_dst = <span class="self">self</span>.states[dst].matches;
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw">let </span><span class="kw-2">mut </span>link_dst = head_dst;
+<a href=#497 id=497 data-nosnippet>497</a>        <span class="kw">while </span><span class="self">self</span>.matches[link_dst].link != StateID::ZERO {
+<a href=#498 id=498 data-nosnippet>498</a>            link_dst = <span class="self">self</span>.matches[link_dst].link;
+<a href=#499 id=499 data-nosnippet>499</a>        }
+<a href=#500 id=500 data-nosnippet>500</a>        <span class="kw">let </span><span class="kw-2">mut </span>link_src = <span class="self">self</span>.states[src].matches;
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="kw">while </span>link_src != StateID::ZERO {
+<a href=#502 id=502 data-nosnippet>502</a>            <span class="kw">let </span>new_match_link =
+<a href=#503 id=503 data-nosnippet>503</a>                StateID::new(<span class="self">self</span>.matches.len()).map_err(|e| {
+<a href=#504 id=504 data-nosnippet>504</a>                    BuildError::state_id_overflow(
+<a href=#505 id=505 data-nosnippet>505</a>                        StateID::MAX.as_u64(),
+<a href=#506 id=506 data-nosnippet>506</a>                        e.attempted(),
+<a href=#507 id=507 data-nosnippet>507</a>                    )
+<a href=#508 id=508 data-nosnippet>508</a>                })<span class="question-mark">?</span>;
+<a href=#509 id=509 data-nosnippet>509</a>            <span class="self">self</span>.matches.push(Match {
+<a href=#510 id=510 data-nosnippet>510</a>                pid: <span class="self">self</span>.matches[link_src].pid,
+<a href=#511 id=511 data-nosnippet>511</a>                link: StateID::ZERO,
+<a href=#512 id=512 data-nosnippet>512</a>            });
+<a href=#513 id=513 data-nosnippet>513</a>            <span class="kw">if </span>link_dst == StateID::ZERO {
+<a href=#514 id=514 data-nosnippet>514</a>                <span class="self">self</span>.states[dst].matches = new_match_link;
+<a href=#515 id=515 data-nosnippet>515</a>            } <span class="kw">else </span>{
+<a href=#516 id=516 data-nosnippet>516</a>                <span class="self">self</span>.matches[link_dst].link = new_match_link;
+<a href=#517 id=517 data-nosnippet>517</a>            }
+<a href=#518 id=518 data-nosnippet>518</a>
+<a href=#519 id=519 data-nosnippet>519</a>            link_dst = new_match_link;
+<a href=#520 id=520 data-nosnippet>520</a>            link_src = <span class="self">self</span>.matches[link_src].link;
+<a href=#521 id=521 data-nosnippet>521</a>        }
+<a href=#522 id=522 data-nosnippet>522</a>        <span class="prelude-val">Ok</span>(())
+<a href=#523 id=523 data-nosnippet>523</a>    }
+<a href=#524 id=524 data-nosnippet>524</a>
+<a href=#525 id=525 data-nosnippet>525</a>    <span class="doccomment">/// Create a new entry in `NFA::trans`, if there's room, and return that
+<a href=#526 id=526 data-nosnippet>526</a>    /// entry's ID. If there's no room, then an error is returned.
+<a href=#527 id=527 data-nosnippet>527</a>    </span><span class="kw">fn </span>alloc_transition(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, BuildError&gt; {
+<a href=#528 id=528 data-nosnippet>528</a>        <span class="kw">let </span>id = StateID::new(<span class="self">self</span>.sparse.len()).map_err(|e| {
+<a href=#529 id=529 data-nosnippet>529</a>            BuildError::state_id_overflow(StateID::MAX.as_u64(), e.attempted())
+<a href=#530 id=530 data-nosnippet>530</a>        })<span class="question-mark">?</span>;
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="self">self</span>.sparse.push(Transition::default());
+<a href=#532 id=532 data-nosnippet>532</a>        <span class="prelude-val">Ok</span>(id)
+<a href=#533 id=533 data-nosnippet>533</a>    }
+<a href=#534 id=534 data-nosnippet>534</a>
+<a href=#535 id=535 data-nosnippet>535</a>    <span class="doccomment">/// Create a new entry in `NFA::matches`, if there's room, and return that
+<a href=#536 id=536 data-nosnippet>536</a>    /// entry's ID. If there's no room, then an error is returned.
+<a href=#537 id=537 data-nosnippet>537</a>    </span><span class="kw">fn </span>alloc_match(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, BuildError&gt; {
+<a href=#538 id=538 data-nosnippet>538</a>        <span class="kw">let </span>id = StateID::new(<span class="self">self</span>.matches.len()).map_err(|e| {
+<a href=#539 id=539 data-nosnippet>539</a>            BuildError::state_id_overflow(StateID::MAX.as_u64(), e.attempted())
+<a href=#540 id=540 data-nosnippet>540</a>        })<span class="question-mark">?</span>;
+<a href=#541 id=541 data-nosnippet>541</a>        <span class="self">self</span>.matches.push(Match::default());
+<a href=#542 id=542 data-nosnippet>542</a>        <span class="prelude-val">Ok</span>(id)
+<a href=#543 id=543 data-nosnippet>543</a>    }
+<a href=#544 id=544 data-nosnippet>544</a>
+<a href=#545 id=545 data-nosnippet>545</a>    <span class="doccomment">/// Create a new set of `N` transitions in this NFA's dense transition
+<a href=#546 id=546 data-nosnippet>546</a>    /// table. The ID return corresponds to the index at which the `N`
+<a href=#547 id=547 data-nosnippet>547</a>    /// transitions begin. So `id+0` is the first transition and `id+(N-1)` is
+<a href=#548 id=548 data-nosnippet>548</a>    /// the last.
+<a href=#549 id=549 data-nosnippet>549</a>    ///
+<a href=#550 id=550 data-nosnippet>550</a>    /// `N` is determined via `NFA::byte_classes::alphabet_len`.
+<a href=#551 id=551 data-nosnippet>551</a>    </span><span class="kw">fn </span>alloc_dense_state(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, BuildError&gt; {
+<a href=#552 id=552 data-nosnippet>552</a>        <span class="kw">let </span>id = StateID::new(<span class="self">self</span>.dense.len()).map_err(|e| {
+<a href=#553 id=553 data-nosnippet>553</a>            BuildError::state_id_overflow(StateID::MAX.as_u64(), e.attempted())
+<a href=#554 id=554 data-nosnippet>554</a>        })<span class="question-mark">?</span>;
+<a href=#555 id=555 data-nosnippet>555</a>        <span class="comment">// We use FAIL because it's the correct default. If a state doesn't
+<a href=#556 id=556 data-nosnippet>556</a>        // have a transition defined for every possible byte value, then the
+<a href=#557 id=557 data-nosnippet>557</a>        // transition function should return NFA::FAIL.
+<a href=#558 id=558 data-nosnippet>558</a>        </span><span class="self">self</span>.dense.extend(
+<a href=#559 id=559 data-nosnippet>559</a>            core::iter::repeat(NFA::FAIL)
+<a href=#560 id=560 data-nosnippet>560</a>                .take(<span class="self">self</span>.byte_classes.alphabet_len()),
+<a href=#561 id=561 data-nosnippet>561</a>        );
+<a href=#562 id=562 data-nosnippet>562</a>        <span class="prelude-val">Ok</span>(id)
+<a href=#563 id=563 data-nosnippet>563</a>    }
+<a href=#564 id=564 data-nosnippet>564</a>
+<a href=#565 id=565 data-nosnippet>565</a>    <span class="doccomment">/// Allocate and add a fresh state to the underlying NFA and return its
+<a href=#566 id=566 data-nosnippet>566</a>    /// ID (guaranteed to be one more than the ID of the previously allocated
+<a href=#567 id=567 data-nosnippet>567</a>    /// state). If the ID would overflow `StateID`, then this returns an error.
+<a href=#568 id=568 data-nosnippet>568</a>    </span><span class="kw">fn </span>alloc_state(<span class="kw-2">&amp;mut </span><span class="self">self</span>, depth: usize) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, BuildError&gt; {
+<a href=#569 id=569 data-nosnippet>569</a>        <span class="comment">// This is OK because we error when building the trie if we see a
+<a href=#570 id=570 data-nosnippet>570</a>        // pattern whose length cannot fit into a 'SmallIndex', and the longest
+<a href=#571 id=571 data-nosnippet>571</a>        // possible depth corresponds to the length of the longest pattern.
+<a href=#572 id=572 data-nosnippet>572</a>        </span><span class="kw">let </span>depth = SmallIndex::new(depth)
+<a href=#573 id=573 data-nosnippet>573</a>            .expect(<span class="string">"patterns longer than SmallIndex::MAX are not allowed"</span>);
+<a href=#574 id=574 data-nosnippet>574</a>        <span class="kw">let </span>id = StateID::new(<span class="self">self</span>.states.len()).map_err(|e| {
+<a href=#575 id=575 data-nosnippet>575</a>            BuildError::state_id_overflow(StateID::MAX.as_u64(), e.attempted())
+<a href=#576 id=576 data-nosnippet>576</a>        })<span class="question-mark">?</span>;
+<a href=#577 id=577 data-nosnippet>577</a>        <span class="self">self</span>.states.push(State {
+<a href=#578 id=578 data-nosnippet>578</a>            sparse: StateID::ZERO,
+<a href=#579 id=579 data-nosnippet>579</a>            dense: StateID::ZERO,
+<a href=#580 id=580 data-nosnippet>580</a>            matches: StateID::ZERO,
+<a href=#581 id=581 data-nosnippet>581</a>            fail: <span class="self">self</span>.special.start_unanchored_id,
+<a href=#582 id=582 data-nosnippet>582</a>            depth,
+<a href=#583 id=583 data-nosnippet>583</a>        });
+<a href=#584 id=584 data-nosnippet>584</a>        <span class="prelude-val">Ok</span>(id)
+<a href=#585 id=585 data-nosnippet>585</a>    }
+<a href=#586 id=586 data-nosnippet>586</a>}
+<a href=#587 id=587 data-nosnippet>587</a>
+<a href=#588 id=588 data-nosnippet>588</a><span class="comment">// SAFETY: 'start_state' always returns a valid state ID, 'next_state' always
+<a href=#589 id=589 data-nosnippet>589</a>// returns a valid state ID given a valid state ID. We otherwise claim that
+<a href=#590 id=590 data-nosnippet>590</a>// all other methods are correct as well.
+<a href=#591 id=591 data-nosnippet>591</a></span><span class="kw">unsafe impl </span>Automaton <span class="kw">for </span>NFA {
+<a href=#592 id=592 data-nosnippet>592</a>    <span class="attr">#[inline(always)]
+<a href=#593 id=593 data-nosnippet>593</a>    </span><span class="kw">fn </span>start_state(<span class="kw-2">&amp;</span><span class="self">self</span>, anchored: Anchored) -&gt; <span class="prelude-ty">Result</span>&lt;StateID, MatchError&gt; {
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="kw">match </span>anchored {
+<a href=#595 id=595 data-nosnippet>595</a>            Anchored::No =&gt; <span class="prelude-val">Ok</span>(<span class="self">self</span>.special.start_unanchored_id),
+<a href=#596 id=596 data-nosnippet>596</a>            Anchored::Yes =&gt; <span class="prelude-val">Ok</span>(<span class="self">self</span>.special.start_anchored_id),
+<a href=#597 id=597 data-nosnippet>597</a>        }
+<a href=#598 id=598 data-nosnippet>598</a>    }
+<a href=#599 id=599 data-nosnippet>599</a>
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="attr">#[inline(always)]
+<a href=#601 id=601 data-nosnippet>601</a>    </span><span class="kw">fn </span>next_state(
+<a href=#602 id=602 data-nosnippet>602</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#603 id=603 data-nosnippet>603</a>        anchored: Anchored,
+<a href=#604 id=604 data-nosnippet>604</a>        <span class="kw-2">mut </span>sid: StateID,
+<a href=#605 id=605 data-nosnippet>605</a>        byte: u8,
+<a href=#606 id=606 data-nosnippet>606</a>    ) -&gt; StateID {
+<a href=#607 id=607 data-nosnippet>607</a>        <span class="comment">// This terminates since:
+<a href=#608 id=608 data-nosnippet>608</a>        //
+<a href=#609 id=609 data-nosnippet>609</a>        // 1. state.fail never points to the FAIL state.
+<a href=#610 id=610 data-nosnippet>610</a>        // 2. All state.fail values point to a state closer to the start state.
+<a href=#611 id=611 data-nosnippet>611</a>        // 3. The start state has no transitions to the FAIL state.
+<a href=#612 id=612 data-nosnippet>612</a>        </span><span class="kw">loop </span>{
+<a href=#613 id=613 data-nosnippet>613</a>            <span class="kw">let </span>next = <span class="self">self</span>.follow_transition(sid, byte);
+<a href=#614 id=614 data-nosnippet>614</a>            <span class="kw">if </span>next != NFA::FAIL {
+<a href=#615 id=615 data-nosnippet>615</a>                <span class="kw">return </span>next;
+<a href=#616 id=616 data-nosnippet>616</a>            }
+<a href=#617 id=617 data-nosnippet>617</a>            <span class="comment">// For an anchored search, we never follow failure transitions
+<a href=#618 id=618 data-nosnippet>618</a>            // because failure transitions lead us down a path to matching
+<a href=#619 id=619 data-nosnippet>619</a>            // a *proper* suffix of the path we were on. Thus, it can only
+<a href=#620 id=620 data-nosnippet>620</a>            // produce matches that appear after the beginning of the search.
+<a href=#621 id=621 data-nosnippet>621</a>            </span><span class="kw">if </span>anchored.is_anchored() {
+<a href=#622 id=622 data-nosnippet>622</a>                <span class="kw">return </span>NFA::DEAD;
+<a href=#623 id=623 data-nosnippet>623</a>            }
+<a href=#624 id=624 data-nosnippet>624</a>            sid = <span class="self">self</span>.states[sid].fail();
+<a href=#625 id=625 data-nosnippet>625</a>        }
+<a href=#626 id=626 data-nosnippet>626</a>    }
+<a href=#627 id=627 data-nosnippet>627</a>
+<a href=#628 id=628 data-nosnippet>628</a>    <span class="attr">#[inline(always)]
+<a href=#629 id=629 data-nosnippet>629</a>    </span><span class="kw">fn </span>is_special(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#630 id=630 data-nosnippet>630</a>        sid &lt;= <span class="self">self</span>.special.max_special_id
+<a href=#631 id=631 data-nosnippet>631</a>    }
+<a href=#632 id=632 data-nosnippet>632</a>
+<a href=#633 id=633 data-nosnippet>633</a>    <span class="attr">#[inline(always)]
+<a href=#634 id=634 data-nosnippet>634</a>    </span><span class="kw">fn </span>is_dead(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#635 id=635 data-nosnippet>635</a>        sid == NFA::DEAD
+<a href=#636 id=636 data-nosnippet>636</a>    }
+<a href=#637 id=637 data-nosnippet>637</a>
+<a href=#638 id=638 data-nosnippet>638</a>    <span class="attr">#[inline(always)]
+<a href=#639 id=639 data-nosnippet>639</a>    </span><span class="kw">fn </span>is_match(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#640 id=640 data-nosnippet>640</a>        <span class="comment">// N.B. This returns true when sid==NFA::FAIL but that's okay because
+<a href=#641 id=641 data-nosnippet>641</a>        // NFA::FAIL is not actually a valid state ID from the perspective of
+<a href=#642 id=642 data-nosnippet>642</a>        // the Automaton trait. Namely, it is never returned by 'start_state'
+<a href=#643 id=643 data-nosnippet>643</a>        // or by 'next_state'. So we don't need to care about it here.
+<a href=#644 id=644 data-nosnippet>644</a>        </span>!<span class="self">self</span>.is_dead(sid) &amp;&amp; sid &lt;= <span class="self">self</span>.special.max_match_id
+<a href=#645 id=645 data-nosnippet>645</a>    }
+<a href=#646 id=646 data-nosnippet>646</a>
+<a href=#647 id=647 data-nosnippet>647</a>    <span class="attr">#[inline(always)]
+<a href=#648 id=648 data-nosnippet>648</a>    </span><span class="kw">fn </span>is_start(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; bool {
+<a href=#649 id=649 data-nosnippet>649</a>        sid == <span class="self">self</span>.special.start_unanchored_id
+<a href=#650 id=650 data-nosnippet>650</a>            || sid == <span class="self">self</span>.special.start_anchored_id
+<a href=#651 id=651 data-nosnippet>651</a>    }
+<a href=#652 id=652 data-nosnippet>652</a>
+<a href=#653 id=653 data-nosnippet>653</a>    <span class="attr">#[inline(always)]
+<a href=#654 id=654 data-nosnippet>654</a>    </span><span class="kw">fn </span>match_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MatchKind {
+<a href=#655 id=655 data-nosnippet>655</a>        <span class="self">self</span>.match_kind
+<a href=#656 id=656 data-nosnippet>656</a>    }
+<a href=#657 id=657 data-nosnippet>657</a>
+<a href=#658 id=658 data-nosnippet>658</a>    <span class="attr">#[inline(always)]
+<a href=#659 id=659 data-nosnippet>659</a>    </span><span class="kw">fn </span>patterns_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#660 id=660 data-nosnippet>660</a>        <span class="self">self</span>.pattern_lens.len()
+<a href=#661 id=661 data-nosnippet>661</a>    }
+<a href=#662 id=662 data-nosnippet>662</a>
+<a href=#663 id=663 data-nosnippet>663</a>    <span class="attr">#[inline(always)]
+<a href=#664 id=664 data-nosnippet>664</a>    </span><span class="kw">fn </span>pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>, pid: PatternID) -&gt; usize {
+<a href=#665 id=665 data-nosnippet>665</a>        <span class="self">self</span>.pattern_lens[pid].as_usize()
+<a href=#666 id=666 data-nosnippet>666</a>    }
+<a href=#667 id=667 data-nosnippet>667</a>
+<a href=#668 id=668 data-nosnippet>668</a>    <span class="attr">#[inline(always)]
+<a href=#669 id=669 data-nosnippet>669</a>    </span><span class="kw">fn </span>min_pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#670 id=670 data-nosnippet>670</a>        <span class="self">self</span>.min_pattern_len
+<a href=#671 id=671 data-nosnippet>671</a>    }
+<a href=#672 id=672 data-nosnippet>672</a>
+<a href=#673 id=673 data-nosnippet>673</a>    <span class="attr">#[inline(always)]
+<a href=#674 id=674 data-nosnippet>674</a>    </span><span class="kw">fn </span>max_pattern_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#675 id=675 data-nosnippet>675</a>        <span class="self">self</span>.max_pattern_len
+<a href=#676 id=676 data-nosnippet>676</a>    }
+<a href=#677 id=677 data-nosnippet>677</a>
+<a href=#678 id=678 data-nosnippet>678</a>    <span class="attr">#[inline(always)]
+<a href=#679 id=679 data-nosnippet>679</a>    </span><span class="kw">fn </span>match_len(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID) -&gt; usize {
+<a href=#680 id=680 data-nosnippet>680</a>        <span class="self">self</span>.iter_matches(sid).count()
+<a href=#681 id=681 data-nosnippet>681</a>    }
+<a href=#682 id=682 data-nosnippet>682</a>
+<a href=#683 id=683 data-nosnippet>683</a>    <span class="attr">#[inline(always)]
+<a href=#684 id=684 data-nosnippet>684</a>    </span><span class="kw">fn </span>match_pattern(<span class="kw-2">&amp;</span><span class="self">self</span>, sid: StateID, index: usize) -&gt; PatternID {
+<a href=#685 id=685 data-nosnippet>685</a>        <span class="self">self</span>.iter_matches(sid).nth(index).unwrap()
+<a href=#686 id=686 data-nosnippet>686</a>    }
+<a href=#687 id=687 data-nosnippet>687</a>
+<a href=#688 id=688 data-nosnippet>688</a>    <span class="attr">#[inline(always)]
+<a href=#689 id=689 data-nosnippet>689</a>    </span><span class="kw">fn </span>memory_usage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#690 id=690 data-nosnippet>690</a>        <span class="self">self</span>.states.len() * core::mem::size_of::&lt;State&gt;()
+<a href=#691 id=691 data-nosnippet>691</a>            + <span class="self">self</span>.sparse.len() * core::mem::size_of::&lt;Transition&gt;()
+<a href=#692 id=692 data-nosnippet>692</a>            + <span class="self">self</span>.matches.len() * core::mem::size_of::&lt;Match&gt;()
+<a href=#693 id=693 data-nosnippet>693</a>            + <span class="self">self</span>.dense.len() * StateID::SIZE
+<a href=#694 id=694 data-nosnippet>694</a>            + <span class="self">self</span>.pattern_lens.len() * SmallIndex::SIZE
+<a href=#695 id=695 data-nosnippet>695</a>            + <span class="self">self</span>.prefilter.as_ref().map_or(<span class="number">0</span>, |p| p.memory_usage())
+<a href=#696 id=696 data-nosnippet>696</a>    }
+<a href=#697 id=697 data-nosnippet>697</a>
+<a href=#698 id=698 data-nosnippet>698</a>    <span class="attr">#[inline(always)]
+<a href=#699 id=699 data-nosnippet>699</a>    </span><span class="kw">fn </span>prefilter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Prefilter&gt; {
+<a href=#700 id=700 data-nosnippet>700</a>        <span class="self">self</span>.prefilter.as_ref()
+<a href=#701 id=701 data-nosnippet>701</a>    }
+<a href=#702 id=702 data-nosnippet>702</a>}
+<a href=#703 id=703 data-nosnippet>703</a>
+<a href=#704 id=704 data-nosnippet>704</a><span class="doccomment">/// A representation of a sparse NFA state for an Aho-Corasick automaton.
+<a href=#705 id=705 data-nosnippet>705</a>///
+<a href=#706 id=706 data-nosnippet>706</a>/// It contains the transitions to the next state, a failure transition for
+<a href=#707 id=707 data-nosnippet>707</a>/// cases where there exists no other transition for the current input byte
+<a href=#708 id=708 data-nosnippet>708</a>/// and the matches implied by visiting this state (if any).
+<a href=#709 id=709 data-nosnippet>709</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#710 id=710 data-nosnippet>710</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>State {
+<a href=#711 id=711 data-nosnippet>711</a>    <span class="doccomment">/// A pointer to `NFA::trans` corresponding to the head of a linked list
+<a href=#712 id=712 data-nosnippet>712</a>    /// containing all of the transitions for this state.
+<a href=#713 id=713 data-nosnippet>713</a>    ///
+<a href=#714 id=714 data-nosnippet>714</a>    /// This is `StateID::ZERO` if and only if this state has zero transitions.
+<a href=#715 id=715 data-nosnippet>715</a>    </span>sparse: StateID,
+<a href=#716 id=716 data-nosnippet>716</a>    <span class="doccomment">/// A pointer to a row of `N` transitions in `NFA::dense`. These
+<a href=#717 id=717 data-nosnippet>717</a>    /// transitions correspond precisely to what is obtained by traversing
+<a href=#718 id=718 data-nosnippet>718</a>    /// `sparse`, but permits constant time lookup.
+<a href=#719 id=719 data-nosnippet>719</a>    ///
+<a href=#720 id=720 data-nosnippet>720</a>    /// When this is zero (which is true for most states in the default
+<a href=#721 id=721 data-nosnippet>721</a>    /// configuration), then this state has no dense representation.
+<a href=#722 id=722 data-nosnippet>722</a>    ///
+<a href=#723 id=723 data-nosnippet>723</a>    /// Note that `N` is equal to `NFA::byte_classes::alphabet_len()`. This is
+<a href=#724 id=724 data-nosnippet>724</a>    /// typically much less than 256 (the maximum value).
+<a href=#725 id=725 data-nosnippet>725</a>    </span>dense: StateID,
+<a href=#726 id=726 data-nosnippet>726</a>    <span class="doccomment">/// A pointer to `NFA::matches` corresponding to the head of a linked list
+<a href=#727 id=727 data-nosnippet>727</a>    /// containing all of the matches for this state.
+<a href=#728 id=728 data-nosnippet>728</a>    ///
+<a href=#729 id=729 data-nosnippet>729</a>    /// This is `StateID::ZERO` if and only if this state is not a match state.
+<a href=#730 id=730 data-nosnippet>730</a>    </span>matches: StateID,
+<a href=#731 id=731 data-nosnippet>731</a>    <span class="doccomment">/// The state that should be transitioned to if the current byte in the
+<a href=#732 id=732 data-nosnippet>732</a>    /// haystack does not have a corresponding transition defined in this
+<a href=#733 id=733 data-nosnippet>733</a>    /// state.
+<a href=#734 id=734 data-nosnippet>734</a>    </span>fail: StateID,
+<a href=#735 id=735 data-nosnippet>735</a>    <span class="doccomment">/// The depth of this state. Specifically, this is the distance from this
+<a href=#736 id=736 data-nosnippet>736</a>    /// state to the starting state. (For the special sentinel states DEAD and
+<a href=#737 id=737 data-nosnippet>737</a>    /// FAIL, their depth is always 0.) The depth of a starting state is 0.
+<a href=#738 id=738 data-nosnippet>738</a>    ///
+<a href=#739 id=739 data-nosnippet>739</a>    /// Note that depth is currently not used in this non-contiguous NFA. It
+<a href=#740 id=740 data-nosnippet>740</a>    /// may in the future, but it is used in the contiguous NFA. Namely, it
+<a href=#741 id=741 data-nosnippet>741</a>    /// permits an optimization where states near the starting state have their
+<a href=#742 id=742 data-nosnippet>742</a>    /// transitions stored in a dense fashion, but all other states have their
+<a href=#743 id=743 data-nosnippet>743</a>    /// transitions stored in a sparse fashion. (This non-contiguous NFA uses
+<a href=#744 id=744 data-nosnippet>744</a>    /// a sparse representation for all states unconditionally.) In any case,
+<a href=#745 id=745 data-nosnippet>745</a>    /// this is really the only convenient place to compute and store this
+<a href=#746 id=746 data-nosnippet>746</a>    /// information, which we need when building the contiguous NFA.
+<a href=#747 id=747 data-nosnippet>747</a>    </span>depth: SmallIndex,
+<a href=#748 id=748 data-nosnippet>748</a>}
+<a href=#749 id=749 data-nosnippet>749</a>
+<a href=#750 id=750 data-nosnippet>750</a><span class="kw">impl </span>State {
+<a href=#751 id=751 data-nosnippet>751</a>    <span class="doccomment">/// Return true if and only if this state is a match state.
+<a href=#752 id=752 data-nosnippet>752</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_match(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#753 id=753 data-nosnippet>753</a>        <span class="self">self</span>.matches != StateID::ZERO
+<a href=#754 id=754 data-nosnippet>754</a>    }
+<a href=#755 id=755 data-nosnippet>755</a>
+<a href=#756 id=756 data-nosnippet>756</a>    <span class="doccomment">/// Returns the failure transition for this state.
+<a href=#757 id=757 data-nosnippet>757</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fail(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StateID {
+<a href=#758 id=758 data-nosnippet>758</a>        <span class="self">self</span>.fail
+<a href=#759 id=759 data-nosnippet>759</a>    }
+<a href=#760 id=760 data-nosnippet>760</a>
+<a href=#761 id=761 data-nosnippet>761</a>    <span class="doccomment">/// Returns the depth of this state. That is, the number of transitions
+<a href=#762 id=762 data-nosnippet>762</a>    /// this state is from the start state of the NFA.
+<a href=#763 id=763 data-nosnippet>763</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>depth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SmallIndex {
+<a href=#764 id=764 data-nosnippet>764</a>        <span class="self">self</span>.depth
+<a href=#765 id=765 data-nosnippet>765</a>    }
+<a href=#766 id=766 data-nosnippet>766</a>}
+<a href=#767 id=767 data-nosnippet>767</a>
+<a href=#768 id=768 data-nosnippet>768</a><span class="doccomment">/// A single transition in a non-contiguous NFA.
+<a href=#769 id=769 data-nosnippet>769</a></span><span class="attr">#[derive(Clone, Copy, Default)]
+<a href=#770 id=770 data-nosnippet>770</a>#[repr(packed)]
+<a href=#771 id=771 data-nosnippet>771</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Transition {
+<a href=#772 id=772 data-nosnippet>772</a>    byte: u8,
+<a href=#773 id=773 data-nosnippet>773</a>    next: StateID,
+<a href=#774 id=774 data-nosnippet>774</a>    link: StateID,
+<a href=#775 id=775 data-nosnippet>775</a>}
+<a href=#776 id=776 data-nosnippet>776</a>
+<a href=#777 id=777 data-nosnippet>777</a><span class="kw">impl </span>Transition {
+<a href=#778 id=778 data-nosnippet>778</a>    <span class="doccomment">/// Return the byte for which this transition is defined.
+<a href=#779 id=779 data-nosnippet>779</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>byte(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8 {
+<a href=#780 id=780 data-nosnippet>780</a>        <span class="self">self</span>.byte
+<a href=#781 id=781 data-nosnippet>781</a>    }
+<a href=#782 id=782 data-nosnippet>782</a>
+<a href=#783 id=783 data-nosnippet>783</a>    <span class="doccomment">/// Return the ID of the state that this transition points to.
+<a href=#784 id=784 data-nosnippet>784</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>next(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StateID {
+<a href=#785 id=785 data-nosnippet>785</a>        <span class="self">self</span>.next
+<a href=#786 id=786 data-nosnippet>786</a>    }
+<a href=#787 id=787 data-nosnippet>787</a>
+<a href=#788 id=788 data-nosnippet>788</a>    <span class="doccomment">/// Return the ID of the next transition.
+<a href=#789 id=789 data-nosnippet>789</a>    </span><span class="kw">fn </span>link(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StateID {
+<a href=#790 id=790 data-nosnippet>790</a>        <span class="self">self</span>.link
+<a href=#791 id=791 data-nosnippet>791</a>    }
+<a href=#792 id=792 data-nosnippet>792</a>}
+<a href=#793 id=793 data-nosnippet>793</a>
+<a href=#794 id=794 data-nosnippet>794</a><span class="kw">impl </span>core::fmt::Debug <span class="kw">for </span>Transition {
+<a href=#795 id=795 data-nosnippet>795</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter) -&gt; core::fmt::Result {
+<a href=#796 id=796 data-nosnippet>796</a>        <span class="macro">write!</span>(
+<a href=#797 id=797 data-nosnippet>797</a>            f,
+<a href=#798 id=798 data-nosnippet>798</a>            <span class="string">"Transition(byte: {:X?}, next: {:?}, link: {:?})"</span>,
+<a href=#799 id=799 data-nosnippet>799</a>            <span class="self">self</span>.byte,
+<a href=#800 id=800 data-nosnippet>800</a>            <span class="self">self</span>.next().as_usize(),
+<a href=#801 id=801 data-nosnippet>801</a>            <span class="self">self</span>.link().as_usize()
+<a href=#802 id=802 data-nosnippet>802</a>        )
+<a href=#803 id=803 data-nosnippet>803</a>    }
+<a href=#804 id=804 data-nosnippet>804</a>}
+<a href=#805 id=805 data-nosnippet>805</a>
+<a href=#806 id=806 data-nosnippet>806</a><span class="doccomment">/// A single match in a non-contiguous NFA.
+<a href=#807 id=807 data-nosnippet>807</a></span><span class="attr">#[derive(Clone, Copy, Default)]
+<a href=#808 id=808 data-nosnippet>808</a></span><span class="kw">struct </span>Match {
+<a href=#809 id=809 data-nosnippet>809</a>    pid: PatternID,
+<a href=#810 id=810 data-nosnippet>810</a>    link: StateID,
+<a href=#811 id=811 data-nosnippet>811</a>}
+<a href=#812 id=812 data-nosnippet>812</a>
+<a href=#813 id=813 data-nosnippet>813</a><span class="kw">impl </span>Match {
+<a href=#814 id=814 data-nosnippet>814</a>    <span class="doccomment">/// Return the pattern ID for this match.
+<a href=#815 id=815 data-nosnippet>815</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pattern(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PatternID {
+<a href=#816 id=816 data-nosnippet>816</a>        <span class="self">self</span>.pid
+<a href=#817 id=817 data-nosnippet>817</a>    }
+<a href=#818 id=818 data-nosnippet>818</a>
+<a href=#819 id=819 data-nosnippet>819</a>    <span class="doccomment">/// Return the ID of the next match.
+<a href=#820 id=820 data-nosnippet>820</a>    </span><span class="kw">fn </span>link(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StateID {
+<a href=#821 id=821 data-nosnippet>821</a>        <span class="self">self</span>.link
+<a href=#822 id=822 data-nosnippet>822</a>    }
+<a href=#823 id=823 data-nosnippet>823</a>}
+<a href=#824 id=824 data-nosnippet>824</a>
+<a href=#825 id=825 data-nosnippet>825</a><span class="kw">impl </span>core::fmt::Debug <span class="kw">for </span>Match {
+<a href=#826 id=826 data-nosnippet>826</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter) -&gt; core::fmt::Result {
+<a href=#827 id=827 data-nosnippet>827</a>        <span class="macro">write!</span>(
+<a href=#828 id=828 data-nosnippet>828</a>            f,
+<a href=#829 id=829 data-nosnippet>829</a>            <span class="string">"Match(pid: {:?}, link: {:?})"</span>,
+<a href=#830 id=830 data-nosnippet>830</a>            <span class="self">self</span>.pattern().as_usize(),
+<a href=#831 id=831 data-nosnippet>831</a>            <span class="self">self</span>.link().as_usize()
+<a href=#832 id=832 data-nosnippet>832</a>        )
+<a href=#833 id=833 data-nosnippet>833</a>    }
+<a href=#834 id=834 data-nosnippet>834</a>}
+<a href=#835 id=835 data-nosnippet>835</a>
+<a href=#836 id=836 data-nosnippet>836</a><span class="doccomment">/// A builder for configuring an Aho-Corasick noncontiguous NFA.
+<a href=#837 id=837 data-nosnippet>837</a>///
+<a href=#838 id=838 data-nosnippet>838</a>/// This builder has a subset of the options available to a
+<a href=#839 id=839 data-nosnippet>839</a>/// [`AhoCorasickBuilder`](crate::AhoCorasickBuilder). Of the shared options,
+<a href=#840 id=840 data-nosnippet>840</a>/// their behavior is identical.
+<a href=#841 id=841 data-nosnippet>841</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#842 id=842 data-nosnippet>842</a></span><span class="kw">pub struct </span>Builder {
+<a href=#843 id=843 data-nosnippet>843</a>    match_kind: MatchKind,
+<a href=#844 id=844 data-nosnippet>844</a>    prefilter: bool,
+<a href=#845 id=845 data-nosnippet>845</a>    ascii_case_insensitive: bool,
+<a href=#846 id=846 data-nosnippet>846</a>    dense_depth: usize,
+<a href=#847 id=847 data-nosnippet>847</a>}
+<a href=#848 id=848 data-nosnippet>848</a>
+<a href=#849 id=849 data-nosnippet>849</a><span class="kw">impl </span>Default <span class="kw">for </span>Builder {
+<a href=#850 id=850 data-nosnippet>850</a>    <span class="kw">fn </span>default() -&gt; Builder {
+<a href=#851 id=851 data-nosnippet>851</a>        Builder {
+<a href=#852 id=852 data-nosnippet>852</a>            match_kind: MatchKind::default(),
+<a href=#853 id=853 data-nosnippet>853</a>            prefilter: <span class="bool-val">true</span>,
+<a href=#854 id=854 data-nosnippet>854</a>            ascii_case_insensitive: <span class="bool-val">false</span>,
+<a href=#855 id=855 data-nosnippet>855</a>            dense_depth: <span class="number">3</span>,
+<a href=#856 id=856 data-nosnippet>856</a>        }
+<a href=#857 id=857 data-nosnippet>857</a>    }
+<a href=#858 id=858 data-nosnippet>858</a>}
+<a href=#859 id=859 data-nosnippet>859</a>
+<a href=#860 id=860 data-nosnippet>860</a><span class="kw">impl </span>Builder {
+<a href=#861 id=861 data-nosnippet>861</a>    <span class="doccomment">/// Create a new builder for configuring an Aho-Corasick noncontiguous NFA.
+<a href=#862 id=862 data-nosnippet>862</a>    </span><span class="kw">pub fn </span>new() -&gt; Builder {
+<a href=#863 id=863 data-nosnippet>863</a>        Builder::default()
+<a href=#864 id=864 data-nosnippet>864</a>    }
+<a href=#865 id=865 data-nosnippet>865</a>
+<a href=#866 id=866 data-nosnippet>866</a>    <span class="doccomment">/// Build an Aho-Corasick noncontiguous NFA from the given iterator of
+<a href=#867 id=867 data-nosnippet>867</a>    /// patterns.
+<a href=#868 id=868 data-nosnippet>868</a>    ///
+<a href=#869 id=869 data-nosnippet>869</a>    /// A builder may be reused to create more NFAs.
+<a href=#870 id=870 data-nosnippet>870</a>    </span><span class="kw">pub fn </span>build&lt;I, P&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, patterns: I) -&gt; <span class="prelude-ty">Result</span>&lt;NFA, BuildError&gt;
+<a href=#871 id=871 data-nosnippet>871</a>    <span class="kw">where
+<a href=#872 id=872 data-nosnippet>872</a>        </span>I: IntoIterator&lt;Item = P&gt;,
+<a href=#873 id=873 data-nosnippet>873</a>        P: AsRef&lt;[u8]&gt;,
+<a href=#874 id=874 data-nosnippet>874</a>    {
+<a href=#875 id=875 data-nosnippet>875</a>        <span class="macro">debug!</span>(<span class="string">"building non-contiguous NFA"</span>);
+<a href=#876 id=876 data-nosnippet>876</a>        <span class="kw">let </span>nfa = Compiler::new(<span class="self">self</span>)<span class="question-mark">?</span>.compile(patterns)<span class="question-mark">?</span>;
+<a href=#877 id=877 data-nosnippet>877</a>        <span class="macro">debug!</span>(
+<a href=#878 id=878 data-nosnippet>878</a>            <span class="string">"non-contiguous NFA built, &lt;states: {:?}, size: {:?}&gt;"</span>,
+<a href=#879 id=879 data-nosnippet>879</a>            nfa.states.len(),
+<a href=#880 id=880 data-nosnippet>880</a>            nfa.memory_usage()
+<a href=#881 id=881 data-nosnippet>881</a>        );
+<a href=#882 id=882 data-nosnippet>882</a>        <span class="prelude-val">Ok</span>(nfa)
+<a href=#883 id=883 data-nosnippet>883</a>    }
+<a href=#884 id=884 data-nosnippet>884</a>
+<a href=#885 id=885 data-nosnippet>885</a>    <span class="doccomment">/// Set the desired match semantics.
+<a href=#886 id=886 data-nosnippet>886</a>    ///
+<a href=#887 id=887 data-nosnippet>887</a>    /// See
+<a href=#888 id=888 data-nosnippet>888</a>    /// [`AhoCorasickBuilder::match_kind`](crate::AhoCorasickBuilder::match_kind)
+<a href=#889 id=889 data-nosnippet>889</a>    /// for more documentation and examples.
+<a href=#890 id=890 data-nosnippet>890</a>    </span><span class="kw">pub fn </span>match_kind(<span class="kw-2">&amp;mut </span><span class="self">self</span>, kind: MatchKind) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#891 id=891 data-nosnippet>891</a>        <span class="self">self</span>.match_kind = kind;
+<a href=#892 id=892 data-nosnippet>892</a>        <span class="self">self
+<a href=#893 id=893 data-nosnippet>893</a>    </span>}
+<a href=#894 id=894 data-nosnippet>894</a>
+<a href=#895 id=895 data-nosnippet>895</a>    <span class="doccomment">/// Enable ASCII-aware case insensitive matching.
+<a href=#896 id=896 data-nosnippet>896</a>    ///
+<a href=#897 id=897 data-nosnippet>897</a>    /// See
+<a href=#898 id=898 data-nosnippet>898</a>    /// [`AhoCorasickBuilder::ascii_case_insensitive`](crate::AhoCorasickBuilder::ascii_case_insensitive)
+<a href=#899 id=899 data-nosnippet>899</a>    /// for more documentation and examples.
+<a href=#900 id=900 data-nosnippet>900</a>    </span><span class="kw">pub fn </span>ascii_case_insensitive(<span class="kw-2">&amp;mut </span><span class="self">self</span>, yes: bool) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#901 id=901 data-nosnippet>901</a>        <span class="self">self</span>.ascii_case_insensitive = yes;
+<a href=#902 id=902 data-nosnippet>902</a>        <span class="self">self
+<a href=#903 id=903 data-nosnippet>903</a>    </span>}
+<a href=#904 id=904 data-nosnippet>904</a>
+<a href=#905 id=905 data-nosnippet>905</a>    <span class="doccomment">/// Set the limit on how many states use a dense representation for their
+<a href=#906 id=906 data-nosnippet>906</a>    /// transitions. Other states will generally use a sparse representation.
+<a href=#907 id=907 data-nosnippet>907</a>    ///
+<a href=#908 id=908 data-nosnippet>908</a>    /// See
+<a href=#909 id=909 data-nosnippet>909</a>    /// [`AhoCorasickBuilder::dense_depth`](crate::AhoCorasickBuilder::dense_depth)
+<a href=#910 id=910 data-nosnippet>910</a>    /// for more documentation and examples.
+<a href=#911 id=911 data-nosnippet>911</a>    </span><span class="kw">pub fn </span>dense_depth(<span class="kw-2">&amp;mut </span><span class="self">self</span>, depth: usize) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#912 id=912 data-nosnippet>912</a>        <span class="self">self</span>.dense_depth = depth;
+<a href=#913 id=913 data-nosnippet>913</a>        <span class="self">self
+<a href=#914 id=914 data-nosnippet>914</a>    </span>}
+<a href=#915 id=915 data-nosnippet>915</a>
+<a href=#916 id=916 data-nosnippet>916</a>    <span class="doccomment">/// Enable heuristic prefilter optimizations.
+<a href=#917 id=917 data-nosnippet>917</a>    ///
+<a href=#918 id=918 data-nosnippet>918</a>    /// See
+<a href=#919 id=919 data-nosnippet>919</a>    /// [`AhoCorasickBuilder::prefilter`](crate::AhoCorasickBuilder::prefilter)
+<a href=#920 id=920 data-nosnippet>920</a>    /// for more documentation and examples.
+<a href=#921 id=921 data-nosnippet>921</a>    </span><span class="kw">pub fn </span>prefilter(<span class="kw-2">&amp;mut </span><span class="self">self</span>, yes: bool) -&gt; <span class="kw-2">&amp;mut </span>Builder {
+<a href=#922 id=922 data-nosnippet>922</a>        <span class="self">self</span>.prefilter = yes;
+<a href=#923 id=923 data-nosnippet>923</a>        <span class="self">self
+<a href=#924 id=924 data-nosnippet>924</a>    </span>}
+<a href=#925 id=925 data-nosnippet>925</a>}
+<a href=#926 id=926 data-nosnippet>926</a>
+<a href=#927 id=927 data-nosnippet>927</a><span class="doccomment">/// A compiler uses a builder configuration and builds up the NFA formulation
+<a href=#928 id=928 data-nosnippet>928</a>/// of an Aho-Corasick automaton. This roughly corresponds to the standard
+<a href=#929 id=929 data-nosnippet>929</a>/// formulation described in textbooks, with some tweaks to support leftmost
+<a href=#930 id=930 data-nosnippet>930</a>/// searching.
+<a href=#931 id=931 data-nosnippet>931</a></span><span class="attr">#[derive(Debug)]
+<a href=#932 id=932 data-nosnippet>932</a></span><span class="kw">struct </span>Compiler&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#933 id=933 data-nosnippet>933</a>    builder: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Builder,
+<a href=#934 id=934 data-nosnippet>934</a>    prefilter: prefilter::Builder,
+<a href=#935 id=935 data-nosnippet>935</a>    nfa: NFA,
+<a href=#936 id=936 data-nosnippet>936</a>    byteset: ByteClassSet,
+<a href=#937 id=937 data-nosnippet>937</a>}
+<a href=#938 id=938 data-nosnippet>938</a>
+<a href=#939 id=939 data-nosnippet>939</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Compiler&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#940 id=940 data-nosnippet>940</a>    <span class="kw">fn </span>new(builder: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Builder) -&gt; <span class="prelude-ty">Result</span>&lt;Compiler&lt;<span class="lifetime">'a</span>&gt;, BuildError&gt; {
+<a href=#941 id=941 data-nosnippet>941</a>        <span class="kw">let </span>prefilter = prefilter::Builder::new(builder.match_kind)
+<a href=#942 id=942 data-nosnippet>942</a>            .ascii_case_insensitive(builder.ascii_case_insensitive);
+<a href=#943 id=943 data-nosnippet>943</a>        <span class="prelude-val">Ok</span>(Compiler {
+<a href=#944 id=944 data-nosnippet>944</a>            builder,
+<a href=#945 id=945 data-nosnippet>945</a>            prefilter,
+<a href=#946 id=946 data-nosnippet>946</a>            nfa: NFA {
+<a href=#947 id=947 data-nosnippet>947</a>                match_kind: builder.match_kind,
+<a href=#948 id=948 data-nosnippet>948</a>                states: <span class="macro">vec!</span>[],
+<a href=#949 id=949 data-nosnippet>949</a>                sparse: <span class="macro">vec!</span>[],
+<a href=#950 id=950 data-nosnippet>950</a>                dense: <span class="macro">vec!</span>[],
+<a href=#951 id=951 data-nosnippet>951</a>                matches: <span class="macro">vec!</span>[],
+<a href=#952 id=952 data-nosnippet>952</a>                pattern_lens: <span class="macro">vec!</span>[],
+<a href=#953 id=953 data-nosnippet>953</a>                prefilter: <span class="prelude-val">None</span>,
+<a href=#954 id=954 data-nosnippet>954</a>                byte_classes: ByteClasses::singletons(),
+<a href=#955 id=955 data-nosnippet>955</a>                min_pattern_len: usize::MAX,
+<a href=#956 id=956 data-nosnippet>956</a>                max_pattern_len: <span class="number">0</span>,
+<a href=#957 id=957 data-nosnippet>957</a>                special: Special::zero(),
+<a href=#958 id=958 data-nosnippet>958</a>            },
+<a href=#959 id=959 data-nosnippet>959</a>            byteset: ByteClassSet::empty(),
+<a href=#960 id=960 data-nosnippet>960</a>        })
+<a href=#961 id=961 data-nosnippet>961</a>    }
+<a href=#962 id=962 data-nosnippet>962</a>
+<a href=#963 id=963 data-nosnippet>963</a>    <span class="kw">fn </span>compile&lt;I, P&gt;(<span class="kw-2">mut </span><span class="self">self</span>, patterns: I) -&gt; <span class="prelude-ty">Result</span>&lt;NFA, BuildError&gt;
+<a href=#964 id=964 data-nosnippet>964</a>    <span class="kw">where
+<a href=#965 id=965 data-nosnippet>965</a>        </span>I: IntoIterator&lt;Item = P&gt;,
+<a href=#966 id=966 data-nosnippet>966</a>        P: AsRef&lt;[u8]&gt;,
+<a href=#967 id=967 data-nosnippet>967</a>    {
+<a href=#968 id=968 data-nosnippet>968</a>        <span class="comment">// Add dummy transition/match links, so that no valid link will point
+<a href=#969 id=969 data-nosnippet>969</a>        // to another link at index 0.
+<a href=#970 id=970 data-nosnippet>970</a>        </span><span class="self">self</span>.nfa.sparse.push(Transition::default());
+<a href=#971 id=971 data-nosnippet>971</a>        <span class="self">self</span>.nfa.matches.push(Match::default());
+<a href=#972 id=972 data-nosnippet>972</a>        <span class="comment">// Add a dummy dense transition so that no states can have dense==0
+<a href=#973 id=973 data-nosnippet>973</a>        // represent a valid pointer to dense transitions. This permits
+<a href=#974 id=974 data-nosnippet>974</a>        // dense==0 to be a sentinel indicating "no dense transitions."
+<a href=#975 id=975 data-nosnippet>975</a>        </span><span class="self">self</span>.nfa.dense.push(NFA::DEAD);
+<a href=#976 id=976 data-nosnippet>976</a>        <span class="comment">// the dead state, only used for leftmost and fixed to id==0
+<a href=#977 id=977 data-nosnippet>977</a>        </span><span class="self">self</span>.nfa.alloc_state(<span class="number">0</span>)<span class="question-mark">?</span>;
+<a href=#978 id=978 data-nosnippet>978</a>        <span class="comment">// the fail state, which is never entered and fixed to id==1
+<a href=#979 id=979 data-nosnippet>979</a>        </span><span class="self">self</span>.nfa.alloc_state(<span class="number">0</span>)<span class="question-mark">?</span>;
+<a href=#980 id=980 data-nosnippet>980</a>        <span class="comment">// unanchored start state, initially fixed to id==2 but later shuffled
+<a href=#981 id=981 data-nosnippet>981</a>        // to appear after all non-start match states.
+<a href=#982 id=982 data-nosnippet>982</a>        </span><span class="self">self</span>.nfa.special.start_unanchored_id = <span class="self">self</span>.nfa.alloc_state(<span class="number">0</span>)<span class="question-mark">?</span>;
+<a href=#983 id=983 data-nosnippet>983</a>        <span class="comment">// anchored start state, initially fixed to id==3 but later shuffled
+<a href=#984 id=984 data-nosnippet>984</a>        // to appear after unanchored start state.
+<a href=#985 id=985 data-nosnippet>985</a>        </span><span class="self">self</span>.nfa.special.start_anchored_id = <span class="self">self</span>.nfa.alloc_state(<span class="number">0</span>)<span class="question-mark">?</span>;
+<a href=#986 id=986 data-nosnippet>986</a>        <span class="comment">// Initialize the unanchored starting state in order to make it dense,
+<a href=#987 id=987 data-nosnippet>987</a>        // and thus make transition lookups on this state faster.
+<a href=#988 id=988 data-nosnippet>988</a>        </span><span class="self">self</span>.init_unanchored_start_state()<span class="question-mark">?</span>;
+<a href=#989 id=989 data-nosnippet>989</a>        <span class="comment">// Set all transitions on the DEAD state to point to itself. This way,
+<a href=#990 id=990 data-nosnippet>990</a>        // the DEAD state can never be escaped. It MUST be used as a sentinel
+<a href=#991 id=991 data-nosnippet>991</a>        // in any correct search.
+<a href=#992 id=992 data-nosnippet>992</a>        </span><span class="self">self</span>.add_dead_state_loop()<span class="question-mark">?</span>;
+<a href=#993 id=993 data-nosnippet>993</a>        <span class="comment">// Build the base trie from the given patterns.
+<a href=#994 id=994 data-nosnippet>994</a>        </span><span class="self">self</span>.build_trie(patterns)<span class="question-mark">?</span>;
+<a href=#995 id=995 data-nosnippet>995</a>        <span class="self">self</span>.nfa.states.shrink_to_fit();
+<a href=#996 id=996 data-nosnippet>996</a>        <span class="comment">// Turn our set of bytes into equivalent classes. This NFA
+<a href=#997 id=997 data-nosnippet>997</a>        // implementation uses byte classes only for states that use a dense
+<a href=#998 id=998 data-nosnippet>998</a>        // representation of transitions. (And that's why this comes before
+<a href=#999 id=999 data-nosnippet>999</a>        // `self.densify()`, as the byte classes need to be set first.)
+<a href=#1000 id=1000 data-nosnippet>1000</a>        </span><span class="self">self</span>.nfa.byte_classes = <span class="self">self</span>.byteset.byte_classes();
+<a href=#1001 id=1001 data-nosnippet>1001</a>        <span class="comment">// Add transitions (and maybe matches) to the anchored starting state.
+<a href=#1002 id=1002 data-nosnippet>1002</a>        // The anchored starting state is used for anchored searches. The only
+<a href=#1003 id=1003 data-nosnippet>1003</a>        // mechanical difference between it and the unanchored start state is
+<a href=#1004 id=1004 data-nosnippet>1004</a>        // that missing transitions map to the DEAD state instead of the FAIL
+<a href=#1005 id=1005 data-nosnippet>1005</a>        // state.
+<a href=#1006 id=1006 data-nosnippet>1006</a>        </span><span class="self">self</span>.set_anchored_start_state()<span class="question-mark">?</span>;
+<a href=#1007 id=1007 data-nosnippet>1007</a>        <span class="comment">// Rewrite transitions to the FAIL state on the unanchored start state
+<a href=#1008 id=1008 data-nosnippet>1008</a>        // as self-transitions. This keeps the start state active at all times.
+<a href=#1009 id=1009 data-nosnippet>1009</a>        </span><span class="self">self</span>.add_unanchored_start_state_loop();
+<a href=#1010 id=1010 data-nosnippet>1010</a>        <span class="comment">// Make some (possibly zero) states use a dense representation for
+<a href=#1011 id=1011 data-nosnippet>1011</a>        // transitions. It's important to do this right after the states
+<a href=#1012 id=1012 data-nosnippet>1012</a>        // and non-failure transitions are solidified. That way, subsequent
+<a href=#1013 id=1013 data-nosnippet>1013</a>        // accesses (particularly `fill_failure_transitions`) will benefit from
+<a href=#1014 id=1014 data-nosnippet>1014</a>        // the faster transition lookup in densified states.
+<a href=#1015 id=1015 data-nosnippet>1015</a>        </span><span class="self">self</span>.densify()<span class="question-mark">?</span>;
+<a href=#1016 id=1016 data-nosnippet>1016</a>        <span class="comment">// The meat of the Aho-Corasick algorithm: compute and write failure
+<a href=#1017 id=1017 data-nosnippet>1017</a>        // transitions. i.e., the state to move to when a transition isn't
+<a href=#1018 id=1018 data-nosnippet>1018</a>        // defined in the current state. These are epsilon transitions and thus
+<a href=#1019 id=1019 data-nosnippet>1019</a>        // make this formulation an NFA.
+<a href=#1020 id=1020 data-nosnippet>1020</a>        </span><span class="self">self</span>.fill_failure_transitions()<span class="question-mark">?</span>;
+<a href=#1021 id=1021 data-nosnippet>1021</a>        <span class="comment">// Handle a special case under leftmost semantics when at least one
+<a href=#1022 id=1022 data-nosnippet>1022</a>        // of the patterns is the empty string.
+<a href=#1023 id=1023 data-nosnippet>1023</a>        </span><span class="self">self</span>.close_start_state_loop_for_leftmost();
+<a href=#1024 id=1024 data-nosnippet>1024</a>        <span class="comment">// Shuffle states so that we have DEAD, FAIL, MATCH, ..., START, START,
+<a href=#1025 id=1025 data-nosnippet>1025</a>        // NON-MATCH, ... This permits us to very quickly query the type of
+<a href=#1026 id=1026 data-nosnippet>1026</a>        // the state we're currently in during a search.
+<a href=#1027 id=1027 data-nosnippet>1027</a>        </span><span class="self">self</span>.shuffle();
+<a href=#1028 id=1028 data-nosnippet>1028</a>        <span class="self">self</span>.nfa.prefilter = <span class="self">self</span>.prefilter.build();
+<a href=#1029 id=1029 data-nosnippet>1029</a>        <span class="comment">// Store the maximum ID of all *relevant* special states. Start states
+<a href=#1030 id=1030 data-nosnippet>1030</a>        // are only relevant when we have a prefilter, otherwise, there is zero
+<a href=#1031 id=1031 data-nosnippet>1031</a>        // reason to care about whether a state is a start state or not during
+<a href=#1032 id=1032 data-nosnippet>1032</a>        // a search. Indeed, without a prefilter, we are careful to explicitly
+<a href=#1033 id=1033 data-nosnippet>1033</a>        // NOT care about start states, otherwise the search can ping pong
+<a href=#1034 id=1034 data-nosnippet>1034</a>        // between the unrolled loop and the handling of special-status states
+<a href=#1035 id=1035 data-nosnippet>1035</a>        // and destroy perf.
+<a href=#1036 id=1036 data-nosnippet>1036</a>        </span><span class="self">self</span>.nfa.special.max_special_id = <span class="kw">if </span><span class="self">self</span>.nfa.prefilter.is_some() {
+<a href=#1037 id=1037 data-nosnippet>1037</a>            <span class="comment">// Why the anchored starting state? Because we always put it
+<a href=#1038 id=1038 data-nosnippet>1038</a>            // after the unanchored starting state and it is therefore the
+<a href=#1039 id=1039 data-nosnippet>1039</a>            // maximum. Why put unanchored followed by anchored? No particular
+<a href=#1040 id=1040 data-nosnippet>1040</a>            // reason, but that's how the states are logically organized in the
+<a href=#1041 id=1041 data-nosnippet>1041</a>            // Thompson NFA implementation found in regex-automata. ¯\_(ツ)_/¯
+<a href=#1042 id=1042 data-nosnippet>1042</a>            </span><span class="self">self</span>.nfa.special.start_anchored_id
+<a href=#1043 id=1043 data-nosnippet>1043</a>        } <span class="kw">else </span>{
+<a href=#1044 id=1044 data-nosnippet>1044</a>            <span class="self">self</span>.nfa.special.max_match_id
+<a href=#1045 id=1045 data-nosnippet>1045</a>        };
+<a href=#1046 id=1046 data-nosnippet>1046</a>        <span class="self">self</span>.nfa.sparse.shrink_to_fit();
+<a href=#1047 id=1047 data-nosnippet>1047</a>        <span class="self">self</span>.nfa.dense.shrink_to_fit();
+<a href=#1048 id=1048 data-nosnippet>1048</a>        <span class="self">self</span>.nfa.matches.shrink_to_fit();
+<a href=#1049 id=1049 data-nosnippet>1049</a>        <span class="self">self</span>.nfa.pattern_lens.shrink_to_fit();
+<a href=#1050 id=1050 data-nosnippet>1050</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.nfa)
+<a href=#1051 id=1051 data-nosnippet>1051</a>    }
+<a href=#1052 id=1052 data-nosnippet>1052</a>
+<a href=#1053 id=1053 data-nosnippet>1053</a>    <span class="doccomment">/// This sets up the initial prefix trie that makes up the Aho-Corasick
+<a href=#1054 id=1054 data-nosnippet>1054</a>    /// automaton. Effectively, it creates the basic structure of the
+<a href=#1055 id=1055 data-nosnippet>1055</a>    /// automaton, where every pattern given has a path from the start state to
+<a href=#1056 id=1056 data-nosnippet>1056</a>    /// the end of the pattern.
+<a href=#1057 id=1057 data-nosnippet>1057</a>    </span><span class="kw">fn </span>build_trie&lt;I, P&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, patterns: I) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt;
+<a href=#1058 id=1058 data-nosnippet>1058</a>    <span class="kw">where
+<a href=#1059 id=1059 data-nosnippet>1059</a>        </span>I: IntoIterator&lt;Item = P&gt;,
+<a href=#1060 id=1060 data-nosnippet>1060</a>        P: AsRef&lt;[u8]&gt;,
+<a href=#1061 id=1061 data-nosnippet>1061</a>    {
+<a href=#1062 id=1062 data-nosnippet>1062</a>        <span class="lifetime">'PATTERNS</span>: <span class="kw">for </span>(i, pat) <span class="kw">in </span>patterns.into_iter().enumerate() {
+<a href=#1063 id=1063 data-nosnippet>1063</a>            <span class="kw">let </span>pid = PatternID::new(i).map_err(|e| {
+<a href=#1064 id=1064 data-nosnippet>1064</a>                BuildError::pattern_id_overflow(
+<a href=#1065 id=1065 data-nosnippet>1065</a>                    PatternID::MAX.as_u64(),
+<a href=#1066 id=1066 data-nosnippet>1066</a>                    e.attempted(),
+<a href=#1067 id=1067 data-nosnippet>1067</a>                )
+<a href=#1068 id=1068 data-nosnippet>1068</a>            })<span class="question-mark">?</span>;
+<a href=#1069 id=1069 data-nosnippet>1069</a>            <span class="kw">let </span>pat = pat.as_ref();
+<a href=#1070 id=1070 data-nosnippet>1070</a>            <span class="kw">let </span>patlen = SmallIndex::new(pat.len())
+<a href=#1071 id=1071 data-nosnippet>1071</a>                .map_err(|<span class="kw">_</span>| BuildError::pattern_too_long(pid, pat.len()))<span class="question-mark">?</span>;
+<a href=#1072 id=1072 data-nosnippet>1072</a>            <span class="self">self</span>.nfa.min_pattern_len =
+<a href=#1073 id=1073 data-nosnippet>1073</a>                core::cmp::min(<span class="self">self</span>.nfa.min_pattern_len, pat.len());
+<a href=#1074 id=1074 data-nosnippet>1074</a>            <span class="self">self</span>.nfa.max_pattern_len =
+<a href=#1075 id=1075 data-nosnippet>1075</a>                core::cmp::max(<span class="self">self</span>.nfa.max_pattern_len, pat.len());
+<a href=#1076 id=1076 data-nosnippet>1076</a>            <span class="macro">assert_eq!</span>(
+<a href=#1077 id=1077 data-nosnippet>1077</a>                i,
+<a href=#1078 id=1078 data-nosnippet>1078</a>                <span class="self">self</span>.nfa.pattern_lens.len(),
+<a href=#1079 id=1079 data-nosnippet>1079</a>                <span class="string">"expected number of patterns to match pattern ID"
+<a href=#1080 id=1080 data-nosnippet>1080</a>            </span>);
+<a href=#1081 id=1081 data-nosnippet>1081</a>            <span class="self">self</span>.nfa.pattern_lens.push(patlen);
+<a href=#1082 id=1082 data-nosnippet>1082</a>            <span class="comment">// We add the pattern to the prefilter here because the pattern
+<a href=#1083 id=1083 data-nosnippet>1083</a>            // ID in the prefilter is determined with respect to the patterns
+<a href=#1084 id=1084 data-nosnippet>1084</a>            // added to the prefilter. That is, it isn't the ID we have here,
+<a href=#1085 id=1085 data-nosnippet>1085</a>            // but the one determined by its own accounting of patterns.
+<a href=#1086 id=1086 data-nosnippet>1086</a>            // To ensure they line up, we add every pattern we see to the
+<a href=#1087 id=1087 data-nosnippet>1087</a>            // prefilter, even if some patterns ultimately are impossible to
+<a href=#1088 id=1088 data-nosnippet>1088</a>            // match (in leftmost-first semantics specifically).
+<a href=#1089 id=1089 data-nosnippet>1089</a>            //
+<a href=#1090 id=1090 data-nosnippet>1090</a>            // Another way of doing this would be to expose an API in the
+<a href=#1091 id=1091 data-nosnippet>1091</a>            // prefilter to permit setting your own pattern IDs. Or to just use
+<a href=#1092 id=1092 data-nosnippet>1092</a>            // our own map and go between them. But this case is sufficiently
+<a href=#1093 id=1093 data-nosnippet>1093</a>            // rare that we don't bother and just make sure they're in sync.
+<a href=#1094 id=1094 data-nosnippet>1094</a>            </span><span class="kw">if </span><span class="self">self</span>.builder.prefilter {
+<a href=#1095 id=1095 data-nosnippet>1095</a>                <span class="self">self</span>.prefilter.add(pat);
+<a href=#1096 id=1096 data-nosnippet>1096</a>            }
+<a href=#1097 id=1097 data-nosnippet>1097</a>
+<a href=#1098 id=1098 data-nosnippet>1098</a>            <span class="kw">let </span><span class="kw-2">mut </span>prev = <span class="self">self</span>.nfa.special.start_unanchored_id;
+<a href=#1099 id=1099 data-nosnippet>1099</a>            <span class="kw">let </span><span class="kw-2">mut </span>saw_match = <span class="bool-val">false</span>;
+<a href=#1100 id=1100 data-nosnippet>1100</a>            <span class="kw">for </span>(depth, <span class="kw-2">&amp;</span>b) <span class="kw">in </span>pat.iter().enumerate() {
+<a href=#1101 id=1101 data-nosnippet>1101</a>                <span class="comment">// When leftmost-first match semantics are requested, we
+<a href=#1102 id=1102 data-nosnippet>1102</a>                // specifically stop adding patterns when a previously added
+<a href=#1103 id=1103 data-nosnippet>1103</a>                // pattern is a prefix of it. We avoid adding it because
+<a href=#1104 id=1104 data-nosnippet>1104</a>                // leftmost-first semantics imply that the pattern can never
+<a href=#1105 id=1105 data-nosnippet>1105</a>                // match. This is not just an optimization to save space! It
+<a href=#1106 id=1106 data-nosnippet>1106</a>                // is necessary for correctness. In fact, this is the only
+<a href=#1107 id=1107 data-nosnippet>1107</a>                // difference in the automaton between the implementations for
+<a href=#1108 id=1108 data-nosnippet>1108</a>                // leftmost-first and leftmost-longest.
+<a href=#1109 id=1109 data-nosnippet>1109</a>                </span>saw_match = saw_match || <span class="self">self</span>.nfa.states[prev].is_match();
+<a href=#1110 id=1110 data-nosnippet>1110</a>                <span class="kw">if </span><span class="self">self</span>.builder.match_kind.is_leftmost_first() &amp;&amp; saw_match {
+<a href=#1111 id=1111 data-nosnippet>1111</a>                    <span class="comment">// Skip to the next pattern immediately. This avoids
+<a href=#1112 id=1112 data-nosnippet>1112</a>                    // incorrectly adding a match after this loop terminates.
+<a href=#1113 id=1113 data-nosnippet>1113</a>                    </span><span class="kw">continue </span><span class="lifetime">'PATTERNS</span>;
+<a href=#1114 id=1114 data-nosnippet>1114</a>                }
+<a href=#1115 id=1115 data-nosnippet>1115</a>
+<a href=#1116 id=1116 data-nosnippet>1116</a>                <span class="comment">// Add this byte to our equivalence classes. These don't
+<a href=#1117 id=1117 data-nosnippet>1117</a>                // get used while building the trie, but other Aho-Corasick
+<a href=#1118 id=1118 data-nosnippet>1118</a>                // implementations may use them.
+<a href=#1119 id=1119 data-nosnippet>1119</a>                </span><span class="self">self</span>.byteset.set_range(b, b);
+<a href=#1120 id=1120 data-nosnippet>1120</a>                <span class="kw">if </span><span class="self">self</span>.builder.ascii_case_insensitive {
+<a href=#1121 id=1121 data-nosnippet>1121</a>                    <span class="kw">let </span>b = opposite_ascii_case(b);
+<a href=#1122 id=1122 data-nosnippet>1122</a>                    <span class="self">self</span>.byteset.set_range(b, b);
+<a href=#1123 id=1123 data-nosnippet>1123</a>                }
+<a href=#1124 id=1124 data-nosnippet>1124</a>
+<a href=#1125 id=1125 data-nosnippet>1125</a>                <span class="comment">// If the transition from prev using the current byte already
+<a href=#1126 id=1126 data-nosnippet>1126</a>                // exists, then just move through it. Otherwise, add a new
+<a href=#1127 id=1127 data-nosnippet>1127</a>                // state. We track the depth here so that we can determine
+<a href=#1128 id=1128 data-nosnippet>1128</a>                // how to represent transitions. States near the start state
+<a href=#1129 id=1129 data-nosnippet>1129</a>                // use a dense representation that uses more memory but is
+<a href=#1130 id=1130 data-nosnippet>1130</a>                // faster. Other states use a sparse representation that uses
+<a href=#1131 id=1131 data-nosnippet>1131</a>                // less memory but is slower.
+<a href=#1132 id=1132 data-nosnippet>1132</a>                </span><span class="kw">let </span>next = <span class="self">self</span>.nfa.follow_transition(prev, b);
+<a href=#1133 id=1133 data-nosnippet>1133</a>                <span class="kw">if </span>next != NFA::FAIL {
+<a href=#1134 id=1134 data-nosnippet>1134</a>                    prev = next;
+<a href=#1135 id=1135 data-nosnippet>1135</a>                } <span class="kw">else </span>{
+<a href=#1136 id=1136 data-nosnippet>1136</a>                    <span class="kw">let </span>next = <span class="self">self</span>.nfa.alloc_state(depth)<span class="question-mark">?</span>;
+<a href=#1137 id=1137 data-nosnippet>1137</a>                    <span class="self">self</span>.nfa.add_transition(prev, b, next)<span class="question-mark">?</span>;
+<a href=#1138 id=1138 data-nosnippet>1138</a>                    <span class="kw">if </span><span class="self">self</span>.builder.ascii_case_insensitive {
+<a href=#1139 id=1139 data-nosnippet>1139</a>                        <span class="kw">let </span>b = opposite_ascii_case(b);
+<a href=#1140 id=1140 data-nosnippet>1140</a>                        <span class="self">self</span>.nfa.add_transition(prev, b, next)<span class="question-mark">?</span>;
+<a href=#1141 id=1141 data-nosnippet>1141</a>                    }
+<a href=#1142 id=1142 data-nosnippet>1142</a>                    prev = next;
+<a href=#1143 id=1143 data-nosnippet>1143</a>                }
+<a href=#1144 id=1144 data-nosnippet>1144</a>            }
+<a href=#1145 id=1145 data-nosnippet>1145</a>            <span class="comment">// Once the pattern has been added, log the match in the final
+<a href=#1146 id=1146 data-nosnippet>1146</a>            // state that it reached.
+<a href=#1147 id=1147 data-nosnippet>1147</a>            </span><span class="self">self</span>.nfa.add_match(prev, pid)<span class="question-mark">?</span>;
+<a href=#1148 id=1148 data-nosnippet>1148</a>        }
+<a href=#1149 id=1149 data-nosnippet>1149</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1150 id=1150 data-nosnippet>1150</a>    }
+<a href=#1151 id=1151 data-nosnippet>1151</a>
+<a href=#1152 id=1152 data-nosnippet>1152</a>    <span class="doccomment">/// This routine creates failure transitions according to the standard
+<a href=#1153 id=1153 data-nosnippet>1153</a>    /// textbook formulation of the Aho-Corasick algorithm, with a couple small
+<a href=#1154 id=1154 data-nosnippet>1154</a>    /// tweaks to support "leftmost" semantics.
+<a href=#1155 id=1155 data-nosnippet>1155</a>    ///
+<a href=#1156 id=1156 data-nosnippet>1156</a>    /// Building failure transitions is the most interesting part of building
+<a href=#1157 id=1157 data-nosnippet>1157</a>    /// the Aho-Corasick automaton, because they are what allow searches to
+<a href=#1158 id=1158 data-nosnippet>1158</a>    /// be performed in linear time. Specifically, a failure transition is
+<a href=#1159 id=1159 data-nosnippet>1159</a>    /// a single transition associated with each state that points back to
+<a href=#1160 id=1160 data-nosnippet>1160</a>    /// the longest proper suffix of the pattern being searched. The failure
+<a href=#1161 id=1161 data-nosnippet>1161</a>    /// transition is followed whenever there exists no transition on the
+<a href=#1162 id=1162 data-nosnippet>1162</a>    /// current state for the current input byte. If there is no other proper
+<a href=#1163 id=1163 data-nosnippet>1163</a>    /// suffix, then the failure transition points back to the starting state.
+<a href=#1164 id=1164 data-nosnippet>1164</a>    ///
+<a href=#1165 id=1165 data-nosnippet>1165</a>    /// For example, let's say we built an Aho-Corasick automaton with the
+<a href=#1166 id=1166 data-nosnippet>1166</a>    /// following patterns: 'abcd' and 'cef'. The trie looks like this:
+<a href=#1167 id=1167 data-nosnippet>1167</a>    ///
+<a href=#1168 id=1168 data-nosnippet>1168</a>    /// ```ignore
+<a href=#1169 id=1169 data-nosnippet>1169</a>    ///          a - S1 - b - S2 - c - S3 - d - S4*
+<a href=#1170 id=1170 data-nosnippet>1170</a>    ///         /
+<a href=#1171 id=1171 data-nosnippet>1171</a>    ///     S0 - c - S5 - e - S6 - f - S7*
+<a href=#1172 id=1172 data-nosnippet>1172</a>    /// ```
+<a href=#1173 id=1173 data-nosnippet>1173</a>    ///
+<a href=#1174 id=1174 data-nosnippet>1174</a>    /// At this point, it should be fairly straight-forward to see how this
+<a href=#1175 id=1175 data-nosnippet>1175</a>    /// trie can be used in a simplistic way. At any given position in the
+<a href=#1176 id=1176 data-nosnippet>1176</a>    /// text we're searching (called the "subject" string), all we need to do
+<a href=#1177 id=1177 data-nosnippet>1177</a>    /// is follow the transitions in the trie by consuming one transition for
+<a href=#1178 id=1178 data-nosnippet>1178</a>    /// each byte in the subject string. If we reach a match state, then we can
+<a href=#1179 id=1179 data-nosnippet>1179</a>    /// report that location as a match.
+<a href=#1180 id=1180 data-nosnippet>1180</a>    ///
+<a href=#1181 id=1181 data-nosnippet>1181</a>    /// The trick comes when searching a subject string like 'abcef'. We'll
+<a href=#1182 id=1182 data-nosnippet>1182</a>    /// initially follow the transition from S0 to S1 and wind up in S3 after
+<a href=#1183 id=1183 data-nosnippet>1183</a>    /// observng the 'c' byte. At this point, the next byte is 'e' but state
+<a href=#1184 id=1184 data-nosnippet>1184</a>    /// S3 has no transition for 'e', so the search fails. We then would need
+<a href=#1185 id=1185 data-nosnippet>1185</a>    /// to restart the search at the next position in 'abcef', which
+<a href=#1186 id=1186 data-nosnippet>1186</a>    /// corresponds to 'b'. The match would fail, but the next search starting
+<a href=#1187 id=1187 data-nosnippet>1187</a>    /// at 'c' would finally succeed. The problem with this approach is that
+<a href=#1188 id=1188 data-nosnippet>1188</a>    /// we wind up searching the subject string potentially many times. In
+<a href=#1189 id=1189 data-nosnippet>1189</a>    /// effect, this makes the algorithm have worst case `O(n * m)` complexity,
+<a href=#1190 id=1190 data-nosnippet>1190</a>    /// where `n ~ len(subject)` and `m ~ len(all patterns)`. We would instead
+<a href=#1191 id=1191 data-nosnippet>1191</a>    /// like to achieve a `O(n + m)` worst case complexity.
+<a href=#1192 id=1192 data-nosnippet>1192</a>    ///
+<a href=#1193 id=1193 data-nosnippet>1193</a>    /// This is where failure transitions come in. Instead of dying at S3 in
+<a href=#1194 id=1194 data-nosnippet>1194</a>    /// the first search, the automaton can instruct the search to move to
+<a href=#1195 id=1195 data-nosnippet>1195</a>    /// another part of the automaton that corresponds to a suffix of what
+<a href=#1196 id=1196 data-nosnippet>1196</a>    /// we've seen so far. Recall that we've seen 'abc' in the subject string,
+<a href=#1197 id=1197 data-nosnippet>1197</a>    /// and the automaton does indeed have a non-empty suffix, 'c', that could
+<a href=#1198 id=1198 data-nosnippet>1198</a>    /// potentially lead to another match. Thus, the actual Aho-Corasick
+<a href=#1199 id=1199 data-nosnippet>1199</a>    /// automaton for our patterns in this case looks like this:
+<a href=#1200 id=1200 data-nosnippet>1200</a>    ///
+<a href=#1201 id=1201 data-nosnippet>1201</a>    /// ```ignore
+<a href=#1202 id=1202 data-nosnippet>1202</a>    ///          a - S1 - b - S2 - c - S3 - d - S4*
+<a href=#1203 id=1203 data-nosnippet>1203</a>    ///         /                      /
+<a href=#1204 id=1204 data-nosnippet>1204</a>    ///        /       ----------------
+<a href=#1205 id=1205 data-nosnippet>1205</a>    ///       /       /
+<a href=#1206 id=1206 data-nosnippet>1206</a>    ///     S0 - c - S5 - e - S6 - f - S7*
+<a href=#1207 id=1207 data-nosnippet>1207</a>    /// ```
+<a href=#1208 id=1208 data-nosnippet>1208</a>    ///
+<a href=#1209 id=1209 data-nosnippet>1209</a>    /// That is, we have a failure transition from S3 to S5, which is followed
+<a href=#1210 id=1210 data-nosnippet>1210</a>    /// exactly in cases when we are in state S3 but see any byte other than
+<a href=#1211 id=1211 data-nosnippet>1211</a>    /// 'd' (that is, we've "failed" to find a match in this portion of our
+<a href=#1212 id=1212 data-nosnippet>1212</a>    /// trie). We know we can transition back to S5 because we've already seen
+<a href=#1213 id=1213 data-nosnippet>1213</a>    /// a 'c' byte, so we don't need to re-scan it. We can then pick back up
+<a href=#1214 id=1214 data-nosnippet>1214</a>    /// with the search starting at S5 and complete our match.
+<a href=#1215 id=1215 data-nosnippet>1215</a>    ///
+<a href=#1216 id=1216 data-nosnippet>1216</a>    /// Adding failure transitions to a trie is fairly simple, but subtle. The
+<a href=#1217 id=1217 data-nosnippet>1217</a>    /// key issue is that you might have multiple failure transition that you
+<a href=#1218 id=1218 data-nosnippet>1218</a>    /// need to follow. For example, look at the trie for the patterns
+<a href=#1219 id=1219 data-nosnippet>1219</a>    /// 'abcd', 'b', 'bcd' and 'cd':
+<a href=#1220 id=1220 data-nosnippet>1220</a>    ///
+<a href=#1221 id=1221 data-nosnippet>1221</a>    /// ```ignore
+<a href=#1222 id=1222 data-nosnippet>1222</a>    ///          - a - S1 - b - S2* - c - S3 - d - S4*
+<a href=#1223 id=1223 data-nosnippet>1223</a>    ///         /               /         /
+<a href=#1224 id=1224 data-nosnippet>1224</a>    ///        /         -------   -------
+<a href=#1225 id=1225 data-nosnippet>1225</a>    ///       /         /         /
+<a href=#1226 id=1226 data-nosnippet>1226</a>    ///     S0 --- b - S5* - c - S6 - d - S7*
+<a href=#1227 id=1227 data-nosnippet>1227</a>    ///       \                  /
+<a href=#1228 id=1228 data-nosnippet>1228</a>    ///        \         --------
+<a href=#1229 id=1229 data-nosnippet>1229</a>    ///         \       /
+<a href=#1230 id=1230 data-nosnippet>1230</a>    ///          - c - S8 - d - S9*
+<a href=#1231 id=1231 data-nosnippet>1231</a>    /// ```
+<a href=#1232 id=1232 data-nosnippet>1232</a>    ///
+<a href=#1233 id=1233 data-nosnippet>1233</a>    /// The failure transitions for this trie are defined from S2 to S5,
+<a href=#1234 id=1234 data-nosnippet>1234</a>    /// S3 to S6 and S6 to S8. Moreover, state S2 needs to track that it
+<a href=#1235 id=1235 data-nosnippet>1235</a>    /// corresponds to a match, since its failure transition to S5 is itself
+<a href=#1236 id=1236 data-nosnippet>1236</a>    /// a match state.
+<a href=#1237 id=1237 data-nosnippet>1237</a>    ///
+<a href=#1238 id=1238 data-nosnippet>1238</a>    /// Perhaps simplest way to think about adding these failure transitions
+<a href=#1239 id=1239 data-nosnippet>1239</a>    /// is recursively. That is, if you know the failure transitions for every
+<a href=#1240 id=1240 data-nosnippet>1240</a>    /// possible previous state that could be visited (e.g., when computing the
+<a href=#1241 id=1241 data-nosnippet>1241</a>    /// failure transition for S3, you already know the failure transitions
+<a href=#1242 id=1242 data-nosnippet>1242</a>    /// for S0, S1 and S2), then you can simply follow the failure transition
+<a href=#1243 id=1243 data-nosnippet>1243</a>    /// of the previous state and check whether the incoming transition is
+<a href=#1244 id=1244 data-nosnippet>1244</a>    /// defined after following the failure transition.
+<a href=#1245 id=1245 data-nosnippet>1245</a>    ///
+<a href=#1246 id=1246 data-nosnippet>1246</a>    /// For example, when determining the failure state for S3, by our
+<a href=#1247 id=1247 data-nosnippet>1247</a>    /// assumptions, we already know that there is a failure transition from
+<a href=#1248 id=1248 data-nosnippet>1248</a>    /// S2 (the previous state) to S5. So we follow that transition and check
+<a href=#1249 id=1249 data-nosnippet>1249</a>    /// whether the transition connecting S2 to S3 is defined. Indeed, it is,
+<a href=#1250 id=1250 data-nosnippet>1250</a>    /// as there is a transition from S5 to S6 for the byte 'c'. If no such
+<a href=#1251 id=1251 data-nosnippet>1251</a>    /// transition existed, we could keep following the failure transitions
+<a href=#1252 id=1252 data-nosnippet>1252</a>    /// until we reach the start state, which is the failure transition for
+<a href=#1253 id=1253 data-nosnippet>1253</a>    /// every state that has no corresponding proper suffix.
+<a href=#1254 id=1254 data-nosnippet>1254</a>    ///
+<a href=#1255 id=1255 data-nosnippet>1255</a>    /// We don't actually use recursion to implement this, but instead, use a
+<a href=#1256 id=1256 data-nosnippet>1256</a>    /// breadth first search of the automaton. Our base case is the start
+<a href=#1257 id=1257 data-nosnippet>1257</a>    /// state, whose failure transition is just a transition to itself.
+<a href=#1258 id=1258 data-nosnippet>1258</a>    ///
+<a href=#1259 id=1259 data-nosnippet>1259</a>    /// When building a leftmost automaton, we proceed as above, but only
+<a href=#1260 id=1260 data-nosnippet>1260</a>    /// include a subset of failure transitions. Namely, we omit any failure
+<a href=#1261 id=1261 data-nosnippet>1261</a>    /// transitions that appear after a match state in the trie. This is
+<a href=#1262 id=1262 data-nosnippet>1262</a>    /// because failure transitions always point back to a proper suffix of
+<a href=#1263 id=1263 data-nosnippet>1263</a>    /// what has been seen so far. Thus, following a failure transition after
+<a href=#1264 id=1264 data-nosnippet>1264</a>    /// a match implies looking for a match that starts after the one that has
+<a href=#1265 id=1265 data-nosnippet>1265</a>    /// already been seen, which is of course therefore not the leftmost match.
+<a href=#1266 id=1266 data-nosnippet>1266</a>    ///
+<a href=#1267 id=1267 data-nosnippet>1267</a>    /// N.B. I came up with this algorithm on my own, and after scouring all of
+<a href=#1268 id=1268 data-nosnippet>1268</a>    /// the other AC implementations I know of (Perl, Snort, many on GitHub).
+<a href=#1269 id=1269 data-nosnippet>1269</a>    /// I couldn't find any that implement leftmost semantics like this.
+<a href=#1270 id=1270 data-nosnippet>1270</a>    /// Perl of course needs leftmost-first semantics, but they implement it
+<a href=#1271 id=1271 data-nosnippet>1271</a>    /// with a seeming hack at *search* time instead of encoding it into the
+<a href=#1272 id=1272 data-nosnippet>1272</a>    /// automaton. There are also a couple Java libraries that support leftmost
+<a href=#1273 id=1273 data-nosnippet>1273</a>    /// longest semantics, but they do it by building a queue of matches at
+<a href=#1274 id=1274 data-nosnippet>1274</a>    /// search time, which is even worse than what Perl is doing. ---AG
+<a href=#1275 id=1275 data-nosnippet>1275</a>    </span><span class="kw">fn </span>fill_failure_transitions(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#1276 id=1276 data-nosnippet>1276</a>        <span class="kw">let </span>is_leftmost = <span class="self">self</span>.builder.match_kind.is_leftmost();
+<a href=#1277 id=1277 data-nosnippet>1277</a>        <span class="kw">let </span>start_uid = <span class="self">self</span>.nfa.special.start_unanchored_id;
+<a href=#1278 id=1278 data-nosnippet>1278</a>        <span class="comment">// Initialize the queue for breadth first search with all transitions
+<a href=#1279 id=1279 data-nosnippet>1279</a>        // out of the start state. We handle the start state specially because
+<a href=#1280 id=1280 data-nosnippet>1280</a>        // we only want to follow non-self transitions. If we followed self
+<a href=#1281 id=1281 data-nosnippet>1281</a>        // transitions, then this would never terminate.
+<a href=#1282 id=1282 data-nosnippet>1282</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
+<a href=#1283 id=1283 data-nosnippet>1283</a>        <span class="kw">let </span><span class="kw-2">mut </span>seen = <span class="self">self</span>.queued_set();
+<a href=#1284 id=1284 data-nosnippet>1284</a>        <span class="kw">let </span><span class="kw-2">mut </span>prev_link = <span class="prelude-val">None</span>;
+<a href=#1285 id=1285 data-nosnippet>1285</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(link) = <span class="self">self</span>.nfa.next_link(start_uid, prev_link) {
+<a href=#1286 id=1286 data-nosnippet>1286</a>            prev_link = <span class="prelude-val">Some</span>(link);
+<a href=#1287 id=1287 data-nosnippet>1287</a>            <span class="kw">let </span>t = <span class="self">self</span>.nfa.sparse[link];
+<a href=#1288 id=1288 data-nosnippet>1288</a>
+<a href=#1289 id=1289 data-nosnippet>1289</a>            <span class="comment">// Skip anything we've seen before and any self-transitions on the
+<a href=#1290 id=1290 data-nosnippet>1290</a>            // start state.
+<a href=#1291 id=1291 data-nosnippet>1291</a>            </span><span class="kw">if </span>start_uid == t.next() || seen.contains(t.next) {
+<a href=#1292 id=1292 data-nosnippet>1292</a>                <span class="kw">continue</span>;
+<a href=#1293 id=1293 data-nosnippet>1293</a>            }
+<a href=#1294 id=1294 data-nosnippet>1294</a>            queue.push_back(t.next);
+<a href=#1295 id=1295 data-nosnippet>1295</a>            seen.insert(t.next);
+<a href=#1296 id=1296 data-nosnippet>1296</a>            <span class="comment">// Under leftmost semantics, if a state immediately following
+<a href=#1297 id=1297 data-nosnippet>1297</a>            // the start state is a match state, then we never want to
+<a href=#1298 id=1298 data-nosnippet>1298</a>            // follow its failure transition since the failure transition
+<a href=#1299 id=1299 data-nosnippet>1299</a>            // necessarily leads back to the start state, which we never
+<a href=#1300 id=1300 data-nosnippet>1300</a>            // want to do for leftmost matching after a match has been
+<a href=#1301 id=1301 data-nosnippet>1301</a>            // found.
+<a href=#1302 id=1302 data-nosnippet>1302</a>            //
+<a href=#1303 id=1303 data-nosnippet>1303</a>            // We apply the same logic to non-start states below as well.
+<a href=#1304 id=1304 data-nosnippet>1304</a>            </span><span class="kw">if </span>is_leftmost &amp;&amp; <span class="self">self</span>.nfa.states[t.next].is_match() {
+<a href=#1305 id=1305 data-nosnippet>1305</a>                <span class="self">self</span>.nfa.states[t.next].fail = NFA::DEAD;
+<a href=#1306 id=1306 data-nosnippet>1306</a>            }
+<a href=#1307 id=1307 data-nosnippet>1307</a>        }
+<a href=#1308 id=1308 data-nosnippet>1308</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(id) = queue.pop_front() {
+<a href=#1309 id=1309 data-nosnippet>1309</a>            <span class="kw">let </span><span class="kw-2">mut </span>prev_link = <span class="prelude-val">None</span>;
+<a href=#1310 id=1310 data-nosnippet>1310</a>            <span class="kw">while let </span><span class="prelude-val">Some</span>(link) = <span class="self">self</span>.nfa.next_link(id, prev_link) {
+<a href=#1311 id=1311 data-nosnippet>1311</a>                prev_link = <span class="prelude-val">Some</span>(link);
+<a href=#1312 id=1312 data-nosnippet>1312</a>                <span class="kw">let </span>t = <span class="self">self</span>.nfa.sparse[link];
+<a href=#1313 id=1313 data-nosnippet>1313</a>
+<a href=#1314 id=1314 data-nosnippet>1314</a>                <span class="kw">if </span>seen.contains(t.next) {
+<a href=#1315 id=1315 data-nosnippet>1315</a>                    <span class="comment">// The only way to visit a duplicate state in a transition
+<a href=#1316 id=1316 data-nosnippet>1316</a>                    // list is when ASCII case insensitivity is enabled. In
+<a href=#1317 id=1317 data-nosnippet>1317</a>                    // this case, we want to skip it since it's redundant work.
+<a href=#1318 id=1318 data-nosnippet>1318</a>                    // But it would also end up duplicating matches, which
+<a href=#1319 id=1319 data-nosnippet>1319</a>                    // results in reporting duplicate matches in some cases.
+<a href=#1320 id=1320 data-nosnippet>1320</a>                    // See the 'acasei010' regression test.
+<a href=#1321 id=1321 data-nosnippet>1321</a>                    </span><span class="kw">continue</span>;
+<a href=#1322 id=1322 data-nosnippet>1322</a>                }
+<a href=#1323 id=1323 data-nosnippet>1323</a>                queue.push_back(t.next);
+<a href=#1324 id=1324 data-nosnippet>1324</a>                seen.insert(t.next);
+<a href=#1325 id=1325 data-nosnippet>1325</a>
+<a href=#1326 id=1326 data-nosnippet>1326</a>                <span class="comment">// As above for start states, under leftmost semantics, once
+<a href=#1327 id=1327 data-nosnippet>1327</a>                // we see a match all subsequent states should have no failure
+<a href=#1328 id=1328 data-nosnippet>1328</a>                // transitions because failure transitions always imply looking
+<a href=#1329 id=1329 data-nosnippet>1329</a>                // for a match that is a suffix of what has been seen so far
+<a href=#1330 id=1330 data-nosnippet>1330</a>                // (where "seen so far" corresponds to the string formed by
+<a href=#1331 id=1331 data-nosnippet>1331</a>                // following the transitions from the start state to the
+<a href=#1332 id=1332 data-nosnippet>1332</a>                // current state). Under leftmost semantics, we specifically do
+<a href=#1333 id=1333 data-nosnippet>1333</a>                // not want to allow this to happen because we always want to
+<a href=#1334 id=1334 data-nosnippet>1334</a>                // report the match found at the leftmost position.
+<a href=#1335 id=1335 data-nosnippet>1335</a>                //
+<a href=#1336 id=1336 data-nosnippet>1336</a>                // The difference between leftmost-first and leftmost-longest
+<a href=#1337 id=1337 data-nosnippet>1337</a>                // occurs previously while we build the trie. For
+<a href=#1338 id=1338 data-nosnippet>1338</a>                // leftmost-first, we simply omit any entries that would
+<a href=#1339 id=1339 data-nosnippet>1339</a>                // otherwise require passing through a match state.
+<a href=#1340 id=1340 data-nosnippet>1340</a>                //
+<a href=#1341 id=1341 data-nosnippet>1341</a>                // Note that for correctness, the failure transition has to be
+<a href=#1342 id=1342 data-nosnippet>1342</a>                // set to the dead state for ALL states following a match, not
+<a href=#1343 id=1343 data-nosnippet>1343</a>                // just the match state itself. However, by setting the failure
+<a href=#1344 id=1344 data-nosnippet>1344</a>                // transition to the dead state on all match states, the dead
+<a href=#1345 id=1345 data-nosnippet>1345</a>                // state will automatically propagate to all subsequent states
+<a href=#1346 id=1346 data-nosnippet>1346</a>                // via the failure state computation below.
+<a href=#1347 id=1347 data-nosnippet>1347</a>                </span><span class="kw">if </span>is_leftmost &amp;&amp; <span class="self">self</span>.nfa.states[t.next].is_match() {
+<a href=#1348 id=1348 data-nosnippet>1348</a>                    <span class="self">self</span>.nfa.states[t.next].fail = NFA::DEAD;
+<a href=#1349 id=1349 data-nosnippet>1349</a>                    <span class="kw">continue</span>;
+<a href=#1350 id=1350 data-nosnippet>1350</a>                }
+<a href=#1351 id=1351 data-nosnippet>1351</a>                <span class="kw">let </span><span class="kw-2">mut </span>fail = <span class="self">self</span>.nfa.states[id].fail;
+<a href=#1352 id=1352 data-nosnippet>1352</a>                <span class="kw">while </span><span class="self">self</span>.nfa.follow_transition(fail, t.byte) == NFA::FAIL {
+<a href=#1353 id=1353 data-nosnippet>1353</a>                    fail = <span class="self">self</span>.nfa.states[fail].fail;
+<a href=#1354 id=1354 data-nosnippet>1354</a>                }
+<a href=#1355 id=1355 data-nosnippet>1355</a>                fail = <span class="self">self</span>.nfa.follow_transition(fail, t.byte);
+<a href=#1356 id=1356 data-nosnippet>1356</a>                <span class="self">self</span>.nfa.states[t.next].fail = fail;
+<a href=#1357 id=1357 data-nosnippet>1357</a>                <span class="self">self</span>.nfa.copy_matches(fail, t.next)<span class="question-mark">?</span>;
+<a href=#1358 id=1358 data-nosnippet>1358</a>            }
+<a href=#1359 id=1359 data-nosnippet>1359</a>            <span class="comment">// If the start state is a match state, then this automaton can
+<a href=#1360 id=1360 data-nosnippet>1360</a>            // match the empty string. This implies all states are match states
+<a href=#1361 id=1361 data-nosnippet>1361</a>            // since every position matches the empty string, so copy the
+<a href=#1362 id=1362 data-nosnippet>1362</a>            // matches from the start state to every state. Strictly speaking,
+<a href=#1363 id=1363 data-nosnippet>1363</a>            // this is only necessary for overlapping matches since each
+<a href=#1364 id=1364 data-nosnippet>1364</a>            // non-empty non-start match state needs to report empty matches
+<a href=#1365 id=1365 data-nosnippet>1365</a>            // in addition to its own. For the non-overlapping case, such
+<a href=#1366 id=1366 data-nosnippet>1366</a>            // states only report the first match, which is never empty since
+<a href=#1367 id=1367 data-nosnippet>1367</a>            // it isn't a start state.
+<a href=#1368 id=1368 data-nosnippet>1368</a>            </span><span class="kw">if </span>!is_leftmost {
+<a href=#1369 id=1369 data-nosnippet>1369</a>                <span class="self">self</span>.nfa
+<a href=#1370 id=1370 data-nosnippet>1370</a>                    .copy_matches(<span class="self">self</span>.nfa.special.start_unanchored_id, id)<span class="question-mark">?</span>;
+<a href=#1371 id=1371 data-nosnippet>1371</a>            }
+<a href=#1372 id=1372 data-nosnippet>1372</a>        }
+<a href=#1373 id=1373 data-nosnippet>1373</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1374 id=1374 data-nosnippet>1374</a>    }
+<a href=#1375 id=1375 data-nosnippet>1375</a>
+<a href=#1376 id=1376 data-nosnippet>1376</a>    <span class="doccomment">/// Shuffle the states so that they appear in this sequence:
+<a href=#1377 id=1377 data-nosnippet>1377</a>    ///
+<a href=#1378 id=1378 data-nosnippet>1378</a>    ///   DEAD, FAIL, MATCH..., START, START, NON-MATCH...
+<a href=#1379 id=1379 data-nosnippet>1379</a>    ///
+<a href=#1380 id=1380 data-nosnippet>1380</a>    /// The idea here is that if we know how special states are laid out in our
+<a href=#1381 id=1381 data-nosnippet>1381</a>    /// transition table, then we can determine what "kind" of state we're in
+<a href=#1382 id=1382 data-nosnippet>1382</a>    /// just by comparing our current state ID with a particular value. In this
+<a href=#1383 id=1383 data-nosnippet>1383</a>    /// way, we avoid doing extra memory lookups.
+<a href=#1384 id=1384 data-nosnippet>1384</a>    ///
+<a href=#1385 id=1385 data-nosnippet>1385</a>    /// Before shuffling begins, our states look something like this:
+<a href=#1386 id=1386 data-nosnippet>1386</a>    ///
+<a href=#1387 id=1387 data-nosnippet>1387</a>    ///   DEAD, FAIL, START, START, (MATCH | NON-MATCH)...
+<a href=#1388 id=1388 data-nosnippet>1388</a>    ///
+<a href=#1389 id=1389 data-nosnippet>1389</a>    /// So all we need to do is move all of the MATCH states so that they
+<a href=#1390 id=1390 data-nosnippet>1390</a>    /// all appear before any NON-MATCH state, like so:
+<a href=#1391 id=1391 data-nosnippet>1391</a>    ///
+<a href=#1392 id=1392 data-nosnippet>1392</a>    ///   DEAD, FAIL, START, START, MATCH... NON-MATCH...
+<a href=#1393 id=1393 data-nosnippet>1393</a>    ///
+<a href=#1394 id=1394 data-nosnippet>1394</a>    /// Then it's just a simple matter of swapping the two START states with
+<a href=#1395 id=1395 data-nosnippet>1395</a>    /// the last two MATCH states.
+<a href=#1396 id=1396 data-nosnippet>1396</a>    ///
+<a href=#1397 id=1397 data-nosnippet>1397</a>    /// (This is the same technique used for fully compiled DFAs in
+<a href=#1398 id=1398 data-nosnippet>1398</a>    /// regex-automata.)
+<a href=#1399 id=1399 data-nosnippet>1399</a>    </span><span class="kw">fn </span>shuffle(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#1400 id=1400 data-nosnippet>1400</a>        <span class="kw">let </span>old_start_uid = <span class="self">self</span>.nfa.special.start_unanchored_id;
+<a href=#1401 id=1401 data-nosnippet>1401</a>        <span class="kw">let </span>old_start_aid = <span class="self">self</span>.nfa.special.start_anchored_id;
+<a href=#1402 id=1402 data-nosnippet>1402</a>        <span class="macro">assert!</span>(old_start_uid &lt; old_start_aid);
+<a href=#1403 id=1403 data-nosnippet>1403</a>        <span class="macro">assert_eq!</span>(
+<a href=#1404 id=1404 data-nosnippet>1404</a>            <span class="number">3</span>,
+<a href=#1405 id=1405 data-nosnippet>1405</a>            old_start_aid.as_usize(),
+<a href=#1406 id=1406 data-nosnippet>1406</a>            <span class="string">"anchored start state should be at index 3"
+<a href=#1407 id=1407 data-nosnippet>1407</a>        </span>);
+<a href=#1408 id=1408 data-nosnippet>1408</a>        <span class="comment">// We implement shuffling by a sequence of pairwise swaps of states.
+<a href=#1409 id=1409 data-nosnippet>1409</a>        // Since we have a number of things referencing states via their
+<a href=#1410 id=1410 data-nosnippet>1410</a>        // IDs and swapping them changes their IDs, we need to record every
+<a href=#1411 id=1411 data-nosnippet>1411</a>        // swap we make so that we can remap IDs. The remapper handles this
+<a href=#1412 id=1412 data-nosnippet>1412</a>        // book-keeping for us.
+<a href=#1413 id=1413 data-nosnippet>1413</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>remapper = Remapper::new(<span class="kw-2">&amp;</span><span class="self">self</span>.nfa, <span class="number">0</span>);
+<a href=#1414 id=1414 data-nosnippet>1414</a>        <span class="comment">// The way we proceed here is by moving all match states so that
+<a href=#1415 id=1415 data-nosnippet>1415</a>        // they directly follow the start states. So it will go: DEAD, FAIL,
+<a href=#1416 id=1416 data-nosnippet>1416</a>        // START-UNANCHORED, START-ANCHORED, MATCH, ..., NON-MATCH, ...
+<a href=#1417 id=1417 data-nosnippet>1417</a>        //
+<a href=#1418 id=1418 data-nosnippet>1418</a>        // To do that, we proceed forward through all states after
+<a href=#1419 id=1419 data-nosnippet>1419</a>        // START-ANCHORED and swap match states so that they appear before all
+<a href=#1420 id=1420 data-nosnippet>1420</a>        // non-match states.
+<a href=#1421 id=1421 data-nosnippet>1421</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>next_avail = StateID::from(<span class="number">4u8</span>);
+<a href=#1422 id=1422 data-nosnippet>1422</a>        <span class="kw">for </span>i <span class="kw">in </span>next_avail.as_usize()..<span class="self">self</span>.nfa.states.len() {
+<a href=#1423 id=1423 data-nosnippet>1423</a>            <span class="kw">let </span>sid = StateID::new(i).unwrap();
+<a href=#1424 id=1424 data-nosnippet>1424</a>            <span class="kw">if </span>!<span class="self">self</span>.nfa.states[sid].is_match() {
+<a href=#1425 id=1425 data-nosnippet>1425</a>                <span class="kw">continue</span>;
+<a href=#1426 id=1426 data-nosnippet>1426</a>            }
+<a href=#1427 id=1427 data-nosnippet>1427</a>            remapper.swap(<span class="kw-2">&amp;mut </span><span class="self">self</span>.nfa, sid, next_avail);
+<a href=#1428 id=1428 data-nosnippet>1428</a>            <span class="comment">// The key invariant here is that only non-match states exist
+<a href=#1429 id=1429 data-nosnippet>1429</a>            // between 'next_avail' and 'sid' (with them being potentially
+<a href=#1430 id=1430 data-nosnippet>1430</a>            // equivalent). Thus, incrementing 'next_avail' by 1 is guaranteed
+<a href=#1431 id=1431 data-nosnippet>1431</a>            // to land on the leftmost non-match state. (Unless 'next_avail'
+<a href=#1432 id=1432 data-nosnippet>1432</a>            // and 'sid' are equivalent, in which case, a swap will occur but
+<a href=#1433 id=1433 data-nosnippet>1433</a>            // it is a no-op.)
+<a href=#1434 id=1434 data-nosnippet>1434</a>            </span>next_avail = StateID::new(next_avail.one_more()).unwrap();
+<a href=#1435 id=1435 data-nosnippet>1435</a>        }
+<a href=#1436 id=1436 data-nosnippet>1436</a>        <span class="comment">// Now we'd like to move the start states to immediately following the
+<a href=#1437 id=1437 data-nosnippet>1437</a>        // match states. (The start states may themselves be match states, but
+<a href=#1438 id=1438 data-nosnippet>1438</a>        // we'll handle that later.) We arrange the states this way so that we
+<a href=#1439 id=1439 data-nosnippet>1439</a>        // don't necessarily need to check whether a state is a start state or
+<a href=#1440 id=1440 data-nosnippet>1440</a>        // not before checking whether a state is a match state. For example,
+<a href=#1441 id=1441 data-nosnippet>1441</a>        // we'd like to be able to write this as our state machine loop:
+<a href=#1442 id=1442 data-nosnippet>1442</a>        //
+<a href=#1443 id=1443 data-nosnippet>1443</a>        //   sid = start()
+<a href=#1444 id=1444 data-nosnippet>1444</a>        //   for byte in haystack:
+<a href=#1445 id=1445 data-nosnippet>1445</a>        //     sid = next(sid, byte)
+<a href=#1446 id=1446 data-nosnippet>1446</a>        //     if sid &lt;= nfa.max_start_id:
+<a href=#1447 id=1447 data-nosnippet>1447</a>        //       if sid &lt;= nfa.max_dead_id:
+<a href=#1448 id=1448 data-nosnippet>1448</a>        //         # search complete
+<a href=#1449 id=1449 data-nosnippet>1449</a>        //       elif sid &lt;= nfa.max_match_id:
+<a href=#1450 id=1450 data-nosnippet>1450</a>        //         # found match
+<a href=#1451 id=1451 data-nosnippet>1451</a>        //
+<a href=#1452 id=1452 data-nosnippet>1452</a>        // The important context here is that we might not want to look for
+<a href=#1453 id=1453 data-nosnippet>1453</a>        // start states at all. Namely, if a searcher doesn't have a prefilter,
+<a href=#1454 id=1454 data-nosnippet>1454</a>        // then there is no reason to care about whether we're in a start state
+<a href=#1455 id=1455 data-nosnippet>1455</a>        // or not. And indeed, if we did check for it, this very hot loop would
+<a href=#1456 id=1456 data-nosnippet>1456</a>        // ping pong between the special state handling and the main state
+<a href=#1457 id=1457 data-nosnippet>1457</a>        // transition logic. This in turn stalls the CPU by killing branch
+<a href=#1458 id=1458 data-nosnippet>1458</a>        // prediction.
+<a href=#1459 id=1459 data-nosnippet>1459</a>        //
+<a href=#1460 id=1460 data-nosnippet>1460</a>        // So essentially, we really want to be able to "forget" that start
+<a href=#1461 id=1461 data-nosnippet>1461</a>        // states even exist and this is why we put them at the end.
+<a href=#1462 id=1462 data-nosnippet>1462</a>        </span><span class="kw">let </span>new_start_aid =
+<a href=#1463 id=1463 data-nosnippet>1463</a>            StateID::new(next_avail.as_usize().checked_sub(<span class="number">1</span>).unwrap())
+<a href=#1464 id=1464 data-nosnippet>1464</a>                .unwrap();
+<a href=#1465 id=1465 data-nosnippet>1465</a>        remapper.swap(<span class="kw-2">&amp;mut </span><span class="self">self</span>.nfa, old_start_aid, new_start_aid);
+<a href=#1466 id=1466 data-nosnippet>1466</a>        <span class="kw">let </span>new_start_uid =
+<a href=#1467 id=1467 data-nosnippet>1467</a>            StateID::new(next_avail.as_usize().checked_sub(<span class="number">2</span>).unwrap())
+<a href=#1468 id=1468 data-nosnippet>1468</a>                .unwrap();
+<a href=#1469 id=1469 data-nosnippet>1469</a>        remapper.swap(<span class="kw-2">&amp;mut </span><span class="self">self</span>.nfa, old_start_uid, new_start_uid);
+<a href=#1470 id=1470 data-nosnippet>1470</a>        <span class="kw">let </span>new_max_match_id =
+<a href=#1471 id=1471 data-nosnippet>1471</a>            StateID::new(next_avail.as_usize().checked_sub(<span class="number">3</span>).unwrap())
+<a href=#1472 id=1472 data-nosnippet>1472</a>                .unwrap();
+<a href=#1473 id=1473 data-nosnippet>1473</a>        <span class="self">self</span>.nfa.special.max_match_id = new_max_match_id;
+<a href=#1474 id=1474 data-nosnippet>1474</a>        <span class="self">self</span>.nfa.special.start_unanchored_id = new_start_uid;
+<a href=#1475 id=1475 data-nosnippet>1475</a>        <span class="self">self</span>.nfa.special.start_anchored_id = new_start_aid;
+<a href=#1476 id=1476 data-nosnippet>1476</a>        <span class="comment">// If one start state is a match state, then they both are.
+<a href=#1477 id=1477 data-nosnippet>1477</a>        </span><span class="kw">if </span><span class="self">self</span>.nfa.states[<span class="self">self</span>.nfa.special.start_anchored_id].is_match() {
+<a href=#1478 id=1478 data-nosnippet>1478</a>            <span class="self">self</span>.nfa.special.max_match_id = <span class="self">self</span>.nfa.special.start_anchored_id;
+<a href=#1479 id=1479 data-nosnippet>1479</a>        }
+<a href=#1480 id=1480 data-nosnippet>1480</a>        remapper.remap(<span class="kw-2">&amp;mut </span><span class="self">self</span>.nfa);
+<a href=#1481 id=1481 data-nosnippet>1481</a>    }
+<a href=#1482 id=1482 data-nosnippet>1482</a>
+<a href=#1483 id=1483 data-nosnippet>1483</a>    <span class="doccomment">/// Attempts to convert the transition representation of a subset of states
+<a href=#1484 id=1484 data-nosnippet>1484</a>    /// in this NFA from sparse to dense. This can greatly improve search
+<a href=#1485 id=1485 data-nosnippet>1485</a>    /// performance since states with a higher number of transitions tend to
+<a href=#1486 id=1486 data-nosnippet>1486</a>    /// correlate with very active states.
+<a href=#1487 id=1487 data-nosnippet>1487</a>    ///
+<a href=#1488 id=1488 data-nosnippet>1488</a>    /// We generally only densify states that are close to the start state.
+<a href=#1489 id=1489 data-nosnippet>1489</a>    /// These tend to be the most active states and thus benefit from a dense
+<a href=#1490 id=1490 data-nosnippet>1490</a>    /// representation more than other states.
+<a href=#1491 id=1491 data-nosnippet>1491</a>    ///
+<a href=#1492 id=1492 data-nosnippet>1492</a>    /// This tends to best balance between memory usage and performance. In
+<a href=#1493 id=1493 data-nosnippet>1493</a>    /// particular, the *vast majority* of all states in a typical Aho-Corasick
+<a href=#1494 id=1494 data-nosnippet>1494</a>    /// automaton have only 1 transition and are usually farther from the start
+<a href=#1495 id=1495 data-nosnippet>1495</a>    /// state and thus don't get densified.
+<a href=#1496 id=1496 data-nosnippet>1496</a>    ///
+<a href=#1497 id=1497 data-nosnippet>1497</a>    /// Note that this doesn't remove the sparse representation of transitions
+<a href=#1498 id=1498 data-nosnippet>1498</a>    /// for states that are densified. It could be done, but actually removing
+<a href=#1499 id=1499 data-nosnippet>1499</a>    /// entries from `NFA::sparse` is likely more expensive than it's worth.
+<a href=#1500 id=1500 data-nosnippet>1500</a>    </span><span class="kw">fn </span>densify(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#1501 id=1501 data-nosnippet>1501</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="self">self</span>.nfa.states.len() {
+<a href=#1502 id=1502 data-nosnippet>1502</a>            <span class="kw">let </span>sid = StateID::new(i).unwrap();
+<a href=#1503 id=1503 data-nosnippet>1503</a>            <span class="comment">// Don't bother densifying states that are only used as sentinels.
+<a href=#1504 id=1504 data-nosnippet>1504</a>            </span><span class="kw">if </span>sid == NFA::DEAD || sid == NFA::FAIL {
+<a href=#1505 id=1505 data-nosnippet>1505</a>                <span class="kw">continue</span>;
+<a href=#1506 id=1506 data-nosnippet>1506</a>            }
+<a href=#1507 id=1507 data-nosnippet>1507</a>            <span class="comment">// Only densify states that are "close enough" to the start state.
+<a href=#1508 id=1508 data-nosnippet>1508</a>            </span><span class="kw">if </span><span class="self">self</span>.nfa.states[sid].depth.as_usize()
+<a href=#1509 id=1509 data-nosnippet>1509</a>                &gt;= <span class="self">self</span>.builder.dense_depth
+<a href=#1510 id=1510 data-nosnippet>1510</a>            {
+<a href=#1511 id=1511 data-nosnippet>1511</a>                <span class="kw">continue</span>;
+<a href=#1512 id=1512 data-nosnippet>1512</a>            }
+<a href=#1513 id=1513 data-nosnippet>1513</a>            <span class="kw">let </span>dense = <span class="self">self</span>.nfa.alloc_dense_state()<span class="question-mark">?</span>;
+<a href=#1514 id=1514 data-nosnippet>1514</a>            <span class="kw">let </span><span class="kw-2">mut </span>prev_link = <span class="prelude-val">None</span>;
+<a href=#1515 id=1515 data-nosnippet>1515</a>            <span class="kw">while let </span><span class="prelude-val">Some</span>(link) = <span class="self">self</span>.nfa.next_link(sid, prev_link) {
+<a href=#1516 id=1516 data-nosnippet>1516</a>                prev_link = <span class="prelude-val">Some</span>(link);
+<a href=#1517 id=1517 data-nosnippet>1517</a>                <span class="kw">let </span>t = <span class="self">self</span>.nfa.sparse[link];
+<a href=#1518 id=1518 data-nosnippet>1518</a>
+<a href=#1519 id=1519 data-nosnippet>1519</a>                <span class="kw">let </span>class = usize::from(<span class="self">self</span>.nfa.byte_classes.get(t.byte));
+<a href=#1520 id=1520 data-nosnippet>1520</a>                <span class="kw">let </span>index = dense.as_usize() + class;
+<a href=#1521 id=1521 data-nosnippet>1521</a>                <span class="self">self</span>.nfa.dense[index] = t.next;
+<a href=#1522 id=1522 data-nosnippet>1522</a>            }
+<a href=#1523 id=1523 data-nosnippet>1523</a>            <span class="self">self</span>.nfa.states[sid].dense = dense;
+<a href=#1524 id=1524 data-nosnippet>1524</a>        }
+<a href=#1525 id=1525 data-nosnippet>1525</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1526 id=1526 data-nosnippet>1526</a>    }
+<a href=#1527 id=1527 data-nosnippet>1527</a>
+<a href=#1528 id=1528 data-nosnippet>1528</a>    <span class="doccomment">/// Returns a set that tracked queued states.
+<a href=#1529 id=1529 data-nosnippet>1529</a>    ///
+<a href=#1530 id=1530 data-nosnippet>1530</a>    /// This is only necessary when ASCII case insensitivity is enabled, since
+<a href=#1531 id=1531 data-nosnippet>1531</a>    /// it is the only way to visit the same state twice. Otherwise, this
+<a href=#1532 id=1532 data-nosnippet>1532</a>    /// returns an inert set that nevers adds anything and always reports
+<a href=#1533 id=1533 data-nosnippet>1533</a>    /// `false` for every member test.
+<a href=#1534 id=1534 data-nosnippet>1534</a>    </span><span class="kw">fn </span>queued_set(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; QueuedSet {
+<a href=#1535 id=1535 data-nosnippet>1535</a>        <span class="kw">if </span><span class="self">self</span>.builder.ascii_case_insensitive {
+<a href=#1536 id=1536 data-nosnippet>1536</a>            QueuedSet::active()
+<a href=#1537 id=1537 data-nosnippet>1537</a>        } <span class="kw">else </span>{
+<a href=#1538 id=1538 data-nosnippet>1538</a>            QueuedSet::inert()
+<a href=#1539 id=1539 data-nosnippet>1539</a>        }
+<a href=#1540 id=1540 data-nosnippet>1540</a>    }
+<a href=#1541 id=1541 data-nosnippet>1541</a>
+<a href=#1542 id=1542 data-nosnippet>1542</a>    <span class="doccomment">/// Initializes the unanchored start state by making it dense. This is
+<a href=#1543 id=1543 data-nosnippet>1543</a>    /// achieved by explicitly setting every transition to the FAIL state.
+<a href=#1544 id=1544 data-nosnippet>1544</a>    /// This isn't necessary for correctness, since any missing transition is
+<a href=#1545 id=1545 data-nosnippet>1545</a>    /// automatically assumed to be mapped to the FAIL state. We do this to
+<a href=#1546 id=1546 data-nosnippet>1546</a>    /// make the unanchored starting state dense, and thus in turn make
+<a href=#1547 id=1547 data-nosnippet>1547</a>    /// transition lookups on it faster. (Which is worth doing because it's
+<a href=#1548 id=1548 data-nosnippet>1548</a>    /// the most active state.)
+<a href=#1549 id=1549 data-nosnippet>1549</a>    </span><span class="kw">fn </span>init_unanchored_start_state(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#1550 id=1550 data-nosnippet>1550</a>        <span class="kw">let </span>start_uid = <span class="self">self</span>.nfa.special.start_unanchored_id;
+<a href=#1551 id=1551 data-nosnippet>1551</a>        <span class="kw">let </span>start_aid = <span class="self">self</span>.nfa.special.start_anchored_id;
+<a href=#1552 id=1552 data-nosnippet>1552</a>        <span class="self">self</span>.nfa.init_full_state(start_uid, NFA::FAIL)<span class="question-mark">?</span>;
+<a href=#1553 id=1553 data-nosnippet>1553</a>        <span class="self">self</span>.nfa.init_full_state(start_aid, NFA::FAIL)<span class="question-mark">?</span>;
+<a href=#1554 id=1554 data-nosnippet>1554</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1555 id=1555 data-nosnippet>1555</a>    }
+<a href=#1556 id=1556 data-nosnippet>1556</a>
+<a href=#1557 id=1557 data-nosnippet>1557</a>    <span class="doccomment">/// Setup the anchored start state by copying all of the transitions and
+<a href=#1558 id=1558 data-nosnippet>1558</a>    /// matches from the unanchored starting state with one change: the failure
+<a href=#1559 id=1559 data-nosnippet>1559</a>    /// transition is changed to the DEAD state, so that for any undefined
+<a href=#1560 id=1560 data-nosnippet>1560</a>    /// transitions, the search will stop.
+<a href=#1561 id=1561 data-nosnippet>1561</a>    </span><span class="kw">fn </span>set_anchored_start_state(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#1562 id=1562 data-nosnippet>1562</a>        <span class="kw">let </span>start_uid = <span class="self">self</span>.nfa.special.start_unanchored_id;
+<a href=#1563 id=1563 data-nosnippet>1563</a>        <span class="kw">let </span>start_aid = <span class="self">self</span>.nfa.special.start_anchored_id;
+<a href=#1564 id=1564 data-nosnippet>1564</a>        <span class="kw">let </span>(<span class="kw-2">mut </span>uprev_link, <span class="kw-2">mut </span>aprev_link) = (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
+<a href=#1565 id=1565 data-nosnippet>1565</a>        <span class="kw">loop </span>{
+<a href=#1566 id=1566 data-nosnippet>1566</a>            <span class="kw">let </span>unext = <span class="self">self</span>.nfa.next_link(start_uid, uprev_link);
+<a href=#1567 id=1567 data-nosnippet>1567</a>            <span class="kw">let </span>anext = <span class="self">self</span>.nfa.next_link(start_aid, aprev_link);
+<a href=#1568 id=1568 data-nosnippet>1568</a>            <span class="kw">let </span>(ulink, alink) = <span class="kw">match </span>(unext, anext) {
+<a href=#1569 id=1569 data-nosnippet>1569</a>                (<span class="prelude-val">Some</span>(ulink), <span class="prelude-val">Some</span>(alink)) =&gt; (ulink, alink),
+<a href=#1570 id=1570 data-nosnippet>1570</a>                (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>) =&gt; <span class="kw">break</span>,
+<a href=#1571 id=1571 data-nosnippet>1571</a>                <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+<a href=#1572 id=1572 data-nosnippet>1572</a>            };
+<a href=#1573 id=1573 data-nosnippet>1573</a>            uprev_link = <span class="prelude-val">Some</span>(ulink);
+<a href=#1574 id=1574 data-nosnippet>1574</a>            aprev_link = <span class="prelude-val">Some</span>(alink);
+<a href=#1575 id=1575 data-nosnippet>1575</a>            <span class="self">self</span>.nfa.sparse[alink].next = <span class="self">self</span>.nfa.sparse[ulink].next;
+<a href=#1576 id=1576 data-nosnippet>1576</a>        }
+<a href=#1577 id=1577 data-nosnippet>1577</a>        <span class="self">self</span>.nfa.copy_matches(start_uid, start_aid)<span class="question-mark">?</span>;
+<a href=#1578 id=1578 data-nosnippet>1578</a>        <span class="comment">// This is the main difference between the unanchored and anchored
+<a href=#1579 id=1579 data-nosnippet>1579</a>        // starting states. If a lookup on an anchored starting state fails,
+<a href=#1580 id=1580 data-nosnippet>1580</a>        // then the search should stop.
+<a href=#1581 id=1581 data-nosnippet>1581</a>        //
+<a href=#1582 id=1582 data-nosnippet>1582</a>        // N.B. This assumes that the loop on the unanchored starting state
+<a href=#1583 id=1583 data-nosnippet>1583</a>        // hasn't been created yet.
+<a href=#1584 id=1584 data-nosnippet>1584</a>        </span><span class="self">self</span>.nfa.states[start_aid].fail = NFA::DEAD;
+<a href=#1585 id=1585 data-nosnippet>1585</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1586 id=1586 data-nosnippet>1586</a>    }
+<a href=#1587 id=1587 data-nosnippet>1587</a>
+<a href=#1588 id=1588 data-nosnippet>1588</a>    <span class="doccomment">/// Set the failure transitions on the start state to loop back to the
+<a href=#1589 id=1589 data-nosnippet>1589</a>    /// start state. This effectively permits the Aho-Corasick automaton to
+<a href=#1590 id=1590 data-nosnippet>1590</a>    /// match at any position. This is also required for finding the next
+<a href=#1591 id=1591 data-nosnippet>1591</a>    /// state to terminate, namely, finding the next state should never return
+<a href=#1592 id=1592 data-nosnippet>1592</a>    /// a fail_id.
+<a href=#1593 id=1593 data-nosnippet>1593</a>    ///
+<a href=#1594 id=1594 data-nosnippet>1594</a>    /// This must be done after building the initial trie, since trie
+<a href=#1595 id=1595 data-nosnippet>1595</a>    /// construction depends on transitions to `fail_id` to determine whether a
+<a href=#1596 id=1596 data-nosnippet>1596</a>    /// state already exists or not.
+<a href=#1597 id=1597 data-nosnippet>1597</a>    </span><span class="kw">fn </span>add_unanchored_start_state_loop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#1598 id=1598 data-nosnippet>1598</a>        <span class="kw">let </span>start_uid = <span class="self">self</span>.nfa.special.start_unanchored_id;
+<a href=#1599 id=1599 data-nosnippet>1599</a>        <span class="kw">let </span><span class="kw-2">mut </span>prev_link = <span class="prelude-val">None</span>;
+<a href=#1600 id=1600 data-nosnippet>1600</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(link) = <span class="self">self</span>.nfa.next_link(start_uid, prev_link) {
+<a href=#1601 id=1601 data-nosnippet>1601</a>            prev_link = <span class="prelude-val">Some</span>(link);
+<a href=#1602 id=1602 data-nosnippet>1602</a>            <span class="kw">if </span><span class="self">self</span>.nfa.sparse[link].next() == NFA::FAIL {
+<a href=#1603 id=1603 data-nosnippet>1603</a>                <span class="self">self</span>.nfa.sparse[link].next = start_uid;
+<a href=#1604 id=1604 data-nosnippet>1604</a>            }
+<a href=#1605 id=1605 data-nosnippet>1605</a>        }
+<a href=#1606 id=1606 data-nosnippet>1606</a>    }
+<a href=#1607 id=1607 data-nosnippet>1607</a>
+<a href=#1608 id=1608 data-nosnippet>1608</a>    <span class="doccomment">/// Remove the start state loop by rewriting any transitions on the start
+<a href=#1609 id=1609 data-nosnippet>1609</a>    /// state back to the start state with transitions to the dead state.
+<a href=#1610 id=1610 data-nosnippet>1610</a>    ///
+<a href=#1611 id=1611 data-nosnippet>1611</a>    /// The loop is only closed when two conditions are met: the start state
+<a href=#1612 id=1612 data-nosnippet>1612</a>    /// is a match state and the match kind is leftmost-first or
+<a href=#1613 id=1613 data-nosnippet>1613</a>    /// leftmost-longest.
+<a href=#1614 id=1614 data-nosnippet>1614</a>    ///
+<a href=#1615 id=1615 data-nosnippet>1615</a>    /// The reason for this is that under leftmost semantics, a start state
+<a href=#1616 id=1616 data-nosnippet>1616</a>    /// that is also a match implies that we should never restart the search
+<a href=#1617 id=1617 data-nosnippet>1617</a>    /// process. We allow normal transitions out of the start state, but if
+<a href=#1618 id=1618 data-nosnippet>1618</a>    /// none exist, we transition to the dead state, which signals that
+<a href=#1619 id=1619 data-nosnippet>1619</a>    /// searching should stop.
+<a href=#1620 id=1620 data-nosnippet>1620</a>    </span><span class="kw">fn </span>close_start_state_loop_for_leftmost(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#1621 id=1621 data-nosnippet>1621</a>        <span class="kw">let </span>start_uid = <span class="self">self</span>.nfa.special.start_unanchored_id;
+<a href=#1622 id=1622 data-nosnippet>1622</a>        <span class="kw">let </span>start = <span class="kw-2">&amp;mut </span><span class="self">self</span>.nfa.states[start_uid];
+<a href=#1623 id=1623 data-nosnippet>1623</a>        <span class="kw">let </span>dense = start.dense;
+<a href=#1624 id=1624 data-nosnippet>1624</a>        <span class="kw">if </span><span class="self">self</span>.builder.match_kind.is_leftmost() &amp;&amp; start.is_match() {
+<a href=#1625 id=1625 data-nosnippet>1625</a>            <span class="kw">let </span><span class="kw-2">mut </span>prev_link = <span class="prelude-val">None</span>;
+<a href=#1626 id=1626 data-nosnippet>1626</a>            <span class="kw">while let </span><span class="prelude-val">Some</span>(link) = <span class="self">self</span>.nfa.next_link(start_uid, prev_link) {
+<a href=#1627 id=1627 data-nosnippet>1627</a>                prev_link = <span class="prelude-val">Some</span>(link);
+<a href=#1628 id=1628 data-nosnippet>1628</a>                <span class="kw">if </span><span class="self">self</span>.nfa.sparse[link].next() == start_uid {
+<a href=#1629 id=1629 data-nosnippet>1629</a>                    <span class="self">self</span>.nfa.sparse[link].next = NFA::DEAD;
+<a href=#1630 id=1630 data-nosnippet>1630</a>                    <span class="kw">if </span>dense != StateID::ZERO {
+<a href=#1631 id=1631 data-nosnippet>1631</a>                        <span class="kw">let </span>b = <span class="self">self</span>.nfa.sparse[link].byte;
+<a href=#1632 id=1632 data-nosnippet>1632</a>                        <span class="kw">let </span>class = usize::from(<span class="self">self</span>.nfa.byte_classes.get(b));
+<a href=#1633 id=1633 data-nosnippet>1633</a>                        <span class="self">self</span>.nfa.dense[dense.as_usize() + class] = NFA::DEAD;
+<a href=#1634 id=1634 data-nosnippet>1634</a>                    }
+<a href=#1635 id=1635 data-nosnippet>1635</a>                }
+<a href=#1636 id=1636 data-nosnippet>1636</a>            }
+<a href=#1637 id=1637 data-nosnippet>1637</a>        }
+<a href=#1638 id=1638 data-nosnippet>1638</a>    }
+<a href=#1639 id=1639 data-nosnippet>1639</a>
+<a href=#1640 id=1640 data-nosnippet>1640</a>    <span class="doccomment">/// Sets all transitions on the dead state to point back to the dead state.
+<a href=#1641 id=1641 data-nosnippet>1641</a>    /// Normally, missing transitions map back to the failure state, but the
+<a href=#1642 id=1642 data-nosnippet>1642</a>    /// point of the dead state is to act as a sink that can never be escaped.
+<a href=#1643 id=1643 data-nosnippet>1643</a>    </span><span class="kw">fn </span>add_dead_state_loop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), BuildError&gt; {
+<a href=#1644 id=1644 data-nosnippet>1644</a>        <span class="self">self</span>.nfa.init_full_state(NFA::DEAD, NFA::DEAD)<span class="question-mark">?</span>;
+<a href=#1645 id=1645 data-nosnippet>1645</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1646 id=1646 data-nosnippet>1646</a>    }
+<a href=#1647 id=1647 data-nosnippet>1647</a>}
+<a href=#1648 id=1648 data-nosnippet>1648</a>
+<a href=#1649 id=1649 data-nosnippet>1649</a><span class="doccomment">/// A set of state identifiers used to avoid revisiting the same state multiple
+<a href=#1650 id=1650 data-nosnippet>1650</a>/// times when filling in failure transitions.
+<a href=#1651 id=1651 data-nosnippet>1651</a>///
+<a href=#1652 id=1652 data-nosnippet>1652</a>/// This set has an "inert" and an "active" mode. When inert, the set never
+<a href=#1653 id=1653 data-nosnippet>1653</a>/// stores anything and always returns `false` for every member test. This is
+<a href=#1654 id=1654 data-nosnippet>1654</a>/// useful to avoid the performance and memory overhead of maintaining this
+<a href=#1655 id=1655 data-nosnippet>1655</a>/// set when it is not needed.
+<a href=#1656 id=1656 data-nosnippet>1656</a></span><span class="attr">#[derive(Debug)]
+<a href=#1657 id=1657 data-nosnippet>1657</a></span><span class="kw">struct </span>QueuedSet {
+<a href=#1658 id=1658 data-nosnippet>1658</a>    set: <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;StateID&gt;&gt;,
+<a href=#1659 id=1659 data-nosnippet>1659</a>}
+<a href=#1660 id=1660 data-nosnippet>1660</a>
+<a href=#1661 id=1661 data-nosnippet>1661</a><span class="kw">impl </span>QueuedSet {
+<a href=#1662 id=1662 data-nosnippet>1662</a>    <span class="doccomment">/// Return an inert set that returns `false` for every state ID membership
+<a href=#1663 id=1663 data-nosnippet>1663</a>    /// test.
+<a href=#1664 id=1664 data-nosnippet>1664</a>    </span><span class="kw">fn </span>inert() -&gt; QueuedSet {
+<a href=#1665 id=1665 data-nosnippet>1665</a>        QueuedSet { set: <span class="prelude-val">None </span>}
+<a href=#1666 id=1666 data-nosnippet>1666</a>    }
+<a href=#1667 id=1667 data-nosnippet>1667</a>
+<a href=#1668 id=1668 data-nosnippet>1668</a>    <span class="doccomment">/// Return an active set that tracks state ID membership.
+<a href=#1669 id=1669 data-nosnippet>1669</a>    </span><span class="kw">fn </span>active() -&gt; QueuedSet {
+<a href=#1670 id=1670 data-nosnippet>1670</a>        QueuedSet { set: <span class="prelude-val">Some</span>(BTreeSet::new()) }
+<a href=#1671 id=1671 data-nosnippet>1671</a>    }
+<a href=#1672 id=1672 data-nosnippet>1672</a>
+<a href=#1673 id=1673 data-nosnippet>1673</a>    <span class="doccomment">/// Inserts the given state ID into this set. (If the set is inert, then
+<a href=#1674 id=1674 data-nosnippet>1674</a>    /// this is a no-op.)
+<a href=#1675 id=1675 data-nosnippet>1675</a>    </span><span class="kw">fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, state_id: StateID) {
+<a href=#1676 id=1676 data-nosnippet>1676</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref mut </span>set) = <span class="self">self</span>.set {
+<a href=#1677 id=1677 data-nosnippet>1677</a>            set.insert(state_id);
+<a href=#1678 id=1678 data-nosnippet>1678</a>        }
+<a href=#1679 id=1679 data-nosnippet>1679</a>    }
+<a href=#1680 id=1680 data-nosnippet>1680</a>
+<a href=#1681 id=1681 data-nosnippet>1681</a>    <span class="doccomment">/// Returns true if and only if the given state ID is in this set. If the
+<a href=#1682 id=1682 data-nosnippet>1682</a>    /// set is inert, this always returns false.
+<a href=#1683 id=1683 data-nosnippet>1683</a>    </span><span class="kw">fn </span>contains(<span class="kw-2">&amp;</span><span class="self">self</span>, state_id: StateID) -&gt; bool {
+<a href=#1684 id=1684 data-nosnippet>1684</a>        <span class="kw">match </span><span class="self">self</span>.set {
+<a href=#1685 id=1685 data-nosnippet>1685</a>            <span class="prelude-val">None </span>=&gt; <span class="bool-val">false</span>,
+<a href=#1686 id=1686 data-nosnippet>1686</a>            <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>set) =&gt; set.contains(<span class="kw-2">&amp;</span>state_id),
+<a href=#1687 id=1687 data-nosnippet>1687</a>        }
+<a href=#1688 id=1688 data-nosnippet>1688</a>    }
+<a href=#1689 id=1689 data-nosnippet>1689</a>}
+<a href=#1690 id=1690 data-nosnippet>1690</a>
+<a href=#1691 id=1691 data-nosnippet>1691</a><span class="kw">impl </span>core::fmt::Debug <span class="kw">for </span>NFA {
+<a href=#1692 id=1692 data-nosnippet>1692</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; core::fmt::Result {
+<a href=#1693 id=1693 data-nosnippet>1693</a>        <span class="kw">use crate</span>::{
+<a href=#1694 id=1694 data-nosnippet>1694</a>            automaton::{fmt_state_indicator, sparse_transitions},
+<a href=#1695 id=1695 data-nosnippet>1695</a>            util::debug::DebugByte,
+<a href=#1696 id=1696 data-nosnippet>1696</a>        };
+<a href=#1697 id=1697 data-nosnippet>1697</a>
+<a href=#1698 id=1698 data-nosnippet>1698</a>        <span class="macro">writeln!</span>(f, <span class="string">"noncontiguous::NFA("</span>)<span class="question-mark">?</span>;
+<a href=#1699 id=1699 data-nosnippet>1699</a>        <span class="kw">for </span>(sid, state) <span class="kw">in </span><span class="self">self</span>.states.iter().with_state_ids() {
+<a href=#1700 id=1700 data-nosnippet>1700</a>            <span class="comment">// The FAIL state doesn't actually have space for a state allocated
+<a href=#1701 id=1701 data-nosnippet>1701</a>            // for it, so we have to treat it as a special case.
+<a href=#1702 id=1702 data-nosnippet>1702</a>            </span><span class="kw">if </span>sid == NFA::FAIL {
+<a href=#1703 id=1703 data-nosnippet>1703</a>                <span class="macro">writeln!</span>(f, <span class="string">"F {:06}:"</span>, sid.as_usize())<span class="question-mark">?</span>;
+<a href=#1704 id=1704 data-nosnippet>1704</a>                <span class="kw">continue</span>;
+<a href=#1705 id=1705 data-nosnippet>1705</a>            }
+<a href=#1706 id=1706 data-nosnippet>1706</a>            fmt_state_indicator(f, <span class="self">self</span>, sid)<span class="question-mark">?</span>;
+<a href=#1707 id=1707 data-nosnippet>1707</a>            <span class="macro">write!</span>(
+<a href=#1708 id=1708 data-nosnippet>1708</a>                f,
+<a href=#1709 id=1709 data-nosnippet>1709</a>                <span class="string">"{:06}({:06}): "</span>,
+<a href=#1710 id=1710 data-nosnippet>1710</a>                sid.as_usize(),
+<a href=#1711 id=1711 data-nosnippet>1711</a>                state.fail.as_usize()
+<a href=#1712 id=1712 data-nosnippet>1712</a>            )<span class="question-mark">?</span>;
+<a href=#1713 id=1713 data-nosnippet>1713</a>
+<a href=#1714 id=1714 data-nosnippet>1714</a>            <span class="kw">let </span>it = sparse_transitions(
+<a href=#1715 id=1715 data-nosnippet>1715</a>                <span class="self">self</span>.iter_trans(sid).map(|t| (t.byte, t.next)),
+<a href=#1716 id=1716 data-nosnippet>1716</a>            )
+<a href=#1717 id=1717 data-nosnippet>1717</a>            .enumerate();
+<a href=#1718 id=1718 data-nosnippet>1718</a>            <span class="kw">for </span>(i, (start, end, sid)) <span class="kw">in </span>it {
+<a href=#1719 id=1719 data-nosnippet>1719</a>                <span class="kw">if </span>i &gt; <span class="number">0 </span>{
+<a href=#1720 id=1720 data-nosnippet>1720</a>                    <span class="macro">write!</span>(f, <span class="string">", "</span>)<span class="question-mark">?</span>;
+<a href=#1721 id=1721 data-nosnippet>1721</a>                }
+<a href=#1722 id=1722 data-nosnippet>1722</a>                <span class="kw">if </span>start == end {
+<a href=#1723 id=1723 data-nosnippet>1723</a>                    <span class="macro">write!</span>(
+<a href=#1724 id=1724 data-nosnippet>1724</a>                        f,
+<a href=#1725 id=1725 data-nosnippet>1725</a>                        <span class="string">"{:?} =&gt; {:?}"</span>,
+<a href=#1726 id=1726 data-nosnippet>1726</a>                        DebugByte(start),
+<a href=#1727 id=1727 data-nosnippet>1727</a>                        sid.as_usize()
+<a href=#1728 id=1728 data-nosnippet>1728</a>                    )<span class="question-mark">?</span>;
+<a href=#1729 id=1729 data-nosnippet>1729</a>                } <span class="kw">else </span>{
+<a href=#1730 id=1730 data-nosnippet>1730</a>                    <span class="macro">write!</span>(
+<a href=#1731 id=1731 data-nosnippet>1731</a>                        f,
+<a href=#1732 id=1732 data-nosnippet>1732</a>                        <span class="string">"{:?}-{:?} =&gt; {:?}"</span>,
+<a href=#1733 id=1733 data-nosnippet>1733</a>                        DebugByte(start),
+<a href=#1734 id=1734 data-nosnippet>1734</a>                        DebugByte(end),
+<a href=#1735 id=1735 data-nosnippet>1735</a>                        sid.as_usize()
+<a href=#1736 id=1736 data-nosnippet>1736</a>                    )<span class="question-mark">?</span>;
+<a href=#1737 id=1737 data-nosnippet>1737</a>                }
+<a href=#1738 id=1738 data-nosnippet>1738</a>            }
+<a href=#1739 id=1739 data-nosnippet>1739</a>
+<a href=#1740 id=1740 data-nosnippet>1740</a>            <span class="macro">write!</span>(f, <span class="string">"\n"</span>)<span class="question-mark">?</span>;
+<a href=#1741 id=1741 data-nosnippet>1741</a>            <span class="kw">if </span><span class="self">self</span>.is_match(sid) {
+<a href=#1742 id=1742 data-nosnippet>1742</a>                <span class="macro">write!</span>(f, <span class="string">"         matches: "</span>)<span class="question-mark">?</span>;
+<a href=#1743 id=1743 data-nosnippet>1743</a>                <span class="kw">for </span>(i, pid) <span class="kw">in </span><span class="self">self</span>.iter_matches(sid).enumerate() {
+<a href=#1744 id=1744 data-nosnippet>1744</a>                    <span class="kw">if </span>i &gt; <span class="number">0 </span>{
+<a href=#1745 id=1745 data-nosnippet>1745</a>                        <span class="macro">write!</span>(f, <span class="string">", "</span>)<span class="question-mark">?</span>;
+<a href=#1746 id=1746 data-nosnippet>1746</a>                    }
+<a href=#1747 id=1747 data-nosnippet>1747</a>                    <span class="macro">write!</span>(f, <span class="string">"{}"</span>, pid.as_usize())<span class="question-mark">?</span>;
+<a href=#1748 id=1748 data-nosnippet>1748</a>                }
+<a href=#1749 id=1749 data-nosnippet>1749</a>                <span class="macro">write!</span>(f, <span class="string">"\n"</span>)<span class="question-mark">?</span>;
+<a href=#1750 id=1750 data-nosnippet>1750</a>            }
+<a href=#1751 id=1751 data-nosnippet>1751</a>        }
+<a href=#1752 id=1752 data-nosnippet>1752</a>        <span class="macro">writeln!</span>(f, <span class="string">"match kind: {:?}"</span>, <span class="self">self</span>.match_kind)<span class="question-mark">?</span>;
+<a href=#1753 id=1753 data-nosnippet>1753</a>        <span class="macro">writeln!</span>(f, <span class="string">"prefilter: {:?}"</span>, <span class="self">self</span>.prefilter.is_some())<span class="question-mark">?</span>;
+<a href=#1754 id=1754 data-nosnippet>1754</a>        <span class="macro">writeln!</span>(f, <span class="string">"state length: {:?}"</span>, <span class="self">self</span>.states.len())<span class="question-mark">?</span>;
+<a href=#1755 id=1755 data-nosnippet>1755</a>        <span class="macro">writeln!</span>(f, <span class="string">"pattern length: {:?}"</span>, <span class="self">self</span>.patterns_len())<span class="question-mark">?</span>;
+<a href=#1756 id=1756 data-nosnippet>1756</a>        <span class="macro">writeln!</span>(f, <span class="string">"shortest pattern length: {:?}"</span>, <span class="self">self</span>.min_pattern_len)<span class="question-mark">?</span>;
+<a href=#1757 id=1757 data-nosnippet>1757</a>        <span class="macro">writeln!</span>(f, <span class="string">"longest pattern length: {:?}"</span>, <span class="self">self</span>.max_pattern_len)<span class="question-mark">?</span>;
+<a href=#1758 id=1758 data-nosnippet>1758</a>        <span class="macro">writeln!</span>(f, <span class="string">"memory usage: {:?}"</span>, <span class="self">self</span>.memory_usage())<span class="question-mark">?</span>;
+<a href=#1759 id=1759 data-nosnippet>1759</a>        <span class="macro">writeln!</span>(f, <span class="string">")"</span>)<span class="question-mark">?</span>;
+<a href=#1760 id=1760 data-nosnippet>1760</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1761 id=1761 data-nosnippet>1761</a>    }
+<a href=#1762 id=1762 data-nosnippet>1762</a>}</code></pre></div></section></main></body></html>
