@@ -4,7 +4,7 @@ metrics_port = 9090
 
 [service_config]
 host = "localhost"
-port = 8881
+port = 8882
 
 [destination_config]
 committee_destination = true
@@ -12,6 +12,12 @@ committee_destination = true
 [[destination_config.destinations]]
 file_name = "linera-exporter.log"
 kind = "Logging"
+
+[[destination_config.destinations]]
+kind = "Indexer"
+tls = "ClearText"
+port = 8081
+endpoint = "127.0.0.1"
 
 [limits]
 persistence_period_ms = 299000
