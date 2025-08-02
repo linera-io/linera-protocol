@@ -162,18 +162,18 @@ pub mod tests {
             }
         });
 
-        const NOTIFICATIONS_A: usize = 500;
-        const NOTIFICATIONS_B: usize = 700;
+        const NOTIFICATIONS_COUNT_A: usize = 500;
+        const NOTIFICATIONS_COUNT_B: usize = 700;
 
         let a_notifier = notifier.clone();
         let handle_a = std::thread::spawn(move || {
-            for _ in 0..NOTIFICATIONS_A {
+            for _ in 0..NOTIFICATIONS_COUNT_A {
                 a_notifier.notify_chain(&chain_a, &());
             }
         });
 
         let handle_b = std::thread::spawn(move || {
-            for _ in 0..NOTIFICATIONS_B {
+            for _ in 0..NOTIFICATIONS_COUNT_B {
                 notifier.notify_chain(&chain_b, &());
             }
         });
@@ -185,11 +185,11 @@ pub mod tests {
         // give some time for the messages to be received.
         std::thread::sleep(Duration::from_millis(100));
 
-        assert_eq!(a_rec.load(Ordering::Relaxed), NOTIFICATIONS_A);
-        assert_eq!(b_rec.load(Ordering::Relaxed), NOTIFICATIONS_B);
+        assert_eq!(a_rec.load(Ordering::Relaxed), NOTIFICATIONS_COUNT_A);
+        assert_eq!(b_rec.load(Ordering::Relaxed), NOTIFICATIONS_COUNT_B);
         assert_eq!(
             a_b_rec.load(Ordering::Relaxed),
-            NOTIFICATIONS_A + NOTIFICATIONS_B
+            NOTIFICATIONS_COUNT_A + NOTIFICATIONS_COUNT_B
         );
     }
 
