@@ -4603,8 +4603,13 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                         message_duration += start_time.elapsed();
                     }
                 }
-                Reason::NewBlock { height, hash } => {
+                Reason::NewBlock {
+                    height,
+                    hash,
+                    event_streams,
+                } => {
                     assert_eq!(height, next_height2);
+                    assert!(event_streams.is_empty());
                     assert!(
                         got_message,
                         "Missing message notification about transfer #{i}"

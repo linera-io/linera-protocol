@@ -87,7 +87,12 @@ fn parse_notification(notification: Notification) -> core::result::Result<BlockI
     let reason = bincode::deserialize::<Reason>(&notification.reason)
         .map_err(|err| BadNotificationKind::InvalidReason { inner: Some(err) })?;
 
-    if let Reason::NewBlock { height, hash } = reason {
+    if let Reason::NewBlock {
+        height,
+        hash,
+        event_streams: _,
+    } = reason
+    {
         return Ok(BlockId::new(chain_id, hash, height));
     }
 
@@ -118,6 +123,7 @@ mod test {
         let reason = Reason::NewBlock {
             height: 4.into(),
             hash: CryptoHash::test_hash("s"),
+            event_streams: Default::default(),
         };
         let request = Notification {
             chain_id: ChainId::default(),
