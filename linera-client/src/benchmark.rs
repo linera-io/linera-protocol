@@ -13,12 +13,10 @@ use std::{
 use linera_base::{
     data_types::Amount,
     identifiers::{AccountOwner, ApplicationId, ChainId},
-    listen_for_shutdown_signals,
     time::Instant,
 };
 use linera_core::{client::ChainClient, Environment};
 use linera_execution::{
-    committee::Committee,
     system::{Recipient, SystemOperation},
     Operation,
 };
@@ -32,9 +30,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 
-use crate::client_metrics::{
-    BlockTimeTimings, BlockTimings, ClientMetricsError, SubmitFastBlockProposalTimings,
-};
+use crate::chain_listener::{ChainListener, ClientContext};
 
 const PROXY_LATENCY_P99_THRESHOLD: f64 = 400.0;
 const LATENCY_METRIC_PREFIX: &str = "linera_proxy_request_latency";
@@ -69,10 +65,6 @@ pub enum BenchmarkError {
     UnexpectedEmptyBucket,
     #[error("Failed to send unit message: {0}")]
     TokioSendUnitError(#[from] mpsc::error::SendError<()>),
-    #[error("Client metrics error: {0}")]
-    ClientMetrics(#[from] ClientMetricsError),
-    #[error("Failed to send block timings message: {0}")]
-    TokioSendBlockTimingsError(#[from] mpsc::error::SendError<BlockTimings>),
 }
 
 #[derive(Debug)]
@@ -88,17 +80,17 @@ pub struct Benchmark<Env: Environment> {
 
 impl<Env: Environment> Benchmark<Env> {
     #[expect(clippy::too_many_arguments)]
-    pub async fn run_benchmark(
+    pub async fn run_benchmark<C: ClientContext<Environment = Env> + 'static>(
         num_chain_groups: usize,
         transactions_per_block: usize,
         bps: usize,
         chain_clients: Vec<Vec<ChainClient<Env>>>,
-        blocks_infos: Vec<Vec<(Vec<Operation>, AccountOwner)>>,
-        committee: Committee,
+        blocks_infos: Vec<Vec<Vec<Operation>>>,
         health_check_endpoints: Option<String>,
         runtime_in_seconds: Option<u64>,
         delay_between_chain_groups_ms: Option<u64>,
-        timing_sender: Option<mpsc::UnboundedSender<BlockTimings>>,
+        chain_listener: ChainListener<C>,
+        shutdown_notifier: &CancellationToken,
     ) -> Result<(), BenchmarkError> {
         let bps_counts = (0..num_chain_groups)
             .map(|_| Arc::new(AtomicUsize::new(0)))
@@ -106,12 +98,18 @@ impl<Env: Environment> Benchmark<Env> {
         let notifier = Arc::new(Notify::new());
         let barrier = Arc::new(Barrier::new(num_chain_groups + 1));
 
-        let shutdown_notifier = CancellationToken::new();
-        tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+        let chain_listener_handle = tokio::spawn(
+            async move {
+                if let Err(e) = chain_listener.run().await {
+                    warn!("Chain listener error: {}", e);
+                }
+            }
+            .instrument(tracing::info_span!("chain_listener")),
+        );
 
         let bps_control_task = Self::bps_control_task(
             &barrier,
-            &shutdown_notifier,
+            shutdown_notifier,
             &bps_counts,
             &notifier,
             transactions_per_block,
@@ -119,7 +117,7 @@ impl<Env: Environment> Benchmark<Env> {
         );
 
         let (runtime_control_task, runtime_control_sender) =
-            Self::runtime_control_task(&shutdown_notifier, runtime_in_seconds, num_chain_groups);
+            Self::runtime_control_task(shutdown_notifier, runtime_in_seconds, num_chain_groups);
 
         let bps_initial_share = bps / num_chain_groups;
         let mut bps_remainder = bps % num_chain_groups;
@@ -130,9 +128,7 @@ impl<Env: Environment> Benchmark<Env> {
             .enumerate()
         {
             let shutdown_notifier_clone = shutdown_notifier.clone();
-            let committee = committee.clone();
             let barrier_clone = barrier.clone();
-            let timing_sender_clone = timing_sender.clone();
             let bps_count_clone = bps_counts[chain_group_index].clone();
             let notifier_clone = notifier.clone();
             let runtime_control_sender_clone = runtime_control_sender.clone();
@@ -151,12 +147,10 @@ impl<Env: Environment> Benchmark<Env> {
                         chain_clients,
                         shutdown_notifier_clone,
                         bps_count_clone,
-                        committee,
                         barrier_clone,
                         notifier_clone,
                         runtime_control_sender_clone,
                         delay_between_chain_groups_ms,
-                        timing_sender_clone,
                     ))
                     .await?;
 
@@ -169,7 +163,7 @@ impl<Env: Environment> Benchmark<Env> {
         }
 
         let metrics_watcher =
-            Self::metrics_watcher(health_check_endpoints, shutdown_notifier.clone()).await?;
+            Self::metrics_watcher(health_check_endpoints, shutdown_notifier).await?;
 
         join_set
             .join_all()
@@ -184,6 +178,7 @@ impl<Env: Environment> Benchmark<Env> {
         if let Some(runtime_control_task) = runtime_control_task {
             runtime_control_task.await?;
         }
+        chain_listener_handle.await?;
 
         Ok(())
     }
@@ -246,7 +241,7 @@ impl<Env: Environment> Benchmark<Env> {
 
     async fn metrics_watcher(
         health_check_endpoints: Option<String>,
-        shutdown_notifier: CancellationToken,
+        shutdown_notifier: &CancellationToken,
     ) -> Result<Option<task::JoinHandle<Result<(), BenchmarkError>>>, BenchmarkError> {
         if let Some(health_check_endpoints) = health_check_endpoints {
             let metrics_addresses = health_check_endpoints
@@ -264,6 +259,7 @@ impl<Env: Environment> Benchmark<Env> {
                 );
             }
 
+            let shutdown_notifier = shutdown_notifier.clone();
             let metrics_watcher: task::JoinHandle<Result<(), BenchmarkError>> = tokio::spawn(
                 async move {
                     let mut health_interval = time::interval(time::Duration::from_secs(5));
@@ -523,16 +519,14 @@ impl<Env: Environment> Benchmark<Env> {
     async fn run_benchmark_internal(
         chain_group_index: usize,
         bps: usize,
-        chain_group: Vec<(Vec<Operation>, AccountOwner)>,
+        chain_group: Vec<Vec<Operation>>,
         chain_clients: Vec<ChainClient<Env>>,
         shutdown_notifier: CancellationToken,
         bps_count: Arc<AtomicUsize>,
-        committee: Committee,
         barrier: Arc<Barrier>,
         notifier: Arc<Notify>,
         runtime_control_sender: Option<mpsc::Sender<()>>,
         delay_between_chain_groups_ms: Option<u64>,
-        timing_sender: Option<mpsc::UnboundedSender<BlockTimings>>,
     ) -> Result<(), BenchmarkError> {
         barrier.wait().await;
         if let Some(delay_between_chain_groups_ms) = delay_between_chain_groups_ms {
@@ -547,7 +541,7 @@ impl<Env: Environment> Benchmark<Env> {
             runtime_control_sender.send(()).await?;
         }
 
-        for ((operations, chain_owner), chain_client) in chain_group
+        for (operations, chain_client) in chain_group
             .into_iter()
             .zip(chain_clients.into_iter())
             .cycle()
@@ -557,52 +551,11 @@ impl<Env: Environment> Benchmark<Env> {
                 break;
             }
 
-            let block_time_start = Instant::now();
-            let submit_fast_block_proposal_start = Instant::now();
-            let get_pending_message_bundles_start = Instant::now();
-            let incoming_bundles = chain_client.pending_message_bundles().await?;
-            let get_pending_message_bundles_ms =
-                get_pending_message_bundles_start.elapsed().as_millis() as u64;
-            let (
-                creating_proposal_ms,
-                stage_block_execution_ms,
-                creating_confirmed_block_ms,
-                submitting_block_proposal_ms,
-            ) = chain_client
-                .submit_fast_block_proposal(&committee, &operations, &incoming_bundles, chain_owner)
-                .await
-                .map_err(BenchmarkError::ChainClient)?;
-            let submit_fast_block_proposal_ms =
-                submit_fast_block_proposal_start.elapsed().as_millis() as u64;
-            let communicate_chain_updates_start = Instant::now();
-            // We assume the committee will not change during the benchmark.
             chain_client
-                .communicate_chain_updates(&committee)
+                .execute_operations(operations, vec![])
                 .await
-                .map_err(BenchmarkError::ChainClient)?;
-            let communicate_chain_updates_ms =
-                communicate_chain_updates_start.elapsed().as_millis() as u64;
-            let block_time_ms = block_time_start.elapsed().as_millis() as u64;
-            let block_metrics = BlockTimings {
-                block_time_ms,
-                block_time_timings: BlockTimeTimings {
-                    get_pending_message_bundles_ms,
-                    submit_fast_block_proposal_ms,
-                    submit_fast_block_proposal_timings: SubmitFastBlockProposalTimings {
-                        creating_proposal_ms,
-                        stage_block_execution_ms,
-                        creating_confirmed_block_ms,
-                        submitting_block_proposal_ms,
-                    },
-                    communicate_chain_updates_ms,
-                },
-            };
-
-            if let Some(sender) = &timing_sender {
-                if let Err(e) = sender.send(block_metrics) {
-                    warn!("Failed to send block timing data to ClientContext: {}", e);
-                }
-            }
+                .map_err(BenchmarkError::ChainClient)?
+                .expect("should execute block with operations");
 
             let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
             if current_bps_count >= bps {
@@ -638,7 +591,7 @@ impl<Env: Environment> Benchmark<Env> {
         benchmark_chains: Vec<Vec<(ChainId, AccountOwner)>>,
         transactions_per_block: usize,
         fungible_application_id: Option<ApplicationId>,
-    ) -> Vec<Vec<(Vec<Operation>, AccountOwner)>> {
+    ) -> Vec<Vec<Vec<Operation>>> {
         let mut blocks_infos = Vec::new();
         for chains in benchmark_chains {
             let mut infos = Vec::new();
@@ -662,7 +615,7 @@ impl<Env: Environment> Benchmark<Env> {
                     }),
                 };
                 let operations = iter::repeat_n(operation, transactions_per_block).collect();
-                infos.push((operations, owner));
+                infos.push(operations);
             }
             blocks_infos.push(infos);
         }

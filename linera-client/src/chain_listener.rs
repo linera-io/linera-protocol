@@ -33,7 +33,7 @@ use crate::{
     Error,
 };
 
-#[derive(Debug, Default, Clone, clap::Args)]
+#[derive(Debug, Default, Clone, clap::Args, serde::Serialize)]
 pub struct ChainListenerConfig {
     /// Do not create blocks automatically to receive incoming messages. Instead, wait for
     /// an explicit mutation `processInbox`.
@@ -73,6 +73,19 @@ pub trait ClientContext {
 
     fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>>;
 
+    /// Gets the timing sender for benchmarking, if available.
+    #[cfg(not(web))]
+    fn timing_sender(
+        &self,
+    ) -> Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>>;
+
+    #[cfg(web)]
+    fn timing_sender(
+        &self,
+    ) -> Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>> {
+        None
+    }
+
     fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Self::Environment> {
         let chain = self
             .wallet()
@@ -85,6 +98,7 @@ pub trait ClientContext {
             chain.next_block_height,
             chain.pending_proposal,
             chain.owner,
+            self.timing_sender(),
         )
     }
 
