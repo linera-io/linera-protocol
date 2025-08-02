@@ -384,11 +384,13 @@ pub trait ExecutionRuntimeContext {
     async fn get_user_contract(
         &self,
         description: &ApplicationDescription,
+        created_blobs: &BTreeMap<BlobId, Blob>,
     ) -> Result<UserContractCode, ExecutionError>;
 
     async fn get_user_service(
         &self,
         description: &ApplicationDescription,
+        created_blobs: &BTreeMap<BlobId, Blob>,
     ) -> Result<UserServiceCode, ExecutionError>;
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
@@ -1050,6 +1052,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     async fn get_user_contract(
         &self,
         description: &ApplicationDescription,
+        _created_blobs: &BTreeMap<BlobId, Blob>,
     ) -> Result<UserContractCode, ExecutionError> {
         let application_id = description.into();
         Ok(self
@@ -1064,6 +1067,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     async fn get_user_service(
         &self,
         description: &ApplicationDescription,
+        _created_blobs: &BTreeMap<BlobId, Blob>,
     ) -> Result<UserServiceCode, ExecutionError> {
         let application_id = description.into();
         Ok(self

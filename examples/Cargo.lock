@@ -1792,6 +1792,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "create-and-call"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "counter-no-graphql",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

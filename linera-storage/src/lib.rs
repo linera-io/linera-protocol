@@ -262,11 +262,15 @@ pub trait Storage: Sized {
     async fn load_contract(
         &self,
         application_description: &ApplicationDescription,
+        created_blobs: &BTreeMap<BlobId, Blob>,
     ) -> Result<UserContractCode, ExecutionError> {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
-        let contract_blob = self.read_blob(contract_bytecode_blob_id).await?.ok_or(
-            ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]),
-        )?;
+        let contract_blob = match created_blobs.get(&contract_bytecode_blob_id) {
+            Some(blob) => blob.clone(),
+            None => self.read_blob(contract_bytecode_blob_id).await?.ok_or(
+                ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]),
+            )?,
+        };
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
@@ -321,11 +325,15 @@ pub trait Storage: Sized {
     async fn load_service(
         &self,
         application_description: &ApplicationDescription,
+        created_blobs: &BTreeMap<BlobId, Blob>,
     ) -> Result<UserServiceCode, ExecutionError> {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
-        let service_blob = self.read_blob(service_bytecode_blob_id).await?.ok_or(
-            ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]),
-        )?;
+        let service_blob = match created_blobs.get(&service_bytecode_blob_id) {
+            Some(blob) => blob.clone(),
+            None => self.read_blob(service_bytecode_blob_id).await?.ok_or(
+                ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]),
+            )?,
+        };
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.into_bytes().to_vec(),
         };
@@ -442,12 +450,16 @@ where
     async fn get_user_contract(
         &self,
         description: &ApplicationDescription,
+        created_blobs: &BTreeMap<BlobId, Blob>,
     ) -> Result<UserContractCode, ExecutionError> {
         let application_id = description.into();
         if let Some(contract) = self.user_contracts.get(&application_id) {
             return Ok(contract.clone());
         }
-        let contract = self.storage.load_contract(description).await?;
+        let contract = self
+            .storage
+            .load_contract(description, created_blobs)
+            .await?;
         self.user_contracts.insert(application_id, contract.clone());
         Ok(contract)
     }
@@ -455,12 +467,16 @@ where
     async fn get_user_service(
         &self,
         description: &ApplicationDescription,
+        created_blobs: &BTreeMap<BlobId, Blob>,
     ) -> Result<UserServiceCode, ExecutionError> {
         let application_id = description.into();
         if let Some(service) = self.user_services.get(&application_id) {
             return Ok(service.clone());
         }
-        let service = self.storage.load_service(description).await?;
+        let service = self
+            .storage
+            .load_service(description, created_blobs)
+            .await?;
         self.user_services.insert(application_id, service.clone());
         Ok(service)
     }

@@ -81,7 +81,7 @@ where
         let code = self
             .context()
             .extra()
-            .get_user_contract(&description)
+            .get_user_contract(&description, txn_tracker.created_blobs())
             .await?;
         Ok((code, description))
     }
@@ -101,7 +101,7 @@ where
         let code = self
             .context()
             .extra()
-            .get_user_service(&description)
+            .get_user_service(&description, txn_tracker.created_blobs())
             .await?;
         Ok((code, description))
     }

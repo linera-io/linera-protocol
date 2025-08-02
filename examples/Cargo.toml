@@ -5,6 +5,7 @@ members = [
     "call-evm-counter",
     "counter",
     "counter-no-graphql",
+    "create-and-call",
     "crowd-funding",
     "ethereum-tracker",
     "fungible",
@@ -56,6 +57,7 @@ tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
 amm = { path = "./amm" }
 counter = { path = "./counter" }
+create-and-call = { path = "./create-and-call" }
 crowd-funding = { path = "./crowd-funding" }
 ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
 fungible = { path = "./fungible" }

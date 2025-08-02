@@ -11,7 +11,8 @@ use std::{
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Bytecode, Resources, SendMessageRequest,
+        Timestamp,
     },
     ensure, http,
     identifiers::{
@@ -20,10 +21,18 @@ use linera_base::{
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
+    vm::VmRuntime,
 };
 use serde::Serialize;
 
 use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
+
+struct ExpectedPublishModuleCall {
+    contract: Bytecode,
+    service: Bytecode,
+    vm_runtime: VmRuntime,
+    module_id: ModuleId,
+}
 
 struct ExpectedCreateApplicationCall {
     module_id: ModuleId,
@@ -70,6 +79,7 @@ where
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_open_chain_calls: VecDeque<(ChainOwnership, ApplicationPermissions, Amount, ChainId)>,
+    expected_publish_module_calls: VecDeque<ExpectedPublishModuleCall>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
     expected_create_data_blob_calls: VecDeque<ExpectedCreateDataBlobCall>,
     key_value_store: KeyValueStore,
@@ -118,6 +128,7 @@ where
             expected_read_data_blob_requests: VecDeque::new(),
             expected_assert_data_blob_exists_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
+            expected_publish_module_calls: VecDeque::new(),
             expected_create_application_calls: VecDeque::new(),
             expected_create_data_blob_calls: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
@@ -687,6 +698,23 @@ where
         chain_id
     }
 
+    /// Adds a new expected call to `publish_module`.
+    pub fn add_expected_publish_module_call(
+        &mut self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+        module_id: ModuleId,
+    ) {
+        self.expected_publish_module_calls
+            .push_back(ExpectedPublishModuleCall {
+                contract,
+                service,
+                vm_runtime,
+                module_id,
+            });
+    }
+
     /// Adds a new expected call to `create_application`.
     pub fn add_expected_create_application_call<Parameters, InstantiationArgument>(
         &mut self,
@@ -720,7 +748,29 @@ where
             .push_back(ExpectedCreateDataBlobCall { bytes, blob_id });
     }
 
-    /// Creates a new on-chain application, based on the supplied bytecode and parameters.
+    /// Creates a new module-id on-chain application, based on the supplied bytecode and parameters.
+    pub fn publish_module(
+        &mut self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+    ) -> ModuleId {
+        let ExpectedPublishModuleCall {
+            contract: expected_contract,
+            service: expected_service,
+            vm_runtime: expected_vm_runtime,
+            module_id,
+        } = self
+            .expected_publish_module_calls
+            .pop_front()
+            .expect("Unexpected publish_module call");
+        assert_eq!(contract, expected_contract);
+        assert_eq!(service, expected_service);
+        assert_eq!(vm_runtime, expected_vm_runtime);
+        module_id
+    }
+
+    /// Creates a new on-chain application, based on the supplied module and parameters.
     pub fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         module_id: ModuleId,
