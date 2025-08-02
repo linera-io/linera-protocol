@@ -1029,8 +1029,10 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 .lock()
                 .expect("The lock should be possible");
             let module_id = runtime.publish_module(contract, service, VmRuntime::Evm)?;
-            let parameters = Vec::new(); // No constructor
-            let argument = Vec::new(); // No call to "fn instantiate"
+            let parameters = Vec::<u8>::new(); // No constructor
+            let parameters = serde_json::to_vec(&parameters)?;
+            let argument = Vec::<u8>::new(); // No call to "fn instantiate"
+            let argument = serde_json::to_vec(&argument)?;
             let required_application_ids = Vec::new();
             let application_id = runtime.create_application(
                 module_id,
@@ -1108,13 +1110,11 @@ impl<Runtime> Clone for CallInterceptorService<Runtime> {
 impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
     fn create(
         &mut self,
-        _context: &mut Ctx<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
-        inputs.scheme = CreateScheme::Custom {
-            address: self.contract_address,
-        };
-        None
+        let result = self.create_or_fail(context, inputs);
+        map_result_create_outcome(result)
     }
 
     fn call(
@@ -1128,6 +1128,22 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
 }
 
 impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
+    fn create_or_fail(
+        &mut self,
+        _context: &mut Ctx<'_, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Result<Option<CreateOutcome>, ExecutionError> {
+        if !self.db.is_revm_instantiated {
+            self.db.is_revm_instantiated = true;
+            inputs.scheme = CreateScheme::Custom {
+                address: self.contract_address,
+            };
+            Ok(None)
+        } else {
+            Err(ExecutionError::EvmError(EvmExecutionError::NoContractCreationInService))
+        }
+    }
+
     fn call_or_fail(
         &mut self,
         context: &mut Ctx<'_, Runtime>,

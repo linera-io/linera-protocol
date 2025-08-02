@@ -35,6 +35,8 @@ pub enum EvmExecutionError {
     MissingBytecode,
     #[error("Transact error {0}")]
     TransactError(String),
+    #[error("Impossible to create contracts in services")]
+    NoContractCreationInService,
     #[error("Transact commit error {0}")]
     TransactCommitError(String),
     #[error("Precompile error: {0}")]
