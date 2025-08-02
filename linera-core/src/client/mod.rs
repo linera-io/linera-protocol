@@ -2337,6 +2337,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mutex = self.state().client_mutex();
         let _guard = mutex.lock_owned().await;
+        // TOOD: We shouldn't need to call this explicitly.
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
@@ -2825,9 +2826,12 @@ impl<Env: Environment> ChainClient<Env> {
         // Send the query to validators.
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
-            self.client
+            let certificate = self
+                .client
                 .submit_block_proposal(&committee, proposal, hashed_value)
-                .await?
+                .await?;
+            self.update_validators(Some(&committee)).await?;
+            certificate
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
@@ -2836,8 +2840,10 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?;
             self.client.finalize_block(&committee, certificate).await?
         };
-        debug!(round = %certificate.round, "Sending confirmed block to validators");
-        self.update_validators(Some(&committee)).await?;
+        debug!(
+            round = %certificate.round,
+            "Sending confirmed block to validators",
+        );
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 

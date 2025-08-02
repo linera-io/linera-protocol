@@ -118,7 +118,7 @@ pub enum ChainError {
     #[error("The previous block hash of a new block should match the last block of the chain")]
     UnexpectedPreviousBlockHash,
     #[error("Sequence numbers above the maximal value are not usable for blocks")]
-    InvalidBlockHeight,
+    BlockHeightOverflow,
     #[error(
         "Block timestamp {new} must not be earlier than the parent block's timestamp {parent}"
     )]

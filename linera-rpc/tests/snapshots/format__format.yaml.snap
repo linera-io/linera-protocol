@@ -697,6 +697,17 @@ NodeError:
         NEWTYPE:
           TYPENAME: ChainId
     6:
+      WrongRound:
+        NEWTYPE:
+          TYPENAME: Round
+    7:
+      UnexpectedBlockHeight:
+        STRUCT:
+          - expected_block_height:
+              TYPENAME: BlockHeight
+          - found_block_height:
+              TYPENAME: BlockHeight
+    8:
       MissingCrossChainUpdate:
         STRUCT:
           - chain_id:
@@ -705,62 +716,62 @@ NodeError:
               TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
-    7:
+    9:
       BlobsNotFound:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    8:
+    10:
       EventsNotFound:
         NEWTYPE:
           SEQ:
             TYPENAME: EventId
-    9:
+    11:
       MissingCertificateValue: UNIT
-    10:
+    12:
       MissingCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    11:
-      MissingVoteInValidatorResponse: UNIT
-    12:
-      InvalidChainInfoResponse: UNIT
     13:
-      UnexpectedCertificateValue: UNIT
+      MissingVoteInValidatorResponse: UNIT
     14:
-      InvalidDecoding: UNIT
+      InvalidChainInfoResponse: UNIT
     15:
-      UnexpectedMessage: UNIT
+      UnexpectedCertificateValue: UNIT
     16:
+      InvalidDecoding: UNIT
+    17:
+      UnexpectedMessage: UNIT
+    18:
       GrpcError:
         STRUCT:
           - error: STR
-    17:
+    19:
       ClientIoError:
         STRUCT:
           - error: STR
-    18:
+    20:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    19:
+    21:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    20:
+    22:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    21:
+    23:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    22:
-      DuplicatesInBlobsNotFound: UNIT
-    23:
-      UnexpectedEntriesInBlobsNotFound: UNIT
     24:
+      DuplicatesInBlobsNotFound: UNIT
+    25:
+      UnexpectedEntriesInBlobsNotFound: UNIT
+    26:
       UnexpectedCertificates:
         STRUCT:
           - returned:
@@ -769,9 +780,9 @@ NodeError:
           - requested:
               SEQ:
                 TYPENAME: CryptoHash
-    25:
+    27:
       EmptyBlobsNotFound: UNIT
-    26:
+    28:
       ResponseHandlingError:
         STRUCT:
           - error: STR

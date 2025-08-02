@@ -298,7 +298,7 @@ where
         // When a block is certified, incrementing its height must succeed.
         ensure!(
             new_block.height < BlockHeight::MAX,
-            ChainError::InvalidBlockHeight
+            ChainError::BlockHeightOverflow
         );
         let current_round = self.current_round();
         match new_round {
