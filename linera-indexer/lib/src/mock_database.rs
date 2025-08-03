@@ -201,41 +201,11 @@ impl IndexerDatabase for MockFailingDatabase {
 }
 
 /// A more sophisticated mock that actually works for successful paths
-pub struct MockSuccessDatabase {
-    /// Track whether transactions have been started
-    pub transactions_started: AtomicBool,
-    /// Track whether blobs have been inserted
-    pub blobs_inserted: AtomicBool,
-    /// Track whether blocks have been inserted
-    pub blocks_inserted: AtomicBool,
-    /// Track whether bundles have been stored
-    pub bundles_stored: AtomicBool,
-    /// Track whether transactions have been committed
-    pub transactions_committed: AtomicBool,
-}
-
-impl MockSuccessDatabase {
-    pub fn new() -> Self {
-        Self {
-            transactions_started: AtomicBool::new(false),
-            blobs_inserted: AtomicBool::new(false),
-            blocks_inserted: AtomicBool::new(false),
-            bundles_stored: AtomicBool::new(false),
-            transactions_committed: AtomicBool::new(false),
-        }
-    }
-}
-
-impl Default for MockSuccessDatabase {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub struct MockSuccessDatabase;
 
 #[async_trait]
 impl IndexerDatabase for MockSuccessDatabase {
     async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
-        self.transactions_started.store(true, Ordering::SeqCst);
         // We can't create a real transaction, but for successful testing we can just
         // return an error that indicates we can't create a mock transaction
         Err(SqliteError::Serialization(
@@ -249,7 +219,6 @@ impl IndexerDatabase for MockSuccessDatabase {
         _blob_id: &BlobId,
         _data: &[u8],
     ) -> Result<(), SqliteError> {
-        self.blobs_inserted.store(true, Ordering::SeqCst);
         Ok(())
     }
 
@@ -261,7 +230,6 @@ impl IndexerDatabase for MockSuccessDatabase {
         _height: BlockHeight,
         _data: &[u8],
     ) -> Result<(), SqliteError> {
-        self.blocks_inserted.store(true, Ordering::SeqCst);
         Ok(())
     }
 
@@ -271,12 +239,10 @@ impl IndexerDatabase for MockSuccessDatabase {
         _block_hash: &CryptoHash,
         _incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), SqliteError> {
-        self.bundles_stored.store(true, Ordering::SeqCst);
         Ok(())
     }
 
     async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
-        self.transactions_committed.store(true, Ordering::SeqCst);
         Ok(())
     }
 

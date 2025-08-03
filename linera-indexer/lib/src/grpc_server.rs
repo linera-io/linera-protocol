@@ -22,6 +22,23 @@ use crate::{
     sqlite_db::SqliteError,
 };
 
+/// Error type for processing elements in the indexer
+#[derive(Debug, thiserror::Error)]
+pub enum ProcessingError {
+    #[error("Failed to deserialize blob: {0}")]
+    BlobDeserialization(#[from] bincode::Error),
+    #[error("Failed to deserialize block: {0}")]
+    BlockDeserialization(String),
+    #[error("Failed to serialize blob: {0}")]
+    BlobSerialization(bincode::Error),
+    #[error("Failed to serialize block: {0}")]
+    BlockSerialization(bincode::Error),
+    #[error("Database error: {0}")]
+    Database(#[from] SqliteError),
+    #[error("Empty element payload")]
+    EmptyPayload,
+}
+
 pub struct IndexerGrpcServer<D> {
     database: Arc<D>,
 }
@@ -66,27 +83,24 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
                 loop {
                     match input_stream.next().await {
                         Some(Ok(element)) => {
-                            match Self::process_single_element(
-                                &database,
-                                &mut pending_blobs,
-                                element,
-                            )
-                            .await
+                            match Self::process_element(&database, &mut pending_blobs, element)
+                                .await
                             {
-                                Some(Ok(())) => {
+                                Ok(Some(())) => {
                                     // If processing was successful, return an ACK
                                     info!("Processed element successfully");
                                     return Some((Ok(()), (input_stream, database, pending_blobs)));
                                 }
-                                Some(Err(status)) => {
+                                Err(error) => {
                                     // If there was an error, return it
+                                    let status = Status::from(error);
                                     error!("Error processing element: {}", status);
                                     return Some((
                                         Err(status),
                                         (input_stream, database, pending_blobs),
                                     ));
                                 }
-                                None => {
+                                Ok(None) => {
                                     // If processing was a blob, we just continue without returning a response
                                 }
                             }
@@ -107,55 +121,29 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
 
     /// Process a single element and return a response if needed.
     /// This handles both blobs and blocks.
-    /// For blobs, it stores them in `pending_blobs` and returns `None`.
-    /// For blocks, it processes them and returns a `Result` indicating success or failure.
-    pub async fn process_single_element(
+    /// For blobs, it stores them in `pending_blobs` and returns `Ok(None)`.
+    /// For blocks, it processes them and returns `Ok(Some(()))` on success or `Err(ProcessingError)` on failure.
+    async fn process_element(
         database: &D,
         pending_blobs: &mut HashMap<BlobId, Vec<u8>>,
         element: Element,
-    ) -> Option<Result<(), Status>> {
+    ) -> Result<Option<()>, ProcessingError> {
         match element.payload {
             Some(Payload::Blob(proto_blob)) => {
                 // Convert protobuf blob to linera blob
-                match Blob::try_from(proto_blob) {
-                    Ok(blob) => {
-                        let blob_id = blob.id();
-                        match bincode::serialize(&blob) {
-                            Ok(blob_data) => {
-                                info!("Received blob: {}", blob_id);
-                                pending_blobs.insert(blob_id, blob_data);
-                                None // No response for blobs, just store them
-                            }
-                            Err(e) => {
-                                error!("Failed to serialize blob: {}", e);
-                                Some(Err(Status::internal(format!(
-                                    "Failed to serialize blob: {}",
-                                    e
-                                ))))
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to deserialize blob: {}", e);
-                        Some(Err(Status::invalid_argument(format!(
-                            "Invalid blob: {}",
-                            e
-                        ))))
-                    }
-                }
+                let blob = Blob::try_from(proto_blob)?;
+                let blob_id = blob.id();
+                let blob_data =
+                    bincode::serialize(&blob).map_err(ProcessingError::BlobSerialization)?;
+
+                info!("Received blob: {}", blob_id);
+                pending_blobs.insert(blob_id, blob_data);
+                Ok(None) // No response for blobs, just store them
             }
             Some(Payload::Block(proto_block)) => {
                 // Convert protobuf block to linera block first
-                let block_cert = match ConfirmedBlockCertificate::try_from(proto_block) {
-                    Ok(cert) => cert,
-                    Err(e) => {
-                        error!("Failed to deserialize block: {}", e);
-                        return Some(Err(Status::invalid_argument(format!(
-                            "Invalid block: {}",
-                            e
-                        ))));
-                    }
-                };
+                let block_cert = ConfirmedBlockCertificate::try_from(proto_block)
+                    .map_err(|e| ProcessingError::BlockDeserialization(e.to_string()))?;
 
                 // Extract block metadata
                 let block_hash = block_cert.hash();
@@ -169,16 +157,8 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
                 );
 
                 // Serialize block BEFORE taking any database locks
-                let block_data = match bincode::serialize(&block_cert) {
-                    Ok(data) => data,
-                    Err(e) => {
-                        error!("Failed to serialize block: {}", e);
-                        return Some(Err(Status::internal(format!(
-                            "Failed to serialize block: {}",
-                            e
-                        ))));
-                    }
-                };
+                let block_data =
+                    bincode::serialize(&block_cert).map_err(ProcessingError::BlockSerialization)?;
 
                 // Convert pending blobs to the format expected by the high-level API
                 let blobs: Vec<(BlobId, Vec<u8>)> = pending_blobs
@@ -187,7 +167,7 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
                     .collect();
 
                 // Use the high-level atomic API with incoming bundles - this manages all locking internally
-                match database
+                database
                     .store_block_with_blobs_and_bundles(
                         &block_hash,
                         &chain_id,
@@ -196,29 +176,19 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
                         &blobs,
                         incoming_bundles,
                     )
-                    .await
-                {
-                    Ok(()) => {
-                        info!(
-                            "Successfully committed block {} with {} blobs",
-                            block_hash,
-                            pending_blobs.len()
-                        );
-                        pending_blobs.clear();
-                        Some(Ok(()))
-                    }
-                    Err(e) => {
-                        error!("Failed to store block {} with blobs: {}", block_hash, e);
-                        Some(Err(Status::internal(format!(
-                            "Failed to store block with blobs: {}",
-                            e
-                        ))))
-                    }
-                }
+                    .await?;
+
+                info!(
+                    "Successfully committed block {} with {} blobs",
+                    block_hash,
+                    pending_blobs.len()
+                );
+                pending_blobs.clear();
+                Ok(Some(()))
             }
             None => {
                 warn!("Received empty element");
-                Some(Err(Status::invalid_argument("Empty element")))
+                Err(ProcessingError::EmptyPayload)
             }
         }
     }
@@ -253,6 +223,26 @@ impl From<SqliteError> for Status {
             SqliteError::BlobNotFound(hash) => {
                 Status::not_found(format!("Blob not found: {}", hash))
             }
+        }
+    }
+}
+impl From<ProcessingError> for Status {
+    fn from(error: ProcessingError) -> Self {
+        match error {
+            ProcessingError::BlobDeserialization(e) => {
+                Status::invalid_argument(format!("Invalid blob: {}", e))
+            }
+            ProcessingError::BlockDeserialization(e) => {
+                Status::invalid_argument(format!("Invalid block: {}", e))
+            }
+            ProcessingError::BlobSerialization(e) => {
+                Status::internal(format!("Failed to serialize blob: {}", e))
+            }
+            ProcessingError::BlockSerialization(e) => {
+                Status::internal(format!("Failed to serialize block: {}", e))
+            }
+            ProcessingError::Database(e) => e.into(),
+            ProcessingError::EmptyPayload => Status::invalid_argument("Empty element"),
         }
     }
 }
@@ -309,10 +299,10 @@ mod tests {
         let element = test_blob_element();
 
         let result =
-            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+            IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
 
-        // Processing blob returns `None` (no ACK).
-        assert!(result.is_none());
+        // Processing blob returns `Ok(None)` (no ACK).
+        assert!(matches!(result, Ok(None)));
         // Blob should be added to pending blobs
         assert_eq!(pending_blobs.len(), 1);
     }
@@ -325,16 +315,13 @@ mod tests {
         let element = invalid_block_element(); // This will have invalid block data
 
         let result =
-            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+            IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
 
         // Should return an error due to deserialization failure
-        assert!(result.is_some());
-        match result.unwrap() {
-            Err(status) => {
-                assert_eq!(status.code(), tonic::Code::InvalidArgument);
-                assert!(status.message().contains("Invalid block"));
-            }
-            Ok(_) => panic!("Expected error but got success"),
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ProcessingError::BlockDeserialization(_) => {}
+            _ => panic!("Expected BlockDeserialization error"),
         }
 
         // Pending blobs should not be cleared on failure
@@ -348,16 +335,13 @@ mod tests {
         let element = Element { payload: None };
 
         let result =
-            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+            IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
 
         // Should return an error for empty element
-        assert!(result.is_some());
-        match result.unwrap() {
-            Err(status) => {
-                assert_eq!(status.code(), tonic::Code::InvalidArgument);
-                assert_eq!(status.message(), "Empty element");
-            }
-            Ok(_) => panic!("Expected error but got success"),
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ProcessingError::EmptyPayload => {}
+            _ => panic!("Expected EmptyPayload error"),
         }
     }
 
@@ -374,16 +358,13 @@ mod tests {
         };
 
         let result =
-            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+            IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
 
         // Should return an error for invalid blob
-        assert!(result.is_some());
-        match result.unwrap() {
-            Err(status) => {
-                assert_eq!(status.code(), tonic::Code::InvalidArgument);
-                assert!(status.message().contains("Invalid blob"));
-            }
-            Ok(_) => panic!("Expected error but got success"),
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ProcessingError::BlobDeserialization(_) => {}
+            _ => panic!("Expected BlobDeserialization error"),
         }
     }
 
@@ -400,16 +381,13 @@ mod tests {
         };
 
         let result =
-            IndexerGrpcServer::process_single_element(&database, &mut pending_blobs, element).await;
+            IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
 
         // Should return an error for invalid block
-        assert!(result.is_some());
-        match result.unwrap() {
-            Err(status) => {
-                assert_eq!(status.code(), tonic::Code::InvalidArgument);
-                assert!(status.message().contains("Invalid block"));
-            }
-            Ok(_) => panic!("Expected error but got success"),
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ProcessingError::BlockDeserialization(_) => {}
+            _ => panic!("Expected BlockDeserialization error"),
         }
     }
 
@@ -417,7 +395,7 @@ mod tests {
     async fn test_process_stream_blob_no_ack() {
         use std::sync::Arc;
 
-        let database = Arc::new(MockSuccessDatabase::new());
+        let database = Arc::new(MockSuccessDatabase);
 
         // Test the core logic through process_single_element
         // which is what process_stream uses internally
@@ -425,11 +403,10 @@ mod tests {
         let blob_element = test_blob_element();
 
         let result =
-            IndexerGrpcServer::process_single_element(&*database, &mut pending_blobs, blob_element)
-                .await;
+            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, blob_element).await;
 
-        // Blob processing should return None (no ACK)
-        assert!(result.is_none());
+        // Blob processing should return Ok(None) (no ACK)
+        assert!(matches!(result, Ok(None)));
 
         // Blob should be stored in pending_blobs
         assert_eq!(pending_blobs.len(), 1);
@@ -445,31 +422,24 @@ mod tests {
         // First add a blob to pending_blobs
         let blob_element = test_blob_element();
         let blob_result =
-            IndexerGrpcServer::process_single_element(&*database, &mut pending_blobs, blob_element)
-                .await;
+            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, blob_element).await;
 
         // Blob should not produce an ACK
-        assert!(blob_result.is_none());
+        assert!(matches!(blob_result, Ok(None)));
         assert_eq!(pending_blobs.len(), 1);
 
         // Now try to process a block (which will fail due to invalid data)
         let block_element = invalid_block_element();
-        let block_result = IndexerGrpcServer::process_single_element(
-            &*database,
-            &mut pending_blobs,
-            block_element,
-        )
-        .await;
+        let block_result =
+            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, block_element).await;
 
-        // Block processing should return Some (attempt to ACK), even on failure
-        assert!(block_result.is_some());
-        match block_result.unwrap() {
-            Err(status) => {
+        // Block processing should return Err (processing failure)
+        assert!(block_result.is_err());
+        match block_result.unwrap_err() {
+            ProcessingError::BlockDeserialization(_) => {
                 // This should fail due to invalid block deserialization
-                assert_eq!(status.code(), tonic::Code::InvalidArgument);
-                assert!(status.message().contains("Invalid block"));
             }
-            Ok(_) => panic!("Expected error due to invalid block data"),
+            _ => panic!("Expected BlockDeserialization error"),
         }
 
         // Pending blobs should still be there since block failed
@@ -482,35 +452,28 @@ mod tests {
 
         // Create a mock that will succeed with transactions but fail at begin_transaction
         // to simulate the block storage path without actually storing
-        let database = Arc::new(MockSuccessDatabase::new());
+        let database = Arc::new(MockSuccessDatabase);
         let mut pending_blobs = HashMap::new();
 
         // Add a blob first
         let blob_element = test_blob_element();
         let _blob_result =
-            IndexerGrpcServer::process_single_element(&*database, &mut pending_blobs, blob_element)
-                .await;
+            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, blob_element).await;
 
         // Try to process a block - this will fail because MockSuccessDatabase
         // can't create real transactions, but it demonstrates the logic flow
         let block_element = invalid_block_element();
-        let block_result = IndexerGrpcServer::process_single_element(
-            &*database,
-            &mut pending_blobs,
-            block_element,
-        )
-        .await;
+        let block_result =
+            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, block_element).await;
 
-        // Block should attempt to return a response (ACK behavior)
-        assert!(block_result.is_some());
+        // Block should return an error (processing failure)
+        assert!(block_result.is_err());
 
         // The result will be an error due to invalid block data, but this confirms
-        // that blocks attempt to produce ACKs while blobs don't
-        match block_result.unwrap() {
-            Err(status) => {
-                assert_eq!(status.code(), tonic::Code::InvalidArgument);
-            }
-            Ok(_) => panic!("Expected error due to invalid block data"),
+        // that blocks attempt to produce responses while blobs don't
+        match block_result.unwrap_err() {
+            ProcessingError::BlockDeserialization(_) => {}
+            _ => panic!("Expected BlockDeserialization error"),
         }
     }
 
@@ -526,31 +489,25 @@ mod tests {
         let mut pending_blobs = HashMap::new();
         let blob_element = test_blob_element();
         let blob_result =
-            IndexerGrpcServer::process_single_element(&*database, &mut pending_blobs, blob_element)
-                .await;
-        assert!(blob_result.is_none(), "Blobs should never produce ACKs");
+            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, blob_element).await;
+        assert!(
+            matches!(blob_result, Ok(None)),
+            "Blobs should return Ok(None)"
+        );
 
         // Test 2: Block should always attempt ACK (even on failure)
         let block_element = invalid_block_element();
-        let block_result = IndexerGrpcServer::process_single_element(
-            &*database,
-            &mut pending_blobs,
-            block_element,
-        )
-        .await;
-        assert!(block_result.is_some(), "Blocks should always attempt ACKs");
+        let block_result =
+            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, block_element).await;
+        assert!(
+            block_result.is_err(),
+            "Blocks should return error on failure"
+        );
 
         // Test 3: Empty element should produce error ACK
         let empty_element = Element { payload: None };
-        let empty_result = IndexerGrpcServer::process_single_element(
-            &*database,
-            &mut pending_blobs,
-            empty_element,
-        )
-        .await;
-        assert!(
-            empty_result.is_some(),
-            "Empty elements should produce error ACKs"
-        );
+        let empty_result =
+            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, empty_element).await;
+        assert!(empty_result.is_err(), "Empty elements should return error");
     }
 }
