@@ -52,7 +52,10 @@ impl<D> IndexerGrpcServer<D> {
     }
 }
 
-impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
+impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D>
+where
+    D::Error: Into<ProcessingError>,
+{
     /// Start the gRPC indexer server
     pub async fn serve(self, port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let addr = format!("0.0.0.0:{}", port).parse()?;
@@ -71,7 +74,10 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
     async fn process_stream(
         database: Arc<D>,
         stream: BoxStream<'static, Result<Element, Status>>,
-    ) -> impl Stream<Item = Result<(), Status>> {
+    ) -> impl Stream<Item = Result<(), Status>>
+    where
+        D::Error: Into<ProcessingError>,
+    {
         futures::stream::unfold(
             (stream, database, HashMap::<BlobId, Vec<u8>>::new()),
             |(mut input_stream, database, mut pending_blobs)| async move {
@@ -122,7 +128,10 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
         database: &D,
         pending_blobs: &mut HashMap<BlobId, Vec<u8>>,
         element: Element,
-    ) -> Result<Option<()>, ProcessingError> {
+    ) -> Result<Option<()>, ProcessingError>
+    where
+        D::Error: Into<ProcessingError>,
+    {
         match element.payload {
             Some(Payload::Blob(proto_blob)) => {
                 // Convert protobuf blob to linera blob
@@ -171,7 +180,8 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
                         &blobs,
                         incoming_bundles,
                     )
-                    .await?;
+                    .await
+                    .map_err(Into::into)?;
 
                 info!(
                     "Successfully committed block {} with {} blobs",
@@ -190,7 +200,10 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
 }
 
 #[async_trait]
-impl<D: IndexerDatabase + 'static> Indexer for IndexerGrpcServer<D> {
+impl<D: IndexerDatabase + 'static> Indexer for IndexerGrpcServer<D>
+where
+    D::Error: Into<ProcessingError>,
+{
     type IndexBatchStream = Pin<Box<dyn Stream<Item = Result<(), Status>> + Send + 'static>>;
 
     async fn index_batch(

@@ -13,9 +13,9 @@ use linera_base::{
 };
 use linera_chain::data_types::IncomingBundle;
 
-use crate::db::{
-    sqlite::{IncomingBundleInfo, PostedMessageInfo, SqliteError},
-    DatabaseTransaction, IndexerDatabase,
+use crate::{
+    db::{DatabaseTransaction, IncomingBundleInfo, IndexerDatabase, PostedMessageInfo},
+    grpc::ProcessingError,
 };
 
 /// Mock database that fails on transaction operations for testing error paths
@@ -33,11 +33,25 @@ impl Default for MockFailingDatabase {
     }
 }
 
+pub enum MockDatabaseError {
+    Serialization(String),
+}
+
+impl From<MockDatabaseError> for ProcessingError {
+    fn from(error: MockDatabaseError) -> Self {
+        match error {
+            MockDatabaseError::Serialization(msg) => ProcessingError::BlockDeserialization(msg),
+        }
+    }
+}
+
 #[async_trait]
 impl IndexerDatabase for MockFailingDatabase {
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
+    type Error = MockDatabaseError;
+
+    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, Self::Error> {
         // Always fail transaction creation for testing error paths
-        Err(SqliteError::Serialization(
+        Err(MockDatabaseError::Serialization(
             "Mock: Cannot create real transaction".to_string(),
         ))
     }
@@ -47,7 +61,7 @@ impl IndexerDatabase for MockFailingDatabase {
         _tx: &mut DatabaseTransaction<'_>,
         _blob_id: &BlobId,
         _data: &[u8],
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -58,7 +72,7 @@ impl IndexerDatabase for MockFailingDatabase {
         _chain_id: &ChainId,
         _height: BlockHeight,
         _data: &[u8],
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -67,22 +81,22 @@ impl IndexerDatabase for MockFailingDatabase {
         _tx: &mut DatabaseTransaction<'_>,
         _block_hash: &CryptoHash,
         _incoming_bundles: Vec<IncomingBundle>,
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
+    async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    async fn get_block(&self, _hash: &CryptoHash) -> Result<Vec<u8>, SqliteError> {
-        Err(SqliteError::Serialization(
+    async fn get_block(&self, _hash: &CryptoHash) -> Result<Vec<u8>, Self::Error> {
+        Err(MockDatabaseError::Serialization(
             "Mock: get_block not implemented".to_string(),
         ))
     }
 
-    async fn get_blob(&self, _blob_id: &BlobId) -> Result<Vec<u8>, SqliteError> {
-        Err(SqliteError::Serialization(
+    async fn get_blob(&self, _blob_id: &BlobId) -> Result<Vec<u8>, Self::Error> {
+        Err(MockDatabaseError::Serialization(
             "Mock: get_blob not implemented".to_string(),
         ))
     }
@@ -90,8 +104,8 @@ impl IndexerDatabase for MockFailingDatabase {
     async fn get_latest_block_for_chain(
         &self,
         _chain_id: &ChainId,
-    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
-        Err(SqliteError::Serialization(
+    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, Self::Error> {
+        Err(MockDatabaseError::Serialization(
             "Mock: get_latest_block_for_chain not implemented".to_string(),
         ))
     }
@@ -101,38 +115,38 @@ impl IndexerDatabase for MockFailingDatabase {
         _chain_id: &ChainId,
         _start_height: BlockHeight,
         _end_height: BlockHeight,
-    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
-        Err(SqliteError::Serialization(
+    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, Self::Error> {
+        Err(MockDatabaseError::Serialization(
             "Mock: get_blocks_for_chain_range not implemented".to_string(),
         ))
     }
 
-    async fn blob_exists(&self, _blob_id: &BlobId) -> Result<bool, SqliteError> {
+    async fn blob_exists(&self, _blob_id: &BlobId) -> Result<bool, Self::Error> {
         Ok(false)
     }
 
-    async fn block_exists(&self, _hash: &CryptoHash) -> Result<bool, SqliteError> {
+    async fn block_exists(&self, _hash: &CryptoHash) -> Result<bool, Self::Error> {
         Ok(false)
     }
 
     async fn get_incoming_bundles_for_block(
         &self,
         _block_hash: &CryptoHash,
-    ) -> Result<Vec<(i64, IncomingBundleInfo)>, SqliteError> {
+    ) -> Result<Vec<(i64, IncomingBundleInfo)>, Self::Error> {
         Ok(vec![])
     }
 
     async fn get_posted_messages_for_bundle(
         &self,
         _bundle_id: i64,
-    ) -> Result<Vec<PostedMessageInfo>, SqliteError> {
+    ) -> Result<Vec<PostedMessageInfo>, Self::Error> {
         Ok(vec![])
     }
 
     async fn get_bundles_from_origin_chain(
         &self,
         _origin_chain_id: &ChainId,
-    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, SqliteError> {
+    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, Self::Error> {
         Ok(vec![])
     }
 }
@@ -175,6 +189,8 @@ impl MockSuccessDatabase {
 
 #[async_trait]
 impl IndexerDatabase for MockSuccessDatabase {
+    type Error = MockDatabaseError;
+
     /// Override the high-level method to succeed and store data
     async fn store_block_with_blobs_and_bundles(
         &self,
@@ -184,7 +200,7 @@ impl IndexerDatabase for MockSuccessDatabase {
         block_data: &[u8],
         blobs: &[(BlobId, Vec<u8>)],
         _incoming_bundles: Vec<IncomingBundle>,
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), Self::Error> {
         // Store all blobs
         {
             let mut blob_storage = self.blobs.write().unwrap();
@@ -201,10 +217,10 @@ impl IndexerDatabase for MockSuccessDatabase {
 
         Ok(())
     }
-    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
+    async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, Self::Error> {
         // We can't create a real transaction, but for successful testing we can just
         // return an error that indicates we can't create a mock transaction
-        Err(SqliteError::Serialization(
+        Err(MockDatabaseError::Serialization(
             "Mock: Cannot create real transaction".to_string(),
         ))
     }
@@ -214,7 +230,7 @@ impl IndexerDatabase for MockSuccessDatabase {
         _tx: &mut DatabaseTransaction<'_>,
         _blob_id: &BlobId,
         _data: &[u8],
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -225,7 +241,7 @@ impl IndexerDatabase for MockSuccessDatabase {
         _chain_id: &ChainId,
         _height: BlockHeight,
         _data: &[u8],
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -234,26 +250,26 @@ impl IndexerDatabase for MockSuccessDatabase {
         _tx: &mut DatabaseTransaction<'_>,
         _block_hash: &CryptoHash,
         _incoming_bundles: Vec<IncomingBundle>,
-    ) -> Result<(), SqliteError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
+    async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    async fn get_block(&self, _hash: &CryptoHash) -> Result<Vec<u8>, SqliteError> {
+    async fn get_block(&self, _hash: &CryptoHash) -> Result<Vec<u8>, Self::Error> {
         Ok(vec![])
     }
 
-    async fn get_blob(&self, _blob_id: &BlobId) -> Result<Vec<u8>, SqliteError> {
+    async fn get_blob(&self, _blob_id: &BlobId) -> Result<Vec<u8>, Self::Error> {
         Ok(vec![])
     }
 
     async fn get_latest_block_for_chain(
         &self,
         _chain_id: &ChainId,
-    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
+    ) -> Result<Option<(CryptoHash, BlockHeight, Vec<u8>)>, Self::Error> {
         Ok(None)
     }
 
@@ -262,36 +278,36 @@ impl IndexerDatabase for MockSuccessDatabase {
         _chain_id: &ChainId,
         _start_height: BlockHeight,
         _end_height: BlockHeight,
-    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, SqliteError> {
+    ) -> Result<Vec<(CryptoHash, BlockHeight, Vec<u8>)>, Self::Error> {
         Ok(vec![])
     }
 
-    async fn blob_exists(&self, _blob_id: &BlobId) -> Result<bool, SqliteError> {
+    async fn blob_exists(&self, _blob_id: &BlobId) -> Result<bool, Self::Error> {
         Ok(false)
     }
 
-    async fn block_exists(&self, _hash: &CryptoHash) -> Result<bool, SqliteError> {
+    async fn block_exists(&self, _hash: &CryptoHash) -> Result<bool, Self::Error> {
         Ok(false)
     }
 
     async fn get_incoming_bundles_for_block(
         &self,
         _block_hash: &CryptoHash,
-    ) -> Result<Vec<(i64, IncomingBundleInfo)>, SqliteError> {
+    ) -> Result<Vec<(i64, IncomingBundleInfo)>, Self::Error> {
         Ok(vec![])
     }
 
     async fn get_posted_messages_for_bundle(
         &self,
         _bundle_id: i64,
-    ) -> Result<Vec<PostedMessageInfo>, SqliteError> {
+    ) -> Result<Vec<PostedMessageInfo>, Self::Error> {
         Ok(vec![])
     }
 
     async fn get_bundles_from_origin_chain(
         &self,
         _origin_chain_id: &ChainId,
-    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, SqliteError> {
+    ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, Self::Error> {
         Ok(vec![])
     }
 }

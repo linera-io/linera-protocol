@@ -24,7 +24,7 @@ use sqlx::{
 };
 use thiserror::Error;
 
-use crate::db::{DatabaseTransaction, IndexerDatabase};
+use crate::db::{DatabaseTransaction, IncomingBundleInfo, IndexerDatabase, PostedMessageInfo};
 
 #[derive(Error, Debug)]
 pub enum SqliteError {
@@ -470,6 +470,8 @@ impl SqliteDatabase {
 
 #[async_trait]
 impl IndexerDatabase for SqliteDatabase {
+    type Error = SqliteError;
+
     async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
         self.begin_transaction().await
     }
@@ -561,27 +563,4 @@ impl IndexerDatabase for SqliteDatabase {
     ) -> Result<Vec<(CryptoHash, i64, IncomingBundleInfo)>, SqliteError> {
         self.get_bundles_from_origin_chain(origin_chain_id).await
     }
-}
-
-/// Information about an incoming bundle (denormalized for queries)
-#[derive(Debug, Clone)]
-pub struct IncomingBundleInfo {
-    pub bundle_index: usize,
-    pub origin_chain_id: ChainId,
-    pub action: MessageAction,
-    pub source_height: BlockHeight,
-    pub source_timestamp: Timestamp,
-    pub source_cert_hash: CryptoHash,
-    pub transaction_index: u32,
-}
-
-/// Information about a posted message (with serialized complex fields)
-#[derive(Debug, Clone)]
-pub struct PostedMessageInfo {
-    pub message_index: u32,
-    pub authenticated_signer_data: Option<String>,
-    pub grant_amount: u64,
-    pub refund_grant_to_data: Option<String>,
-    pub message_kind: String,
-    pub message_data: Vec<u8>,
 }
