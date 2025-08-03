@@ -287,9 +287,62 @@ mod tests {
         }
     }
 
+    // Create a valid block element with minimal data.
+    fn valid_block_element() -> Element {
+        use std::collections::BTreeMap;
+
+        use linera_base::{
+            crypto::CryptoHash,
+            data_types::{BlockHeight, Epoch, Round, Timestamp},
+            identifiers::{ChainId, StreamId},
+        };
+        use linera_chain::{
+            block::{Block, ConfirmedBlock},
+            data_types::{BlockExecutionOutcome, ProposedBlock},
+        };
+        // Create a simple test ChainId
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        // Create a minimal proposed block (genesis block)
+        let proposed_block = ProposedBlock {
+            epoch: Epoch::ZERO,
+            chain_id,
+            incoming_bundles: vec![],
+            operations: vec![],
+            previous_block_hash: None,
+            height: BlockHeight::ZERO,
+            authenticated_signer: None,
+            timestamp: Timestamp::default(),
+        };
+
+        // Create a minimal block execution outcome with proper BTreeMap types
+        let outcome = BlockExecutionOutcome {
+            messages: vec![],
+            state_hash: CryptoHash::default(),
+            oracle_responses: vec![],
+            events: vec![],
+            blobs: vec![],
+            operation_results: vec![],
+            previous_event_blocks: BTreeMap::<StreamId, (CryptoHash, BlockHeight)>::new(),
+            previous_message_blocks: BTreeMap::<ChainId, (CryptoHash, BlockHeight)>::new(),
+        };
+
+        let block = Block::new(proposed_block, outcome);
+        let confirmed_block = ConfirmedBlock::new(block);
+        let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+        let block_data = bincode::serialize(&certificate).unwrap();
+
+        Element {
+            payload: Some(Payload::Block(crate::indexer_api::Block {
+                bytes: block_data,
+            })),
+        }
+    }
+
     #[tokio::test]
-    async fn test_process_single_element_blob_success() {
-        let database = MockFailingDatabase::new();
+    async fn test_process_element_blob_success() {
+        // Use MockSuccessDatabase since we're testing successful blob processing
+        let database = MockSuccessDatabase;
         let mut pending_blobs = HashMap::new();
         let element = test_blob_element();
 
@@ -303,11 +356,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_process_single_element_block_deserialization_failure() {
+    async fn test_process_element_invalid_block() {
+        // Use MockFailingDatabase - database choice doesn't matter since deserialization fails first
         let database = MockFailingDatabase::new();
 
         let mut pending_blobs = HashMap::new();
-        let element = invalid_block_element(); // This will have invalid block data
+        match IndexerGrpcServer::process_element(&database, &mut pending_blobs, test_blob_element())
+            .await
+        {
+            Ok(None) => {}
+            _ => panic!("Expected Ok(None)"),
+        };
+
+        let element = invalid_block_element();
 
         let result =
             IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
@@ -319,29 +380,27 @@ mod tests {
             _ => panic!("Expected BlockDeserialization error"),
         }
 
-        // Pending blobs should not be cleared on failure
-        assert_eq!(pending_blobs.len(), 0);
+        assert_eq!(
+            pending_blobs.len(),
+            1,
+            "Pending blobs should remain after block failure"
+        );
     }
 
     #[tokio::test]
-    async fn test_process_single_element_empty_payload() {
+    async fn test_process_element_empty_payload() {
         let database = MockFailingDatabase::new();
         let mut pending_blobs = HashMap::new();
         let element = Element { payload: None };
 
-        let result =
-            IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
-
-        // Should return an error for empty element
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ProcessingError::EmptyPayload => {}
+        match IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await {
+            Err(ProcessingError::EmptyPayload) => {}
             _ => panic!("Expected EmptyPayload error"),
         }
     }
 
     #[tokio::test]
-    async fn test_process_single_element_invalid_blob() {
+    async fn test_process_element_invalid_blob() {
         let database = MockFailingDatabase::new();
         let mut pending_blobs = HashMap::new();
 
@@ -352,66 +411,18 @@ mod tests {
             })),
         };
 
-        let result =
-            IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
-
-        // Should return an error for invalid blob
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ProcessingError::BlobDeserialization(_) => {}
+        match IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await {
+            Err(ProcessingError::BlobDeserialization(_)) => {}
             _ => panic!("Expected BlobDeserialization error"),
         }
     }
 
     #[tokio::test]
-    async fn test_process_single_element_invalid_block() {
-        let database = MockFailingDatabase::new();
-        let mut pending_blobs = HashMap::new();
-
-        // Create element with invalid block data
-        let element = Element {
-            payload: Some(Payload::Block(crate::indexer_api::Block {
-                bytes: vec![0x00, 0x01, 0x02], // Invalid block data
-            })),
-        };
-
-        let result =
-            IndexerGrpcServer::process_element(&database, &mut pending_blobs, element).await;
-
-        // Should return an error for invalid block
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ProcessingError::BlockDeserialization(_) => {}
-            _ => panic!("Expected BlockDeserialization error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_process_stream_blob_no_ack() {
+    async fn test_ack_behavior_comprehensive() {
         use std::sync::Arc;
 
+        // Use MockSuccessDatabase to test successful paths and ACK behavior
         let database = Arc::new(MockSuccessDatabase);
-
-        // Test the core logic through process_single_element
-        // which is what process_stream uses internally
-        let mut pending_blobs = HashMap::new();
-        let blob_element = test_blob_element();
-
-        let result =
-            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, blob_element).await;
-
-        // Blob processing should return Ok(None) (no ACK)
-        assert!(matches!(result, Ok(None)));
-
-        // Blob should be stored in pending_blobs
-        assert_eq!(pending_blobs.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_process_stream_block_with_ack() {
-        use std::sync::Arc;
-
-        let database = Arc::new(MockFailingDatabase::new());
         let mut pending_blobs = HashMap::new();
 
         // First add a blob to pending_blobs
@@ -439,70 +450,18 @@ mod tests {
 
         // Pending blobs should still be there since block failed
         assert_eq!(pending_blobs.len(), 1);
-    }
 
-    #[tokio::test]
-    async fn test_process_stream_successful_block_clears_blobs() {
-        use std::sync::Arc;
-
-        // Create a mock that will succeed with transactions but fail at begin_transaction
-        // to simulate the block storage path without actually storing
-        let database = Arc::new(MockSuccessDatabase);
-        let mut pending_blobs = HashMap::new();
-
-        // Add a blob first
-        let blob_element = test_blob_element();
-        let _blob_result =
-            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, blob_element).await;
-
-        // Try to process a block - this will fail because MockSuccessDatabase
-        // can't create real transactions, but it demonstrates the logic flow
-        let block_element = invalid_block_element();
-        let block_result =
-            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, block_element).await;
-
-        // Block should return an error (processing failure)
-        assert!(block_result.is_err());
-
-        // The result will be an error due to invalid block data, but this confirms
-        // that blocks attempt to produce responses while blobs don't
-        match block_result.unwrap_err() {
-            ProcessingError::BlockDeserialization(_) => {}
-            _ => panic!("Expected BlockDeserialization error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_ack_behavior_invariant() {
-        use std::sync::Arc;
-
-        let database = Arc::new(MockFailingDatabase::new());
-
-        // Test the key invariant: blobs never produce ACKs, blocks always attempt ACKs
-
-        // Test 1: Blob should never produce ACK
-        let mut pending_blobs = HashMap::new();
-        let blob_element = test_blob_element();
-        let blob_result =
-            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, blob_element).await;
-        assert!(
-            matches!(blob_result, Ok(None)),
-            "Blobs should return Ok(None)"
-        );
-
-        // Test 2: Block should always attempt ACK (even on failure)
-        let block_element = invalid_block_element();
+        // Valid block should produce ACK
+        let block_element = valid_block_element();
         let block_result =
             IndexerGrpcServer::process_element(&*database, &mut pending_blobs, block_element).await;
         assert!(
-            block_result.is_err(),
-            "Blocks should return error on failure"
+            matches!(block_result, Ok(Some(()))),
+            "Valid blocks should return Ok(Some(())) ACK"
         );
-
-        // Test 3: Empty element should produce error ACK
-        let empty_element = Element { payload: None };
-        let empty_result =
-            IndexerGrpcServer::process_element(&*database, &mut pending_blobs, empty_element).await;
-        assert!(empty_result.is_err(), "Empty elements should return error");
+        assert!(
+            pending_blobs.is_empty(),
+            "Pending blobs should be cleared after block"
+        );
     }
 }

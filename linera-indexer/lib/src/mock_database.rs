@@ -205,6 +205,19 @@ pub struct MockSuccessDatabase;
 
 #[async_trait]
 impl IndexerDatabase for MockSuccessDatabase {
+    /// Override the high-level method to succeed without needing transactions
+    async fn store_block_with_blobs_and_bundles(
+        &self,
+        _block_hash: &CryptoHash,
+        _chain_id: &ChainId,
+        _height: BlockHeight,
+        _block_data: &[u8],
+        _blobs: &[(BlobId, Vec<u8>)],
+        _incoming_bundles: Vec<IncomingBundle>,
+    ) -> Result<(), SqliteError> {
+        // Mock implementation that always succeeds
+        Ok(())
+    }
     async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
         // We can't create a real transaction, but for successful testing we can just
         // return an error that indicates we can't create a mock transaction
