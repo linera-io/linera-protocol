@@ -6,7 +6,7 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{Stream, StreamExt};
+use futures::{stream::BoxStream, Stream, StreamExt};
 use linera_base::{data_types::Blob, identifiers::BlobId};
 use linera_chain::types::ConfirmedBlockCertificate;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
@@ -69,7 +69,7 @@ impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
     /// Process the entire stream and return responses
     async fn process_stream(
         database: Arc<D>,
-        stream: Streaming<Element>,
+        stream: BoxStream<'static, Result<Element, Status>>,
     ) -> impl Stream<Item = Result<(), Status>> {
         futures::stream::unfold(
             (stream, database, HashMap::<BlobId, Vec<u8>>::new()),
@@ -199,7 +199,7 @@ impl<D: IndexerDatabase + 'static> Indexer for IndexerGrpcServer<D> {
         let stream = request.into_inner();
         let database = Arc::clone(&self.database);
 
-        let output_stream = Self::process_stream(database, stream).await;
+        let output_stream = Self::process_stream(database, stream.boxed()).await;
         Ok(Response::new(Box::pin(output_stream)))
     }
 }
@@ -462,6 +462,72 @@ mod tests {
         assert!(
             pending_blobs.is_empty(),
             "Pending blobs should be cleared after block"
+        );
+    }
+
+    // === STREAM PROCESSING TESTS (Integration Tests) ===
+
+    #[tokio::test]
+    async fn test_process_stream_end_to_end_mixed_elements() {
+        use std::sync::Arc;
+
+        use futures::StreamExt;
+        use tokio_stream;
+        use tonic::{Code, Status};
+
+        // Use MockSuccessDatabase to allow valid blocks to succeed
+        let database = Arc::new(MockSuccessDatabase);
+
+        // Create a mixed stream of elements: blobs and blocks
+        let elements = vec![
+            Ok(test_blob_element()),     // Blob #1 - should not produce ACK
+            Ok(test_blob_element()),     // Blob #2 - should not produce ACK
+            Ok(valid_block_element()),   // Valid Block - should produce ACK
+            Ok(invalid_block_element()), // Invalid Block - should produce ERROR
+            Ok(test_blob_element()),     // Blob #3 - should not produce ACK
+            Ok(valid_block_element()),   // Valid Block #2 - should produce ACK
+        ];
+
+        // Create a BoxStream from the elements
+        let input_stream = tokio_stream::iter(elements).boxed();
+
+        // Call the process_stream method
+        let output_stream = IndexerGrpcServer::process_stream(database, input_stream).await;
+
+        // Collect all results from the output stream
+        let results: Vec<Result<(), Status>> = output_stream.collect().await;
+
+        // Verify we get exactly 3 responses:
+        // 1. ACK for first valid block
+        // 2. ERROR for invalid block
+        // 3. ACK for second valid block
+        // (No responses for the 3 blobs)
+        assert_eq!(results.len(), 3, "Expected exactly 3 responses from stream");
+
+        // Verify the first result is a successful ACK
+        assert!(
+            matches!(results[0], Ok(())),
+            "First valid block should produce successful ACK"
+        );
+
+        // Verify the second result is an error for invalid block
+        // Verify the error details
+        if let Err(status) = &results[1] {
+            assert_eq!(
+                status.code(),
+                Code::InvalidArgument,
+                "Invalid block should return InvalidArgument status"
+            );
+            assert!(
+                status.message().contains("Invalid block"),
+                "Error message should mention invalid block"
+            );
+        }
+
+        // Verify the third result is a successful ACK
+        assert!(
+            matches!(results[2], Ok(())),
+            "Second valid block should produce successful ACK"
         );
     }
 }
