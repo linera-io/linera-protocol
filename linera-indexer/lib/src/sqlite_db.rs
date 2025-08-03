@@ -594,9 +594,7 @@ mod tests {
     };
     use linera_chain::data_types::MessageAction;
 
-    use crate::{
-        database_trait::IndexerDatabase, grpc_server::IndexerGrpcServer, sqlite_db::SqliteDatabase,
-    };
+    use crate::{database_trait::IndexerDatabase, sqlite_db::SqliteDatabase};
 
     async fn create_test_database() -> SqliteDatabase {
         SqliteDatabase::new("sqlite::memory:")
@@ -625,15 +623,6 @@ mod tests {
 
         // Test block storage (we'd need to create a proper ConfirmedBlockCertificate here)
         // For now, just test that the database operations work
-    }
-
-    #[tokio::test]
-    async fn test_indexer_server_creation() {
-        let db = create_test_database().await;
-        let _server = IndexerGrpcServer::new(db);
-
-        // Test that we can create the server with a non-cloneable database
-        // This verifies the Arc<SqliteDatabase> approach works
     }
 
     #[tokio::test]

@@ -52,12 +52,6 @@ impl<D> IndexerGrpcServer<D> {
 }
 
 impl<D: IndexerDatabase + 'static> IndexerGrpcServer<D> {
-    pub fn new_with_database(database: D) -> Self {
-        Self {
-            database: Arc::new(database),
-        }
-    }
-
     /// Start the gRPC indexer server
     pub async fn serve(self, port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let addr = format!("0.0.0.0:{}", port).parse()?;
@@ -226,6 +220,7 @@ impl From<SqliteError> for Status {
         }
     }
 }
+
 impl From<ProcessingError> for Status {
     fn from(error: ProcessingError) -> Self {
         match error {
