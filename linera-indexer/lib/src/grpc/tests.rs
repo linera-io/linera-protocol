@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::{
+    db::tests::{MockFailingDatabase, MockSuccessDatabase},
     indexer_api::{element::Payload, Element},
-    mock_database::{MockFailingDatabase, MockSuccessDatabase},
 };
 
 fn test_blob_element() -> Element {

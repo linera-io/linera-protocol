@@ -3,6 +3,11 @@
 
 //! Database trait for the indexer.
 
+#[cfg(test)]
+pub(crate) mod tests;
+
+pub mod sqlite;
+
 use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
@@ -10,9 +15,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::IncomingBundle;
+use sqlite::{IncomingBundleInfo, PostedMessageInfo, SqliteError};
 use sqlx::{Sqlite, Transaction};
-
-use crate::sqlite_db::{IncomingBundleInfo, PostedMessageInfo, SqliteError};
 
 /// Transaction type for database operations
 pub type DatabaseTransaction<'a> = Transaction<'a, Sqlite>;

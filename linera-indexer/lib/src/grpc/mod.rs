@@ -15,13 +15,12 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tracing::{error, info, warn};
 
 use crate::{
-    database_trait::IndexerDatabase,
+    db::{sqlite::SqliteError, IndexerDatabase},
     indexer_api::{
         element::Payload,
         indexer_server::{Indexer, IndexerServer},
         Element,
     },
-    sqlite_db::SqliteError,
 };
 
 /// Error type for processing elements in the indexer

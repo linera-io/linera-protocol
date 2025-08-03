@@ -12,6 +12,8 @@ use linera_base::crypto::CryptoHash;
 use reqwest::header::InvalidHeaderValue;
 use thiserror::Error;
 
+use crate::db::sqlite::SqliteError;
+
 #[derive(Error, Debug)]
 pub enum IndexerError {
     #[error(transparent)]
@@ -49,6 +51,12 @@ pub enum IndexerError {
     #[cfg(feature = "scylladb")]
     #[error(transparent)]
     ScyllaDbError(#[from] Box<linera_views::scylla_db::ScyllaDbStoreError>),
+}
+
+impl From<SqliteError> for IndexerError {
+    fn from(error: SqliteError) -> Self {
+        Self::Other(Box::new(error).into())
+    }
 }
 
 impl From<async_tungstenite::tungstenite::Error> for IndexerError {
