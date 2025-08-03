@@ -289,6 +289,10 @@ mod tests {
 
     // Create a valid block element with minimal data.
     fn valid_block_element() -> Element {
+        valid_block_element_with_chain_id("test_chain")
+    }
+
+    fn valid_block_element_with_chain_id(chain_suffix: &str) -> Element {
         use std::collections::BTreeMap;
 
         use linera_base::{
@@ -300,8 +304,8 @@ mod tests {
             block::{Block, ConfirmedBlock},
             data_types::{BlockExecutionOutcome, ProposedBlock},
         };
-        // Create a simple test ChainId
-        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+        // Create a simple test ChainId with unique suffix
+        let chain_id = ChainId(CryptoHash::test_hash(chain_suffix));
 
         // Create a minimal proposed block (genesis block)
         let proposed_block = ProposedBlock {
@@ -342,7 +346,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_element_blob_success() {
         // Use MockSuccessDatabase since we're testing successful blob processing
-        let database = MockSuccessDatabase;
+        let database = MockSuccessDatabase::new();
         let mut pending_blobs = HashMap::new();
         let element = test_blob_element();
 
@@ -422,7 +426,7 @@ mod tests {
         use std::sync::Arc;
 
         // Use MockSuccessDatabase to test successful paths and ACK behavior
-        let database = Arc::new(MockSuccessDatabase);
+        let database = Arc::new(MockSuccessDatabase::new());
         let mut pending_blobs = HashMap::new();
 
         // First add a blob to pending_blobs
@@ -475,33 +479,47 @@ mod tests {
         use tokio_stream;
         use tonic::{Code, Status};
 
-        // Use MockSuccessDatabase to allow valid blocks to succeed
-        let database = Arc::new(MockSuccessDatabase);
+        // Use MockSuccessDatabase to allow valid blocks to succeed and track storage
+        let database = Arc::new(MockSuccessDatabase::new());
+
+        // Create test elements - same blob content will have same BlobId
+        let blob1 = test_blob_element();
+        let blob2 = test_blob_element();
+        let blob3 = test_blob_element();
+        let valid_block1 = valid_block_element_with_chain_id("test_chain_1");
+        let invalid_block = invalid_block_element();
+        let valid_block2 = valid_block_element_with_chain_id("test_chain_2");
 
         // Create a mixed stream of elements: blobs and blocks
         let elements = vec![
-            Ok(test_blob_element()),     // Blob #1 - should not produce ACK
-            Ok(test_blob_element()),     // Blob #2 - should not produce ACK
-            Ok(valid_block_element()),   // Valid Block - should produce ACK
-            Ok(invalid_block_element()), // Invalid Block - should produce ERROR
-            Ok(test_blob_element()),     // Blob #3 - should not produce ACK
-            Ok(valid_block_element()),   // Valid Block #2 - should produce ACK
+            Ok(blob1),         // Blob #1 - should not produce ACK
+            Ok(blob2),         // Blob #2 - should not produce ACK
+            Ok(valid_block1),  // Valid Block #1 - should produce ACK and store blobs 1&2
+            Ok(invalid_block), // Invalid Block - should produce ERROR, no storage
+            Ok(blob3),         // Blob #3 - should not produce ACK
+            Ok(valid_block2),  // Valid Block #2 - should produce ACK and store blob 3
         ];
+
+        // Verify initial state - no data stored
+        assert_eq!(database.blob_count(), 0, "Database should start empty");
+        assert_eq!(database.block_count(), 0, "Database should start empty");
 
         // Create a BoxStream from the elements
         let input_stream = tokio_stream::iter(elements).boxed();
 
         // Call the process_stream method
-        let output_stream = IndexerGrpcServer::process_stream(database, input_stream).await;
+        let output_stream = IndexerGrpcServer::process_stream(database.clone(), input_stream).await;
 
         // Collect all results from the output stream
         let results: Vec<Result<(), Status>> = output_stream.collect().await;
 
+        // === VERIFY OUTPUT STREAM RESPONSES ===
+
         // Verify we get exactly 3 responses:
-        // 1. ACK for first valid block
-        // 2. ERROR for invalid block
-        // 3. ACK for second valid block
-        // (No responses for the 3 blobs)
+        // 1. ACK for first valid block (processes 2 blobs + block 1)
+        // 2. ERROR for invalid block (deserialization fails)
+        // 3. ACK for second valid block (processes 1 blob + block 2)
+        // (No responses for the individual blobs)
         assert_eq!(results.len(), 3, "Expected exactly 3 responses from stream");
 
         // Verify the first result is a successful ACK
@@ -528,6 +546,23 @@ mod tests {
         assert!(
             matches!(results[2], Ok(())),
             "Second valid block should produce successful ACK"
+        );
+
+        // After processing the stream, we should have:
+        // - 1 blob stored (all blobs have same content/BlobId, so they overwrite each other)
+        // - 2 blocks stored (valid_block1 and valid_block2 with different chain IDs)
+        // - invalid_block should NOT be stored (deserialization failed)
+
+        assert_eq!(
+            database.blob_count(),
+            1,
+            "Should have 1 unique blob stored (all blobs have same content/BlobId)"
+        );
+
+        assert_eq!(
+            database.block_count(),
+            2,
+            "Should have 2 valid blocks stored (invalid block should not be stored)"
         );
     }
 }

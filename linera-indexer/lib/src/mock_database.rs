@@ -3,7 +3,13 @@
 
 //! Mock database implementations for testing.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        RwLock,
+    },
+};
 
 use async_trait::async_trait;
 use linera_base::{
@@ -200,22 +206,68 @@ impl IndexerDatabase for MockFailingDatabase {
     }
 }
 
+type Blocks = HashMap<CryptoHash, (ChainId, BlockHeight, Vec<u8>)>;
+
 /// A more sophisticated mock that actually works for successful paths
-pub struct MockSuccessDatabase;
+/// and stores data in internal HashMaps for testing verification
+pub struct MockSuccessDatabase {
+    /// Storage for blobs: BlobId -> blob data
+    blobs: RwLock<HashMap<BlobId, Vec<u8>>>,
+    /// Storage for blocks: CryptoHash -> (ChainId, BlockHeight, block data)
+    blocks: RwLock<Blocks>,
+}
+
+impl Default for MockSuccessDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MockSuccessDatabase {
+    pub fn new() -> Self {
+        Self {
+            blobs: RwLock::new(HashMap::new()),
+            blocks: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Get the count of stored blobs
+    pub fn blob_count(&self) -> usize {
+        self.blobs.read().unwrap().len()
+    }
+
+    /// Get the count of stored blocks
+    pub fn block_count(&self) -> usize {
+        self.blocks.read().unwrap().len()
+    }
+}
 
 #[async_trait]
 impl IndexerDatabase for MockSuccessDatabase {
-    /// Override the high-level method to succeed without needing transactions
+    /// Override the high-level method to succeed and store data
     async fn store_block_with_blobs_and_bundles(
         &self,
-        _block_hash: &CryptoHash,
-        _chain_id: &ChainId,
-        _height: BlockHeight,
-        _block_data: &[u8],
-        _blobs: &[(BlobId, Vec<u8>)],
+        block_hash: &CryptoHash,
+        chain_id: &ChainId,
+        height: BlockHeight,
+        block_data: &[u8],
+        blobs: &[(BlobId, Vec<u8>)],
         _incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), SqliteError> {
-        // Mock implementation that always succeeds
+        // Store all blobs
+        {
+            let mut blob_storage = self.blobs.write().unwrap();
+            for (blob_id, blob_data) in blobs {
+                blob_storage.insert(*blob_id, blob_data.clone());
+            }
+        }
+
+        // Store the block
+        {
+            let mut block_storage = self.blocks.write().unwrap();
+            block_storage.insert(*block_hash, (*chain_id, height, block_data.to_vec()));
+        }
+
         Ok(())
     }
     async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
