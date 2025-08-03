@@ -565,4 +565,71 @@ mod tests {
             "Should have 2 valid blocks stored (invalid block should not be stored)"
         );
     }
+
+    #[tokio::test]
+    async fn test_process_stream_database_failure() {
+        use std::sync::Arc;
+
+        use futures::StreamExt;
+        use tokio_stream;
+        use tonic::{Code, Status};
+
+        // Use MockFailingDatabase to simulate database failures during block storage
+        let database = Arc::new(MockFailingDatabase::new());
+
+        // Create test elements: blobs + valid block (which will fail at database level)
+        let blob1 = test_blob_element();
+        let blob2 = test_blob_element();
+        let blob3 = test_blob_element();
+        let valid_block = valid_block_element(); // This will fail when trying to store
+
+        // Create a stream: blobs followed by a valid block that will fail at DB level
+        let elements = vec![
+            Ok(blob1),       // Blob #1 - should not produce ACK, stored in pending_blobs
+            Ok(blob2),       // Blob #2 - should not produce ACK, stored in pending_blobs
+            Ok(blob3),       // Blob #3 - should not produce ACK, stored in pending_blobs
+            Ok(valid_block), // Valid Block - should produce ERROR due to database failure
+        ];
+
+        // Create a BoxStream from the elements
+        let input_stream = tokio_stream::iter(elements).boxed();
+
+        // Call the process_stream method
+        let output_stream = IndexerGrpcServer::process_stream(database.clone(), input_stream).await;
+
+        // Collect all results from the output stream
+        let results: Vec<Result<(), Status>> = output_stream.collect().await;
+
+        // === VERIFY OUTPUT STREAM RESPONSES ===
+
+        // Verify we get exactly 1 response: ERROR for the block (database failure)
+        // (No responses for the individual blobs, they just accumulate in pending_blobs)
+        assert_eq!(results.len(), 1, "Expected exactly 1 response from stream");
+
+        // Verify the result is an error due to database failure
+        assert!(results[0].is_err(), "Block should produce database error");
+
+        // Verify the error details
+        if let Err(status) = &results[0] {
+            assert_eq!(
+                status.code(),
+                Code::InvalidArgument,
+                "MockFailingDatabase returns SqliteError::Serialization which maps to InvalidArgument"
+            );
+            assert!(
+                status
+                    .message()
+                    .contains("Mock: Cannot create real transaction"),
+                "Error message should contain database failure details, got: {}",
+                status.message()
+            );
+        }
+
+        // === VERIFY NO DATA WAS COMMITTED ===
+
+        // Since the database transaction failed, no data should be committed.
+        // The MockFailingDatabase doesn't actually store anything, so we can't verify
+        // storage directly, but the test verifies that the error path is working correctly.
+        // The pending blobs would have been accumulated but not stored due to the transaction failure.
+    }
 }

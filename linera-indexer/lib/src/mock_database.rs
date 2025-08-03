@@ -3,13 +3,7 @@
 
 //! Mock database implementations for testing.
 
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        RwLock,
-    },
-};
+use std::{collections::HashMap, sync::RwLock};
 
 use async_trait::async_trait;
 use linera_base::{
@@ -24,49 +18,12 @@ use crate::{
     sqlite_db::{IncomingBundleInfo, PostedMessageInfo, SqliteError},
 };
 
-/// Mock database that can be configured to fail at different points
-pub struct MockFailingDatabase {
-    /// Whether to fail when beginning transactions
-    pub fail_begin_transaction: AtomicBool,
-    /// Whether to fail when inserting blobs
-    pub fail_insert_blob: AtomicBool,
-    /// Whether to fail when inserting blocks
-    pub fail_insert_block: AtomicBool,
-    /// Whether to fail when storing incoming bundles
-    pub fail_store_bundles: AtomicBool,
-    /// Whether to fail when committing transactions
-    pub fail_commit: AtomicBool,
-}
+/// Mock database that fails on transaction operations for testing error paths
+pub struct MockFailingDatabase;
 
 impl MockFailingDatabase {
     pub fn new() -> Self {
-        Self {
-            fail_begin_transaction: AtomicBool::new(false),
-            fail_insert_blob: AtomicBool::new(false),
-            fail_insert_block: AtomicBool::new(false),
-            fail_store_bundles: AtomicBool::new(false),
-            fail_commit: AtomicBool::new(false),
-        }
-    }
-
-    pub fn fail_begin_transaction(&self) {
-        self.fail_begin_transaction.store(true, Ordering::SeqCst);
-    }
-
-    pub fn fail_insert_blob(&self) {
-        self.fail_insert_blob.store(true, Ordering::SeqCst);
-    }
-
-    pub fn fail_insert_block(&self) {
-        self.fail_insert_block.store(true, Ordering::SeqCst);
-    }
-
-    pub fn fail_store_bundles(&self) {
-        self.fail_store_bundles.store(true, Ordering::SeqCst);
-    }
-
-    pub fn fail_commit(&self) {
-        self.fail_commit.store(true, Ordering::SeqCst);
+        Self
     }
 }
 
@@ -79,13 +36,7 @@ impl Default for MockFailingDatabase {
 #[async_trait]
 impl IndexerDatabase for MockFailingDatabase {
     async fn begin_transaction(&self) -> Result<DatabaseTransaction<'_>, SqliteError> {
-        if self.fail_begin_transaction.load(Ordering::SeqCst) {
-            return Err(SqliteError::Serialization(
-                "Mock: Failed to begin transaction".to_string(),
-            ));
-        }
-        // We can't actually create a real transaction for a mock, so this will fail
-        // but it's sufficient for testing the error path
+        // Always fail transaction creation for testing error paths
         Err(SqliteError::Serialization(
             "Mock: Cannot create real transaction".to_string(),
         ))
@@ -97,11 +48,6 @@ impl IndexerDatabase for MockFailingDatabase {
         _blob_id: &BlobId,
         _data: &[u8],
     ) -> Result<(), SqliteError> {
-        if self.fail_insert_blob.load(Ordering::SeqCst) {
-            return Err(SqliteError::Serialization(
-                "Mock: Failed to insert blob".to_string(),
-            ));
-        }
         Ok(())
     }
 
@@ -113,11 +59,6 @@ impl IndexerDatabase for MockFailingDatabase {
         _height: BlockHeight,
         _data: &[u8],
     ) -> Result<(), SqliteError> {
-        if self.fail_insert_block.load(Ordering::SeqCst) {
-            return Err(SqliteError::Serialization(
-                "Mock: Failed to insert block".to_string(),
-            ));
-        }
         Ok(())
     }
 
@@ -127,20 +68,10 @@ impl IndexerDatabase for MockFailingDatabase {
         _block_hash: &CryptoHash,
         _incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), SqliteError> {
-        if self.fail_store_bundles.load(Ordering::SeqCst) {
-            return Err(SqliteError::Serialization(
-                "Mock: Failed to store bundles".to_string(),
-            ));
-        }
         Ok(())
     }
 
     async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
-        if self.fail_commit.load(Ordering::SeqCst) {
-            return Err(SqliteError::Serialization(
-                "Mock: Failed to commit transaction".to_string(),
-            ));
-        }
         Ok(())
     }
 
