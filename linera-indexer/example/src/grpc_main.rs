@@ -4,9 +4,7 @@
 //! An example of a gRPC indexer server with SQLite storage.
 
 use clap::Parser;
-use linera_indexer::{
-    common::IndexerError, grpc_server::IndexerGrpcServer, sqlite_runner::SqliteConfig,
-};
+use linera_indexer::{common::IndexerError, grpc::IndexerGrpcServer, sqlite_runner::SqliteConfig};
 
 #[derive(Parser, Debug)]
 #[command(version = linera_version::VersionInfo::default_clap_str())]

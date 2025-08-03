@@ -20,12 +20,13 @@ pub mod rocks_db;
 pub mod scylla_db;
 
 pub mod database_trait;
-pub mod grpc_server;
 #[cfg(test)]
 pub mod mock_database;
 pub mod sqlite;
 pub mod sqlite_db;
 pub mod sqlite_runner;
+
+pub mod grpc;
 
 // Generated protobuf types
 pub mod indexer_api {
