@@ -54,7 +54,6 @@ pub enum CommunicateAction {
     },
     RequestTimeout {
         chain_id: ChainId,
-        height: BlockHeight,
         round: Round,
     },
 }
@@ -287,6 +286,30 @@ where
                 .await
             {
                 Ok(info) => return Ok(info),
+                Err(NodeError::WrongRound(_round)) => {
+                    // The proposal is for a different round, so we need to update the validator.
+                    // TODO: this should probably be more specific as to which rounds are retried.
+                    self.send_chain_information(
+                        chain_id,
+                        proposal.content.block.height,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await?;
+                }
+                Err(NodeError::UnexpectedBlockHeight {
+                    expected_block_height,
+                    found_block_height,
+                }) => {
+                    if expected_block_height < found_block_height {
+                        // The proposal is for a a later block height, so we need to update the validator.
+                        self.send_chain_information(
+                            chain_id,
+                            found_block_height,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await?;
+                    }
+                }
                 Err(NodeError::MissingCrossChainUpdate { .. }) if !sent_cross_chain_updates => {
                     sent_cross_chain_updates = true;
                     // Some received certificates may be missing for this validator
@@ -482,23 +505,13 @@ where
         &mut self,
         action: CommunicateAction,
     ) -> Result<LiteVote, ChainClientError> {
-        let (target_block_height, chain_id) = match &action {
-            CommunicateAction::SubmitBlock { proposal, .. } => {
-                let block = &proposal.content.block;
-                (block.height, block.chain_id)
+        let chain_id = match &action {
+            CommunicateAction::SubmitBlock { proposal, .. } => proposal.content.block.chain_id,
+            CommunicateAction::FinalizeBlock { certificate, .. } => {
+                certificate.inner().block().header.chain_id
             }
-            CommunicateAction::FinalizeBlock { certificate, .. } => (
-                certificate.inner().block().header.height,
-                certificate.inner().block().header.chain_id,
-            ),
-            CommunicateAction::RequestTimeout {
-                height, chain_id, ..
-            } => (*height, *chain_id),
+            CommunicateAction::RequestTimeout { chain_id, .. } => *chain_id,
         };
-        // Update the validator with missing information, if needed.
-        let delivery = CrossChainMessageDelivery::NonBlocking;
-        self.send_chain_information(chain_id, target_block_height, delivery)
-            .await?;
         // Send the block proposal, certificate or timeout request and return a vote.
         let vote = match action {
             CommunicateAction::SubmitBlock { proposal, blob_ids } => {
