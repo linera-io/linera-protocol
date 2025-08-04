@@ -321,7 +321,12 @@ where
                 )
             }
 
-            if let Reason::NewBlock { height: _, hash: _ } = reason {
+            if let Reason::NewBlock {
+                height: _,
+                hash: _,
+                event_streams: _,
+            } = reason
+            {
                 for exporter_client in &mut exporter_clients {
                     let request = tonic::Request::new(notification.clone());
                     if let Err(error) = exporter_client.notify(request).await {
