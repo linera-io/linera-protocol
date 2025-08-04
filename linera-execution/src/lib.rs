@@ -42,7 +42,7 @@ use linera_base::{
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
-        GenericApplicationId, MessageId, ModuleId, StreamName,
+        GenericApplicationId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -444,6 +444,8 @@ pub struct OperationContext {
 pub struct MessageContext {
     /// The current chain ID.
     pub chain_id: ChainId,
+    /// The chain ID where the message originated from.
+    pub origin: ChainId,
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
     /// The authenticated signer of the operation that created the message, if any.
@@ -458,9 +460,6 @@ pub struct MessageContext {
     pub round: Option<u32>,
     /// The timestamp of the block executing the message.
     pub timestamp: Timestamp,
-    /// The ID of the message (based on the operation height and index in the remote
-    /// certificate).
-    pub message_id: MessageId,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -710,12 +709,12 @@ pub trait ContractRuntime: BaseRuntime {
     /// The authenticated signer for this execution, if there is one.
     fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
 
-    /// The current message ID, if there is one.
-    fn message_id(&mut self) -> Result<Option<MessageId>, ExecutionError>;
-
     /// If the current message (if there is one) was rejected by its destination and is now
     /// bouncing back.
     fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError>;
+
+    /// The chain ID where the current message originated from, if there is one.
+    fn message_origin_chain_id(&mut self) -> Result<Option<ChainId>, ExecutionError>;
 
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.

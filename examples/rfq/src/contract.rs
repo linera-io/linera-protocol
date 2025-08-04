@@ -314,9 +314,8 @@ impl Contract for RfqContract {
 impl RfqContract {
     fn get_message_creation_chain_id(&mut self) -> ChainId {
         self.runtime
-            .message_id()
-            .expect("Getting message id should not fail")
-            .chain_id
+            .message_origin_chain_id()
+            .expect("Getting message origin chain ID should not fail")
     }
 
     async fn start_exchange(

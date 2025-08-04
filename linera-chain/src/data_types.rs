@@ -14,7 +14,7 @@ use linera_base::{
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
-    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, StreamId},
+    identifiers::{Account, AccountOwner, BlobId, ChainId, StreamId},
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
@@ -140,17 +140,6 @@ pub struct ChainAndHeight {
     pub height: BlockHeight,
 }
 
-impl ChainAndHeight {
-    /// Returns the ID of the `index`-th message sent by the block at that height.
-    pub fn to_message_id(&self, index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index,
-        }
-    }
-}
-
 /// A bundle of cross-chain messages.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct IncomingBundle {
@@ -164,16 +153,8 @@ pub struct IncomingBundle {
 
 impl IncomingBundle {
     /// Returns an iterator over all posted messages in this bundle, together with their ID.
-    pub fn messages_and_ids(&self) -> impl Iterator<Item = (MessageId, &PostedMessage)> {
-        let chain_and_height = ChainAndHeight {
-            chain_id: self.origin,
-            height: self.bundle.height,
-        };
-        let messages = self.bundle.messages.iter();
-        messages.map(move |posted_message| {
-            let message_id = chain_and_height.to_message_id(posted_message.index);
-            (message_id, posted_message)
-        })
+    pub fn messages(&self) -> impl Iterator<Item = &PostedMessage> {
+        self.bundle.messages.iter()
     }
 }
 

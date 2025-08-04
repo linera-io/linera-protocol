@@ -80,7 +80,7 @@ impl Contract for HexContract {
                 self.state.board.set(Board::new(board_size));
             }
             Message::End { winner, loser } => {
-                let message_id = self.runtime.message_id().unwrap();
+                let origin_chain_id = self.runtime.message_origin_chain_id().unwrap();
                 for owner in [&winner, &loser] {
                     let chain_set = self
                         .state
@@ -88,7 +88,7 @@ impl Contract for HexContract {
                         .get_mut_or_default(owner)
                         .await
                         .unwrap();
-                    chain_set.retain(|game_chain| game_chain.chain_id != message_id.chain_id);
+                    chain_set.retain(|game_chain| game_chain.chain_id != origin_chain_id);
                     if chain_set.is_empty() {
                         self.state.game_chains.remove(owner).unwrap();
                     }
