@@ -1375,16 +1375,23 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             index,
             chain_id,
         };
-        let txn_tracker_moved = mem::take(&mut this.transaction_tracker);
-        let (event, txn_tracker_moved) = this
-            .execution_state_sender
-            .send_request(|callback| ExecutionRequest::ReadEvent {
-                event_id: event_id.clone(),
-                callback,
-                txn_tracker: txn_tracker_moved,
-            })?
-            .recv_response()?;
-        this.transaction_tracker = txn_tracker_moved;
+        let event = match this.transaction_tracker.next_replayed_oracle_response()? {
+            None => this
+                .execution_state_sender
+                .send_request(|callback| ExecutionRequest::ReadEvent {
+                    event_id: event_id.clone(),
+                    callback,
+                })?
+                .recv_response()?,
+            Some(OracleResponse::Event(recorded_event_id, event))
+                if recorded_event_id == event_id =>
+            {
+                event
+            }
+            Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+        };
+        this.transaction_tracker
+            .add_oracle_response(OracleResponse::Event(event_id, event.clone()));
         // TODO(#365): Consider separate event fee categories.
         this.resource_controller
             .track_bytes_read(event.len() as u64)?;
