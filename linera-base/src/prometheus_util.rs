@@ -13,7 +13,7 @@ use crate::time::Instant;
 
 const LINERA_NAMESPACE: &str = "linera";
 
-/// Wrapper around Prometheus register_int_counter_vec! macro which also sets the `linera` namespace
+/// Wrapper around Prometheus `register_int_counter_vec!` macro which also sets the `linera` namespace
 pub fn register_int_counter_vec(
     name: &str,
     description: &str,
@@ -23,7 +23,7 @@ pub fn register_int_counter_vec(
     register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created")
 }
 
-/// Wrapper around Prometheus register_int_counter_vec! macro which also sets the `linera` namespace
+/// Wrapper around Prometheus `register_int_counter!` macro which also sets the `linera` namespace
 pub fn register_int_counter(name: &str, description: &str) -> IntCounter {
     let counter_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
     register_int_counter!(counter_opts).expect("IntCounter can be created")
