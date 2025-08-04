@@ -12,8 +12,7 @@ use futures::{channel::mpsc, StreamExt as _};
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
-        Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -446,25 +445,10 @@ where
                 callback.respond(index)
             }
 
-            ReadEvent {
-                event_id,
-                callback,
-                mut txn_tracker,
-            } => {
-                let bytes = match txn_tracker.next_replayed_oracle_response()? {
-                    None => {
-                        let event = self.context().extra().get_event(event_id.clone()).await?;
-                        event.ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?
-                    }
-                    Some(OracleResponse::Event(recorded_event_id, bytes))
-                        if recorded_event_id == event_id =>
-                    {
-                        bytes
-                    }
-                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                };
-                txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes.clone()));
-                callback.respond((bytes, txn_tracker));
+            ReadEvent { event_id, callback } => {
+                let event = self.context().extra().get_event(event_id.clone()).await?;
+                let bytes = event.ok_or(ExecutionError::EventsNotFound(vec![event_id]))?;
+                callback.respond(bytes);
             }
 
             SubscribeToEvents {
@@ -773,8 +757,7 @@ pub enum ExecutionRequest {
 
     ReadEvent {
         event_id: EventId,
-        callback: oneshot::Sender<(Vec<u8>, TransactionTracker)>,
-        txn_tracker: TransactionTracker,
+        callback: oneshot::Sender<Vec<u8>>,
     },
 
     SubscribeToEvents {
