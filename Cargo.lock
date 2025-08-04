@@ -5405,7 +5405,6 @@ dependencies = [
  "linera-service-graphql-client",
  "linera-version",
  "linera-views",
- "prost",
  "reqwest 0.11.27",
  "sqlx",
  "thiserror 1.0.69",
