@@ -29,7 +29,7 @@ export const useAPI = () => {
   return { isConnected, error, api };
 };
 
-export const useBlocks = (limit: number = 50, offset: number = 0) => {
+export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) => {
   const [blocks, setBlocks] = useState<BlockInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,21 +38,41 @@ export const useBlocks = (limit: number = 50, offset: number = 0) => {
   useEffect(() => {
     if (!isConnected) return;
 
-    const fetchBlocks = async () => {
+    const fetchBlocks = async (isPolling = false) => {
       try {
-        setLoading(true);
-        const result = await api.getBlocks(limit, offset);
+        if (!isPolling) {
+          setLoading(true);
+        }
+        // Always fetch from beginning (offset=0) to get the latest blocks
+        const result = await api.getBlocks(limit, 0);
+        
+        if (isPolling) {
+          console.log('📋 Refreshed blocks from API');
+        }
+        
         setBlocks(result);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch blocks');
       } finally {
-        setLoading(false);
+        if (!isPolling) {
+          setLoading(false);
+        }
       }
     };
 
+    // Initial fetch
     fetchBlocks();
-  }, [isConnected, limit, offset]);
+
+    // Set up polling
+    const pollInterval = setInterval(() => {
+      console.log('📋 Polling for new blocks...');
+      fetchBlocks(true);
+    }, refreshInterval);
+
+    // Cleanup interval on unmount or dependency change
+    return () => clearInterval(pollInterval);
+  }, [isConnected, limit, refreshInterval]);
 
   return { blocks, loading, error };
 };
@@ -119,7 +139,7 @@ export const useChains = () => {
   return { chains, loading, error };
 };
 
-export const useChainBlocks = (chainId: string, limit: number = 50, offset: number = 0) => {
+export const useChainBlocks = (chainId: string, limit: number = 50, refreshInterval: number = 5000) => {
   const [blocks, setBlocks] = useState<BlockInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,21 +148,41 @@ export const useChainBlocks = (chainId: string, limit: number = 50, offset: numb
   useEffect(() => {
     if (!isConnected || !chainId) return;
 
-    const fetchChainBlocks = async () => {
+    const fetchChainBlocks = async (isPolling = false) => {
       try {
-        setLoading(true);
-        const result = await api.getBlocksByChain(chainId, limit, offset);
+        if (!isPolling) {
+          setLoading(true);
+        }
+        // Always fetch from beginning (offset=0) to get the latest blocks for this chain
+        const result = await api.getBlocksByChain(chainId, limit, 0);
+        
+        if (isPolling) {
+          console.log(`🔗 Refreshed blocks for chain ${chainId}`);
+        }
+        
         setBlocks(result);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch chain blocks');
       } finally {
-        setLoading(false);
+        if (!isPolling) {
+          setLoading(false);
+        }
       }
     };
 
+    // Initial fetch
     fetchChainBlocks();
-  }, [isConnected, chainId, limit, offset]);
+
+    // Set up polling
+    const pollInterval = setInterval(() => {
+      console.log(`🔗 Polling for new blocks on chain ${chainId}...`);
+      fetchChainBlocks(true);
+    }, refreshInterval);
+
+    // Cleanup interval on unmount or dependency change
+    return () => clearInterval(pollInterval);
+  }, [isConnected, chainId, limit, refreshInterval]);
 
   return { blocks, loading, error };
 };

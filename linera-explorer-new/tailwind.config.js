@@ -14,6 +14,7 @@ export default {
           'red-hover': '#c02402',
           'teal': '#1e4a52',
           'teal-light': '#2a5b65',
+          'glow': '#4a90e2',
           'gray-light': '#8a9ba5',
           'gray-medium': '#6b7c87',
           'border': '#1a3339',
