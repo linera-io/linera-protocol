@@ -400,25 +400,39 @@ where
         // last one, so we optimistically send that one right away.
         let remote_info = if let Ok(height) = target_block_height.try_sub_one() {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            let hash = chain.block_hashes(height..target_block_height).await?[0];
-            let certificate = self
-                .local_node
-                .storage_client()
-                .read_certificate(hash)
+            if let Some(hash) = chain
+                .block_hashes(height..target_block_height)
                 .await?
-                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
-            match self.send_confirmed_certificate(certificate, delivery).await {
-                Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
-                    if event_ids.iter().all(|event_id| {
+                .first()
+            {
+                let certificate = self
+                    .local_node
+                    .storage_client()
+                    .read_certificate(*hash)
+                    .await?
+                    .ok_or_else(|| ChainClientError::MissingConfirmedBlock(*hash))?;
+                match self.send_confirmed_certificate(certificate, delivery).await {
+                    Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(
+                        event_ids,
+                    ))) if event_ids.iter().all(|event_id| {
                         event_id.stream_id.application_id == GenericApplicationId::System
                     }) =>
-                {
-                    // The chain is missing epoch events. Send all blocks.
-                    let query = ChainInfoQuery::new(chain_id);
-                    self.remote_node.handle_chain_info_query(query).await?
+                    {
+                        // The chain is missing epoch events. Send all blocks.
+                        let query = ChainInfoQuery::new(chain_id);
+                        self.remote_node.handle_chain_info_query(query).await?
+                    }
+                    Err(err) => return Err(err),
+                    Ok(info) => info,
                 }
-                Err(err) => return Err(err),
-                Ok(info) => info,
+            } else {
+                // We don't have the block at the specified height. Send all blocks.
+                tracing::warn!(
+                    "send_chain_information called with height {target_block_height},
+                    but {chain_id:.8} does not have that block"
+                );
+                let query = ChainInfoQuery::new(chain_id);
+                self.remote_node.handle_chain_info_query(query).await?
             }
         } else {
             let query = ChainInfoQuery::new(chain_id);
