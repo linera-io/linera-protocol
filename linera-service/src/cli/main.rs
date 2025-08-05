@@ -1936,6 +1936,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_port,
                 faucet_amount,
                 with_block_exporter,
+                exporter_address: block_exporter_address,
                 exporter_port: block_exporter_port,
                 ..
             } => {
@@ -1948,6 +1949,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *policy_config,
                     cross_chain_config.clone(),
                     *with_block_exporter,
+                    block_exporter_address.to_owned(),
                     *block_exporter_port,
                     path,
                     // Not using the default value for storage

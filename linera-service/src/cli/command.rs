@@ -1093,6 +1093,10 @@ pub enum NetCommand {
         #[arg(long, default_value = "false")]
         with_block_exporter: bool,
 
+        /// The address of the block exporter.
+        #[arg(long, default_value = "localhost")]
+        exporter_address: String,
+
         /// The port on which to run the block exporter.
         #[arg(long, default_value = "8081")]
         exporter_port: NonZeroU16,
