@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Search, Layers, Home, Database, Activity } from 'lucide-react';
+import { Layers, Home, Activity } from 'lucide-react';
 import { BlockList } from './components/BlockList';
 import { BlockDetail } from './components/BlockDetail';
 import { ChainView } from './components/ChainView';

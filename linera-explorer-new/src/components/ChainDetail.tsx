@@ -8,8 +8,6 @@ export const ChainDetail: React.FC = () => {
   const { chainId } = useParams<{ chainId: string }>();
   const { blocks, loading, error } = useChainBlocks(chainId || '');
 
-  const formatChainId = (chainId: string) => `${chainId.slice(0, 16)}...${chainId.slice(-8)}`;
-
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };

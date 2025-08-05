@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BlockchainAPI } from '../utils/database';
-import { BlockInfo, Block, IncomingBundle, PostedMessage, ChainInfo } from '../types/blockchain';
+import { BlockInfo, Block, IncomingBundle, ChainInfo } from '../types/blockchain';
 
 const api = new BlockchainAPI();
 
