@@ -85,7 +85,6 @@ fn valid_block_element_with_chain_id(chain_suffix: &str) -> Element {
 
 #[tokio::test]
 async fn test_process_element_blob_success() {
-    // Use MockSuccessDatabase since we're testing successful blob processing
     let database = MockSuccessDatabase::new();
     let mut pending_blobs = HashMap::new();
     let element = test_blob_element();
@@ -100,7 +99,6 @@ async fn test_process_element_blob_success() {
 
 #[tokio::test]
 async fn test_process_element_invalid_block() {
-    // Use MockFailingDatabase - database choice doesn't matter since deserialization fails first
     let database = MockFailingDatabase::new();
 
     let mut pending_blobs = HashMap::new();
@@ -160,7 +158,7 @@ async fn test_process_element_invalid_blob() {
 }
 
 #[tokio::test]
-async fn test_ack_behavior_comprehensive() {
+async fn test_process_valid_block() {
     use std::sync::Arc;
 
     // Use MockSuccessDatabase to test successful paths and ACK behavior
@@ -172,17 +170,20 @@ async fn test_ack_behavior_comprehensive() {
     let blob_result =
         IndexerGrpcServer::process_element(&*database, &mut pending_blobs, blob_element).await;
 
-    // Blob should not produce an ACK
-    assert!(matches!(blob_result, Ok(None)));
-    assert_eq!(pending_blobs.len(), 1);
+    assert!(
+        matches!(blob_result, Ok(None)),
+        "Blobs should return Ok(None)"
+    );
+    assert_eq!(pending_blobs.len(), 1, "Pending blobs should have 1 blob");
 
-    // Now try to process a block (which will fail due to invalid data)
     let block_element = invalid_block_element();
     let block_result =
         IndexerGrpcServer::process_element(&*database, &mut pending_blobs, block_element).await;
 
-    // Block processing should return Err (processing failure)
-    assert!(block_result.is_err());
+    assert!(
+        block_result.is_err(),
+        "Invalid block should return an error"
+    );
     match block_result.unwrap_err() {
         ProcessingError::BlockDeserialization(_) => {
             // This should fail due to invalid block deserialization
@@ -190,8 +191,11 @@ async fn test_ack_behavior_comprehensive() {
         _ => panic!("Expected BlockDeserialization error"),
     }
 
-    // Pending blobs should still be there since block failed
-    assert_eq!(pending_blobs.len(), 1);
+    assert_eq!(
+        pending_blobs.len(),
+        1,
+        "Pending blobs should remain after block failure"
+    );
 
     // Valid block should produce ACK
     let block_element = valid_block_element();
@@ -217,7 +221,6 @@ async fn test_process_stream_end_to_end_mixed_elements() {
     use tokio_stream;
     use tonic::{Code, Status};
 
-    // Use MockSuccessDatabase to allow valid blocks to succeed and track storage
     let database = Arc::new(MockSuccessDatabase::new());
 
     // Create test elements - same blob content will have same BlobId
@@ -362,11 +365,4 @@ async fn test_process_stream_database_failure() {
             status.message()
         );
     }
-
-    // === VERIFY NO DATA WAS COMMITTED ===
-
-    // Since the database transaction failed, no data should be committed.
-    // The MockFailingDatabase doesn't actually store anything, so we can't verify
-    // storage directly, but the test verifies that the error path is working correctly.
-    // The pending blobs would have been accumulated but not stored due to the transaction failure.
 }
