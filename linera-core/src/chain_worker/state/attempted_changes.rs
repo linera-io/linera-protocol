@@ -516,6 +516,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
+    #[instrument(level = "trace", skip(self, bundles))]
     pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: ChainId,

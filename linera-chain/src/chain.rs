@@ -1057,6 +1057,9 @@ where
             if block_height > next_height {
                 // There may be a gap in the chain before this block. We can only add it to this
                 // outbox if the previous message to the same recipient has already been added.
+                if *outbox.next_height_to_schedule.get() > block_height {
+                    continue; // We already added this recipient's messages to the outbox.
+                }
                 let maybe_prev_hash = match outbox.next_height_to_schedule.get().try_sub_one().ok()
                 {
                     // The block with the last added message has already been executed; look up its
