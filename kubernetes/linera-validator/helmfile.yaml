@@ -3,6 +3,7 @@ environments:
     values:
       - writeToGrafanaCloud: {{ env "LINERA_WRITE_TO_GRAFANA_CLOUD" | default "false" }}
         validatorLabel: {{ env "LINERA_VALIDATOR_LABEL" | default (printf "local-%s" (env "USER")) }}
+        usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
         gcpRun: {{ env "LINERA_HELMFILE_SET_GCP_RUN" | default "false" }}
         kubeContext: {{ env "LINERA_HELMFILE_SET_KUBE_CONTEXT" | default "" }}
         kubeConfigPath: {{ env "KUBECONFIG" | default "" }}
@@ -23,7 +24,7 @@ hooks:
         set -euxo pipefail
         echo "Installing Prometheus ServiceMonitor CRD…"
         kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
-{{- if and .Values.dualStore .Values.gcpRun }}
+{{- if and .Values.gcpRun .Values.usingLocalSsd }}
   - events: ["prepare"]
     showlogs: true
     command: bash
@@ -86,7 +87,7 @@ releases:
       - scylla-operator/scylla-operator
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA" | default "scylla.values.yaml.gotmpl" }}
-    {{- if .Values.gcpRun }}
+    {{- if and .Values.gcpRun .Values.usingLocalSsd }}
     hooks:
       - events: ["presync"]
         showlogs: true
