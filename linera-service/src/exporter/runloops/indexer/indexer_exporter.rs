@@ -59,6 +59,8 @@ impl Exporter {
         let mut client = IndexerClient::new(address, self.options)?;
         let destination_state = storage.load_destination_state(&self.destination_id);
 
+        tracing::info!(start_index=&destination_state.load(Ordering::SeqCst), indexer_address=%address, "starting indexer exporter");
+
         loop {
             let (outgoing_stream, incoming_stream) =
                 client.setup_indexer_client(self.work_queue_size).await?;
