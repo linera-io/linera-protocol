@@ -392,15 +392,19 @@ where
         .with_transfer(source, recipient, amount);
         match recipient {
             Recipient::Account(account) => {
-                messages.push(vec![direct_outgoing_message(
-                    account.chain_id,
-                    MessageKind::Tracked,
-                    SystemMessage::Credit {
-                        source,
-                        target: account.owner,
-                        amount,
-                    },
-                )]);
+                if chain_id != account.chain_id {
+                    messages.push(vec![direct_outgoing_message(
+                        account.chain_id,
+                        MessageKind::Tracked,
+                        SystemMessage::Credit {
+                            source,
+                            target: account.owner,
+                            amount,
+                        },
+                    )]);
+                } else {
+                    messages.push(Vec::new());
+                }
             }
             Recipient::Burn => messages.push(Vec::new()),
         }
@@ -2292,9 +2296,8 @@ where
         owner: recipient,
     };
 
-    // First move the money from the public balance to the sender's account.
-    // This takes two certificates (sending, receiving) sadly.
-    let certificate00 = env
+    // Transfer money from the CHAIN account to the sender's account.
+    let certificate0 = env
         .make_transfer_certificate(
             chain_1_desc.clone(),
             sender_pubkey,
@@ -2304,54 +2307,14 @@ where
             Amount::from_tokens(5),
             Vec::new(),
             Amount::ONE,
-            BTreeMap::new(),
+            BTreeMap::from_iter([(sender, Amount::from_tokens(5))]),
             vec![],
         )
         .await;
 
     env.worker()
-        .fully_handle_certificate_with_notifications(certificate00.clone(), &())
+        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
-
-    let certificate01 = env
-        .make_transfer_certificate(
-            chain_1_desc.clone(),
-            sender_pubkey,
-            sender,
-            AccountOwner::CHAIN,
-            Recipient::Burn,
-            Amount::ONE,
-            vec![IncomingBundle {
-                origin: chain_1,
-                bundle: MessageBundle {
-                    certificate_hash: certificate00.hash(),
-                    height: BlockHeight::from(0),
-                    timestamp: Timestamp::from(0),
-                    transaction_index: 0,
-                    messages: vec![Message::System(SystemMessage::Credit {
-                        source: AccountOwner::CHAIN,
-                        target: sender,
-                        amount: Amount::from_tokens(5),
-                    })
-                    .to_posted(0, MessageKind::Tracked)],
-                },
-                action: MessageAction::Accept,
-            }],
-            Amount::ZERO,
-            BTreeMap::from_iter([(sender, Amount::from_tokens(5))]),
-            vec![&certificate00],
-        )
-        .await;
-
-    env.worker()
-        .fully_handle_certificate_with_notifications(certificate01.clone(), &())
-        .await?;
-
-    {
-        let chain = env.worker.chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
-        chain.validate_incoming_bundles().await?;
-    }
 
     // Then, make two transfers to the recipient.
     let certificate1 = env
@@ -2363,9 +2326,9 @@ where
             Recipient::Account(recipient_account),
             Amount::from_tokens(3),
             Vec::new(),
-            Amount::ZERO,
+            Amount::ONE,
             BTreeMap::from_iter([(sender, Amount::from_tokens(2))]),
-            vec![&certificate01, &certificate00],
+            vec![&certificate0],
         )
         .await;
 
@@ -2382,9 +2345,9 @@ where
             Recipient::Account(recipient_account),
             Amount::from_tokens(2),
             Vec::new(),
-            Amount::ZERO,
+            Amount::ONE,
             BTreeMap::new(),
-            vec![&certificate1, &certificate01, &certificate00],
+            vec![&certificate1, &certificate0],
         )
         .await;
 
@@ -2406,7 +2369,7 @@ where
                     origin: chain_1,
                     bundle: MessageBundle {
                         certificate_hash: certificate1.hash(),
-                        height: BlockHeight::from(2),
+                        height: BlockHeight::from(1),
                         timestamp: Timestamp::from(0),
                         transaction_index: 0,
                         messages: vec![Message::System(SystemMessage::Credit {
@@ -2422,7 +2385,7 @@ where
                     origin: chain_1,
                     bundle: MessageBundle {
                         certificate_hash: certificate2.hash(),
-                        height: BlockHeight::from(3),
+                        height: BlockHeight::from(2),
                         timestamp: Timestamp::from(0),
                         transaction_index: 0,
                         messages: vec![Message::System(SystemMessage::Credit {
@@ -2476,9 +2439,9 @@ where
                 },
                 action: MessageAction::Accept,
             }],
-            Amount::ZERO,
+            Amount::ONE,
             BTreeMap::new(),
-            vec![&certificate2, &certificate1, &certificate01, &certificate00],
+            vec![&certificate2, &certificate1, &certificate0],
         )
         .await;
 
