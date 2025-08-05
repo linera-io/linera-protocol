@@ -49,8 +49,8 @@ pub enum ChainError {
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error(
-        "Cannot vote for block proposal of chain {chain_id:?} because a message \
-         from origin {origin:?} at height {height:?} has not been received yet"
+        "Cannot vote for block proposal of chain {chain_id} because a message \
+         from chain {origin} at height {height} has not been received yet"
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
