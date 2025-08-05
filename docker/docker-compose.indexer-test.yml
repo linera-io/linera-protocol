@@ -91,6 +91,7 @@ services:
       --exporter-address linera-block-exporter
       --exporter-port ${BLOCK_EXPORTER_PORT:-8882}"
     environment:
+      - RUST_LOG=linera=info
       - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
       - FAUCET_PORT=${FAUCET_PORT:-8080}
       - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}

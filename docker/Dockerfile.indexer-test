@@ -120,7 +120,7 @@ COPY \
 FROM builder$copy AS binaries
 
 # Setup running environment for container
-FROM debian:latest
+FROM debian:bookworm-slim
 
 ARG git_commit
 LABEL git_commit=$git_commit
@@ -128,13 +128,14 @@ LABEL git_commit=$git_commit
 ARG build_date
 LABEL build_date=$build_date
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install --no-install-recommends -y \
     ca-certificates \
     openssl \
     pkg-config \
     protobuf-compiler \
     clang \
     netcat-openbsd
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN update-ca-certificates
 
 ARG target
