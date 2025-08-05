@@ -40,7 +40,7 @@
   }
   
   .card {
-    @apply bg-linera-card/80 backdrop-blur-sm border border-linera-border rounded-xl p-6 transition-all duration-300 hover:bg-linera-card-hover hover:shadow-2xl hover:shadow-linera-red/10;
+    @apply bg-linera-card/90 backdrop-blur-sm border border-linera-border/80 rounded-xl p-6 transition-all duration-300 hover:bg-linera-card-hover hover:border-linera-red/50 hover:shadow-2xl hover:shadow-linera-red/10;
   }
   
   .card-glass {
@@ -72,7 +72,7 @@
   }
   
   .hash-display {
-    @apply font-mono text-sm bg-linera-darker/80 px-3 py-2 rounded-lg border border-linera-border/50 break-all;
+    @apply font-mono text-sm bg-linera-darker/60 px-3 py-2 rounded-lg border border-linera-border/50 break-all;
   }
   
   .stat-card {

@@ -63,78 +63,77 @@ export const BlockList: React.FC<BlockListProps> = ({ blocks, loading, error }) 
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {blocks.map((block, index) => (
         <Link
           key={block.hash}
           to={`/block/${block.hash}`}
-          className="card group hover:scale-[1.01] transition-all duration-300 animate-slide-up"
+          className="block bg-linera-card/90 backdrop-blur-sm border border-linera-border/80 rounded-xl p-6 transition-all duration-300 hover:bg-linera-card-hover hover:border-linera-red/50 hover:shadow-xl hover:shadow-linera-red/10 group animate-slide-up"
           style={{ animationDelay: `${index * 50}ms` }}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex-1 space-y-4">
-              {/* Block Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-linera-red/20 rounded-lg border border-linera-red/30">
-                    <Hash className="w-4 h-4 text-linera-red" />
-                  </div>
-                  <div>
-                    <div className="hash-display text-white">
-                      {formatHash(block.hash)}
-                    </div>
-                    <div className="text-sm text-linera-gray-light mt-1">
-                      Block Hash
-                    </div>
-                  </div>
+          {/* Block Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-linera-red/20 rounded-lg border border-linera-red/30 group-hover:bg-linera-red/30 transition-colors">
+                <Hash className="w-5 h-5 text-linera-red" />
+              </div>
+              <div>
+                <div className="font-mono text-lg font-semibold text-white group-hover:text-white transition-colors">
+                  {formatHash(block.hash)}
                 </div>
-                
-                <div className="text-right">
-                  <div className="bg-linera-red/20 text-linera-red px-4 py-2 rounded-full text-sm font-semibold border border-linera-red/30">
-                    #{block.height}
-                  </div>
+                <div className="text-sm text-linera-gray-light mt-1">
+                  Block Hash
                 </div>
               </div>
-              
-              {/* Block Details Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                <div className="flex items-center space-x-3">
-                  <Layers className="w-4 h-4 text-linera-gray-medium" />
-                  <div>
-                    <div className="text-white font-medium">{block.height}</div>
-                    <div className="text-sm text-linera-gray-light">Height</div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  <HardDrive className="w-4 h-4 text-linera-gray-medium" />
-                  <div>
-                    <div className="text-white font-medium">{formatBytes(block.size)}</div>
-                    <div className="text-sm text-linera-gray-light">Size</div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3 col-span-2 md:col-span-1">
-                  <Clock className="w-4 h-4 text-linera-gray-medium" />
-                  <div>
-                    <div className="text-white font-medium">{formatTimestamp(block.created_at)}</div>
-                    <div className="text-sm text-linera-gray-light">Created</div>
-                  </div>
-                </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <div className="bg-linera-red/20 text-linera-red px-4 py-2 rounded-full text-sm font-bold border border-linera-red/30 group-hover:bg-linera-red/30 transition-colors">
+                #{block.height}
+              </div>
+              <ChevronRight className="w-5 h-5 text-linera-gray-medium group-hover:text-linera-red group-hover:translate-x-1 transition-all" />
+            </div>
+          </div>
+          
+          {/* Block Stats Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            <div className="flex items-center space-x-3 p-3 bg-linera-darker/30 rounded-lg border border-linera-border/30">
+              <Layers className="w-5 h-5 text-linera-gray-medium flex-shrink-0" />
+              <div>
+                <div className="text-white font-semibold">{block.height}</div>
+                <div className="text-sm text-linera-gray-light">Height</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3 p-3 bg-linera-darker/30 rounded-lg border border-linera-border/30">
+              <HardDrive className="w-5 h-5 text-linera-gray-medium flex-shrink-0" />
+              <div>
+                <div className="text-white font-semibold">{formatBytes(block.size)}</div>
+                <div className="text-sm text-linera-gray-light">Size</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3 p-3 bg-linera-darker/30 rounded-lg border border-linera-border/30 sm:col-span-2 lg:col-span-1">
+              <Clock className="w-5 h-5 text-linera-gray-medium flex-shrink-0" />
+              <div>
+                <div className="text-white font-semibold">{formatTimestamp(block.created_at)}</div>
+                <div className="text-sm text-linera-gray-light">Created</div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Chain ID Section */}
+          <div className="pt-4 border-t border-linera-border/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <span className="text-sm font-medium text-linera-gray-light">Chain ID:</span>
+                <span className="font-mono text-sm bg-linera-darker/50 px-3 py-2 rounded-lg border border-linera-border/50 text-linera-gray-light group-hover:text-white transition-colors">
+                  {formatChainId(block.chain_id)}
+                </span>
               </div>
               
-              {/* Chain ID */}
-              <div className="pt-2 border-t border-linera-border/50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-linera-gray-light">Chain:</span>
-                    <span className="font-mono text-sm bg-linera-darker/80 px-3 py-1 rounded border border-linera-border/50 text-linera-gray-light">
-                      {formatChainId(block.chain_id)}
-                    </span>
-                  </div>
-                  
-                  <ChevronRight className="w-5 h-5 text-linera-gray-medium group-hover:text-linera-red group-hover:translate-x-1 transition-all" />
-                </div>
+              <div className="text-sm text-linera-gray-medium group-hover:text-linera-red transition-colors flex items-center space-x-1">
+                <span>View Details</span>
               </div>
             </div>
           </div>
