@@ -1046,6 +1046,9 @@ Start a Local Linera Network
 * `--with-block-exporter` — Whether to start a block exporter for each validator
 
   Default value: `false`
+* `--exporter-address <EXPORTER_ADDRESS>` — The address of the block exporter
+
+  Default value: `localhost`
 * `--exporter-port <EXPORTER_PORT>` — The port on which to run the block exporter
 
   Default value: `8081`
