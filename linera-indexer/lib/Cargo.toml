@@ -52,3 +52,6 @@ assert_matches.workspace = true
 
 [build-dependencies]
 tonic-build = { workspace = true, features = ["prost"] }
+
+[package.metadata.cargo-machete]
+ignored = ["prost"]
