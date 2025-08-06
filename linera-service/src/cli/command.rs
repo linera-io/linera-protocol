@@ -27,6 +27,8 @@ const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
 #[cfg(feature = "benchmark")]
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 #[cfg(feature = "benchmark")]
+const DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP: usize = 2;
+#[cfg(feature = "benchmark")]
 const DEFAULT_BPS: usize = 10;
 
 // Make sure that the default values are consts, and that they are used in the Default impl.
@@ -34,10 +36,9 @@ const DEFAULT_BPS: usize = 10;
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkCommand {
-    /// Wether to use cross chain messages in the transactions or not. This effectively sets the
-    /// chain group size to 1.
-    #[arg(long)]
-    pub dont_use_cross_chain_messages: bool,
+    /// How many chains to use in each chain group.
+    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP)]
+    pub num_chains_per_chain_group: usize,
 
     /// How many chain groups to use. If not provided, the number of CPUs will be used.
     #[arg(long)]
@@ -102,7 +103,7 @@ pub struct BenchmarkCommand {
 impl Default for BenchmarkCommand {
     fn default() -> Self {
         Self {
-            dont_use_cross_chain_messages: false,
+            num_chains_per_chain_group: DEFAULT_NUM_CHAINS_PER_CHAIN_GROUP,
             num_chain_groups: None,
             tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
             transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
