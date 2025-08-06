@@ -51,17 +51,6 @@ where
         callback: oneshot::Sender<Result<Option<ConfirmedBlockCertificate>, WorkerError>>,
     },
 
-    /// Search for a bundle in one of the chain's inboxes.
-    #[cfg(with_testing)]
-    FindBundleInInbox {
-        inbox_id: ChainId,
-        certificate_hash: CryptoHash,
-        height: BlockHeight,
-        index: u32,
-        #[debug(skip)]
-        callback: oneshot::Sender<Result<Option<MessageBundle>, WorkerError>>,
-    },
-
     /// Request a read-only view of the [`ChainStateView`].
     GetChainStateView {
         #[debug(skip)]
@@ -366,10 +355,6 @@ where
         let responded = match self {
             #[cfg(with_testing)]
             ChainWorkerRequest::ReadCertificate { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            #[cfg(with_testing)]
-            ChainWorkerRequest::FindBundleInInbox { callback, .. } => {
                 callback.send(Err(error)).is_ok()
             }
             ChainWorkerRequest::GetChainStateView { callback } => callback.send(Err(error)).is_ok(),

@@ -20,10 +20,7 @@ use linera_execution::{Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, View};
 #[cfg(with_testing)]
-use {
-    linera_base::{crypto::CryptoHash, data_types::BlockHeight},
-    linera_chain::{data_types::MessageBundle, types::ConfirmedBlockCertificate},
-};
+use {linera_base::data_types::BlockHeight, linera_chain::types::ConfirmedBlockCertificate};
 
 use super::ChainWorkerState;
 use crate::{
@@ -71,29 +68,6 @@ where
             .await?
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
-    }
-
-    /// Searches for a bundle in one of the chain's inboxes.
-    #[cfg(with_testing)]
-    pub(super) async fn find_bundle_in_inbox(
-        &mut self,
-        inbox_id: linera_base::identifiers::ChainId,
-        certificate_hash: CryptoHash,
-        height: BlockHeight,
-        index: u32,
-    ) -> Result<Option<MessageBundle>, WorkerError> {
-        self.0.ensure_is_active().await?;
-
-        let mut inbox = self.0.chain.inboxes.try_load_entry_mut(&inbox_id).await?;
-        let mut bundles = inbox.added_bundles.iter_mut().await?;
-
-        Ok(bundles
-            .find(|bundle| {
-                bundle.certificate_hash == certificate_hash
-                    && bundle.height == height
-                    && bundle.messages.iter().any(|msg| msg.index == index)
-            })
-            .cloned())
     }
 
     /// Queries an application's state on the chain.
