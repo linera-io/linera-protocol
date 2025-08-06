@@ -19,7 +19,7 @@ The setup includes the following services in startup order:
 
 ```bash
 cd docker
-docker build -f Dockerfile.indexer-test -t linera-all-test ..
+./make-all-build.sh
 ```
 
 ### 2. Start the Services
