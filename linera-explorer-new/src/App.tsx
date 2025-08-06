@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Layers, Home, Activity } from 'lucide-react';
 import { BlockList } from './components/BlockList';
@@ -70,7 +70,30 @@ const Navigation: React.FC = () => {
 };
 
 const HomePage: React.FC = () => {
-  const { blocks, loading, error } = useBlocks();
+  const { blocks, latestBlock, loading, error } = useBlocks();
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Update current time every second for real-time "Last block seen" display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
+  
+  // Calculate the latest block time - recalculates when currentTime or latestBlock changes
+  const latestBlockTime = useMemo(() => {
+    if (!latestBlock) return null;
+    
+    const blockTime = new Date(latestBlock.created_at.includes('Z') || latestBlock.created_at.includes('+') ? latestBlock.created_at : latestBlock.created_at + 'Z');
+    const diffMs = currentTime.getTime() - blockTime.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    
+    if (diffSec < 60) return `${diffSec} seconds ago`;
+    const diffMin = Math.floor(diffSec / 60);
+    return `${diffMin} minutes ago`;
+  }, [currentTime, latestBlock]);
 
   const handleSearch = (query: string) => {
     // For now, just navigate to the block if it looks like a hash
@@ -114,8 +137,10 @@ const HomePage: React.FC = () => {
           <div className="text-linera-gray-light mt-1">Network Status</div>
         </div>
         <div className="card stat-card">
-          <div className="stat-number text-blue-400">Real-time</div>
-          <div className="text-linera-gray-light mt-1">Updates</div>
+          <div className="stat-number text-blue-400">
+            {loading ? '...' : latestBlockTime || 'N/A'}
+          </div>
+          <div className="text-linera-gray-light mt-1">Last Block Seen</div>
         </div>
       </div>
 

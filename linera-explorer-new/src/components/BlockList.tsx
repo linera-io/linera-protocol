@@ -19,7 +19,8 @@ export const BlockList: React.FC<BlockListProps> = ({ blocks, loading, error }) 
   };
 
   const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
+    // Ensure timestamp is properly treated as UTC
+    const date = new Date(timestamp.includes('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z');
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffSec = Math.floor(diffMs / 1000);

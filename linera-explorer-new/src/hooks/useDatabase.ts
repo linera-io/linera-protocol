@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BlockchainAPI } from '../utils/database';
 import { BlockInfo, Block, IncomingBundle, ChainInfo } from '../types/blockchain';
 
@@ -31,9 +31,11 @@ export const useAPI = () => {
 
 export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) => {
   const [blocks, setBlocks] = useState<BlockInfo[]>([]);
+  const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isConnected } = useAPI();
+  const latestBlockRef = useRef<BlockInfo | null>(null);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -51,6 +53,15 @@ export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) =>
         }
         
         setBlocks(result);
+        // API returns blocks sorted by timestamp DESC, so first block is the latest
+        if (result.length > 0) {
+          const newLatestBlock = result[0];
+          // Only update if we don't have a latest block yet, or if the new one is actually newer
+          if (!latestBlockRef.current || new Date(newLatestBlock.created_at) > new Date(latestBlockRef.current.created_at)) {
+            setLatestBlock(newLatestBlock);
+            latestBlockRef.current = newLatestBlock;
+          }
+        }
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch blocks');
@@ -74,7 +85,7 @@ export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) =>
     return () => clearInterval(pollInterval);
   }, [isConnected, limit, refreshInterval]);
 
-  return { blocks, loading, error };
+  return { blocks, latestBlock, loading, error };
 };
 
 export const useBlock = (hash: string) => {
@@ -141,9 +152,11 @@ export const useChains = () => {
 
 export const useChainBlocks = (chainId: string, limit: number = 50, refreshInterval: number = 5000) => {
   const [blocks, setBlocks] = useState<BlockInfo[]>([]);
+  const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isConnected } = useAPI();
+  const latestBlockRef = useRef<BlockInfo | null>(null);
 
   useEffect(() => {
     if (!isConnected || !chainId) return;
@@ -161,6 +174,15 @@ export const useChainBlocks = (chainId: string, limit: number = 50, refreshInter
         }
         
         setBlocks(result);
+        // API returns blocks sorted by timestamp DESC, so first block is the latest
+        if (result.length > 0) {
+          const newLatestBlock = result[0];
+          // Only update if we don't have a latest block yet, or if the new one is actually newer
+          if (!latestBlockRef.current || new Date(newLatestBlock.created_at) > new Date(latestBlockRef.current.created_at)) {
+            setLatestBlock(newLatestBlock);
+            latestBlockRef.current = newLatestBlock;
+          }
+        }
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch chain blocks');
@@ -184,5 +206,5 @@ export const useChainBlocks = (chainId: string, limit: number = 50, refreshInter
     return () => clearInterval(pollInterval);
   }, [isConnected, chainId, limit, refreshInterval]);
 
-  return { blocks, loading, error };
+  return { blocks, latestBlock, loading, error };
 };

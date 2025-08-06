@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Layers, Copy } from 'lucide-react';
 import { useChainBlocks } from '../hooks/useDatabase';
@@ -6,7 +6,30 @@ import { BlockList } from './BlockList';
 
 export const ChainDetail: React.FC = () => {
   const { chainId } = useParams<{ chainId: string }>();
-  const { blocks, loading, error } = useChainBlocks(chainId || '');
+  const { blocks, latestBlock, loading, error } = useChainBlocks(chainId || '');
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every second for real-time "Last block seen" display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
+  
+  // Calculate the latest block time - recalculates when currentTime or latestBlock changes
+  const latestBlockTime = useMemo(() => {
+    if (!latestBlock) return null;
+    
+    const blockTime = new Date(latestBlock.created_at.includes('Z') || latestBlock.created_at.includes('+') ? latestBlock.created_at : latestBlock.created_at + 'Z');
+    const diffMs = currentTime.getTime() - blockTime.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    
+    if (diffSec < 60) return `${diffSec} seconds ago`;
+    const diffMin = Math.floor(diffSec / 60);
+    return `${diffMin} minutes ago`;
+  }, [currentTime, latestBlock]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -82,8 +105,10 @@ export const ChainDetail: React.FC = () => {
               <div className="text-sm text-linera-gray-light mt-1">Chain Status</div>
             </div>
             <div className="text-center p-4 bg-linera-darker/50 rounded-lg border border-linera-border/50">
-              <div className="stat-number text-blue-400">Live</div>
-              <div className="text-sm text-linera-gray-light mt-1">Updates</div>
+              <div className="stat-number text-blue-400">
+                {loading ? '...' : latestBlockTime || 'N/A'}
+              </div>
+              <div className="text-sm text-linera-gray-light mt-1">Last Block Seen</div>
             </div>
           </div>
         </div>
