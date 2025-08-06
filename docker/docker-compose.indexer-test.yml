@@ -121,7 +121,7 @@ services:
       linera-indexer:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3002/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${EXPLORER_API_PORT:-3002}/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
