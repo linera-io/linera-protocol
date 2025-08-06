@@ -26,18 +26,32 @@ async-trait.workspace = true
 async-tungstenite.workspace = true
 axum = { workspace = true, features = ["ws"] }
 bcs.workspace = true
+bincode.workspace = true
 clap.workspace = true
 futures.workspace = true
 graphql-ws-client = { version = "0.5", features = ["client-graphql-client"] }
 graphql_client = { version = "0.13", features = ["reqwest-rustls"] }
-linera-base.workspace = true
+linera-base = { workspace = true, features = ["test"] }
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-service-graphql-client.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
+prost.workspace = true
 reqwest.workspace = true
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio-stream = "0.1"
+tonic = { workspace = true, features = ["server", "codegen", "prost"] }
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
+
+[dev-dependencies]
+assert_matches.workspace = true
+
+[build-dependencies]
+tonic-build = { workspace = true, features = ["prost"] }
+
+[package.metadata.cargo-machete]
+ignored = ["prost"]
