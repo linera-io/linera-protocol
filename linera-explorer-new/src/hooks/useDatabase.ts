@@ -57,7 +57,7 @@ export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) =>
         if (result.length > 0) {
           const newLatestBlock = result[0];
           // Only update if we don't have a latest block yet, or if the new one is actually newer
-          if (!latestBlockRef.current || new Date(newLatestBlock.created_at) > new Date(latestBlockRef.current.created_at)) {
+          if (!latestBlockRef.current || new Date(newLatestBlock.timestamp / 1000) > new Date(latestBlockRef.current.timestamp / 1000)) {
             setLatestBlock(newLatestBlock);
             latestBlockRef.current = newLatestBlock;
           }
@@ -178,7 +178,7 @@ export const useChainBlocks = (chainId: string, limit: number = 50, refreshInter
         if (result.length > 0) {
           const newLatestBlock = result[0];
           // Only update if we don't have a latest block yet, or if the new one is actually newer
-          if (!latestBlockRef.current || new Date(newLatestBlock.created_at) > new Date(latestBlockRef.current.created_at)) {
+          if (!latestBlockRef.current || new Date(newLatestBlock.timestamp / 1000) > new Date(latestBlockRef.current.timestamp / 1000)) {
             setLatestBlock(newLatestBlock);
             latestBlockRef.current = newLatestBlock;
           }

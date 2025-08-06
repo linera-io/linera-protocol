@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     hash TEXT PRIMARY KEY NOT NULL,
     chain_id TEXT NOT NULL,
     height INTEGER NOT NULL,
+    timestamp INTEGER NOT NULL,
     data BLOB NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

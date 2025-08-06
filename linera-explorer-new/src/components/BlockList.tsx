@@ -117,7 +117,7 @@ export const BlockList: React.FC<BlockListProps> = ({ blocks, loading, error }) 
             <div className="flex items-center space-x-3 p-3 bg-linera-darker/30 rounded-lg border border-linera-border/30 sm:col-span-2 lg:col-span-1">
               <Clock className="w-5 h-5 text-linera-gray-medium flex-shrink-0" />
               <div>
-                <div className="text-white font-semibold">{formatTimestamp(block.created_at)}</div>
+                <div className="text-white font-semibold">{formatTimestamp(new Date(block.timestamp / 1000).toISOString())}</div>
                 <div className="text-sm text-linera-gray-light">Created</div>
               </div>
             </div>

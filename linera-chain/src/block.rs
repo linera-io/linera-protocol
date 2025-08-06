@@ -129,6 +129,10 @@ impl ConfirmedBlock {
         self.0.inner().header.height
     }
 
+    pub fn timestamp(&self) -> Timestamp {
+        self.0.inner().header.timestamp
+    }
+
     pub fn to_log_str(&self) -> &'static str {
         "confirmed_block"
     }

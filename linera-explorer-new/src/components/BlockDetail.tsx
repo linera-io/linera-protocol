@@ -139,9 +139,9 @@ export const BlockDetail: React.FC = () => {
               <div className="flex items-center justify-between p-4 bg-linera-darker/50 rounded-lg border border-linera-border/50">
                 <div className="flex items-center space-x-3">
                   <Clock className="w-5 h-5 text-linera-gray-medium" />
-                  <span className="text-linera-gray-light">Created</span>
+                  <span className="text-linera-gray-light">Timestamp</span>
                 </div>
-                <span className="text-white font-medium">{new Date(block.created_at).toLocaleString()}</span>
+                <span className="text-white font-medium">{new Date(block.timestamp / 1000).toLocaleString()}</span>
               </div>
             </div>
           </div>

@@ -153,6 +153,7 @@ where
                 let block_hash = block_cert.hash();
                 let chain_id = block_cert.inner().chain_id();
                 let height = block_cert.inner().height();
+                let timestamp = block_cert.inner().timestamp();
                 let incoming_bundles = block_cert.value().block().body.incoming_bundles.clone();
 
                 info!(
@@ -176,6 +177,7 @@ where
                         &block_hash,
                         &chain_id,
                         height,
+                        timestamp,
                         &block_data,
                         &blobs,
                         incoming_bundles,

@@ -8,9 +8,9 @@ export class BlockchainDatabase {
   // Get all blocks with pagination
   getBlocks(limit = 50, offset = 0) {
     const stmt = this.db.prepare(`
-      SELECT hash, chain_id, height, created_at, LENGTH(data) as size 
+      SELECT hash, chain_id, height, timestamp, LENGTH(data) as size 
       FROM blocks 
-      ORDER BY created_at DESC 
+      ORDER BY timestamp DESC 
       LIMIT ? OFFSET ?
     `);
     return stmt.all(limit, offset);
@@ -19,7 +19,7 @@ export class BlockchainDatabase {
   // Get block by hash
   getBlockByHash(hash) {
     const stmt = this.db.prepare(`
-      SELECT hash, chain_id, height, data, created_at 
+      SELECT hash, chain_id, height, data, timestamp 
       FROM blocks 
       WHERE hash = ?
     `);
@@ -29,7 +29,7 @@ export class BlockchainDatabase {
   // Get blocks for a specific chain
   getBlocksByChain(chainId, limit = 50, offset = 0) {
     const stmt = this.db.prepare(`
-      SELECT hash, chain_id, height, created_at, LENGTH(data) as size 
+      SELECT hash, chain_id, height, timestamp, LENGTH(data) as size 
       FROM blocks 
       WHERE chain_id = ? 
       ORDER BY height DESC 
@@ -41,7 +41,7 @@ export class BlockchainDatabase {
   // Get latest block for a chain
   getLatestBlockForChain(chainId) {
     const stmt = this.db.prepare(`
-      SELECT hash, chain_id, height, created_at, LENGTH(data) as size 
+      SELECT hash, chain_id, height, timestamp, LENGTH(data) as size 
       FROM blocks 
       WHERE chain_id = ? 
       ORDER BY height DESC 
@@ -88,10 +88,10 @@ export class BlockchainDatabase {
   // Search blocks by hash prefix
   searchBlocks(query) {
     const stmt = this.db.prepare(`
-      SELECT hash, chain_id, height, created_at, LENGTH(data) as size 
+      SELECT hash, chain_id, height, timestamp, LENGTH(data) as size 
       FROM blocks 
-      WHERE hash LIKE ? 
-      ORDER BY created_at DESC 
+      WHERE hash = ? 
+      ORDER BY timestamp DESC 
       LIMIT 20
     `);
     return stmt.all(`${query}%`);

@@ -22,7 +22,7 @@ export const ChainDetail: React.FC = () => {
   const latestBlockTime = useMemo(() => {
     if (!latestBlock) return null;
     
-    const blockTime = new Date(latestBlock.created_at.includes('Z') || latestBlock.created_at.includes('+') ? latestBlock.created_at : latestBlock.created_at + 'Z');
+    const blockTime = new Date(latestBlock.timestamp / 1000);
     const diffMs = currentTime.getTime() - blockTime.getTime();
     const diffSec = Math.floor(diffMs / 1000);
     

@@ -2,6 +2,7 @@ export interface Block {
   hash: string;
   chain_id: string;
   height: number;
+  timestamp: number;
   data: Uint8Array;
   created_at: string;
 }
@@ -10,6 +11,7 @@ export interface BlockInfo {
   hash: string;
   chain_id: string;
   height: number;
+  timestamp: number;
   created_at: string;
   size: number;
 }
