@@ -45,6 +45,27 @@ pub struct SqliteDatabase {
 impl SqliteDatabase {
     /// Create a new SQLite database connection
     pub async fn new(database_url: &str) -> Result<Self, SqliteError> {
+        match std::fs::exists(database_url) {
+            Ok(true) => {
+                tracing::info!(?database_url, "opening existing SQLite database");
+            }
+            Ok(false) => {
+                tracing::info!(?database_url, "creating new SQLite database");
+                // Create the database file if it doesn't exist
+                std::fs::File::create(database_url).unwrap_or_else(|e| {
+                    panic!(
+                        "failed to create SQLite database file: {}, error: {}",
+                        database_url, e
+                    )
+                });
+            }
+            Err(e) => {
+                panic!(
+                    "failed to check SQLite database existence. file: {}, error: {}",
+                    database_url, e
+                )
+            }
+        }
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect(database_url)
