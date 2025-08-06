@@ -1,7 +1,7 @@
 services:
   # 1. Storage Service - starts first
   linera-storage-service:
-    image: "${LINERA_INDEXER_IMAGE:-linera-indexer-test}"
+    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
     container_name: linera-storage-service
     ports:
       - "${LINERA_STORAGE_SERVICE_PORT:-1235}:${LINERA_STORAGE_SERVICE_PORT:-1235}"
@@ -20,11 +20,10 @@ services:
 
   # 2. Indexer - starts after storage service is healthy
   linera-indexer:
-    image: "${LINERA_INDEXER_IMAGE:-linera-indexer-test}"
+    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
     container_name: linera-indexer
     ports:
       - "${INDEXER_PORT:-8081}:${INDEXER_PORT:-8081}"
-    # working_dir: /linera-indexer/example
     command: >
       sh -c "set -ex; ./linera-indexer-grpc --port ${INDEXER_PORT:-8081} --database-path ${INDEXER_DATABASE_PATH:-/data/indexer.db}"
     environment:
@@ -46,7 +45,7 @@ services:
 
   # 3. Block Exporter - starts after indexer is healthy
   linera-block-exporter:
-    image: "${LINERA_INDEXER_IMAGE:-linera-indexer-test}"
+    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
     container_name: linera-block-exporter
     ports:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
@@ -77,7 +76,7 @@ services:
 
   # 4. Network (Validator + Faucet) - starts last
   linera-network:
-    image: "${LINERA_INDEXER_IMAGE:-linera-indexer-test}"
+    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
     container_name: linera-network
     ports:
       - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
