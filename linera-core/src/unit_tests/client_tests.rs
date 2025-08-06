@@ -1302,7 +1302,22 @@ where
         .await
         .unwrap_ok_committed();
 
-    receiver.synchronize_from_validators().await?;
+    // Process the notification about the incoming message.
+    let notification = Notification {
+        chain_id: receiver_id,
+        reason: Reason::NewIncomingBundle {
+            origin: cert2.block().header.chain_id,
+            height: cert2.block().header.height,
+        },
+    };
+    let validator = builder
+        .initial_committee
+        .validator_addresses()
+        .next()
+        .unwrap();
+    receiver
+        .process_notification_from(notification, validator)
+        .await;
     receiver.process_inbox().await?;
 
     // The first and last blocks sent something to the receiver. The middle one didn't.

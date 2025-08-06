@@ -3492,34 +3492,40 @@ impl<Env: Environment> ChainClient<Env> {
         maybe_info.map_or(BlockHeight::ZERO, |info| info.next_block_height)
     }
 
+    /// Returns the next height we expect to receive from the given sender chain, according to the
+    /// local inbox.
+    #[instrument(level = "trace")]
+    async fn local_next_height_to_receive(
+        &self,
+        origin: ChainId,
+    ) -> Result<BlockHeight, ChainClientError> {
+        let chain = self.chain_state_view().await?;
+        Ok(match chain.inboxes.try_load_entry(&origin).await? {
+            Some(inbox) => inbox.next_block_height_to_receive()?,
+            None => BlockHeight::ZERO,
+        })
+    }
+
     #[instrument(level = "trace", skip(remote_node, local_node, notification))]
     async fn process_notification(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
-    ) {
+    ) -> Result<(), ChainClientError> {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
-                if self.local_next_block_height(origin, &mut local_node).await > height {
+                if self.local_next_height_to_receive(origin).await? > height {
                     debug!(
                         chain_id = %self.chain_id,
                         "Accepting redundant notification for new message"
                     );
-                    return;
+                    return Ok(());
                 }
-                if let Err(error) = self
-                    .find_received_certificates_from_validator(remote_node)
-                    .await
-                {
-                    error!(
-                        chain_id = %self.chain_id,
-                        "NewIncomingBundle: Fail to process notification: {error}"
-                    );
-                    return;
-                }
-                if self.local_next_block_height(origin, &mut local_node).await <= height {
-                    error!(
+                self.find_received_certificates_from_validator(remote_node)
+                    .await?;
+                if self.local_next_height_to_receive(origin).await? <= height {
+                    warn!(
                         chain_id = %self.chain_id,
                         "NewIncomingBundle: Fail to synchronize new message after notification"
                     );
@@ -3536,19 +3542,11 @@ impl<Env: Environment> ChainClient<Env> {
                         chain_id = %self.chain_id,
                         "Accepting redundant notification for new block"
                     );
-                    return;
+                    return Ok(());
                 }
-                if let Err(error) = self
-                    .client
+                self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
-                    .await
-                {
-                    error!(
-                        chain_id = %self.chain_id,
-                        "NewBlock: Fail to process notification: {error}"
-                    );
-                    return;
-                }
+                    .await?;
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await;
@@ -3564,26 +3562,18 @@ impl<Env: Environment> ChainClient<Env> {
                             chain_id = %self.chain_id,
                             "Accepting redundant notification for new round"
                         );
-                        return;
+                        return Ok(());
                     }
                 }
-                if let Err(error) = self
-                    .client
+                self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
-                    .await
-                {
-                    error!(
-                        chain_id = %self.chain_id,
-                        "NewRound: Fail to process notification: {error}"
-                    );
-                    return;
-                }
+                    .await?;
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
                     error!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to read local chain info for {chain_id}"
                     );
-                    return;
+                    return Ok(());
                 };
                 if (info.next_block_height, info.manager.current_round) < (height, round) {
                     error!(
@@ -3593,6 +3583,7 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             }
         }
+        Ok(())
     }
 
     /// Returns whether this chain is tracked by the client, i.e. we are updating its inbox.
@@ -3730,12 +3721,21 @@ impl<Env: Environment> ChainClient<Env> {
             let remote_node = RemoteNode { public_key, node };
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
-                    this.process_notification(
-                        remote_node.clone(),
-                        local_node.clone(),
-                        notification,
-                    )
-                    .await;
+                    if let Err(err) = this
+                        .process_notification(
+                            remote_node.clone(),
+                            local_node.clone(),
+                            notification.clone(),
+                        )
+                        .await
+                    {
+                        tracing::warn!(
+                            chain_id = %this.chain_id,
+                            validator_public_key = ?remote_node.public_key,
+                            ?notification,
+                            "Failed to process notification: {err}",
+                        );
+                    }
                 }
             });
             entry.insert(abort);
@@ -3854,6 +3854,27 @@ impl<Env: Environment> ChainClient<Env> {
         ownership
             .all_owners()
             .any(|owner| Some(owner) != self.preferred_owner.as_ref())
+    }
+}
+
+#[cfg(with_testing)]
+impl<Env: Environment> ChainClient<Env> {
+    pub async fn process_notification_from(
+        &self,
+        notification: Notification,
+        validator: (ValidatorPublicKey, &str),
+    ) {
+        let mut node_list = self
+            .client
+            .validator_node_provider()
+            .make_nodes_from_list(vec![validator])
+            .unwrap();
+        let (public_key, node) = node_list.next().unwrap();
+        let remote_node = RemoteNode { node, public_key };
+        let local_node = self.client.local_node.clone();
+        self.process_notification(remote_node, local_node, notification)
+            .await
+            .unwrap();
     }
 }
 
