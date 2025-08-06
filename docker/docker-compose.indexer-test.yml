@@ -1,0 +1,115 @@
+services:
+  # 1. Storage Service - starts first
+  linera-storage-service:
+    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    container_name: linera-storage-service
+    ports:
+      - "${LINERA_STORAGE_SERVICE_PORT:-1235}:${LINERA_STORAGE_SERVICE_PORT:-1235}"
+    command: >
+      sh -c "./linera-storage-server memory --endpoint 0.0.0.0:${LINERA_STORAGE_SERVICE_PORT:-1235}"
+    environment:
+      - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost ${LINERA_STORAGE_SERVICE_PORT:-1235}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - linera-network
+
+  # 2. Indexer - starts after storage service is healthy
+  linera-indexer:
+    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    container_name: linera-indexer
+    ports:
+      - "${INDEXER_PORT:-8081}:${INDEXER_PORT:-8081}"
+    command: >
+      sh -c "set -ex; ./linera-indexer-grpc --port ${INDEXER_PORT:-8081} --database-path ${INDEXER_DATABASE_PATH:-/data/indexer.db}"
+    environment:
+      - INDEXER_PORT=${INDEXER_PORT:-8081}
+      - INDEXER_DATABASE_PATH=${INDEXER_DATABASE_PATH:-/data/indexer.db}
+    volumes:
+      - ./indexer-data:/data
+    depends_on:
+      linera-storage-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost ${INDEXER_PORT:-8081}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    networks:
+      - linera-network
+
+  # 3. Block Exporter - starts after indexer is healthy
+  linera-block-exporter:
+    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    container_name: linera-block-exporter
+    ports:
+      - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
+      - "${METRICS_PORT:-9091}:${METRICS_PORT:-9091}"
+    command: >
+      sh -c "./linera-exporter 
+      --storage service:tcp:linera-storage-service:${LINERA_STORAGE_SERVICE_PORT:-1235}:linera_storage_service_server_0_db 
+      --config-path /exporter-config.toml 
+      --metrics-port ${METRICS_PORT:-9091}"
+    environment:
+      - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
+      - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
+      - METRICS_PORT=${METRICS_PORT:-9091}
+    volumes:
+      - ./exporter-config.toml:/exporter-config.toml:ro
+      - ./exporter-data:/data
+    depends_on:
+      linera-indexer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost ${BLOCK_EXPORTER_PORT:-8882}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    networks:
+      - linera-network
+
+  # 4. Network (Validator + Faucet) - starts last
+  linera-network:
+    image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
+    container_name: linera-network
+    ports:
+      - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
+      - "13001:13001"
+    command: >
+      sh -c "./linera net 
+      --storage service:tcp:linera-storage-service:${LINERA_STORAGE_SERVICE_PORT:-1235}:linera_storage_service
+      up
+      --with-faucet
+      --faucet-port ${FAUCET_PORT:-8080}
+      --with-block-exporter
+      --exporter-address linera-block-exporter
+      --exporter-port ${BLOCK_EXPORTER_PORT:-8882}"
+    environment:
+      - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
+      - FAUCET_PORT=${FAUCET_PORT:-8080}
+      - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
+    volumes:
+      - network-data:/data
+    depends_on:
+      linera-block-exporter:
+        condition: service_healthy
+    networks:
+      - linera-network
+
+volumes:
+  indexer-data:
+    driver: local
+  exporter-data:
+    driver: local
+  network-data:
+    driver: local
+
+networks:
+  linera-network:
+    driver: bridge
