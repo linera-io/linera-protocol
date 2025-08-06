@@ -29,42 +29,47 @@ export const useAPI = () => {
   return { isConnected, error, api };
 };
 
-export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) => {
-  const [blocks, setBlocks] = useState<BlockInfo[]>([]);
-  const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
+// Generic polling hook to reduce code duplication
+const usePollingData = <T>(
+  fetcher: () => Promise<T>,
+  dependencies: any[],
+  options: {
+    refreshInterval?: number;
+    logPrefix?: string;
+    errorMessage?: string;
+    enabled?: boolean;
+  } = {}
+) => {
+  const {
+    refreshInterval = 5000,
+    logPrefix = '🔄',
+    errorMessage = 'Failed to fetch data',
+    enabled = true
+  } = options;
+
+  const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { isConnected } = useAPI();
-  const latestBlockRef = useRef<BlockInfo | null>(null);
 
   useEffect(() => {
-    if (!isConnected) return;
+    if (!enabled) return;
 
-    const fetchBlocks = async (isPolling = false) => {
+    const fetchData = async (isPolling = false) => {
       try {
         if (!isPolling) {
           setLoading(true);
         }
-        // Always fetch from beginning (offset=0) to get the latest blocks
-        const result = await api.getBlocks(limit, 0);
+        
+        const result = await fetcher();
         
         if (isPolling) {
-          console.log('📋 Refreshed blocks from API');
+          console.log(`${logPrefix} Refreshed data from API`);
         }
         
-        setBlocks(result);
-        // API returns blocks sorted by timestamp DESC, so first block is the latest
-        if (result.length > 0) {
-          const newLatestBlock = result[0];
-          // Only update if we don't have a latest block yet, or if the new one is actually newer
-          if (!latestBlockRef.current || new Date(newLatestBlock.timestamp / 1000) > new Date(latestBlockRef.current.timestamp / 1000)) {
-            setLatestBlock(newLatestBlock);
-            latestBlockRef.current = newLatestBlock;
-          }
-        }
+        setData(result);
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch blocks');
+        setError(err instanceof Error ? err.message : errorMessage);
       } finally {
         if (!isPolling) {
           setLoading(false);
@@ -73,19 +78,52 @@ export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) =>
     };
 
     // Initial fetch
-    fetchBlocks();
+    fetchData();
 
     // Set up polling
     const pollInterval = setInterval(() => {
-      console.log('📋 Polling for new blocks...');
-      fetchBlocks(true);
+      console.log(`${logPrefix} Polling for updates...`);
+      fetchData(true);
     }, refreshInterval);
 
     // Cleanup interval on unmount or dependency change
-    return () => clearInterval(pollInterval);
-  }, [isConnected, limit, refreshInterval]);
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [enabled, refreshInterval, ...dependencies]);
 
-  return { blocks, latestBlock, loading, error };
+  return { data, loading, error };
+};
+
+export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) => {
+  const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
+  const { isConnected } = useAPI();
+  const latestBlockRef = useRef<BlockInfo | null>(null);
+
+  const { data: blocks, loading, error } = usePollingData<BlockInfo[]>(
+    () => api.getBlocks(limit, 0),
+    [limit],
+    {
+      refreshInterval,
+      logPrefix: '📋',
+      errorMessage: 'Failed to fetch blocks',
+      enabled: isConnected
+    }
+  );
+
+  // Handle latestBlock tracking when blocks data changes
+  useEffect(() => {
+    if (blocks && blocks.length > 0) {
+      const newLatestBlock = blocks[0];
+      // Only update if we don't have a latest block yet, or if the new one is actually newer
+      if (!latestBlockRef.current || new Date(newLatestBlock.timestamp / 1000) > new Date(latestBlockRef.current.timestamp / 1000)) {
+        setLatestBlock(newLatestBlock);
+        latestBlockRef.current = newLatestBlock;
+      }
+    }
+  }, [blocks]);
+
+  return { blocks: blocks || [], latestBlock, loading, error };
 };
 
 export const useBlock = (hash: string) => {
@@ -122,89 +160,50 @@ export const useBlock = (hash: string) => {
   return { block, bundles, loading, error };
 };
 
-export const useChains = () => {
-  const [chains, setChains] = useState<ChainInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export const useChains = (refreshInterval: number = 5000) => {
   const { isConnected } = useAPI();
 
-  useEffect(() => {
-    if (!isConnected) return;
+  const { data: chains, loading, error } = usePollingData<ChainInfo[]>(
+    () => api.getChains(),
+    [],
+    {
+      refreshInterval,
+      logPrefix: '⛓️',
+      errorMessage: 'Failed to fetch chains',
+      enabled: isConnected
+    }
+  );
 
-    const fetchChains = async () => {
-      try {
-        setLoading(true);
-        const result = await api.getChains();
-        setChains(result);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch chains');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchChains();
-  }, [isConnected]);
-
-  return { chains, loading, error };
+  return { chains: chains || [], loading, error };
 };
 
 export const useChainBlocks = (chainId: string, limit: number = 50, refreshInterval: number = 5000) => {
-  const [blocks, setBlocks] = useState<BlockInfo[]>([]);
   const [latestBlock, setLatestBlock] = useState<BlockInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { isConnected } = useAPI();
   const latestBlockRef = useRef<BlockInfo | null>(null);
 
+  const { data: blocks, loading, error } = usePollingData<BlockInfo[]>(
+    () => api.getBlocksByChain(chainId, limit, 0),
+    [chainId, limit],
+    {
+      refreshInterval,
+      logPrefix: '🔗',
+      errorMessage: 'Failed to fetch chain blocks',
+      enabled: isConnected && !!chainId
+    }
+  );
+
+  // Handle latestBlock tracking when blocks data changes
   useEffect(() => {
-    if (!isConnected || !chainId) return;
-
-    const fetchChainBlocks = async (isPolling = false) => {
-      try {
-        if (!isPolling) {
-          setLoading(true);
-        }
-        // Always fetch from beginning (offset=0) to get the latest blocks for this chain
-        const result = await api.getBlocksByChain(chainId, limit, 0);
-        
-        if (isPolling) {
-          console.log(`🔗 Refreshed blocks for chain ${chainId}`);
-        }
-        
-        setBlocks(result);
-        // API returns blocks sorted by timestamp DESC, so first block is the latest
-        if (result.length > 0) {
-          const newLatestBlock = result[0];
-          // Only update if we don't have a latest block yet, or if the new one is actually newer
-          if (!latestBlockRef.current || new Date(newLatestBlock.timestamp / 1000) > new Date(latestBlockRef.current.timestamp / 1000)) {
-            setLatestBlock(newLatestBlock);
-            latestBlockRef.current = newLatestBlock;
-          }
-        }
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch chain blocks');
-      } finally {
-        if (!isPolling) {
-          setLoading(false);
-        }
+    if (blocks && blocks.length > 0) {
+      const newLatestBlock = blocks[0];
+      // Only update if we don't have a latest block yet, or if the new one is actually newer
+      if (!latestBlockRef.current || new Date(newLatestBlock.timestamp / 1000) > new Date(latestBlockRef.current.timestamp / 1000)) {
+        setLatestBlock(newLatestBlock);
+        latestBlockRef.current = newLatestBlock;
       }
-    };
+    }
+  }, [blocks]);
 
-    // Initial fetch
-    fetchChainBlocks();
-
-    // Set up polling
-    const pollInterval = setInterval(() => {
-      console.log(`🔗 Polling for new blocks on chain ${chainId}...`);
-      fetchChainBlocks(true);
-    }, refreshInterval);
-
-    // Cleanup interval on unmount or dependency change
-    return () => clearInterval(pollInterval);
-  }, [isConnected, chainId, limit, refreshInterval]);
-
-  return { blocks, latestBlock, loading, error };
+  return { blocks: blocks || [], latestBlock, loading, error };
 };
