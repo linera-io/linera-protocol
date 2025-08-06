@@ -110,19 +110,6 @@ where
             ChainWorkerRequest::ReadCertificate { height, callback } => {
                 callback.send(self.read_certificate(height).await).is_ok()
             }
-            #[cfg(with_testing)]
-            ChainWorkerRequest::FindBundleInInbox {
-                inbox_id,
-                certificate_hash,
-                height,
-                index,
-                callback,
-            } => callback
-                .send(
-                    self.find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
-                        .await,
-                )
-                .is_ok(),
             ChainWorkerRequest::GetChainStateView { callback } => {
                 callback.send(self.chain_state_view().await).is_ok()
             }
@@ -242,21 +229,6 @@ where
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .read_certificate(height)
-            .await
-    }
-
-    /// Searches for a bundle in one of the chain's inboxes.
-    #[cfg(with_testing)]
-    pub(super) async fn find_bundle_in_inbox(
-        &mut self,
-        inbox_id: ChainId,
-        certificate_hash: CryptoHash,
-        height: BlockHeight,
-        index: u32,
-    ) -> Result<Option<MessageBundle>, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
-            .await
-            .find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
             .await
     }
 

@@ -11,8 +11,7 @@ mod state;
 pub(super) use self::delivery_notifier::DeliveryNotifier;
 #[cfg(test)]
 pub(crate) use self::state::CrossChainUpdateHelper;
-pub use self::{
+pub(crate) use self::{
     actor::{ChainWorkerActor, ChainWorkerRequest},
     config::ChainWorkerConfig,
-    state::ChainWorkerState,
 };
