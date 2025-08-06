@@ -35,13 +35,14 @@ use {
     },
     linera_core::client::ChainClientError,
     linera_execution::{
-        committee::Committee,
         system::{OpenChainConfig, SystemOperation},
         Operation,
     },
     std::iter,
     tokio::task,
 };
+#[cfg(not(web))]
+use {crate::client_metrics::ClientMetrics, tokio::sync::mpsc};
 #[cfg(feature = "fs")]
 use {
     linera_base::{
@@ -53,8 +54,6 @@ use {
     std::{fs, path::PathBuf},
 };
 
-#[cfg(not(web))]
-use crate::client_metrics::ClientMetrics;
 use crate::{
     chain_listener::{self, ClientContext as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
@@ -91,6 +90,15 @@ where
 
     fn client(&self) -> &Arc<Client<Env>> {
         &self.client
+    }
+
+    #[cfg(not(web))]
+    fn timing_sender(
+        &self,
+    ) -> Option<mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>> {
+        self.client_metrics
+            .as_ref()
+            .map(|metrics| metrics.timing_sender.clone())
     }
 
     async fn update_wallet_for_new_chain(
@@ -668,14 +676,7 @@ where
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
         pub_keys: Vec<AccountPublicKey>,
-    ) -> Result<
-        (
-            Vec<Vec<ChainClient<Env>>>,
-            Vec<Vec<(Vec<Operation>, AccountOwner)>>,
-            Committee,
-        ),
-        Error,
-    > {
+    ) -> Result<(Vec<Vec<ChainClient<Env>>>, Vec<Vec<Vec<Operation>>>), Error> {
         let start = Instant::now();
         // Below all block proposals are supposed to succeed without retries, we
         // must make sure that all incoming payments have been accepted on-chain
@@ -719,19 +720,13 @@ where
             );
         }
 
-        let default_chain_id = self
-            .wallet
-            .default_chain()
-            .expect("should have default chain");
-        let default_chain_client = self.make_chain_client(default_chain_id);
-        let committee = default_chain_client.admin_committee().await?.1;
         let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
             benchmark_chains,
             transactions_per_block,
             fungible_application_id,
         );
 
-        Ok((chain_clients, blocks_infos, committee))
+        Ok((chain_clients, blocks_infos))
     }
 
     pub async fn wrap_up_benchmark(
@@ -933,6 +928,7 @@ where
                     BlockHeight::ZERO,
                     None,
                     Some(owner),
+                    self.timing_sender(),
                 );
                 chain_client.set_preferred_owner(owner);
                 chain_client.process_inbox().await?;

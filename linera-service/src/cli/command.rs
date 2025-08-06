@@ -19,8 +19,6 @@ use linera_client::{
     util,
 };
 use linera_rpc::config::CrossChainConfig;
-#[cfg(feature = "benchmark")]
-use serde::Serialize;
 
 #[cfg(feature = "benchmark")]
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
@@ -33,7 +31,7 @@ const DEFAULT_BPS: usize = 10;
 
 // Make sure that the default values are consts, and that they are used in the Default impl.
 #[cfg(feature = "benchmark")]
-#[derive(Clone, Serialize, clap::Args)]
+#[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkCommand {
     /// Wether to use cross chain messages in the transactions or not. This effectively sets the
