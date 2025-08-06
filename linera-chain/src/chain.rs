@@ -484,7 +484,6 @@ where
             local_time,
             maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
         )?;
-        self.save().await?;
         Ok(())
     }
 

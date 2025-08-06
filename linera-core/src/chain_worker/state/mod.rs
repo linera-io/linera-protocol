@@ -27,7 +27,7 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
-use linera_views::views::ClonableView;
+use linera_views::views::{ClonableView, RootView};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{instrument, warn};
 
@@ -437,6 +437,8 @@ where
         if !self.knows_chain_is_active {
             let local_time = self.storage.clock().current_time();
             self.chain.ensure_is_active(local_time).await?;
+            self.clear_shared_chain_view().await;
+            self.chain.save().await?;
             self.knows_chain_is_active = true;
         }
         Ok(())
