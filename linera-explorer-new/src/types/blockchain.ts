@@ -80,6 +80,11 @@ export interface Message {
   message_type: 'System' | 'User';
   application_id?: string;
   system_message_type?: string;
+  system_target?: string;
+  system_amount?: number;
+  system_source?: string;
+  system_owner?: string;
+  system_recipient?: string;
   data: Uint8Array;
   created_at: string;
 }

@@ -269,6 +269,15 @@ impl Recipient {
     }
 }
 
+impl ToString for Recipient {
+    fn to_string(&self) -> String {
+        match self {
+            Recipient::Burn => "burn".to_string(),
+            Recipient::Account(account) => account.to_string(),
+        }
+    }
+}
+
 impl From<ChainId> for Recipient {
     fn from(chain_id: ChainId) -> Self {
         Recipient::chain(chain_id)

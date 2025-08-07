@@ -49,6 +49,19 @@ pub struct SqliteDatabase {
     pool: SqlitePool,
 }
 
+/// Classification result for a Message with denormalized SystemMessage fields
+#[derive(Debug)]
+struct MessageClassification {
+    message_type: String,
+    application_id: Option<String>,
+    system_message_type: Option<String>,
+    system_target: Option<String>,
+    system_amount: Option<i64>,
+    system_source: Option<String>,
+    system_owner: Option<String>,
+    system_recipient: Option<String>,
+}
+
 impl SqliteDatabase {
     /// Create a new SQLite database connection
     pub async fn new(database_url: &str) -> Result<Self, SqliteError> {
@@ -314,16 +327,16 @@ impl SqliteDatabase {
         let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
         let message_kind_str = Self::message_kind_to_string(&message.kind);
 
-        let (message_type, application_id, system_message_type) =
-            Self::classify_message(&message.message);
+        let classification = Self::classify_message(&message.message);
         let data = Self::serialize_message(&message.message)?;
 
         sqlx::query(
             r#"
             INSERT INTO outgoing_messages 
             (block_hash, transaction_index, message_index, destination_chain_id, authenticated_signer, 
-             grant_amount, message_kind, message_type, application_id, system_message_type, data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             grant_amount, message_kind, message_type, application_id, system_message_type,
+             system_target, system_amount, system_source, system_owner, system_recipient, data)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
             "#,
         )
         .bind(&block_hash_str)
@@ -333,9 +346,14 @@ impl SqliteDatabase {
         .bind(&authenticated_signer_str)
         .bind(u128::from(message.grant) as i64)
         .bind(&message_kind_str)
-        .bind(message_type)
-        .bind(application_id)
-        .bind(system_message_type)
+        .bind(classification.message_type)
+        .bind(classification.application_id)
+        .bind(classification.system_message_type)
+        .bind(classification.system_target)
+        .bind(classification.system_amount)
+        .bind(classification.system_source)
+        .bind(classification.system_owner)
+        .bind(classification.system_recipient)
         .bind(&data)
         .execute(&mut **tx)
         .await?;
@@ -508,17 +526,19 @@ impl SqliteDatabase {
         message: &PostedMessage,
     ) -> Result<(), SqliteError> {
         let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
-
         let refund_grant_to_data = message.refund_grant_to.as_ref().map(|s| format!("{s}"));
-
         let message_kind_str = Self::message_kind_to_string(&message.kind);
+
+        let classification = Self::classify_message(&message.message);
         let message_data = Self::serialize_message(&message.message)?;
 
         sqlx::query(
             r#"
             INSERT INTO posted_messages 
-            (bundle_id, message_index, authenticated_signer, grant_amount, refund_grant_to, message_kind, message_data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            (bundle_id, message_index, authenticated_signer, grant_amount, refund_grant_to, 
+             message_kind, message_type, application_id, system_message_type,
+             system_target, system_amount, system_source, system_owner, system_recipient, message_data)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
             "#
         )
         .bind(bundle_id)
@@ -527,6 +547,14 @@ impl SqliteDatabase {
         .bind(u128::from(message.grant) as i64)
         .bind(refund_grant_to_data)
         .bind(&message_kind_str)
+        .bind(classification.message_type)
+        .bind(classification.application_id)
+        .bind(classification.system_message_type)
+        .bind(classification.system_target)
+        .bind(classification.system_amount)
+        .bind(classification.system_source)
+        .bind(classification.system_owner)
+        .bind(classification.system_recipient)
         .bind(&message_data)
         .execute(&mut **tx)
         .await?;
@@ -982,20 +1010,68 @@ impl SqliteDatabase {
         }
     }
 
-    /// Classify a Message into database fields (message_type, application_id, system_message_type)
-    fn classify_message(message: &Message) -> (String, Option<String>, Option<String>) {
+    /// Classify a Message into database fields with denormalized SystemMessage fields
+    fn classify_message(message: &Message) -> MessageClassification {
         match message {
             Message::System(sys_msg) => {
-                let sys_msg_type = match sys_msg {
-                    SystemMessage::Credit { .. } => "Credit",
-                    SystemMessage::Withdraw { .. } => "Withdraw",
-                    SystemMessage::ApplicationCreated => "ApplicationCreated",
+                let (
+                    sys_msg_type,
+                    system_target,
+                    system_amount,
+                    system_source,
+                    system_owner,
+                    system_recipient,
+                ) = match sys_msg {
+                    SystemMessage::Credit {
+                        target,
+                        amount,
+                        source,
+                    } => (
+                        "Credit",
+                        Some(target.to_string()),
+                        Some(u128::from(*amount) as i64),
+                        Some(source.to_string()),
+                        None,
+                        None,
+                    ),
+                    SystemMessage::Withdraw {
+                        owner,
+                        amount,
+                        recipient,
+                    } => (
+                        "Withdraw",
+                        None,
+                        Some(u128::from(*amount) as i64),
+                        None,
+                        Some(owner.to_string()),
+                        Some(recipient.to_string()),
+                    ),
+                    SystemMessage::ApplicationCreated => {
+                        ("ApplicationCreated", None, None, None, None, None)
+                    }
                 };
-                ("System".to_string(), None, Some(sys_msg_type.to_string()))
+
+                MessageClassification {
+                    message_type: "System".to_string(),
+                    application_id: None,
+                    system_message_type: Some(sys_msg_type.to_string()),
+                    system_target,
+                    system_amount,
+                    system_source,
+                    system_owner,
+                    system_recipient,
+                }
             }
-            Message::User { application_id, .. } => {
-                ("User".to_string(), Some(application_id.to_string()), None)
-            }
+            Message::User { application_id, .. } => MessageClassification {
+                message_type: "User".to_string(),
+                application_id: Some(application_id.to_string()),
+                system_message_type: None,
+                system_target: None,
+                system_amount: None,
+                system_source: None,
+                system_owner: None,
+                system_recipient: None,
+            },
         }
     }
 

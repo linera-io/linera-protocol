@@ -233,6 +233,36 @@ export const BlockDetail: React.FC = () => {
                           <span className="text-white font-mono text-xs">{message.system_message_type}</span>
                         </div>
                       )}
+                      {message.system_amount !== undefined && message.system_amount !== null && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-linera-gray-light">Amount</span>
+                          <span className="text-white font-mono text-xs">{message.system_amount}</span>
+                        </div>
+                      )}
+                      {message.system_target && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Target</span>
+                          <CopyableHash value={message.system_target} format="short" className="text-xs" />
+                        </div>
+                      )}
+                      {message.system_source && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Source</span>
+                          <CopyableHash value={message.system_source} format="short" className="text-xs" />
+                        </div>
+                      )}
+                      {message.system_owner && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Owner</span>
+                          <CopyableHash value={message.system_owner} format="short" className="text-xs" />
+                        </div>
+                      )}
+                      {message.system_recipient && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Recipient</span>
+                          <CopyableHash value={message.system_recipient} format="short" className="text-xs" />
+                        </div>
+                      )}
                       {message.application_id && (
                         <div className="space-y-1">
                           <span className="text-sm text-linera-gray-light">Application</span>

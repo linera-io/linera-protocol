@@ -123,7 +123,7 @@ export class BlockchainDatabase {
   // Get messages for a block
   getMessages(blockHash) {
     const stmt = this.db.prepare(`
-      SELECT * FROM outgoing_messages 
+      SELECT *, system_target, system_amount, system_source, system_owner, system_recipient FROM outgoing_messages 
       WHERE block_hash = ? 
       ORDER BY transaction_index ASC, message_index ASC
     `);

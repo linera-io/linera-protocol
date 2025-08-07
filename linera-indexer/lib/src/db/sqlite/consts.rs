@@ -72,6 +72,11 @@ CREATE TABLE IF NOT EXISTS outgoing_messages (
     message_type TEXT NOT NULL, -- 'System' or 'User'
     application_id TEXT, -- For user messages
     system_message_type TEXT, -- For system messages (Credit, Withdraw, etc.)
+    system_target TEXT, -- Credit target
+    system_amount INTEGER, -- Credit/Withdraw amount
+    system_source TEXT, -- Credit source
+    system_owner TEXT, -- Withdraw owner
+    system_recipient TEXT, -- Withdraw recipient
     data BLOB NOT NULL, -- Serialized message content
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (block_hash) REFERENCES blocks(hash),
@@ -82,6 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_outgoing_messages_block_hash ON outgoing_messages
 CREATE INDEX IF NOT EXISTS idx_outgoing_messages_destination ON outgoing_messages(destination_chain_id);
 CREATE INDEX IF NOT EXISTS idx_outgoing_messages_type ON outgoing_messages(message_type);
 CREATE INDEX IF NOT EXISTS idx_outgoing_messages_application_id ON outgoing_messages(application_id);
+CREATE INDEX IF NOT EXISTS idx_outgoing_messages_system_type ON outgoing_messages(system_message_type);
 "#;
 
 /// SQL schema for creating the events table
@@ -171,6 +177,14 @@ CREATE TABLE IF NOT EXISTS posted_messages (
     grant_amount INTEGER NOT NULL,
     refund_grant_to TEXT,
     message_kind TEXT NOT NULL,
+    message_type TEXT NOT NULL, -- 'System' or 'User'
+    application_id TEXT, -- For user messages
+    system_message_type TEXT, -- For system messages (Credit, Withdraw, etc.)
+    system_target TEXT, -- Credit target
+    system_amount INTEGER, -- Credit/Withdraw amount
+    system_source TEXT, -- Credit source
+    system_owner TEXT, -- Withdraw owner
+    system_recipient TEXT, -- Withdraw recipient
     message_data BLOB NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (bundle_id) REFERENCES incoming_bundles(id)
@@ -178,4 +192,6 @@ CREATE TABLE IF NOT EXISTS posted_messages (
 
 CREATE INDEX IF NOT EXISTS idx_posted_messages_bundle_id ON posted_messages(bundle_id);
 CREATE INDEX IF NOT EXISTS idx_posted_messages_kind ON posted_messages(message_kind);
+CREATE INDEX IF NOT EXISTS idx_posted_messages_type ON posted_messages(message_type);
+CREATE INDEX IF NOT EXISTS idx_posted_messages_system_type ON posted_messages(system_message_type);
 "#;
