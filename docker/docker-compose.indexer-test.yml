@@ -95,6 +95,12 @@ services:
       - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
       - FAUCET_PORT=${FAUCET_PORT:-8080}
       - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost ${FAUCET_PORT:-8080}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
     volumes:
       - network-data:/data
     depends_on:
