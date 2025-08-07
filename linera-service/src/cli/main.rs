@@ -61,12 +61,17 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 #[cfg(feature = "benchmark")]
 use {
+    linera_client::chain_listener::{ChainListener, ChainListenerConfig},
     linera_service::{
         cli::command::BenchmarkCommand,
         cli_wrappers::{local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     },
     std::time::Duration,
-    tokio::{io::AsyncWriteExt, process::ChildStdin, sync::oneshot},
+    tokio::{
+        io::AsyncWriteExt,
+        process::{ChildStdin, Command},
+        sync::oneshot,
+    },
 };
 
 struct Job(ClientOptions);
@@ -789,8 +794,7 @@ impl Runnable for Job {
             #[cfg(feature = "benchmark")]
             Benchmark(benchmark_config) => {
                 let BenchmarkCommand {
-                    dont_use_cross_chain_messages,
-                    num_chain_groups,
+                    num_chains,
                     tokens_per_chain,
                     transactions_per_block,
                     fungible_application_id,
@@ -800,16 +804,15 @@ impl Runnable for Job {
                     wrap_up_max_in_flight,
                     confirm_before_start,
                     runtime_in_seconds,
-                    delay_between_chain_groups_ms,
+                    delay_between_chains_ms,
                 } = benchmark_config;
                 assert!(
                     options.context_options.max_pending_message_bundles >= transactions_per_block,
                     "max_pending_message_bundles must be set to at least the same as the \
                      number of transactions per block ({transactions_per_block}) for benchmarking",
                 );
-                let num_chain_groups = num_chain_groups.unwrap_or(num_cpus::get());
                 assert!(
-                    num_chain_groups > 0,
+                    num_chains > 0,
                     "Number of chain groups must be greater than 0"
                 );
                 assert!(
@@ -817,23 +820,33 @@ impl Runnable for Job {
                     "Number of transactions per block must be greater than 0"
                 );
                 assert!(bps > 0, "BPS must be greater than 0");
-                let num_chains_per_chain_group = if dont_use_cross_chain_messages { 1 } else { 2 };
+                if num_chains > 1 {
+                    assert!(
+                        transactions_per_block % (num_chains - 1) == 0,
+                        "Number of transactions per block must be a multiple of the number of \
+                         chains minus 1, to make sure transactions always cancel each other out"
+                    );
+                }
+
+                let listener_config = ChainListenerConfig {
+                    skip_process_inbox: true,
+                    ..Default::default()
+                };
 
                 let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
-                    .take(num_chain_groups * num_chains_per_chain_group)
+                    .take(num_chains)
                     .collect();
                 signer.persist().await?;
 
                 let mut context = ClientContext::new(
-                    storage,
+                    storage.clone(),
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
-                let (chain_clients, blocks_infos, committee) = context
+                let (chain_clients, blocks_infos) = context
                     .prepare_for_benchmark(
-                        num_chain_groups,
-                        num_chains_per_chain_group,
+                        num_chains,
                         transactions_per_block,
                         tokens_per_chain,
                         fungible_application_id,
@@ -857,20 +870,33 @@ impl Runnable for Job {
                     }
                 }
 
+                let shutdown_notifier = CancellationToken::new();
+                tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+                let shared_context = std::sync::Arc::new(futures::lock::Mutex::new(context));
+                let chain_listener = ChainListener::new(
+                    listener_config,
+                    shared_context.clone(),
+                    storage.clone(),
+                    shutdown_notifier.clone(),
+                );
                 linera_client::benchmark::Benchmark::run_benchmark(
-                    num_chain_groups,
+                    num_chains,
                     transactions_per_block,
                     bps,
                     chain_clients.clone(),
                     blocks_infos,
-                    committee,
                     health_check_endpoints,
                     runtime_in_seconds,
-                    delay_between_chain_groups_ms,
-                    context.client_metrics().map(|m| m.timing_sender.clone()),
+                    delay_between_chains_ms,
+                    chain_listener,
+                    &shutdown_notifier,
                 )
                 .await?;
 
+                let mut context = std::sync::Arc::try_unwrap(shared_context)
+                    .map_err(|_| anyhow::anyhow!("Failed to unwrap shared context"))?
+                    .into_inner();
                 context
                     .wrap_up_benchmark(chain_clients, close_chains, wrap_up_max_in_flight)
                     .await?;
@@ -1620,6 +1646,18 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
     }
 }
 
+#[cfg(feature = "benchmark")]
+async fn kill_all_processes(pids: &[u32]) {
+    for &pid in pids {
+        info!("Killing benchmark process (pid {})", pid);
+        let _ = Command::new("kill")
+            .arg("-9")
+            .arg(pid.to_string())
+            .status()
+            .await;
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let options = ClientOptions::init();
 
@@ -2278,26 +2316,54 @@ Make sure to use a Linera client compatible with this network.
             tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
             let mut join_set = JoinSet::new();
+            let children_pids: Vec<u32> = children.iter().flat_map(|c| c.id()).collect();
+
             for ((mut child, stdout_handle), stderr_handle) in
                 children.into_iter().zip(stdout_handles).zip(stderr_handles)
             {
                 join_set.spawn(async move {
-                    child.wait().await?;
+                    let pid = child.id();
+                    let status = child.wait().await?;
                     stdout_handle.await?;
                     stderr_handle.await?;
-                    Ok::<_, anyhow::Error>(())
+                    Ok::<_, anyhow::Error>((pid, status))
                 });
             }
 
-            // Wait for the shutdown signal.
-            shutdown_notifier.cancelled().await;
-
-            // Wait for all children to exit.
-            join_set
-                .join_all()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
+            loop {
+                tokio::select! {
+                    result = join_set.join_next() => {
+                        match result {
+                            Some(Ok(Ok((pid, status)))) => {
+                                if !status.success() {
+                                    error!("Benchmark process (pid {:?}) failed with status: {:?}", pid, status);
+                                    kill_all_processes(&children_pids).await;
+                                    return Err(anyhow::anyhow!("Benchmark process (pid {:?}) failed", pid));
+                                }
+                            }
+                            Some(Ok(Err(e))) => {
+                                error!("Benchmark process failed: {}", e);
+                                kill_all_processes(&children_pids).await;
+                                return Err(e);
+                            }
+                            Some(Err(e)) => {
+                                error!("Benchmark process panicked: {}", e);
+                                kill_all_processes(&children_pids).await;
+                                return Err(e.into());
+                            }
+                            None => {
+                                info!("All benchmark processes have finished");
+                                break;
+                            }
+                        }
+                    }
+                    _ = shutdown_notifier.cancelled() => {
+                        info!("Shutdown signal received, waiting for all benchmark processes to finish");
+                        join_set.join_all().await.into_iter().collect::<Result<Vec<_>, _>>()?;
+                        break;
+                    }
+                }
+            }
             Ok(0)
         }
 

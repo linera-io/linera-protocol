@@ -186,6 +186,12 @@ impl ClientContext for DummyContext {
         unimplemented!()
     }
 
+    fn timing_sender(
+        &self,
+    ) -> Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>> {
+        None
+    }
+
     async fn update_wallet_for_new_chain(
         &mut self,
         _: ChainId,
