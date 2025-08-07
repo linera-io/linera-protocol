@@ -1,4 +1,4 @@
-import { Block, BlockInfo, IncomingBundle, PostedMessage, ChainInfo } from '../types/blockchain';
+import { Block, BlockInfo, IncomingBundle, PostedMessage, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
 
 const API_BASE_URL = 'http://localhost:3002/api';
 
@@ -120,4 +120,75 @@ export class BlockchainAPI {
     const stats = await response.json();
     return stats.totalBlocks;
   }
+
+  // Get operations for a block
+  async getOperations(blockHash: string): Promise<Operation[]> {
+    const response = await fetch(`${API_BASE_URL}/blocks/${blockHash}/operations`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch operations: ${response.statusText}`);
+    }
+    const operations = await response.json();
+    
+    // Convert binary data from base64
+    return operations.map((op: any) => ({
+      ...op,
+      data: op.data ? this.base64ToUint8Array(op.data) : new Uint8Array()
+    }));
+  }
+
+  // Get messages for a block
+  async getMessages(blockHash: string): Promise<Message[]> {
+    const response = await fetch(`${API_BASE_URL}/blocks/${blockHash}/messages`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch messages: ${response.statusText}`);
+    }
+    const messages = await response.json();
+    
+    // Convert binary data from base64
+    return messages.map((msg: any) => ({
+      ...msg,
+      data: msg.data ? this.base64ToUint8Array(msg.data) : new Uint8Array()
+    }));
+  }
+
+  // Get events for a block
+  async getEvents(blockHash: string): Promise<Event[]> {
+    const response = await fetch(`${API_BASE_URL}/blocks/${blockHash}/events`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch events: ${response.statusText}`);
+    }
+    const events = await response.json();
+    
+    // Convert binary data from base64
+    return events.map((event: any) => ({
+      ...event,
+      data: event.data ? this.base64ToUint8Array(event.data) : new Uint8Array()
+    }));
+  }
+
+  // Get oracle responses for a block
+  async getOracleResponses(blockHash: string): Promise<OracleResponse[]> {
+    const response = await fetch(`${API_BASE_URL}/blocks/${blockHash}/oracle-responses`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch oracle responses: ${response.statusText}`);
+    }
+    const responses = await response.json();
+    
+    // Convert binary data from base64
+    return responses.map((resp: any) => ({
+      ...resp,
+      data: resp.data ? this.base64ToUint8Array(resp.data) : undefined
+    }));
+  }
+
+  // Helper method to convert base64 to Uint8Array
+  private base64ToUint8Array(base64: string): Uint8Array {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  }
+
 }

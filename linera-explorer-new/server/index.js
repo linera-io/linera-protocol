@@ -156,6 +156,51 @@ app.get('/api/stats', (req, res) => {
   }
 });
 
+// Get operations for a block
+app.get('/api/blocks/:hash/operations', (req, res) => {
+  try {
+    const { hash } = req.params;
+    const operations = db.getOperations(hash);
+    res.json(operations);
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch operations');
+  }
+});
+
+// Get messages for a block
+app.get('/api/blocks/:hash/messages', (req, res) => {
+  try {
+    const { hash } = req.params;
+    const messages = db.getMessages(hash);
+    res.json(messages);
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch messages');
+  }
+});
+
+// Get events for a block
+app.get('/api/blocks/:hash/events', (req, res) => {
+  try {
+    const { hash } = req.params;
+    const events = db.getEvents(hash);
+    res.json(events);
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch events');
+  }
+});
+
+// Get oracle responses for a block
+app.get('/api/blocks/:hash/oracle-responses', (req, res) => {
+  try {
+    const { hash } = req.params;
+    const oracleResponses = db.getOracleResponses(hash);
+    res.json(oracleResponses);
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch oracle responses');
+  }
+});
+
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

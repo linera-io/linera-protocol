@@ -54,3 +54,54 @@ export interface ChainInfo {
   latest_height: number;
   latest_block_hash: string;
 }
+
+// Denormalized data structures
+export interface Operation {
+  id: number;
+  block_hash: string;
+  operation_index: number;
+  operation_type: 'System' | 'User';
+  application_id?: string;
+  system_operation_type?: string;
+  authenticated_signer?: string;
+  data: Uint8Array;
+  created_at: string;
+}
+
+export interface Message {
+  id: number;
+  block_hash: string;
+  transaction_index: number;
+  message_index: number;
+  destination_chain_id: string;
+  authenticated_signer?: string;
+  grant_amount: number;
+  message_kind: string; // 'Simple', 'Tracked', 'Bouncing', 'Protected'
+  message_type: 'System' | 'User';
+  application_id?: string;
+  system_message_type?: string;
+  data: Uint8Array;
+  created_at: string;
+}
+
+export interface Event {
+  id: number;
+  block_hash: string;
+  transaction_index: number;
+  event_index: number;
+  stream_id: string;
+  stream_index: number;
+  data: Uint8Array;
+  created_at: string;
+}
+
+export interface OracleResponse {
+  id: number;
+  block_hash: string;
+  transaction_index: number;
+  response_index: number;
+  response_type: string;
+  blob_hash?: string;
+  data?: Uint8Array;
+  created_at: string;
+}

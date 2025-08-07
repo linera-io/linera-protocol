@@ -104,6 +104,71 @@ export class BlockchainDatabase {
     return result.count;
   }
 
+  // Get operations for a block
+  getOperations(blockHash) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM operations 
+      WHERE block_hash = ? 
+      ORDER BY operation_index ASC
+    `);
+    const operations = stmt.all(blockHash);
+    
+    // Convert binary data to base64 for JSON transport
+    return operations.map(op => ({
+      ...op,
+      data: op.data ? Buffer.from(op.data).toString('base64') : null
+    }));
+  }
+
+  // Get messages for a block
+  getMessages(blockHash) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM outgoing_messages 
+      WHERE block_hash = ? 
+      ORDER BY transaction_index ASC, message_index ASC
+    `);
+    const messages = stmt.all(blockHash);
+    
+    // Convert binary data to base64 for JSON transport
+    return messages.map(msg => ({
+      ...msg,
+      data: msg.data ? Buffer.from(msg.data).toString('base64') : null
+    }));
+  }
+
+  // Get events for a block
+  getEvents(blockHash) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM events 
+      WHERE block_hash = ? 
+      ORDER BY transaction_index ASC, event_index ASC
+    `);
+    const events = stmt.all(blockHash);
+    
+    // Convert binary data to base64 for JSON transport
+    return events.map(event => ({
+      ...event,
+      data: event.data ? Buffer.from(event.data).toString('base64') : null
+    }));
+  }
+
+  // Get oracle responses for a block
+  getOracleResponses(blockHash) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM oracle_responses 
+      WHERE block_hash = ? 
+      ORDER BY transaction_index ASC, response_index ASC
+    `);
+    const responses = stmt.all(blockHash);
+    
+    // Convert binary data to base64 for JSON transport
+    return responses.map(resp => ({
+      ...resp,
+      data: resp.data ? Buffer.from(resp.data).toString('base64') : null
+    }));
+  }
+
+
   close() {
     this.db.close();
   }

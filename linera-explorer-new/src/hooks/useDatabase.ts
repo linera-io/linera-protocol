@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { BlockchainAPI } from '../utils/database';
-import { BlockInfo, Block, IncomingBundle, ChainInfo } from '../types/blockchain';
+import { BlockInfo, Block, IncomingBundle, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
 
 const api = new BlockchainAPI();
 
@@ -129,6 +129,16 @@ export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) =>
 export const useBlock = (hash: string) => {
   const [block, setBlock] = useState<Block | null>(null);
   const [bundles, setBundles] = useState<IncomingBundle[]>([]);
+  const [operations, setOperations] = useState<Operation[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [oracleResponses, setOracleResponses] = useState<OracleResponse[]>([]);
+  const [activity, setActivity] = useState<{
+    operationsCount: number;
+    messagesCount: number;
+    eventsCount: number;
+    oracleResponsesCount: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isConnected } = useAPI();
@@ -139,13 +149,37 @@ export const useBlock = (hash: string) => {
     const fetchBlock = async () => {
       try {
         setLoading(true);
-        const [blockResult, bundlesResult] = await Promise.all([
+        const [
+          blockResult,
+          bundlesResult,
+          operationsResult,
+          messagesResult,
+          eventsResult,
+          oracleResponsesResult
+        ] = await Promise.all([
           api.getBlockByHash(hash),
-          api.getIncomingBundles(hash)
+          api.getIncomingBundles(hash),
+          api.getOperations(hash),
+          api.getMessages(hash),
+          api.getEvents(hash),
+          api.getOracleResponses(hash)
         ]);
+        
+        // Calculate activity counts from the data we already have
+        const activityResult = {
+          operationsCount: operationsResult.length,
+          messagesCount: messagesResult.length,
+          eventsCount: eventsResult.length,
+          oracleResponsesCount: oracleResponsesResult.length
+        };
         
         setBlock(blockResult);
         setBundles(bundlesResult);
+        setOperations(operationsResult);
+        setMessages(messagesResult);
+        setEvents(eventsResult);
+        setOracleResponses(oracleResponsesResult);
+        setActivity(activityResult);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch block');
@@ -157,7 +191,17 @@ export const useBlock = (hash: string) => {
     fetchBlock();
   }, [isConnected, hash]);
 
-  return { block, bundles, loading, error };
+  return { 
+    block, 
+    bundles, 
+    operations, 
+    messages, 
+    events, 
+    oracleResponses, 
+    activity, 
+    loading, 
+    error 
+  };
 };
 
 export const useChains = (refreshInterval: number = 5000) => {
