@@ -4,6 +4,7 @@ import { ArrowLeft, Hash, Clock, Layers, HardDrive, Package, MessageSquare, Copy
 import { useBlock } from '../hooks/useDatabase';
 import { ExpandableSection } from './ExpandableSection';
 import { CopyableHash } from './CopyableHash';
+import { BinaryDataSection } from './BinaryDataSection';
 
 export const BlockDetail: React.FC = () => {
   const { hash } = useParams<{ hash: string }>();
@@ -184,13 +185,11 @@ export const BlockDetail: React.FC = () => {
                     </div>
                   </div>
                   {operation.data && (
-                    <div className="mt-3 pt-3 border-t border-linera-border/30">
-                      <span className="text-sm text-linera-gray-light block mb-2">Operation Data</span>
-                      <div className="font-mono text-xs bg-linera-darker/80 px-3 py-2 rounded border border-linera-border/50 text-linera-gray-light max-h-32 overflow-y-auto">
-                        {Array.from(operation.data.slice(0, 100)).map(byte => byte.toString(16).padStart(2, '0')).join(' ')}
-                        {operation.data.length > 100 && '...'}
-                      </div>
-                    </div>
+                    <BinaryDataSection 
+                      data={operation.data} 
+                      title="Operation Data"
+                      maxDisplayBytes={100}
+                    />
                   )}
                 </div>
               ))}
@@ -247,13 +246,11 @@ export const BlockDetail: React.FC = () => {
                     </div>
                   </div>
                   {message.data && (
-                    <div className="mt-3 pt-3 border-t border-linera-border/30">
-                      <span className="text-sm text-linera-gray-light block mb-2">Message Data</span>
-                      <div className="font-mono text-xs bg-linera-darker/80 px-3 py-2 rounded border border-linera-border/50 text-linera-gray-light max-h-32 overflow-y-auto">
-                        {Array.from(message.data.slice(0, 100)).map(byte => byte.toString(16).padStart(2, '0')).join(' ')}
-                        {message.data.length > 100 && '...'}
-                      </div>
-                    </div>
+                    <BinaryDataSection 
+                      data={message.data} 
+                      title="Message Data"
+                      maxDisplayBytes={100}
+                    />
                   )}
                 </div>
               ))}
@@ -291,13 +288,11 @@ export const BlockDetail: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-linera-border/30">
-                    <span className="text-sm text-linera-gray-light block mb-2">Event Data</span>
-                    <div className="font-mono text-xs bg-linera-darker/80 px-3 py-2 rounded border border-linera-border/50 text-linera-gray-light max-h-32 overflow-y-auto">
-                      {Array.from(event.data.slice(0, 100)).map(byte => byte.toString(16).padStart(2, '0')).join(' ')}
-                      {event.data.length > 100 && '...'}
-                    </div>
-                  </div>
+                  <BinaryDataSection 
+                    data={event.data} 
+                    title="Event Data"
+                    maxDisplayBytes={100}
+                  />
                 </div>
               ))}
             </div>
@@ -331,13 +326,11 @@ export const BlockDetail: React.FC = () => {
                     </div>
                   </div>
                   {response.data && (
-                    <div className="mt-3 pt-3 border-t border-linera-border/30">
-                      <span className="text-sm text-linera-gray-light block mb-2">Response Data</span>
-                      <div className="font-mono text-xs bg-linera-darker/80 px-3 py-2 rounded border border-linera-border/50 text-linera-gray-light max-h-32 overflow-y-auto">
-                        {Array.from(response.data.slice(0, 100)).map(byte => byte.toString(16).padStart(2, '0')).join(' ')}
-                        {response.data.length > 100 && '...'}
-                      </div>
-                    </div>
+                    <BinaryDataSection 
+                      data={response.data} 
+                      title="Response Data"
+                      maxDisplayBytes={100}
+                    />
                   )}
                   {response.blob_hash && (
                     <div className="mt-3 pt-3 border-t border-linera-border/30">
@@ -445,32 +438,12 @@ export const BlockDetail: React.FC = () => {
             </div>
           </div>
           
-          <div className="bg-linera-darker/50 rounded-lg border border-linera-border/50 p-6 font-mono text-sm overflow-x-auto">
-            <div className="text-linera-gray-light mb-4 flex items-center justify-between">
-              <div>
-                <span>Size: {formatBytes(block.data.length)}</span>
-                <span className="mx-2">•</span>
-                <span>Type: Binary Data</span>
-              </div>
-              <button
-                onClick={() => copyToClipboard(Array.from(block.data).map(byte => byte.toString(16).padStart(2, '0')).join(''))}
-                className="text-linera-gray-medium hover:text-linera-red transition-colors"
-              >
-                <Copy className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="text-linera-gray-light leading-relaxed">
-              {Array.from(block.data.slice(0, 400))
-                .map(byte => byte.toString(16).padStart(2, '0'))
-                .join(' ')
-                .replace(/(.{48})/g, '$1\n')}
-              {block.data.length > 400 && (
-                <div className="text-linera-gray-medium mt-4">
-                  ... and {block.data.length - 400} more bytes
-                </div>
-              )}
-            </div>
-          </div>
+          <BinaryDataSection 
+            data={block.data} 
+            title="Block Data"
+            maxDisplayBytes={400}
+            className="mt-0 pt-0 border-t-0"
+          />
         </div>
       )}
     </div>
