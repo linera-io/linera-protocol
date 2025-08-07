@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use futures::lock::Mutex;
 use linera_base::{
@@ -17,6 +17,7 @@ use linera_core::{
     environment,
     test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
 };
+use tempfile::tempdir;
 
 use super::{FaucetStorage, MutationRoot};
 
@@ -157,10 +158,8 @@ async fn test_faucet_persistence() {
     let context = Arc::new(Mutex::new(context));
 
     let faucet_storage = Arc::new(Mutex::new(FaucetStorage::default()));
-    let storage_path = PathBuf::from("/tmp/test_faucet_persistence.json");
-
-    // Clean up any existing test file
-    let _ = fs::remove_file(&storage_path);
+    let temp_dir = tempdir().unwrap();
+    let storage_path = temp_dir.path().join("test_faucet_persistence.json");
 
     // Set clock past any time limits to avoid balance checking issues
     clock.set(Timestamp::from(u64::MAX));
@@ -188,9 +187,6 @@ async fn test_faucet_persistence() {
 
     // Should be the same chain
     assert_eq!(first_description.id(), second_description.id());
-
-    // Clean up test file
-    let _ = fs::remove_file(&storage_path);
 }
 
 #[test]

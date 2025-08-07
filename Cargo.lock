@@ -5387,6 +5387,7 @@ dependencies = [
  "prometheus",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-util",
  "tower-http 0.5.2",
