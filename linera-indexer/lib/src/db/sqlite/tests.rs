@@ -4,7 +4,7 @@
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::Blob,
+    data_types::{Blob, Timestamp},
     identifiers::ChainId,
 };
 use linera_chain::data_types::MessageAction;
@@ -88,6 +88,7 @@ async fn test_high_level_atomic_api() {
     let chain_id =
         linera_base::identifiers::ChainId(linera_base::crypto::CryptoHash::new(blob2.content()));
     let height = linera_base::data_types::BlockHeight(1);
+    let timestamp: linera_base::data_types::Timestamp = linera_base::data_types::Timestamp::now();
     let block_data = b"fake block data".to_vec();
 
     let blobs = vec![
@@ -100,6 +101,7 @@ async fn test_high_level_atomic_api() {
         &block_hash,
         &chain_id,
         height,
+        timestamp,
         &block_data,
         &blobs,
         vec![],
@@ -152,16 +154,20 @@ async fn test_incoming_bundles_storage_and_query() {
     // First insert a test block that the bundle can reference
     let test_chain_id = ChainId(CryptoHash::new(&TestString::new("test_chain_id")));
     let test_height = 100_i64;
+    let test_timestamp = Timestamp::now();
     let test_block_data = b"test_block_data".to_vec();
 
-    sqlx::query("INSERT INTO blocks (hash, chain_id, height, data) VALUES (?1, ?2, ?3, ?4)")
-        .bind(block_hash.to_string())
-        .bind(test_chain_id.to_string())
-        .bind(test_height)
-        .bind(&test_block_data)
-        .execute(&mut *tx)
-        .await
-        .expect("Should be able to insert test block");
+    sqlx::query(
+        "INSERT INTO blocks (hash, chain_id, height, timestamp, data) VALUES (?1, ?2, ?3, ?4, ?5)",
+    )
+    .bind(block_hash.to_string())
+    .bind(test_chain_id.to_string())
+    .bind(test_height)
+    .bind(test_timestamp.micros() as i32)
+    .bind(&test_block_data)
+    .execute(&mut *tx)
+    .await
+    .expect("Should be able to insert test block");
 
     // Insert a test incoming bundle
     let bundle_result = sqlx::query(

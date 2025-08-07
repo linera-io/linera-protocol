@@ -128,16 +128,18 @@ impl SqliteDatabase {
         hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
+        timestamp: Timestamp,
         data: &[u8],
     ) -> Result<(), SqliteError> {
         let hash_str = hash.to_string();
         let chain_id_str = chain_id.to_string();
         sqlx::query(
-            "INSERT OR REPLACE INTO blocks (hash, chain_id, height, data) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT OR REPLACE INTO blocks (hash, chain_id, height, timestamp, data) VALUES (?1, ?2, ?3, ?4, ?5)",
         )
         .bind(&hash_str)
         .bind(&chain_id_str)
         .bind(height.0 as i64)
+        .bind(timestamp.micros() as i64)
         .bind(data)
         .execute(&mut **tx)
         .await?;
@@ -512,9 +514,11 @@ impl IndexerDatabase for SqliteDatabase {
         hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
+        timestamp: Timestamp,
         data: &[u8],
     ) -> Result<(), SqliteError> {
-        self.insert_block_tx(tx, hash, chain_id, height, data).await
+        self.insert_block_tx(tx, hash, chain_id, height, timestamp, data)
+            .await
     }
 
     async fn store_incoming_bundles_tx(

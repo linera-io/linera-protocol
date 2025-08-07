@@ -57,6 +57,7 @@ impl IndexerDatabase for MockFailingDatabase {
         _hash: &CryptoHash,
         _chain_id: &ChainId,
         _height: BlockHeight,
+        _timestamp: Timestamp,
         _data: &[u8],
     ) -> Result<(), SqliteError> {
         Ok(())
@@ -224,6 +225,7 @@ impl IndexerDatabase for MockSuccessDatabase {
         _hash: &CryptoHash,
         _chain_id: &ChainId,
         _height: BlockHeight,
+        _timestamp: Timestamp,
         _data: &[u8],
     ) -> Result<(), SqliteError> {
         Ok(())

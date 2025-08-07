@@ -74,7 +74,7 @@ services:
     networks:
       - linera-network
 
-  # 4. Network (Validator + Faucet) - starts last
+  # 4. Network (Validator + Faucet) - starts after block exporter
   linera-network:
     image: "${LINERA_INDEXER_IMAGE:-linera-all-test}"
     container_name: linera-network
@@ -91,14 +91,47 @@ services:
       --exporter-address linera-block-exporter
       --exporter-port ${BLOCK_EXPORTER_PORT:-8882}"
     environment:
+      - RUST_LOG=linera=info
       - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
       - FAUCET_PORT=${FAUCET_PORT:-8080}
       - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost ${FAUCET_PORT:-8080}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
     volumes:
       - network-data:/data
     depends_on:
       linera-block-exporter:
         condition: service_healthy
+    networks:
+      - linera-network
+
+  # 5. Explorer - starts last after all services are ready
+  linera-explorer:
+    image: "${LINERA_EXPLORER_IMAGE:-linera-explorer-new}"
+    container_name: linera-explorer
+    ports:
+      - "${EXPLORER_FRONTEND_PORT:-3001}:3001"
+      - "${EXPLORER_API_PORT:-3002}:3002"
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/data/indexer.db
+      - EXPLORER_FRONTEND_PORT=${EXPLORER_FRONTEND_PORT:-3001}
+      - EXPLORER_API_PORT=${EXPLORER_API_PORT:-3002}
+    volumes:
+      - ./indexer-data:/data:ro
+    depends_on:
+      linera-indexer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${EXPLORER_API_PORT:-3002}/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - linera-network
 

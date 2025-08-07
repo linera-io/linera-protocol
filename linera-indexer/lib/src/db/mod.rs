@@ -28,11 +28,13 @@ pub trait IndexerDatabase: Send + Sync {
 
     /// Atomically store a block with its required blobs and incoming bundles
     /// This is the high-level API that can be implemented in terms of the other methods
+    #[allow(clippy::too_many_arguments)]
     async fn store_block_with_blobs_and_bundles(
         &self,
         block_hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
+        timestamp: Timestamp,
         block_data: &[u8],
         blobs: &[(BlobId, Vec<u8>)],
         incoming_bundles: Vec<IncomingBundle>,
@@ -46,7 +48,7 @@ pub trait IndexerDatabase: Send + Sync {
         }
 
         // Insert the block
-        self.insert_block_tx(&mut tx, block_hash, chain_id, height, block_data)
+        self.insert_block_tx(&mut tx, block_hash, chain_id, height, timestamp, block_data)
             .await?;
 
         // Store incoming bundles and their messages
@@ -77,6 +79,7 @@ pub trait IndexerDatabase: Send + Sync {
         hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
+        timestamp: Timestamp,
         data: &[u8],
     ) -> Result<(), Self::Error>;
 

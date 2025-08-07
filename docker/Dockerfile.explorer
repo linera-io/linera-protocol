@@ -1,0 +1,71 @@
+# Multi-stage build for Linera Explorer
+# Stage 1: Build the frontend
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /app
+
+# Copy package files
+COPY linera-explorer-new/package*.json ./
+COPY linera-explorer-new/tsconfig*.json ./
+COPY linera-explorer-new/vite.config.ts ./
+COPY linera-explorer-new/tailwind.config.js ./
+COPY linera-explorer-new/postcss.config.js ./
+COPY linera-explorer-new/index.html ./
+
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci
+
+# Copy source code
+COPY linera-explorer-new/src ./src
+
+# Build frontend
+RUN npm run build
+
+# Stage 2: Setup backend dependencies
+FROM node:18-alpine AS backend-builder
+
+WORKDIR /app
+
+# Copy backend files
+COPY linera-explorer-new/server ./server
+COPY linera-explorer-new/package*.json ./
+
+# Install backend dependencies (including better-sqlite3)
+RUN npm ci --only=production
+
+# Stage 3: Production runtime
+FROM node:18-alpine
+
+# Install sqlite3 for database operations
+RUN apk add --no-cache sqlite
+
+WORKDIR /app
+
+# Copy built frontend from stage 1
+COPY --from=frontend-builder /app/dist ./dist
+
+# Copy backend and dependencies from stage 2
+COPY --from=backend-builder /app/server ./server
+COPY --from=backend-builder /app/node_modules ./node_modules
+COPY --from=backend-builder /app/package.json ./package.json
+
+# Create data directory for database
+RUN mkdir -p /data
+
+# Copy startup script
+COPY docker/explorer-entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+# Expose ports
+EXPOSE 3001 3002
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV DB_PATH=/data/indexer.db
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3002/api/health || exit 1
+
+# Start both frontend and backend
+CMD ["sh", "./entrypoint.sh"]

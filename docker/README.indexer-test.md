@@ -19,14 +19,14 @@ The setup includes the following services in startup order:
 
 ```bash
 cd docker
-docker build -f Dockerfile.indexer-test -t linera-all-test ..
+./make-all-build.sh
 ```
 
 ### 2. Start the Services
 
 ```bash
 # in /docker directory
-docker-compose -f docker-compose.indexer-test.yml --env-file ../.env.indexer-test up
+./make-all-up.sh
 ```
 
 ### 3. Verify Services are Running
@@ -36,6 +36,13 @@ docker-compose -f docker-compose.indexer-test.yml --env-file ../.env.indexer-tes
 - Block Exporter: `curl http://localhost:8882`
     - Metrics `curl http://localhost:9091/metrics`
 - Faucet: `curl http://localhost:8080`
+
+
+### 4. Stop the services
+```bash
+# in /docker directory
+./make-all-down.sh
+```
 
 ## Configuration
 

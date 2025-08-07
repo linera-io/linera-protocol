@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::RwLock};
 use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlockHeight,
+    data_types::{BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::IncomingBundle;
@@ -71,6 +71,7 @@ impl IndexerDatabase for MockFailingDatabase {
         _hash: &CryptoHash,
         _chain_id: &ChainId,
         _height: BlockHeight,
+        _timestamp: Timestamp,
         _data: &[u8],
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -151,14 +152,14 @@ impl IndexerDatabase for MockFailingDatabase {
     }
 }
 
-type Blocks = HashMap<CryptoHash, (ChainId, BlockHeight, Vec<u8>)>;
+type Blocks = HashMap<CryptoHash, (ChainId, BlockHeight, Timestamp, Vec<u8>)>;
 
 /// A more sophisticated mock that actually works for successful paths
 /// and stores data in internal HashMaps for testing verification
 pub struct MockSuccessDatabase {
     /// Storage for blobs: BlobId -> blob data
     blobs: RwLock<HashMap<BlobId, Vec<u8>>>,
-    /// Storage for blocks: CryptoHash -> (ChainId, BlockHeight, block data)
+    /// Storage for blocks: CryptoHash -> (ChainId, BlockHeight, Timestamp, block data)
     blocks: RwLock<Blocks>,
 }
 
@@ -197,6 +198,7 @@ impl IndexerDatabase for MockSuccessDatabase {
         block_hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
+        timestamp: Timestamp,
         block_data: &[u8],
         blobs: &[(BlobId, Vec<u8>)],
         _incoming_bundles: Vec<IncomingBundle>,
@@ -212,7 +214,10 @@ impl IndexerDatabase for MockSuccessDatabase {
         // Store the block
         {
             let mut block_storage = self.blocks.write().unwrap();
-            block_storage.insert(*block_hash, (*chain_id, height, block_data.to_vec()));
+            block_storage.insert(
+                *block_hash,
+                (*chain_id, height, timestamp, block_data.to_vec()),
+            );
         }
 
         Ok(())
@@ -240,6 +245,7 @@ impl IndexerDatabase for MockSuccessDatabase {
         _hash: &CryptoHash,
         _chain_id: &ChainId,
         _height: BlockHeight,
+        _timestamp: Timestamp,
         _data: &[u8],
     ) -> Result<(), Self::Error> {
         Ok(())
