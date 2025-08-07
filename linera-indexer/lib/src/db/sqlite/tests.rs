@@ -4,18 +4,15 @@
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::{Blob, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, Timestamp},
     identifiers::ChainId,
 };
-use linera_chain::data_types::MessageAction;
+use linera_chain::{
+    block::{Block, BlockBody, BlockHeader},
+    data_types::MessageAction,
+};
 
 use crate::db::{sqlite::SqliteDatabase, IndexerDatabase};
-
-async fn create_test_database() -> SqliteDatabase {
-    SqliteDatabase::new("sqlite::memory:")
-        .await
-        .expect("Failed to create test database")
-}
 
 #[tokio::test]
 async fn test_sqlite_database_operations() {
@@ -83,13 +80,13 @@ async fn test_high_level_atomic_api() {
     let blob1_data = bincode::serialize(&blob1).unwrap();
     let blob2_data = bincode::serialize(&blob2).unwrap();
 
-    // Use blob hashes for test IDs (simpler than creating proper ones)
-    let block_hash = linera_base::crypto::CryptoHash::new(blob1.content());
-    let chain_id =
-        linera_base::identifiers::ChainId(linera_base::crypto::CryptoHash::new(blob2.content()));
-    let height = linera_base::data_types::BlockHeight(1);
-    let timestamp: linera_base::data_types::Timestamp = linera_base::data_types::Timestamp::now();
-    let block_data = b"fake block data".to_vec();
+    // Create a proper test block
+    let chain_id = ChainId(CryptoHash::new(blob2.content()));
+    let height = BlockHeight(1);
+    let timestamp = Timestamp::now();
+    let test_block = create_test_block(chain_id, height);
+    let block_hash = CryptoHash::new(blob1.content());
+    let block_data = bincode::serialize(&test_block).unwrap();
 
     let blobs = vec![
         (blob1.id(), blob1_data.clone()),
@@ -157,13 +154,29 @@ async fn test_incoming_bundles_storage_and_query() {
     let test_timestamp = Timestamp::now();
     let test_block_data = b"test_block_data".to_vec();
 
+    // Insert with all required fields for the new schema
+    let test_epoch = 0i64;
+    let test_state_hash = CryptoHash::new(&TestString::new("test_state_hash"));
     sqlx::query(
-        "INSERT INTO blocks (hash, chain_id, height, timestamp, data) VALUES (?1, ?2, ?3, ?4, ?5)",
+        r#"INSERT INTO blocks 
+        (hash, chain_id, height, timestamp, epoch, state_hash, previous_block_hash, 
+         authenticated_signer, operation_count, incoming_bundle_count, message_count, 
+         event_count, blob_count, data) 
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"#,
     )
     .bind(block_hash.to_string())
     .bind(test_chain_id.to_string())
     .bind(test_height)
-    .bind(test_timestamp.micros() as i32)
+    .bind(test_timestamp.micros() as i64)
+    .bind(test_epoch)
+    .bind(test_state_hash.to_string())
+    .bind(None::<String>) // previous_block_hash
+    .bind(None::<String>) // authenticated_signer
+    .bind(0i64) // operation_count
+    .bind(0i64) // incoming_bundle_count
+    .bind(0i64) // message_count
+    .bind(0i64) // event_count
+    .bind(0i64) // blob_count
     .bind(&test_block_data)
     .execute(&mut *tx)
     .await
@@ -257,4 +270,44 @@ async fn test_incoming_bundles_storage_and_query() {
     assert_eq!(origin_bundles.len(), 1);
     assert_eq!(origin_bundles[0].0, block_hash);
     assert_eq!(origin_bundles[0].1, *queried_bundle_id);
+}
+
+async fn create_test_database() -> SqliteDatabase {
+    SqliteDatabase::new("sqlite::memory:")
+        .await
+        .expect("Failed to create test database")
+}
+
+fn create_test_block(chain_id: ChainId, height: BlockHeight) -> Block {
+    Block {
+        header: BlockHeader {
+            chain_id,
+            epoch: Epoch::ZERO,
+            height,
+            timestamp: Timestamp::now(),
+            state_hash: CryptoHash::new(&TestString::new("test_state_hash")),
+            previous_block_hash: None,
+            authenticated_signer: None,
+            bundles_hash: CryptoHash::new(&TestString::new("bundles_hash")),
+            operations_hash: CryptoHash::new(&TestString::new("operations_hash")),
+            messages_hash: CryptoHash::new(&TestString::new("messages_hash")),
+            previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg_blocks_hash")),
+            previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_event_blocks_hash")),
+            oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_responses_hash")),
+            events_hash: CryptoHash::new(&TestString::new("events_hash")),
+            blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
+            operation_results_hash: CryptoHash::new(&TestString::new("operation_results_hash")),
+        },
+        body: BlockBody {
+            incoming_bundles: vec![],
+            operations: vec![],
+            messages: vec![],
+            previous_message_blocks: Default::default(),
+            previous_event_blocks: Default::default(),
+            oracle_responses: vec![],
+            events: vec![],
+            blobs: vec![],
+            operation_results: vec![],
+        },
+    }
 }

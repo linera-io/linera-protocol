@@ -9,15 +9,22 @@ mod tests;
 
 use async_trait::async_trait;
 use consts::{
-    CREATE_BLOBS_TABLE, CREATE_BLOCKS_TABLE, CREATE_INCOMING_BUNDLES_TABLE,
+    CREATE_BLOBS_TABLE, CREATE_BLOCKS_TABLE, CREATE_EVENTS_TABLE, CREATE_INCOMING_BUNDLES_TABLE,
+    CREATE_OPERATIONS_TABLE, CREATE_ORACLE_RESPONSES_TABLE, CREATE_OUTGOING_MESSAGES_TABLE,
     CREATE_POSTED_MESSAGES_TABLE,
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, Timestamp},
+    data_types::{BlockHeight, Event, OracleResponse, Timestamp},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{IncomingBundle, MessageAction, PostedMessage};
+use linera_chain::{
+    block::Block,
+    data_types::{IncomingBundle, MessageAction, PostedMessage},
+};
+use linera_execution::{
+    Message, MessageKind, Operation, OutgoingMessage, SystemMessage, SystemOperation,
+};
 use sqlx::{
     sqlite::{SqlitePool, SqlitePoolOptions},
     Row, Sqlite, Transaction,
@@ -78,14 +85,26 @@ impl SqliteDatabase {
 
     /// Initialize the database schema
     async fn initialize_schema(&self) -> Result<(), SqliteError> {
+        // Create core tables
         sqlx::query(CREATE_BLOCKS_TABLE).execute(&self.pool).await?;
-
         sqlx::query(CREATE_BLOBS_TABLE).execute(&self.pool).await?;
 
-        sqlx::query(CREATE_INCOMING_BUNDLES_TABLE)
+        // Create denormalized tables for block data
+        sqlx::query(CREATE_OPERATIONS_TABLE)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query(CREATE_OUTGOING_MESSAGES_TABLE)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query(CREATE_EVENTS_TABLE).execute(&self.pool).await?;
+        sqlx::query(CREATE_ORACLE_RESPONSES_TABLE)
             .execute(&self.pool)
             .await?;
 
+        // Create existing message-related tables
+        sqlx::query(CREATE_INCOMING_BUNDLES_TABLE)
+            .execute(&self.pool)
+            .await?;
         sqlx::query(CREATE_POSTED_MESSAGES_TABLE)
             .execute(&self.pool)
             .await?;
@@ -111,8 +130,11 @@ impl SqliteDatabase {
         data: &[u8],
     ) -> Result<(), SqliteError> {
         let blob_id_str = blob_id.hash.to_string();
-        let blob_type = blob_id.blob_type.to_string();
-        sqlx::query("INSERT OR IGNORE INTO blobs (hash, type, data) VALUES (?1, ?2, ?3)")
+        let blob_type = format!("{:?}", blob_id.blob_type);
+
+        // For now, we don't have block_hash and application_id context here
+        // These could be passed as optional parameters in the future
+        sqlx::query("INSERT OR IGNORE INTO blobs (hash, blob_type, data) VALUES (?1, ?2, ?3)")
             .bind(&blob_id_str)
             .bind(&blob_type)
             .bind(data)
@@ -131,18 +153,307 @@ impl SqliteDatabase {
         timestamp: Timestamp,
         data: &[u8],
     ) -> Result<(), SqliteError> {
+        // Deserialize the block to extract denormalized data
+        let block: Block = bincode::deserialize(data).map_err(|e| {
+            SqliteError::Serialization(format!("Failed to deserialize block: {}", e))
+        })?;
+
+        // Count aggregated data
+        let operation_count = block.body.operations.len();
+        let incoming_bundle_count = block.body.incoming_bundles.len();
+        let message_count = block.body.messages.iter().map(|v| v.len()).sum::<usize>();
+        let event_count = block.body.events.iter().map(|v| v.len()).sum::<usize>();
+        let blob_count = block.body.blobs.len();
+
+        // Insert main block record with denormalized fields
         let hash_str = hash.to_string();
         let chain_id_str = chain_id.to_string();
+        let state_hash_str = block.header.state_hash.to_string();
+        let previous_block_hash_str = block.header.previous_block_hash.map(|h| h.to_string());
+        let authenticated_signer_str = block.header.authenticated_signer.map(|s| s.to_string());
+
         sqlx::query(
-            "INSERT OR REPLACE INTO blocks (hash, chain_id, height, timestamp, data) VALUES (?1, ?2, ?3, ?4, ?5)",
+            r#"
+            INSERT OR REPLACE INTO blocks 
+            (hash, chain_id, height, timestamp, epoch, state_hash, previous_block_hash, 
+             authenticated_signer, operation_count, incoming_bundle_count, message_count, 
+             event_count, blob_count, data) 
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            "#,
         )
         .bind(&hash_str)
         .bind(&chain_id_str)
         .bind(height.0 as i64)
         .bind(timestamp.micros() as i64)
+        .bind(block.header.epoch.0 as i64)
+        .bind(&state_hash_str)
+        .bind(&previous_block_hash_str)
+        .bind(&authenticated_signer_str)
+        .bind(operation_count as i64)
+        .bind(incoming_bundle_count as i64)
+        .bind(message_count as i64)
+        .bind(event_count as i64)
+        .bind(blob_count as i64)
         .bind(data)
         .execute(&mut **tx)
         .await?;
+
+        // Insert operations
+        for (index, operation) in block.body.operations.iter().enumerate() {
+            self.insert_operation_tx(
+                tx,
+                hash,
+                index,
+                operation,
+                block.header.authenticated_signer,
+            )
+            .await?;
+        }
+
+        // Insert outgoing messages
+        for (txn_index, messages) in block.body.messages.iter().enumerate() {
+            for (msg_index, message) in messages.iter().enumerate() {
+                self.insert_outgoing_message_tx(tx, hash, txn_index, msg_index, message)
+                    .await?;
+            }
+        }
+
+        // Insert events
+        for (txn_index, events) in block.body.events.iter().enumerate() {
+            for (event_index, event) in events.iter().enumerate() {
+                self.insert_event_tx(tx, hash, txn_index, event_index, event)
+                    .await?;
+            }
+        }
+
+        // Insert oracle responses
+        for (txn_index, responses) in block.body.oracle_responses.iter().enumerate() {
+            for (response_index, response) in responses.iter().enumerate() {
+                self.insert_oracle_response_tx(tx, hash, txn_index, response_index, response)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Insert an operation within a transaction
+    async fn insert_operation_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        block_hash: &CryptoHash,
+        operation_index: usize,
+        operation: &Operation,
+        authenticated_signer: Option<linera_base::identifiers::AccountOwner>,
+    ) -> Result<(), SqliteError> {
+        let block_hash_str = block_hash.to_string();
+        let authenticated_signer_str = authenticated_signer.map(|s| s.to_string());
+
+        let (operation_type, application_id, system_operation_type) = match operation {
+            Operation::System(sys_op) => {
+                let sys_op_type = match sys_op.as_ref() {
+                    SystemOperation::Transfer { .. } => "Transfer",
+                    SystemOperation::Claim { .. } => "Claim",
+                    SystemOperation::OpenChain { .. } => "OpenChain",
+                    SystemOperation::CloseChain => "CloseChain",
+                    SystemOperation::ChangeApplicationPermissions { .. } => {
+                        "ChangeApplicationPermissions"
+                    }
+                    SystemOperation::CreateApplication { .. } => "CreateApplication",
+                    SystemOperation::PublishModule { .. } => "PublishModule",
+                    SystemOperation::PublishDataBlob { .. } => "PublishDataBlob",
+                    SystemOperation::Admin(_) => "Admin",
+                    SystemOperation::ProcessNewEpoch(_) => "ProcessNewEpoch",
+                    SystemOperation::ProcessRemovedEpoch(_) => "ProcessRemovedEpoch",
+                    SystemOperation::UpdateStreams(_) => "UpdateStreams",
+                    SystemOperation::ChangeOwnership { .. } => "ChangeOwnership",
+                    SystemOperation::VerifyBlob { .. } => "VerifyBlob",
+                };
+                ("System", None, Some(sys_op_type))
+            }
+            Operation::User { application_id, .. } => {
+                ("User", Some(application_id.to_string()), None)
+            }
+        };
+
+        let data = bincode::serialize(operation).map_err(|e| {
+            SqliteError::Serialization(format!("Failed to serialize operation: {}", e))
+        })?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO operations 
+            (block_hash, operation_index, operation_type, application_id, system_operation_type, authenticated_signer, data)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "#,
+        )
+        .bind(&block_hash_str)
+        .bind(operation_index as i64)
+        .bind(operation_type)
+        .bind(application_id)
+        .bind(system_operation_type)
+        .bind(&authenticated_signer_str)
+        .bind(&data)
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Insert an outgoing message within a transaction
+    async fn insert_outgoing_message_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        block_hash: &CryptoHash,
+        transaction_index: usize,
+        message_index: usize,
+        message: &OutgoingMessage,
+    ) -> Result<(), SqliteError> {
+        let block_hash_str = block_hash.to_string();
+        let destination_chain_id_str = message.destination.to_string();
+        let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
+        let message_kind_str = format!("{:?}", message.kind);
+
+        let (message_type, application_id, system_message_type) = match &message.message {
+            Message::System(sys_msg) => {
+                let sys_msg_type = match sys_msg {
+                    SystemMessage::Credit { .. } => "Credit",
+                    SystemMessage::Withdraw { .. } => "Withdraw",
+                    SystemMessage::ApplicationCreated => "ApplicationCreated",
+                };
+                ("System", None, Some(sys_msg_type))
+            }
+            Message::User { application_id, .. } => {
+                ("User", Some(application_id.to_string()), None)
+            }
+        };
+
+        let data = bincode::serialize(&message.message).map_err(|e| {
+            SqliteError::Serialization(format!("Failed to serialize message: {}", e))
+        })?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO outgoing_messages 
+            (block_hash, transaction_index, message_index, destination_chain_id, authenticated_signer, 
+             grant_amount, message_kind, message_type, application_id, system_message_type, data)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            "#,
+        )
+        .bind(&block_hash_str)
+        .bind(transaction_index as i64)
+        .bind(message_index as i64)
+        .bind(&destination_chain_id_str)
+        .bind(&authenticated_signer_str)
+        .bind(u128::from(message.grant) as i64)
+        .bind(&message_kind_str)
+        .bind(message_type)
+        .bind(application_id)
+        .bind(system_message_type)
+        .bind(&data)
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Insert an event within a transaction
+    async fn insert_event_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        block_hash: &CryptoHash,
+        transaction_index: usize,
+        event_index: usize,
+        event: &Event,
+    ) -> Result<(), SqliteError> {
+        let block_hash_str = block_hash.to_string();
+        let stream_id_str = event.stream_id.to_string();
+
+        sqlx::query(
+            r#"
+            INSERT INTO events 
+            (block_hash, transaction_index, event_index, stream_id, stream_index, data)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "#,
+        )
+        .bind(&block_hash_str)
+        .bind(transaction_index as i64)
+        .bind(event_index as i64)
+        .bind(&stream_id_str)
+        .bind(event.index as i64)
+        .bind(&event.value)
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Insert an oracle response within a transaction
+    async fn insert_oracle_response_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        block_hash: &CryptoHash,
+        transaction_index: usize,
+        response_index: usize,
+        response: &OracleResponse,
+    ) -> Result<(), SqliteError> {
+        let block_hash_str = block_hash.to_string();
+
+        let (response_type, blob_hash, data): (&str, Option<String>, Option<Vec<u8>>) =
+            match response {
+                OracleResponse::Service(service_data) => {
+                    ("Service", None, Some(service_data.clone()))
+                }
+                OracleResponse::Blob(blob_id) => ("Blob", Some(blob_id.hash.to_string()), None),
+                OracleResponse::Http(http_response) => {
+                    let serialized = bincode::serialize(http_response).map_err(|e| {
+                        SqliteError::Serialization(format!(
+                            "Failed to serialize HTTP response: {}",
+                            e
+                        ))
+                    })?;
+                    ("Http", None, Some(serialized))
+                }
+                OracleResponse::Assert => ("Assert", None, None),
+                OracleResponse::Round(round) => {
+                    let serialized = bincode::serialize(round).map_err(|e| {
+                        SqliteError::Serialization(format!("Failed to serialize round: {}", e))
+                    })?;
+                    ("Round", None, Some(serialized))
+                }
+                OracleResponse::Event(stream_id, index) => {
+                    let serialized = bincode::serialize(&(stream_id, index)).map_err(|e| {
+                        SqliteError::Serialization(format!("Failed to serialize event: {}", e))
+                    })?;
+                    ("Event", None, Some(serialized))
+                }
+                OracleResponse::EventExists(event_exists) => {
+                    let serialized = bincode::serialize(event_exists).map_err(|e| {
+                        SqliteError::Serialization(format!(
+                            "Failed to serialize event exists: {}",
+                            e
+                        ))
+                    })?;
+                    ("EventExists", None, Some(serialized))
+                }
+            };
+
+        sqlx::query(
+            r#"
+            INSERT INTO oracle_responses 
+            (block_hash, transaction_index, response_index, response_type, blob_hash, data)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "#,
+        )
+        .bind(&block_hash_str)
+        .bind(transaction_index as i64)
+        .bind(response_index as i64)
+        .bind(response_type)
+        .bind(blob_hash)
+        .bind(data)
+        .execute(&mut **tx)
+        .await?;
+
         Ok(())
     }
 
@@ -489,8 +800,246 @@ impl SqliteDatabase {
         }
         Ok(bundles)
     }
+
+    /// Get operations for a specific block
+    pub async fn get_operations_for_block(
+        &self,
+        block_hash: &CryptoHash,
+    ) -> Result<Vec<(usize, Operation)>, SqliteError> {
+        let block_hash_str = block_hash.to_string();
+        let rows = sqlx::query(
+            r#"
+            SELECT operation_index, data
+            FROM operations 
+            WHERE block_hash = ?1 
+            ORDER BY operation_index ASC
+            "#,
+        )
+        .bind(&block_hash_str)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut operations = Vec::new();
+        for row in rows {
+            let index = row.get::<i64, _>("operation_index") as usize;
+            let data: Vec<u8> = row.get("data");
+            let operation: Operation = bincode::deserialize(&data).map_err(|e| {
+                SqliteError::Serialization(format!("Failed to deserialize operation: {}", e))
+            })?;
+            operations.push((index, operation));
+        }
+        Ok(operations)
+    }
+
+    /// Get outgoing messages for a specific block
+    pub async fn get_outgoing_messages_for_block(
+        &self,
+        block_hash: &CryptoHash,
+    ) -> Result<Vec<OutgoingMessage>, SqliteError> {
+        let block_hash_str = block_hash.to_string();
+        let rows = sqlx::query(
+            r#"
+            SELECT destination_chain_id, authenticated_signer, grant_amount, message_kind, data
+            FROM outgoing_messages 
+            WHERE block_hash = ?1 
+            ORDER BY transaction_index, message_index ASC
+            "#,
+        )
+        .bind(&block_hash_str)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut messages = Vec::new();
+        for row in rows {
+            let destination_str: String = row.get("destination_chain_id");
+            let destination = destination_str
+                .parse()
+                .map_err(|_| SqliteError::Serialization("Invalid chain ID".to_string()))?;
+            let authenticated_signer_str: Option<String> = row.get("authenticated_signer");
+            let authenticated_signer = authenticated_signer_str.and_then(|s| s.parse().ok());
+            let grant_amount: i64 = row.get("grant_amount");
+            let grant = linera_base::data_types::Amount::from(grant_amount as u128);
+            let message_kind_str: String = row.get("message_kind");
+            let kind = match message_kind_str.as_str() {
+                "Simple" => MessageKind::Simple,
+                "Tracked" => MessageKind::Tracked,
+                "Bouncing" => MessageKind::Bouncing,
+                "Protected" => MessageKind::Protected,
+                _ => MessageKind::Simple,
+            };
+            let data: Vec<u8> = row.get("data");
+            let message: Message = bincode::deserialize(&data).map_err(|e| {
+                SqliteError::Serialization(format!("Failed to deserialize message: {}", e))
+            })?;
+
+            messages.push(OutgoingMessage {
+                destination,
+                authenticated_signer,
+                grant,
+                refund_grant_to: None, // This would need to be stored separately
+                kind,
+                message,
+            });
+        }
+        Ok(messages)
+    }
+
+    /// Get events for a specific block
+    pub async fn get_events_for_block(
+        &self,
+        block_hash: &CryptoHash,
+    ) -> Result<Vec<Event>, SqliteError> {
+        let block_hash_str = block_hash.to_string();
+        let rows = sqlx::query(
+            r#"
+            SELECT stream_id, stream_index, data
+            FROM events 
+            WHERE block_hash = ?1 
+            ORDER BY transaction_index, event_index ASC
+            "#,
+        )
+        .bind(&block_hash_str)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut events = Vec::new();
+        for row in rows {
+            let stream_id_str: String = row.get("stream_id");
+            let stream_id = stream_id_str
+                .parse()
+                .map_err(|_| SqliteError::Serialization("Invalid stream ID".to_string()))?;
+            let stream_index = row.get::<i64, _>("stream_index") as u32;
+            let value: Vec<u8> = row.get("data");
+
+            events.push(Event {
+                stream_id,
+                index: stream_index,
+                value,
+            });
+        }
+        Ok(events)
+    }
+
+    /// Query blocks with filters
+    pub async fn query_blocks_with_filters(
+        &self,
+        chain_id: Option<&ChainId>,
+        epoch: Option<u64>,
+        min_operations: Option<usize>,
+        min_messages: Option<usize>,
+    ) -> Result<Vec<(CryptoHash, BlockHeight, Timestamp)>, SqliteError> {
+        let mut query = String::from("SELECT hash, height, timestamp FROM blocks WHERE 1=1");
+        let mut bindings = Vec::new();
+
+        if let Some(chain_id) = chain_id {
+            query.push_str(" AND chain_id = ?");
+            bindings.push(chain_id.to_string());
+        }
+
+        if let Some(epoch) = epoch {
+            query.push_str(" AND epoch = ?");
+            bindings.push(epoch.to_string());
+        }
+
+        if let Some(min_ops) = min_operations {
+            query.push_str(" AND operation_count >= ?");
+            bindings.push(min_ops.to_string());
+        }
+
+        if let Some(min_msgs) = min_messages {
+            query.push_str(" AND message_count >= ?");
+            bindings.push(min_msgs.to_string());
+        }
+
+        query.push_str(" ORDER BY height DESC");
+
+        let mut sql_query = sqlx::query(&query);
+        for binding in bindings {
+            sql_query = sql_query.bind(binding);
+        }
+
+        let rows = sql_query.fetch_all(&self.pool).await?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            let hash_str: String = row.get("hash");
+            let hash = hash_str
+                .parse()
+                .map_err(|_| SqliteError::Serialization("Invalid hash".to_string()))?;
+            let height = BlockHeight(row.get::<i64, _>("height") as u64);
+            let timestamp = Timestamp::from(row.get::<i64, _>("timestamp") as u64);
+            results.push((hash, height, timestamp));
+        }
+        Ok(results)
+    }
+
+    /// Get block summary (header fields without full data)
+    pub async fn get_block_summary(
+        &self,
+        hash: &CryptoHash,
+    ) -> Result<Option<BlockSummary>, SqliteError> {
+        let hash_str = hash.to_string();
+        let row = sqlx::query(
+            r#"
+            SELECT chain_id, height, timestamp, epoch, state_hash, previous_block_hash,
+                   authenticated_signer, operation_count, incoming_bundle_count, 
+                   message_count, event_count, blob_count
+            FROM blocks 
+            WHERE hash = ?1
+            "#,
+        )
+        .bind(&hash_str)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            Some(row) => {
+                let chain_id_str: String = row.get("chain_id");
+                let chain_id = chain_id_str
+                    .parse()
+                    .map_err(|_| SqliteError::Serialization("Invalid chain ID".to_string()))?;
+
+                Ok(Some(BlockSummary {
+                    hash: *hash,
+                    chain_id,
+                    height: BlockHeight(row.get::<i64, _>("height") as u64),
+                    timestamp: Timestamp::from(row.get::<i64, _>("timestamp") as u64),
+                    epoch: row.get::<i64, _>("epoch") as u64,
+                    state_hash: row.get::<String, _>("state_hash").parse().map_err(|_| {
+                        SqliteError::Serialization("Invalid state hash".to_string())
+                    })?,
+                    previous_block_hash: row
+                        .get::<Option<String>, _>("previous_block_hash")
+                        .and_then(|s| s.parse().ok()),
+                    authenticated_signer: row.get::<Option<String>, _>("authenticated_signer"),
+                    operation_count: row.get::<i64, _>("operation_count") as usize,
+                    incoming_bundle_count: row.get::<i64, _>("incoming_bundle_count") as usize,
+                    message_count: row.get::<i64, _>("message_count") as usize,
+                    event_count: row.get::<i64, _>("event_count") as usize,
+                    blob_count: row.get::<i64, _>("blob_count") as usize,
+                }))
+            }
+            None => Ok(None),
+        }
+    }
 }
 
+/// Summary of a block without the full data
+pub struct BlockSummary {
+    pub hash: CryptoHash,
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+    pub timestamp: Timestamp,
+    pub epoch: u64,
+    pub state_hash: CryptoHash,
+    pub previous_block_hash: Option<CryptoHash>,
+    pub authenticated_signer: Option<String>,
+    pub operation_count: usize,
+    pub incoming_bundle_count: usize,
+    pub message_count: usize,
+    pub event_count: usize,
+    pub blob_count: usize,
+}
 #[async_trait]
 impl IndexerDatabase for SqliteDatabase {
     type Error = SqliteError;
