@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::sync::Arc;
+use std::{fs, path::PathBuf, sync::Arc};
 
 use futures::lock::Mutex;
 use linera_base::{
@@ -18,7 +18,7 @@ use linera_core::{
     test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
 };
 
-use super::MutationRoot;
+use super::{FaucetStorage, MutationRoot};
 
 struct ClientContext {
     client: ChainClient<environment::Test>,
@@ -87,6 +87,8 @@ async fn test_faucet_rate_limiting() {
         update_calls: 0,
     };
     let context = Arc::new(Mutex::new(context));
+    let faucet_storage = Arc::new(Mutex::new(FaucetStorage::default()));
+    let storage_path = PathBuf::from("/tmp/test_faucet_storage.json");
     let root = MutationRoot {
         chain_id,
         context: context.clone(),
@@ -94,6 +96,8 @@ async fn test_faucet_rate_limiting() {
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
+        faucet_storage,
+        storage_path,
     };
     // The faucet is releasing one token every 1000 microseconds. So at 1000 one claim should
     // succeed. At 3000, two more should have been unlocked.
@@ -132,6 +136,61 @@ async fn test_faucet_rate_limiting() {
         .await
         .is_err());
     assert_eq!(context.lock().await.update_calls, 4); // Also called in the last error case.
+}
+
+#[tokio::test]
+async fn test_faucet_persistence() {
+    let storage_builder = MemoryStorageBuilder::default();
+    let keys = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    clock.set(Timestamp::from(0));
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await.unwrap();
+    let client = builder
+        .add_root_chain(1, Amount::from_tokens(10))
+        .await
+        .unwrap();
+    let chain_id = client.chain_id();
+    let context = ClientContext {
+        client,
+        update_calls: 0,
+    };
+    let context = Arc::new(Mutex::new(context));
+
+    let faucet_storage = Arc::new(Mutex::new(FaucetStorage::default()));
+    let storage_path = PathBuf::from("/tmp/test_faucet_persistence.json");
+
+    // Clean up any existing test file
+    let _ = fs::remove_file(&storage_path);
+
+    // Set clock past any time limits to avoid balance checking issues
+    clock.set(Timestamp::from(u64::MAX));
+
+    let root = MutationRoot {
+        chain_id,
+        context: context.clone(),
+        amount: Amount::from_tokens(1),
+        end_timestamp: Timestamp::from(0), // Already passed, so no time limits
+        start_timestamp: Timestamp::from(0),
+        start_balance: Amount::from_tokens(10),
+        faucet_storage,
+        storage_path: storage_path.clone(),
+    };
+
+    let test_owner = AccountPublicKey::test_key(0).into();
+
+    // First claim should succeed and create a new chain
+    let first_description = root.do_claim(test_owner).await.unwrap();
+
+    // Second claim with the same owner should return the same chain
+    let second_result = root.do_claim(test_owner).await;
+    assert!(second_result.is_ok());
+    let second_description = second_result.unwrap();
+
+    // Should be the same chain
+    assert_eq!(first_description.id(), second_description.id());
+
+    // Clean up test file
+    let _ = fs::remove_file(&storage_path);
 }
 
 #[test]
