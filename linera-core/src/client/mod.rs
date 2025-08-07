@@ -8,7 +8,6 @@ use std::{
     iter,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
-    time::{Duration, Instant},
 };
 
 use chain_client_state::ChainClientState;
@@ -36,6 +35,7 @@ use linera_base::{
         ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
+    time::{Duration, Instant},
 };
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
