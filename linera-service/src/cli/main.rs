@@ -951,6 +951,7 @@ impl Runnable for Job {
                 amount,
                 limit_rate_until,
                 config,
+                storage_path,
             } => {
                 let context = ClientContext::new(
                     storage.clone(),
@@ -978,6 +979,7 @@ impl Runnable for Job {
                     end_timestamp,
                     genesis_config,
                     chain_listener_config: config,
+                    storage_path,
                 };
                 let faucet = FaucetService::new(config, context, storage).await?;
                 let cancellation_token = CancellationToken::new();
