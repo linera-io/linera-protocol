@@ -312,25 +312,11 @@ impl SqliteDatabase {
         let block_hash_str = block_hash.to_string();
         let destination_chain_id_str = message.destination.to_string();
         let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
-        let message_kind_str = format!("{:?}", message.kind);
+        let message_kind_str = Self::message_kind_to_string(&message.kind);
 
-        let (message_type, application_id, system_message_type) = match &message.message {
-            Message::System(sys_msg) => {
-                let sys_msg_type = match sys_msg {
-                    SystemMessage::Credit { .. } => "Credit",
-                    SystemMessage::Withdraw { .. } => "Withdraw",
-                    SystemMessage::ApplicationCreated => "ApplicationCreated",
-                };
-                ("System", None, Some(sys_msg_type))
-            }
-            Message::User { application_id, .. } => {
-                ("User", Some(application_id.to_string()), None)
-            }
-        };
-
-        let data = bincode::serialize(&message.message).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to serialize message: {}", e))
-        })?;
+        let (message_type, application_id, system_message_type) =
+            Self::classify_message(&message.message);
+        let data = Self::serialize_message(&message.message)?;
 
         sqlx::query(
             r#"
@@ -457,6 +443,26 @@ impl SqliteDatabase {
         Ok(())
     }
 
+    /// Extract and store incoming bundles from a ConfirmedBlockCertificate
+    async fn store_incoming_bundles_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        block_hash: &CryptoHash,
+        incoming_bundles: Vec<IncomingBundle>,
+    ) -> Result<(), SqliteError> {
+        for (bundle_index, incoming_bundle) in incoming_bundles.iter().enumerate() {
+            let bundle_id = self
+                .insert_incoming_bundle_tx(tx, block_hash, bundle_index, incoming_bundle)
+                .await?;
+
+            for message in &incoming_bundle.bundle.messages {
+                self.insert_bundle_message_tx(tx, bundle_id, message)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
     /// Insert an incoming bundle within a transaction and return the bundle ID
     async fn insert_incoming_bundle_tx(
         &self,
@@ -495,37 +501,18 @@ impl SqliteDatabase {
     }
 
     /// Insert a posted message within a transaction
-    async fn insert_posted_message_tx(
+    async fn insert_bundle_message_tx(
         &self,
         tx: &mut Transaction<'_, Sqlite>,
         bundle_id: i64,
         message: &PostedMessage,
     ) -> Result<(), SqliteError> {
-        let authenticated_signer_data = message
-            .authenticated_signer
-            .as_ref()
-            .map(bincode::serialize)
-            .transpose()
-            .map_err(|e| {
-                SqliteError::Serialization(format!(
-                    "Failed to serialize authenticated_signer: {}",
-                    e
-                ))
-            })?;
+        let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
 
-        let refund_grant_to_data = message
-            .refund_grant_to
-            .as_ref()
-            .map(bincode::serialize)
-            .transpose()
-            .map_err(|e| {
-                SqliteError::Serialization(format!("Failed to serialize refund_grant_to: {}", e))
-            })?;
+        let refund_grant_to_data = message.refund_grant_to.as_ref().map(|s| format!("{s}"));
 
-        let message_kind_str = format!("{:?}", message.kind);
-        let message_data = bincode::serialize(&message.message).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to serialize message: {}", e))
-        })?;
+        let message_kind_str = Self::message_kind_to_string(&message.kind);
+        let message_data = Self::serialize_message(&message.message)?;
 
         sqlx::query(
             r#"
@@ -536,7 +523,7 @@ impl SqliteDatabase {
         )
         .bind(bundle_id)
         .bind(message.index as i64)
-        .bind(authenticated_signer_data)
+        .bind(authenticated_signer_str)
         .bind(u128::from(message.grant) as i64)
         .bind(refund_grant_to_data)
         .bind(&message_kind_str)
@@ -544,26 +531,6 @@ impl SqliteDatabase {
         .execute(&mut **tx)
         .await?;
 
-        Ok(())
-    }
-
-    /// Extract and store incoming bundles from a ConfirmedBlockCertificate
-    async fn store_incoming_bundles_tx(
-        &self,
-        tx: &mut Transaction<'_, Sqlite>,
-        block_hash: &CryptoHash,
-        incoming_bundles: Vec<IncomingBundle>,
-    ) -> Result<(), SqliteError> {
-        for (bundle_index, incoming_bundle) in incoming_bundles.iter().enumerate() {
-            let bundle_id = self
-                .insert_incoming_bundle_tx(tx, block_hash, bundle_index, incoming_bundle)
-                .await?;
-
-            for message in &incoming_bundle.bundle.messages {
-                self.insert_posted_message_tx(tx, bundle_id, message)
-                    .await?;
-            }
-        }
         Ok(())
     }
 
@@ -859,18 +826,10 @@ impl SqliteDatabase {
             let authenticated_signer = authenticated_signer_str.and_then(|s| s.parse().ok());
             let grant_amount: i64 = row.get("grant_amount");
             let grant = linera_base::data_types::Amount::from(grant_amount as u128);
-            let message_kind_str: String = row.get("message_kind");
-            let kind = match message_kind_str.as_str() {
-                "Simple" => MessageKind::Simple,
-                "Tracked" => MessageKind::Tracked,
-                "Bouncing" => MessageKind::Bouncing,
-                "Protected" => MessageKind::Protected,
-                _ => MessageKind::Simple,
-            };
-            let data: Vec<u8> = row.get("data");
-            let message: Message = bincode::deserialize(&data).map_err(|e| {
-                SqliteError::Serialization(format!("Failed to deserialize message: {}", e))
-            })?;
+            let kind_str: String = row.get("message_kind");
+            let kind = Self::parse_message_kind(kind_str.as_str())?;
+            let message_bytes: Vec<u8> = row.get("data");
+            let message = Self::deserialize_message(message_bytes.as_slice())?;
 
             messages.push(OutgoingMessage {
                 destination,
@@ -1021,6 +980,54 @@ impl SqliteDatabase {
             }
             None => Ok(None),
         }
+    }
+
+    /// Classify a Message into database fields (message_type, application_id, system_message_type)
+    fn classify_message(message: &Message) -> (String, Option<String>, Option<String>) {
+        match message {
+            Message::System(sys_msg) => {
+                let sys_msg_type = match sys_msg {
+                    SystemMessage::Credit { .. } => "Credit",
+                    SystemMessage::Withdraw { .. } => "Withdraw",
+                    SystemMessage::ApplicationCreated => "ApplicationCreated",
+                };
+                ("System".to_string(), None, Some(sys_msg_type.to_string()))
+            }
+            Message::User { application_id, .. } => {
+                ("User".to_string(), Some(application_id.to_string()), None)
+            }
+        }
+    }
+
+    /// Serialize a Message with consistent error handling
+    fn serialize_message(message: &Message) -> Result<Vec<u8>, SqliteError> {
+        bincode::serialize(message)
+            .map_err(|e| SqliteError::Serialization(format!("Failed to serialize message: {}", e)))
+    }
+
+    fn deserialize_message(data: &[u8]) -> Result<Message, SqliteError> {
+        bincode::deserialize(data).map_err(|e| {
+            SqliteError::Serialization(format!("Failed to deserialize message: {}", e))
+        })
+    }
+
+    /// Parse MessageKind from string
+    fn parse_message_kind(kind_str: &str) -> Result<MessageKind, SqliteError> {
+        match kind_str {
+            "Simple" => Ok(MessageKind::Simple),
+            "Tracked" => Ok(MessageKind::Tracked),
+            "Bouncing" => Ok(MessageKind::Bouncing),
+            "Protected" => Ok(MessageKind::Protected),
+            _ => Err(SqliteError::Serialization(format!(
+                "Unknown message kind: {}",
+                kind_str
+            ))),
+        }
+    }
+
+    /// Convert MessageKind to string
+    fn message_kind_to_string(kind: &MessageKind) -> String {
+        format!("{:?}", kind)
     }
 }
 
