@@ -3,8 +3,11 @@
 
 //! The server component of the Linera faucet.
 
-use std::{future::IntoFuture, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap, future::IntoFuture, io, net::SocketAddr, path::PathBuf, sync::Arc,
+};
 
+use anyhow::Context as _;
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{Extension, Router};
@@ -23,7 +26,7 @@ use linera_core::data_types::ClientOutcome;
 #[cfg(feature = "metrics")]
 use linera_metrics::prometheus_server;
 use linera_storage::{Clock as _, Storage};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::info;
@@ -56,6 +59,8 @@ pub struct MutationRoot<C> {
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
+    faucet_storage: Arc<Mutex<FaucetStorage>>,
+    storage_path: PathBuf,
 }
 
 /// The result of a successful `claim` mutation.
@@ -71,6 +76,56 @@ pub struct ClaimOutcome {
 pub struct Validator {
     pub public_key: ValidatorPublicKey,
     pub network_address: String,
+}
+
+/// Persistent mapping of account owners to chain descriptions
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct FaucetStorage {
+    /// Maps account owners to their corresponding chain descriptions
+    owner_to_chain: HashMap<AccountOwner, ChainDescription>,
+}
+
+impl FaucetStorage {
+    /// Loads the faucet storage from disk, creating a new one if it doesn't exist
+    async fn load(storage_path: &PathBuf) -> Result<Self, io::Error> {
+        match tokio::fs::read(storage_path).await {
+            Ok(data) => serde_json::from_slice(&data).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Failed to deserialize faucet storage: {}", e),
+                )
+            }),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Saves the faucet storage to disk
+    async fn save(&self, storage_path: &PathBuf) -> Result<(), io::Error> {
+        let data = serde_json::to_vec_pretty(self).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to serialize faucet storage: {}", e),
+            )
+        })?;
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = storage_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        tokio::fs::write(storage_path, data).await
+    }
+
+    /// Gets the chain description for an owner if it exists
+    fn get_chain(&self, owner: &AccountOwner) -> Option<&ChainDescription> {
+        self.owner_to_chain.get(owner)
+    }
+
+    /// Stores a new mapping from owner to chain description
+    fn store_chain(&mut self, owner: AccountOwner, description: ChainDescription) {
+        self.owner_to_chain.insert(owner, description);
+    }
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
@@ -119,6 +174,14 @@ where
     C: ClientContext,
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
+        // Check if this owner already has a chain
+        {
+            let storage = self.faucet_storage.lock().await;
+            if let Some(existing_description) = storage.get_chain(&owner) {
+                return Ok(existing_description.clone());
+            }
+        }
+
         let client = self.context.lock().await.make_chain_client(self.chain_id);
 
         if self.start_timestamp < self.end_timestamp {
@@ -163,6 +226,16 @@ where
                 )));
             }
         };
+
+        // Store the new mapping and save to disk
+        {
+            let mut storage = self.faucet_storage.lock().await;
+            storage.store_chain(owner, description.clone());
+            if let Err(e) = storage.save(&self.storage_path).await {
+                tracing::warn!("Failed to save faucet storage: {}", e);
+            }
+        }
+
         Ok(description)
     }
 }
@@ -193,6 +266,8 @@ where
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
+    faucet_storage: Arc<Mutex<FaucetStorage>>,
+    storage_path: PathBuf,
 }
 
 impl<C> Clone for FaucetService<C>
@@ -213,6 +288,8 @@ where
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
+            faucet_storage: Arc::clone(&self.faucet_storage),
+            storage_path: self.storage_path.clone(),
         }
     }
 }
@@ -226,6 +303,7 @@ pub struct FaucetConfig {
     pub end_timestamp: Timestamp,
     pub genesis_config: Arc<GenesisConfig>,
     pub chain_listener_config: ChainListenerConfig,
+    pub storage_path: PathBuf,
 }
 
 impl<C> FaucetService<C>
@@ -243,6 +321,13 @@ where
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
+
+        // Load the faucet storage
+        let faucet_storage = FaucetStorage::load(&config.storage_path)
+            .await
+            .context("Failed to load faucet storage")?;
+        let faucet_storage = Arc::new(Mutex::new(faucet_storage));
+
         Ok(Self {
             chain_id: config.chain_id,
             context,
@@ -256,6 +341,8 @@ where
             end_timestamp: config.end_timestamp,
             start_timestamp,
             start_balance,
+            faucet_storage,
+            storage_path: config.storage_path,
         })
     }
 
@@ -267,6 +354,8 @@ where
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
+            faucet_storage: Arc::clone(&self.faucet_storage),
+            storage_path: self.storage_path.clone(),
         };
         let query_root = QueryRoot {
             genesis_config: Arc::clone(&self.genesis_config),
