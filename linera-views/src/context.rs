@@ -113,6 +113,33 @@ where
     }
 }
 
+/// A context which can't be used to read or write data, only used for caching views.
+#[derive(Debug, Default, Clone)]
+pub struct InactiveContext(pub BaseKey);
+
+impl Context for InactiveContext {
+    type Store = crate::store::inactive_store::InactiveStore;
+    type Extra = ();
+
+    type Error = crate::store::inactive_store::InactiveStoreError;
+
+    fn store(&self) -> &Self::Store {
+        &crate::store::inactive_store::InactiveStore
+    }
+
+    fn extra(&self) -> &Self::Extra {
+        &()
+    }
+
+    fn base_key(&self) -> &BaseKey {
+        &self.0
+    }
+
+    fn base_key_mut(&mut self) -> &mut BaseKey {
+        &mut self.0
+    }
+}
+
 /// Implementation of the [`Context`] trait on top of a DB client implementing
 /// [`crate::store::KeyValueStore`].
 #[derive(Debug, Default, Clone)]

@@ -27,6 +27,7 @@ use linera_execution::{
     ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
+use linera_views::context::InactiveContext;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{debug, instrument, trace, warn, Instrument as _};
 
@@ -164,7 +165,7 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
 }
@@ -183,9 +184,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
+        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -227,9 +226,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
+        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,

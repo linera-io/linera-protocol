@@ -13,7 +13,7 @@ use crate::{
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError},
 };
 
 #[cfg(with_metrics)]
@@ -40,6 +40,18 @@ pub struct ByteSetView<C> {
     context: C,
     delete_storage_first: bool,
     updates: BTreeMap<Vec<u8>, Update<()>>,
+}
+
+impl<C: Context, C2: Context> ReplaceContext<C2> for ByteSetView<C> {
+    type Result = ByteSetView<C2>;
+
+    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+        ByteSetView {
+            context: ctx(self.context()),
+            delete_storage_first: self.delete_storage_first,
+            updates: self.updates.clone(),
+        }
+    }
 }
 
 impl<C: Context> View for ByteSetView<C> {
@@ -362,6 +374,17 @@ impl<C: Context> HashableView for ByteSetView<C> {
 pub struct SetView<C, I> {
     set: ByteSetView<C>,
     _phantom: PhantomData<I>,
+}
+
+impl<C: Context, I: Send + Sync + Serialize, C2: Context> ReplaceContext<C2> for SetView<C, I> {
+    type Result = SetView<C2, I>;
+
+    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+        SetView {
+            set: self.set.with_context(ctx).await,
+            _phantom: self._phantom,
+        }
+    }
 }
 
 impl<C: Context, I: Send + Sync + Serialize> View for SetView<C, I> {

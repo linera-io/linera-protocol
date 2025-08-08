@@ -24,7 +24,7 @@ use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
-    views::{RootView, View},
+    views::{ReplaceContext, RootView, View},
 };
 use tokio::sync::oneshot;
 use tracing::{debug, instrument, trace, warn};
@@ -428,7 +428,14 @@ where
         let verified_outcome = if let Some(execution_state) =
             self.state.execution_state_cache.remove(&outcome.state_hash)
         {
-            chain.execution_state = execution_state;
+            chain.execution_state = execution_state
+                .with_context(|ctx| {
+                    chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await;
             outcome.clone()
         } else {
             chain
