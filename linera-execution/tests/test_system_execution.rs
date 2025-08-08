@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{AccountOwner, MessageId},
+    identifiers::AccountOwner,
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -82,14 +82,10 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     };
     let context = MessageContext {
         chain_id,
+        origin: chain_id,
         is_bouncing: false,
         height: BlockHeight(0),
         round: Some(0),
-        message_id: MessageId {
-            chain_id: dummy_chain_description(1).id(),
-            height: BlockHeight(0),
-            index: 0,
-        },
         authenticated_signer: None,
         refund_grant_to: None,
         timestamp: Default::default(),

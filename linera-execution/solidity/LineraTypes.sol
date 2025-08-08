@@ -566,7 +566,7 @@ library LineraTypes {
     struct ContractRuntimePrecompile {
         uint8 choice;
         // choice=0 corresponds to AuthenticatedSigner
-        // choice=1 corresponds to MessageId
+        // choice=1 corresponds to MessageOriginChainId
         // choice=2 corresponds to MessageIsBouncing
         // choice=3 corresponds to AuthenticatedCallerId
         // choice=4 corresponds to SendMessage
@@ -601,7 +601,7 @@ library LineraTypes {
         return ContractRuntimePrecompile(uint8(0), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
-    function ContractRuntimePrecompile_case_message_id()
+    function ContractRuntimePrecompile_case_message_origin_chain_id()
         internal
         pure
         returns (ContractRuntimePrecompile memory)
@@ -1223,49 +1223,6 @@ library LineraTypes {
         return value;
     }
 
-    struct MessageId {
-        ChainId chain_id;
-        BlockHeight height;
-        uint32 index;
-    }
-
-    function bcs_serialize_MessageId(MessageId memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_ChainId(input.chain_id);
-        result = abi.encodePacked(result, bcs_serialize_BlockHeight(input.height));
-        return abi.encodePacked(result, bcs_serialize_uint32(input.index));
-    }
-
-    function bcs_deserialize_offset_MessageId(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, MessageId memory)
-    {
-        uint256 new_pos;
-        ChainId memory chain_id;
-        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(pos, input);
-        BlockHeight memory height;
-        (new_pos, height) = bcs_deserialize_offset_BlockHeight(new_pos, input);
-        uint32 index;
-        (new_pos, index) = bcs_deserialize_offset_uint32(new_pos, input);
-        return (new_pos, MessageId(chain_id, height, index));
-    }
-
-    function bcs_deserialize_MessageId(bytes memory input)
-        internal
-        pure
-        returns (MessageId memory)
-    {
-        uint256 new_pos;
-        MessageId memory value;
-        (new_pos, value) = bcs_deserialize_offset_MessageId(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct MessageIsBouncing {
         OptionBool value;
     }
@@ -1419,37 +1376,37 @@ library LineraTypes {
         return value;
     }
 
-    struct OptionMessageId {
-        opt_MessageId value;
+    struct OptionChainId {
+        opt_ChainId value;
     }
 
-    function bcs_serialize_OptionMessageId(OptionMessageId memory input)
+    function bcs_serialize_OptionChainId(OptionChainId memory input)
         internal
         pure
         returns (bytes memory)
     {
-        return bcs_serialize_opt_MessageId(input.value);
+        return bcs_serialize_opt_ChainId(input.value);
     }
 
-    function bcs_deserialize_offset_OptionMessageId(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_OptionChainId(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, OptionMessageId memory)
+        returns (uint256, OptionChainId memory)
     {
         uint256 new_pos;
-        opt_MessageId memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_MessageId(pos, input);
-        return (new_pos, OptionMessageId(value));
+        opt_ChainId memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_ChainId(pos, input);
+        return (new_pos, OptionChainId(value));
     }
 
-    function bcs_deserialize_OptionMessageId(bytes memory input)
+    function bcs_deserialize_OptionChainId(bytes memory input)
         internal
         pure
-        returns (OptionMessageId memory)
+        returns (OptionChainId memory)
     {
         uint256 new_pos;
-        OptionMessageId memory value;
-        (new_pos, value) = bcs_deserialize_offset_OptionMessageId(0, input);
+        OptionChainId memory value;
+        (new_pos, value) = bcs_deserialize_offset_OptionChainId(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -2256,46 +2213,46 @@ library LineraTypes {
         return value;
     }
 
-    struct opt_MessageId {
+    struct opt_ChainId {
         bool has_value;
-        MessageId value;
+        ChainId value;
     }
 
-    function bcs_serialize_opt_MessageId(opt_MessageId memory input)
+    function bcs_serialize_opt_ChainId(opt_ChainId memory input)
         internal
         pure
         returns (bytes memory)
     {
         if (input.has_value) {
-            return abi.encodePacked(uint8(1), bcs_serialize_MessageId(input.value));
+            return abi.encodePacked(uint8(1), bcs_serialize_ChainId(input.value));
         } else {
             return abi.encodePacked(uint8(0));
         }
     }
 
-    function bcs_deserialize_offset_opt_MessageId(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_opt_ChainId(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, opt_MessageId memory)
+        returns (uint256, opt_ChainId memory)
     {
         uint256 new_pos;
         bool has_value;
         (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
-        MessageId memory value;
+        ChainId memory value;
         if (has_value) {
-            (new_pos, value) = bcs_deserialize_offset_MessageId(new_pos, input);
+            (new_pos, value) = bcs_deserialize_offset_ChainId(new_pos, input);
         }
-        return (new_pos, opt_MessageId(has_value, value));
+        return (new_pos, opt_ChainId(has_value, value));
     }
 
-    function bcs_deserialize_opt_MessageId(bytes memory input)
+    function bcs_deserialize_opt_ChainId(bytes memory input)
         internal
         pure
-        returns (opt_MessageId memory)
+        returns (opt_ChainId memory)
     {
         uint256 new_pos;
-        opt_MessageId memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_MessageId(0, input);
+        opt_ChainId memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_ChainId(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

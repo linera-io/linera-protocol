@@ -18,8 +18,8 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, GenericApplicationId, MessageId,
-        StreamId, StreamName,
+        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
+        StreamName,
     },
     ownership::ChainOwnership,
     vm::VmRuntime,
@@ -1172,15 +1172,18 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(self.inner().authenticated_signer)
     }
 
-    fn message_id(&mut self) -> Result<Option<MessageId>, ExecutionError> {
-        Ok(self.inner().executing_message.map(|metadata| metadata.id))
-    }
-
     fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError> {
         Ok(self
             .inner()
             .executing_message
             .map(|metadata| metadata.is_bouncing))
+    }
+
+    fn message_origin_chain_id(&mut self) -> Result<Option<ChainId>, ExecutionError> {
+        Ok(self
+            .inner()
+            .executing_message
+            .map(|metadata| metadata.origin))
     }
 
     fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError> {
@@ -1845,15 +1848,15 @@ pub enum ServiceRuntimeRequest {
 /// The origin of the execution.
 #[derive(Clone, Copy, Debug)]
 struct ExecutingMessage {
-    id: MessageId,
     is_bouncing: bool,
+    origin: ChainId,
 }
 
 impl From<&MessageContext> for ExecutingMessage {
     fn from(context: &MessageContext) -> Self {
         ExecutingMessage {
-            id: context.message_id,
             is_bouncing: context.is_bouncing,
+            origin: context.origin,
         }
     }
 }

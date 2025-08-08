@@ -4,21 +4,13 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{ChainId, MessageId, ModuleId},
+    identifiers::{ChainId, ModuleId},
     vm::VmRuntime,
 };
 
 use super::{
     ApplicationRegistry, ApplicationRegistryView, ApplicationDescription, ApplicationId,
 };
-
-fn message_id(index: u32) -> MessageId {
-    MessageId {
-        chain_id: ChainId::root(0),
-        height: BlockHeight::ZERO,
-        index,
-    }
-}
 
 fn module_id() -> ModuleId {
     ModuleId::new(
@@ -29,16 +21,16 @@ fn module_id() -> ModuleId {
 }
 
 fn app_id(index: u32) -> ApplicationId {
-    ApplicationId {
-        module_id: module_id(),
-        creation: message_id(index),
-    }
+    let description = app_description(index, vec![]);
+    (&description).into()
 }
 
 fn app_description(index: u32, deps: Vec<u32>) -> ApplicationDescription {
     ApplicationDescription {
         module_id: module_id(),
-        creation: message_id(index),
+        creator_chain_id: ChainId::root(0),
+        block_height: BlockHeight::ZERO,
+        application_index: index,
         parameters: vec![],
         required_application_ids: deps.into_iter().map(app_id).collect(),
     }

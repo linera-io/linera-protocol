@@ -75,13 +75,6 @@ CryptoHash:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-MessageId:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - height:
-        TYPENAME: BlockHeight
-    - index: U32
 BlockHeight:
   NEWTYPESTRUCT: U64
 ChainId:
@@ -98,10 +91,10 @@ MessageIsBouncing:
 OptionU32:
   NEWTYPESTRUCT:
     OPTION: U32
-OptionMessageId:
+OptionChainId:
   NEWTYPESTRUCT:
     OPTION:
-      TYPENAME: MessageId
+      TYPENAME: ChainId
 StreamName:
   NEWTYPESTRUCT: BYTES
 ApplicationId:
@@ -143,7 +136,7 @@ ContractRuntimePrecompile:
     0:
       AuthenticatedSigner: UNIT
     1:
-      MessageId: UNIT
+      MessageOriginChainId: UNIT
     2:
       MessageIsBouncing: UNIT
     3:

@@ -15,9 +15,7 @@ use linera_base::{
         Timestamp,
     },
     ensure, http,
-    identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, ChainId, MessageId, ModuleId, StreamName,
-    },
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, ModuleId, StreamName},
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
@@ -59,8 +57,8 @@ where
     authenticated_signer: Option<Option<AccountOwner>>,
     block_height: Option<BlockHeight>,
     round: Option<u32>,
-    message_id: Option<Option<MessageId>>,
     message_is_bouncing: Option<Option<bool>>,
+    message_origin_chain_id: Option<Option<ChainId>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
@@ -108,8 +106,8 @@ where
             authenticated_signer: None,
             block_height: None,
             round: None,
-            message_id: None,
             message_is_bouncing: None,
+            message_origin_chain_id: None,
             authenticated_caller_id: None,
             timestamp: None,
             chain_balance: None,
@@ -292,27 +290,6 @@ where
         )
     }
 
-    /// Configures the message ID to return during the test.
-    pub fn with_message_id(mut self, message_id: impl Into<Option<MessageId>>) -> Self {
-        self.message_id = Some(message_id.into());
-        self
-    }
-
-    /// Configures the message ID to return during the test.
-    pub fn set_message_id(&mut self, message_id: impl Into<Option<MessageId>>) -> &mut Self {
-        self.message_id = Some(message_id.into());
-        self
-    }
-
-    /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing
-    /// an incoming message.
-    pub fn message_id(&mut self) -> Option<MessageId> {
-        self.message_id.expect(
-            "Message ID has not been mocked, \
-            please call `MockContractRuntime::set_message_id` first",
-        )
-    }
-
     /// Configures the `message_is_bouncing` flag to return during the test.
     pub fn with_message_is_bouncing(
         mut self,
@@ -337,6 +314,24 @@ where
         self.message_is_bouncing.expect(
             "`message_is_bouncing` flag has not been mocked, \
             please call `MockContractRuntime::set_message_is_bouncing` first",
+        )
+    }
+
+    /// Configures the `message_origin_chain_id` to return during the test.
+    pub fn set_message_origin_chain_id(
+        &mut self,
+        message_origin_chain_id: impl Into<Option<ChainId>>,
+    ) -> &mut Self {
+        self.message_origin_chain_id = Some(message_origin_chain_id.into());
+        self
+    }
+
+    /// Returns the chain ID where the incoming message originated from, or [`None`] if not
+    /// executing an incoming message.
+    pub fn message_origin_chain_id(&mut self) -> Option<ChainId> {
+        self.message_origin_chain_id.expect(
+            "`message_origin_chain_id` has not been mocked, \
+            please call `MockContractRuntime::set_message_origin_chain_id` first",
         )
     }
 
@@ -664,7 +659,7 @@ where
         }
     }
 
-    /// Adds an expected call to `open_chain`, and the message ID that should be returned.
+    /// Adds an expected call to `open_chain`, and the child chain ID that should be returned.
     pub fn add_expected_open_chain_call(
         &mut self,
         ownership: ChainOwnership,

@@ -11,7 +11,7 @@ use test_case::test_case;
 use crate::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -27,7 +27,6 @@ use crate::{
 #[test_case(AccountOwner::from(CryptoHash::test_hash("owner")); "of_owner")]
 #[test_case(account_test_case(); "of_account")]
 #[test_case(ChainId(CryptoHash::test_hash("chain_id")); "of_chain_id")]
-#[test_case(message_id_test_case(); "of_message_id")]
 #[test_case(application_id_test_case(); "of_application_id")]
 #[test_case(module_id_test_case(); "of_module_id")]
 #[test_case(timeout_config_test_case(); "of_timeout_config")]
@@ -98,15 +97,6 @@ fn account_test_case() -> Account {
     Account {
         chain_id: ChainId(CryptoHash::test_hash("chain_id_10")),
         owner: AccountOwner::from(CryptoHash::test_hash("account")),
-    }
-}
-
-/// Creates a dummy [`MessageId`] instance to use for the WIT roundtrip test.
-fn message_id_test_case() -> MessageId {
-    MessageId {
-        chain_id: ChainId(CryptoHash::test_hash("chain_id_3")),
-        height: BlockHeight(9_812_394),
-        index: 7,
     }
 }
 

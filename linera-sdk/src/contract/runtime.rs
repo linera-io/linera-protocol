@@ -10,7 +10,7 @@ use linera_base::{
         Timestamp,
     },
     ensure, http,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamName},
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
@@ -36,7 +36,7 @@ where
     authenticated_signer: Option<Option<AccountOwner>>,
     block_height: Option<BlockHeight>,
     message_is_bouncing: Option<Option<bool>>,
-    message_id: Option<Option<MessageId>>,
+    message_origin_chain_id: Option<Option<ChainId>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
     timestamp: Option<Timestamp>,
 }
@@ -55,7 +55,7 @@ where
             authenticated_signer: None,
             block_height: None,
             message_is_bouncing: None,
-            message_id: None,
+            message_origin_chain_id: None,
             authenticated_caller_id: None,
             timestamp: None,
         }
@@ -179,20 +179,20 @@ where
             .get_or_insert_with(|| contract_wit::authenticated_signer().map(AccountOwner::from))
     }
 
-    /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing
-    /// an incoming message.
-    pub fn message_id(&mut self) -> Option<MessageId> {
-        *self
-            .message_id
-            .get_or_insert_with(|| contract_wit::get_message_id().map(MessageId::from))
-    }
-
     /// Returns [`true`] if the incoming message was rejected from the original destination and is
     /// now bouncing back, or [`None`] if not executing an incoming message.
     pub fn message_is_bouncing(&mut self) -> Option<bool> {
         *self
             .message_is_bouncing
             .get_or_insert_with(contract_wit::message_is_bouncing)
+    }
+
+    /// Returns the chain ID where the incoming message originated from, or [`None`] if not executing
+    /// an incoming message.
+    pub fn message_origin_chain_id(&mut self) -> Option<ChainId> {
+        *self
+            .message_origin_chain_id
+            .get_or_insert_with(|| contract_wit::message_origin_chain_id().map(ChainId::from))
     }
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context

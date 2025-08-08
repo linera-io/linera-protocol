@@ -2,8 +2,8 @@ package linera:app;
 
 interface contract-runtime-api {
     authenticated-signer: func() -> option<account-owner>;
-    get-message-id: func() -> option<message-id>;
     message-is-bouncing: func() -> option<bool>;
+    message-origin-chain-id: func() -> option<chain-id>;
     authenticated-caller-id: func() -> option<application-id>;
     send-message: func(message: send-message-request);
     transfer: func(source: account-owner, destination: account, amount: amount);
@@ -73,10 +73,6 @@ interface contract-runtime-api {
         chain-description,
     }
 
-    record block-height {
-        inner0: u64,
-    }
-
     record bytecode {
         bytes: list<u8>,
     }
@@ -106,12 +102,6 @@ interface contract-runtime-api {
         part2: u64,
         part3: u64,
         part4: u64,
-    }
-
-    record message-id {
-        chain-id: chain-id,
-        height: block-height,
-        index: u32,
     }
 
     record module-id {

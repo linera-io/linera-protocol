@@ -196,12 +196,33 @@ library Linera {
         AccountOwner value;
     }
 
+    struct opt_ChainId {
+        bool has_value;
+        ChainId value;
+    }
+
     function opt_accountowner_from(LineraTypes.opt_AccountOwner memory entry)
         internal
         pure
         returns (opt_AccountOwner memory)
     {
         return opt_AccountOwner(entry.has_value, accountowner_from(entry.value));
+    }
+
+    function opt_chainid_from(LineraTypes.opt_ChainId memory entry)
+        internal
+        pure
+        returns (opt_ChainId memory)
+    {
+        return opt_ChainId(entry.has_value, chainid_from(entry.value));
+    }
+
+    function opt_chainid_none()
+        internal
+        pure
+        returns (opt_ChainId memory)
+    {
+        return opt_ChainId(false, ChainId(bytes32(0)));
     }
 
     enum OptionBool { None, True, False }
@@ -220,32 +241,7 @@ library Linera {
         return OptionBool.None;
     }
 
-    struct MessageId {
-        ChainId chain_id;
-        uint64 height;
-        uint32 index;
-    }
 
-    function messageid_from(LineraTypes.MessageId memory entry)
-        internal
-        pure
-        returns (MessageId memory)
-    {
-        return MessageId(chainid_from(entry.chain_id), entry.height.value, entry.index);
-    }
-
-    struct opt_MessageId {
-        bool has_value;
-        MessageId value;
-    }
-
-    function opt_messageid_from(LineraTypes.opt_MessageId memory entry)
-        internal
-        pure
-        returns (opt_MessageId memory)
-    {
-        return opt_MessageId(entry.has_value, messageid_from(entry.value));
-    }
 
     struct StreamUpdate {
         ChainId chain_id;
@@ -419,15 +415,15 @@ library Linera {
         return opt_accountowner_from(output2);
     }
 
-    function message_id() internal returns (Linera.opt_MessageId memory) {
+    function message_origin_chain_id() internal returns (opt_ChainId memory) {
         address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_id();
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_origin_chain_id();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
-        LineraTypes.opt_MessageId memory output2 = LineraTypes.bcs_deserialize_opt_MessageId(output1);
-        return opt_messageid_from(output2);
+        LineraTypes.opt_ChainId memory output2 = LineraTypes.bcs_deserialize_opt_ChainId(output1);
+        return opt_chainid_from(output2);
     }
 
     function message_is_bouncing() internal returns (OptionBool) {

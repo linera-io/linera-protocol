@@ -18,7 +18,7 @@ use linera_base::{
         Amount, Blob, BlockHeight, ChainDescription, ChainOrigin, CompressedBytecode, Epoch,
         InitialChainConfig, OracleResponse, Timestamp,
     },
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, MessageId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -130,16 +130,12 @@ pub fn create_dummy_message_context(
 ) -> MessageContext {
     MessageContext {
         chain_id,
+        origin: chain_id,
         is_bouncing: false,
         authenticated_signer,
         refund_grant_to: None,
         height: BlockHeight(0),
         round: Some(0),
-        message_id: MessageId {
-            chain_id,
-            height: BlockHeight(0),
-            index: 0,
-        },
         timestamp: Default::default(),
     }
 }

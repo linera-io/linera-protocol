@@ -11,7 +11,7 @@ use linera_base::{
     crypto::AccountPublicKey,
     data_types::{Amount, BlockHeight, OracleResponse},
     http,
-    identifiers::{Account, AccountOwner, MessageId},
+    identifiers::{Account, AccountOwner},
     vm::VmRuntime,
 };
 use linera_execution::{
@@ -278,12 +278,12 @@ async fn test_fee_consumption(
         .or(None);
     let context = MessageContext {
         chain_id,
+        origin: chain_id,
         is_bouncing: false,
         authenticated_signer,
         refund_grant_to,
         height: BlockHeight(0),
         round: Some(0),
-        message_id: MessageId::default(),
         timestamp: Default::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
