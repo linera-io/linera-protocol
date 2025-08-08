@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(Index)]` generates"><title>Index in derive_more::with_trait - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../derive_more/index.html">derive_<wbr>more</a><span class="version">2.0.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Index</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#what-deriveindex-generates" title="What `#[derive(Index)]` generates">What <code>#[derive(Index)]</code> generates</a><ul><li><a href="#example-usage" title="Example usage">Example usage</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In derive_<wbr>more::<wbr>with_<wbr>trait</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">derive_more</a>::<wbr><a href="index.html">with_trait</a></div><h1>Derive Macro <span class="derive">Index</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><pre class="rust item-decl"><code>#[derive(Index)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[index]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-deriveindex-generates"><a class="doc-anchor" href="#what-deriveindex-generates">§</a>What <code>#[derive(Index)]</code> generates</h2>
+<p>Deriving <code>Index</code> only works for a single field of a struct.
+The result is that you will index it’s member directly.</p>
+<p>With <code>#[index]</code> or <code>#[index(ignore)]</code> it’s possible to indicate the field that
+you want to derive <code>Index</code> for.</p>
+<h3 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Index)]
+</span><span class="kw">struct </span>MyVec(Vec&lt;i32&gt;);
+
+<span class="comment">// You can specify the field you want to derive Index for
+</span><span class="attr">#[derive(Index)]
+</span><span class="kw">struct </span>Numbers {
+    <span class="attr">#[index]
+    </span>numbers: Vec&lt;i32&gt;,
+    useless: bool,
+}
+
+<span class="macro">assert_eq!</span>(<span class="number">5</span>, MyVec(<span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">8</span>])[<span class="number">0</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">200</span>, Numbers { numbers: <span class="macro">vec!</span>[<span class="number">100</span>, <span class="number">200</span>], useless: <span class="bool-val">false </span>}[<span class="number">1</span>]);</code></pre></div>
+<h3 id="structs"><a class="doc-anchor" href="#structs">§</a>Structs</h3>
+<p>When deriving <code>Index</code> for a struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Index)]
+</span><span class="kw">struct </span>Numbers {
+    <span class="attr">#[index]
+    </span>numbers: Vec&lt;i32&gt;,
+    useless: bool,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;__IdxT&gt; derive_more::core::ops::Index&lt;__IdxT&gt; <span class="kw">for </span>Numbers
+<span class="kw">where
+    </span>Vec&lt;i32&gt;: derive_more::core::ops::Index&lt;__IdxT&gt;,
+{
+    <span class="kw">type </span>Output = &lt;Vec&lt;i32&gt; <span class="kw">as </span>derive_more::core::ops::Index&lt;__IdxT&gt;&gt;::Output;
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>index(<span class="kw-2">&amp;</span><span class="self">self</span>, idx: __IdxT) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Output {
+        &lt;Vec&lt;i32&gt; <span class="kw">as </span>derive_more::core::ops::Index&lt;__IdxT&gt;&gt;::index(<span class="kw-2">&amp;</span><span class="self">self</span>.numbers, idx)
+    }
+}</code></pre></div>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>Deriving <code>Index</code> is not supported for enums.</p>
+</div></details></section></div></main></body></html>

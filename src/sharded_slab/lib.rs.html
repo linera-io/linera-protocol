@@ -1,0 +1,1106 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sharded-slab-0.1.7/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sharded_slab" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">sharded_slab/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! A lock-free concurrent slab.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! Slabs provide pre-allocated storage for many instances of a single data
+<a href=#4 id=4 data-nosnippet>4</a>//! type. When a large number of values of a single type are required,
+<a href=#5 id=5 data-nosnippet>5</a>//! this can be more efficient than allocating each item individually. Since the
+<a href=#6 id=6 data-nosnippet>6</a>//! allocated items are the same size, memory fragmentation is reduced, and
+<a href=#7 id=7 data-nosnippet>7</a>//! creating and removing new items can be very cheap.
+<a href=#8 id=8 data-nosnippet>8</a>//!
+<a href=#9 id=9 data-nosnippet>9</a>//! This crate implements a lock-free concurrent slab, indexed by `usize`s.
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! ## Usage
+<a href=#12 id=12 data-nosnippet>12</a>//!
+<a href=#13 id=13 data-nosnippet>13</a>//! First, add this to your `Cargo.toml`:
+<a href=#14 id=14 data-nosnippet>14</a>//!
+<a href=#15 id=15 data-nosnippet>15</a>//! ```toml
+<a href=#16 id=16 data-nosnippet>16</a>//! sharded-slab = "0.1.1"
+<a href=#17 id=17 data-nosnippet>17</a>//! ```
+<a href=#18 id=18 data-nosnippet>18</a>//!
+<a href=#19 id=19 data-nosnippet>19</a>//! This crate provides two  types, [`Slab`] and [`Pool`], which provide
+<a href=#20 id=20 data-nosnippet>20</a>//! slightly different APIs for using a sharded slab.
+<a href=#21 id=21 data-nosnippet>21</a>//!
+<a href=#22 id=22 data-nosnippet>22</a>//! [`Slab`] implements a slab for _storing_ small types, sharing them between
+<a href=#23 id=23 data-nosnippet>23</a>//! threads, and accessing them by index. New entries are allocated by
+<a href=#24 id=24 data-nosnippet>24</a>//! [inserting] data, moving it in by value. Similarly, entries may be
+<a href=#25 id=25 data-nosnippet>25</a>//! deallocated by [taking] from the slab, moving the value out. This API is
+<a href=#26 id=26 data-nosnippet>26</a>//! similar to a `Vec&lt;Option&lt;T&gt;&gt;`, but allowing lock-free concurrent insertion
+<a href=#27 id=27 data-nosnippet>27</a>//! and removal.
+<a href=#28 id=28 data-nosnippet>28</a>//!
+<a href=#29 id=29 data-nosnippet>29</a>//! In contrast, the [`Pool`] type provides an [object pool] style API for
+<a href=#30 id=30 data-nosnippet>30</a>//! _reusing storage_. Rather than constructing values and moving them into the
+<a href=#31 id=31 data-nosnippet>31</a>//! pool, as with [`Slab`], [allocating an entry][create] from the pool takes a
+<a href=#32 id=32 data-nosnippet>32</a>//! closure that's provided with a mutable reference to initialize the entry in
+<a href=#33 id=33 data-nosnippet>33</a>//! place. When entries are deallocated, they are [cleared] in place. Types
+<a href=#34 id=34 data-nosnippet>34</a>//! which own a heap allocation can be cleared by dropping any _data_ they
+<a href=#35 id=35 data-nosnippet>35</a>//! store, but retaining any previously-allocated capacity. This means that a
+<a href=#36 id=36 data-nosnippet>36</a>//! [`Pool`] may be used to reuse a set of existing heap allocations, reducing
+<a href=#37 id=37 data-nosnippet>37</a>//! allocator load.
+<a href=#38 id=38 data-nosnippet>38</a>//!
+<a href=#39 id=39 data-nosnippet>39</a>//! [inserting]: Slab::insert
+<a href=#40 id=40 data-nosnippet>40</a>//! [taking]: Slab::take
+<a href=#41 id=41 data-nosnippet>41</a>//! [create]: Pool::create
+<a href=#42 id=42 data-nosnippet>42</a>//! [cleared]: Clear
+<a href=#43 id=43 data-nosnippet>43</a>//! [object pool]: https://en.wikipedia.org/wiki/Object_pool_pattern
+<a href=#44 id=44 data-nosnippet>44</a>//!
+<a href=#45 id=45 data-nosnippet>45</a>//! # Examples
+<a href=#46 id=46 data-nosnippet>46</a>//!
+<a href=#47 id=47 data-nosnippet>47</a>//! Inserting an item into the slab, returning an index:
+<a href=#48 id=48 data-nosnippet>48</a>//! ```rust
+<a href=#49 id=49 data-nosnippet>49</a>//! # use sharded_slab::Slab;
+<a href=#50 id=50 data-nosnippet>50</a>//! let slab = Slab::new();
+<a href=#51 id=51 data-nosnippet>51</a>//!
+<a href=#52 id=52 data-nosnippet>52</a>//! let key = slab.insert("hello world").unwrap();
+<a href=#53 id=53 data-nosnippet>53</a>//! assert_eq!(slab.get(key).unwrap(), "hello world");
+<a href=#54 id=54 data-nosnippet>54</a>//! ```
+<a href=#55 id=55 data-nosnippet>55</a>//!
+<a href=#56 id=56 data-nosnippet>56</a>//! To share a slab across threads, it may be wrapped in an `Arc`:
+<a href=#57 id=57 data-nosnippet>57</a>//! ```rust
+<a href=#58 id=58 data-nosnippet>58</a>//! # use sharded_slab::Slab;
+<a href=#59 id=59 data-nosnippet>59</a>//! use std::sync::Arc;
+<a href=#60 id=60 data-nosnippet>60</a>//! let slab = Arc::new(Slab::new());
+<a href=#61 id=61 data-nosnippet>61</a>//!
+<a href=#62 id=62 data-nosnippet>62</a>//! let slab2 = slab.clone();
+<a href=#63 id=63 data-nosnippet>63</a>//! let thread2 = std::thread::spawn(move || {
+<a href=#64 id=64 data-nosnippet>64</a>//!     let key = slab2.insert("hello from thread two").unwrap();
+<a href=#65 id=65 data-nosnippet>65</a>//!     assert_eq!(slab2.get(key).unwrap(), "hello from thread two");
+<a href=#66 id=66 data-nosnippet>66</a>//!     key
+<a href=#67 id=67 data-nosnippet>67</a>//! });
+<a href=#68 id=68 data-nosnippet>68</a>//!
+<a href=#69 id=69 data-nosnippet>69</a>//! let key1 = slab.insert("hello from thread one").unwrap();
+<a href=#70 id=70 data-nosnippet>70</a>//! assert_eq!(slab.get(key1).unwrap(), "hello from thread one");
+<a href=#71 id=71 data-nosnippet>71</a>//!
+<a href=#72 id=72 data-nosnippet>72</a>//! // Wait for thread 2 to complete.
+<a href=#73 id=73 data-nosnippet>73</a>//! let key2 = thread2.join().unwrap();
+<a href=#74 id=74 data-nosnippet>74</a>//!
+<a href=#75 id=75 data-nosnippet>75</a>//! // The item inserted by thread 2 remains in the slab.
+<a href=#76 id=76 data-nosnippet>76</a>//! assert_eq!(slab.get(key2).unwrap(), "hello from thread two");
+<a href=#77 id=77 data-nosnippet>77</a>//!```
+<a href=#78 id=78 data-nosnippet>78</a>//!
+<a href=#79 id=79 data-nosnippet>79</a>//! If items in the slab must be mutated, a `Mutex` or `RwLock` may be used for
+<a href=#80 id=80 data-nosnippet>80</a>//! each item, providing granular locking of items rather than of the slab:
+<a href=#81 id=81 data-nosnippet>81</a>//!
+<a href=#82 id=82 data-nosnippet>82</a>//! ```rust
+<a href=#83 id=83 data-nosnippet>83</a>//! # use sharded_slab::Slab;
+<a href=#84 id=84 data-nosnippet>84</a>//! use std::sync::{Arc, Mutex};
+<a href=#85 id=85 data-nosnippet>85</a>//! let slab = Arc::new(Slab::new());
+<a href=#86 id=86 data-nosnippet>86</a>//!
+<a href=#87 id=87 data-nosnippet>87</a>//! let key = slab.insert(Mutex::new(String::from("hello world"))).unwrap();
+<a href=#88 id=88 data-nosnippet>88</a>//!
+<a href=#89 id=89 data-nosnippet>89</a>//! let slab2 = slab.clone();
+<a href=#90 id=90 data-nosnippet>90</a>//! let thread2 = std::thread::spawn(move || {
+<a href=#91 id=91 data-nosnippet>91</a>//!     let hello = slab2.get(key).expect("item missing");
+<a href=#92 id=92 data-nosnippet>92</a>//!     let mut hello = hello.lock().expect("mutex poisoned");
+<a href=#93 id=93 data-nosnippet>93</a>//!     *hello = String::from("hello everyone!");
+<a href=#94 id=94 data-nosnippet>94</a>//! });
+<a href=#95 id=95 data-nosnippet>95</a>//!
+<a href=#96 id=96 data-nosnippet>96</a>//! thread2.join().unwrap();
+<a href=#97 id=97 data-nosnippet>97</a>//!
+<a href=#98 id=98 data-nosnippet>98</a>//! let hello = slab.get(key).expect("item missing");
+<a href=#99 id=99 data-nosnippet>99</a>//! let mut hello = hello.lock().expect("mutex poisoned");
+<a href=#100 id=100 data-nosnippet>100</a>//! assert_eq!(hello.as_str(), "hello everyone!");
+<a href=#101 id=101 data-nosnippet>101</a>//! ```
+<a href=#102 id=102 data-nosnippet>102</a>//!
+<a href=#103 id=103 data-nosnippet>103</a>//! # Configuration
+<a href=#104 id=104 data-nosnippet>104</a>//!
+<a href=#105 id=105 data-nosnippet>105</a>//! For performance reasons, several values used by the slab are calculated as
+<a href=#106 id=106 data-nosnippet>106</a>//! constants. In order to allow users to tune the slab's parameters, we provide
+<a href=#107 id=107 data-nosnippet>107</a>//! a [`Config`] trait which defines these parameters as associated `consts`.
+<a href=#108 id=108 data-nosnippet>108</a>//! The `Slab` type is generic over a `C: Config` parameter.
+<a href=#109 id=109 data-nosnippet>109</a>//!
+<a href=#110 id=110 data-nosnippet>110</a>//! [`Config`]: trait.Config.html
+<a href=#111 id=111 data-nosnippet>111</a>//!
+<a href=#112 id=112 data-nosnippet>112</a>//! # Comparison with Similar Crates
+<a href=#113 id=113 data-nosnippet>113</a>//!
+<a href=#114 id=114 data-nosnippet>114</a>//! - [`slab`]: Carl Lerche's `slab` crate provides a slab implementation with a
+<a href=#115 id=115 data-nosnippet>115</a>//!   similar API, implemented by storing all data in a single vector.
+<a href=#116 id=116 data-nosnippet>116</a>//!
+<a href=#117 id=117 data-nosnippet>117</a>//!   Unlike `sharded_slab`, inserting and removing elements from the slab
+<a href=#118 id=118 data-nosnippet>118</a>//!   requires  mutable access. This means that if the slab is accessed
+<a href=#119 id=119 data-nosnippet>119</a>//!   concurrently by multiple threads, it is necessary for it to be protected
+<a href=#120 id=120 data-nosnippet>120</a>//!   by a `Mutex` or `RwLock`. Items may not be inserted or removed (or
+<a href=#121 id=121 data-nosnippet>121</a>//!   accessed, if a `Mutex` is used) concurrently, even when they are
+<a href=#122 id=122 data-nosnippet>122</a>//!   unrelated. In many cases, the lock can become a significant bottleneck. On
+<a href=#123 id=123 data-nosnippet>123</a>//!   the other hand, this crate allows separate indices in the slab to be
+<a href=#124 id=124 data-nosnippet>124</a>//!   accessed, inserted, and removed concurrently without requiring a global
+<a href=#125 id=125 data-nosnippet>125</a>//!   lock. Therefore, when the slab is shared across multiple threads, this
+<a href=#126 id=126 data-nosnippet>126</a>//!   crate offers significantly better performance than `slab`.
+<a href=#127 id=127 data-nosnippet>127</a>//!
+<a href=#128 id=128 data-nosnippet>128</a>//!   However, the lock free slab introduces some additional constant-factor
+<a href=#129 id=129 data-nosnippet>129</a>//!   overhead. This means that in use-cases where a slab is _not_ shared by
+<a href=#130 id=130 data-nosnippet>130</a>//!   multiple threads and locking is not required, this crate will likely offer
+<a href=#131 id=131 data-nosnippet>131</a>//!   slightly worse performance.
+<a href=#132 id=132 data-nosnippet>132</a>//!
+<a href=#133 id=133 data-nosnippet>133</a>//!   In summary: `sharded-slab` offers significantly improved performance in
+<a href=#134 id=134 data-nosnippet>134</a>//!   concurrent use-cases, while `slab` should be preferred in single-threaded
+<a href=#135 id=135 data-nosnippet>135</a>//!   use-cases.
+<a href=#136 id=136 data-nosnippet>136</a>//!
+<a href=#137 id=137 data-nosnippet>137</a>//! [`slab`]: https://crates.io/crates/loom
+<a href=#138 id=138 data-nosnippet>138</a>//!
+<a href=#139 id=139 data-nosnippet>139</a>//! # Safety and Correctness
+<a href=#140 id=140 data-nosnippet>140</a>//!
+<a href=#141 id=141 data-nosnippet>141</a>//! Most implementations of lock-free data structures in Rust require some
+<a href=#142 id=142 data-nosnippet>142</a>//! amount of unsafe code, and this crate is not an exception. In order to catch
+<a href=#143 id=143 data-nosnippet>143</a>//! potential bugs in this unsafe code, we make use of [`loom`], a
+<a href=#144 id=144 data-nosnippet>144</a>//! permutation-testing tool for concurrent Rust programs. All `unsafe` blocks
+<a href=#145 id=145 data-nosnippet>145</a>//! this crate occur in accesses to `loom` `UnsafeCell`s. This means that when
+<a href=#146 id=146 data-nosnippet>146</a>//! those accesses occur in this crate's tests, `loom` will assert that they are
+<a href=#147 id=147 data-nosnippet>147</a>//! valid under the C11 memory model across multiple permutations of concurrent
+<a href=#148 id=148 data-nosnippet>148</a>//! executions of those tests.
+<a href=#149 id=149 data-nosnippet>149</a>//!
+<a href=#150 id=150 data-nosnippet>150</a>//! In order to guard against the [ABA problem][aba], this crate makes use of
+<a href=#151 id=151 data-nosnippet>151</a>//! _generational indices_. Each slot in the slab tracks a generation counter
+<a href=#152 id=152 data-nosnippet>152</a>//! which is incremented every time a value is inserted into that slot, and the
+<a href=#153 id=153 data-nosnippet>153</a>//! indices returned by [`Slab::insert`] include the generation of the slot when
+<a href=#154 id=154 data-nosnippet>154</a>//! the value was inserted, packed into the high-order bits of the index. This
+<a href=#155 id=155 data-nosnippet>155</a>//! ensures that if a value is inserted, removed,  and a new value is inserted
+<a href=#156 id=156 data-nosnippet>156</a>//! into the same slot in the slab, the key returned by the first call to
+<a href=#157 id=157 data-nosnippet>157</a>//! `insert` will not map to the new value.
+<a href=#158 id=158 data-nosnippet>158</a>//!
+<a href=#159 id=159 data-nosnippet>159</a>//! Since a fixed number of bits are set aside to use for storing the generation
+<a href=#160 id=160 data-nosnippet>160</a>//! counter, the counter will wrap  around after being incremented a number of
+<a href=#161 id=161 data-nosnippet>161</a>//! times. To avoid situations where a returned index lives long enough to see the
+<a href=#162 id=162 data-nosnippet>162</a>//! generation counter wrap around to the same value, it is good to be fairly
+<a href=#163 id=163 data-nosnippet>163</a>//! generous when configuring the allocation of index bits.
+<a href=#164 id=164 data-nosnippet>164</a>//!
+<a href=#165 id=165 data-nosnippet>165</a>//! [`loom`]: https://crates.io/crates/loom
+<a href=#166 id=166 data-nosnippet>166</a>//! [aba]: https://en.wikipedia.org/wiki/ABA_problem
+<a href=#167 id=167 data-nosnippet>167</a>//! [`Slab::insert`]: struct.Slab.html#method.insert
+<a href=#168 id=168 data-nosnippet>168</a>//!
+<a href=#169 id=169 data-nosnippet>169</a>//! # Performance
+<a href=#170 id=170 data-nosnippet>170</a>//!
+<a href=#171 id=171 data-nosnippet>171</a>//! These graphs were produced by [benchmarks] of the sharded slab implementation,
+<a href=#172 id=172 data-nosnippet>172</a>//! using the [`criterion`] crate.
+<a href=#173 id=173 data-nosnippet>173</a>//!
+<a href=#174 id=174 data-nosnippet>174</a>//! The first shows the results of a benchmark where an increasing number of
+<a href=#175 id=175 data-nosnippet>175</a>//! items are inserted and then removed into a slab concurrently by five
+<a href=#176 id=176 data-nosnippet>176</a>//! threads. It compares the performance of the sharded slab implementation
+<a href=#177 id=177 data-nosnippet>177</a>//! with a `RwLock&lt;slab::Slab&gt;`:
+<a href=#178 id=178 data-nosnippet>178</a>//!
+<a href=#179 id=179 data-nosnippet>179</a>//! &lt;img width="1124" alt="Screen Shot 2019-10-01 at 5 09 49 PM" src="https://user-images.githubusercontent.com/2796466/66078398-cd6c9f80-e516-11e9-9923-0ed6292e8498.png"&gt;
+<a href=#180 id=180 data-nosnippet>180</a>//!
+<a href=#181 id=181 data-nosnippet>181</a>//! The second graph shows the results of a benchmark where an increasing
+<a href=#182 id=182 data-nosnippet>182</a>//! number of items are inserted and then removed by a _single_ thread. It
+<a href=#183 id=183 data-nosnippet>183</a>//! compares the performance of the sharded slab implementation with an
+<a href=#184 id=184 data-nosnippet>184</a>//! `RwLock&lt;slab::Slab&gt;` and a `mut slab::Slab`.
+<a href=#185 id=185 data-nosnippet>185</a>//!
+<a href=#186 id=186 data-nosnippet>186</a>//! &lt;img width="925" alt="Screen Shot 2019-10-01 at 5 13 45 PM" src="https://user-images.githubusercontent.com/2796466/66078469-f0974f00-e516-11e9-95b5-f65f0aa7e494.png"&gt;
+<a href=#187 id=187 data-nosnippet>187</a>//!
+<a href=#188 id=188 data-nosnippet>188</a>//! These benchmarks demonstrate that, while the sharded approach introduces
+<a href=#189 id=189 data-nosnippet>189</a>//! a small constant-factor overhead, it offers significantly better
+<a href=#190 id=190 data-nosnippet>190</a>//! performance across concurrent accesses.
+<a href=#191 id=191 data-nosnippet>191</a>//!
+<a href=#192 id=192 data-nosnippet>192</a>//! [benchmarks]: https://github.com/hawkw/sharded-slab/blob/master/benches/bench.rs
+<a href=#193 id=193 data-nosnippet>193</a>//! [`criterion`]: https://crates.io/crates/criterion
+<a href=#194 id=194 data-nosnippet>194</a>//!
+<a href=#195 id=195 data-nosnippet>195</a>//! # Implementation Notes
+<a href=#196 id=196 data-nosnippet>196</a>//!
+<a href=#197 id=197 data-nosnippet>197</a>//! See [this page](crate::implementation) for details on this crate's design
+<a href=#198 id=198 data-nosnippet>198</a>//! and implementation.
+<a href=#199 id=199 data-nosnippet>199</a>//!
+<a href=#200 id=200 data-nosnippet>200</a></span><span class="attr">#![doc(html_root_url = <span class="string">"https://docs.rs/sharded-slab/0.1.4"</span>)]
+<a href=#201 id=201 data-nosnippet>201</a>#![warn(missing_debug_implementations, missing_docs)]
+<a href=#202 id=202 data-nosnippet>202</a>#![cfg_attr(docsrs, warn(rustdoc::broken_intra_doc_links))]
+<a href=#203 id=203 data-nosnippet>203</a>#[macro_use]
+<a href=#204 id=204 data-nosnippet>204</a></span><span class="kw">mod </span>macros;
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a><span class="kw">pub mod </span>implementation;
+<a href=#207 id=207 data-nosnippet>207</a><span class="kw">pub mod </span>pool;
+<a href=#208 id=208 data-nosnippet>208</a>
+<a href=#209 id=209 data-nosnippet>209</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>cfg;
+<a href=#210 id=210 data-nosnippet>210</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>sync;
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a><span class="kw">mod </span>clear;
+<a href=#213 id=213 data-nosnippet>213</a><span class="kw">mod </span>iter;
+<a href=#214 id=214 data-nosnippet>214</a><span class="kw">mod </span>page;
+<a href=#215 id=215 data-nosnippet>215</a><span class="kw">mod </span>shard;
+<a href=#216 id=216 data-nosnippet>216</a><span class="kw">mod </span>tid;
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a><span class="kw">pub use </span><span class="self">self</span>::{
+<a href=#219 id=219 data-nosnippet>219</a>    cfg::{Config, DefaultConfig},
+<a href=#220 id=220 data-nosnippet>220</a>    clear::Clear,
+<a href=#221 id=221 data-nosnippet>221</a>    iter::UniqueIter,
+<a href=#222 id=222 data-nosnippet>222</a>};
+<a href=#223 id=223 data-nosnippet>223</a><span class="attr">#[doc(inline)]
+<a href=#224 id=224 data-nosnippet>224</a></span><span class="kw">pub use </span>pool::Pool;
+<a href=#225 id=225 data-nosnippet>225</a>
+<a href=#226 id=226 data-nosnippet>226</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>tid::Tid;
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a><span class="kw">use </span>cfg::CfgPrivate;
+<a href=#229 id=229 data-nosnippet>229</a><span class="kw">use </span>shard::Shard;
+<a href=#230 id=230 data-nosnippet>230</a><span class="kw">use </span>std::{fmt, marker::PhantomData, ptr, sync::Arc};
+<a href=#231 id=231 data-nosnippet>231</a>
+<a href=#232 id=232 data-nosnippet>232</a><span class="doccomment">/// A sharded slab.
+<a href=#233 id=233 data-nosnippet>233</a>///
+<a href=#234 id=234 data-nosnippet>234</a>/// See the [crate-level documentation](crate) for details on using this type.
+<a href=#235 id=235 data-nosnippet>235</a></span><span class="kw">pub struct </span>Slab&lt;T, C: cfg::Config = DefaultConfig&gt; {
+<a href=#236 id=236 data-nosnippet>236</a>    shards: shard::Array&lt;<span class="prelude-ty">Option</span>&lt;T&gt;, C&gt;,
+<a href=#237 id=237 data-nosnippet>237</a>    _cfg: PhantomData&lt;C&gt;,
+<a href=#238 id=238 data-nosnippet>238</a>}
+<a href=#239 id=239 data-nosnippet>239</a>
+<a href=#240 id=240 data-nosnippet>240</a><span class="doccomment">/// A handle that allows access to an occupied entry in a [`Slab`].
+<a href=#241 id=241 data-nosnippet>241</a>///
+<a href=#242 id=242 data-nosnippet>242</a>/// While the guard exists, it indicates to the slab that the item the guard
+<a href=#243 id=243 data-nosnippet>243</a>/// references is currently being accessed. If the item is removed from the slab
+<a href=#244 id=244 data-nosnippet>244</a>/// while a guard exists, the removal will be deferred until all guards are
+<a href=#245 id=245 data-nosnippet>245</a>/// dropped.
+<a href=#246 id=246 data-nosnippet>246</a></span><span class="kw">pub struct </span>Entry&lt;<span class="lifetime">'a</span>, T, C: cfg::Config = DefaultConfig&gt; {
+<a href=#247 id=247 data-nosnippet>247</a>    inner: page::slot::Guard&lt;<span class="prelude-ty">Option</span>&lt;T&gt;, C&gt;,
+<a href=#248 id=248 data-nosnippet>248</a>    value: ptr::NonNull&lt;T&gt;,
+<a href=#249 id=249 data-nosnippet>249</a>    shard: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Shard&lt;<span class="prelude-ty">Option</span>&lt;T&gt;, C&gt;,
+<a href=#250 id=250 data-nosnippet>250</a>    key: usize,
+<a href=#251 id=251 data-nosnippet>251</a>}
+<a href=#252 id=252 data-nosnippet>252</a>
+<a href=#253 id=253 data-nosnippet>253</a><span class="doccomment">/// A handle to a vacant entry in a [`Slab`].
+<a href=#254 id=254 data-nosnippet>254</a>///
+<a href=#255 id=255 data-nosnippet>255</a>/// `VacantEntry` allows constructing values with the key that they will be
+<a href=#256 id=256 data-nosnippet>256</a>/// assigned to.
+<a href=#257 id=257 data-nosnippet>257</a>///
+<a href=#258 id=258 data-nosnippet>258</a>/// # Examples
+<a href=#259 id=259 data-nosnippet>259</a>///
+<a href=#260 id=260 data-nosnippet>260</a>/// ```
+<a href=#261 id=261 data-nosnippet>261</a>/// # use sharded_slab::Slab;
+<a href=#262 id=262 data-nosnippet>262</a>/// let mut slab = Slab::new();
+<a href=#263 id=263 data-nosnippet>263</a>///
+<a href=#264 id=264 data-nosnippet>264</a>/// let hello = {
+<a href=#265 id=265 data-nosnippet>265</a>///     let entry = slab.vacant_entry().unwrap();
+<a href=#266 id=266 data-nosnippet>266</a>///     let key = entry.key();
+<a href=#267 id=267 data-nosnippet>267</a>///
+<a href=#268 id=268 data-nosnippet>268</a>///     entry.insert((key, "hello"));
+<a href=#269 id=269 data-nosnippet>269</a>///     key
+<a href=#270 id=270 data-nosnippet>270</a>/// };
+<a href=#271 id=271 data-nosnippet>271</a>///
+<a href=#272 id=272 data-nosnippet>272</a>/// assert_eq!(hello, slab.get(hello).unwrap().0);
+<a href=#273 id=273 data-nosnippet>273</a>/// assert_eq!("hello", slab.get(hello).unwrap().1);
+<a href=#274 id=274 data-nosnippet>274</a>/// ```
+<a href=#275 id=275 data-nosnippet>275</a></span><span class="attr">#[derive(Debug)]
+<a href=#276 id=276 data-nosnippet>276</a></span><span class="kw">pub struct </span>VacantEntry&lt;<span class="lifetime">'a</span>, T, C: cfg::Config = DefaultConfig&gt; {
+<a href=#277 id=277 data-nosnippet>277</a>    inner: page::slot::InitGuard&lt;<span class="prelude-ty">Option</span>&lt;T&gt;, C&gt;,
+<a href=#278 id=278 data-nosnippet>278</a>    key: usize,
+<a href=#279 id=279 data-nosnippet>279</a>    _lt: PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>()&gt;,
+<a href=#280 id=280 data-nosnippet>280</a>}
+<a href=#281 id=281 data-nosnippet>281</a>
+<a href=#282 id=282 data-nosnippet>282</a><span class="doccomment">/// An owned reference to an occupied entry in a [`Slab`].
+<a href=#283 id=283 data-nosnippet>283</a>///
+<a href=#284 id=284 data-nosnippet>284</a>/// While the guard exists, it indicates to the slab that the item the guard
+<a href=#285 id=285 data-nosnippet>285</a>/// references is currently being accessed. If the item is removed from the slab
+<a href=#286 id=286 data-nosnippet>286</a>/// while the guard exists, the  removal will be deferred until all guards are
+<a href=#287 id=287 data-nosnippet>287</a>/// dropped.
+<a href=#288 id=288 data-nosnippet>288</a>///
+<a href=#289 id=289 data-nosnippet>289</a>/// Unlike [`Entry`], which borrows the slab, an `OwnedEntry` clones the [`Arc`]
+<a href=#290 id=290 data-nosnippet>290</a>/// around the slab. Therefore, it keeps the slab from being dropped until all
+<a href=#291 id=291 data-nosnippet>291</a>/// such guards have been dropped. This means that an `OwnedEntry` may be held for
+<a href=#292 id=292 data-nosnippet>292</a>/// an arbitrary lifetime.
+<a href=#293 id=293 data-nosnippet>293</a>///
+<a href=#294 id=294 data-nosnippet>294</a>/// # Examples
+<a href=#295 id=295 data-nosnippet>295</a>///
+<a href=#296 id=296 data-nosnippet>296</a>/// ```
+<a href=#297 id=297 data-nosnippet>297</a>/// # use sharded_slab::Slab;
+<a href=#298 id=298 data-nosnippet>298</a>/// use std::sync::Arc;
+<a href=#299 id=299 data-nosnippet>299</a>///
+<a href=#300 id=300 data-nosnippet>300</a>/// let slab: Arc&lt;Slab&lt;&amp;'static str&gt;&gt; = Arc::new(Slab::new());
+<a href=#301 id=301 data-nosnippet>301</a>/// let key = slab.insert("hello world").unwrap();
+<a href=#302 id=302 data-nosnippet>302</a>///
+<a href=#303 id=303 data-nosnippet>303</a>/// // Look up the created key, returning an `OwnedEntry`.
+<a href=#304 id=304 data-nosnippet>304</a>/// let value = slab.clone().get_owned(key).unwrap();
+<a href=#305 id=305 data-nosnippet>305</a>///
+<a href=#306 id=306 data-nosnippet>306</a>/// // Now, the original `Arc` clone of the slab may be dropped, but the
+<a href=#307 id=307 data-nosnippet>307</a>/// // returned `OwnedEntry` can still access the value.
+<a href=#308 id=308 data-nosnippet>308</a>/// assert_eq!(value, "hello world");
+<a href=#309 id=309 data-nosnippet>309</a>/// ```
+<a href=#310 id=310 data-nosnippet>310</a>///
+<a href=#311 id=311 data-nosnippet>311</a>/// Unlike [`Entry`], an `OwnedEntry` may be stored in a struct which must live
+<a href=#312 id=312 data-nosnippet>312</a>/// for the `'static` lifetime:
+<a href=#313 id=313 data-nosnippet>313</a>///
+<a href=#314 id=314 data-nosnippet>314</a>/// ```
+<a href=#315 id=315 data-nosnippet>315</a>/// # use sharded_slab::Slab;
+<a href=#316 id=316 data-nosnippet>316</a>/// use sharded_slab::OwnedEntry;
+<a href=#317 id=317 data-nosnippet>317</a>/// use std::sync::Arc;
+<a href=#318 id=318 data-nosnippet>318</a>///
+<a href=#319 id=319 data-nosnippet>319</a>/// pub struct MyStruct {
+<a href=#320 id=320 data-nosnippet>320</a>///     entry: OwnedEntry&lt;&amp;'static str&gt;,
+<a href=#321 id=321 data-nosnippet>321</a>///     // ... other fields ...
+<a href=#322 id=322 data-nosnippet>322</a>/// }
+<a href=#323 id=323 data-nosnippet>323</a>///
+<a href=#324 id=324 data-nosnippet>324</a>/// // Suppose this is some arbitrary function which requires a value that
+<a href=#325 id=325 data-nosnippet>325</a>/// // lives for the 'static lifetime...
+<a href=#326 id=326 data-nosnippet>326</a>/// fn function_requiring_static&lt;T: 'static&gt;(t: &amp;T) {
+<a href=#327 id=327 data-nosnippet>327</a>///     // ... do something extremely important and interesting ...
+<a href=#328 id=328 data-nosnippet>328</a>/// }
+<a href=#329 id=329 data-nosnippet>329</a>///
+<a href=#330 id=330 data-nosnippet>330</a>/// let slab: Arc&lt;Slab&lt;&amp;'static str&gt;&gt; = Arc::new(Slab::new());
+<a href=#331 id=331 data-nosnippet>331</a>/// let key = slab.insert("hello world").unwrap();
+<a href=#332 id=332 data-nosnippet>332</a>///
+<a href=#333 id=333 data-nosnippet>333</a>/// // Look up the created key, returning an `OwnedEntry`.
+<a href=#334 id=334 data-nosnippet>334</a>/// let entry = slab.clone().get_owned(key).unwrap();
+<a href=#335 id=335 data-nosnippet>335</a>/// let my_struct = MyStruct {
+<a href=#336 id=336 data-nosnippet>336</a>///     entry,
+<a href=#337 id=337 data-nosnippet>337</a>///     // ...
+<a href=#338 id=338 data-nosnippet>338</a>/// };
+<a href=#339 id=339 data-nosnippet>339</a>///
+<a href=#340 id=340 data-nosnippet>340</a>/// // We can use `my_struct` anywhere where it is required to have the
+<a href=#341 id=341 data-nosnippet>341</a>/// // `'static` lifetime:
+<a href=#342 id=342 data-nosnippet>342</a>/// function_requiring_static(&amp;my_struct);
+<a href=#343 id=343 data-nosnippet>343</a>/// ```
+<a href=#344 id=344 data-nosnippet>344</a>///
+<a href=#345 id=345 data-nosnippet>345</a>/// `OwnedEntry`s may be sent between threads:
+<a href=#346 id=346 data-nosnippet>346</a>///
+<a href=#347 id=347 data-nosnippet>347</a>/// ```
+<a href=#348 id=348 data-nosnippet>348</a>/// # use sharded_slab::Slab;
+<a href=#349 id=349 data-nosnippet>349</a>/// use std::{thread, sync::Arc};
+<a href=#350 id=350 data-nosnippet>350</a>///
+<a href=#351 id=351 data-nosnippet>351</a>/// let slab: Arc&lt;Slab&lt;&amp;'static str&gt;&gt; = Arc::new(Slab::new());
+<a href=#352 id=352 data-nosnippet>352</a>/// let key = slab.insert("hello world").unwrap();
+<a href=#353 id=353 data-nosnippet>353</a>///
+<a href=#354 id=354 data-nosnippet>354</a>/// // Look up the created key, returning an `OwnedEntry`.
+<a href=#355 id=355 data-nosnippet>355</a>/// let value = slab.clone().get_owned(key).unwrap();
+<a href=#356 id=356 data-nosnippet>356</a>///
+<a href=#357 id=357 data-nosnippet>357</a>/// thread::spawn(move || {
+<a href=#358 id=358 data-nosnippet>358</a>///     assert_eq!(value, "hello world");
+<a href=#359 id=359 data-nosnippet>359</a>///     // ...
+<a href=#360 id=360 data-nosnippet>360</a>/// }).join().unwrap();
+<a href=#361 id=361 data-nosnippet>361</a>/// ```
+<a href=#362 id=362 data-nosnippet>362</a>///
+<a href=#363 id=363 data-nosnippet>363</a>/// [`get`]: Slab::get
+<a href=#364 id=364 data-nosnippet>364</a>/// [`Arc`]: std::sync::Arc
+<a href=#365 id=365 data-nosnippet>365</a></span><span class="kw">pub struct </span>OwnedEntry&lt;T, C = DefaultConfig&gt;
+<a href=#366 id=366 data-nosnippet>366</a><span class="kw">where
+<a href=#367 id=367 data-nosnippet>367</a>    </span>C: cfg::Config,
+<a href=#368 id=368 data-nosnippet>368</a>{
+<a href=#369 id=369 data-nosnippet>369</a>    inner: page::slot::Guard&lt;<span class="prelude-ty">Option</span>&lt;T&gt;, C&gt;,
+<a href=#370 id=370 data-nosnippet>370</a>    value: ptr::NonNull&lt;T&gt;,
+<a href=#371 id=371 data-nosnippet>371</a>    slab: Arc&lt;Slab&lt;T, C&gt;&gt;,
+<a href=#372 id=372 data-nosnippet>372</a>    key: usize,
+<a href=#373 id=373 data-nosnippet>373</a>}
+<a href=#374 id=374 data-nosnippet>374</a>
+<a href=#375 id=375 data-nosnippet>375</a><span class="kw">impl</span>&lt;T&gt; Slab&lt;T&gt; {
+<a href=#376 id=376 data-nosnippet>376</a>    <span class="doccomment">/// Returns a new slab with the default configuration parameters.
+<a href=#377 id=377 data-nosnippet>377</a>    </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="self">Self</span>::new_with_config()
+<a href=#379 id=379 data-nosnippet>379</a>    }
+<a href=#380 id=380 data-nosnippet>380</a>
+<a href=#381 id=381 data-nosnippet>381</a>    <span class="doccomment">/// Returns a new slab with the provided configuration parameters.
+<a href=#382 id=382 data-nosnippet>382</a>    </span><span class="kw">pub fn </span>new_with_config&lt;C: cfg::Config&gt;() -&gt; Slab&lt;T, C&gt; {
+<a href=#383 id=383 data-nosnippet>383</a>        C::validate();
+<a href=#384 id=384 data-nosnippet>384</a>        Slab {
+<a href=#385 id=385 data-nosnippet>385</a>            shards: shard::Array::new(),
+<a href=#386 id=386 data-nosnippet>386</a>            _cfg: PhantomData,
+<a href=#387 id=387 data-nosnippet>387</a>        }
+<a href=#388 id=388 data-nosnippet>388</a>    }
+<a href=#389 id=389 data-nosnippet>389</a>}
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a><span class="kw">impl</span>&lt;T, C: cfg::Config&gt; Slab&lt;T, C&gt; {
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="doccomment">/// The number of bits in each index which are used by the slab.
+<a href=#393 id=393 data-nosnippet>393</a>    ///
+<a href=#394 id=394 data-nosnippet>394</a>    /// If other data is packed into the `usize` indices returned by
+<a href=#395 id=395 data-nosnippet>395</a>    /// [`Slab::insert`], user code is free to use any bits higher than the
+<a href=#396 id=396 data-nosnippet>396</a>    /// `USED_BITS`-th bit freely.
+<a href=#397 id=397 data-nosnippet>397</a>    ///
+<a href=#398 id=398 data-nosnippet>398</a>    /// This is determined by the [`Config`] type that configures the slab's
+<a href=#399 id=399 data-nosnippet>399</a>    /// parameters. By default, all bits are used; this can be changed by
+<a href=#400 id=400 data-nosnippet>400</a>    /// overriding the [`Config::RESERVED_BITS`][res] constant.
+<a href=#401 id=401 data-nosnippet>401</a>    ///
+<a href=#402 id=402 data-nosnippet>402</a>    /// [res]: crate::Config#RESERVED_BITS
+<a href=#403 id=403 data-nosnippet>403</a>    </span><span class="kw">pub const </span>USED_BITS: usize = C::USED_BITS;
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>    <span class="doccomment">/// Inserts a value into the slab, returning the integer index at which that
+<a href=#406 id=406 data-nosnippet>406</a>    /// value was inserted. This index can then be used to access the entry.
+<a href=#407 id=407 data-nosnippet>407</a>    ///
+<a href=#408 id=408 data-nosnippet>408</a>    /// If this function returns `None`, then the shard for the current thread
+<a href=#409 id=409 data-nosnippet>409</a>    /// is full and no items can be added until some are removed, or the maximum
+<a href=#410 id=410 data-nosnippet>410</a>    /// number of shards has been reached.
+<a href=#411 id=411 data-nosnippet>411</a>    ///
+<a href=#412 id=412 data-nosnippet>412</a>    /// # Examples
+<a href=#413 id=413 data-nosnippet>413</a>    /// ```rust
+<a href=#414 id=414 data-nosnippet>414</a>    /// # use sharded_slab::Slab;
+<a href=#415 id=415 data-nosnippet>415</a>    /// let slab = Slab::new();
+<a href=#416 id=416 data-nosnippet>416</a>    ///
+<a href=#417 id=417 data-nosnippet>417</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#418 id=418 data-nosnippet>418</a>    /// assert_eq!(slab.get(key).unwrap(), "hello world");
+<a href=#419 id=419 data-nosnippet>419</a>    /// ```
+<a href=#420 id=420 data-nosnippet>420</a>    </span><span class="kw">pub fn </span>insert(<span class="kw-2">&amp;</span><span class="self">self</span>, value: T) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>(tid, shard) = <span class="self">self</span>.shards.current();
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="macro">test_println!</span>(<span class="string">"insert {:?}"</span>, tid);
+<a href=#423 id=423 data-nosnippet>423</a>        <span class="kw">let </span><span class="kw-2">mut </span>value = <span class="prelude-val">Some</span>(value);
+<a href=#424 id=424 data-nosnippet>424</a>        shard
+<a href=#425 id=425 data-nosnippet>425</a>            .init_with(|idx, slot| {
+<a href=#426 id=426 data-nosnippet>426</a>                <span class="kw">let </span>gen = slot.insert(<span class="kw-2">&amp;mut </span>value)<span class="question-mark">?</span>;
+<a href=#427 id=427 data-nosnippet>427</a>                <span class="prelude-val">Some</span>(gen.pack(idx))
+<a href=#428 id=428 data-nosnippet>428</a>            })
+<a href=#429 id=429 data-nosnippet>429</a>            .map(|idx| tid.pack(idx))
+<a href=#430 id=430 data-nosnippet>430</a>    }
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a>    <span class="doccomment">/// Return a handle to a vacant entry allowing for further manipulation.
+<a href=#433 id=433 data-nosnippet>433</a>    ///
+<a href=#434 id=434 data-nosnippet>434</a>    /// This function is useful when creating values that must contain their
+<a href=#435 id=435 data-nosnippet>435</a>    /// slab index. The returned [`VacantEntry`] reserves a slot in the slab and
+<a href=#436 id=436 data-nosnippet>436</a>    /// is able to return the index of the entry.
+<a href=#437 id=437 data-nosnippet>437</a>    ///
+<a href=#438 id=438 data-nosnippet>438</a>    /// # Examples
+<a href=#439 id=439 data-nosnippet>439</a>    ///
+<a href=#440 id=440 data-nosnippet>440</a>    /// ```
+<a href=#441 id=441 data-nosnippet>441</a>    /// # use sharded_slab::Slab;
+<a href=#442 id=442 data-nosnippet>442</a>    /// let mut slab = Slab::new();
+<a href=#443 id=443 data-nosnippet>443</a>    ///
+<a href=#444 id=444 data-nosnippet>444</a>    /// let hello = {
+<a href=#445 id=445 data-nosnippet>445</a>    ///     let entry = slab.vacant_entry().unwrap();
+<a href=#446 id=446 data-nosnippet>446</a>    ///     let key = entry.key();
+<a href=#447 id=447 data-nosnippet>447</a>    ///
+<a href=#448 id=448 data-nosnippet>448</a>    ///     entry.insert((key, "hello"));
+<a href=#449 id=449 data-nosnippet>449</a>    ///     key
+<a href=#450 id=450 data-nosnippet>450</a>    /// };
+<a href=#451 id=451 data-nosnippet>451</a>    ///
+<a href=#452 id=452 data-nosnippet>452</a>    /// assert_eq!(hello, slab.get(hello).unwrap().0);
+<a href=#453 id=453 data-nosnippet>453</a>    /// assert_eq!("hello", slab.get(hello).unwrap().1);
+<a href=#454 id=454 data-nosnippet>454</a>    /// ```
+<a href=#455 id=455 data-nosnippet>455</a>    </span><span class="kw">pub fn </span>vacant_entry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;VacantEntry&lt;<span class="lifetime">'_</span>, T, C&gt;&gt; {
+<a href=#456 id=456 data-nosnippet>456</a>        <span class="kw">let </span>(tid, shard) = <span class="self">self</span>.shards.current();
+<a href=#457 id=457 data-nosnippet>457</a>        <span class="macro">test_println!</span>(<span class="string">"vacant_entry {:?}"</span>, tid);
+<a href=#458 id=458 data-nosnippet>458</a>        shard.init_with(|idx, slot| {
+<a href=#459 id=459 data-nosnippet>459</a>            <span class="kw">let </span>inner = slot.init()<span class="question-mark">?</span>;
+<a href=#460 id=460 data-nosnippet>460</a>            <span class="kw">let </span>key = inner.generation().pack(tid.pack(idx));
+<a href=#461 id=461 data-nosnippet>461</a>            <span class="prelude-val">Some</span>(VacantEntry {
+<a href=#462 id=462 data-nosnippet>462</a>                inner,
+<a href=#463 id=463 data-nosnippet>463</a>                key,
+<a href=#464 id=464 data-nosnippet>464</a>                _lt: PhantomData,
+<a href=#465 id=465 data-nosnippet>465</a>            })
+<a href=#466 id=466 data-nosnippet>466</a>        })
+<a href=#467 id=467 data-nosnippet>467</a>    }
+<a href=#468 id=468 data-nosnippet>468</a>
+<a href=#469 id=469 data-nosnippet>469</a>    <span class="doccomment">/// Remove the value at the given index in the slab, returning `true` if a
+<a href=#470 id=470 data-nosnippet>470</a>    /// value was removed.
+<a href=#471 id=471 data-nosnippet>471</a>    ///
+<a href=#472 id=472 data-nosnippet>472</a>    /// Unlike [`take`], this method does _not_ block the current thread until
+<a href=#473 id=473 data-nosnippet>473</a>    /// the value can be removed. Instead, if another thread is currently
+<a href=#474 id=474 data-nosnippet>474</a>    /// accessing that value, this marks it to be removed by that thread when it
+<a href=#475 id=475 data-nosnippet>475</a>    /// finishes accessing the value.
+<a href=#476 id=476 data-nosnippet>476</a>    ///
+<a href=#477 id=477 data-nosnippet>477</a>    /// # Examples
+<a href=#478 id=478 data-nosnippet>478</a>    ///
+<a href=#479 id=479 data-nosnippet>479</a>    /// ```rust
+<a href=#480 id=480 data-nosnippet>480</a>    /// let slab = sharded_slab::Slab::new();
+<a href=#481 id=481 data-nosnippet>481</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#482 id=482 data-nosnippet>482</a>    ///
+<a href=#483 id=483 data-nosnippet>483</a>    /// // Remove the item from the slab.
+<a href=#484 id=484 data-nosnippet>484</a>    /// assert!(slab.remove(key));
+<a href=#485 id=485 data-nosnippet>485</a>    ///
+<a href=#486 id=486 data-nosnippet>486</a>    /// // Now, the slot is empty.
+<a href=#487 id=487 data-nosnippet>487</a>    /// assert!(!slab.contains(key));
+<a href=#488 id=488 data-nosnippet>488</a>    /// ```
+<a href=#489 id=489 data-nosnippet>489</a>    ///
+<a href=#490 id=490 data-nosnippet>490</a>    /// ```rust
+<a href=#491 id=491 data-nosnippet>491</a>    /// use std::sync::Arc;
+<a href=#492 id=492 data-nosnippet>492</a>    ///
+<a href=#493 id=493 data-nosnippet>493</a>    /// let slab = Arc::new(sharded_slab::Slab::new());
+<a href=#494 id=494 data-nosnippet>494</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#495 id=495 data-nosnippet>495</a>    ///
+<a href=#496 id=496 data-nosnippet>496</a>    /// let slab2 = slab.clone();
+<a href=#497 id=497 data-nosnippet>497</a>    /// let thread2 = std::thread::spawn(move || {
+<a href=#498 id=498 data-nosnippet>498</a>    ///     // Depending on when this thread begins executing, the item may
+<a href=#499 id=499 data-nosnippet>499</a>    ///     // or may not have already been removed...
+<a href=#500 id=500 data-nosnippet>500</a>    ///     if let Some(item) = slab2.get(key) {
+<a href=#501 id=501 data-nosnippet>501</a>    ///         assert_eq!(item, "hello world");
+<a href=#502 id=502 data-nosnippet>502</a>    ///     }
+<a href=#503 id=503 data-nosnippet>503</a>    /// });
+<a href=#504 id=504 data-nosnippet>504</a>    ///
+<a href=#505 id=505 data-nosnippet>505</a>    /// // The item will be removed by thread2 when it finishes accessing it.
+<a href=#506 id=506 data-nosnippet>506</a>    /// assert!(slab.remove(key));
+<a href=#507 id=507 data-nosnippet>507</a>    ///
+<a href=#508 id=508 data-nosnippet>508</a>    /// thread2.join().unwrap();
+<a href=#509 id=509 data-nosnippet>509</a>    /// assert!(!slab.contains(key));
+<a href=#510 id=510 data-nosnippet>510</a>    /// ```
+<a href=#511 id=511 data-nosnippet>511</a>    /// [`take`]: Slab::take
+<a href=#512 id=512 data-nosnippet>512</a>    </span><span class="kw">pub fn </span>remove(<span class="kw-2">&amp;</span><span class="self">self</span>, idx: usize) -&gt; bool {
+<a href=#513 id=513 data-nosnippet>513</a>        <span class="comment">// The `Drop` impl for `Entry` calls `remove_local` or `remove_remote` based
+<a href=#514 id=514 data-nosnippet>514</a>        // on where the guard was dropped from. If the dropped guard was the last one, this will
+<a href=#515 id=515 data-nosnippet>515</a>        // call `Slot::remove_value` which actually clears storage.
+<a href=#516 id=516 data-nosnippet>516</a>        </span><span class="kw">let </span>tid = C::unpack_tid(idx);
+<a href=#517 id=517 data-nosnippet>517</a>
+<a href=#518 id=518 data-nosnippet>518</a>        <span class="macro">test_println!</span>(<span class="string">"rm_deferred {:?}"</span>, tid);
+<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>shard = <span class="self">self</span>.shards.get(tid.as_usize());
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">if </span>tid.is_current() {
+<a href=#521 id=521 data-nosnippet>521</a>            shard.map(|shard| shard.remove_local(idx)).unwrap_or(<span class="bool-val">false</span>)
+<a href=#522 id=522 data-nosnippet>522</a>        } <span class="kw">else </span>{
+<a href=#523 id=523 data-nosnippet>523</a>            shard.map(|shard| shard.remove_remote(idx)).unwrap_or(<span class="bool-val">false</span>)
+<a href=#524 id=524 data-nosnippet>524</a>        }
+<a href=#525 id=525 data-nosnippet>525</a>    }
+<a href=#526 id=526 data-nosnippet>526</a>
+<a href=#527 id=527 data-nosnippet>527</a>    <span class="doccomment">/// Removes the value associated with the given key from the slab, returning
+<a href=#528 id=528 data-nosnippet>528</a>    /// it.
+<a href=#529 id=529 data-nosnippet>529</a>    ///
+<a href=#530 id=530 data-nosnippet>530</a>    /// If the slab does not contain a value for that key, `None` is returned
+<a href=#531 id=531 data-nosnippet>531</a>    /// instead.
+<a href=#532 id=532 data-nosnippet>532</a>    ///
+<a href=#533 id=533 data-nosnippet>533</a>    /// If the value associated with the given key is currently being
+<a href=#534 id=534 data-nosnippet>534</a>    /// accessed by another thread, this method will block the current thread
+<a href=#535 id=535 data-nosnippet>535</a>    /// until the item is no longer accessed. If this is not desired, use
+<a href=#536 id=536 data-nosnippet>536</a>    /// [`remove`] instead.
+<a href=#537 id=537 data-nosnippet>537</a>    ///
+<a href=#538 id=538 data-nosnippet>538</a>    /// **Note**: This method blocks the calling thread by spinning until the
+<a href=#539 id=539 data-nosnippet>539</a>    /// currently outstanding references are released. Spinning for long periods
+<a href=#540 id=540 data-nosnippet>540</a>    /// of time can result in high CPU time and power consumption. Therefore,
+<a href=#541 id=541 data-nosnippet>541</a>    /// `take` should only be called when other references to the slot are
+<a href=#542 id=542 data-nosnippet>542</a>    /// expected to be dropped soon (e.g., when all accesses are relatively
+<a href=#543 id=543 data-nosnippet>543</a>    /// short).
+<a href=#544 id=544 data-nosnippet>544</a>    ///
+<a href=#545 id=545 data-nosnippet>545</a>    /// # Examples
+<a href=#546 id=546 data-nosnippet>546</a>    ///
+<a href=#547 id=547 data-nosnippet>547</a>    /// ```rust
+<a href=#548 id=548 data-nosnippet>548</a>    /// let slab = sharded_slab::Slab::new();
+<a href=#549 id=549 data-nosnippet>549</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#550 id=550 data-nosnippet>550</a>    ///
+<a href=#551 id=551 data-nosnippet>551</a>    /// // Remove the item from the slab, returning it.
+<a href=#552 id=552 data-nosnippet>552</a>    /// assert_eq!(slab.take(key), Some("hello world"));
+<a href=#553 id=553 data-nosnippet>553</a>    ///
+<a href=#554 id=554 data-nosnippet>554</a>    /// // Now, the slot is empty.
+<a href=#555 id=555 data-nosnippet>555</a>    /// assert!(!slab.contains(key));
+<a href=#556 id=556 data-nosnippet>556</a>    /// ```
+<a href=#557 id=557 data-nosnippet>557</a>    ///
+<a href=#558 id=558 data-nosnippet>558</a>    /// ```rust
+<a href=#559 id=559 data-nosnippet>559</a>    /// use std::sync::Arc;
+<a href=#560 id=560 data-nosnippet>560</a>    ///
+<a href=#561 id=561 data-nosnippet>561</a>    /// let slab = Arc::new(sharded_slab::Slab::new());
+<a href=#562 id=562 data-nosnippet>562</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#563 id=563 data-nosnippet>563</a>    ///
+<a href=#564 id=564 data-nosnippet>564</a>    /// let slab2 = slab.clone();
+<a href=#565 id=565 data-nosnippet>565</a>    /// let thread2 = std::thread::spawn(move || {
+<a href=#566 id=566 data-nosnippet>566</a>    ///     // Depending on when this thread begins executing, the item may
+<a href=#567 id=567 data-nosnippet>567</a>    ///     // or may not have already been removed...
+<a href=#568 id=568 data-nosnippet>568</a>    ///     if let Some(item) = slab2.get(key) {
+<a href=#569 id=569 data-nosnippet>569</a>    ///         assert_eq!(item, "hello world");
+<a href=#570 id=570 data-nosnippet>570</a>    ///     }
+<a href=#571 id=571 data-nosnippet>571</a>    /// });
+<a href=#572 id=572 data-nosnippet>572</a>    ///
+<a href=#573 id=573 data-nosnippet>573</a>    /// // The item will only be removed when the other thread finishes
+<a href=#574 id=574 data-nosnippet>574</a>    /// // accessing it.
+<a href=#575 id=575 data-nosnippet>575</a>    /// assert_eq!(slab.take(key), Some("hello world"));
+<a href=#576 id=576 data-nosnippet>576</a>    ///
+<a href=#577 id=577 data-nosnippet>577</a>    /// thread2.join().unwrap();
+<a href=#578 id=578 data-nosnippet>578</a>    /// assert!(!slab.contains(key));
+<a href=#579 id=579 data-nosnippet>579</a>    /// ```
+<a href=#580 id=580 data-nosnippet>580</a>    /// [`remove`]: Slab::remove
+<a href=#581 id=581 data-nosnippet>581</a>    </span><span class="kw">pub fn </span>take(<span class="kw-2">&amp;</span><span class="self">self</span>, idx: usize) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt; {
+<a href=#582 id=582 data-nosnippet>582</a>        <span class="kw">let </span>tid = C::unpack_tid(idx);
+<a href=#583 id=583 data-nosnippet>583</a>
+<a href=#584 id=584 data-nosnippet>584</a>        <span class="macro">test_println!</span>(<span class="string">"rm {:?}"</span>, tid);
+<a href=#585 id=585 data-nosnippet>585</a>        <span class="kw">let </span>shard = <span class="self">self</span>.shards.get(tid.as_usize())<span class="question-mark">?</span>;
+<a href=#586 id=586 data-nosnippet>586</a>        <span class="kw">if </span>tid.is_current() {
+<a href=#587 id=587 data-nosnippet>587</a>            shard.take_local(idx)
+<a href=#588 id=588 data-nosnippet>588</a>        } <span class="kw">else </span>{
+<a href=#589 id=589 data-nosnippet>589</a>            shard.take_remote(idx)
+<a href=#590 id=590 data-nosnippet>590</a>        }
+<a href=#591 id=591 data-nosnippet>591</a>    }
+<a href=#592 id=592 data-nosnippet>592</a>
+<a href=#593 id=593 data-nosnippet>593</a>    <span class="doccomment">/// Return a reference to the value associated with the given key.
+<a href=#594 id=594 data-nosnippet>594</a>    ///
+<a href=#595 id=595 data-nosnippet>595</a>    /// If the slab does not contain a value for the given key, or if the
+<a href=#596 id=596 data-nosnippet>596</a>    /// maximum number of concurrent references to the slot has been reached,
+<a href=#597 id=597 data-nosnippet>597</a>    /// `None` is returned instead.
+<a href=#598 id=598 data-nosnippet>598</a>    ///
+<a href=#599 id=599 data-nosnippet>599</a>    /// # Examples
+<a href=#600 id=600 data-nosnippet>600</a>    ///
+<a href=#601 id=601 data-nosnippet>601</a>    /// ```rust
+<a href=#602 id=602 data-nosnippet>602</a>    /// let slab = sharded_slab::Slab::new();
+<a href=#603 id=603 data-nosnippet>603</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#604 id=604 data-nosnippet>604</a>    ///
+<a href=#605 id=605 data-nosnippet>605</a>    /// assert_eq!(slab.get(key).unwrap(), "hello world");
+<a href=#606 id=606 data-nosnippet>606</a>    /// assert!(slab.get(12345).is_none());
+<a href=#607 id=607 data-nosnippet>607</a>    /// ```
+<a href=#608 id=608 data-nosnippet>608</a>    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, key: usize) -&gt; <span class="prelude-ty">Option</span>&lt;Entry&lt;<span class="lifetime">'_</span>, T, C&gt;&gt; {
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="kw">let </span>tid = C::unpack_tid(key);
+<a href=#610 id=610 data-nosnippet>610</a>
+<a href=#611 id=611 data-nosnippet>611</a>        <span class="macro">test_println!</span>(<span class="string">"get {:?}; current={:?}"</span>, tid, Tid::&lt;C&gt;::current());
+<a href=#612 id=612 data-nosnippet>612</a>        <span class="kw">let </span>shard = <span class="self">self</span>.shards.get(tid.as_usize())<span class="question-mark">?</span>;
+<a href=#613 id=613 data-nosnippet>613</a>        shard.with_slot(key, |slot| {
+<a href=#614 id=614 data-nosnippet>614</a>            <span class="kw">let </span>inner = slot.get(C::unpack_gen(key))<span class="question-mark">?</span>;
+<a href=#615 id=615 data-nosnippet>615</a>            <span class="kw">let </span>value = ptr::NonNull::from(slot.value().as_ref().unwrap());
+<a href=#616 id=616 data-nosnippet>616</a>            <span class="prelude-val">Some</span>(Entry {
+<a href=#617 id=617 data-nosnippet>617</a>                inner,
+<a href=#618 id=618 data-nosnippet>618</a>                value,
+<a href=#619 id=619 data-nosnippet>619</a>                shard,
+<a href=#620 id=620 data-nosnippet>620</a>                key,
+<a href=#621 id=621 data-nosnippet>621</a>            })
+<a href=#622 id=622 data-nosnippet>622</a>        })
+<a href=#623 id=623 data-nosnippet>623</a>    }
+<a href=#624 id=624 data-nosnippet>624</a>
+<a href=#625 id=625 data-nosnippet>625</a>    <span class="doccomment">/// Return an owned reference to the value at the given index.
+<a href=#626 id=626 data-nosnippet>626</a>    ///
+<a href=#627 id=627 data-nosnippet>627</a>    /// If the slab does not contain a value for the given key, `None` is
+<a href=#628 id=628 data-nosnippet>628</a>    /// returned instead.
+<a href=#629 id=629 data-nosnippet>629</a>    ///
+<a href=#630 id=630 data-nosnippet>630</a>    /// Unlike [`get`], which borrows the slab, this method _clones_ the [`Arc`]
+<a href=#631 id=631 data-nosnippet>631</a>    /// around the slab. This means that the returned [`OwnedEntry`] can be held
+<a href=#632 id=632 data-nosnippet>632</a>    /// for an arbitrary lifetime. However,  this method requires that the slab
+<a href=#633 id=633 data-nosnippet>633</a>    /// itself be wrapped in an `Arc`.
+<a href=#634 id=634 data-nosnippet>634</a>    ///
+<a href=#635 id=635 data-nosnippet>635</a>    /// # Examples
+<a href=#636 id=636 data-nosnippet>636</a>    ///
+<a href=#637 id=637 data-nosnippet>637</a>    /// ```
+<a href=#638 id=638 data-nosnippet>638</a>    /// # use sharded_slab::Slab;
+<a href=#639 id=639 data-nosnippet>639</a>    /// use std::sync::Arc;
+<a href=#640 id=640 data-nosnippet>640</a>    ///
+<a href=#641 id=641 data-nosnippet>641</a>    /// let slab: Arc&lt;Slab&lt;&amp;'static str&gt;&gt; = Arc::new(Slab::new());
+<a href=#642 id=642 data-nosnippet>642</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#643 id=643 data-nosnippet>643</a>    ///
+<a href=#644 id=644 data-nosnippet>644</a>    /// // Look up the created key, returning an `OwnedEntry`.
+<a href=#645 id=645 data-nosnippet>645</a>    /// let value = slab.clone().get_owned(key).unwrap();
+<a href=#646 id=646 data-nosnippet>646</a>    ///
+<a href=#647 id=647 data-nosnippet>647</a>    /// // Now, the original `Arc` clone of the slab may be dropped, but the
+<a href=#648 id=648 data-nosnippet>648</a>    /// // returned `OwnedEntry` can still access the value.
+<a href=#649 id=649 data-nosnippet>649</a>    /// assert_eq!(value, "hello world");
+<a href=#650 id=650 data-nosnippet>650</a>    /// ```
+<a href=#651 id=651 data-nosnippet>651</a>    ///
+<a href=#652 id=652 data-nosnippet>652</a>    /// Unlike [`Entry`], an `OwnedEntry` may be stored in a struct which must live
+<a href=#653 id=653 data-nosnippet>653</a>    /// for the `'static` lifetime:
+<a href=#654 id=654 data-nosnippet>654</a>    ///
+<a href=#655 id=655 data-nosnippet>655</a>    /// ```
+<a href=#656 id=656 data-nosnippet>656</a>    /// # use sharded_slab::Slab;
+<a href=#657 id=657 data-nosnippet>657</a>    /// use sharded_slab::OwnedEntry;
+<a href=#658 id=658 data-nosnippet>658</a>    /// use std::sync::Arc;
+<a href=#659 id=659 data-nosnippet>659</a>    ///
+<a href=#660 id=660 data-nosnippet>660</a>    /// pub struct MyStruct {
+<a href=#661 id=661 data-nosnippet>661</a>    ///     entry: OwnedEntry&lt;&amp;'static str&gt;,
+<a href=#662 id=662 data-nosnippet>662</a>    ///     // ... other fields ...
+<a href=#663 id=663 data-nosnippet>663</a>    /// }
+<a href=#664 id=664 data-nosnippet>664</a>    ///
+<a href=#665 id=665 data-nosnippet>665</a>    /// // Suppose this is some arbitrary function which requires a value that
+<a href=#666 id=666 data-nosnippet>666</a>    /// // lives for the 'static lifetime...
+<a href=#667 id=667 data-nosnippet>667</a>    /// fn function_requiring_static&lt;T: 'static&gt;(t: &amp;T) {
+<a href=#668 id=668 data-nosnippet>668</a>    ///     // ... do something extremely important and interesting ...
+<a href=#669 id=669 data-nosnippet>669</a>    /// }
+<a href=#670 id=670 data-nosnippet>670</a>    ///
+<a href=#671 id=671 data-nosnippet>671</a>    /// let slab: Arc&lt;Slab&lt;&amp;'static str&gt;&gt; = Arc::new(Slab::new());
+<a href=#672 id=672 data-nosnippet>672</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#673 id=673 data-nosnippet>673</a>    ///
+<a href=#674 id=674 data-nosnippet>674</a>    /// // Look up the created key, returning an `OwnedEntry`.
+<a href=#675 id=675 data-nosnippet>675</a>    /// let entry = slab.clone().get_owned(key).unwrap();
+<a href=#676 id=676 data-nosnippet>676</a>    /// let my_struct = MyStruct {
+<a href=#677 id=677 data-nosnippet>677</a>    ///     entry,
+<a href=#678 id=678 data-nosnippet>678</a>    ///     // ...
+<a href=#679 id=679 data-nosnippet>679</a>    /// };
+<a href=#680 id=680 data-nosnippet>680</a>    ///
+<a href=#681 id=681 data-nosnippet>681</a>    /// // We can use `my_struct` anywhere where it is required to have the
+<a href=#682 id=682 data-nosnippet>682</a>    /// // `'static` lifetime:
+<a href=#683 id=683 data-nosnippet>683</a>    /// function_requiring_static(&amp;my_struct);
+<a href=#684 id=684 data-nosnippet>684</a>    /// ```
+<a href=#685 id=685 data-nosnippet>685</a>    ///
+<a href=#686 id=686 data-nosnippet>686</a>    /// [`OwnedEntry`]s may be sent between threads:
+<a href=#687 id=687 data-nosnippet>687</a>    ///
+<a href=#688 id=688 data-nosnippet>688</a>    /// ```
+<a href=#689 id=689 data-nosnippet>689</a>    /// # use sharded_slab::Slab;
+<a href=#690 id=690 data-nosnippet>690</a>    /// use std::{thread, sync::Arc};
+<a href=#691 id=691 data-nosnippet>691</a>    ///
+<a href=#692 id=692 data-nosnippet>692</a>    /// let slab: Arc&lt;Slab&lt;&amp;'static str&gt;&gt; = Arc::new(Slab::new());
+<a href=#693 id=693 data-nosnippet>693</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#694 id=694 data-nosnippet>694</a>    ///
+<a href=#695 id=695 data-nosnippet>695</a>    /// // Look up the created key, returning an `OwnedEntry`.
+<a href=#696 id=696 data-nosnippet>696</a>    /// let value = slab.clone().get_owned(key).unwrap();
+<a href=#697 id=697 data-nosnippet>697</a>    ///
+<a href=#698 id=698 data-nosnippet>698</a>    /// thread::spawn(move || {
+<a href=#699 id=699 data-nosnippet>699</a>    ///     assert_eq!(value, "hello world");
+<a href=#700 id=700 data-nosnippet>700</a>    ///     // ...
+<a href=#701 id=701 data-nosnippet>701</a>    /// }).join().unwrap();
+<a href=#702 id=702 data-nosnippet>702</a>    /// ```
+<a href=#703 id=703 data-nosnippet>703</a>    ///
+<a href=#704 id=704 data-nosnippet>704</a>    /// [`get`]: Slab::get
+<a href=#705 id=705 data-nosnippet>705</a>    /// [`Arc`]: std::sync::Arc
+<a href=#706 id=706 data-nosnippet>706</a>    </span><span class="kw">pub fn </span>get_owned(<span class="self">self</span>: Arc&lt;<span class="self">Self</span>&gt;, key: usize) -&gt; <span class="prelude-ty">Option</span>&lt;OwnedEntry&lt;T, C&gt;&gt; {
+<a href=#707 id=707 data-nosnippet>707</a>        <span class="kw">let </span>tid = C::unpack_tid(key);
+<a href=#708 id=708 data-nosnippet>708</a>
+<a href=#709 id=709 data-nosnippet>709</a>        <span class="macro">test_println!</span>(<span class="string">"get_owned {:?}; current={:?}"</span>, tid, Tid::&lt;C&gt;::current());
+<a href=#710 id=710 data-nosnippet>710</a>        <span class="kw">let </span>shard = <span class="self">self</span>.shards.get(tid.as_usize())<span class="question-mark">?</span>;
+<a href=#711 id=711 data-nosnippet>711</a>        shard.with_slot(key, |slot| {
+<a href=#712 id=712 data-nosnippet>712</a>            <span class="kw">let </span>inner = slot.get(C::unpack_gen(key))<span class="question-mark">?</span>;
+<a href=#713 id=713 data-nosnippet>713</a>            <span class="kw">let </span>value = ptr::NonNull::from(slot.value().as_ref().unwrap());
+<a href=#714 id=714 data-nosnippet>714</a>            <span class="prelude-val">Some</span>(OwnedEntry {
+<a href=#715 id=715 data-nosnippet>715</a>                inner,
+<a href=#716 id=716 data-nosnippet>716</a>                value,
+<a href=#717 id=717 data-nosnippet>717</a>                slab: <span class="self">self</span>.clone(),
+<a href=#718 id=718 data-nosnippet>718</a>                key,
+<a href=#719 id=719 data-nosnippet>719</a>            })
+<a href=#720 id=720 data-nosnippet>720</a>        })
+<a href=#721 id=721 data-nosnippet>721</a>    }
+<a href=#722 id=722 data-nosnippet>722</a>
+<a href=#723 id=723 data-nosnippet>723</a>    <span class="doccomment">/// Returns `true` if the slab contains a value for the given key.
+<a href=#724 id=724 data-nosnippet>724</a>    ///
+<a href=#725 id=725 data-nosnippet>725</a>    /// # Examples
+<a href=#726 id=726 data-nosnippet>726</a>    ///
+<a href=#727 id=727 data-nosnippet>727</a>    /// ```
+<a href=#728 id=728 data-nosnippet>728</a>    /// let slab = sharded_slab::Slab::new();
+<a href=#729 id=729 data-nosnippet>729</a>    ///
+<a href=#730 id=730 data-nosnippet>730</a>    /// let key = slab.insert("hello world").unwrap();
+<a href=#731 id=731 data-nosnippet>731</a>    /// assert!(slab.contains(key));
+<a href=#732 id=732 data-nosnippet>732</a>    ///
+<a href=#733 id=733 data-nosnippet>733</a>    /// slab.take(key).unwrap();
+<a href=#734 id=734 data-nosnippet>734</a>    /// assert!(!slab.contains(key));
+<a href=#735 id=735 data-nosnippet>735</a>    /// ```
+<a href=#736 id=736 data-nosnippet>736</a>    </span><span class="kw">pub fn </span>contains(<span class="kw-2">&amp;</span><span class="self">self</span>, key: usize) -&gt; bool {
+<a href=#737 id=737 data-nosnippet>737</a>        <span class="self">self</span>.get(key).is_some()
+<a href=#738 id=738 data-nosnippet>738</a>    }
+<a href=#739 id=739 data-nosnippet>739</a>
+<a href=#740 id=740 data-nosnippet>740</a>    <span class="doccomment">/// Returns an iterator over all the items in the slab.
+<a href=#741 id=741 data-nosnippet>741</a>    ///
+<a href=#742 id=742 data-nosnippet>742</a>    /// Because this iterator exclusively borrows the slab (i.e. it holds an
+<a href=#743 id=743 data-nosnippet>743</a>    /// `&amp;mut Slab&lt;T&gt;`), elements will not be added or removed while the
+<a href=#744 id=744 data-nosnippet>744</a>    /// iteration is in progress.
+<a href=#745 id=745 data-nosnippet>745</a>    </span><span class="kw">pub fn </span>unique_iter(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; iter::UniqueIter&lt;<span class="lifetime">'_</span>, T, C&gt; {
+<a href=#746 id=746 data-nosnippet>746</a>        <span class="kw">let </span><span class="kw-2">mut </span>shards = <span class="self">self</span>.shards.iter_mut();
+<a href=#747 id=747 data-nosnippet>747</a>
+<a href=#748 id=748 data-nosnippet>748</a>        <span class="kw">let </span>(pages, slots) = <span class="kw">match </span>shards.next() {
+<a href=#749 id=749 data-nosnippet>749</a>            <span class="prelude-val">Some</span>(shard) =&gt; {
+<a href=#750 id=750 data-nosnippet>750</a>                <span class="kw">let </span><span class="kw-2">mut </span>pages = shard.iter();
+<a href=#751 id=751 data-nosnippet>751</a>                <span class="kw">let </span>slots = pages.next().and_then(page::Shared::iter);
+<a href=#752 id=752 data-nosnippet>752</a>                (pages, slots)
+<a href=#753 id=753 data-nosnippet>753</a>            }
+<a href=#754 id=754 data-nosnippet>754</a>            <span class="prelude-val">None </span>=&gt; ([].iter(), <span class="prelude-val">None</span>),
+<a href=#755 id=755 data-nosnippet>755</a>        };
+<a href=#756 id=756 data-nosnippet>756</a>
+<a href=#757 id=757 data-nosnippet>757</a>        iter::UniqueIter {
+<a href=#758 id=758 data-nosnippet>758</a>            shards,
+<a href=#759 id=759 data-nosnippet>759</a>            pages,
+<a href=#760 id=760 data-nosnippet>760</a>            slots,
+<a href=#761 id=761 data-nosnippet>761</a>        }
+<a href=#762 id=762 data-nosnippet>762</a>    }
+<a href=#763 id=763 data-nosnippet>763</a>}
+<a href=#764 id=764 data-nosnippet>764</a>
+<a href=#765 id=765 data-nosnippet>765</a><span class="kw">impl</span>&lt;T&gt; Default <span class="kw">for </span>Slab&lt;T&gt; {
+<a href=#766 id=766 data-nosnippet>766</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#767 id=767 data-nosnippet>767</a>        <span class="self">Self</span>::new()
+<a href=#768 id=768 data-nosnippet>768</a>    }
+<a href=#769 id=769 data-nosnippet>769</a>}
+<a href=#770 id=770 data-nosnippet>770</a>
+<a href=#771 id=771 data-nosnippet>771</a><span class="kw">impl</span>&lt;T: fmt::Debug, C: cfg::Config&gt; fmt::Debug <span class="kw">for </span>Slab&lt;T, C&gt; {
+<a href=#772 id=772 data-nosnippet>772</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#773 id=773 data-nosnippet>773</a>        f.debug_struct(<span class="string">"Slab"</span>)
+<a href=#774 id=774 data-nosnippet>774</a>            .field(<span class="string">"shards"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.shards)
+<a href=#775 id=775 data-nosnippet>775</a>            .field(<span class="string">"config"</span>, <span class="kw-2">&amp;</span>C::debug())
+<a href=#776 id=776 data-nosnippet>776</a>            .finish()
+<a href=#777 id=777 data-nosnippet>777</a>    }
+<a href=#778 id=778 data-nosnippet>778</a>}
+<a href=#779 id=779 data-nosnippet>779</a>
+<a href=#780 id=780 data-nosnippet>780</a><span class="kw">unsafe impl</span>&lt;T: Send, C: cfg::Config&gt; Send <span class="kw">for </span>Slab&lt;T, C&gt; {}
+<a href=#781 id=781 data-nosnippet>781</a><span class="kw">unsafe impl</span>&lt;T: Sync, C: cfg::Config&gt; Sync <span class="kw">for </span>Slab&lt;T, C&gt; {}
+<a href=#782 id=782 data-nosnippet>782</a>
+<a href=#783 id=783 data-nosnippet>783</a><span class="comment">// === impl Entry ===
+<a href=#784 id=784 data-nosnippet>784</a>
+<a href=#785 id=785 data-nosnippet>785</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T, C: cfg::Config&gt; Entry&lt;<span class="lifetime">'a</span>, T, C&gt; {
+<a href=#786 id=786 data-nosnippet>786</a>    <span class="doccomment">/// Returns the key used to access the guard.
+<a href=#787 id=787 data-nosnippet>787</a>    </span><span class="kw">pub fn </span>key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#788 id=788 data-nosnippet>788</a>        <span class="self">self</span>.key
+<a href=#789 id=789 data-nosnippet>789</a>    }
+<a href=#790 id=790 data-nosnippet>790</a>
+<a href=#791 id=791 data-nosnippet>791</a>    <span class="attr">#[inline(always)]
+<a href=#792 id=792 data-nosnippet>792</a>    </span><span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
+<a href=#793 id=793 data-nosnippet>793</a>        <span class="kw">unsafe </span>{
+<a href=#794 id=794 data-nosnippet>794</a>            <span class="comment">// Safety: this is always going to be valid, as it's projected from
+<a href=#795 id=795 data-nosnippet>795</a>            // the safe reference to `self.value` --- this is just to avoid
+<a href=#796 id=796 data-nosnippet>796</a>            // having to `expect` an option in the hot path when dereferencing.
+<a href=#797 id=797 data-nosnippet>797</a>            </span><span class="self">self</span>.value.as_ref()
+<a href=#798 id=798 data-nosnippet>798</a>        }
+<a href=#799 id=799 data-nosnippet>799</a>    }
+<a href=#800 id=800 data-nosnippet>800</a>}
+<a href=#801 id=801 data-nosnippet>801</a>
+<a href=#802 id=802 data-nosnippet>802</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T, C: cfg::Config&gt; std::ops::Deref <span class="kw">for </span>Entry&lt;<span class="lifetime">'a</span>, T, C&gt; {
+<a href=#803 id=803 data-nosnippet>803</a>    <span class="kw">type </span>Target = T;
+<a href=#804 id=804 data-nosnippet>804</a>
+<a href=#805 id=805 data-nosnippet>805</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+<a href=#806 id=806 data-nosnippet>806</a>        <span class="self">self</span>.value()
+<a href=#807 id=807 data-nosnippet>807</a>    }
+<a href=#808 id=808 data-nosnippet>808</a>}
+<a href=#809 id=809 data-nosnippet>809</a>
+<a href=#810 id=810 data-nosnippet>810</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T, C: cfg::Config&gt; Drop <span class="kw">for </span>Entry&lt;<span class="lifetime">'a</span>, T, C&gt; {
+<a href=#811 id=811 data-nosnippet>811</a>    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#812 id=812 data-nosnippet>812</a>        <span class="kw">let </span>should_remove = <span class="kw">unsafe </span>{
+<a href=#813 id=813 data-nosnippet>813</a>            <span class="comment">// Safety: calling `slot::Guard::release` is unsafe, since the
+<a href=#814 id=814 data-nosnippet>814</a>            // `Guard` value contains a pointer to the slot that may outlive the
+<a href=#815 id=815 data-nosnippet>815</a>            // slab containing that slot. Here, the `Entry` guard owns a
+<a href=#816 id=816 data-nosnippet>816</a>            // borrowed reference to the shard containing that slot, which
+<a href=#817 id=817 data-nosnippet>817</a>            // ensures that the slot will not be dropped while this `Guard`
+<a href=#818 id=818 data-nosnippet>818</a>            // exists.
+<a href=#819 id=819 data-nosnippet>819</a>            </span><span class="self">self</span>.inner.release()
+<a href=#820 id=820 data-nosnippet>820</a>        };
+<a href=#821 id=821 data-nosnippet>821</a>        <span class="kw">if </span>should_remove {
+<a href=#822 id=822 data-nosnippet>822</a>            <span class="self">self</span>.shard.clear_after_release(<span class="self">self</span>.key)
+<a href=#823 id=823 data-nosnippet>823</a>        }
+<a href=#824 id=824 data-nosnippet>824</a>    }
+<a href=#825 id=825 data-nosnippet>825</a>}
+<a href=#826 id=826 data-nosnippet>826</a>
+<a href=#827 id=827 data-nosnippet>827</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T, C&gt; fmt::Debug <span class="kw">for </span>Entry&lt;<span class="lifetime">'a</span>, T, C&gt;
+<a href=#828 id=828 data-nosnippet>828</a><span class="kw">where
+<a href=#829 id=829 data-nosnippet>829</a>    </span>T: fmt::Debug,
+<a href=#830 id=830 data-nosnippet>830</a>    C: cfg::Config,
+<a href=#831 id=831 data-nosnippet>831</a>{
+<a href=#832 id=832 data-nosnippet>832</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#833 id=833 data-nosnippet>833</a>        fmt::Debug::fmt(<span class="self">self</span>.value(), f)
+<a href=#834 id=834 data-nosnippet>834</a>    }
+<a href=#835 id=835 data-nosnippet>835</a>}
+<a href=#836 id=836 data-nosnippet>836</a>
+<a href=#837 id=837 data-nosnippet>837</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T, C&gt; PartialEq&lt;T&gt; <span class="kw">for </span>Entry&lt;<span class="lifetime">'a</span>, T, C&gt;
+<a href=#838 id=838 data-nosnippet>838</a><span class="kw">where
+<a href=#839 id=839 data-nosnippet>839</a>    </span>T: PartialEq&lt;T&gt;,
+<a href=#840 id=840 data-nosnippet>840</a>    C: cfg::Config,
+<a href=#841 id=841 data-nosnippet>841</a>{
+<a href=#842 id=842 data-nosnippet>842</a>    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>T) -&gt; bool {
+<a href=#843 id=843 data-nosnippet>843</a>        <span class="self">self</span>.value().eq(other)
+<a href=#844 id=844 data-nosnippet>844</a>    }
+<a href=#845 id=845 data-nosnippet>845</a>}
+<a href=#846 id=846 data-nosnippet>846</a>
+<a href=#847 id=847 data-nosnippet>847</a><span class="comment">// === impl VacantEntry ===
+<a href=#848 id=848 data-nosnippet>848</a>
+<a href=#849 id=849 data-nosnippet>849</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T, C: cfg::Config&gt; VacantEntry&lt;<span class="lifetime">'a</span>, T, C&gt; {
+<a href=#850 id=850 data-nosnippet>850</a>    <span class="doccomment">/// Insert a value in the entry.
+<a href=#851 id=851 data-nosnippet>851</a>    ///
+<a href=#852 id=852 data-nosnippet>852</a>    /// To get the integer index at which this value will be inserted, use
+<a href=#853 id=853 data-nosnippet>853</a>    /// [`key`] prior to calling `insert`.
+<a href=#854 id=854 data-nosnippet>854</a>    ///
+<a href=#855 id=855 data-nosnippet>855</a>    /// # Examples
+<a href=#856 id=856 data-nosnippet>856</a>    ///
+<a href=#857 id=857 data-nosnippet>857</a>    /// ```
+<a href=#858 id=858 data-nosnippet>858</a>    /// # use sharded_slab::Slab;
+<a href=#859 id=859 data-nosnippet>859</a>    /// let mut slab = Slab::new();
+<a href=#860 id=860 data-nosnippet>860</a>    ///
+<a href=#861 id=861 data-nosnippet>861</a>    /// let hello = {
+<a href=#862 id=862 data-nosnippet>862</a>    ///     let entry = slab.vacant_entry().unwrap();
+<a href=#863 id=863 data-nosnippet>863</a>    ///     let key = entry.key();
+<a href=#864 id=864 data-nosnippet>864</a>    ///
+<a href=#865 id=865 data-nosnippet>865</a>    ///     entry.insert((key, "hello"));
+<a href=#866 id=866 data-nosnippet>866</a>    ///     key
+<a href=#867 id=867 data-nosnippet>867</a>    /// };
+<a href=#868 id=868 data-nosnippet>868</a>    ///
+<a href=#869 id=869 data-nosnippet>869</a>    /// assert_eq!(hello, slab.get(hello).unwrap().0);
+<a href=#870 id=870 data-nosnippet>870</a>    /// assert_eq!("hello", slab.get(hello).unwrap().1);
+<a href=#871 id=871 data-nosnippet>871</a>    /// ```
+<a href=#872 id=872 data-nosnippet>872</a>    ///
+<a href=#873 id=873 data-nosnippet>873</a>    /// [`key`]: VacantEntry::key
+<a href=#874 id=874 data-nosnippet>874</a>    </span><span class="kw">pub fn </span>insert(<span class="kw-2">mut </span><span class="self">self</span>, val: T) {
+<a href=#875 id=875 data-nosnippet>875</a>        <span class="kw">let </span>value = <span class="kw">unsafe </span>{
+<a href=#876 id=876 data-nosnippet>876</a>            <span class="comment">// Safety: this `VacantEntry` only lives as long as the `Slab` it was
+<a href=#877 id=877 data-nosnippet>877</a>            // borrowed from, so it cannot outlive the entry's slot.
+<a href=#878 id=878 data-nosnippet>878</a>            </span><span class="self">self</span>.inner.value_mut()
+<a href=#879 id=879 data-nosnippet>879</a>        };
+<a href=#880 id=880 data-nosnippet>880</a>        <span class="macro">debug_assert!</span>(
+<a href=#881 id=881 data-nosnippet>881</a>            value.is_none(),
+<a href=#882 id=882 data-nosnippet>882</a>            <span class="string">"tried to insert to a slot that already had a value!"
+<a href=#883 id=883 data-nosnippet>883</a>        </span>);
+<a href=#884 id=884 data-nosnippet>884</a>        <span class="kw-2">*</span>value = <span class="prelude-val">Some</span>(val);
+<a href=#885 id=885 data-nosnippet>885</a>        <span class="kw">let </span>_released = <span class="kw">unsafe </span>{
+<a href=#886 id=886 data-nosnippet>886</a>            <span class="comment">// Safety: again, this `VacantEntry` only lives as long as the
+<a href=#887 id=887 data-nosnippet>887</a>            // `Slab` it was borrowed from, so it cannot outlive the entry's
+<a href=#888 id=888 data-nosnippet>888</a>            // slot.
+<a href=#889 id=889 data-nosnippet>889</a>            </span><span class="self">self</span>.inner.release()
+<a href=#890 id=890 data-nosnippet>890</a>        };
+<a href=#891 id=891 data-nosnippet>891</a>        <span class="macro">debug_assert!</span>(
+<a href=#892 id=892 data-nosnippet>892</a>            !_released,
+<a href=#893 id=893 data-nosnippet>893</a>            <span class="string">"removing a value before it was inserted should be a no-op"
+<a href=#894 id=894 data-nosnippet>894</a>        </span>)
+<a href=#895 id=895 data-nosnippet>895</a>    }
+<a href=#896 id=896 data-nosnippet>896</a>
+<a href=#897 id=897 data-nosnippet>897</a>    <span class="doccomment">/// Return the integer index at which this entry will be inserted.
+<a href=#898 id=898 data-nosnippet>898</a>    ///
+<a href=#899 id=899 data-nosnippet>899</a>    /// A value stored in this entry will be associated with this key.
+<a href=#900 id=900 data-nosnippet>900</a>    ///
+<a href=#901 id=901 data-nosnippet>901</a>    /// # Examples
+<a href=#902 id=902 data-nosnippet>902</a>    ///
+<a href=#903 id=903 data-nosnippet>903</a>    /// ```
+<a href=#904 id=904 data-nosnippet>904</a>    /// # use sharded_slab::*;
+<a href=#905 id=905 data-nosnippet>905</a>    /// let mut slab = Slab::new();
+<a href=#906 id=906 data-nosnippet>906</a>    ///
+<a href=#907 id=907 data-nosnippet>907</a>    /// let hello = {
+<a href=#908 id=908 data-nosnippet>908</a>    ///     let entry = slab.vacant_entry().unwrap();
+<a href=#909 id=909 data-nosnippet>909</a>    ///     let key = entry.key();
+<a href=#910 id=910 data-nosnippet>910</a>    ///
+<a href=#911 id=911 data-nosnippet>911</a>    ///     entry.insert((key, "hello"));
+<a href=#912 id=912 data-nosnippet>912</a>    ///     key
+<a href=#913 id=913 data-nosnippet>913</a>    /// };
+<a href=#914 id=914 data-nosnippet>914</a>    ///
+<a href=#915 id=915 data-nosnippet>915</a>    /// assert_eq!(hello, slab.get(hello).unwrap().0);
+<a href=#916 id=916 data-nosnippet>916</a>    /// assert_eq!("hello", slab.get(hello).unwrap().1);
+<a href=#917 id=917 data-nosnippet>917</a>    /// ```
+<a href=#918 id=918 data-nosnippet>918</a>    </span><span class="kw">pub fn </span>key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#919 id=919 data-nosnippet>919</a>        <span class="self">self</span>.key
+<a href=#920 id=920 data-nosnippet>920</a>    }
+<a href=#921 id=921 data-nosnippet>921</a>}
+<a href=#922 id=922 data-nosnippet>922</a><span class="comment">// === impl OwnedEntry ===
+<a href=#923 id=923 data-nosnippet>923</a>
+<a href=#924 id=924 data-nosnippet>924</a></span><span class="kw">impl</span>&lt;T, C&gt; OwnedEntry&lt;T, C&gt;
+<a href=#925 id=925 data-nosnippet>925</a><span class="kw">where
+<a href=#926 id=926 data-nosnippet>926</a>    </span>C: cfg::Config,
+<a href=#927 id=927 data-nosnippet>927</a>{
+<a href=#928 id=928 data-nosnippet>928</a>    <span class="doccomment">/// Returns the key used to access this guard
+<a href=#929 id=929 data-nosnippet>929</a>    </span><span class="kw">pub fn </span>key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#930 id=930 data-nosnippet>930</a>        <span class="self">self</span>.key
+<a href=#931 id=931 data-nosnippet>931</a>    }
+<a href=#932 id=932 data-nosnippet>932</a>
+<a href=#933 id=933 data-nosnippet>933</a>    <span class="attr">#[inline(always)]
+<a href=#934 id=934 data-nosnippet>934</a>    </span><span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
+<a href=#935 id=935 data-nosnippet>935</a>        <span class="kw">unsafe </span>{
+<a href=#936 id=936 data-nosnippet>936</a>            <span class="comment">// Safety: this is always going to be valid, as it's projected from
+<a href=#937 id=937 data-nosnippet>937</a>            // the safe reference to `self.value` --- this is just to avoid
+<a href=#938 id=938 data-nosnippet>938</a>            // having to `expect` an option in the hot path when dereferencing.
+<a href=#939 id=939 data-nosnippet>939</a>            </span><span class="self">self</span>.value.as_ref()
+<a href=#940 id=940 data-nosnippet>940</a>        }
+<a href=#941 id=941 data-nosnippet>941</a>    }
+<a href=#942 id=942 data-nosnippet>942</a>}
+<a href=#943 id=943 data-nosnippet>943</a>
+<a href=#944 id=944 data-nosnippet>944</a><span class="kw">impl</span>&lt;T, C&gt; std::ops::Deref <span class="kw">for </span>OwnedEntry&lt;T, C&gt;
+<a href=#945 id=945 data-nosnippet>945</a><span class="kw">where
+<a href=#946 id=946 data-nosnippet>946</a>    </span>C: cfg::Config,
+<a href=#947 id=947 data-nosnippet>947</a>{
+<a href=#948 id=948 data-nosnippet>948</a>    <span class="kw">type </span>Target = T;
+<a href=#949 id=949 data-nosnippet>949</a>
+<a href=#950 id=950 data-nosnippet>950</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+<a href=#951 id=951 data-nosnippet>951</a>        <span class="self">self</span>.value()
+<a href=#952 id=952 data-nosnippet>952</a>    }
+<a href=#953 id=953 data-nosnippet>953</a>}
+<a href=#954 id=954 data-nosnippet>954</a>
+<a href=#955 id=955 data-nosnippet>955</a><span class="kw">impl</span>&lt;T, C&gt; Drop <span class="kw">for </span>OwnedEntry&lt;T, C&gt;
+<a href=#956 id=956 data-nosnippet>956</a><span class="kw">where
+<a href=#957 id=957 data-nosnippet>957</a>    </span>C: cfg::Config,
+<a href=#958 id=958 data-nosnippet>958</a>{
+<a href=#959 id=959 data-nosnippet>959</a>    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#960 id=960 data-nosnippet>960</a>        <span class="macro">test_println!</span>(<span class="string">"drop OwnedEntry: try clearing data"</span>);
+<a href=#961 id=961 data-nosnippet>961</a>        <span class="kw">let </span>should_clear = <span class="kw">unsafe </span>{
+<a href=#962 id=962 data-nosnippet>962</a>            <span class="comment">// Safety: calling `slot::Guard::release` is unsafe, since the
+<a href=#963 id=963 data-nosnippet>963</a>            // `Guard` value contains a pointer to the slot that may outlive the
+<a href=#964 id=964 data-nosnippet>964</a>            // slab containing that slot. Here, the `OwnedEntry` owns an `Arc`
+<a href=#965 id=965 data-nosnippet>965</a>            // clone of the pool, which keeps it alive as long as the `OwnedEntry`
+<a href=#966 id=966 data-nosnippet>966</a>            // exists.
+<a href=#967 id=967 data-nosnippet>967</a>            </span><span class="self">self</span>.inner.release()
+<a href=#968 id=968 data-nosnippet>968</a>        };
+<a href=#969 id=969 data-nosnippet>969</a>        <span class="kw">if </span>should_clear {
+<a href=#970 id=970 data-nosnippet>970</a>            <span class="kw">let </span>shard_idx = Tid::&lt;C&gt;::from_packed(<span class="self">self</span>.key);
+<a href=#971 id=971 data-nosnippet>971</a>            <span class="macro">test_println!</span>(<span class="string">"-&gt; shard={:?}"</span>, shard_idx);
+<a href=#972 id=972 data-nosnippet>972</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(shard) = <span class="self">self</span>.slab.shards.get(shard_idx.as_usize()) {
+<a href=#973 id=973 data-nosnippet>973</a>                shard.clear_after_release(<span class="self">self</span>.key)
+<a href=#974 id=974 data-nosnippet>974</a>            } <span class="kw">else </span>{
+<a href=#975 id=975 data-nosnippet>975</a>                <span class="macro">test_println!</span>(<span class="string">"-&gt; shard={:?} does not exist! THIS IS A BUG"</span>, shard_idx);
+<a href=#976 id=976 data-nosnippet>976</a>                <span class="macro">debug_assert!</span>(std::thread::panicking(), <span class="string">"[internal error] tried to drop an `OwnedEntry` to a slot on a shard that never existed!"</span>);
+<a href=#977 id=977 data-nosnippet>977</a>            }
+<a href=#978 id=978 data-nosnippet>978</a>        }
+<a href=#979 id=979 data-nosnippet>979</a>    }
+<a href=#980 id=980 data-nosnippet>980</a>}
+<a href=#981 id=981 data-nosnippet>981</a>
+<a href=#982 id=982 data-nosnippet>982</a><span class="kw">impl</span>&lt;T, C&gt; fmt::Debug <span class="kw">for </span>OwnedEntry&lt;T, C&gt;
+<a href=#983 id=983 data-nosnippet>983</a><span class="kw">where
+<a href=#984 id=984 data-nosnippet>984</a>    </span>T: fmt::Debug,
+<a href=#985 id=985 data-nosnippet>985</a>    C: cfg::Config,
+<a href=#986 id=986 data-nosnippet>986</a>{
+<a href=#987 id=987 data-nosnippet>987</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#988 id=988 data-nosnippet>988</a>        fmt::Debug::fmt(<span class="self">self</span>.value(), f)
+<a href=#989 id=989 data-nosnippet>989</a>    }
+<a href=#990 id=990 data-nosnippet>990</a>}
+<a href=#991 id=991 data-nosnippet>991</a>
+<a href=#992 id=992 data-nosnippet>992</a><span class="kw">impl</span>&lt;T, C&gt; PartialEq&lt;T&gt; <span class="kw">for </span>OwnedEntry&lt;T, C&gt;
+<a href=#993 id=993 data-nosnippet>993</a><span class="kw">where
+<a href=#994 id=994 data-nosnippet>994</a>    </span>T: PartialEq&lt;T&gt;,
+<a href=#995 id=995 data-nosnippet>995</a>    C: cfg::Config,
+<a href=#996 id=996 data-nosnippet>996</a>{
+<a href=#997 id=997 data-nosnippet>997</a>    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>T) -&gt; bool {
+<a href=#998 id=998 data-nosnippet>998</a>        <span class="kw-2">*</span><span class="self">self</span>.value() == <span class="kw-2">*</span>other
+<a href=#999 id=999 data-nosnippet>999</a>    }
+<a href=#1000 id=1000 data-nosnippet>1000</a>}
+<a href=#1001 id=1001 data-nosnippet>1001</a>
+<a href=#1002 id=1002 data-nosnippet>1002</a><span class="kw">unsafe impl</span>&lt;T, C&gt; Sync <span class="kw">for </span>OwnedEntry&lt;T, C&gt;
+<a href=#1003 id=1003 data-nosnippet>1003</a><span class="kw">where
+<a href=#1004 id=1004 data-nosnippet>1004</a>    </span>T: Sync,
+<a href=#1005 id=1005 data-nosnippet>1005</a>    C: cfg::Config,
+<a href=#1006 id=1006 data-nosnippet>1006</a>{
+<a href=#1007 id=1007 data-nosnippet>1007</a>}
+<a href=#1008 id=1008 data-nosnippet>1008</a>
+<a href=#1009 id=1009 data-nosnippet>1009</a><span class="kw">unsafe impl</span>&lt;T, C&gt; Send <span class="kw">for </span>OwnedEntry&lt;T, C&gt;
+<a href=#1010 id=1010 data-nosnippet>1010</a><span class="kw">where
+<a href=#1011 id=1011 data-nosnippet>1011</a>    </span>T: Sync,
+<a href=#1012 id=1012 data-nosnippet>1012</a>    C: cfg::Config,
+<a href=#1013 id=1013 data-nosnippet>1013</a>{
+<a href=#1014 id=1014 data-nosnippet>1014</a>}
+<a href=#1015 id=1015 data-nosnippet>1015</a>
+<a href=#1016 id=1016 data-nosnippet>1016</a><span class="comment">// === pack ===
+<a href=#1017 id=1017 data-nosnippet>1017</a>
+<a href=#1018 id=1018 data-nosnippet>1018</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">trait </span>Pack&lt;C: cfg::Config&gt;: Sized {
+<a href=#1019 id=1019 data-nosnippet>1019</a>    <span class="comment">// ====== provided by each implementation =================================
+<a href=#1020 id=1020 data-nosnippet>1020</a>
+<a href=#1021 id=1021 data-nosnippet>1021</a>    </span><span class="doccomment">/// The number of bits occupied by this type when packed into a usize.
+<a href=#1022 id=1022 data-nosnippet>1022</a>    ///
+<a href=#1023 id=1023 data-nosnippet>1023</a>    /// This must be provided to determine the number of bits into which to pack
+<a href=#1024 id=1024 data-nosnippet>1024</a>    /// the type.
+<a href=#1025 id=1025 data-nosnippet>1025</a>    </span><span class="kw">const </span>LEN: usize;
+<a href=#1026 id=1026 data-nosnippet>1026</a>    <span class="doccomment">/// The type packed on the less significant side of this type.
+<a href=#1027 id=1027 data-nosnippet>1027</a>    ///
+<a href=#1028 id=1028 data-nosnippet>1028</a>    /// If this type is packed into the least significant bit of a usize, this
+<a href=#1029 id=1029 data-nosnippet>1029</a>    /// should be `()`, which occupies no bytes.
+<a href=#1030 id=1030 data-nosnippet>1030</a>    ///
+<a href=#1031 id=1031 data-nosnippet>1031</a>    /// This is used to calculate the shift amount for packing this value.
+<a href=#1032 id=1032 data-nosnippet>1032</a>    </span><span class="kw">type </span>Prev: Pack&lt;C&gt;;
+<a href=#1033 id=1033 data-nosnippet>1033</a>
+<a href=#1034 id=1034 data-nosnippet>1034</a>    <span class="comment">// ====== calculated automatically ========================================
+<a href=#1035 id=1035 data-nosnippet>1035</a>
+<a href=#1036 id=1036 data-nosnippet>1036</a>    </span><span class="doccomment">/// A number consisting of `Self::LEN` 1 bits, starting at the least
+<a href=#1037 id=1037 data-nosnippet>1037</a>    /// significant bit.
+<a href=#1038 id=1038 data-nosnippet>1038</a>    ///
+<a href=#1039 id=1039 data-nosnippet>1039</a>    /// This is the higest value this type can represent. This number is shifted
+<a href=#1040 id=1040 data-nosnippet>1040</a>    /// left by `Self::SHIFT` bits to calculate this type's `MASK`.
+<a href=#1041 id=1041 data-nosnippet>1041</a>    ///
+<a href=#1042 id=1042 data-nosnippet>1042</a>    /// This is computed automatically based on `Self::LEN`.
+<a href=#1043 id=1043 data-nosnippet>1043</a>    </span><span class="kw">const </span>BITS: usize = {
+<a href=#1044 id=1044 data-nosnippet>1044</a>        <span class="kw">let </span>shift = <span class="number">1 </span>&lt;&lt; (<span class="self">Self</span>::LEN - <span class="number">1</span>);
+<a href=#1045 id=1045 data-nosnippet>1045</a>        shift | (shift - <span class="number">1</span>)
+<a href=#1046 id=1046 data-nosnippet>1046</a>    };
+<a href=#1047 id=1047 data-nosnippet>1047</a>    <span class="doccomment">/// The number of bits to shift a number to pack it into a usize with other
+<a href=#1048 id=1048 data-nosnippet>1048</a>    /// values.
+<a href=#1049 id=1049 data-nosnippet>1049</a>    ///
+<a href=#1050 id=1050 data-nosnippet>1050</a>    /// This is caculated automatically based on the `LEN` and `SHIFT` constants
+<a href=#1051 id=1051 data-nosnippet>1051</a>    /// of the previous value.
+<a href=#1052 id=1052 data-nosnippet>1052</a>    </span><span class="kw">const </span>SHIFT: usize = <span class="self">Self</span>::Prev::SHIFT + <span class="self">Self</span>::Prev::LEN;
+<a href=#1053 id=1053 data-nosnippet>1053</a>
+<a href=#1054 id=1054 data-nosnippet>1054</a>    <span class="doccomment">/// The mask to extract only this type from a packed `usize`.
+<a href=#1055 id=1055 data-nosnippet>1055</a>    ///
+<a href=#1056 id=1056 data-nosnippet>1056</a>    /// This is calculated by shifting `Self::BITS` left by `Self::SHIFT`.
+<a href=#1057 id=1057 data-nosnippet>1057</a>    </span><span class="kw">const </span>MASK: usize = <span class="self">Self</span>::BITS &lt;&lt; <span class="self">Self</span>::SHIFT;
+<a href=#1058 id=1058 data-nosnippet>1058</a>
+<a href=#1059 id=1059 data-nosnippet>1059</a>    <span class="kw">fn </span>as_usize(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+<a href=#1060 id=1060 data-nosnippet>1060</a>    <span class="kw">fn </span>from_usize(val: usize) -&gt; <span class="self">Self</span>;
+<a href=#1061 id=1061 data-nosnippet>1061</a>
+<a href=#1062 id=1062 data-nosnippet>1062</a>    <span class="attr">#[inline(always)]
+<a href=#1063 id=1063 data-nosnippet>1063</a>    </span><span class="kw">fn </span>pack(<span class="kw-2">&amp;</span><span class="self">self</span>, to: usize) -&gt; usize {
+<a href=#1064 id=1064 data-nosnippet>1064</a>        <span class="kw">let </span>value = <span class="self">self</span>.as_usize();
+<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="macro">debug_assert!</span>(value &lt;= <span class="self">Self</span>::BITS);
+<a href=#1066 id=1066 data-nosnippet>1066</a>
+<a href=#1067 id=1067 data-nosnippet>1067</a>        (to &amp; !<span class="self">Self</span>::MASK) | (value &lt;&lt; <span class="self">Self</span>::SHIFT)
+<a href=#1068 id=1068 data-nosnippet>1068</a>    }
+<a href=#1069 id=1069 data-nosnippet>1069</a>
+<a href=#1070 id=1070 data-nosnippet>1070</a>    <span class="attr">#[inline(always)]
+<a href=#1071 id=1071 data-nosnippet>1071</a>    </span><span class="kw">fn </span>from_packed(from: usize) -&gt; <span class="self">Self </span>{
+<a href=#1072 id=1072 data-nosnippet>1072</a>        <span class="kw">let </span>value = (from &amp; <span class="self">Self</span>::MASK) &gt;&gt; <span class="self">Self</span>::SHIFT;
+<a href=#1073 id=1073 data-nosnippet>1073</a>        <span class="macro">debug_assert!</span>(value &lt;= <span class="self">Self</span>::BITS);
+<a href=#1074 id=1074 data-nosnippet>1074</a>        <span class="self">Self</span>::from_usize(value)
+<a href=#1075 id=1075 data-nosnippet>1075</a>    }
+<a href=#1076 id=1076 data-nosnippet>1076</a>}
+<a href=#1077 id=1077 data-nosnippet>1077</a>
+<a href=#1078 id=1078 data-nosnippet>1078</a><span class="kw">impl</span>&lt;C: cfg::Config&gt; Pack&lt;C&gt; <span class="kw">for </span>() {
+<a href=#1079 id=1079 data-nosnippet>1079</a>    <span class="kw">const </span>BITS: usize = <span class="number">0</span>;
+<a href=#1080 id=1080 data-nosnippet>1080</a>    <span class="kw">const </span>LEN: usize = <span class="number">0</span>;
+<a href=#1081 id=1081 data-nosnippet>1081</a>    <span class="kw">const </span>SHIFT: usize = <span class="number">0</span>;
+<a href=#1082 id=1082 data-nosnippet>1082</a>    <span class="kw">const </span>MASK: usize = <span class="number">0</span>;
+<a href=#1083 id=1083 data-nosnippet>1083</a>
+<a href=#1084 id=1084 data-nosnippet>1084</a>    <span class="kw">type </span>Prev = ();
+<a href=#1085 id=1085 data-nosnippet>1085</a>
+<a href=#1086 id=1086 data-nosnippet>1086</a>    <span class="kw">fn </span>as_usize(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#1087 id=1087 data-nosnippet>1087</a>        <span class="macro">unreachable!</span>()
+<a href=#1088 id=1088 data-nosnippet>1088</a>    }
+<a href=#1089 id=1089 data-nosnippet>1089</a>    <span class="kw">fn </span>from_usize(_val: usize) -&gt; <span class="self">Self </span>{
+<a href=#1090 id=1090 data-nosnippet>1090</a>        <span class="macro">unreachable!</span>()
+<a href=#1091 id=1091 data-nosnippet>1091</a>    }
+<a href=#1092 id=1092 data-nosnippet>1092</a>
+<a href=#1093 id=1093 data-nosnippet>1093</a>    <span class="kw">fn </span>pack(<span class="kw-2">&amp;</span><span class="self">self</span>, _to: usize) -&gt; usize {
+<a href=#1094 id=1094 data-nosnippet>1094</a>        <span class="macro">unreachable!</span>()
+<a href=#1095 id=1095 data-nosnippet>1095</a>    }
+<a href=#1096 id=1096 data-nosnippet>1096</a>
+<a href=#1097 id=1097 data-nosnippet>1097</a>    <span class="kw">fn </span>from_packed(_from: usize) -&gt; <span class="self">Self </span>{
+<a href=#1098 id=1098 data-nosnippet>1098</a>        <span class="macro">unreachable!</span>()
+<a href=#1099 id=1099 data-nosnippet>1099</a>    }
+<a href=#1100 id=1100 data-nosnippet>1100</a>}
+<a href=#1101 id=1101 data-nosnippet>1101</a>
+<a href=#1102 id=1102 data-nosnippet>1102</a><span class="attr">#[cfg(test)]
+<a href=#1103 id=1103 data-nosnippet>1103</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span><span class="self">self</span>::tests::util <span class="kw">as </span>test_util;
+<a href=#1104 id=1104 data-nosnippet>1104</a>
+<a href=#1105 id=1105 data-nosnippet>1105</a><span class="attr">#[cfg(test)]
+<a href=#1106 id=1106 data-nosnippet>1106</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>

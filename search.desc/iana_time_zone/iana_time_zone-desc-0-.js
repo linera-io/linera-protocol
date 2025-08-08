@@ -1,0 +1,1 @@
+searchState.loadedDescShard("iana_time_zone", 0, "get the IANA time zone for the current system\nFailed to parse\nError types\nWrapped IO error\nPlatform-specific error from the operating system\nReturns the argument unchanged.\nGet the current IANA time zone as a string.\nCalls <code>U::from(self)</code>.")

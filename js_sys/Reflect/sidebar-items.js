@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["apply","construct","construct_with_new_target","define_property","delete_property","get","get_f64","get_own_property_descriptor","get_prototype_of","get_u32","has","is_extensible","own_keys","prevent_extensions","set","set_f64","set_prototype_of","set_u32","set_with_receiver"]};

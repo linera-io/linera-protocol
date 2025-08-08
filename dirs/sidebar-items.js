@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["audio_dir","cache_dir","config_dir","config_local_dir","data_dir","data_local_dir","desktop_dir","document_dir","download_dir","executable_dir","font_dir","home_dir","picture_dir","preference_dir","public_dir","runtime_dir","state_dir","template_dir","video_dir"]};

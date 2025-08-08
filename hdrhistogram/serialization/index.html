@@ -1,0 +1,153 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serialization/deserialization support."><title>hdrhistogram::serialization - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="hdrhistogram" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../hdrhistogram/index.html">hdrhistogram</a><span class="version">7.5.4</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module serialization</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#performance-concerns" title="Performance concerns">Performance concerns</a></li><li><a href="#api" title="API">API</a></li><li><a href="#interval-logs" title="Interval logs">Interval logs</a><ul><li><a href="#integration-with-general-purpose-serialization-libraries" title="Integration with general-purpose serialization libraries">Integration with general-purpose serialization libraries</a></li></ul></li><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#modules">Module Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate hdrhistogram</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">hdrhistogram</a></div><h1>Module <span>serialization</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/hdrhistogram/serialization/mod.rs.html#1-226">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Serialization/deserialization support.</p>
+<p>The upstream Java project has established several different types of serialization. We have
+currently implemented V2 and V2 + DEFLATE (following the names used by the Java implementation).</p>
+<p>These formats are compact binary representations of the state of the histogram. They are
+intended to be used for archival or transmission to other systems for further analysis. A
+typical use case would be to periodically serialize a histogram, save it somewhere, and reset
+the histogram.</p>
+<p>Histograms are designed to be added, subtracted, and otherwise manipulated, and an efficient
+storage format facilitates this. As an example, you might be capturing histograms once a minute
+to have a granular view into your performance over time, but you might also want to see longer
+trends over an hour or day. Simply deserialize the last 60 minutes worth to recreate their
+in-memory <code>Histogram</code> form, add them all together into one <code>Histogram</code>, and perform whatever
+calculations you wish on the resulting histogram. This would allow you to correctly calculate
+the 99.99th percentile for the entire hour, for instance, which is not something you can do
+if you have only stored percentiles (as opposed to the entire histogram) for each minute.</p>
+<h2 id="performance-concerns"><a class="doc-anchor" href="#performance-concerns">§</a>Performance concerns</h2>
+<p>Serialization is quite fast; serializing a histogram in V2 format that represents 1 to
+<code>u64::max_value()</code> with 3 digits of precision with tens of thousands of recorded counts takes
+about 40 microseconds on an E5-1650v3 Xeon. Deserialization is about 3x slower, but that will
+improve as there are still some optimizations to perform.</p>
+<p>For the V2 format, the space used for a histogram will depend mainly on precision since higher
+precision will reduce the extent to which different values are grouped into the same bucket.
+Having a large value range (e.g. 1 to <code>u64::max_value()</code>) will not directly impact the size if
+there are many zero counts as zeros are compressed away.</p>
+<p>V2 + DEFLATE is significantly slower to serialize (around 10x) but only a little bit slower to
+deserialize (less than 2x). YMMV depending on the compressibility of your histogram data, the
+speed of the underlying storage medium, etc. Naturally, you can always compress at a later time:
+there’s no reason why you couldn’t serialize as V2 and then later re-serialize it as V2 +
+DEFLATE on another system (perhaps as a batch job) for better archival storage density.</p>
+<h2 id="api"><a class="doc-anchor" href="#api">§</a>API</h2>
+<p>Each serialization format has its own serializer struct, but since each format is reliably
+distinguishable from each other, there is only one <code>Deserializer</code> struct that will work for
+any of the formats this library implements.</p>
+<p>Serializers and deserializers are intended to be re-used for many histograms. You can use them
+for one histogram and throw them away; it will just be less efficient as the cost of their
+internal buffers will not be amortized across many histograms.</p>
+<p>Serializers can write to any <code>Write</code> implementation, and <code>Deserializer</code> can read from any
+<code>Read</code>. This should make it easy to use them in almost any context, as everything from i/o
+streams to <code>Vec&lt;u8&gt;</code> can be a <code>Read</code> or <code>Write</code>.</p>
+<h2 id="interval-logs"><a class="doc-anchor" href="#interval-logs">§</a>Interval logs</h2>
+<p>See the <code>interval_log</code> module.</p>
+<h4 id="integration-with-general-purpose-serialization-libraries"><a class="doc-anchor" href="#integration-with-general-purpose-serialization-libraries">§</a>Integration with general-purpose serialization libraries</h4>
+<p>In general, serializing histograms should be straightforward: pick the serialization format
+that is suitable for your requirements (e.g. based on what formats are supported by other tools
+that will consume the serialized histograms) and use the corresponding struct.</p>
+<p>However, there are some approaches to serialization like <a href="https://docs.serde.rs/serde/trait.Serialize.html">serde’s
+<code>Serialize</code></a> or <a href="https://doc.rust-lang.org/rustc-serialize/rustc_serialize/trait.Encodable.html"><code>rustc_serialize</code>’s
+<code>Encodable</code></a>
+that effectively require that only one way of serialization can be used because a trait can
+only be implemented once for a struct. This is too restrictive for histograms since they
+inherently have multiple ways of being serialized, so as a library we cannot pick the format
+for you. If you need to interoperate with such a restriction, a good approach is to first pick
+your serialization format (V2, etc) like you normally would, then make a wrapper struct. The
+wrapper effectively gives you a struct whose sole opportunity to implement a trait you can
+expend to satisfy the way serde, etc, are structured.</p>
+<p>Here’s a sketch of how that would look for serde’s <code>Serialize</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hdrhistogram::Histogram;
+<span class="kw">use </span>hdrhistogram::serialization::{Serializer, V2Serializer};
+
+<span class="kw">mod </span>serde {
+    <span class="comment">// part of serde, simplified
+    </span><span class="kw">pub trait </span>Serializer {
+       <span class="comment">// ...
+       </span><span class="kw">fn </span>serialize_bytes(<span class="self">self</span>, value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt;;
+       <span class="comment">// ...
+    </span>}
+
+    <span class="comment">// also in serde
+    </span><span class="kw">pub trait </span>Serialize {
+        <span class="kw">fn </span>serialize&lt;S: Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt;;
+    }
+}
+
+<span class="comment">// your custom wrapper
+</span><span class="attr">#[allow(dead_code)] </span><span class="comment">// to muffle warnings compiling this example
+</span><span class="kw">struct </span>V2HistogramWrapper {
+    histogram: Histogram&lt;u64&gt;
+}
+
+<span class="kw">impl </span>serde::Serialize <span class="kw">for </span>V2HistogramWrapper {
+    <span class="kw">fn </span>serialize&lt;S: serde::Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
+        <span class="comment">// Not optimal to not re-use the vec and serializer, but it'll work
+        </span><span class="kw">let </span><span class="kw-2">mut </span>vec = Vec::new();
+        <span class="comment">// Pick the serialization format you want to use. Here, we use plain V2, but V2 +
+        // DEFLATE is also available.
+        // Map errors as appropriate for your use case.
+        </span>V2Serializer::new().serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.histogram, <span class="kw-2">&amp;mut </span>vec)
+            .map_err(|<span class="kw">_</span>| ())<span class="question-mark">?</span>;
+        serializer.serialize_bytes(<span class="kw-2">&amp;</span>vec)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+}</code></pre></div>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Creating, serializing, and deserializing a single histogram using a <code>Vec&lt;u8&gt;</code> as a <code>Write</code> and a
+<code>&amp;[u8]</code> slice from the vec as a <code>Read</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hdrhistogram::Histogram;
+<span class="kw">use </span>hdrhistogram::serialization::{Deserializer, Serializer, V2Serializer};
+
+<span class="kw">let </span><span class="kw-2">mut </span>vec = Vec::new();
+<span class="kw">let </span>orig_histogram = Histogram::&lt;u64&gt;::new(<span class="number">1</span>).unwrap();
+V2Serializer::new().serialize(<span class="kw-2">&amp;</span>orig_histogram, <span class="kw-2">&amp;mut </span>vec).unwrap();
+
+<span class="kw">let </span>_histogram: Histogram&lt;u64&gt; = Deserializer::new()
+    .deserialize(<span class="kw-2">&amp;mut </span>vec.as_slice()).unwrap();</code></pre></div>
+<p>This example shows serializing several histograms into a <code>Vec&lt;u8&gt;</code> and deserializing them again,
+at which point they are summed into one histogram (for further hypothetical analysis).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hdrhistogram::Histogram;
+<span class="kw">use </span>hdrhistogram::serialization::{Deserializer, Serializer, V2Serializer};
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="comment">// Naturally, do real error handling instead of unwrap() everywhere
+
+</span><span class="kw">let </span>num_histograms = <span class="number">4</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>histograms = Vec::new();
+
+<span class="comment">// Make some histograms
+</span><span class="kw">for _ in </span><span class="number">0</span>..num_histograms {
+    <span class="kw">let </span><span class="kw-2">mut </span>h = Histogram::&lt;u64&gt;::new_with_bounds(<span class="number">1</span>, u64::max_value(), <span class="number">3</span>).unwrap();
+    h.record_n(<span class="number">42</span>, <span class="number">7</span>).unwrap();
+    histograms.push(h);
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+<span class="kw">let </span><span class="kw-2">mut </span>serializer = V2Serializer::new();
+
+<span class="comment">// Save them to the buffer
+</span><span class="kw">for </span>h <span class="kw">in </span>histograms.iter() {
+    serializer.serialize(h, <span class="kw-2">&amp;mut </span>buf).unwrap();
+}
+
+<span class="comment">// Read them back out again
+</span><span class="kw">let </span><span class="kw-2">mut </span>deserializer = Deserializer::new();
+<span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(<span class="kw-2">&amp;</span>buf);
+
+<span class="kw">let </span><span class="kw-2">mut </span>accumulator =
+    Histogram::&lt;u64&gt;::new_with_bounds(<span class="number">1</span>, u64::max_value(), <span class="number">3</span>).unwrap();
+
+<span class="kw">for _ in </span><span class="number">0</span>..num_histograms {
+    <span class="kw">let </span>h: Histogram&lt;u64&gt; = deserializer.deserialize(<span class="kw-2">&amp;mut </span>cursor).unwrap();
+
+    <span class="comment">// behold, they are restored as they were originally
+    </span><span class="macro">assert_eq!</span>(<span class="number">7</span>, h.count_at(<span class="number">42</span>));
+    <span class="macro">assert_eq!</span>(<span class="number">0</span>, h.count_at(<span class="number">1000</span>));
+
+    accumulator.add(h).unwrap();
+}
+
+<span class="comment">// all the counts are there
+</span><span class="macro">assert_eq!</span>(num_histograms * <span class="number">7</span>, accumulator.count_at(<span class="number">42</span>));</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="interval_log/index.html" title="mod hdrhistogram::serialization::interval_log">interval_<wbr>log</a></dt><dd>Interval log parsing and writing.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Deserializer.html" title="struct hdrhistogram::serialization::Deserializer">Deserializer</a></dt><dd>Deserializer for all supported formats.</dd><dt><a class="struct" href="struct.V2DeflateSerializer.html" title="struct hdrhistogram::serialization::V2DeflateSerializer">V2Deflate<wbr>Serializer</a></dt><dd>Serializer for the V2 + DEFLATE binary format.</dd><dt><a class="struct" href="struct.V2Serializer.html" title="struct hdrhistogram::serialization::V2Serializer">V2Serializer</a></dt><dd>Serializer for the V2 binary format.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.DeserializeError.html" title="enum hdrhistogram::serialization::DeserializeError">Deserialize<wbr>Error</a></dt><dd>Errors that can happen during deserialization.</dd><dt><a class="enum" href="enum.V2DeflateSerializeError.html" title="enum hdrhistogram::serialization::V2DeflateSerializeError">V2Deflate<wbr>Serialize<wbr>Error</a></dt><dd>Errors that occur during serialization.</dd><dt><a class="enum" href="enum.V2SerializeError.html" title="enum hdrhistogram::serialization::V2SerializeError">V2Serialize<wbr>Error</a></dt><dd>Errors that occur during serialization.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Serializer.html" title="trait hdrhistogram::serialization::Serializer">Serializer</a></dt><dd>Histogram serializer.</dd></dl></section></div></main></body></html>

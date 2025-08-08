@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","Step"],"fn":["build_addition_chain","build_steps","find_shortest_chain"]};

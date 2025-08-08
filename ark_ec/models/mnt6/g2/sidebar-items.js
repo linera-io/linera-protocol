@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AteAdditionCoefficients","AteDoubleCoefficients","G2Prepared","G2ProjectiveExtended"],"type":["G2Affine","G2Projective"]};

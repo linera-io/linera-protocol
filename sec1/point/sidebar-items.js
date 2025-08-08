@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Coordinates","Tag"],"struct":["EncodedPoint"],"trait":["ModulusSize"]};
