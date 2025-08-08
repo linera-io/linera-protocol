@@ -7,6 +7,8 @@ mod consts;
 #[cfg(test)]
 mod tests;
 
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use consts::{
     CREATE_BLOBS_TABLE, CREATE_BLOCKS_TABLE, CREATE_EVENTS_TABLE, CREATE_INCOMING_BUNDLES_TABLE,
@@ -346,7 +348,7 @@ impl SqliteDatabase {
         .bind(message_index as i64)
         .bind(&destination_chain_id_str)
         .bind(&authenticated_signer_str)
-        .bind(u128::from(message.grant) as i64)
+        .bind(message.grant.to_string())
         .bind(&message_kind_str)
         .bind(classification.message_type)
         .bind(classification.application_id)
@@ -546,7 +548,7 @@ impl SqliteDatabase {
         .bind(bundle_id)
         .bind(message.index as i64)
         .bind(authenticated_signer_str)
-        .bind(u128::from(message.grant) as i64)
+        .bind(message.grant.to_string())
         .bind(refund_grant_to_data)
         .bind(&message_kind_str)
         .bind(classification.message_type)
@@ -738,7 +740,7 @@ impl SqliteDatabase {
             let message_info = PostedMessageInfo {
                 message_index: row.get::<i64, _>("message_index") as u32,
                 authenticated_signer_data: row.get("authenticated_signer"),
-                grant_amount: row.get::<i64, _>("grant_amount") as u64,
+                grant_amount: row.get("grant_amount"),
                 refund_grant_to_data: row.get("refund_grant_to"),
                 message_kind: row.get("message_kind"),
                 message_data: row.get("message_data"),
@@ -854,8 +856,9 @@ impl SqliteDatabase {
                 .map_err(|_| SqliteError::Serialization("Invalid chain ID".to_string()))?;
             let authenticated_signer_str: Option<String> = row.get("authenticated_signer");
             let authenticated_signer = authenticated_signer_str.and_then(|s| s.parse().ok());
-            let grant_amount: i64 = row.get("grant_amount");
-            let grant = linera_base::data_types::Amount::from(grant_amount as u128);
+            let grant_amount: String = row.get("grant_amount");
+            let grant = linera_base::data_types::Amount::from_str(grant_amount.as_str())
+                .map_err(|_| SqliteError::Serialization("Invalid grant amount".to_string()))?;
             let kind_str: String = row.get("message_kind");
             let kind = Self::parse_message_kind(kind_str.as_str())?;
             let message_bytes: Vec<u8> = row.get("data");

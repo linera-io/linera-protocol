@@ -945,6 +945,17 @@ pub enum MessageKind {
     Bouncing,
 }
 
+impl Display for MessageKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MessageKind::Simple => write!(f, "Simple"),
+            MessageKind::Protected => write!(f, "Protected"),
+            MessageKind::Tracked => write!(f, "Tracked"),
+            MessageKind::Bouncing => write!(f, "Bouncing"),
+        }
+    }
+}
+
 /// A posted message together with routing information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OutgoingMessage {

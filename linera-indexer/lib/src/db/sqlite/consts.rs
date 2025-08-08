@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS outgoing_messages (
     message_index INTEGER NOT NULL,
     destination_chain_id TEXT NOT NULL,
     authenticated_signer TEXT,
-    grant_amount INTEGER NOT NULL DEFAULT 0,
+    grant_amount TEXT,
     message_kind TEXT NOT NULL, -- 'Simple', 'Tracked', 'Bouncing', 'Protected'
     message_type TEXT NOT NULL, -- 'System' or 'User'
     application_id TEXT, -- For user messages
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS posted_messages (
     bundle_id INTEGER NOT NULL,
     message_index INTEGER NOT NULL,
     authenticated_signer TEXT,
-    grant_amount INTEGER NOT NULL,
+    grant_amount TEXT,
     refund_grant_to TEXT,
     message_kind TEXT NOT NULL,
     message_type TEXT NOT NULL, -- 'System' or 'User'
