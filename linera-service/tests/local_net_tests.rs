@@ -801,8 +801,8 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         .benchmark(BenchmarkCommand {
             num_chains: 2,
             transactions_per_block: 10,
-            bps: 1,
-            runtime_in_seconds: Some(1),
+            bps: 2,
+            runtime_in_seconds: Some(5),
             close_chains: true,
             ..Default::default()
         })
@@ -831,8 +831,8 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         .benchmark(BenchmarkCommand {
             num_chains: 2,
             transactions_per_block: 10,
-            bps: 1,
-            runtime_in_seconds: Some(1),
+            bps: 2,
+            runtime_in_seconds: Some(5),
             fungible_application_id: Some(application_id.forget_abi()),
             close_chains: true,
             ..Default::default()
