@@ -44,8 +44,20 @@ export interface PostedMessage {
   grant_amount: number;
   refund_grant_to: Uint8Array | null;
   message_kind: string;
+  message_type?: 'System' | 'User';
+  application_id?: string;
+  system_message_type?: string;
+  system_target?: string;
+  system_amount?: number;
+  system_source?: string;
+  system_owner?: string;
+  system_recipient?: string;
   message_data: Uint8Array;
   created_at: string;
+}
+
+export interface IncomingBundleWithMessages extends IncomingBundle {
+  messages: PostedMessage[];
 }
 
 export interface ChainInfo {

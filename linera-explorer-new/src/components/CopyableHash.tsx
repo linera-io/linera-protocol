@@ -23,7 +23,8 @@ export const CopyableHash: React.FC<CopyableHashProps> = ({
     return hash;
   };
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, event?: React.MouseEvent) => {
+    event?.stopPropagation();
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -36,12 +37,12 @@ export const CopyableHash: React.FC<CopyableHashProps> = ({
   return (
     <div className={`relative group ${className}`}>
       <div className={`font-mono text-sm bg-linera-darker/80 px-3 py-2 rounded border border-linera-border/50 text-linera-gray-light group-hover:text-white transition-colors cursor-pointer ${showCopyIcon ? 'pr-12' : ''}`}
-           onClick={() => copyToClipboard(value)}>
+           onClick={(e) => copyToClipboard(value, e)}>
         {formatHash(value)}
       </div>
       {showCopyIcon && (
         <button
-          onClick={() => copyToClipboard(value)}
+          onClick={(e) => copyToClipboard(value, e)}
           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-linera-gray-medium hover:text-linera-red transition-colors"
           title={copied ? 'Copied!' : 'Copy to clipboard'}
         >

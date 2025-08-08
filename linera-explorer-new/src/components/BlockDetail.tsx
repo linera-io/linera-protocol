@@ -1,6 +1,6 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Hash, Clock, Layers, HardDrive, Package, MessageSquare, Copy, ChevronRight, Settings, Mail, Zap, Database } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Hash, Clock, Layers, HardDrive, Package, MessageSquare, ChevronRight, Settings, Mail, Zap, Database, MessageCircle } from 'lucide-react';
 import { useBlock } from '../hooks/useDatabase';
 import { ExpandableSection } from './ExpandableSection';
 import { CopyableHash } from './CopyableHash';
@@ -8,17 +8,13 @@ import { BinaryDataSection } from './BinaryDataSection';
 
 export const BlockDetail: React.FC = () => {
   const { hash } = useParams<{ hash: string }>();
+  const navigate = useNavigate();
   const { block, bundles, operations, messages, events, oracleResponses, activity, loading, error } = useBlock(hash || '');
 
-  const formatFullHash = (hash: string) => hash;
   const formatBytes = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
   };
 
   if (loading) {
@@ -88,15 +84,7 @@ export const BlockDetail: React.FC = () => {
                 Block Hash
               </label>
               <div className="relative group">
-                <div className="hash-display text-white pr-12">
-                  {formatFullHash(block.hash)}
-                </div>
-                <button
-                  onClick={() => copyToClipboard(block.hash)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-linera-gray-medium hover:text-linera-red"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
+                <CopyableHash value={block.hash} format="full" />
               </div>
             </div>
 
@@ -384,11 +372,11 @@ export const BlockDetail: React.FC = () => {
         >
           <div className="space-y-4">
             {bundles.map((bundle, index) => (
-              <Link
+              <div
                 key={bundle.id}
-                to={`/block/${bundle.source_cert_hash}`}
-                className="block bg-linera-darker/30 border border-linera-border/50 rounded-lg p-6 animate-slide-up hover:bg-linera-darker/50 hover:border-linera-red/30 transition-all duration-300 group cursor-pointer"
+                className="block bg-linera-darker/30 border border-linera-border/50 rounded-lg p-6 animate-slide-up hover:bg-linera-darker/50 hover:border-linera-red/30 transition-all duration-300 group"
                 style={{ animationDelay: `${index * 100}ms` }}
+                onClick={(e) => e.stopPropagation()}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="space-y-4">
@@ -434,18 +422,116 @@ export const BlockDetail: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Posted Messages */}
+                {bundle.messages && bundle.messages.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-linera-border/30">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <MessageCircle className="w-4 h-4 text-linera-gray-medium" />
+                      <span className="text-sm text-linera-gray-light">Posted Messages</span>
+                      <span className="px-2 py-0.5 bg-linera-darker rounded text-xs text-white">
+                        {bundle.messages.length}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {bundle.messages.map((msg) => (
+                        <div key={msg.id} className="bg-linera-darker/50 rounded p-3 text-xs">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-linera-gray-light">#{msg.message_index}</span>
+                            <div className="flex items-center space-x-2">
+                              {msg.message_type && (
+                                <span className={`px-1.5 py-0.5 rounded text-xs ${
+                                  msg.message_type === 'System' 
+                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                                    : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                                }`}>
+                                  {msg.message_type}
+                                </span>
+                              )}
+                              <span className="text-linera-gray-medium">{msg.message_kind}</span>
+                            </div>
+                          </div>
+                          
+                          {/* System Message Details */}
+                          {msg.system_message_type && (
+                            <div className="space-y-1 mt-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-linera-gray-light">Type:</span>
+                                <span className="text-white">{msg.system_message_type}</span>
+                              </div>
+                              {msg.system_amount !== undefined && msg.system_amount !== null && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Amount:</span>
+                                  <span className="text-white font-mono">{msg.system_amount}</span>
+                                </div>
+                              )}
+                              {msg.system_target && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Target:</span>
+                                  <CopyableHash value={msg.system_target} format="short" className="text-xs"/>
+                                </div>
+                              )}
+                              {msg.system_source && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Source:</span>
+                                  <CopyableHash value={msg.system_source} format="short" className="text-xs"/>
+                                </div>
+                              )}
+                              {msg.system_owner && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Owner:</span>
+                                  <CopyableHash value={msg.system_owner} format="short" className="text-xs"/>
+                                </div>
+                              )}
+                              {msg.system_recipient && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Recipient:</span>
+                                  <CopyableHash value={msg.system_recipient} format="short" className="text-xs"/>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* User Message Details */}
+                          {msg.application_id && (
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-linera-gray-light">Application:</span>
+                                <CopyableHash value={msg.application_id} format="short" className="text-xs" />
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Grant Amount */}
+                          {msg.grant_amount > 0 && (
+                            <div className="mt-2 flex items-center justify-between">
+                              <span className="text-linera-gray-light">Grant:</span>
+                              <span className="text-white font-mono">{msg.grant_amount}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Source Block Info */}
                 <div className="mt-4 pt-4 border-t border-linera-border/30">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm text-linera-gray-light">Source Block</span>
-                    <div className="flex items-center space-x-2 text-linera-gray-medium group-hover:text-linera-red transition-colors">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/block/${bundle.source_cert_hash}`);
+                      }}
+                      className="flex items-center space-x-2 text-linera-gray-medium hover:text-linera-red transition-colors"
+                    >
                       <span className="text-sm">View Source Block</span>
-                      <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </div>
+                      <ChevronRight className="w-4 h-4 hover:translate-x-1 transition-transform" />
+                    </button>
                   </div>
                   <CopyableHash value={bundle.source_cert_hash} format="short" />
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         </ExpandableSection>

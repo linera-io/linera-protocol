@@ -75,6 +75,30 @@ app.get('/api/blocks/:hash/bundles', (req, res) => {
   }
 });
 
+// Get bundles with messages - optimized single query
+app.get('/api/blocks/:hash/bundles-with-messages', (req, res) => {
+  try {
+    const { hash } = req.params;
+    const bundlesWithMessages = db.getBlockWithBundlesAndMessages(hash);
+    
+    // Convert binary data to base64 for JSON transport
+    bundlesWithMessages.forEach(bundle => {
+      bundle.messages.forEach(message => {
+        if (message.authenticated_signer) {
+          message.authenticated_signer = Buffer.from(message.authenticated_signer).toString('base64');
+        }
+        if (message.refund_grant_to) {
+          message.refund_grant_to = Buffer.from(message.refund_grant_to).toString('base64');
+        }
+      });
+    });
+    
+    res.json(bundlesWithMessages);
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch bundles with messages');
+  }
+});
+
 // Get posted messages for a bundle
 app.get('/api/bundles/:id/messages', (req, res) => {
   try {

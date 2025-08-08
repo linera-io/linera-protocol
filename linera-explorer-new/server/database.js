@@ -60,14 +60,103 @@ export class BlockchainDatabase {
     return stmt.all(blockHash);
   }
 
-  // Get posted messages for a bundle
+  // Get posted messages for a bundle with SystemMessage fields
   getPostedMessages(bundleId) {
     const stmt = this.db.prepare(`
-      SELECT * FROM posted_messages 
+      SELECT *, system_target, system_amount, system_source, system_owner, system_recipient,
+             message_type, application_id, system_message_type
+      FROM posted_messages 
       WHERE bundle_id = ? 
       ORDER BY message_index ASC
     `);
     return stmt.all(bundleId);
+  }
+
+  // Get block with all bundles and their messages in a single query
+  getBlockWithBundlesAndMessages(blockHash) {
+    const stmt = this.db.prepare(`
+      SELECT 
+        ib.id as bundle_id,
+        ib.bundle_index,
+        ib.origin_chain_id,
+        ib.action,
+        ib.source_height,
+        ib.source_timestamp,
+        ib.source_cert_hash,
+        ib.transaction_index as bundle_transaction_index,
+        ib.created_at as bundle_created_at,
+        pm.id as message_id,
+        pm.message_index,
+        pm.authenticated_signer,
+        pm.grant_amount,
+        pm.refund_grant_to,
+        pm.message_kind,
+        pm.message_type,
+        pm.application_id,
+        pm.system_message_type,
+        pm.system_target,
+        pm.system_amount,
+        pm.system_source,
+        pm.system_owner,
+        pm.system_recipient,
+        pm.message_data,
+        pm.created_at as message_created_at
+      FROM incoming_bundles ib
+      LEFT JOIN posted_messages pm ON ib.id = pm.bundle_id
+      WHERE ib.block_hash = ?
+      ORDER BY ib.bundle_index, pm.message_index
+    `);
+    
+    const rows = stmt.all(blockHash);
+    
+    // Group results by bundle
+    const bundlesMap = new Map();
+    
+    for (const row of rows) {
+      const bundleId = row.bundle_id;
+      
+      if (!bundlesMap.has(bundleId)) {
+        bundlesMap.set(bundleId, {
+          id: bundleId,
+          block_hash: blockHash,
+          bundle_index: row.bundle_index,
+          origin_chain_id: row.origin_chain_id,
+          action: row.action,
+          source_height: row.source_height,
+          source_timestamp: row.source_timestamp,
+          source_cert_hash: row.source_cert_hash,
+          transaction_index: row.bundle_transaction_index,
+          created_at: row.bundle_created_at,
+          messages: []
+        });
+      }
+      
+      // Add message if it exists (LEFT JOIN may produce NULL messages)
+      if (row.message_id) {
+        const bundle = bundlesMap.get(bundleId);
+        bundle.messages.push({
+          id: row.message_id,
+          bundle_id: bundleId,
+          message_index: row.message_index,
+          authenticated_signer: row.authenticated_signer,
+          grant_amount: row.grant_amount,
+          refund_grant_to: row.refund_grant_to,
+          message_kind: row.message_kind,
+          message_type: row.message_type,
+          application_id: row.application_id,
+          system_message_type: row.system_message_type,
+          system_target: row.system_target,
+          system_amount: row.system_amount,
+          system_source: row.system_source,
+          system_owner: row.system_owner,
+          system_recipient: row.system_recipient,
+          message_data: row.message_data ? Buffer.from(row.message_data).toString('base64') : null,
+          created_at: row.message_created_at
+        });
+      }
+    }
+    
+    return Array.from(bundlesMap.values());
   }
 
   // Get all unique chains with stats

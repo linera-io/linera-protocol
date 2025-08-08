@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { BlockchainAPI } from '../utils/database';
-import { BlockInfo, Block, IncomingBundle, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
+import { BlockInfo, Block, IncomingBundleWithMessages, ChainInfo, Operation, Message, Event, OracleResponse } from '../types/blockchain';
 
 const api = new BlockchainAPI();
 
@@ -128,7 +128,7 @@ export const useBlocks = (limit: number = 50, refreshInterval: number = 5000) =>
 
 export const useBlock = (hash: string) => {
   const [block, setBlock] = useState<Block | null>(null);
-  const [bundles, setBundles] = useState<IncomingBundle[]>([]);
+  const [bundles, setBundles] = useState<IncomingBundleWithMessages[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -158,7 +158,7 @@ export const useBlock = (hash: string) => {
           oracleResponsesResult
         ] = await Promise.all([
           api.getBlockByHash(hash),
-          api.getIncomingBundles(hash),
+          api.getBundlesWithMessages(hash), // Use optimized query
           api.getOperations(hash),
           api.getMessages(hash),
           api.getEvents(hash),
