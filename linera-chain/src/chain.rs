@@ -242,12 +242,12 @@ where
     /// Hash of the execution state.
     pub execution_state_hash: RegisterView<C, Option<CryptoHash>>,
     /// Execution state, including system and user applications.
-    /// NOTE: This has to **not** be the first field in `ChainStateView` in order for execution
-    /// state caching to work. This is because the derivation of the `RootView` trait delegates
-    /// `context()` calls to the first field. If we cache the field, we also save the storage LRU
-    /// cache (if enabled), which is a part of the context, and restoring its value from the cache
-    /// results in storage using an outdated cache, which may result in incorrect values being
-    /// returned by read operations.
+    // NOTE: This has to **not** be the first field in `ChainStateView` in order for execution
+    // state caching to work. This is because the derivation of the `RootView` trait delegates
+    // `context()` calls to the first field. If we cache the field, we also save the storage LRU
+    // cache (if enabled), which is a part of the context, and restoring its value from the cache
+    // results in storage using an outdated cache, which may result in incorrect values being
+    // returned by read operations.
     pub execution_state: ExecutionStateView<C>,
 
     /// Block-chaining state.
