@@ -113,18 +113,18 @@ where
     }
 }
 
-/// A dummy context, only used for caching views.
+/// A context which can't be used to read or write data, only used for caching views.
 #[derive(Debug, Default, Clone)]
-pub struct DummyContext(pub BaseKey);
+pub struct InactiveContext(pub BaseKey);
 
-impl Context for DummyContext {
-    type Store = crate::store::dummy_store::DummyStore;
+impl Context for InactiveContext {
+    type Store = crate::store::inactive_store::InactiveStore;
     type Extra = ();
 
-    type Error = crate::store::dummy_store::DummyStoreError;
+    type Error = crate::store::inactive_store::InactiveStoreError;
 
     fn store(&self) -> &Self::Store {
-        &crate::store::dummy_store::DummyStore
+        &crate::store::inactive_store::InactiveStore
     }
 
     fn extra(&self) -> &Self::Extra {
