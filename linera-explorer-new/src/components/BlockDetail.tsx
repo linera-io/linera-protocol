@@ -502,7 +502,7 @@ export const BlockDetail: React.FC = () => {
                           )}
                           
                           {/* Grant Amount */}
-                          {msg.grant_amount > 0 && (
+                          {msg.grant_amount != '0' && (
                             <div className="mt-2 flex items-center justify-between">
                               <span className="text-linera-gray-light">Grant:</span>
                               <span className="text-white font-mono">{msg.grant_amount}</span>

@@ -17,7 +17,7 @@ use consts::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, Event, OracleResponse, Timestamp},
+    data_types::{Amount, BlockHeight, Event, OracleResponse, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -58,7 +58,7 @@ struct MessageClassification {
     application_id: Option<String>,
     system_message_type: Option<String>,
     system_target: Option<String>,
-    system_amount: Option<i64>,
+    system_amount: Option<Amount>,
     system_source: Option<String>,
     system_owner: Option<String>,
     system_recipient: Option<String>,
@@ -354,7 +354,7 @@ impl SqliteDatabase {
         .bind(classification.application_id)
         .bind(classification.system_message_type)
         .bind(classification.system_target)
-        .bind(classification.system_amount)
+        .bind(classification.system_amount.map(|a| a.to_string()))
         .bind(classification.system_source)
         .bind(classification.system_owner)
         .bind(classification.system_recipient)
@@ -530,7 +530,7 @@ impl SqliteDatabase {
         message: &PostedMessage,
     ) -> Result<(), SqliteError> {
         let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
-        let refund_grant_to_data = message.refund_grant_to.as_ref().map(|s| format!("{s}"));
+        let refund_grant_to = message.refund_grant_to.as_ref().map(|s| format!("{s}"));
         let message_kind_str = Self::message_kind_to_string(&message.kind);
 
         let classification = Self::classify_message(&message.message);
@@ -549,13 +549,13 @@ impl SqliteDatabase {
         .bind(message.index as i64)
         .bind(authenticated_signer_str)
         .bind(message.grant.to_string())
-        .bind(refund_grant_to_data)
+        .bind(refund_grant_to)
         .bind(&message_kind_str)
         .bind(classification.message_type)
         .bind(classification.application_id)
         .bind(classification.system_message_type)
         .bind(classification.system_target)
-        .bind(classification.system_amount)
+        .bind(classification.system_amount.map(|a| a.to_string()))
         .bind(classification.system_source)
         .bind(classification.system_owner)
         .bind(classification.system_recipient)
@@ -1034,7 +1034,7 @@ impl SqliteDatabase {
                     } => (
                         "Credit",
                         Some(target.to_string()),
-                        Some(u128::from(*amount) as i64),
+                        Some(*amount),
                         Some(source.to_string()),
                         None,
                         None,
@@ -1046,7 +1046,7 @@ impl SqliteDatabase {
                     } => (
                         "Withdraw",
                         None,
-                        Some(u128::from(*amount) as i64),
+                        Some(*amount),
                         None,
                         Some(owner.to_string()),
                         Some(recipient.to_string()),

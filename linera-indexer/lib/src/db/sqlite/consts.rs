@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS outgoing_messages (
     application_id TEXT, -- For user messages
     system_message_type TEXT, -- For system messages (Credit, Withdraw, etc.)
     system_target TEXT, -- Credit target
-    system_amount INTEGER, -- Credit/Withdraw amount
+    system_amount TEXT, -- Credit/Withdraw amount
     system_source TEXT, -- Credit source
     system_owner TEXT, -- Withdraw owner
     system_recipient TEXT, -- Withdraw recipient
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS posted_messages (
     application_id TEXT, -- For user messages
     system_message_type TEXT, -- For system messages (Credit, Withdraw, etc.)
     system_target TEXT, -- Credit target
-    system_amount INTEGER, -- Credit/Withdraw amount
+    system_amount TEXT, -- Credit/Withdraw amount
     system_source TEXT, -- Credit source
     system_owner TEXT, -- Withdraw owner
     system_recipient TEXT, -- Withdraw recipient

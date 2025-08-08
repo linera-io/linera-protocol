@@ -41,14 +41,14 @@ export interface PostedMessage {
   bundle_id: number;
   message_index: number;
   authenticated_signer: Uint8Array | null;
-  grant_amount: number;
+  grant_amount: string;
   refund_grant_to: Uint8Array | null;
   message_kind: string;
   message_type?: 'System' | 'User';
   application_id?: string;
   system_message_type?: string;
   system_target?: string;
-  system_amount?: number;
+  system_amount?: string;
   system_source?: string;
   system_owner?: string;
   system_recipient?: string;
@@ -87,13 +87,13 @@ export interface Message {
   message_index: number;
   destination_chain_id: string;
   authenticated_signer?: string;
-  grant_amount: number;
+  grant_amount: string;
   message_kind: string; // 'Simple', 'Tracked', 'Bouncing', 'Protected'
   message_type: 'System' | 'User';
   application_id?: string;
   system_message_type?: string;
   system_target?: string;
-  system_amount?: number;
+  system_amount?: string;
   system_source?: string;
   system_owner?: string;
   system_recipient?: string;
