@@ -27,7 +27,10 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
-use linera_views::views::{ClonableView, RootView};
+use linera_views::{
+    context::DummyContext,
+    views::{ClonableView, RootView},
+};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{instrument, warn};
 
@@ -55,7 +58,7 @@ where
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<DummyContext>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -71,9 +74,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
+        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<DummyContext>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,

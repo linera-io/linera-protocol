@@ -18,7 +18,10 @@ use linera_chain::{
 };
 use linera_execution::{Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
-use linera_views::views::{ClonableView, View};
+use linera_views::{
+    context::{Context, DummyContext},
+    views::{ClonableView, ReplaceContext, View},
+};
 #[cfg(with_testing)]
 use {linera_base::data_types::BlockHeight, linera_chain::types::ConfirmedBlockCertificate};
 
@@ -334,7 +337,12 @@ where
             .await?;
         self.0.execution_state_cache.insert_owned(
             &outcome.state_hash,
-            self.0.chain.execution_state.clone_unchecked()?,
+            self.0
+                .chain
+                .execution_state
+                .clone_unchecked()?
+                .with_context(|ctx| DummyContext(ctx.base_key().clone()))
+                .await,
         );
         Ok(outcome)
     }

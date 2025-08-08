@@ -113,6 +113,33 @@ where
     }
 }
 
+/// A dummy context, only used for caching views.
+#[derive(Debug, Default, Clone)]
+pub struct DummyContext(pub BaseKey);
+
+impl Context for DummyContext {
+    type Store = crate::store::dummy_store::DummyStore;
+    type Extra = ();
+
+    type Error = crate::store::dummy_store::DummyStoreError;
+
+    fn store(&self) -> &Self::Store {
+        &crate::store::dummy_store::DummyStore
+    }
+
+    fn extra(&self) -> &Self::Extra {
+        &()
+    }
+
+    fn base_key(&self) -> &BaseKey {
+        &self.0
+    }
+
+    fn base_key_mut(&mut self) -> &mut BaseKey {
+        &mut self.0
+    }
+}
+
 /// Implementation of the [`Context`] trait on top of a DB client implementing
 /// [`crate::store::KeyValueStore`].
 #[derive(Debug, Default, Clone)]

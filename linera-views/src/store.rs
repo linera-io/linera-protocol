@@ -255,3 +255,91 @@ pub trait TestKeyValueDatabase: KeyValueDatabase {
         database.open_shared(&[])
     }
 }
+
+/// A module containing a dummy store used for caching views.
+pub mod dummy_store {
+    use super::*;
+
+    /// A dummy store, not actually stored anything - used for caching views.
+    pub struct DummyStore;
+
+    /// A dummy error struct for the dummy store.
+    #[derive(Clone, Copy, Debug)]
+    pub struct DummyStoreError;
+
+    impl std::fmt::Display for DummyStoreError {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "dummy error")
+        }
+    }
+
+    impl From<bcs::Error> for DummyStoreError {
+        fn from(_other: bcs::Error) -> Self {
+            Self
+        }
+    }
+
+    impl std::error::Error for DummyStoreError {}
+
+    impl KeyValueStoreError for DummyStoreError {
+        const BACKEND: &'static str = "dummy";
+    }
+
+    impl WithError for DummyStore {
+        type Error = DummyStoreError;
+    }
+
+    impl ReadableKeyValueStore for DummyStore {
+        const MAX_KEY_SIZE: usize = 0;
+
+        fn max_stream_queries(&self) -> usize {
+            0
+        }
+
+        async fn read_value_bytes(&self, _key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+            Ok(None)
+        }
+
+        async fn contains_key(&self, _key: &[u8]) -> Result<bool, Self::Error> {
+            Ok(false)
+        }
+
+        async fn contains_keys(&self, _keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+            Ok(vec![])
+        }
+
+        async fn read_multi_values_bytes(
+            &self,
+            _keys: Vec<Vec<u8>>,
+        ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+            Ok(vec![])
+        }
+
+        async fn find_keys_by_prefix(
+            &self,
+            _key_prefix: &[u8],
+        ) -> Result<Vec<Vec<u8>>, Self::Error> {
+            Ok(vec![])
+        }
+
+        /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
+        async fn find_key_values_by_prefix(
+            &self,
+            _key_prefix: &[u8],
+        ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+            Ok(vec![])
+        }
+    }
+
+    impl WritableKeyValueStore for DummyStore {
+        const MAX_VALUE_SIZE: usize = 0;
+
+        async fn write_batch(&self, _batch: Batch) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        async fn clear_journal(&self) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+}

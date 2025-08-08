@@ -29,7 +29,7 @@ use crate::{
     context::Context,
     map_view::ByteMapView,
     store::ReadableKeyValueStore,
-    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
+    views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
 #[cfg(with_metrics)]
@@ -208,6 +208,24 @@ pub struct KeyValueStoreView<C> {
     sizes: ByteMapView<C, u32>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
+}
+
+impl<C: Context, C2: Context> ReplaceContext<C2> for KeyValueStoreView<C> {
+    type Result = KeyValueStoreView<C2>;
+
+    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+        let hash = *self.hash.lock().unwrap();
+        KeyValueStoreView {
+            context: ctx.clone()(self.context()),
+            deletion_set: self.deletion_set.clone(),
+            updates: self.updates.clone(),
+            stored_total_size: self.stored_total_size,
+            total_size: self.total_size,
+            sizes: self.sizes.with_context(ctx.clone()).await,
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(hash),
+        }
+    }
 }
 
 impl<C: Context> View for KeyValueStoreView<C> {
