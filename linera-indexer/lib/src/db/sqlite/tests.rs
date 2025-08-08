@@ -1,21 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::{Blob, Timestamp},
-    identifiers::ChainId,
+    data_types::{Amount, Blob, BlockHeight, Epoch, Timestamp},
+    hashed::Hashed,
+    identifiers::{ApplicationId, ChainId},
 };
-use linera_chain::data_types::MessageAction;
+use linera_chain::{
+    block::{Block, BlockBody, BlockHeader},
+    data_types::{IncomingBundle, MessageAction, PostedMessage},
+};
+use linera_execution::{Message, MessageKind};
+use linera_service_graphql_client::MessageBundle;
 
 use crate::db::{sqlite::SqliteDatabase, IndexerDatabase};
-
-async fn create_test_database() -> SqliteDatabase {
-    SqliteDatabase::new("sqlite::memory:")
-        .await
-        .expect("Failed to create test database")
-}
 
 #[tokio::test]
 async fn test_sqlite_database_operations() {
@@ -83,13 +82,13 @@ async fn test_high_level_atomic_api() {
     let blob1_data = bincode::serialize(&blob1).unwrap();
     let blob2_data = bincode::serialize(&blob2).unwrap();
 
-    // Use blob hashes for test IDs (simpler than creating proper ones)
-    let block_hash = linera_base::crypto::CryptoHash::new(blob1.content());
-    let chain_id =
-        linera_base::identifiers::ChainId(linera_base::crypto::CryptoHash::new(blob2.content()));
-    let height = linera_base::data_types::BlockHeight(1);
-    let timestamp: linera_base::data_types::Timestamp = linera_base::data_types::Timestamp::now();
-    let block_data = b"fake block data".to_vec();
+    // Create a proper test block
+    let chain_id = ChainId(CryptoHash::new(blob2.content()));
+    let height = BlockHeight(1);
+    let timestamp = Timestamp::now();
+    let test_block = create_test_block(chain_id, height);
+    let block_hash = Hashed::new(test_block.clone()).hash();
+    let block_data = bincode::serialize(&test_block).unwrap();
 
     let blobs = vec![
         (blob1.id(), blob1_data.clone()),
@@ -144,77 +143,57 @@ async fn test_incoming_bundles_storage_and_query() {
         "posted_messages table should exist"
     );
 
-    // Test manual insertion to verify the schema works using string parsing
-    let block_hash = CryptoHash::new(&TestString::new("test_block_hash"));
-    let origin_chain = ChainId(CryptoHash::new(&TestString::new("origin_chain_id")));
+    // First insert a test block that the bundle can reference
+    let test_block = create_test_block(
+        ChainId(CryptoHash::new(&TestString::new("test_chain_id"))),
+        BlockHeight(100),
+    );
+    let origin_chain_id = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
+    let block_hash = Hashed::new(test_block.clone()).hash();
+    let block_data = bincode::serialize(&test_block).unwrap();
+
     let source_cert_hash = CryptoHash::new(&TestString::new("source_cert_hash"));
 
     let mut tx = db.begin_transaction().await.unwrap();
 
-    // First insert a test block that the bundle can reference
-    let test_chain_id = ChainId(CryptoHash::new(&TestString::new("test_chain_id")));
-    let test_height = 100_i64;
-    let test_timestamp = Timestamp::now();
-    let test_block_data = b"test_block_data".to_vec();
-
-    sqlx::query(
-        "INSERT INTO blocks (hash, chain_id, height, timestamp, data) VALUES (?1, ?2, ?3, ?4, ?5)",
+    db.insert_block_tx(
+        &mut tx,
+        &block_hash,
+        &test_block.header.chain_id,
+        test_block.header.height,
+        test_block.header.timestamp,
+        &block_data,
     )
-    .bind(block_hash.to_string())
-    .bind(test_chain_id.to_string())
-    .bind(test_height)
-    .bind(test_timestamp.micros() as i32)
-    .bind(&test_block_data)
-    .execute(&mut *tx)
     .await
-    .expect("Should be able to insert test block");
+    .unwrap();
 
-    // Insert a test incoming bundle
-    let bundle_result = sqlx::query(
-            r#"
-            INSERT INTO incoming_bundles 
-            (block_hash, bundle_index, origin_chain_id, action, source_height, source_timestamp, source_cert_hash, transaction_index)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-            "#
-        )
-        .bind(block_hash.to_string())
-        .bind(0_i64)
-        .bind(origin_chain.to_string())
-        .bind("Accept")
-        .bind(10_i64)
-        .bind(1234567890_i64)
-        .bind(source_cert_hash.to_string())
-        .bind(2_i64)
-        .execute(&mut *tx)
-        .await;
+    let incoming_bundle_message = PostedMessage {
+        index: 0,
+        authenticated_signer: None,
+        grant: Amount::from_tokens(100),
+        refund_grant_to: None,
+        kind: MessageKind::Protected,
+        message: Message::User {
+            application_id: ApplicationId::new(CryptoHash::new(&TestString::new("test_app_id"))),
+            bytes: b"test_message_data".to_vec(),
+        },
+    };
 
-    let bundle_id = bundle_result
-        .expect("Should be able to insert into incoming_bundles")
-        .last_insert_rowid();
+    let incoming_bundle = IncomingBundle {
+        origin: origin_chain_id,
+        bundle: MessageBundle {
+            height: test_block.header.height,
+            timestamp: Timestamp::now(),
+            certificate_hash: source_cert_hash,
+            transaction_index: 2,
+            messages: vec![incoming_bundle_message.clone()],
+        },
+        action: MessageAction::Reject,
+    };
 
-    // Insert a test posted message
-    let message_result = sqlx::query(
-            r#"
-            INSERT INTO posted_messages 
-            (bundle_id, message_index, authenticated_signer, grant_amount, refund_grant_to, message_kind, message_data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-            "#
-        )
-        .bind(bundle_id)
-        .bind(0_i64)
-        .bind(None::<Vec<u8>>)
-        .bind(1000_i64)
-        .bind(None::<Vec<u8>>)
-        .bind("Protected")
-        .bind(b"test_message_data".to_vec())
-        .execute(&mut *tx)
-        .await;
-
-    assert_matches!(
-        message_result,
-        Ok(_),
-        "Should be able to insert into posted_messages"
-    );
+    db.store_incoming_bundles_tx(&mut tx, &block_hash, vec![incoming_bundle.clone()])
+        .await
+        .unwrap();
 
     tx.commit().await.unwrap();
 
@@ -227,13 +206,13 @@ async fn test_incoming_bundles_storage_and_query() {
 
     let (queried_bundle_id, bundle_info) = &bundles[0];
     assert_eq!(bundle_info.bundle_index, 0);
-    assert_eq!(bundle_info.origin_chain_id, origin_chain);
-    assert_eq!(bundle_info.action, MessageAction::Accept);
+    assert_eq!(bundle_info.origin_chain_id, origin_chain_id);
+    assert_eq!(bundle_info.action, incoming_bundle.action);
+    assert_eq!(bundle_info.source_height, incoming_bundle.bundle.height);
     assert_eq!(
-        bundle_info.source_height,
-        linera_base::data_types::BlockHeight(10)
+        bundle_info.transaction_index,
+        incoming_bundle.bundle.transaction_index
     );
-    assert_eq!(bundle_info.transaction_index, 2);
 
     let messages = db
         .get_posted_messages_for_bundle(*queried_bundle_id)
@@ -243,18 +222,67 @@ async fn test_incoming_bundles_storage_and_query() {
 
     let message_info = &messages[0];
     assert_eq!(message_info.message_index, 0);
-    assert_eq!(message_info.grant_amount, 1000);
-    assert_eq!(message_info.message_kind, "Protected");
+    assert_eq!(
+        message_info.grant_amount,
+        Amount::from_tokens(100).to_string()
+    );
+    assert_eq!(
+        message_info.message_kind,
+        incoming_bundle_message.kind.to_string()
+    );
     assert!(message_info.authenticated_signer_data.is_none());
     assert!(message_info.refund_grant_to_data.is_none());
-    assert_eq!(message_info.message_data, b"test_message_data");
+    assert_eq!(
+        message_info.message_data,
+        bincode::serialize(&incoming_bundle_message.message).unwrap()
+    );
 
     // Test querying by origin chain
     let origin_bundles = db
-        .get_bundles_from_origin_chain(&origin_chain)
+        .get_bundles_from_origin_chain(&origin_chain_id)
         .await
         .unwrap();
     assert_eq!(origin_bundles.len(), 1);
     assert_eq!(origin_bundles[0].0, block_hash);
     assert_eq!(origin_bundles[0].1, *queried_bundle_id);
+}
+
+async fn create_test_database() -> SqliteDatabase {
+    SqliteDatabase::new("sqlite::memory:")
+        .await
+        .expect("Failed to create test database")
+}
+
+fn create_test_block(chain_id: ChainId, height: BlockHeight) -> Block {
+    Block {
+        header: BlockHeader {
+            chain_id,
+            epoch: Epoch::ZERO,
+            height,
+            timestamp: Timestamp::now(),
+            state_hash: CryptoHash::new(&TestString::new("test_state_hash")),
+            previous_block_hash: None,
+            authenticated_signer: None,
+            bundles_hash: CryptoHash::new(&TestString::new("bundles_hash")),
+            operations_hash: CryptoHash::new(&TestString::new("operations_hash")),
+            messages_hash: CryptoHash::new(&TestString::new("messages_hash")),
+            previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg_blocks_hash")),
+            previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_event_blocks_hash")),
+            oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_responses_hash")),
+            events_hash: CryptoHash::new(&TestString::new("events_hash")),
+            blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
+            operation_results_hash: CryptoHash::new(&TestString::new("operation_results_hash")),
+        },
+        body: BlockBody {
+            incoming_bundles: vec![],
+            operations: vec![],
+            messages: vec![],
+            previous_message_blocks: Default::default(),
+            previous_event_blocks: Default::default(),
+            oracle_responses: vec![],
+            events: vec![],
+            blobs: vec![],
+            operation_results: vec![],
+        },
+    }
 }

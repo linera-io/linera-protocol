@@ -8,6 +8,7 @@ mod tests;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::{Display, Formatter},
     mem,
 };
 
@@ -266,6 +267,15 @@ impl Recipient {
     /// Returns the default recipient for the given chain (no owner).
     pub fn chain(chain_id: ChainId) -> Recipient {
         Recipient::Account(Account::chain(chain_id))
+    }
+}
+
+impl Display for Recipient {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Recipient::Burn => write!(f, "burn"),
+            Recipient::Account(account) => write!(f, "{}", account),
+        }
     }
 }
 

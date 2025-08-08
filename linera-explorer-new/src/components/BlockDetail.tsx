@@ -1,22 +1,20 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Hash, Clock, Layers, HardDrive, Package, MessageSquare, Copy, ChevronRight } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Hash, Clock, Layers, HardDrive, Package, MessageSquare, ChevronRight, Settings, Mail, Zap, Database, MessageCircle } from 'lucide-react';
 import { useBlock } from '../hooks/useDatabase';
+import { ExpandableSection } from './ExpandableSection';
+import { CopyableHash } from './CopyableHash';
+import { BinaryDataSection } from './BinaryDataSection';
 
 export const BlockDetail: React.FC = () => {
   const { hash } = useParams<{ hash: string }>();
-  const { block, bundles, loading, error } = useBlock(hash || '');
+  const navigate = useNavigate();
+  const { block, bundles, operations, messages, events, oracleResponses, activity, loading, error } = useBlock(hash || '');
 
-  const formatHash = (hash: string) => `${hash.slice(0, 12)}...${hash.slice(-12)}`;
-  const formatFullHash = (hash: string) => hash;
   const formatBytes = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
   };
 
   if (loading) {
@@ -69,7 +67,7 @@ export const BlockDetail: React.FC = () => {
                 Block Details
               </h1>
               <p className="text-lg text-linera-gray-light mt-2">
-                Block #{block.height} • {formatBytes(block.data.length)}
+                Block #{block.height} • {activity ? `${activity.operationsCount + activity.messagesCount + activity.eventsCount + activity.oracleResponsesCount} activities` : formatBytes(block.data.length)}
               </p>
             </div>
           </div>
@@ -86,15 +84,7 @@ export const BlockDetail: React.FC = () => {
                 Block Hash
               </label>
               <div className="relative group">
-                <div className="hash-display text-white pr-12">
-                  {formatFullHash(block.hash)}
-                </div>
-                <button
-                  onClick={() => copyToClipboard(block.hash)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-linera-gray-medium hover:text-linera-red"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
+                <CopyableHash value={block.hash} format="full" />
               </div>
             </div>
 
@@ -103,17 +93,7 @@ export const BlockDetail: React.FC = () => {
               <label className="block text-sm font-medium text-linera-gray-light mb-3">
                 Chain ID
               </label>
-              <div className="relative group">
-                <div className="hash-display text-white pr-12">
-                  {block.chain_id}
-                </div>
-                <button
-                  onClick={() => copyToClipboard(block.chain_id)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-linera-gray-medium hover:text-linera-red"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
-              </div>
+              <CopyableHash value={block.chain_id} format="full" />
             </div>
           </div>
 
@@ -148,30 +128,255 @@ export const BlockDetail: React.FC = () => {
         </div>
       </div>
 
+      {/* Block Activities */}
+      {activity && (
+        <>
+          {/* Operations */}
+          <ExpandableSection
+            title="Operations"
+            count={activity.operationsCount}
+            icon={<Settings className="w-5 h-5 text-linera-red" />}
+          >
+            <div className="space-y-3">
+              {operations.map((operation) => (
+                <div key={operation.id} className="bg-linera-darker/30 border border-linera-border/50 rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Index</span>
+                        <span className="text-white font-medium">{operation.operation_index}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Type</span>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          operation.operation_type === 'System' 
+                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                            : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                        }`}>
+                          {operation.operation_type}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {operation.system_operation_type && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-linera-gray-light">System Op</span>
+                          <span className="text-white font-mono text-xs">{operation.system_operation_type}</span>
+                        </div>
+                      )}
+                      {operation.application_id && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Application</span>
+                          <CopyableHash value={operation.application_id} format="short" className="text-xs" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {operation.data && (
+                    <BinaryDataSection 
+                      data={operation.data} 
+                      title="Operation Data"
+                      maxDisplayBytes={100}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </ExpandableSection>
+
+          {/* Messages */}
+          <ExpandableSection
+            title="Messages"
+            count={activity.messagesCount}
+            icon={<Mail className="w-5 h-5 text-linera-red" />}
+          >
+            <div className="space-y-3">
+              {messages.map((message) => (
+                <div key={message.id} className="bg-linera-darker/30 border border-linera-border/50 rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Tx Index</span>
+                        <span className="text-white font-medium">{message.transaction_index}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Msg Index</span>
+                        <span className="text-white font-medium">{message.message_index}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Type</span>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          message.message_type === 'System' 
+                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                            : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                        }`}>
+                          {message.message_type}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {message.system_message_type && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-linera-gray-light">System Msg</span>
+                          <span className="text-white font-mono text-xs">{message.system_message_type}</span>
+                        </div>
+                      )}
+                      {message.system_amount !== undefined && message.system_amount !== null && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-linera-gray-light">Amount</span>
+                          <span className="text-white font-mono text-xs">{message.system_amount}</span>
+                        </div>
+                      )}
+                      {message.system_target && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Target</span>
+                          <CopyableHash value={message.system_target} format="short" className="text-xs" />
+                        </div>
+                      )}
+                      {message.system_source && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Source</span>
+                          <CopyableHash value={message.system_source} format="short" className="text-xs" />
+                        </div>
+                      )}
+                      {message.system_owner && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Owner</span>
+                          <CopyableHash value={message.system_owner} format="short" className="text-xs" />
+                        </div>
+                      )}
+                      {message.system_recipient && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Recipient</span>
+                          <CopyableHash value={message.system_recipient} format="short" className="text-xs" />
+                        </div>
+                      )}
+                      {message.application_id && (
+                        <div className="space-y-1">
+                          <span className="text-sm text-linera-gray-light">Application</span>
+                          <CopyableHash value={message.application_id} format="short" className="text-xs" />
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <span className="text-sm text-linera-gray-light">Destination</span>
+                        <CopyableHash value={message.destination_chain_id} format="short" className="text-xs" />
+                      </div>
+                    </div>
+                  </div>
+                  {message.data && (
+                    <BinaryDataSection 
+                      data={message.data} 
+                      title="Message Data"
+                      maxDisplayBytes={100}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </ExpandableSection>
+
+          {/* Events */}
+          <ExpandableSection
+            title="Events"
+            count={activity.eventsCount}
+            icon={<Zap className="w-5 h-5 text-linera-red" />}
+          >
+            <div className="space-y-3">
+              {events.map((event) => (
+                <div key={event.id} className="bg-linera-darker/30 border border-linera-border/50 rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Tx Index</span>
+                        <span className="text-white font-medium">{event.transaction_index}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Event Index</span>
+                        <span className="text-white font-medium">{event.event_index}</span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-sm text-linera-gray-light">Stream ID</span>
+                        <CopyableHash value={event.stream_id} format="short" className="text-xs" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Stream Index</span>
+                        <span className="text-white font-mono text-xs">{event.stream_index}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <BinaryDataSection 
+                    data={event.data} 
+                    title="Event Data"
+                    maxDisplayBytes={100}
+                  />
+                </div>
+              ))}
+            </div>
+          </ExpandableSection>
+
+          {/* Oracle Responses */}
+          <ExpandableSection
+            title="Oracle Responses"
+            count={activity.oracleResponsesCount}
+            icon={<Database className="w-5 h-5 text-linera-red" />}
+          >
+            <div className="space-y-3">
+              {oracleResponses.map((response) => (
+                <div key={response.id} className="bg-linera-darker/30 border border-linera-border/50 rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Tx Index</span>
+                        <span className="text-white font-medium">{response.transaction_index}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Response Index</span>
+                        <span className="text-white font-medium">{response.response_index}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-linera-gray-light">Type</span>
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                          {response.response_type}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  {response.data && (
+                    <BinaryDataSection 
+                      data={response.data} 
+                      title="Response Data"
+                      maxDisplayBytes={100}
+                    />
+                  )}
+                  {response.blob_hash && (
+                    <div className="mt-3 pt-3 border-t border-linera-border/30">
+                      <span className="text-sm text-linera-gray-light block mb-2">Blob Hash</span>
+                      <CopyableHash value={response.blob_hash} format="short" className="text-xs" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ExpandableSection>
+        </>
+      )}
+
       {/* Incoming Bundles */}
       {bundles.length > 0 && (
-        <div className="card">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="p-2 bg-green-500/20 rounded-lg border border-green-500/30">
-              <Package className="w-5 h-5 text-green-400" />
-            </div>
-            <div>
-              <h2 className="text-xl font-epilogue font-semibold text-white">
-                Incoming Bundles
-              </h2>
-              <p className="text-sm text-linera-gray-light">
-                {bundles.length} bundle{bundles.length !== 1 ? 's' : ''} found
-              </p>
-            </div>
-          </div>
-
+        <ExpandableSection
+          title="Incoming Bundles"
+          count={bundles.length}
+          icon={<Package className="w-5 h-5 text-linera-red" />}
+        >
           <div className="space-y-4">
             {bundles.map((bundle, index) => (
-              <Link
+              <div
                 key={bundle.id}
-                to={`/block/${bundle.source_cert_hash}`}
-                className="block bg-linera-darker/30 border border-linera-border/50 rounded-lg p-6 animate-slide-up hover:bg-linera-darker/50 hover:border-linera-red/30 transition-all duration-300 group cursor-pointer"
+                className="block bg-linera-darker/30 border border-linera-border/50 rounded-lg p-6 animate-slide-up hover:bg-linera-darker/50 hover:border-linera-red/30 transition-all duration-300 group"
                 style={{ animationDelay: `${index * 100}ms` }}
+                onClick={(e) => e.stopPropagation()}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="space-y-4">
@@ -182,9 +387,7 @@ export const BlockDetail: React.FC = () => {
                     
                     <div className="space-y-2">
                       <span className="text-sm text-linera-gray-light">Origin Chain</span>
-                      <div className="font-mono text-sm bg-linera-darker/80 px-3 py-2 rounded border border-linera-border/50 text-linera-gray-light group-hover:text-white transition-colors">
-                        {formatHash(bundle.origin_chain_id)}
-                      </div>
+                      <CopyableHash value={bundle.origin_chain_id} format="short" />
                     </div>
                     
                     <div className="flex items-center justify-between">
@@ -210,7 +413,7 @@ export const BlockDetail: React.FC = () => {
                       <span className="text-white font-medium">{bundle.transaction_index}</span>
                     </div>
                     
-                    <div className="space-y-2">
+                    <div className="flex items-center justify-between">
                       <span className="text-sm text-linera-gray-light">Timestamp</span>
                       <span className="text-white font-medium text-sm">
                         {new Date(bundle.source_timestamp / 1000).toLocaleString()}
@@ -219,69 +422,146 @@ export const BlockDetail: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Posted Messages */}
+                {bundle.messages && bundle.messages.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-linera-border/30">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <MessageCircle className="w-4 h-4 text-linera-gray-medium" />
+                      <span className="text-sm text-linera-gray-light">Posted Messages</span>
+                      <span className="px-2 py-0.5 bg-linera-darker rounded text-xs text-white">
+                        {bundle.messages.length}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {bundle.messages.map((msg) => (
+                        <div key={msg.id} className="bg-linera-darker/50 rounded p-3 text-xs">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-linera-gray-light">#{msg.message_index}</span>
+                            <div className="flex items-center space-x-2">
+                              {msg.message_type && (
+                                <span className={`px-1.5 py-0.5 rounded text-xs ${
+                                  msg.message_type === 'System' 
+                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                                    : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                                }`}>
+                                  {msg.message_type}
+                                </span>
+                              )}
+                              <span className="text-linera-gray-medium">{msg.message_kind}</span>
+                            </div>
+                          </div>
+                          
+                          {/* System Message Details */}
+                          {msg.system_message_type && (
+                            <div className="space-y-1 mt-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-linera-gray-light">Type:</span>
+                                <span className="text-white">{msg.system_message_type}</span>
+                              </div>
+                              {msg.system_amount !== undefined && msg.system_amount !== null && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Amount:</span>
+                                  <span className="text-white font-mono">{msg.system_amount}</span>
+                                </div>
+                              )}
+                              {msg.system_target && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Target:</span>
+                                  <CopyableHash value={msg.system_target} format="short" className="text-xs"/>
+                                </div>
+                              )}
+                              {msg.system_source && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Source:</span>
+                                  <CopyableHash value={msg.system_source} format="short" className="text-xs"/>
+                                </div>
+                              )}
+                              {msg.system_owner && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Owner:</span>
+                                  <CopyableHash value={msg.system_owner} format="short" className="text-xs"/>
+                                </div>
+                              )}
+                              {msg.system_recipient && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-linera-gray-light">Recipient:</span>
+                                  <CopyableHash value={msg.system_recipient} format="short" className="text-xs"/>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* User Message Details */}
+                          {msg.application_id && (
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-linera-gray-light">Application:</span>
+                                <CopyableHash value={msg.application_id} format="short" className="text-xs" />
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Grant Amount */}
+                          {msg.grant_amount != '0' && (
+                            <div className="mt-2 flex items-center justify-between">
+                              <span className="text-linera-gray-light">Grant:</span>
+                              <span className="text-white font-mono">{msg.grant_amount}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Source Block Info */}
-                <div className="mt-4 pt-4 border-t border-linera-border/30 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-linera-gray-light">Source Block:</span>
-                    <span className="font-mono text-sm text-linera-gray-light group-hover:text-linera-red transition-colors">
-                      {formatHash(bundle.source_cert_hash)}
-                    </span>
+                <div className="mt-4 pt-4 border-t border-linera-border/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-linera-gray-light">Source Block</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/block/${bundle.source_cert_hash}`);
+                      }}
+                      className="flex items-center space-x-2 text-linera-gray-medium hover:text-linera-red transition-colors"
+                    >
+                      <span className="text-sm">View Source Block</span>
+                      <ChevronRight className="w-4 h-4 hover:translate-x-1 transition-transform" />
+                    </button>
                   </div>
-                  
-                  <div className="flex items-center space-x-2 text-linera-gray-medium group-hover:text-linera-red transition-colors">
-                    <span className="text-sm">View Source Block</span>
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </div>
+                  <CopyableHash value={bundle.source_cert_hash} format="short" />
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
-        </div>
+        </ExpandableSection>
       )}
 
-      {/* Raw Data Preview */}
-      <div className="card">
-        <div className="flex items-center space-x-3 mb-6">
-          <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30">
-            <MessageSquare className="w-5 h-5 text-purple-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-epilogue font-semibold text-white">
-              Raw Block Data
-            </h2>
-            <p className="text-sm text-linera-gray-light">
-              Binary data • {formatBytes(block.data.length)}
-            </p>
-          </div>
-        </div>
-        
-        <div className="bg-linera-darker/50 rounded-lg border border-linera-border/50 p-6 font-mono text-sm overflow-x-auto">
-          <div className="text-linera-gray-light mb-4 flex items-center justify-between">
-            <div>
-              <span>Size: {formatBytes(block.data.length)}</span>
-              <span className="mx-2">•</span>
-              <span>Type: Binary Data</span>
+      {/* Raw Data Preview - Only show if no structured data is available */}
+      {(!activity || (activity.operationsCount === 0 && activity.messagesCount === 0 && activity.eventsCount === 0 && activity.oracleResponsesCount === 0)) && (
+        <div className="card">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30">
+              <MessageSquare className="w-5 h-5 text-purple-400" />
             </div>
-            <button
-              onClick={() => copyToClipboard(Array.from(block.data).map(byte => byte.toString(16).padStart(2, '0')).join(''))}
-              className="text-linera-gray-medium hover:text-linera-red transition-colors"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
+            <div>
+              <h2 className="text-xl font-epilogue font-semibold text-white">
+                Raw Block Data
+              </h2>
+              <p className="text-sm text-linera-gray-light">
+                Binary data • {formatBytes(block.data.length)}
+              </p>
+            </div>
           </div>
-          <div className="text-linera-gray-light leading-relaxed">
-            {Array.from(block.data.slice(0, 400))
-              .map(byte => byte.toString(16).padStart(2, '0'))
-              .join(' ')
-              .replace(/(.{48})/g, '$1\n')}
-            {block.data.length > 400 && (
-              <div className="text-linera-gray-medium mt-4">
-                ... and {block.data.length - 400} more bytes
-              </div>
-            )}
-          </div>
+          
+          <BinaryDataSection 
+            data={block.data} 
+            title="Block Data"
+            maxDisplayBytes={400}
+            className="mt-0 pt-0 border-t-0"
+          />
         </div>
-      </div>
+      )}
     </div>
   );
 };
