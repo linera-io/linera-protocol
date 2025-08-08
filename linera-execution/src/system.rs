@@ -8,6 +8,7 @@ mod tests;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::{Display, Formatter},
     mem,
 };
 
@@ -269,11 +270,11 @@ impl Recipient {
     }
 }
 
-impl ToString for Recipient {
-    fn to_string(&self) -> String {
+impl Display for Recipient {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Recipient::Burn => "burn".to_string(),
-            Recipient::Account(account) => account.to_string(),
+            Recipient::Burn => write!(f, "burn"),
+            Recipient::Account(account) => write!(f, "{}", account),
         }
     }
 }
