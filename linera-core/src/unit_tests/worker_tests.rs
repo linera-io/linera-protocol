@@ -1821,7 +1821,7 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_handle_certificate_receiver_equal_sender<B>(
+async fn test_handle_certificate_same_chain_same_owner_no_messages<B>(
     mut storage_builder: B,
 ) -> anyhow::Result<()>
 where
@@ -1841,7 +1841,7 @@ where
             chain_1,
             Amount::ONE,
             Vec::new(),
-            Amount::ZERO,
+            Amount::ONE,
             vec![],
         )
         .await;
@@ -1850,12 +1850,72 @@ where
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
-    assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
-    let inbox = chain
+    assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
+
+    // With the new optimization, transfers to the same chain should not create messages
+    // but may still have the inbox entry since the transfer happened
+    let inbox = chain.inboxes.try_load_entry(&chain_1).await?;
+    assert!(inbox.is_none());
+
+    assert_eq!(
+        BlockHeight::from(1),
+        chain.tip_state.get().next_block_height
+    );
+    assert_eq!(chain.confirmed_log.count(), 1);
+    assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_different_chain_with_messages<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let storage = storage_builder.build().await?;
+    let key_pair = AccountSecretKey::generate();
+    let owner = key_pair.public().into();
+    let mut env = TestEnvironment::new(storage, false, false).await;
+    let chain_1_desc = env.add_root_chain(1, owner, Amount::ONE).await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
+    let chain_2 = chain_2_desc.id();
+
+    let certificate = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            key_pair.public(),
+            chain_2,
+            Amount::ONE,
+            Vec::new(),
+            Amount::ZERO,
+            vec![],
+        )
+        .await;
+    env.worker()
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
+        .await?;
+
+    // Check the sender chain
+    let chain_1_state = env.worker().chain_state_view(chain_1).await?;
+    assert!(chain_1_state.is_active());
+    assert_eq!(
+        Amount::ZERO,
+        *chain_1_state.execution_state.system.balance.get()
+    );
+
+    // Check the receiver chain has the inbox with the expected message
+    let chain_2_state = env.worker().chain_state_view(chain_2).await?;
+    let inbox = chain_2_state
         .inboxes
         .try_load_entry(&chain_1)
         .await?
-        .expect("Missing inbox for `ChainId::root(1)` in `ChainId::root(1)`");
+        .expect("Missing inbox for chain_1 in chain_2");
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
         inbox.added_bundles.front().await?.unwrap(),
@@ -1878,12 +1938,16 @@ where
         }] if amount == Amount::ONE),
         "Unexpected bundle",
     );
+
     assert_eq!(
         BlockHeight::from(1),
-        chain.tip_state.get().next_block_height
+        chain_1_state.tip_state.get().next_block_height
     );
-    assert_eq!(chain.confirmed_log.count(), 1);
-    assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
+    assert_eq!(chain_1_state.confirmed_log.count(), 1);
+    assert_eq!(
+        Some(certificate.hash()),
+        chain_1_state.tip_state.get().block_hash
+    );
     Ok(())
 }
 
