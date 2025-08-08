@@ -892,13 +892,9 @@ where
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
     let chain_1 = chain_1_desc.id();
-    let chain_2_desc = env
-        .add_root_chain(2, sender_owner, Amount::ZERO)
-        .await;
+    let chain_2_desc = env.add_root_chain(2, sender_owner, Amount::ZERO).await;
     let chain_2 = chain_2_desc.id();
-    let chain_3_desc = env
-        .add_root_chain(3, sender_owner, Amount::ZERO)
-        .await;
+    let chain_3_desc = env.add_root_chain(3, sender_owner, Amount::ZERO).await;
     let chain_3 = chain_3_desc.id();
 
     let certificate0 = env
@@ -3871,10 +3867,18 @@ where
     let chain_1_desc = env
         .add_root_chain_with_ownership(1, balance, ownership)
         .await;
-    let chain_id = chain_1_desc.id();
+    let chain_1_id = chain_1_desc.id();
+
+    // Create a second chain for cross-chain transfers with the same ownership config
+    let mut ownership_2 = ChainOwnership::single(public_key.into());
+    ownership_2.timeout_config.fallback_duration = TimeDelta::from_secs(5);
+    let chain_2_desc = env
+        .add_root_chain_with_ownership(2, Amount::ZERO, ownership_2)
+        .await;
+    let chain_2_id = chain_2_desc.id();
 
     // At time 0 we don't vote for fallback mode.
-    let query = ChainInfoQuery::new(chain_id)
+    let query = ChainInfoQuery::new(chain_1_id)
         .with_fallback()
         .with_committees();
     let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
@@ -3889,9 +3893,9 @@ where
     let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
     assert!(response.info.manager.fallback_vote.is_none());
 
-    // Make a tracked message to ourselves. It's in the inbox now.
-    let proposed_block = make_first_block(chain_id)
-        .with_simple_transfer(chain_id, Amount::ONE)
+    // Make a tracked message between chains. This will create a cross-chain message.
+    let proposed_block = make_first_block(chain_1_id)
+        .with_simple_transfer(chain_2_id, Amount::ONE)
         .with_authenticated_signer(Some(public_key.into()));
     let (block, _) = env
         .worker()
@@ -3903,15 +3907,26 @@ where
         .fully_handle_certificate_with_notifications(certificate, &())
         .await?;
 
+    // Now we need to switch the query to check chain_2 since that's where the incoming message is
+    let query_chain_2 = ChainInfoQuery::new(chain_2_id)
+        .with_fallback()
+        .with_committees();
+
     // The message only just arrived: No fallback mode.
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let (response, _) = env
+        .worker()
+        .handle_chain_info_query(query_chain_2.clone())
+        .await?;
     assert!(response.info.manager.fallback_vote.is_none());
 
     // If for a long time the message isn't handled, we vote for fallback mode.
     clock.add(fallback_duration);
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let (response, _) = env
+        .worker()
+        .handle_chain_info_query(query_chain_2.clone())
+        .await?;
     let vote = response.info.manager.fallback_vote.unwrap();
-    let value = Timeout::new(chain_id, BlockHeight(1), Epoch::ZERO);
+    let value = Timeout::new(chain_2_id, BlockHeight(0), Epoch::ZERO);
     let round = Round::SingleLeader(u32::MAX);
     assert_eq!(vote.value.value_hash, value.hash());
     assert_eq!(vote.round, round);
@@ -3919,7 +3934,10 @@ where
     env.worker().handle_timeout_certificate(certificate).await?;
 
     // Now we are in fallback mode, and the validator is the leader.
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let (response, _) = env
+        .worker()
+        .handle_chain_info_query(query_chain_2.clone())
+        .await?;
     let manager = response.info.manager;
     let expected_key = response
         .info
