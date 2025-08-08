@@ -396,13 +396,7 @@ where
                 recipient,
             } => {
                 let maybe_message = self
-                    .transfer(
-                        context.authenticated_signer,
-                        None,
-                        owner,
-                        recipient,
-                        amount,
-                    )
+                    .transfer(context.authenticated_signer, None, owner, recipient, amount)
                     .await?;
                 txn_tracker.add_outgoing_messages(maybe_message)?;
             }
