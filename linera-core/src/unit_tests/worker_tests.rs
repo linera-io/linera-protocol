@@ -888,15 +888,22 @@ where
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
     let mut env = TestEnvironment::new(storage_builder.build().await?, false, false).await;
-    let chain_desc = env
+    let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
-    let chain_1 = chain_desc.id();
-    let chain_2 = env.add_root_chain(2, sender_owner, Amount::ZERO).await.id();
+    let chain_1 = chain_1_desc.id();
+    let chain_2_desc = env
+        .add_root_chain(2, sender_owner, Amount::ZERO)
+        .await;
+    let chain_2 = chain_2_desc.id();
+    let chain_3_desc = env
+        .add_root_chain(3, sender_owner, Amount::ZERO)
+        .await;
+    let chain_3 = chain_3_desc.id();
 
     let certificate0 = env
         .make_simple_transfer_certificate(
-            chain_desc.clone(),
+            chain_1_desc.clone(),
             sender_public_key,
             chain_2,
             Amount::ONE,
@@ -908,9 +915,9 @@ where
 
     let certificate1 = env
         .make_simple_transfer_certificate(
-            chain_desc.clone(),
+            chain_1_desc.clone(),
             sender_public_key,
-            chain_1,
+            chain_3,
             Amount::ONE,
             Vec::new(),
             Amount::from_tokens(3),
@@ -920,7 +927,7 @@ where
 
     let certificate2 = env
         .make_simple_transfer_certificate(
-            chain_desc.clone(),
+            chain_1_desc.clone(),
             sender_public_key,
             chain_2,
             Amount::ONE,
@@ -946,10 +953,11 @@ where
         .handle_confirmed_certificate(certificate2.clone(), None)
         .await?;
 
-    let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
-    assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(1));
-    drop(chain);
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        assert!(chain.is_active());
+        assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(1));
+    }
 
     // The proposal is at height 3 - it should fail until the chain is fully processed up
     // to height 2.
@@ -970,10 +978,11 @@ where
         .handle_confirmed_certificate(certificate1, None)
         .await?;
 
-    let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
-    assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(2));
-    drop(chain);
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        assert!(chain.is_active());
+        assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(2));
+    }
 
     // ...and the one that has been preprocessed before, again, as it is not automatically
     // re-processed.
@@ -981,10 +990,11 @@ where
         .handle_confirmed_certificate(certificate2, None)
         .await?;
 
-    let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
-    assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(3));
-    drop(chain);
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        assert!(chain.is_active());
+        assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(3));
+    }
 
     // The proposal should now succeed.
     let proposal_result = env
