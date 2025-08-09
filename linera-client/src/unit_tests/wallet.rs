@@ -57,8 +57,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         block: ProposedBlock {
             chain_id,
             epoch: Epoch::ZERO,
-            incoming_bundles: vec![],
-            operations: vec![],
+            transactions: vec![],
             height: BlockHeight::ZERO,
             timestamp: clock.current_time(),
             authenticated_signer: None,

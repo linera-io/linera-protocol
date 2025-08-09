@@ -145,12 +145,9 @@ Block:
         TYPENAME: BlockBody
 BlockBody:
   STRUCT:
-    - incoming_bundles:
+    - transactions:
         SEQ:
-          TYPENAME: IncomingBundle
-    - operations:
-        SEQ:
-          TYPENAME: Operation
+          TYPENAME: Transaction
     - messages:
         SEQ:
           SEQ:
@@ -893,12 +890,9 @@ ProposedBlock:
         TYPENAME: ChainId
     - epoch:
         TYPENAME: Epoch
-    - incoming_bundles:
+    - transactions:
         SEQ:
-          TYPENAME: IncomingBundle
-    - operations:
-        SEQ:
-          TYPENAME: Operation
+          TYPENAME: Transaction
     - height:
         TYPENAME: BlockHeight
     - timestamp:
@@ -1278,6 +1272,16 @@ TimeoutConfig:
         TYPENAME: TimeDelta
 Timestamp:
   NEWTYPESTRUCT: U64
+Transaction:
+  ENUM:
+    0:
+      ReceiveMessages:
+        NEWTYPE:
+          TYPENAME: IncomingBundle
+    1:
+      ExecuteOperation:
+        NEWTYPE:
+          TYPENAME: Operation
 ValidatedBlockCertificate:
   STRUCT:
     - value:

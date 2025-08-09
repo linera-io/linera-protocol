@@ -19,12 +19,11 @@ test('Blocks mounting', () => {
                 timestamp: 1694097511817833,
                 authenticatedSigner: "a36c72207a7c3cef20eb254978c0947d7cf28c9c7d7c62de42a0ed9db901cf3f",
                 previousBlockHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
+                transactionsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 messagesHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 previousMessageBlocksHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 previousEventBlocksHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 eventsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
-                bundlesHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
-                operationsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 oracleResponsesHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 blobsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 operationResultsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
@@ -55,27 +54,30 @@ test('Blocks mounting', () => {
                 oracleResponses: [],
                 blobs: [[]],
                 operationResults: [],
-                incomingBundles: [{
-                  origin: {
-                    medium: "Direct",
-                    sender: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
+                transactionMetadata: [{
+                  transactionType: "ReceiveMessages",
+                  incomingBundle: {
+                    origin: {
+                      medium: "Direct",
+                      sender: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
+                    },
+                    bundle: {
+                      certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
+                      height: 5,
+                      messages: [{
+                        authenticatedSigner: null,
+                        message: { System: { BytecodePublished: { operation_index: 0 } } },
+                        grant: "0.01",
+                        index: 4,
+                        kind: "Tracked"
+                      }],
+                      transactionIndex: 0,
+                      timestamp: 1694097510206912
+                    },
+                    action: "Accept",
                   },
-                  bundle: {
-                    certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
-                    height: 5,
-                    messages: [{
-                      authenticatedSigner: null,
-                      message: { System: { BytecodePublished: { operation_index: 0 } } },
-                      grant: "0.01",
-                      index: 4,
-                      kind: "Tracked"
-                    }],
-                    transactionIndex: 0,
-                    timestamp: 1694097510206912
-                  },
-                  action: "Accept",
-                }],
-                operations: []
+                  operation: null
+                }]
               }
             }
           }

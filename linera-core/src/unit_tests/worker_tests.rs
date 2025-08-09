@@ -28,7 +28,7 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, LiteValue, LiteVote,
         MessageAction, MessageBundle, OperationResult, PostedMessage, ProposedBlock,
-        SignatureAggregator,
+        SignatureAggregator, Transaction,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -383,9 +383,16 @@ where
             })
             .collect::<Vec<_>>();
 
+        let mut transactions = block_template.transactions;
+        transactions.extend(
+            incoming_bundles
+                .into_iter()
+                .map(Transaction::ReceiveMessages),
+        );
+
         let block = ProposedBlock {
             epoch,
-            incoming_bundles,
+            transactions,
             authenticated_signer: Some(authenticated_signer),
             ..block_template
         }
@@ -404,13 +411,13 @@ where
             }
             Recipient::Burn => messages.push(Vec::new()),
         }
-        let tx_count = block.operations.len() + block.incoming_bundles.len();
+        let tx_count = block.operations().count() + block.incoming_bundles().count();
         let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
         let events = iter::repeat_with(Vec::new).take(tx_count).collect();
         let blobs = iter::repeat_with(Vec::new).take(tx_count).collect();
         let operation_results = iter::repeat_with(Vec::new)
             .map(OperationResult)
-            .take(block.operations.len())
+            .take(block.operations().count())
             .collect();
         let state_hash = system_state.into_hash().await;
         let previous_message_blocks = messages
@@ -1269,7 +1276,6 @@ where
     }
     {
         let block_proposal = make_first_block(chain_2)
-            .with_simple_transfer(chain_3, Amount::ONE)
             .with_incoming_bundle(IncomingBundle {
                 origin: chain_1,
                 bundle: MessageBundle {
@@ -1283,6 +1289,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
+            .with_simple_transfer(chain_3, Amount::ONE)
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
             .await
@@ -1316,7 +1323,6 @@ where
 
         // Then receive the next two messages.
         let block_proposal = make_child_block(&certificate.into_value())
-            .with_simple_transfer(chain_3, Amount::from_tokens(3))
             .with_incoming_bundle(IncomingBundle {
                 origin: chain_1,
                 bundle: MessageBundle {
@@ -1341,6 +1347,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
+            .with_simple_transfer(chain_3, Amount::from_tokens(3))
             .into_first_proposal(recipient_owner, &signer)
             .await
             .unwrap();

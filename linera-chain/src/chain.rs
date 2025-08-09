@@ -41,6 +41,7 @@ use crate::{
     block_tracker::BlockExecutionTracker,
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageBundle, ProposedBlock,
+        Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -193,7 +194,7 @@ pub(crate) mod metrics {
 }
 
 /// The BCS-serialized size of an empty [`Block`].
-pub(crate) const EMPTY_BLOCK_SIZE: usize = 95;
+pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
@@ -335,19 +336,32 @@ impl ChainTipState {
     /// Checks if the measurement counters would be valid.
     pub fn update_counters(
         &mut self,
-        incoming_bundles: &[IncomingBundle],
-        operations: &[Operation],
+        transactions: &[Transaction],
         messages: &[Vec<OutgoingMessage>],
     ) -> Result<(), ChainError> {
-        let num_incoming_bundles =
-            u32::try_from(incoming_bundles.len()).map_err(|_| ArithmeticError::Overflow)?;
+        let mut num_incoming_bundles = 0u32;
+        let mut num_operations = 0u32;
+
+        for transaction in transactions {
+            match transaction {
+                Transaction::ReceiveMessages(_) => {
+                    num_incoming_bundles = num_incoming_bundles
+                        .checked_add(1)
+                        .ok_or(ArithmeticError::Overflow)?;
+                }
+                Transaction::ExecuteOperation(_) => {
+                    num_operations = num_operations
+                        .checked_add(1)
+                        .ok_or(ArithmeticError::Overflow)?;
+                }
+            }
+        }
+
         self.num_incoming_bundles = self
             .num_incoming_bundles
             .checked_add(num_incoming_bundles)
             .ok_or(ArithmeticError::Overflow)?;
 
-        let num_operations =
-            u32::try_from(operations.len()).map_err(|_| ArithmeticError::Overflow)?;
         self.num_operations = self
             .num_operations
             .checked_add(num_operations)
@@ -637,11 +651,12 @@ where
     pub async fn remove_bundles_from_inboxes(
         &mut self,
         timestamp: Timestamp,
-        incoming_bundles: &[IncomingBundle],
+        incoming_bundles: impl IntoIterator<Item = &IncomingBundle>,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut bundles_by_origin: BTreeMap<_, Vec<&MessageBundle>> = Default::default();
-        for IncomingBundle { bundle, origin, .. } in incoming_bundles {
+        for incoming_bundle in incoming_bundles {
+            let IncomingBundle { bundle, origin, .. } = incoming_bundle;
             ensure!(
                 bundle.timestamp <= timestamp,
                 ChainError::IncorrectBundleTimestamp {
@@ -650,28 +665,29 @@ where
                     block_timestamp: timestamp,
                 }
             );
-            let bundles = bundles_by_origin.entry(origin).or_default();
+            let bundles = bundles_by_origin.entry(*origin).or_default();
             bundles.push(bundle);
         }
-        let origins = bundles_by_origin.keys().copied();
-        let inboxes = self.inboxes.try_load_entries_mut(origins).await?;
+        let origins = bundles_by_origin.keys().copied().collect::<Vec<_>>();
+        let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
         let mut removed_unskippable = HashSet::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
-                "Removing {:?} from {chain_id:.8}'s inbox for {origin:}",
+                "Removing [{}] from {chain_id:.8}'s inbox for {origin:}",
                 bundles
                     .iter()
-                    .map(|bundle| bundle.height)
+                    .map(|bundle| bundle.height.to_string())
                     .collect::<Vec<_>>()
+                    .join(", ")
             );
             for bundle in bundles {
                 // Mark the message as processed in the inbox.
                 let was_present = inbox
                     .remove_bundle(bundle)
                     .await
-                    .map_err(|error| (chain_id, *origin, error))?;
+                    .map_err(|error| (chain_id, origin, error))?;
                 if was_present && !bundle.is_skippable() {
-                    removed_unskippable.insert(BundleInInbox::new(*origin, bundle));
+                    removed_unskippable.insert(BundleInInbox::new(origin, bundle));
                 }
             }
         }
@@ -774,7 +790,7 @@ where
             block,
         )?;
 
-        for transaction in block.transactions() {
+        for transaction in block.transaction_refs() {
             block_execution_tracker
                 .execute_transaction(transaction, round, chain)
                 .await?;
@@ -854,10 +870,7 @@ where
                 new: block.timestamp
             }
         );
-        ensure!(
-            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
-            ChainError::EmptyBlock
-        );
+        ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
         ensure!(
             block.published_blob_ids()
@@ -870,7 +883,8 @@ where
 
         if *self.execution_state.system.closed.get() {
             ensure!(
-                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
+                !block.incoming_bundles().collect::<Vec<_>>().is_empty()
+                    && block.has_only_rejected_messages(),
                 ChainError::ClosedChain
             );
         }
@@ -921,11 +935,7 @@ where
         let tip = self.tip_state.get_mut();
         tip.block_hash = Some(hash);
         tip.next_block_height.try_add_assign_one()?;
-        tip.update_counters(
-            &block.body.incoming_bundles,
-            &block.body.operations,
-            &block.body.messages,
-        )?;
+        tip.update_counters(&block.body.transactions, &block.body.messages)?;
         self.confirmed_log.push(hash);
         self.preprocessed_blocks.remove(&block.header.height)?;
         Ok(())
@@ -961,7 +971,7 @@ where
         let mut mandatory = HashSet::<ApplicationId>::from_iter(
             app_permissions.mandatory_applications.iter().cloned(),
         );
-        for operation in &block.operations {
+        for operation in block.operations() {
             if operation.is_exempt_from_permissions() {
                 mandatory.clear();
                 continue;
