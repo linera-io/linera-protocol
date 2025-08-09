@@ -1858,8 +1858,7 @@ where
     assert!(chain.is_active());
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
 
-    // With the new optimization, transfers to the same chain should not create messages
-    // but may still have the inbox entry since the transfer happened
+    // With the new optimization, transfers to the same chain should not create messages.
     let inbox = chain.inboxes.try_load_entry(&chain_1).await?;
     assert!(inbox.is_none());
 
@@ -3867,7 +3866,7 @@ where
     let chain_1_desc = env
         .add_root_chain_with_ownership(1, balance, ownership)
         .await;
-    let chain_1_id = chain_1_desc.id();
+    let chain_1 = chain_1_desc.id();
 
     // Create a second chain for cross-chain transfers with the same ownership config
     let mut ownership_2 = ChainOwnership::single(public_key.into());
@@ -3875,10 +3874,10 @@ where
     let chain_2_desc = env
         .add_root_chain_with_ownership(2, Amount::ZERO, ownership_2)
         .await;
-    let chain_2_id = chain_2_desc.id();
+    let chain_2 = chain_2_desc.id();
 
     // At time 0 we don't vote for fallback mode.
-    let query = ChainInfoQuery::new(chain_1_id)
+    let query = ChainInfoQuery::new(chain_1)
         .with_fallback()
         .with_committees();
     let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
@@ -3894,8 +3893,8 @@ where
     assert!(response.info.manager.fallback_vote.is_none());
 
     // Make a tracked message between chains. This will create a cross-chain message.
-    let proposed_block = make_first_block(chain_1_id)
-        .with_simple_transfer(chain_2_id, Amount::ONE)
+    let proposed_block = make_first_block(chain_1)
+        .with_simple_transfer(chain_2, Amount::ONE)
         .with_authenticated_signer(Some(public_key.into()));
     let (block, _) = env
         .worker()
@@ -3908,7 +3907,7 @@ where
         .await?;
 
     // Now we need to switch the query to check chain_2 since that's where the incoming message is
-    let query_chain_2 = ChainInfoQuery::new(chain_2_id)
+    let query_chain_2 = ChainInfoQuery::new(chain_2)
         .with_fallback()
         .with_committees();
 
@@ -3926,7 +3925,7 @@ where
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
     let vote = response.info.manager.fallback_vote.unwrap();
-    let value = Timeout::new(chain_2_id, BlockHeight(0), Epoch::ZERO);
+    let value = Timeout::new(chain_2, BlockHeight(0), Epoch::ZERO);
     let round = Round::SingleLeader(u32::MAX);
     assert_eq!(vote.value.value_hash, value.hash());
     assert_eq!(vote.round, round);
