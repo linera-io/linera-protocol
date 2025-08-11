@@ -408,7 +408,7 @@ where
                 let maybe_message = self
                     .transfer(context.authenticated_signer, None, owner, recipient, amount)
                     .await?;
-                txn_tracker.add_outgoing_messages(maybe_message)?;
+                txn_tracker.add_outgoing_messages(maybe_message);
             }
             Claim {
                 owner,
@@ -426,7 +426,7 @@ where
                         amount,
                     )
                     .await?;
-                txn_tracker.add_outgoing_message(message)?;
+                txn_tracker.add_outgoing_message(message);
             }
             Admin(admin_operation) => {
                 ensure!(
