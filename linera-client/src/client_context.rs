@@ -330,7 +330,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
-            chain_client.synchronize_from_validators().await?;
+            // chain_client.synchronize_from_validators().await?;
             let result = chain_client.process_inbox_without_prepare().await;
             self.update_wallet_from_client(chain_client).await?;
             if result.is_err() {
