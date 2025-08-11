@@ -28,7 +28,7 @@ use linera_views::{
     map_view::{HashedMapView, MapView},
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    views::{ClonableView, HashableView, View},
+    views::{ClonableView, HashableView, ReplaceContext, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -92,6 +92,30 @@ pub struct SystemExecutionStateView<C> {
     pub used_blobs: HashedSetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
     pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
+}
+
+impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
+    type Target = SystemExecutionStateView<C2>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        SystemExecutionStateView {
+            description: self.description.with_context(ctx.clone()).await,
+            epoch: self.epoch.with_context(ctx.clone()).await,
+            admin_id: self.admin_id.with_context(ctx.clone()).await,
+            committees: self.committees.with_context(ctx.clone()).await,
+            ownership: self.ownership.with_context(ctx.clone()).await,
+            balance: self.balance.with_context(ctx.clone()).await,
+            balances: self.balances.with_context(ctx.clone()).await,
+            timestamp: self.timestamp.with_context(ctx.clone()).await,
+            closed: self.closed.with_context(ctx.clone()).await,
+            application_permissions: self.application_permissions.with_context(ctx.clone()).await,
+            used_blobs: self.used_blobs.with_context(ctx.clone()).await,
+            event_subscriptions: self.event_subscriptions.with_context(ctx.clone()).await,
+        }
+    }
 }
 
 /// The applications subscribing to a particular stream, and the next event index.
@@ -408,7 +432,7 @@ where
                 let maybe_message = self
                     .transfer(context.authenticated_signer, None, owner, recipient, amount)
                     .await?;
-                txn_tracker.add_outgoing_messages(maybe_message)?;
+                txn_tracker.add_outgoing_messages(maybe_message);
             }
             Claim {
                 owner,
@@ -426,7 +450,7 @@ where
                         amount,
                     )
                     .await?;
-                txn_tracker.add_outgoing_message(message)?;
+                txn_tracker.add_outgoing_message(message);
             }
             Admin(admin_operation) => {
                 ensure!(

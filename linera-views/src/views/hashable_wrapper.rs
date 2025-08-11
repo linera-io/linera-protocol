@@ -14,7 +14,7 @@ use crate::{
     common::from_bytes_option,
     context::Context,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
+    views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
 /// A hash for `ContainerView` and storing of the hash for memoization purposes
@@ -33,6 +33,30 @@ enum KeyTag {
     Inner = MIN_VIEW_TAG,
     /// Prefix for the hash.
     Hash,
+}
+
+impl<C, W, O, C2> ReplaceContext<C2> for WrappedHashableContainerView<C, W, O>
+where
+    W: HashableView<Hasher: Hasher<Output = O>, Context = C> + ReplaceContext<C2>,
+    <W as ReplaceContext<C2>>::Target: HashableView<Hasher: Hasher<Output = O>>,
+    O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
+    C: Context,
+    C2: Context,
+{
+    type Target = WrappedHashableContainerView<C2, <W as ReplaceContext<C2>>::Target, O>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        let hash = *self.hash.lock().unwrap();
+        WrappedHashableContainerView {
+            _phantom: PhantomData,
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(hash),
+            inner: self.inner.with_context(ctx).await,
+        }
+    }
 }
 
 impl<W: HashableView, O> View for WrappedHashableContainerView<W::Context, W, O>

@@ -115,7 +115,7 @@ struct LruPrefixCache {
 
 impl LruPrefixCache {
     /// Creates an `LruPrefixCache`.
-    pub fn new(config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
+    fn new(config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
         Self {
             map: BTreeMap::new(),
             queue: LinkedHashMap::new(),
@@ -139,7 +139,7 @@ impl LruPrefixCache {
     }
 
     /// Inserts an entry into the cache.
-    pub fn insert(&mut self, key: Vec<u8>, cache_entry: CacheEntry) {
+    fn insert(&mut self, key: Vec<u8>, cache_entry: CacheEntry) {
         let key_value_size = key.len() + cache_entry.size();
         if (matches!(cache_entry, CacheEntry::DoesNotExist) && !self.has_exclusive_access)
             || key_value_size > self.config.max_entry_size
@@ -170,7 +170,7 @@ impl LruPrefixCache {
     }
 
     /// Inserts a read_value entry into the cache.
-    pub fn insert_read_value(&mut self, key: Vec<u8>, value: &Option<Vec<u8>>) {
+    fn insert_read_value(&mut self, key: Vec<u8>, value: &Option<Vec<u8>>) {
         let cache_entry = match value {
             None => CacheEntry::DoesNotExist,
             Some(vec) => CacheEntry::Value(vec.to_vec()),
@@ -179,7 +179,7 @@ impl LruPrefixCache {
     }
 
     /// Inserts a read_value entry into the cache.
-    pub fn insert_contains_key(&mut self, key: Vec<u8>, result: bool) {
+    fn insert_contains_key(&mut self, key: Vec<u8>, result: bool) {
         let cache_entry = match result {
             false => CacheEntry::DoesNotExist,
             true => CacheEntry::Exists,
@@ -189,7 +189,7 @@ impl LruPrefixCache {
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not
     /// create new entries in the cache.
-    pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
+    fn delete_prefix(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
             for (key, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
                 *self.queue.get_mut(key).unwrap() = key.len();
@@ -215,7 +215,7 @@ impl LruPrefixCache {
     /// Returns the cached value, or `Some(None)` if the entry does not exist in the
     /// database. If `None` is returned, the entry might exist in the database but is
     /// not in the cache.
-    pub fn query_read_value(&mut self, key: &[u8]) -> Option<Option<Vec<u8>>> {
+    fn query_read_value(&mut self, key: &[u8]) -> Option<Option<Vec<u8>>> {
         let result = match self.map.get(key) {
             None => None,
             Some(entry) => match entry {
@@ -234,7 +234,7 @@ impl LruPrefixCache {
 
     /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
     /// exist in the database. Returns `None` if that information is not in the cache.
-    pub fn query_contains_key(&mut self, key: &[u8]) -> Option<bool> {
+    fn query_contains_key(&mut self, key: &[u8]) -> Option<bool> {
         let result = self
             .map
             .get(key)
@@ -555,7 +555,7 @@ where
 
 impl<S> LruCachingStore<S> {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
-    pub fn new(store: S, config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
+    fn new(store: S, config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
         let cache = {
             if config.max_cache_entries == 0 {
                 None

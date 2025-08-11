@@ -2199,7 +2199,10 @@ impl<Env: Environment> ChainClient<Env> {
         )
         .await;
         let received_certificate_batches = match result {
-            Ok(((), received_certificate_batches)) => received_certificate_batches,
+            Ok(((), received_certificate_batches)) => received_certificate_batches
+                .into_iter()
+                .map(|(_, batch)| batch)
+                .collect(),
             Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
                 // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.

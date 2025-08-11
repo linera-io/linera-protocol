@@ -255,3 +255,91 @@ pub trait TestKeyValueDatabase: KeyValueDatabase {
         database.open_shared(&[])
     }
 }
+
+/// A module containing a dummy store used for caching views.
+pub mod inactive_store {
+    use super::*;
+
+    /// A store which does not actually store anything - used for caching views.
+    pub struct InactiveStore;
+
+    /// An error struct for the inactive store.
+    #[derive(Clone, Copy, Debug)]
+    pub struct InactiveStoreError;
+
+    impl std::fmt::Display for InactiveStoreError {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "inactive store error")
+        }
+    }
+
+    impl From<bcs::Error> for InactiveStoreError {
+        fn from(_other: bcs::Error) -> Self {
+            Self
+        }
+    }
+
+    impl std::error::Error for InactiveStoreError {}
+
+    impl KeyValueStoreError for InactiveStoreError {
+        const BACKEND: &'static str = "inactive";
+    }
+
+    impl WithError for InactiveStore {
+        type Error = InactiveStoreError;
+    }
+
+    impl ReadableKeyValueStore for InactiveStore {
+        const MAX_KEY_SIZE: usize = 0;
+
+        fn max_stream_queries(&self) -> usize {
+            0
+        }
+
+        async fn read_value_bytes(&self, _key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+            panic!("attempt to read from an inactive store!")
+        }
+
+        async fn contains_key(&self, _key: &[u8]) -> Result<bool, Self::Error> {
+            panic!("attempt to read from an inactive store!")
+        }
+
+        async fn contains_keys(&self, _keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
+            panic!("attempt to read from an inactive store!")
+        }
+
+        async fn read_multi_values_bytes(
+            &self,
+            _keys: Vec<Vec<u8>>,
+        ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+            panic!("attempt to read from an inactive store!")
+        }
+
+        async fn find_keys_by_prefix(
+            &self,
+            _key_prefix: &[u8],
+        ) -> Result<Vec<Vec<u8>>, Self::Error> {
+            panic!("attempt to read from an inactive store!")
+        }
+
+        /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
+        async fn find_key_values_by_prefix(
+            &self,
+            _key_prefix: &[u8],
+        ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+            panic!("attempt to read from an inactive store!")
+        }
+    }
+
+    impl WritableKeyValueStore for InactiveStore {
+        const MAX_VALUE_SIZE: usize = 0;
+
+        async fn write_batch(&self, _batch: Batch) -> Result<(), Self::Error> {
+            panic!("attempt to write to an inactive store!")
+        }
+
+        async fn clear_journal(&self) -> Result<(), Self::Error> {
+            panic!("attempt to write to an inactive store!")
+        }
+    }
+}
