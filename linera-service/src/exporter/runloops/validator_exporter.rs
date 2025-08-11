@@ -156,7 +156,7 @@ where
                         blob.id()
                     );
                     #[cfg(with_metrics)]
-                    let start = std::time::Instant::now();
+                    let start = linera_base::time::Instant::now();
                     let result = self
                         .node
                         .upload_blob((*blob).clone().into())
@@ -185,7 +185,7 @@ where
         let block_id = BlockId::from_confirmed_block(certificate.value());
         tracing::info!(?block_id, "dispatching block");
         #[cfg(with_metrics)]
-        let start = std::time::Instant::now();
+        let start = linera_base::time::Instant::now();
         match self
             .node
             .handle_confirmed_certificate(certificate, delivery)
