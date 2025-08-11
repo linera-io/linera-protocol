@@ -2314,8 +2314,8 @@ impl<Env: Environment> ChainClient<Env> {
         let result = loop {
             let execute_block_start = std::time::Instant::now();
             // TODO(#2066): Remove boxing once the call-stack is shallower
-            match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await? {
-                ExecuteBlockOutcome::Executed(certificate) => {
+            match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
+                Ok(ExecuteBlockOutcome::Executed(certificate)) => {
                     if let Some(sender) = &self.timing_sender {
                         let _ = sender.send((
                             execute_block_start.elapsed().as_millis() as u64,
@@ -2324,15 +2324,28 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                     break Ok(ClientOutcome::Committed(certificate));
                 }
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     break Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
-                ExecuteBlockOutcome::Conflict(certificate) => {
+                Ok(ExecuteBlockOutcome::Conflict(certificate)) => {
                     info!(
                         height = %certificate.block().header.height,
                         "Another block was committed; retrying."
                     );
                 }
+                Err(ChainClientError::CommunicationError(CommunicationError::Trusted(
+                    NodeError::UnexpectedBlockHeight {
+                        expected_block_height,
+                        found_block_height,
+                    },
+                ))) if expected_block_height > found_block_height => {
+                    tracing::info!(
+                        "Local state is outdated; synchronizing chain {:.8}",
+                        self.chain_id
+                    );
+                    self.synchronize_chain_state(self.chain_id).await?;
+                }
+                Err(err) => return Err(err),
             };
         };
 
