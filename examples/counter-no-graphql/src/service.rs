@@ -37,6 +37,16 @@ impl Service for CounterService {
     }
 
     async fn handle_query(&self, request: CounterRequest) -> u64 {
+        // Load chain_id and application_creator_chain_id for comparison
+        let chain_id = self.runtime.chain_id();
+        let application_creator_chain_id = self.runtime.application_creator_chain_id();
+
+        // Check that they are equal (for demonstration purposes)
+        assert_eq!(
+            chain_id, application_creator_chain_id,
+            "Chain ID and Application Creator Chain ID should be equal"
+        );
+
         match request {
             CounterRequest::Query => *self.state.value.get(),
             CounterRequest::Increment(value) => {
