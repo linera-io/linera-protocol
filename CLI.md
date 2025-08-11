@@ -642,8 +642,6 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
   Default value: `0`
 * `--storage-path <STORAGE_PATH>` — Path to the persistent storage file for faucet mappings
 
-  Default value: `faucet_storage.json`
-
 
 
 ## `linera publish-module`

@@ -732,8 +732,8 @@ pub enum ClientCommand {
         config: ChainListenerConfig,
 
         /// Path to the persistent storage file for faucet mappings.
-        #[arg(long, default_value = "faucet_storage.json")]
-        storage_path: PathBuf,
+        #[arg(long)]
+        storage_path: Option<PathBuf>,
     },
 
     /// Publish module.

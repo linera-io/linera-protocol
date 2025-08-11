@@ -268,6 +268,8 @@ where
     start_balance: Amount,
     faucet_storage: Arc<Mutex<FaucetStorage>>,
     storage_path: PathBuf,
+    /// Temporary directory handle to keep it alive (if using temporary storage)
+    _temp_dir: Option<Arc<tempfile::TempDir>>,
 }
 
 impl<C> Clone for FaucetService<C>
@@ -290,6 +292,7 @@ where
             start_balance: self.start_balance,
             faucet_storage: Arc::clone(&self.faucet_storage),
             storage_path: self.storage_path.clone(),
+            _temp_dir: self._temp_dir.clone(),
         }
     }
 }
@@ -303,7 +306,7 @@ pub struct FaucetConfig {
     pub end_timestamp: Timestamp,
     pub genesis_config: Arc<GenesisConfig>,
     pub chain_listener_config: ChainListenerConfig,
-    pub storage_path: PathBuf,
+    pub storage_path: Option<PathBuf>,
 }
 
 impl<C> FaucetService<C>
@@ -322,8 +325,19 @@ where
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
 
+        // Create storage path: use provided path or create temporary directory
+        let (storage_path, temp_dir) = match config.storage_path {
+            Some(path) => (path, None),
+            None => {
+                let temp_dir = tempfile::tempdir()
+                    .context("Failed to create temporary directory for faucet storage")?;
+                let storage_path = temp_dir.path().join("faucet_storage.json");
+                (storage_path, Some(Arc::new(temp_dir)))
+            }
+        };
+
         // Load the faucet storage
-        let faucet_storage = FaucetStorage::load(&config.storage_path)
+        let faucet_storage = FaucetStorage::load(&storage_path)
             .await
             .context("Failed to load faucet storage")?;
         let faucet_storage = Arc::new(Mutex::new(faucet_storage));
@@ -342,7 +356,8 @@ where
             start_timestamp,
             start_balance,
             faucet_storage,
-            storage_path: config.storage_path,
+            storage_path,
+            _temp_dir: temp_dir,
         })
     }
 
