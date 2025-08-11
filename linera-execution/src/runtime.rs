@@ -1253,7 +1253,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                     application_id,
                     bytes: message.message,
                 },
-            })?;
+            });
 
         Ok(())
     }
@@ -1282,7 +1282,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?;
 
         this.transaction_tracker
-            .add_outgoing_messages(maybe_message)?;
+            .add_outgoing_messages(maybe_message);
         Ok(())
     }
 
@@ -1308,7 +1308,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 callback,
             })?
             .recv_response()?;
-        this.transaction_tracker.add_outgoing_message(message)?;
+        this.transaction_tracker.add_outgoing_message(message);
         Ok(())
     }
 

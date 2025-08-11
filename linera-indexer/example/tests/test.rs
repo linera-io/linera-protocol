@@ -48,7 +48,7 @@ async fn run_indexer(path_provider: &PathProvider) -> Child {
     command
         .current_dir(path_provider.path())
         .kill_on_drop(true)
-        .args(["run"]);
+        .args(["run-graph-ql"]);
     let child = command.spawn().unwrap();
     let client = reqwest_client();
     for i in 0..10 {

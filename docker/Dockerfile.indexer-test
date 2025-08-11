@@ -1,0 +1,151 @@
+# Build arguments:
+#
+# - `git_commit` is the hash of the current git commit — used for
+#   versioning information inside the binaries.
+# - `build_date` is the date and time of when the docker image was
+#   built
+# - `binaries` is the path to the directory containing the Linera
+#   binaries. Leave unset to build the binaries from scratch.
+# - `target` is a Rust target quadruple. Currently known to be
+#   supported are `x86_64-unknown-linux-gnu` and
+#   `aarch64-unknown-linux-gnu`.
+# - `build_flag` is either "--release" or an empty string.
+# - `build_folder` is either "release" or "debug".
+# - `build_features` is a comma-separated list of features to build the binaries with.
+
+# Stage 1 - Generate recipe file for dependencies
+
+# Modern Docker provides TARGETPLATFORM and friends, but these do not
+# provide enough information to reconstruct the whole Rust target and
+# switching on them to map to a subset of targets seems unwise
+ARG git_commit
+ARG build_date
+ARG target=x86_64-unknown-linux-gnu
+ARG binaries=
+ARG copy=${binaries:+_copy}
+# ARG build_flag=--release
+ARG build_folder=debug
+ARG build_features=metrics
+ARG rustflags="-C force-frame-pointers=yes"
+
+FROM rust:1.74-slim-bookworm AS builder
+ARG git_commit
+ARG build_flag
+ARG build_folder
+ARG build_features
+ARG rustflags
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    protobuf-compiler \
+    clang
+
+COPY examples examples
+COPY linera-base linera-base
+COPY linera-chain linera-chain
+COPY linera-client linera-client
+COPY linera-core linera-core
+COPY linera-ethereum linera-ethereum
+COPY linera-explorer linera-explorer
+COPY linera-execution linera-execution
+COPY linera-faucet linera-faucet
+COPY linera-indexer linera-indexer
+COPY linera-metrics linera-metrics
+COPY linera-rpc linera-rpc
+COPY linera-sdk linera-sdk
+COPY linera-sdk-derive linera-sdk-derive
+COPY linera-service linera-service
+COPY linera-service-graphql-client linera-service-graphql-client
+COPY linera-storage linera-storage
+COPY linera-storage-service linera-storage-service
+COPY linera-summary linera-summary
+COPY linera-persistent linera-persistent
+COPY linera-version linera-version
+COPY linera-views linera-views
+COPY linera-views-derive linera-views-derive
+COPY linera-web linera-web
+COPY linera-witty linera-witty
+COPY linera-witty-macros linera-witty-macros
+COPY scripts scripts
+COPY rust-toolchain* Cargo.* ./
+
+ENV GIT_COMMIT=${git_commit}
+ENV RUSTFLAGS=${rustflags}
+
+
+# Build linera core binaries (no database features needed)
+RUN cargo build ${build_flag:+"$build_flag"} \
+    --bin linera \
+    --bin linera-proxy \
+    --bin linera-server \
+    --features $build_features
+
+# Build storage service (memory storage, no database features)
+RUN cargo build ${build_flag:+"$build_flag"} \
+    -p linera-storage-service
+
+# Build block exporter with metrics feature only
+RUN cargo build ${build_flag:+"$build_flag"} \
+    -p linera-service \
+    --bin linera-exporter \
+    --features metrics
+
+# Build indexer binaries (no scylladb needed for testing)
+RUN cargo build ${build_flag:+"$build_flag"} \
+    -p linera-indexer-example \
+    --bin linera-indexer-grpc
+
+# Move binaries to avoid directory conflicts and clean up to save space
+RUN mv \
+    target/"$build_folder"/linera \
+    target/"$build_folder"/linera-proxy \
+    target/"$build_folder"/linera-server \
+    target/"$build_folder"/linera-storage-server \
+    target/"$build_folder"/linera-exporter \
+    target/"$build_folder"/linera-indexer-grpc \
+    ./
+
+# Optionally copy binaries instead of using the build images above
+FROM scratch AS builder_copy
+ARG binaries
+COPY \
+    "$binaries"/linera \
+    "$binaries"/linera-server \
+    "$binaries"/linera-proxy \
+    "$binaries"/linera-storage-server \
+    "$binaries"/linera-exporter \
+    "$binaries"/linera-indexer-grpc \
+    ./
+
+FROM builder$copy AS binaries
+
+# Setup running environment for container
+FROM debian:bookworm-slim
+
+ARG git_commit
+LABEL git_commit=$git_commit
+
+ARG build_date
+LABEL build_date=$build_date
+
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    ca-certificates \
+    openssl \
+    pkg-config \
+    protobuf-compiler \
+    clang \
+    netcat-openbsd
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN update-ca-certificates
+
+ARG target
+
+# Copy pre-built binaries for non-indexer services
+COPY --from=binaries \
+    linera \
+    linera-proxy \
+    linera-server \
+    linera-storage-server \
+    linera-indexer-grpc  \
+    linera-exporter \
+    ./

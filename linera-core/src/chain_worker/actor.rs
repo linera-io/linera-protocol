@@ -27,6 +27,7 @@ use linera_execution::{
     ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
+use linera_views::context::InactiveContext;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{debug, instrument, trace, warn, Instrument as _};
 
@@ -49,17 +50,6 @@ where
         height: BlockHeight,
         #[debug(skip)]
         callback: oneshot::Sender<Result<Option<ConfirmedBlockCertificate>, WorkerError>>,
-    },
-
-    /// Search for a bundle in one of the chain's inboxes.
-    #[cfg(with_testing)]
-    FindBundleInInbox {
-        inbox_id: ChainId,
-        certificate_hash: CryptoHash,
-        height: BlockHeight,
-        index: u32,
-        #[debug(skip)]
-        callback: oneshot::Sender<Result<Option<MessageBundle>, WorkerError>>,
     },
 
     /// Request a read-only view of the [`ChainStateView`].
@@ -175,7 +165,7 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
 }
@@ -194,9 +184,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
+        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -238,9 +226,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
+        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -366,10 +352,6 @@ where
         let responded = match self {
             #[cfg(with_testing)]
             ChainWorkerRequest::ReadCertificate { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            #[cfg(with_testing)]
-            ChainWorkerRequest::FindBundleInInbox { callback, .. } => {
                 callback.send(Err(error)).is_ok()
             }
             ChainWorkerRequest::GetChainStateView { callback } => callback.send(Err(error)).is_ok(),

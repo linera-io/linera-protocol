@@ -40,6 +40,12 @@ impl chain_listener::ClientContext for ClientContext {
         unimplemented!()
     }
 
+    fn timing_sender(
+        &self,
+    ) -> Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>> {
+        None
+    }
+
     fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
         assert_eq!(chain_id, self.client.chain_id());
         self.client.clone()

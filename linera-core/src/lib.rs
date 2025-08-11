@@ -21,7 +21,7 @@ pub mod test_utils;
 pub mod worker;
 
 pub(crate) mod updater;
-pub(crate) mod value_cache;
+mod value_cache;
 
 pub use updater::DEFAULT_GRACE_PERIOD;
 

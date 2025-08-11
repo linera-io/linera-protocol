@@ -16,7 +16,7 @@ use linera_views::{
     key_value_store_view::KeyValueStoreView,
     map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
-    views::{ClonableView, View},
+    views::{ClonableView, ReplaceContext, View},
 };
 use linera_views_derive::CryptoHashView;
 #[cfg(with_testing)]
@@ -47,6 +47,21 @@ pub struct ExecutionStateView<C> {
     pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
+}
+
+impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
+    type Target = ExecutionStateView<C2>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        ExecutionStateView {
+            system: self.system.with_context(ctx.clone()).await,
+            users: self.users.with_context(ctx.clone()).await,
+            stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
+        }
+    }
 }
 
 /// How to interact with a long-lived service runtime.
@@ -325,7 +340,7 @@ where
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
-                txn_tracker.add_outgoing_messages(outcome)?;
+                txn_tracker.add_outgoing_messages(outcome);
             }
             Message::User {
                 application_id,
@@ -362,7 +377,7 @@ where
             grant,
             kind: MessageKind::Bouncing,
             message,
-        })?;
+        });
         Ok(())
     }
 
@@ -388,7 +403,7 @@ where
         };
         txn_tracker.add_outgoing_message(
             OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
-        )?;
+        );
         Ok(())
     }
 

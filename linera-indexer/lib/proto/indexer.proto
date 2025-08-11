@@ -1,0 +1,28 @@
+syntax = "proto3";
+package indexer.linera_indexer;
+
+import "google/protobuf/empty.proto";
+
+service Indexer {
+    /// This interface will send a stream of either blocks or blobs.
+    /// Before sending a block, we first send all the blobs
+    /// that are required by that block then the block itself.
+    /// This rpc function returns an acknowledgement stream.
+    /// An acknowledgement should be sent for every block successfully received.
+    rpc IndexBatch(stream Element) returns (stream google.protobuf.Empty) {}
+}
+
+message Element {
+    oneof payload {
+        Blob blob = 1;
+        Block block = 2;
+    }
+}
+
+message Blob {
+    bytes bytes = 1;
+}
+
+message Block {
+    bytes bytes = 1;
+}

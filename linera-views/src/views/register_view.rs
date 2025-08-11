@@ -11,7 +11,7 @@ use crate::{
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, View},
+    views::{ClonableView, HashableView, Hasher, ReplaceContext, View},
     ViewError,
 };
 
@@ -40,6 +40,27 @@ pub struct RegisterView<C, T> {
     context: C,
     stored_value: Box<T>,
     update: Option<Box<T>>,
+}
+
+impl<C, T, C2> ReplaceContext<C2> for RegisterView<C, T>
+where
+    C: Context,
+    C2: Context,
+    T: Default + Send + Sync + Serialize + DeserializeOwned + Clone,
+{
+    type Target = RegisterView<C2, T>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        RegisterView {
+            delete_storage_first: self.delete_storage_first,
+            context: ctx(self.context()),
+            stored_value: self.stored_value.clone(),
+            update: self.update.clone(),
+        }
+    }
 }
 
 impl<C, T> View for RegisterView<C, T>

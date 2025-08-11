@@ -27,7 +27,10 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
-use linera_views::views::ClonableView;
+use linera_views::{
+    context::InactiveContext,
+    views::{ClonableView, RootView},
+};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{instrument, warn};
 
@@ -55,7 +58,7 @@ where
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -71,9 +74,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
+        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -110,19 +111,6 @@ where
             ChainWorkerRequest::ReadCertificate { height, callback } => {
                 callback.send(self.read_certificate(height).await).is_ok()
             }
-            #[cfg(with_testing)]
-            ChainWorkerRequest::FindBundleInInbox {
-                inbox_id,
-                certificate_hash,
-                height,
-                index,
-                callback,
-            } => callback
-                .send(
-                    self.find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
-                        .await,
-                )
-                .is_ok(),
             ChainWorkerRequest::GetChainStateView { callback } => {
                 callback.send(self.chain_state_view().await).is_ok()
             }
@@ -242,21 +230,6 @@ where
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .read_certificate(height)
-            .await
-    }
-
-    /// Searches for a bundle in one of the chain's inboxes.
-    #[cfg(with_testing)]
-    pub(super) async fn find_bundle_in_inbox(
-        &mut self,
-        inbox_id: ChainId,
-        certificate_hash: CryptoHash,
-        height: BlockHeight,
-        index: u32,
-    ) -> Result<Option<MessageBundle>, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
-            .await
-            .find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
             .await
     }
 
@@ -465,6 +438,8 @@ where
         if !self.knows_chain_is_active {
             let local_time = self.storage.clock().current_time();
             self.chain.ensure_is_active(local_time).await?;
+            self.clear_shared_chain_view().await;
+            self.chain.save().await?;
             self.knows_chain_is_active = true;
         }
         Ok(())

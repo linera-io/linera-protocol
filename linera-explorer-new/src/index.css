@@ -1,0 +1,93 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@layer base {
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 18px;
+    line-height: 1.3;
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    background: linear-gradient(135deg, #0a1f27 0%, #061116 100%);
+    min-height: 100vh;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Epilogue', sans-serif;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center px-6 py-3 font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-linera-dark;
+  }
+  
+  .btn-primary {
+    @apply btn text-white bg-linera-red hover:bg-linera-red-hover focus:ring-linera-red shadow-lg hover:shadow-xl transform hover:-translate-y-0.5;
+  }
+  
+  .btn-secondary {
+    @apply btn text-linera-gray-light bg-linera-teal hover:bg-linera-teal-light border border-linera-border focus:ring-linera-teal;
+  }
+  
+  .card {
+    @apply bg-linera-card/90 backdrop-blur-sm border border-linera-border/80 rounded-xl p-6 transition-all duration-300 hover:bg-linera-card-hover hover:border-linera-red/50 hover:shadow-2xl hover:shadow-linera-red/10;
+  }
+  
+  .card-glass {
+    @apply bg-linera-card/60 backdrop-blur-md border border-linera-border/50 rounded-xl;
+  }
+  
+  .text-gradient {
+    @apply bg-gradient-to-r from-white to-linera-gray-light bg-clip-text text-transparent;
+  }
+  
+  .text-accent {
+    @apply text-linera-red;
+  }
+  
+  .nav-link {
+    @apply flex items-center space-x-2 px-4 py-2 rounded-lg text-linera-gray-light hover:text-white hover:bg-linera-teal/50 transition-all duration-200;
+  }
+  
+  .nav-link.active {
+    @apply text-white bg-linera-red/20 border border-linera-red/30;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 bg-linera-card/50 border border-linera-border rounded-lg text-white placeholder-linera-gray-medium focus:ring-2 focus:ring-linera-red focus:border-transparent transition-all duration-200;
+  }
+  
+  .loading-spinner {
+    @apply animate-spin rounded-full border-2 border-linera-border border-t-linera-red;
+  }
+  
+  .hash-display {
+    @apply font-mono text-sm bg-linera-darker/60 px-3 py-2 rounded-lg border border-linera-border/50 break-all;
+  }
+  
+  .stat-card {
+    @apply text-center p-4;
+  }
+  
+  .stat-number {
+    @apply text-2xl font-bold font-epilogue tracking-tight-custom;
+  }
+  
+  .status-badge-accept {
+    @apply px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30;
+  }
+  
+  .status-badge-reject {
+    @apply px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30;
+  }
+}

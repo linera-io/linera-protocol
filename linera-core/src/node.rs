@@ -226,8 +226,8 @@ pub enum NodeError {
 
     // This error must be normalized during conversions.
     #[error(
-        "Cannot vote for block proposal of chain {chain_id:?} because a message \
-         from chain {origin:?} at height {height:?} has not been received yet"
+        "Cannot vote for block proposal of chain {chain_id} because a message \
+         from chain {origin} at height {height} has not been received yet"
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
