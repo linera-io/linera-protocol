@@ -62,6 +62,7 @@ use tracing::{debug, error, info, warn, Instrument as _};
 #[cfg(feature = "benchmark")]
 use {
     linera_base::identifiers::ChainId,
+    linera_base::time::Duration,
     linera_client::{
         benchmark::BenchmarkConfig,
         chain_listener::{ChainListener, ChainListenerConfig},
@@ -71,7 +72,6 @@ use {
         cli::command::BenchmarkCommand,
         cli_wrappers::{local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     },
-    std::time::Duration,
     tempfile::NamedTempFile,
     tokio::{
         io::AsyncWriteExt,

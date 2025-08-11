@@ -2312,10 +2312,10 @@ impl<Env: Environment> ChainClient<Env> {
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        let timing_start = std::time::Instant::now();
+        let timing_start = linera_base::time::Instant::now();
 
         let result = loop {
-            let execute_block_start = std::time::Instant::now();
+            let execute_block_start = linera_base::time::Instant::now();
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate)) => {
@@ -2872,7 +2872,7 @@ impl<Env: Environment> ChainClient<Env> {
         let committee = self.local_committee().await?;
         let block = Block::new(proposed_block, outcome);
         // Send the query to validators.
-        let submit_block_proposal_start = std::time::Instant::now();
+        let submit_block_proposal_start = linera_base::time::Instant::now();
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             let certificate = self
@@ -2897,7 +2897,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        let update_validators_start = std::time::Instant::now();
+        let update_validators_start = linera_base::time::Instant::now();
         self.update_validators(Some(&committee)).await?;
         if let Some(sender) = &self.timing_sender {
             let _ = sender.send((
