@@ -21,6 +21,7 @@ benchmark = [
     "dep:anyhow",
     "dep:prometheus-parse",
     "dep:rand",
+    "dep:serde_yaml",
 ]
 wasmer = [
     "linera-core/wasmer",
@@ -74,6 +75,7 @@ prometheus-parse = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 serde.workspace = true
+serde_yaml = { workspace = true, optional = true }
 thiserror.workspace = true
 thiserror-context.workspace = true
 tokio.workspace = true
