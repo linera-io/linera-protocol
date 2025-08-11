@@ -643,7 +643,6 @@ impl<Env: Environment> Benchmark<Env> {
         Ok(all_chains)
     }
 
-    /// Generates information related to one block per chain.
     pub fn make_benchmark_block_info(
         benchmark_chains: Vec<(ChainId, AccountOwner)>,
         transactions_per_block: usize,
@@ -651,8 +650,9 @@ impl<Env: Environment> Benchmark<Env> {
         all_chains: Vec<ChainId>,
     ) -> Result<Vec<Vec<Operation>>, BenchmarkError> {
         let mut blocks_infos = Vec::new();
+        let amount = Amount::from_attos(1);
+
         for (current_chain_id, owner) in benchmark_chains.iter() {
-            let amount = Amount::from(1);
             let mut operations = Vec::new();
 
             let mut other_chains: Vec<_> = if all_chains.len() == 1 {
@@ -669,6 +669,22 @@ impl<Env: Environment> Benchmark<Env> {
             };
 
             other_chains.shuffle(&mut thread_rng());
+
+            // Calculate adjusted transactions_per_block to ensure even distribution
+            let num_destinations = other_chains.len();
+            let adjusted_transactions_per_block = if transactions_per_block % num_destinations != 0
+            {
+                let adjusted = transactions_per_block.div_ceil(num_destinations) * num_destinations;
+                warn!(
+                    "Requested transactions_per_block ({}) is not evenly divisible by number of destination chains ({}). \
+                    Adjusting to {} transactions per block to ensure transfers cancel each other out.",
+                    transactions_per_block, num_destinations, adjusted
+                );
+                adjusted
+            } else {
+                transactions_per_block
+            };
+
             for recipient_chain_id in other_chains {
                 let operation = match fungible_application_id {
                     Some(application_id) => Self::fungible_transfer(
@@ -690,7 +706,7 @@ impl<Env: Environment> Benchmark<Env> {
             let operations = operations
                 .into_iter()
                 .cycle()
-                .take(transactions_per_block)
+                .take(adjusted_transactions_per_block)
                 .collect();
             blocks_infos.push(operations);
         }
