@@ -640,6 +640,7 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 * `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
 
   Default value: `0`
+* `--storage-path <STORAGE_PATH>` — Path to the persistent storage file for faucet mappings
 
 
 

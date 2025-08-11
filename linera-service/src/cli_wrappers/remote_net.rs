@@ -42,8 +42,7 @@ impl LineraNetConfig for RemoteNetTestingConfig {
     type Net = RemoteNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let seed = 37;
-        let mut net = RemoteNet::new(Some(seed), &self.faucet)
+        let mut net = RemoteNet::new(None, &self.faucet)
             .await
             .expect("Creating RemoteNet should not fail");
 

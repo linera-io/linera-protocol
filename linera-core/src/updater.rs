@@ -300,16 +300,14 @@ where
                 Err(NodeError::UnexpectedBlockHeight {
                     expected_block_height,
                     found_block_height,
-                }) => {
-                    if expected_block_height < found_block_height {
-                        // The proposal is for a a later block height, so we need to update the validator.
-                        self.send_chain_information(
-                            chain_id,
-                            found_block_height,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
-                    }
+                }) if expected_block_height < found_block_height => {
+                    // The proposal is for a later block height, so we need to update the validator.
+                    self.send_chain_information(
+                        chain_id,
+                        found_block_height,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await?;
                 }
                 Err(NodeError::MissingCrossChainUpdate { .. }) if !sent_cross_chain_updates => {
                     sent_cross_chain_updates = true;
