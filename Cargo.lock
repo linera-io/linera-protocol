@@ -5412,6 +5412,7 @@ dependencies = [
  "linera-base",
  "linera-chain",
  "linera-core",
+ "linera-execution",
  "linera-service-graphql-client",
  "linera-version",
  "linera-views",

@@ -340,7 +340,7 @@ where
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
-                txn_tracker.add_outgoing_messages(outcome)?;
+                txn_tracker.add_outgoing_messages(outcome);
             }
             Message::User {
                 application_id,
@@ -377,7 +377,7 @@ where
             grant,
             kind: MessageKind::Bouncing,
             message,
-        })?;
+        });
         Ok(())
     }
 
@@ -403,7 +403,7 @@ where
         };
         txn_tracker.add_outgoing_message(
             OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
-        )?;
+        );
         Ok(())
     }
 

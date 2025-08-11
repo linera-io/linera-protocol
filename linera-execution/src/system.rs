@@ -8,6 +8,7 @@ mod tests;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::{Display, Formatter},
     mem,
 };
 
@@ -293,6 +294,15 @@ impl Recipient {
     }
 }
 
+impl Display for Recipient {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Recipient::Burn => write!(f, "burn"),
+            Recipient::Account(account) => write!(f, "{}", account),
+        }
+    }
+}
+
 impl From<ChainId> for Recipient {
     fn from(chain_id: ChainId) -> Self {
         Recipient::chain(chain_id)
@@ -422,7 +432,7 @@ where
                 let maybe_message = self
                     .transfer(context.authenticated_signer, None, owner, recipient, amount)
                     .await?;
-                txn_tracker.add_outgoing_messages(maybe_message)?;
+                txn_tracker.add_outgoing_messages(maybe_message);
             }
             Claim {
                 owner,
@@ -440,7 +450,7 @@ where
                         amount,
                     )
                     .await?;
-                txn_tracker.add_outgoing_message(message)?;
+                txn_tracker.add_outgoing_message(message);
             }
             Admin(admin_operation) => {
                 ensure!(

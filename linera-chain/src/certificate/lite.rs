@@ -45,22 +45,26 @@ impl LiteCertificate<'_> {
         }
     }
 
-    /// Creates a [`LiteCertificate`] from a list of votes, without cryptographically checking the
+    /// Creates a [`LiteCertificate`] from a list of votes with their validator public keys, without cryptographically checking the
     /// signatures. Returns `None` if the votes are empty or don't have matching values and rounds.
-    pub fn try_from_votes(votes: impl IntoIterator<Item = LiteVote>) -> Option<Self> {
+    pub fn try_from_votes(
+        votes: impl IntoIterator<Item = (ValidatorPublicKey, LiteVote)>,
+    ) -> Option<Self> {
         let mut votes = votes.into_iter();
-        let LiteVote {
-            value,
-            round,
+        let (
             public_key,
-            signature,
-        } = votes.next()?;
+            LiteVote {
+                value,
+                round,
+                signature,
+            },
+        ) = votes.next()?;
         let mut signatures = vec![(public_key, signature)];
-        for vote in votes {
+        for (validator_key, vote) in votes {
             if vote.value.value_hash != value.value_hash || vote.round != round {
                 return None;
             }
-            signatures.push((vote.public_key, vote.signature));
+            signatures.push((validator_key, vote.signature));
         }
         Some(LiteCertificate::new(value, round, signatures))
     }
