@@ -14,6 +14,7 @@ use futures::{
     Future, StreamExt,
 };
 use linera_base::{
+    crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round},
     ensure,
     identifiers::{BlobId, ChainId, GenericApplicationId},
@@ -109,7 +110,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     execute: F,
     // Grace period as a fraction of time taken to reach quorum
     grace_period: f64,
-) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
+) -> Result<(K, Vec<(ValidatorPublicKey, V)>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Clone + 'static,
     F: Clone + Fn(RemoteNode<A>) -> R,
@@ -136,7 +137,7 @@ where
     let mut end_time: Option<Instant> = None;
     let mut remaining_votes = committee.total_votes();
     let mut highest_key_score = 0;
-    let mut value_scores = HashMap::new();
+    let mut value_scores: HashMap<K, (u64, Vec<(ValidatorPublicKey, V)>)> = HashMap::new();
     let mut error_scores = HashMap::new();
 
     'vote_wait: while let Ok(Some((name, result))) = timeout(
@@ -151,7 +152,7 @@ where
                 let key = group_by(&value);
                 let entry = value_scores.entry(key.clone()).or_insert((0, Vec::new()));
                 entry.0 += committee.weight(&name);
-                entry.1.push(value);
+                entry.1.push((name, value));
                 highest_key_score = highest_key_score.max(entry.0);
             }
             Err(err) => {
@@ -546,13 +547,9 @@ where
                 let info = self.remote_node.handle_chain_info_query(query).await?;
                 info.manager.timeout_vote
             }
-        };
-        match vote {
-            Some(vote) if vote.public_key == self.remote_node.public_key => {
-                vote.check()?;
-                Ok(vote)
-            }
-            Some(_) | None => Err(NodeError::MissingVoteInValidatorResponse.into()),
         }
+        .ok_or(NodeError::MissingVoteInValidatorResponse)?;
+        vote.check(self.remote_node.public_key)?;
+        Ok(vote)
     }
 }
