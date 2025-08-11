@@ -263,7 +263,7 @@ where
         );
         let mut builder = SignatureAggregator::new(value, round, &self.committee);
         builder
-            .append(vote.public_key, vote.signature)
+            .append(self.worker.public_key(), vote.signature)
             .unwrap()
             .unwrap()
     }
@@ -3329,7 +3329,7 @@ where
     let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
-        .into_certificate();
+        .into_certificate(env.worker().public_key());
     let (response, _) = env
         .worker()
         .handle_timeout_certificate(certificate_timeout)
@@ -3364,7 +3364,10 @@ where
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
-    let certificate1 = vote.with_value(value1.clone()).unwrap().into_certificate();
+    let certificate1 = vote
+        .with_value(value1.clone())
+        .unwrap()
+        .into_certificate(env.worker().public_key());
     let (response, _) = env
         .worker()
         .handle_validated_certificate(certificate1.clone())
@@ -3570,7 +3573,7 @@ where
     let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
-        .into_certificate();
+        .into_certificate(env.worker().public_key());
     let (response, _) = env
         .worker()
         .handle_timeout_certificate(certificate_timeout)
@@ -3893,7 +3896,7 @@ where
         .get(&response.info.epoch)
         .unwrap()
         .validators
-        .get(&vote.public_key)
+        .get(&env.worker().public_key())
         .unwrap()
         .account_public_key;
     assert_eq!(manager.current_round, Round::Validator(0));

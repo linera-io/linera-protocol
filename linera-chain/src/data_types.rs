@@ -338,7 +338,6 @@ struct VoteValue(CryptoHash, Round, CertificateKind);
 pub struct Vote<T> {
     pub value: T,
     pub round: Round,
-    pub public_key: ValidatorPublicKey,
     pub signature: ValidatorSignature,
 }
 
@@ -353,7 +352,6 @@ impl<T> Vote<T> {
         Self {
             value,
             round,
-            public_key: key_pair.public(),
             signature,
         }
     }
@@ -366,7 +364,6 @@ impl<T> Vote<T> {
         LiteVote {
             value: LiteValue::new(&self.value),
             round: self.round,
-            public_key: self.public_key,
             signature: self.signature,
         }
     }
@@ -383,7 +380,6 @@ impl<T> Vote<T> {
 pub struct LiteVote {
     pub value: LiteValue,
     pub round: Round,
-    pub public_key: ValidatorPublicKey,
     pub signature: ValidatorSignature,
 }
 
@@ -397,7 +393,6 @@ impl LiteVote {
         Some(Vote {
             value,
             round: self.round,
-            public_key: self.public_key,
             signature: self.signature,
         })
     }
@@ -631,15 +626,14 @@ impl LiteVote {
         Self {
             value,
             round,
-            public_key: secret_key.public(),
             signature,
         }
     }
 
     /// Verifies the signature in the vote.
-    pub fn check(&self) -> Result<(), ChainError> {
+    pub fn check(&self, public_key: ValidatorPublicKey) -> Result<(), ChainError> {
         let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
-        Ok(self.signature.check(&hash_and_round, self.public_key)?)
+        Ok(self.signature.check(&hash_and_round, public_key)?)
     }
 }
 

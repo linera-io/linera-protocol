@@ -597,8 +597,6 @@ LiteVote:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
-    - public_key:
-        TYPENAME: Secp256k1PublicKey
     - signature:
         TYPENAME: Secp256k1Signature
 LockingBlock:
