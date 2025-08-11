@@ -99,10 +99,11 @@ pub trait View: Sized {
 /// A view which can have its context replaced.
 pub trait ReplaceContext<C: crate::context::Context>: View {
     /// The type returned after replacing the context.
-    type Result: View<Context = C>;
+    type Target: View<Context = C>;
 
     /// Returns a view with a replaced context.
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C + Clone) -> Self::Result;
+    async fn with_context(&mut self, ctx: impl FnOnce(&Self::Context) -> C + Clone)
+        -> Self::Target;
 }
 
 /// A view that supports hashing its values.

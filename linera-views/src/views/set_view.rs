@@ -43,9 +43,12 @@ pub struct ByteSetView<C> {
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ByteSetView<C> {
-    type Result = ByteSetView<C2>;
+    type Target = ByteSetView<C2>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         ByteSetView {
             context: ctx(self.context()),
             delete_storage_first: self.delete_storage_first,
@@ -377,9 +380,12 @@ pub struct SetView<C, I> {
 }
 
 impl<C: Context, I: Send + Sync + Serialize, C2: Context> ReplaceContext<C2> for SetView<C, I> {
-    type Result = SetView<C2, I>;
+    type Target = SetView<C2, I>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         SetView {
             set: self.set.with_context(ctx).await,
             _phantom: self._phantom,

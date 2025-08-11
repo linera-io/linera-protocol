@@ -90,16 +90,19 @@ where
     W: View + ReplaceContext<C2>,
     C2: Context,
 {
-    type Result = ReentrantByteCollectionView<C2, <W as ReplaceContext<C2>>::Result>;
+    type Target = ReentrantByteCollectionView<C2, <W as ReplaceContext<C2>>::Target>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
-        let mut updates: BTreeMap<_, Update<Arc<RwLock<W::Result>>>> = BTreeMap::new();
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        let mut updates: BTreeMap<_, Update<Arc<RwLock<W::Target>>>> = BTreeMap::new();
         let mut cached_entries = BTreeMap::new();
         for (key, update) in &self.updates {
             let new_value = match update {
                 Update::Removed => Update::Removed,
                 Update::Set(x) => Update::Set(Arc::new(RwLock::new(
-                    x.read().await.with_context(ctx.clone()).await,
+                    x.write().await.with_context(ctx.clone()).await,
                 ))),
             };
             updates.insert(key.clone(), new_value);
@@ -109,7 +112,7 @@ where
             cached_entries.insert(
                 key,
                 Arc::new(RwLock::new(
-                    entry.read().await.with_context(ctx.clone()).await,
+                    entry.write().await.with_context(ctx.clone()).await,
                 )),
             );
         }
@@ -1108,9 +1111,12 @@ where
     I: Send + Sync + Serialize + DeserializeOwned,
     C2: Context,
 {
-    type Result = ReentrantCollectionView<C2, I, <W as ReplaceContext<C2>>::Result>;
+    type Target = ReentrantCollectionView<C2, I, <W as ReplaceContext<C2>>::Target>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         ReentrantCollectionView {
             collection: self.collection.with_context(ctx).await,
             _phantom: self._phantom,

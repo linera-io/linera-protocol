@@ -70,9 +70,12 @@ impl<C: Context, C2: Context, V> ReplaceContext<C2> for ByteMapView<C, V>
 where
     V: Send + Sync + Serialize + Clone,
 {
-    type Result = ByteMapView<C2, V>;
+    type Target = ByteMapView<C2, V>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         ByteMapView {
             context: ctx(self.context()),
             deletion_set: self.deletion_set.clone(),
@@ -968,9 +971,12 @@ where
     I: Send + Sync,
     V: Send + Sync + Serialize + Clone,
 {
-    type Result = MapView<C2, I, V>;
+    type Target = MapView<C2, I, V>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         MapView {
             map: self.map.with_context(ctx).await,
             _phantom: self._phantom,

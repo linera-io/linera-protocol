@@ -38,14 +38,17 @@ enum KeyTag {
 impl<C, W, O, C2> ReplaceContext<C2> for WrappedHashableContainerView<C, W, O>
 where
     W: HashableView<Hasher: Hasher<Output = O>, Context = C> + ReplaceContext<C2>,
-    <W as ReplaceContext<C2>>::Result: HashableView<Hasher: Hasher<Output = O>>,
+    <W as ReplaceContext<C2>>::Target: HashableView<Hasher: Hasher<Output = O>>,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     C: Context,
     C2: Context,
 {
-    type Result = WrappedHashableContainerView<C2, <W as ReplaceContext<C2>>::Result, O>;
+    type Target = WrappedHashableContainerView<C2, <W as ReplaceContext<C2>>::Target, O>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         let hash = *self.hash.lock().unwrap();
         WrappedHashableContainerView {
             _phantom: PhantomData,

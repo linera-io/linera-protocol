@@ -48,9 +48,12 @@ where
     C2: Context,
     T: Default + Send + Sync + Serialize + DeserializeOwned + Clone,
 {
-    type Result = RegisterView<C2, T>;
+    type Target = RegisterView<C2, T>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         RegisterView {
             delete_storage_first: self.delete_storage_first,
             context: ctx(self.context()),

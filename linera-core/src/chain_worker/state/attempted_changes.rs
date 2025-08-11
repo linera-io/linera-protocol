@@ -425,7 +425,7 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome = if let Some(execution_state) =
+        let verified_outcome = if let Some(mut execution_state) =
             self.state.execution_state_cache.remove(&outcome.state_hash)
         {
             chain.execution_state = execution_state

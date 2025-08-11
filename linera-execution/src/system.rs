@@ -94,9 +94,12 @@ pub struct SystemExecutionStateView<C> {
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
-    type Result = SystemExecutionStateView<C2>;
+    type Target = SystemExecutionStateView<C2>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         SystemExecutionStateView {
             description: self.description.with_context(ctx.clone()).await,
             epoch: self.epoch.with_context(ctx.clone()).await,

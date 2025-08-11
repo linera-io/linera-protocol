@@ -50,9 +50,12 @@ pub struct ExecutionStateView<C> {
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
-    type Result = ExecutionStateView<C2>;
+    type Target = ExecutionStateView<C2>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         ExecutionStateView {
             system: self.system.with_context(ctx.clone()).await,
             users: self.users.with_context(ctx.clone()).await,

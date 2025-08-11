@@ -211,9 +211,12 @@ pub struct KeyValueStoreView<C> {
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for KeyValueStoreView<C> {
-    type Result = KeyValueStoreView<C2>;
+    type Target = KeyValueStoreView<C2>;
 
-    async fn with_context(&self, ctx: impl FnOnce(&Self::Context) -> C2 + Clone) -> Self::Result {
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
         let hash = *self.hash.lock().unwrap();
         KeyValueStoreView {
             context: ctx.clone()(self.context()),

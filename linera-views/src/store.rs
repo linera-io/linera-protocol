@@ -260,7 +260,7 @@ pub trait TestKeyValueDatabase: KeyValueDatabase {
 pub mod inactive_store {
     use super::*;
 
-    /// A store which is not actually stored anything - used for caching views.
+    /// A store which does not actually store anything - used for caching views.
     pub struct InactiveStore;
 
     /// An error struct for the inactive store.
