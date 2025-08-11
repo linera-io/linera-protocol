@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
+use linera_base::time::{Duration, Instant};
 
 use crate::{
     batch::Batch,

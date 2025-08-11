@@ -145,12 +145,11 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
     use linera_base::{
         crypto::CryptoHash,
         data_types::{Round, Timestamp},
         identifiers::ChainId,
+        time::Duration,
     };
     use linera_chain::{
         data_types::{BlockExecutionOutcome, IncomingBundle, MessageBundle},

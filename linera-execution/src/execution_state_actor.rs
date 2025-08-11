@@ -3,9 +3,6 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-#[cfg(not(web))]
-use std::time::Duration;
-
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
@@ -381,7 +378,7 @@ where
                     .headers(headers);
                 #[cfg(not(web))]
                 {
-                    request = request.timeout(Duration::from_millis(
+                    request = request.timeout(linera_base::time::Duration::from_millis(
                         committee.policy().http_request_timeout_ms,
                     ));
                 }
