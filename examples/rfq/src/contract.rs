@@ -191,7 +191,11 @@ impl Contract for RfqContract {
     }
 
     async fn execute_message(&mut self, message: Self::Message) {
-        let request_id = message.request_id(self.get_message_creation_chain_id());
+        let origin_chain_id = self
+            .runtime
+            .message_origin_chain_id()
+            .expect("Getting message origin chain ID should not fail");
+        let request_id = message.request_id(origin_chain_id);
         match message {
             Message::RequestQuote {
                 token_pair, amount, ..
@@ -210,12 +214,11 @@ impl Contract for RfqContract {
                     .update_state_with_quote(quote, quoter_owner);
             }
             Message::QuoteAccepted { request_id } => {
-                let temp_chain_id = self.get_message_creation_chain_id();
                 self.state
                     .request_data(&request_id)
                     .await
                     .expect("Request not found!")
-                    .accept_quote(temp_chain_id);
+                    .accept_quote(origin_chain_id);
             }
             Message::CancelRequest { .. } => {
                 if let Some(temp_chain_id) = self.state.cancel_request(&request_id).await {
@@ -312,12 +315,6 @@ impl Contract for RfqContract {
 }
 
 impl RfqContract {
-    fn get_message_creation_chain_id(&mut self) -> ChainId {
-        self.runtime
-            .message_origin_chain_id()
-            .expect("Getting message origin chain ID should not fail")
-    }
-
     async fn start_exchange(
         &mut self,
         request_id: RequestId,
