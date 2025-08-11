@@ -505,8 +505,8 @@ enum BaseRuntimePrecompile {
 enum ContractRuntimePrecompile {
     /// Calling `authenticated_signer` of `ContractRuntime`
     AuthenticatedSigner,
-    /// Calling `message_id` of `ContractRuntime`
-    MessageId,
+    /// Calling `message_origin_chain_id` of `ContractRuntime`
+    MessageOriginChainId,
     /// Calling `message_is_bouncing` of `ContractRuntime`
     MessageIsBouncing,
     /// Calling `authenticated_caller_id` of `ContractRuntime`
@@ -722,10 +722,12 @@ impl<'a> ContractPrecompile {
                 let account_owner = runtime.authenticated_signer()?;
                 Ok(bcs::to_bytes(&account_owner)?)
             }
-            ContractRuntimePrecompile::MessageId => {
-                let message_id = runtime.message_id()?;
-                Ok(bcs::to_bytes(&message_id)?)
+
+            ContractRuntimePrecompile::MessageOriginChainId => {
+                let origin_chain_id = runtime.message_origin_chain_id()?;
+                Ok(bcs::to_bytes(&origin_chain_id)?)
             }
+
             ContractRuntimePrecompile::MessageIsBouncing => {
                 let result = runtime.message_is_bouncing()?;
                 Ok(bcs::to_bytes(&result)?)
