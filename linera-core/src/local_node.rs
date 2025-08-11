@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{future::Either, stream::FuturesUnordered, TryStreamExt as _};
+use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch},
@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
-    types::{Block, GenericCertificate, LiteCertificate},
+    types::{Block, GenericCertificate},
     ChainStateView,
 };
 use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome};
@@ -91,18 +91,6 @@ where
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = self.node.state.handle_block_proposal(proposal).await?;
         Ok(response)
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn handle_lite_certificate(
-        &self,
-        certificate: LiteCertificate<'_>,
-        notifier: &impl Notifier,
-    ) -> Result<ChainInfoResponse, LocalNodeError> {
-        match self.node.state.full_certificate(certificate).await? {
-            Either::Left(confirmed) => Ok(self.handle_certificate(confirmed, notifier).await?),
-            Either::Right(validated) => Ok(self.handle_certificate(validated, notifier).await?),
-        }
     }
 
     #[instrument(level = "trace", skip_all)]
