@@ -301,22 +301,16 @@ where
             .await
             .load_proposal_blobs(&proposal)
             .await?;
-        let validation_outcome = ChainWorkerStateWithTemporaryChanges::new(self)
+        let (outcome, local_time) = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .validate_proposal_content(&proposal.content, &published_blobs)
             .await?;
 
-        let actions = if let Some((outcome, local_time)) = validation_outcome {
-            ChainWorkerStateWithAttemptedChanges::new(&mut *self)
-                .await
-                .vote_for_block_proposal(proposal, outcome, local_time)
-                .await?;
-            // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-            self.create_network_actions().await?
-        } else {
-            // If we just processed the same pending block, return the chain info unchanged.
-            NetworkActions::default()
-        };
+        ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+            .await
+            .vote_for_block_proposal(proposal, outcome, local_time)
+            .await?;
+        let actions = self.create_network_actions().await?;
 
         let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
         Ok((info, actions))

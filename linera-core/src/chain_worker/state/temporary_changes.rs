@@ -206,7 +206,7 @@ where
         &mut self,
         content: &ProposalContent,
         published_blobs: &[Blob],
-    ) -> Result<Option<(BlockExecutionOutcome, Timestamp)>, WorkerError> {
+    ) -> Result<(BlockExecutionOutcome, Timestamp), WorkerError> {
         let ProposalContent {
             block,
             round,
@@ -245,7 +245,7 @@ where
         )?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
-        Ok(Some((outcome, local_time)))
+        Ok((outcome, local_time))
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
