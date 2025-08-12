@@ -123,7 +123,6 @@ pub enum ChainError {
         "Block timestamp {new} must not be earlier than the parent block's timestamp {parent}"
     )]
     InvalidBlockTimestamp { parent: Timestamp, new: Timestamp },
-
     #[error("Round number should be at least {0:?}")]
     InsufficientRound(Round),
     #[error("Round number should be greater than {0:?}")]
@@ -140,14 +139,12 @@ pub enum ChainError {
     CertificateValidatorReuse,
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
-
     #[error("Internal error {0}")]
     InternalError(String),
     #[error("Block proposal has size {0} which is too large")]
     BlockProposalTooLarge(usize),
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
-
     #[error("Invalid owner weights: {0}")]
     OwnerWeightError(#[from] WeightedError),
     #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
@@ -158,7 +155,6 @@ pub enum ChainError {
     AuthorizedApplications(Vec<ApplicationId>),
     #[error("Missing operations or messages from mandatory applications: {0:?}")]
     MissingMandatoryApplications(Vec<ApplicationId>),
-
     #[error("Executed block contains fewer oracle responses than requests")]
     MissingOracleResponseList,
 }
