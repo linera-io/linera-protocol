@@ -437,11 +437,6 @@ where
         }
 
         if let Some(locking) = self.locking_block.get() {
-            if let LockingBlock::Regular(locking_cert) = locking {
-                if locking_cert.hash() == certificate.hash() && locking.round() == new_round {
-                    return Ok(Outcome::Skip); // We already handled this certificate.
-                }
-            }
             ensure!(
                 new_round > locking.round(),
                 ChainError::InsufficientRoundStrict(locking.round())
