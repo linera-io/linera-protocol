@@ -157,6 +157,10 @@ pub enum ChainError {
     MissingMandatoryApplications(Vec<ApplicationId>),
     #[error("Executed block contains fewer oracle responses than requests")]
     MissingOracleResponseList,
+    #[error("Not signing timeout certificate; current round does not time out")]
+    RoundDoesNotTimeOut,
+    #[error("Not signing timeout certificate; current round times out at time {0}")]
+    NotTimedOutYet(Timestamp),
 }
 
 #[derive(Copy, Clone, Debug)]

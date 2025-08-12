@@ -593,21 +593,14 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-
-        let (response, actions) = self
-            .query_chain_worker(chain_id, move |callback| {
-                ChainWorkerRequest::ProcessConfirmedBlock {
-                    certificate,
-                    notify_when_messages_are_delivered,
-                    callback,
-                }
-            })
-            .await?;
-
-        #[cfg(with_metrics)]
-        metrics::NUM_BLOCKS.with_label_values(&[]).inc();
-
-        Ok((response, actions))
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::ProcessConfirmedBlock {
+                certificate,
+                notify_when_messages_are_delivered,
+                callback,
+            }
+        })
+        .await
     }
 
     /// Processes a validated block issued from a multi-owner chain.
@@ -617,7 +610,6 @@ where
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
@@ -846,32 +838,63 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
         #[cfg(with_metrics)]
+        let metrics_data = if self
+            .chain_state_view(certificate.block().header.chain_id)
+            .await?
+            .tip_state
+            .get()
+            .next_block_height
+            > certificate.block().header.height
         {
-            let confirmed_transactions = (certificate.block().body.incoming_bundles.len()
-                + certificate.block().body.operations.len())
-                as u64;
+            // Block already processed, no metrics to report.
+            None
+        } else {
+            Some((
+                certificate.inner().to_log_str(),
+                certificate.round.type_name(),
+                certificate.round.number(),
+                (certificate.block().body.incoming_bundles.len()
+                    + certificate.block().body.operations.len()) as u64,
+                certificate
+                    .signatures()
+                    .iter()
+                    .map(|(validator_name, _)| validator_name.to_string())
+                    .collect::<Vec<_>>(),
+            ))
+        };
 
-            metrics::NUM_ROUNDS_IN_CERTIFICATE
-                .with_label_values(&[
-                    certificate.inner().to_log_str(),
-                    certificate.round.type_name(),
-                ])
-                .observe(certificate.round.number() as f64);
-            if confirmed_transactions > 0 {
-                metrics::TRANSACTION_COUNT
-                    .with_label_values(&[])
-                    .inc_by(confirmed_transactions);
-            }
+        let result = self
+            .process_confirmed_block(certificate, notify_when_messages_are_delivered)
+            .await?;
 
-            for (validator_name, _) in certificate.signatures() {
-                metrics::CERTIFICATES_SIGNED
-                    .with_label_values(&[&validator_name.to_string()])
-                    .inc();
+        #[cfg(with_metrics)]
+        {
+            if let Some(metrics_data) = metrics_data {
+                let (
+                    certificate_log_str,
+                    round_type,
+                    round_number,
+                    confirmed_transactions,
+                    validators_with_signatures,
+                ) = metrics_data;
+                metrics::NUM_BLOCKS.with_label_values(&[]).inc();
+                metrics::NUM_ROUNDS_IN_CERTIFICATE
+                    .with_label_values(&[certificate_log_str, round_type])
+                    .observe(round_number as f64);
+                if confirmed_transactions > 0 {
+                    metrics::TRANSACTION_COUNT
+                        .with_label_values(&[])
+                        .inc_by(confirmed_transactions);
+                }
+
+                for validator_name in validators_with_signatures {
+                    metrics::CERTIFICATES_SIGNED
+                        .with_label_values(&[&validator_name])
+                        .inc();
+                }
             }
         }
-
-        self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
-            .await
+        Ok(result)
     }
 
     /// Processes a validated block certificate.

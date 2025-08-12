@@ -359,7 +359,11 @@ ChainInfoQuery:
     - request_received_log_excluding_first_n:
         OPTION: U64
     - request_manager_values: BOOL
-    - request_leader_timeout: BOOL
+    - request_leader_timeout:
+        OPTION:
+          TUPLE:
+            - TYPENAME: BlockHeight
+            - TYPENAME: Round
     - request_fallback: BOOL
 ChainInfoResponse:
   STRUCT:
@@ -732,7 +736,8 @@ NodeError:
           SEQ:
             TYPENAME: CryptoHash
     13:
-      MissingVoteInValidatorResponse: UNIT
+      MissingVoteInValidatorResponse:
+        NEWTYPE: STR
     14:
       InvalidChainInfoResponse: UNIT
     15:

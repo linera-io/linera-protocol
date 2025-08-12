@@ -3311,15 +3311,16 @@ where
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
-    let query = ChainInfoQuery::new(chain_1).with_timeout();
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
-    assert!(response.info.manager.timeout_vote.is_none());
+    let query = ChainInfoQuery::new(chain_1).with_timeout(BlockHeight(1), Round::SingleLeader(0));
+    let result = env.worker().handle_chain_info_query(query.clone()).await;
+    assert_matches!(result, Err(WorkerError::ChainError(ref error))
+        if matches!(**error, ChainError::NotTimedOutYet(_))
+    );
 
     // Set the clock to the end of the round.
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let query = ChainInfoQuery::new(chain_1).with_timeout();
     let (response, _) = env.worker().handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_1, BlockHeight::from(1), Epoch::from(0));
@@ -3556,15 +3557,16 @@ where
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
-    let query = ChainInfoQuery::new(chain_id).with_timeout();
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
-    assert!(response.info.manager.timeout_vote.is_none());
+    let query = ChainInfoQuery::new(chain_id).with_timeout(BlockHeight(1), Round::Fast);
+    let result = env.worker().handle_chain_info_query(query.clone()).await;
+    assert_matches!(result, Err(WorkerError::ChainError(ref error))
+        if matches!(**error, ChainError::NotTimedOutYet(_))
+    );
 
     // Set the clock to the end of the round.
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = env.worker().handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0));
