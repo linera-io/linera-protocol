@@ -3537,17 +3537,16 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<Env::Storage>,
-    ) -> Option<Box<ChainInfo>> {
-        let info = match local_node.chain_info(chain_id).await {
-            Ok(info) => info,
-            Err(error) => {
-                error!("Fail to read local chain info for {chain_id}: {error}");
-                return None;
+    ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
+        match local_node.chain_info(chain_id).await {
+            Ok(info) => {
+                // Useful in case `chain_id` is the same as a local chain.
+                self.client.update_from_info(&info);
+                Ok(Some(info))
             }
-        };
-        // Useful in case `chain_id` is the same as the local chain.
-        self.client.update_from_info(&info);
-        Some(info)
+            Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
     }
 
     #[instrument(level = "trace", skip(chain_id, local_node))]
@@ -3555,9 +3554,11 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<Env::Storage>,
-    ) -> BlockHeight {
-        let maybe_info = self.local_chain_info(chain_id, local_node).await;
-        maybe_info.map_or(BlockHeight::ZERO, |info| info.next_block_height)
+    ) -> Result<BlockHeight, ChainClientError> {
+        Ok(self
+            .local_chain_info(chain_id, local_node)
+            .await?
+            .map_or(BlockHeight::ZERO, |info| info.next_block_height))
     }
 
     /// Returns the next height we expect to receive from the given sender chain, according to the
@@ -3603,7 +3604,7 @@ impl<Env: Environment> ChainClient<Env> {
                 let chain_id = notification.chain_id;
                 if self
                     .local_next_block_height(chain_id, &mut local_node)
-                    .await
+                    .await?
                     > height
                 {
                     debug!(
@@ -3615,16 +3616,17 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
                     .await?;
-                let local_height = self
+                if self
                     .local_next_block_height(chain_id, &mut local_node)
-                    .await;
-                if local_height <= height {
+                    .await?
+                    <= height
+                {
                     error!("NewBlock: Fail to synchronize new block after notification");
                 }
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
-                if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await {
+                if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!(
                             chain_id = %self.chain_id,
@@ -3636,7 +3638,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
                     .await?;
-                let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
+                let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? else {
                     error!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to read local chain info for {chain_id}"
