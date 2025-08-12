@@ -207,7 +207,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Returns a reference to the [`LocalNodeClient`] of the client.
     #[instrument(level = "trace", skip(self))]
-    pub fn local_node(&self) -> &LocalNodeClient<Env::Storage> {
+    pub(crate) fn local_node(&self) -> &LocalNodeClient<Env::Storage> {
         &self.local_node
     }
 
