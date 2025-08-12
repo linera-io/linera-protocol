@@ -26,7 +26,7 @@ pub use chain::ChainStateView;
 use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,
-    crypto::{CryptoError, CryptoHash},
+    crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
@@ -123,8 +123,7 @@ pub enum ChainError {
         "Block timestamp {new} must not be earlier than the parent block's timestamp {parent}"
     )]
     InvalidBlockTimestamp { parent: Timestamp, new: Timestamp },
-    #[error("Cannot initiate a new block while the previous one is still pending confirmation")]
-    PreviousBlockMustBeConfirmedFirst,
+
     #[error("Round number should be at least {0:?}")]
     InsufficientRound(Round),
     #[error("Round number should be greater than {0:?}")]
@@ -141,16 +140,14 @@ pub enum ChainError {
     CertificateValidatorReuse,
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
-    #[error("Certificate signature verification failed: {error}")]
-    CertificateSignatureVerificationFailed { error: String },
+
     #[error("Internal error {0}")]
     InternalError(String),
     #[error("Block proposal has size {0} which is too large")]
     BlockProposalTooLarge(usize),
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
-    #[error("Insufficient balance to pay the fees")]
-    InsufficientBalance,
+
     #[error("Invalid owner weights: {0}")]
     OwnerWeightError(#[from] WeightedError),
     #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
@@ -161,15 +158,9 @@ pub enum ChainError {
     AuthorizedApplications(Vec<ApplicationId>),
     #[error("Missing operations or messages from mandatory applications: {0:?}")]
     MissingMandatoryApplications(Vec<ApplicationId>),
-    #[error("Can't use grant across different broadcast messages")]
-    GrantUseOnBroadcast,
+
     #[error("Executed block contains fewer oracle responses than requests")]
     MissingOracleResponseList,
-    #[error("Unexpected hash for CertificateValue! Expected: {expected:?}, Actual: {actual:?}")]
-    CertificateValueHashMismatch {
-        expected: CryptoHash,
-        actual: CryptoHash,
-    },
 }
 
 #[derive(Copy, Clone, Debug)]
