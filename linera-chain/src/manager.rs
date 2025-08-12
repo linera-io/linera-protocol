@@ -360,7 +360,7 @@ where
 
     /// Checks if the current round has timed out, and signs a `Timeout`. Returns `true` if the
     /// chain manager's state has changed.
-    pub fn vote_timeout(
+    pub fn create_timeout_vote(
         &mut self,
         chain_id: ChainId,
         height: BlockHeight,

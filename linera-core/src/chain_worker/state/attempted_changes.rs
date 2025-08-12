@@ -635,7 +635,7 @@ where
         let local_time = self.state.storage.clock().current_time();
         if chain
             .manager
-            .vote_timeout(chain_id, height, round, *epoch, key_pair, local_time)?
+            .create_timeout_vote(chain_id, height, round, *epoch, key_pair, local_time)?
         {
             self.save().await?;
         }
