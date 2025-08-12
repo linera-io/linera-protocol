@@ -520,11 +520,8 @@ impl<Env: Environment> Client<Env> {
         let certificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
-        self.receive_certificate_and_update_validators(
-            certificate.clone(),
-            ReceiveCertificateMode::AlreadyChecked,
-        )
-        .await?;
+        self.receive_certificate(certificate.clone(), ReceiveCertificateMode::AlreadyChecked)
+            .await?;
         Ok(certificate)
     }
 
@@ -2037,6 +2034,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         old_committee: Option<&Committee>,
     ) -> Result<(), ChainClientError> {
+        let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
         if let Some(old_committee) = old_committee {
             self.communicate_chain_updates(old_committee).await?
@@ -2047,6 +2045,12 @@ impl<Env: Environment> ChainClient<Env> {
                 // (This is actually more important that updating the previous committee.)
                 self.communicate_chain_updates(&new_committee).await?;
             }
+        }
+        if let Some(sender) = &self.timing_sender {
+            let _ = sender.send((
+                update_validators_start.elapsed().as_millis() as u64,
+                TimingType::UpdateValidators,
+            ));
         }
         Ok(())
     }
@@ -2875,12 +2879,9 @@ impl<Env: Environment> ChainClient<Env> {
         let submit_block_proposal_start = linera_base::time::Instant::now();
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
-            let certificate = self
-                .client
+            self.client
                 .submit_block_proposal(&committee, proposal, hashed_value)
-                .await?;
-            self.update_validators(Some(&committee)).await?;
-            certificate
+                .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
@@ -2897,14 +2898,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        let update_validators_start = linera_base::time::Instant::now();
         self.update_validators(Some(&committee)).await?;
-        if let Some(sender) = &self.timing_sender {
-            let _ = sender.send((
-                update_validators_start.elapsed().as_millis() as u64,
-                TimingType::UpdateValidators,
-            ));
-        }
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
@@ -2947,7 +2941,10 @@ impl<Env: Environment> ChainClient<Env> {
             .finalize_block(&committee, certificate.clone())
             .await
         {
-            Ok(certificate) => Ok(ClientOutcome::Committed(Some(certificate))),
+            Ok(certificate) => {
+                self.update_validators(Some(&committee)).await?;
+                Ok(ClientOutcome::Committed(Some(certificate)))
+            }
             Err(ChainClientError::CommunicationError(error)) => {
                 // Communication errors in this case often mean that someone else already
                 // finalized the block or started another round.
