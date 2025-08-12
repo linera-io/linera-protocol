@@ -91,6 +91,12 @@ pub struct BenchmarkOptions {
     /// If not provided, only transfers between chains in the same wallet.
     #[arg(long)]
     pub config_path: Option<PathBuf>,
+
+    /// Transaction distribution mode. If false (default), distributes transactions evenly
+    /// across chains within each block. If true, sends all transactions in each block
+    /// to a single chain, rotating through chains for subsequent blocks.
+    #[arg(long)]
+    pub single_destination_per_block: bool,
 }
 
 impl Default for BenchmarkOptions {
@@ -108,6 +114,7 @@ impl Default for BenchmarkOptions {
             runtime_in_seconds: None,
             delay_between_chains_ms: None,
             config_path: None,
+            single_destination_per_block: false,
         }
     }
 }
