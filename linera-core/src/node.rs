@@ -381,6 +381,13 @@ impl From<WorkerError> for NodeError {
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
             WorkerError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             WorkerError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
+            WorkerError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            } => NodeError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            },
             error => Self::WorkerError {
                 error: error.to_string(),
             },

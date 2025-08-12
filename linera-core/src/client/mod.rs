@@ -1760,7 +1760,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
     /// local chain.
     #[instrument(level = "trace")]
-    pub async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
+    async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
         if self.options.message_policy.is_ignore() {
             // Ignore all messages.
             return Ok(Vec::new());
@@ -2312,13 +2312,13 @@ impl<Env: Environment> ChainClient<Env> {
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        let timing_start = std::time::Instant::now();
+        let timing_start = linera_base::time::Instant::now();
 
         let result = loop {
-            let execute_block_start = std::time::Instant::now();
+            let execute_block_start = linera_base::time::Instant::now();
             // TODO(#2066): Remove boxing once the call-stack is shallower
-            match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await? {
-                ExecuteBlockOutcome::Executed(certificate) => {
+            match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
+                Ok(ExecuteBlockOutcome::Executed(certificate)) => {
                     if let Some(sender) = &self.timing_sender {
                         let _ = sender.send((
                             execute_block_start.elapsed().as_millis() as u64,
@@ -2327,15 +2327,28 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                     break Ok(ClientOutcome::Committed(certificate));
                 }
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     break Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
-                ExecuteBlockOutcome::Conflict(certificate) => {
+                Ok(ExecuteBlockOutcome::Conflict(certificate)) => {
                     info!(
                         height = %certificate.block().header.height,
                         "Another block was committed; retrying."
                     );
                 }
+                Err(ChainClientError::CommunicationError(CommunicationError::Trusted(
+                    NodeError::UnexpectedBlockHeight {
+                        expected_block_height,
+                        found_block_height,
+                    },
+                ))) if expected_block_height > found_block_height => {
+                    tracing::info!(
+                        "Local state is outdated; synchronizing chain {:.8}",
+                        self.chain_id
+                    );
+                    self.synchronize_chain_state(self.chain_id).await?;
+                }
+                Err(err) => return Err(err),
             };
         };
 
@@ -2859,7 +2872,7 @@ impl<Env: Environment> ChainClient<Env> {
         let committee = self.local_committee().await?;
         let block = Block::new(proposed_block, outcome);
         // Send the query to validators.
-        let submit_block_proposal_start = std::time::Instant::now();
+        let submit_block_proposal_start = linera_base::time::Instant::now();
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             let certificate = self
@@ -2884,7 +2897,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        let update_validators_start = std::time::Instant::now();
+        let update_validators_start = linera_base::time::Instant::now();
         self.update_validators(Some(&committee)).await?;
         if let Some(sender) = &self.timing_sender {
             let _ = sender.send((

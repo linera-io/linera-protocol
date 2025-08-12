@@ -24,7 +24,7 @@ use crate::{
         AccountPublicKey, CryptoError, CryptoHash, Ed25519PublicKey, EvmPublicKey,
         Secp256k1PublicKey,
     },
-    data_types::{BlobContent, BlockHeight, ChainDescription},
+    data_types::{BlobContent, ChainDescription},
     doc_scalar, hex_debug,
     vm::VmRuntime,
 };
@@ -296,32 +296,6 @@ impl<'a> Deserialize<'a> for BlobId {
             Ok(BlobId::new(helper.hash, helper.blob_type))
         }
     }
-}
-
-/// The index of a message in a chain.
-#[derive(
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Copy,
-    Clone,
-    Hash,
-    Debug,
-    Serialize,
-    Deserialize,
-    WitLoad,
-    WitStore,
-    WitType,
-)]
-#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct MessageId {
-    /// The chain ID that created the message.
-    pub chain_id: ChainId,
-    /// The height of the block that created the message.
-    pub height: BlockHeight,
-    /// The index of the message inside the block.
-    pub index: u32,
 }
 
 /// A unique identifier for a user application from a blob.
@@ -1106,7 +1080,7 @@ doc_scalar!(
     ChainDescription."
 );
 doc_scalar!(StreamName, "The name of an event stream");
-bcs_scalar!(MessageId, "The index of a message in a chain");
+
 doc_scalar!(
     AccountOwner,
     "A unique identifier for a user or an application."

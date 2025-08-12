@@ -35,6 +35,7 @@ linera-version.workspace = true
 prometheus = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
@@ -44,6 +45,7 @@ tracing.workspace = true
 async-trait.workspace = true
 derive_more.workspace = true
 linera-views.workspace = true
+tempfile.workspace = true
 [dev-dependencies.linera-core]
 features = ["test"]
 workspace = true

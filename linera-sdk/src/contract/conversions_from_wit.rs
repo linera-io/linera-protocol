@@ -5,10 +5,9 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, StreamUpdate},
+    data_types::{Amount, StreamUpdate},
     identifiers::{
-        AccountOwner, ApplicationId, ChainId, GenericApplicationId, MessageId, ModuleId, StreamId,
-        StreamName,
+        AccountOwner, ApplicationId, ChainId, GenericApplicationId, ModuleId, StreamId, StreamName,
     },
     ownership::{ChangeApplicationPermissionsError, CloseChainError},
     vm::VmRuntime,
@@ -69,16 +68,6 @@ impl From<wit_contract_api::VmRuntime> for VmRuntime {
         match vm_runtime {
             wit_contract_api::VmRuntime::Wasm => VmRuntime::Wasm,
             wit_contract_api::VmRuntime::Evm => VmRuntime::Evm,
-        }
-    }
-}
-
-impl From<wit_contract_api::MessageId> for MessageId {
-    fn from(message_id: wit_contract_api::MessageId) -> Self {
-        MessageId {
-            chain_id: message_id.chain_id.into(),
-            height: BlockHeight(message_id.height.inner0),
-            index: message_id.index,
         }
     }
 }

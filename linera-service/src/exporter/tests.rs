@@ -6,9 +6,8 @@
     feature = "scylladb",
     feature = "storage-service",
 ))]
-use std::time::Duration;
-
 use anyhow::Result;
+use linera_base::time::Duration;
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_rpc::config::ExporterServiceConfig;
 use linera_service::{

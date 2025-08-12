@@ -173,7 +173,7 @@ where
     F: std::future::Future<Output = bool>,
 {
     for i in 0..5 {
-        linera_base::time::timer::sleep(std::time::Duration::from_secs(i)).await;
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_secs(i)).await;
         if condition().await {
             return true;
         }

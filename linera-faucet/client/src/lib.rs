@@ -53,7 +53,7 @@ impl Faucet {
         let builder = reqwest::ClientBuilder::new();
 
         #[cfg(not(target_arch = "wasm32"))]
-        let builder = builder.timeout(std::time::Duration::from_secs(30));
+        let builder = builder.timeout(linera_base::time::Duration::from_secs(30));
 
         let response: GraphQlResponse<Response> = builder
             .build()
