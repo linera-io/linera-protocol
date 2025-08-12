@@ -194,8 +194,8 @@ message ChainInfoQuery {
   // Query values from the chain manager, not just votes.
   bool request_manager_values = 7;
 
-  // Request a signed vote for a leader timeout.
-  bool request_leader_timeout = 8;
+  // Request a signed vote for a leader timeout for the given height and round.
+  optional bytes request_leader_timeout = 8;
 
   // Query the balance of a given owner.
   AccountOwner request_owner_balance = 9;

@@ -385,10 +385,10 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        if query.request_leader_timeout {
+        if let Some((height, round)) = query.request_leader_timeout {
             ChainWorkerStateWithAttemptedChanges::new(&mut *self)
                 .await
-                .vote_for_leader_timeout()
+                .vote_for_leader_timeout(height, round)
                 .await?;
         }
         if query.request_fallback {

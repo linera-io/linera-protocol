@@ -55,6 +55,7 @@ pub enum CommunicateAction {
     },
     RequestTimeout {
         chain_id: ChainId,
+        height: BlockHeight,
         round: Round,
     },
 }
@@ -544,8 +545,8 @@ where
                     NodeError::MissingVoteInValidatorResponse("finalize a block".into())
                 })?
             }
-            CommunicateAction::RequestTimeout { .. } => {
-                let query = ChainInfoQuery::new(chain_id).with_timeout();
+            CommunicateAction::RequestTimeout { round, height, .. } => {
+                let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
                 let info = self.remote_node.handle_chain_info_query(query).await?;
                 info.manager.timeout_vote.ok_or_else(|| {
                     NodeError::MissingVoteInValidatorResponse("request a timeout".into())
