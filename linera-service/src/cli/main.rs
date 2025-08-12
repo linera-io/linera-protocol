@@ -22,12 +22,14 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::AccountOwner,
+    identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
+    time::Duration,
 };
 use linera_client::{
-    chain_listener::ClientContext as _,
+    benchmark::BenchmarkConfig,
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     client_context::ClientContext,
     client_options::ClientContextOptions,
     config::{CommitteeConfig, GenesisConfig},
@@ -40,14 +42,18 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     WasmRuntime, WithWasmDefault as _,
 };
+use linera_faucet_client::Faucet;
 use linera_faucet_server::{FaucetConfig, FaucetService};
 use linera_persistent::{self as persistent, Persist, PersistExt as _};
 use linera_service::{
     cli::{
-        command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand},
+        command::{
+            BenchmarkCommand, ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand,
+            WalletCommand,
+        },
         net_up_utils,
     },
-    cli_wrappers::{self},
+    cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
     project::{self, Project},
     storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
@@ -56,30 +62,16 @@ use linera_service::{
 use linera_storage::{DbStorage, Storage};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
 use serde_json::Value;
-use tokio::task::JoinSet;
+use tempfile::NamedTempFile;
+use tokio::{
+    io::AsyncWriteExt,
+    process::{ChildStdin, Command},
+    sync::oneshot,
+    task::JoinSet,
+    time,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
-#[cfg(feature = "benchmark")]
-use {
-    linera_base::identifiers::ChainId,
-    linera_base::time::Duration,
-    linera_client::{
-        benchmark::BenchmarkConfig,
-        chain_listener::{ChainListener, ChainListenerConfig},
-    },
-    linera_faucet_client::Faucet,
-    linera_service::{
-        cli::command::BenchmarkCommand,
-        cli_wrappers::{local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
-    },
-    tempfile::NamedTempFile,
-    tokio::{
-        io::AsyncWriteExt,
-        process::{ChildStdin, Command},
-        sync::oneshot,
-        time,
-    },
-};
 
 struct Job(ClientOptions);
 
@@ -149,7 +141,6 @@ impl Runnable for Job {
                 chain_id,
                 owner,
                 balance,
-                #[cfg(feature = "benchmark")]
                 super_owner,
             } => {
                 let new_owner = owner.unwrap_or_else(|| signer.generate_new().into());
@@ -166,14 +157,11 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 let (description, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
-                        #[cfg(feature = "benchmark")]
                         let ownership = if super_owner {
                             ChainOwnership::single_super(new_owner)
                         } else {
                             ChainOwnership::single(new_owner)
                         };
-                        #[cfg(not(feature = "benchmark"))]
-                        let ownership = ChainOwnership::single(new_owner);
 
                         let chain_client = chain_client.clone();
                         async move {
@@ -808,7 +796,6 @@ impl Runnable for Job {
                 );
             }
 
-            #[cfg(feature = "benchmark")]
             Benchmark(benchmark_config) => {
                 let BenchmarkCommand {
                     num_chains,
@@ -1362,7 +1349,6 @@ impl Runnable for Job {
                 );
             }
 
-            #[cfg(feature = "benchmark")]
             MultiBenchmark { .. } => {
                 unreachable!()
             }
@@ -1657,7 +1643,6 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
     }
 }
 
-#[cfg(feature = "benchmark")]
 async fn kill_all_processes(pids: &[u32]) {
     for &pid in pids {
         info!("Killing benchmark process (pid {})", pid);
@@ -2174,7 +2159,6 @@ Make sure to use a Linera client compatible with this network.
             }
         },
 
-        #[cfg(feature = "benchmark")]
         ClientCommand::MultiBenchmark {
             processes,
             faucet,

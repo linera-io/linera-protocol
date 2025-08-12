@@ -195,8 +195,8 @@ jobs:
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
     - name: Run the benchmark test
       run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
-        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
+        cargo build --locked -p linera-service --bin linera-benchmark --features storage-service
+        cargo test --locked -p linera-service --features storage-service benchmark
 
   ethereum-tests:
     needs: changed-files
