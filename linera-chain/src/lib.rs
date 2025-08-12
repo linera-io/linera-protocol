@@ -170,6 +170,10 @@ pub enum ChainError {
         expected: CryptoHash,
         actual: CryptoHash,
     },
+    #[error("Not signing timeout certificate; current round does not time out")]
+    RoundDoesNotTimeOut,
+    #[error("Not signing timeout certificate; current round times out at time {0}")]
+    NotTimedOutYet(Timestamp),
 }
 
 #[derive(Copy, Clone, Debug)]

@@ -2280,7 +2280,11 @@ impl<Env: Environment> ChainClient<Env> {
         let committee = info.current_committee()?;
         let height = info.next_block_height;
         let round = info.manager.current_round;
-        let action = CommunicateAction::RequestTimeout { round, chain_id };
+        let action = CommunicateAction::RequestTimeout {
+            height,
+            round,
+            chain_id,
+        };
         let value = Timeout::new(chain_id, height, info.epoch);
         let certificate = Box::new(
             self.client

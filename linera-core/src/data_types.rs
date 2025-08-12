@@ -84,9 +84,9 @@ pub struct ChainInfoQuery {
     /// Query values from the chain manager, not just votes.
     #[debug(skip_if = Not::not)]
     pub request_manager_values: bool,
-    /// Include a timeout vote for the current round, if appropriate.
-    #[debug(skip_if = Not::not)]
-    pub request_leader_timeout: bool,
+    /// Include a timeout vote for the specified round, if appropriate.
+    #[debug(skip_if = Option::is_none)]
+    pub request_leader_timeout: Option<(BlockHeight, Round)>,
     /// Include a vote to switch to fallback mode, if appropriate.
     #[debug(skip_if = Not::not)]
     pub request_fallback: bool,
@@ -103,7 +103,7 @@ impl ChainInfoQuery {
             request_sent_certificate_hashes_in_range: None,
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
-            request_leader_timeout: false,
+            request_leader_timeout: None,
             request_fallback: false,
         }
     }
@@ -143,8 +143,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_timeout(mut self) -> Self {
-        self.request_leader_timeout = true;
+    pub fn with_timeout(mut self, height: BlockHeight, round: Round) -> Self {
+        self.request_leader_timeout = Some((height, round));
         self
     }
 

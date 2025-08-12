@@ -593,6 +593,10 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             .request_sent_certificate_hashes_in_range
             .map(|range| bincode::deserialize(&range))
             .transpose()?;
+        let request_leader_timeout = chain_info_query
+            .request_leader_timeout
+            .map(|height_and_round| bincode::deserialize(&height_and_round))
+            .transpose()?;
 
         Ok(Self {
             request_committees: chain_info_query.request_committees,
@@ -604,7 +608,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
                 .request_received_log_excluding_first_n,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_manager_values: chain_info_query.request_manager_values,
-            request_leader_timeout: chain_info_query.request_leader_timeout,
+            request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
         })
     }
@@ -619,6 +623,10 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             .map(|range| bincode::serialize(&range))
             .transpose()?;
         let request_owner_balance = Some(chain_info_query.request_owner_balance.try_into()?);
+        let request_leader_timeout = chain_info_query
+            .request_leader_timeout
+            .map(|height_and_round| bincode::serialize(&height_and_round))
+            .transpose()?;
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
@@ -630,7 +638,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_received_log_excluding_first_n: chain_info_query
                 .request_received_log_excluding_first_n,
             request_manager_values: chain_info_query.request_manager_values,
-            request_leader_timeout: chain_info_query.request_leader_timeout,
+            request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
         })
     }
@@ -1142,7 +1150,7 @@ pub mod tests {
             ),
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
-            request_leader_timeout: false,
+            request_leader_timeout: None,
             request_fallback: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);

@@ -2032,11 +2032,11 @@ where
     if !matches!(
         result,
         Err(ChainClientError::CommunicationError(
-            CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
+            CommunicationError::Trusted(NodeError::ChainError { .. })
         ))
     ) && !matches!(&result,
         Err(ChainClientError::CommunicationError(CommunicationError::Sample(samples)))
-        if samples.iter().any(|(err, _)| matches!(err, NodeError::MissingVoteInValidatorResponse))
+        if samples.iter().any(|(err, _)| matches!(err, NodeError::ChainError { .. }))
     ) {
         panic!("unexpected leader timeout result: {:?}", result);
     }

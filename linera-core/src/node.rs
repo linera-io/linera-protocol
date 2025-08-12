@@ -248,8 +248,8 @@ pub enum NodeError {
     #[error("Response doesn't contain requested certificates: {0:?}")]
     MissingCertificates(Vec<CryptoHash>),
 
-    #[error("Validator's response to block proposal failed to include a vote")]
-    MissingVoteInValidatorResponse,
+    #[error("Validator's response failed to include a vote when trying to {0}")]
+    MissingVoteInValidatorResponse(String),
 
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,

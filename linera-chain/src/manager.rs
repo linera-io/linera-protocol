@@ -358,34 +358,40 @@ where
         Ok(Outcome::Accept)
     }
 
-    /// Checks if the current round has timed out, and signs a `Timeout`.
-    pub fn vote_timeout(
+    /// Checks if the current round has timed out, and signs a `Timeout`. Returns `true` if the
+    /// chain manager's state has changed.
+    pub fn create_timeout_vote(
         &mut self,
         chain_id: ChainId,
         height: BlockHeight,
+        round: Round,
         epoch: Epoch,
         key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
-    ) -> bool {
+    ) -> Result<bool, ChainError> {
         let Some(key_pair) = key_pair else {
-            return false; // We are not a validator.
+            return Ok(false); // We are not a validator.
         };
+        ensure!(
+            round == self.current_round(),
+            ChainError::WrongRound(self.current_round())
+        );
         let Some(round_timeout) = *self.round_timeout.get() else {
-            return false; // The current round does not time out.
+            return Err(ChainError::RoundDoesNotTimeOut);
         };
-        if local_time < round_timeout || self.ownership.get().owners.is_empty() {
-            return false; // Round has not timed out yet, or there are no regular owners.
-        }
-        let current_round = self.current_round();
+        ensure!(
+            local_time >= round_timeout,
+            ChainError::NotTimedOutYet(round_timeout)
+        );
         if let Some(vote) = self.timeout_vote.get() {
-            if vote.round == current_round {
-                return false; // We already signed this timeout.
+            if vote.round == round {
+                return Ok(false); // We already signed this timeout.
             }
         }
         let value = Timeout::new(chain_id, height, epoch);
         self.timeout_vote
-            .set(Some(Vote::new(value, current_round, key_pair)));
-        true
+            .set(Some(Vote::new(value, round, key_pair)));
+        Ok(true)
     }
 
     /// Signs a `Timeout` certificate to switch to fallback mode.
@@ -431,11 +437,6 @@ where
         }
 
         if let Some(locking) = self.locking_block.get() {
-            if let LockingBlock::Regular(locking_cert) = locking {
-                if locking_cert.hash() == certificate.hash() && locking.round() == new_round {
-                    return Ok(Outcome::Skip); // We already handled this certificate.
-                }
-            }
             ensure!(
                 new_round > locking.round(),
                 ChainError::InsufficientRoundStrict(locking.round())

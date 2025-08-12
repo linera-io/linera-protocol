@@ -55,6 +55,7 @@ pub enum CommunicateAction {
     },
     RequestTimeout {
         chain_id: ChainId,
+        height: BlockHeight,
         round: Round,
     },
 }
@@ -529,7 +530,9 @@ where
         let vote = match action {
             CommunicateAction::SubmitBlock { proposal, blob_ids } => {
                 let info = self.send_block_proposal(proposal, blob_ids).await?;
-                info.manager.pending
+                info.manager.pending.ok_or_else(|| {
+                    NodeError::MissingVoteInValidatorResponse("submit a block proposal".into())
+                })?
             }
             CommunicateAction::FinalizeBlock {
                 certificate,
@@ -538,15 +541,18 @@ where
                 let info = self
                     .send_validated_certificate(*certificate, delivery)
                     .await?;
-                info.manager.pending
+                info.manager.pending.ok_or_else(|| {
+                    NodeError::MissingVoteInValidatorResponse("finalize a block".into())
+                })?
             }
-            CommunicateAction::RequestTimeout { .. } => {
-                let query = ChainInfoQuery::new(chain_id).with_timeout();
+            CommunicateAction::RequestTimeout { round, height, .. } => {
+                let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
                 let info = self.remote_node.handle_chain_info_query(query).await?;
-                info.manager.timeout_vote
+                info.manager.timeout_vote.ok_or_else(|| {
+                    NodeError::MissingVoteInValidatorResponse("request a timeout".into())
+                })?
             }
-        }
-        .ok_or(NodeError::MissingVoteInValidatorResponse)?;
+        };
         vote.check(self.remote_node.public_key)?;
         Ok(vote)
     }
