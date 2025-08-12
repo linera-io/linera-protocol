@@ -811,6 +811,7 @@ impl Runnable for Job {
                         runtime_in_seconds,
                         delay_between_chains_ms,
                         config_path,
+                        single_destination_per_block,
                     } = benchmark_options;
                     assert!(
                         options.context_options.max_pending_message_bundles
@@ -898,6 +899,7 @@ impl Runnable for Job {
                         delay_between_chains_ms,
                         chain_listener,
                         &shutdown_notifier,
+                        single_destination_per_block,
                     )
                     .await?;
 
