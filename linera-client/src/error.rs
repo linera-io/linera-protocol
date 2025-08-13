@@ -33,7 +33,7 @@ pub(crate) enum Inner {
     #[error("no keypair found for chain: {0:?}")]
     NonexistentKeypair(linera_base::identifiers::ChainId),
     #[error("error on the local node: {0}")]
-    LocalNode(#[from] linera_core::local_node::LocalNodeError),
+    LocalNode(#[from] linera_core::LocalNodeError),
     #[error("remote node operation failed: {0}")]
     RemoteNode(#[from] linera_core::node::NodeError),
     #[error("arithmetic error: {0}")]

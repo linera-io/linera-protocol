@@ -205,12 +205,6 @@ impl<Env: Environment> Client<Env> {
         self.environment.network()
     }
 
-    /// Returns a reference to the [`LocalNodeClient`] of the client.
-    #[instrument(level = "trace", skip(self))]
-    pub fn local_node(&self) -> &LocalNodeClient<Env::Storage> {
-        &self.local_node
-    }
-
     /// Returns a reference to the [`Signer`] of the client.
     #[instrument(level = "trace", skip(self))]
     pub fn signer(&self) -> &impl Signer {

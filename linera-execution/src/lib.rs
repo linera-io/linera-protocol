@@ -221,8 +221,6 @@ pub enum ExecutionError {
         caller_id: Box<ApplicationId>,
         callee_id: Box<ApplicationId>,
     },
-    #[error("Attempt to write to storage from a contract")]
-    ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<ApplicationDescription>),
     // TODO(#2927): support dynamic loading of modules on the Web
@@ -245,8 +243,6 @@ pub enum ExecutionError {
     HttpResponseSizeLimitExceeded { limit: u64, size: u64 },
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
-    #[error("Module ID {0:?} is invalid")]
-    InvalidModuleId(ModuleId),
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(ApplicationId),
     #[error("Failed to make network reqwest: {0}")]
@@ -295,8 +291,6 @@ pub enum ExecutionError {
 
     #[error("No NetworkDescription found in storage")]
     NoNetworkDescriptionFound,
-    #[error("Invalid committees")]
-    InvalidCommittees,
     #[error("{epoch:?} is not recognized by chain {chain_id:}")]
     InvalidEpoch { chain_id: ChainId, epoch: Epoch },
     #[error("Transfer must have positive amount")]
@@ -320,16 +314,6 @@ pub enum ExecutionError {
     InvalidCommitteeEpoch { expected: Epoch, provided: Epoch },
     #[error("Failed to remove committee")]
     InvalidCommitteeRemoval,
-    #[error("Amount overflow")]
-    AmountOverflow,
-    #[error("Amount underflow")]
-    AmountUnderflow,
-    #[error("Chain balance overflow")]
-    BalanceOverflow,
-    #[error("Chain balance underflow")]
-    BalanceUnderflow,
-    #[error("Application {0:?} is not registered by the chain")]
-    UnknownApplicationId(Box<ApplicationId>),
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
     #[error("process_streams was not called for all stream updates")]
