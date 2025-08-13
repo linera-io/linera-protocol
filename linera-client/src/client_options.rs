@@ -134,7 +134,7 @@ pub struct ClientContextOptions {
 
 impl ClientContextOptions {
     /// Creates [`ChainClientOptions`] with the corresponding values.
-    pub fn to_chain_client_options(&self) -> ChainClientOptions {
+    pub(crate) fn to_chain_client_options(&self) -> ChainClientOptions {
         let message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
@@ -152,7 +152,7 @@ impl ClientContextOptions {
 
     /// Creates [`TimingConfig`] with the corresponding values.
     #[cfg(not(web))]
-    pub fn to_timing_config(&self) -> TimingConfig {
+    pub(crate) fn to_timing_config(&self) -> TimingConfig {
         TimingConfig {
             enabled: self.timings,
             report_interval_secs: self.timing_interval,
