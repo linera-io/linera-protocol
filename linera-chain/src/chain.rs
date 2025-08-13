@@ -883,8 +883,7 @@ where
 
         if *self.execution_state.system.closed.get() {
             ensure!(
-                !block.incoming_bundles().collect::<Vec<_>>().is_empty()
-                    && block.has_only_rejected_messages(),
+                block.incoming_bundles().next().is_some() && block.has_only_rejected_messages(),
                 ChainError::ClosedChain
             );
         }
