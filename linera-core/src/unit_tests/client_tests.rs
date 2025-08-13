@@ -762,22 +762,17 @@ where
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].block();
-    assert!(block
-        .body
-        .transactions
-        .iter()
-        .all(|t| matches!(t, Transaction::ReceiveMessages(_))));
-    assert_eq!(block.body.incoming_bundles().count(), 1);
+    assert_eq!(block.body.transactions.len(), 1);
     assert_matches!(
-        block.body.incoming_bundles().next().unwrap(),
-        IncomingBundle {
+        &block.body.transactions[..],
+        [Transaction::ReceiveMessages(IncomingBundle {
             origin: sender,
             action: MessageAction::Reject,
             bundle: MessageBundle {
                 messages,
                 ..
             },
-        } if *sender == client2.chain_id() && matches!(messages[..],
+        })] if *sender == client2.chain_id() && matches!(messages[..],
             [PostedMessage {
                 message: Message::System(SystemMessage::Credit { .. }),
                 kind: MessageKind::Tracked,

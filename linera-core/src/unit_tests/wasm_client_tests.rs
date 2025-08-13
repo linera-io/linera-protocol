@@ -595,9 +595,8 @@ where
     }
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
-    let messages = certs[0].block().body.incoming_bundles().collect::<Vec<_>>();
-    assert!(messages
-        .iter()
+    let bundles = certs[0].block().body.incoming_bundles();
+    assert!(bundles
         .flat_map(|msg| &msg.bundle.messages)
         .any(|msg| matches!(msg.message, Message::User { .. })));
 
@@ -621,9 +620,8 @@ where
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
-    let messages = certs[0].block().body.incoming_bundles().collect::<Vec<_>>();
-    assert!(messages
-        .iter()
+    let bundles = certs[0].block().body.incoming_bundles();
+    assert!(bundles
         .flat_map(|msg| &msg.bundle.messages)
         .any(|msg| matches!(msg.message, Message::User { .. })));
 

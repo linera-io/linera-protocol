@@ -3,7 +3,6 @@
 
 use graphql_client::GraphQLQuery;
 use linera_base::{
-    bcs,
     crypto::CryptoHash,
     data_types::{Amount, Blob, BlockHeight, ChainDescription, OracleResponse, Round, Timestamp},
     identifiers::{Account, AccountOwner, BlobId, ChainId, GenericApplicationId, StreamName},
@@ -210,7 +209,7 @@ mod from {
 
                         // Deserialize the system operation from BCS bytes
                         let system_operation: SystemOperation =
-                            bcs::from_bytes(&bytes).map_err(|_| {
+                            linera_base::bcs::from_bytes(&bytes).map_err(|_| {
                                 ConversionError::UnexpectedCertificateType(
                                     "Failed to deserialize system operation from BCS bytes"
                                         .to_string(),
