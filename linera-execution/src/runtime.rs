@@ -1308,7 +1308,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 callback,
             })?
             .recv_response()?;
-        this.transaction_tracker.add_outgoing_messages(maybe_message);
+        this.transaction_tracker
+            .add_outgoing_messages(maybe_message);
         Ok(())
     }
 
