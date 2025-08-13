@@ -34,6 +34,13 @@ pub fn mock_application_id(_application_id: impl Into<Option<ApplicationId>>) {
     unreachable!("{ERROR_MESSAGE}");
 }
 
+/// Sets the mocked application creator chain ID.
+pub fn mock_application_creator_chain_id(
+    _application_creator_chain_id: impl Into<Option<ChainId>>,
+) {
+    unreachable!("{ERROR_MESSAGE}");
+}
+
 /// Sets the mocked application parameters.
 pub fn mock_application_parameters(_application_parameters: &impl Serialize) {
     unreachable!("{ERROR_MESSAGE}");
