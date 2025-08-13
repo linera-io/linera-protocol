@@ -550,9 +550,6 @@ A unique identifier for a user application or for the system application
 """
 scalar GenericApplicationId
 
-"""
-GraphQL-compatible operation representation.
-"""
 type GraphQLOperation {
 	"""
 	The type of operation: "System" or "User"
@@ -566,6 +563,10 @@ type GraphQLOperation {
 	For user operations, the serialized bytes (as a hex string for GraphQL)
 	"""
 	userBytesHex: String
+	"""
+	For system operations, the serialized bytes (as a hex string for GraphQL)
+	"""
+	systemBytesHex: String
 }
 
 """

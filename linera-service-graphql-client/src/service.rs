@@ -3,6 +3,7 @@
 
 use graphql_client::GraphQLQuery;
 use linera_base::{
+    bcs,
     crypto::CryptoHash,
     data_types::{Amount, Blob, BlockHeight, ChainDescription, OracleResponse, Round, Timestamp},
     identifiers::{Account, AccountOwner, BlobId, ChainId, GenericApplicationId, StreamName},
@@ -66,7 +67,7 @@ mod types {
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
-    pub use linera_execution::{Message, MessageKind, Operation};
+    pub use linera_execution::{Message, MessageKind, Operation, SystemOperation};
 }
 
 pub use types::*;
@@ -194,11 +195,29 @@ mod from {
 
                 let operation = match graphql_operation.operation_type.as_str() {
                     "System" => {
-                        // System operations are complex and would need detailed parsing
-                        // For now, we'll indicate this needs more implementation
-                        return Err(ConversionError::UnexpectedCertificateType(
-                            "System operations conversion not yet implemented".to_string(),
-                        ));
+                        let bytes_hex = graphql_operation.system_bytes_hex.ok_or_else(|| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Missing system_bytes_hex for System operation".to_string(),
+                            )
+                        })?;
+
+                        // Convert hex string to bytes
+                        let bytes = hex::decode(bytes_hex).map_err(|_| {
+                            ConversionError::UnexpectedCertificateType(
+                                "Invalid hex in system_bytes_hex".to_string(),
+                            )
+                        })?;
+
+                        // Deserialize the system operation from BCS bytes
+                        let system_operation: SystemOperation =
+                            bcs::from_bytes(&bytes).map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Failed to deserialize system operation from BCS bytes"
+                                        .to_string(),
+                                )
+                            })?;
+
+                        Operation::System(Box::new(system_operation))
                     }
                     "User" => {
                         let application_id = graphql_operation.application_id.ok_or_else(|| {

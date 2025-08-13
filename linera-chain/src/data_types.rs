@@ -150,7 +150,6 @@ pub enum Transaction {
 
 impl BcsHashable<'_> for Transaction {}
 
-/// GraphQL-compatible operation representation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct GraphQLOperation {
     /// The type of operation: "System" or "User"
@@ -159,15 +158,20 @@ pub struct GraphQLOperation {
     pub application_id: Option<ApplicationId>,
     /// For user operations, the serialized bytes (as a hex string for GraphQL)
     pub user_bytes_hex: Option<String>,
+    /// For system operations, the serialized bytes (as a hex string for GraphQL)
+    pub system_bytes_hex: Option<String>,
 }
 
 impl From<&Operation> for GraphQLOperation {
     fn from(operation: &Operation) -> Self {
         match operation {
-            Operation::System(_) => GraphQLOperation {
+            Operation::System(sys_op) => GraphQLOperation {
                 operation_type: "System".to_string(),
                 application_id: None,
                 user_bytes_hex: None,
+                system_bytes_hex: Some(hex::encode(
+                    bcs::to_bytes(sys_op).expect("System operation should be serializable"),
+                )),
             },
             Operation::User {
                 application_id,
@@ -176,6 +180,7 @@ impl From<&Operation> for GraphQLOperation {
                 operation_type: "User".to_string(),
                 application_id: Some(*application_id),
                 user_bytes_hex: Some(hex::encode(bytes)),
+                system_bytes_hex: None,
             },
         }
     }

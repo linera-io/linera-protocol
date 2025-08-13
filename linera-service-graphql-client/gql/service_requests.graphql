@@ -276,6 +276,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
             operationType
             applicationId
             userBytesHex
+            systemBytesHex
           }
         }
       }
@@ -351,6 +352,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
             operationType
             applicationId
             userBytesHex
+            systemBytesHex
           }
         }
       }
