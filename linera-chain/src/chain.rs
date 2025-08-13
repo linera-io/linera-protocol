@@ -655,8 +655,7 @@ where
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut bundles_by_origin: BTreeMap<_, Vec<&MessageBundle>> = Default::default();
-        for incoming_bundle in incoming_bundles {
-            let IncomingBundle { bundle, origin, .. } = incoming_bundle;
+        for IncomingBundle { bundle, origin, .. } in incoming_bundles {
             ensure!(
                 bundle.timestamp <= timestamp,
                 ChainError::IncorrectBundleTimestamp {
@@ -882,10 +881,7 @@ where
         );
 
         if *self.execution_state.system.closed.get() {
-            ensure!(
-                block.incoming_bundles().next().is_some() && block.has_only_rejected_messages(),
-                ChainError::ClosedChain
-            );
+            ensure!(block.has_only_rejected_messages(), ChainError::ClosedChain);
         }
 
         Self::check_app_permissions(
@@ -970,27 +966,31 @@ where
         let mut mandatory = HashSet::<ApplicationId>::from_iter(
             app_permissions.mandatory_applications.iter().cloned(),
         );
-        for operation in block.operations() {
-            if operation.is_exempt_from_permissions() {
-                mandatory.clear();
-                continue;
-            }
-            ensure!(
-                app_permissions.can_execute_operations(&operation.application_id()),
-                ChainError::AuthorizedApplications(
-                    app_permissions.execute_operations.clone().unwrap()
-                )
-            );
-            if let Operation::User { application_id, .. } = operation {
-                mandatory.remove(application_id);
-            }
-        }
-        for pending in block.incoming_messages() {
-            if mandatory.is_empty() {
-                break;
-            }
-            if let Message::User { application_id, .. } = &pending.message {
-                mandatory.remove(application_id);
+        for transaction in &block.transactions {
+            match transaction {
+                Transaction::ExecuteOperation(operation)
+                    if operation.is_exempt_from_permissions() =>
+                {
+                    mandatory.clear()
+                }
+                Transaction::ExecuteOperation(operation) => {
+                    ensure!(
+                        app_permissions.can_execute_operations(&operation.application_id()),
+                        ChainError::AuthorizedApplications(
+                            app_permissions.execute_operations.clone().unwrap()
+                        )
+                    );
+                    if let Operation::User { application_id, .. } = operation {
+                        mandatory.remove(application_id);
+                    }
+                }
+                Transaction::ReceiveMessages(incoming_bundle) => {
+                    for pending in incoming_bundle.messages() {
+                        if let Message::User { application_id, .. } = &pending.message {
+                            mandatory.remove(application_id);
+                        }
+                    }
+                }
             }
         }
         ensure!(

@@ -78,10 +78,15 @@ impl ProposedBlock {
     /// Returns whether the block contains only rejected incoming messages, which
     /// makes it admissible even on closed chains.
     pub fn has_only_rejected_messages(&self) -> bool {
-        self.operations().next().is_none()
-            && self
-                .incoming_bundles()
-                .all(|bundle| bundle.action == MessageAction::Reject)
+        self.transactions.iter().all(|txn| {
+            matches!(
+                txn,
+                Transaction::ReceiveMessages(IncomingBundle {
+                    action: MessageAction::Reject,
+                    ..
+                })
+            )
+        })
     }
 
     /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
