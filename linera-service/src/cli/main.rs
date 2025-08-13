@@ -829,22 +829,12 @@ impl Runnable for Job {
                     "max_pending_message_bundles must be set to at least the same as the \
                      number of transactions per block ({transactions_per_block}) for benchmarking",
                 );
-                assert!(
-                    num_chains > 0,
-                    "Number of chain groups must be greater than 0"
-                );
+                assert!(num_chains > 0, "Number of chains must be greater than 0");
                 assert!(
                     transactions_per_block > 0,
                     "Number of transactions per block must be greater than 0"
                 );
                 assert!(bps > 0, "BPS must be greater than 0");
-                if num_chains > 1 {
-                    assert!(
-                        transactions_per_block % (num_chains - 1) == 0,
-                        "Number of transactions per block must be a multiple of the number of \
-                         chains minus 1, to make sure transactions always cancel each other out"
-                    );
-                }
 
                 let listener_config = ChainListenerConfig {
                     skip_process_inbox: true,
