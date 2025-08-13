@@ -164,7 +164,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let txn_outcome = txn_tracker
             .into_outcome()
             .with_execution_context(chain_execution_context)?;
-        self.process_txn_outcome(&txn_outcome, &mut chain.system, chain_execution_context)
+        self.process_txn_outcome(txn_outcome, &mut chain.system, chain_execution_context)
             .await?;
         Ok(())
     }
@@ -276,25 +276,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
     pub async fn process_txn_outcome<C>(
         &mut self,
-        txn_outcome: &TransactionOutcome,
+        txn_outcome: TransactionOutcome,
         view: &mut SystemExecutionStateView<C>,
         context: ChainExecutionContext,
     ) -> Result<(), ChainError>
     where
         C: Context + Clone + Send + Sync + 'static,
     {
-        self.next_application_index = txn_outcome.next_application_index;
-        self.next_chain_index = txn_outcome.next_chain_index;
-        self.oracle_responses
-            .push(txn_outcome.oracle_responses.clone());
-        self.events.push(txn_outcome.events.clone());
-        self.blobs.push(txn_outcome.blobs.clone());
-        self.messages.push(txn_outcome.outgoing_messages.clone());
-        if matches!(context, ChainExecutionContext::Operation(_)) {
-            self.operation_results
-                .push(OperationResult(txn_outcome.operation_result.clone()));
-        }
-
         let mut resource_controller = self.resource_controller.with_state(view).await?;
 
         for message_out in &txn_outcome.outgoing_messages {
@@ -336,6 +324,16 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .track_block_size_of(&(&txn_outcome.operation_result))
             .with_execution_context(context)?;
 
+        self.next_application_index = txn_outcome.next_application_index;
+        self.next_chain_index = txn_outcome.next_chain_index;
+        self.oracle_responses.push(txn_outcome.oracle_responses);
+        self.events.push(txn_outcome.events);
+        self.blobs.push(txn_outcome.blobs);
+        self.messages.push(txn_outcome.outgoing_messages);
+        if matches!(context, ChainExecutionContext::Operation(_)) {
+            self.operation_results
+                .push(OperationResult(txn_outcome.operation_result));
+        }
         self.transaction_index += 1;
         Ok(())
     }
