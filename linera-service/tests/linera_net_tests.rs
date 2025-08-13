@@ -523,7 +523,7 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{
-        load_solidity_example_by_name, temporary_write_evm_module,
+        load_solidity_example_by_name, temporary_write_evm_module, read_evm_address_entry,
     };
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -586,12 +586,14 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     };
     let query0 = EvmQuery::Query(query0.abi_encode());
     let address0 = application.run_json_query(query0).await?;
+    let address0 = read_evm_address_entry(address0);
 
     let query1 = get_addressCall {
         index: U256::from(1),
     };
     let query1 = EvmQuery::Query(query1.abi_encode());
     let address1 = application.run_json_query(query1).await?;
+    let address1 = read_evm_address_entry(address1);
     assert_ne!(address0, address1);
 
     node_service.ensure_is_running()?;
