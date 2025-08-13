@@ -123,7 +123,7 @@ struct RocksDbStoreExecutor {
 }
 
 impl RocksDbStoreExecutor {
-    pub fn contains_keys_internal(
+    fn contains_keys_internal(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<bool>, RocksDbStoreInternalError> {

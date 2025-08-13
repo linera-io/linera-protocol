@@ -160,9 +160,9 @@ pub struct Timeout(Hashed<TimeoutInner>);
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename = "Timeout")]
 pub struct TimeoutInner {
-    pub chain_id: ChainId,
-    pub height: BlockHeight,
-    pub epoch: Epoch,
+    chain_id: ChainId,
+    height: BlockHeight,
+    epoch: Epoch,
 }
 
 impl Timeout {

@@ -37,9 +37,13 @@ pub struct TransactionTracker {
     events: Vec<Event>,
     /// Blobs created by contracts.
     ///
-    /// As of right now, blobs created by the contracts are one of the two:
-    /// - [`OpenChain`]
-    /// - [`CreateApplication`]
+    /// As of right now, blobs created by the contracts are one of the following types:
+    /// - [`Data`]
+    /// - [`ContractBytecode`]
+    /// - [`ServiceBytecode`]
+    /// - [`EvmBytecode`]
+    /// - [`ApplicationDescription`]
+    /// - [`ChainDescription`]
     blobs: BTreeMap<BlobId, Blob>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
