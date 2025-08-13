@@ -5381,6 +5381,7 @@ dependencies = [
  "linera-base",
  "linera-client",
  "linera-core",
+ "linera-execution",
  "linera-metrics",
  "linera-storage",
  "linera-version",

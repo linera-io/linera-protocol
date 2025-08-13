@@ -641,6 +641,9 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 
   Default value: `0`
 * `--storage-path <STORAGE_PATH>` — Path to the persistent storage file for faucet mappings
+* `--max-batch-size <MAX_BATCH_SIZE>` — Maximum number of operations to include in a single block (default: 100)
+
+  Default value: `100`
 
 
 
