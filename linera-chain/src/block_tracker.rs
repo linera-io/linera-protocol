@@ -39,19 +39,19 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
     local_time: Timestamp,
     #[debug(skip_if = Option::is_none)]
-    pub replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    pub next_application_index: u32,
-    pub next_chain_index: u32,
+    replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
+    next_application_index: u32,
+    next_chain_index: u32,
     #[debug(skip_if = Vec::is_empty)]
-    pub oracle_responses: Vec<Vec<OracleResponse>>,
+    oracle_responses: Vec<Vec<OracleResponse>>,
     #[debug(skip_if = Vec::is_empty)]
-    pub events: Vec<Vec<Event>>,
+    events: Vec<Vec<Event>>,
     #[debug(skip_if = Vec::is_empty)]
-    pub blobs: Vec<Vec<Blob>>,
+    blobs: Vec<Vec<Blob>>,
     #[debug(skip_if = Vec::is_empty)]
-    pub messages: Vec<Vec<OutgoingMessage>>,
+    messages: Vec<Vec<OutgoingMessage>>,
     #[debug(skip_if = Vec::is_empty)]
-    pub operation_results: Vec<OperationResult>,
+    operation_results: Vec<OperationResult>,
     // Index of the currently executed transaction in a block.
     transaction_index: u32,
 
@@ -380,7 +380,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// Finalizes the execution and returns the collected results.
     ///
     /// This method should be called after all transactions have been processed.
-    /// Panics if the number of outcomes does match the expected count.
+    /// Panics if the number of lists of oracle responses, outgoing messages,
+    /// events, or blobs does not match the expected counts.
     pub fn finalize(self) -> FinalizeExecutionResult {
         // Asserts that the number of outcomes matches the expected count.
         assert_eq!(self.oracle_responses.len(), self.expected_outcomes_count);
