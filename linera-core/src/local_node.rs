@@ -10,8 +10,8 @@ use std::{
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch},
-    identifiers::{ApplicationId, BlobId, ChainId},
+    data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
+    identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
@@ -246,20 +246,6 @@ where
     ) -> Result<QueryOutcome, LocalNodeError> {
         let outcome = self.node.state.query_application(chain_id, query).await?;
         Ok(outcome)
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    pub async fn describe_application(
-        &self,
-        chain_id: ChainId,
-        application_id: ApplicationId,
-    ) -> Result<ApplicationDescription, LocalNodeError> {
-        let response = self
-            .node
-            .state
-            .describe_application(chain_id, application_id)
-            .await?;
-        Ok(response)
     }
 
     /// Handles any pending local cross-chain requests.
