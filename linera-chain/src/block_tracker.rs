@@ -380,7 +380,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// Finalizes the execution and returns the collected results.
     ///
     /// This method should be called after all transactions have been processed.
-    /// Panics if the counts does not match the expected counts.
+    /// Panics if the number of lists of oracle responses, outgoing messages,
+    /// events, or blobs does not match the expected counts.
     pub fn finalize(self) -> FinalizeExecutionResult {
         // Asserts that the number of outcomes matches the expected count.
         assert_eq!(self.oracle_responses.len(), self.expected_outcomes_count);
