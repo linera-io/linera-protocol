@@ -9,7 +9,10 @@ use std::{
 use async_graphql::{OneofObject, SimpleObject};
 use axum::Router;
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
-use linera_chain::types::{CertificateValue as _, ConfirmedBlock};
+use linera_chain::{
+    data_types::Transaction,
+    types::{CertificateValue as _, ConfirmedBlock},
+};
 use linera_execution::Operation;
 use linera_indexer::{
     common::IndexerError,
@@ -130,18 +133,21 @@ where
     async fn register(&self, value: &ConfirmedBlock) -> Result<(), IndexerError> {
         let mut plugin = self.0.lock().await;
         let chain_id = value.chain_id();
-        for (index, content) in value.block().body.operations().enumerate() {
-            let key = OperationKey {
-                chain_id,
-                height: value.height(),
-                index,
-            };
-            match plugin
-                .register_operation(key, value.hash(), content.clone())
-                .await
-            {
-                Err(e) => return Err(e),
-                Ok(()) => continue,
+        // Iterate over all transactions to find operations and their actual transaction indices
+        for (transaction_index, transaction) in value.block().body.transactions.iter().enumerate() {
+            if let Transaction::ExecuteOperation(operation) = transaction {
+                let key = OperationKey {
+                    chain_id,
+                    height: value.height(),
+                    index: transaction_index,
+                };
+                match plugin
+                    .register_operation(key, value.hash(), operation.clone())
+                    .await
+                {
+                    Err(e) => return Err(e),
+                    Ok(()) => continue,
+                }
             }
         }
         Ok(plugin.save().await?)
