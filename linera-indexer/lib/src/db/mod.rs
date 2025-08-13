@@ -14,7 +14,6 @@ use linera_base::{
     data_types::{BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::IncomingBundle;
 use linera_service_graphql_client::MessageAction;
 use sqlx::{Sqlite, Transaction};
 
@@ -26,10 +25,10 @@ pub type DatabaseTransaction<'a> = Transaction<'a, Sqlite>;
 pub trait IndexerDatabase: Send + Sync {
     type Error;
 
-    /// Atomically store a block with its required blobs and incoming bundles
+    /// Atomically store a block with its required blobs
     /// This is the high-level API that can be implemented in terms of the other methods
     #[allow(clippy::too_many_arguments)]
-    async fn store_block_with_blobs_and_bundles(
+    async fn store_block_with_blobs(
         &self,
         block_hash: &CryptoHash,
         chain_id: &ChainId,
@@ -37,7 +36,6 @@ pub trait IndexerDatabase: Send + Sync {
         timestamp: Timestamp,
         block_data: &[u8],
         blobs: &[(BlobId, Vec<u8>)],
-        incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), Self::Error> {
         // Start atomic transaction
         let mut tx = self.begin_transaction().await?;
@@ -49,10 +47,6 @@ pub trait IndexerDatabase: Send + Sync {
 
         // Insert the block
         self.insert_block_tx(&mut tx, block_hash, chain_id, height, timestamp, block_data)
-            .await?;
-
-        // Store incoming bundles and their messages
-        self.store_incoming_bundles_tx(&mut tx, block_hash, incoming_bundles)
             .await?;
 
         // Commit transaction - this is the only point where data becomes visible
@@ -81,14 +75,6 @@ pub trait IndexerDatabase: Send + Sync {
         height: BlockHeight,
         timestamp: Timestamp,
         data: &[u8],
-    ) -> Result<(), Self::Error>;
-
-    /// Store incoming bundles within a transaction
-    async fn store_incoming_bundles_tx(
-        &self,
-        tx: &mut DatabaseTransaction<'_>,
-        block_hash: &CryptoHash,
-        incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), Self::Error>;
 
     /// Commit a transaction
