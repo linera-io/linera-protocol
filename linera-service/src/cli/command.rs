@@ -26,10 +26,9 @@ const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 const DEFAULT_NUM_CHAINS: usize = 10;
 const DEFAULT_BPS: usize = 10;
 
-// Make sure that the default values are consts, and that they are used in the Default impl.
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct BenchmarkCommand {
+pub struct BenchmarkOptions {
     /// How many chains to use.
     #[arg(long, default_value_t = DEFAULT_NUM_CHAINS)]
     pub num_chains: usize,
@@ -94,7 +93,7 @@ pub struct BenchmarkCommand {
     pub config_path: Option<PathBuf>,
 }
 
-impl Default for BenchmarkCommand {
+impl Default for BenchmarkOptions {
     fn default() -> Self {
         Self {
             num_chains: DEFAULT_NUM_CHAINS,
@@ -109,6 +108,54 @@ impl Default for BenchmarkCommand {
             runtime_in_seconds: None,
             delay_between_chains_ms: None,
             config_path: None,
+        }
+    }
+}
+
+#[derive(Clone, clap::Subcommand, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BenchmarkCommand {
+    /// Start a single benchmark process, maintaining a given TPS.
+    Single {
+        #[command(flatten)]
+        options: BenchmarkOptions,
+    },
+
+    /// Run multiple benchmark processes in parallel.
+    Multi {
+        #[command(flatten)]
+        options: BenchmarkOptions,
+
+        /// The number of benchmark processes to run in parallel.
+        #[arg(long, default_value = "1")]
+        processes: usize,
+
+        /// The faucet (which implicitly defines the network)
+        #[arg(long)]
+        faucet: String,
+
+        /// If specified, a directory with a random name will be created in this directory, and the
+        /// client state will be stored there.
+        /// If not specified, a temporary directory will be used for each client.
+        #[arg(long)]
+        client_state_dir: Option<String>,
+
+        /// The delay between starting the benchmark processes, in seconds.
+        /// If --cross-wallet-transfers is true, this will be ignored.
+        #[arg(long, default_value = "10")]
+        delay_between_processes: u64,
+
+        /// Whether to send transfers between chains in different wallets.
+        #[arg(long)]
+        cross_wallet_transfers: bool,
+    },
+}
+
+impl BenchmarkCommand {
+    pub fn transactions_per_block(&self) -> usize {
+        match self {
+            Self::Single { options } => options.transactions_per_block,
+            Self::Multi { options, .. } => options.transactions_per_block,
         }
     }
 }
@@ -463,38 +510,9 @@ pub enum ClientCommand {
         http_request_allow_list: Option<Vec<String>>,
     },
 
-    /// Start a benchmark, maintaining a given TPS or just sending one transfer per chain in bulk mode.
+    /// Run benchmarks to test network performance.
+    #[command(subcommand)]
     Benchmark(BenchmarkCommand),
-
-    /// Runs multiple `linera benchmark` processes in parallel.
-    MultiBenchmark {
-        /// The number of `linera benchmark` processes to run in parallel.
-        #[arg(long, default_value = "1")]
-        processes: usize,
-
-        /// The faucet (which implicitly defines the network)
-        #[arg(long)]
-        faucet: String,
-
-        /// If specified, a directory with a random name will be created in this directory, and the
-        /// client state will be stored there.
-        /// If not specified, a temporary directory will be used for each client.
-        #[arg(long)]
-        client_state_dir: Option<String>,
-
-        /// The benchmark command to run.
-        #[clap(flatten)]
-        command: BenchmarkCommand,
-
-        /// The delay between starting the benchmark processes, in seconds.
-        /// If --cross-wallet-transfers is true, this will be ignored.
-        #[arg(long, default_value = "10")]
-        delay_between_processes: u64,
-
-        /// Whether to send transfers between chains in different wallets.
-        #[arg(long)]
-        cross_wallet_transfers: bool,
-    },
 
     /// Create genesis configuration for a Linera deployment.
     /// Create initial user chains and print information to be used for initialization of validator setup.
@@ -955,8 +973,8 @@ impl ClientCommand {
             | ClientCommand::Assign { .. }
             | ClientCommand::Wallet { .. }
             | ClientCommand::RetryPendingBlock { .. } => "client".into(),
-            ClientCommand::Benchmark { .. } => "benchmark".into(),
-            ClientCommand::MultiBenchmark { .. } => "multi-benchmark".into(),
+            ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
+            ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),
             ClientCommand::Project { .. } => "project".into(),
             ClientCommand::Watch { .. } => "watch".into(),

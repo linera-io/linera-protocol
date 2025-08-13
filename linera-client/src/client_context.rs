@@ -26,7 +26,10 @@ use thiserror_context::Context;
 use tracing::{debug, info};
 #[cfg(not(web))]
 use {
-    crate::benchmark::{Benchmark, BenchmarkError},
+    crate::{
+        benchmark::{Benchmark, BenchmarkError},
+        client_metrics::ClientMetrics,
+    },
     futures::{stream, StreamExt, TryStreamExt},
     linera_base::{
         crypto::AccountPublicKey,
@@ -39,10 +42,8 @@ use {
         Operation,
     },
     std::{collections::HashSet, iter, path::Path},
-    tokio::task,
+    tokio::{sync::mpsc, task},
 };
-#[cfg(not(web))]
-use {crate::client_metrics::ClientMetrics, tokio::sync::mpsc};
 #[cfg(feature = "fs")]
 use {
     linera_base::{
