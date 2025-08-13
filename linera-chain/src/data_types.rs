@@ -156,7 +156,8 @@ pub enum Transaction {
 impl BcsHashable<'_> for Transaction {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-pub struct GraphQLOperation {
+#[graphql(name = "Operation")]
+pub struct OperationMetadata {
     /// The type of operation: "System" or "User"
     pub operation_type: String,
     /// For user operations, the application ID
@@ -167,10 +168,10 @@ pub struct GraphQLOperation {
     pub system_bytes_hex: Option<String>,
 }
 
-impl From<&Operation> for GraphQLOperation {
+impl From<&Operation> for OperationMetadata {
     fn from(operation: &Operation) -> Self {
         match operation {
-            Operation::System(sys_op) => GraphQLOperation {
+            Operation::System(sys_op) => OperationMetadata {
                 operation_type: "System".to_string(),
                 application_id: None,
                 user_bytes_hex: None,
@@ -181,7 +182,7 @@ impl From<&Operation> for GraphQLOperation {
             Operation::User {
                 application_id,
                 bytes,
-            } => GraphQLOperation {
+            } => OperationMetadata {
                 operation_type: "User".to_string(),
                 application_id: Some(*application_id),
                 user_bytes_hex: Some(hex::encode(bytes)),
@@ -199,7 +200,7 @@ pub struct TransactionMetadata {
     /// The incoming bundle, if this is a ReceiveMessages transaction
     pub incoming_bundle: Option<IncomingBundle>,
     /// The operation, if this is an ExecuteOperation transaction
-    pub operation: Option<GraphQLOperation>,
+    pub operation: Option<OperationMetadata>,
 }
 
 impl TransactionMetadata {
@@ -213,7 +214,7 @@ impl TransactionMetadata {
             Transaction::ExecuteOperation(op) => TransactionMetadata {
                 transaction_type: "ExecuteOperation".to_string(),
                 incoming_bundle: None,
-                operation: Some(GraphQLOperation::from(op)),
+                operation: Some(OperationMetadata::from(op)),
             },
         }
     }

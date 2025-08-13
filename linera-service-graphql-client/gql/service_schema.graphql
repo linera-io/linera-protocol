@@ -550,25 +550,6 @@ A unique identifier for a user application or for the system application
 """
 scalar GenericApplicationId
 
-type GraphQLOperation {
-	"""
-	The type of operation: "System" or "User"
-	"""
-	operationType: String!
-	"""
-	For user operations, the application ID
-	"""
-	applicationId: ApplicationId
-	"""
-	For user operations, the serialized bytes (as a hex string for GraphQL)
-	"""
-	userBytesHex: String
-	"""
-	For system operations, the serialized bytes (as a hex string for GraphQL)
-	"""
-	systemBytesHex: String
-}
-
 """
 The state of an inbox.
 * An inbox is used to track bundles received and executed locally.
@@ -884,6 +865,25 @@ type MutationRoot {
 Notify that a chain has a new certified block or a new message
 """
 scalar Notification
+
+type Operation {
+	"""
+	The type of operation: "System" or "User"
+	"""
+	operationType: String!
+	"""
+	For user operations, the application ID
+	"""
+	applicationId: ApplicationId
+	"""
+	For user operations, the serialized bytes (as a hex string for GraphQL)
+	"""
+	userBytesHex: String
+	"""
+	For system operations, the serialized bytes (as a hex string for GraphQL)
+	"""
+	systemBytesHex: String
+}
 
 """
 The execution result of a single operation.
@@ -1263,7 +1263,7 @@ type TransactionMetadata {
 	"""
 	The operation, if this is an ExecuteOperation transaction
 	"""
-	operation: GraphQLOperation
+	operation: Operation
 }
 
 scalar VersionInfo
