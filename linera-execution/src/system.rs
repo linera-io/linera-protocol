@@ -263,8 +263,6 @@ pub enum SystemMessage {
         amount: Amount,
         recipient: Recipient,
     },
-    /// Notifies that a new application was created.
-    ApplicationCreated,
 }
 
 /// A query to the system state.
@@ -796,8 +794,6 @@ where
                     Recipient::Burn => (),
                 }
             }
-            // This message is only a placeholder: Its ID is part of the application ID.
-            ApplicationCreated => {}
         }
         Ok(outcome)
     }

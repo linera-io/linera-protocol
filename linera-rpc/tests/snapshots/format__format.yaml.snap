@@ -1153,8 +1153,6 @@ SystemMessage:
               TYPENAME: Amount
           - recipient:
               TYPENAME: Recipient
-    2:
-      ApplicationCreated: UNIT
 SystemOperation:
   ENUM:
     0:
