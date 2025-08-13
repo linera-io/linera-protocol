@@ -216,15 +216,18 @@ impl SqliteDatabase {
         .await?;
 
         // Insert operations
-        for (index, operation) in block.body.operations().enumerate() {
-            self.insert_operation_tx(
-                tx,
-                hash,
-                index,
-                operation,
-                block.header.authenticated_signer,
-            )
-            .await?;
+        for (index, transaction) in block.body.transactions.iter().enumerate() {
+            if let linera_chain::data_types::Transaction::ExecuteOperation(operation) = transaction
+            {
+                self.insert_operation_tx(
+                    tx,
+                    hash,
+                    index,
+                    operation,
+                    block.header.authenticated_signer,
+                )
+                .await?;
+            }
         }
 
         // Insert outgoing messages
