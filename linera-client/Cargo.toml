@@ -13,16 +13,6 @@ version.workspace = true
 
 [features]
 test = ["linera-views/test", "linera-execution/test"]
-benchmark = [
-    "linera-base/test",
-    "dep:linera-sdk",
-    "dep:num-format",
-    "dep:reqwest",
-    "dep:anyhow",
-    "dep:prometheus-parse",
-    "dep:rand",
-    "dep:serde_yaml",
-]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
@@ -55,7 +45,7 @@ indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]
 web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
+anyhow.workspace = true
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
@@ -66,16 +56,16 @@ linera-core.workspace = true
 linera-execution.workspace = true
 linera-persistent = { version = "0.15.0", path = "../linera-persistent" }
 linera-rpc.workspace = true
-linera-sdk = { workspace = true, optional = true }
+linera-sdk.workspace = true
 linera-storage.workspace = true
 linera-version = { workspace = true }
 linera-views.workspace = true
-num-format = { workspace = true, optional = true }
-prometheus-parse = { workspace = true, optional = true }
-rand = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
+num-format.workspace = true
+prometheus-parse.workspace = true
+rand.workspace = true
+reqwest.workspace = true
 serde.workspace = true
-serde_yaml = { workspace = true, optional = true }
+serde_yaml.workspace = true
 thiserror.workspace = true
 thiserror-context.workspace = true
 tokio.workspace = true

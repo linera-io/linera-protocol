@@ -27,11 +27,6 @@ test = [
     "linera-views/test",
     "dep:stdext",
 ]
-benchmark = [
-    "linera-base/test",
-    "linera-client/benchmark",
-    "linera-chain/benchmark",
-]
 wasmer = [
     "linera-client/wasmer",
     "linera-execution/wasmer",
@@ -187,7 +182,6 @@ path = "src/schema_export.rs"
 [[bin]]
 name = "linera-benchmark"
 path = "src/benchmark.rs"
-required-features = ["benchmark"]
 
 [[bin]]
 name = "linera-exporter"
