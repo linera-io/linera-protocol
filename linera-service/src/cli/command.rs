@@ -19,8 +19,6 @@ use linera_client::{
     util,
 };
 use linera_rpc::config::CrossChainConfig;
-#[cfg(feature = "benchmark")]
-use serde::Serialize;
 
 #[cfg(feature = "benchmark")]
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
@@ -29,21 +27,18 @@ const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
 #[cfg(feature = "benchmark")]
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 #[cfg(feature = "benchmark")]
+const DEFAULT_NUM_CHAINS: usize = 10;
+#[cfg(feature = "benchmark")]
 const DEFAULT_BPS: usize = 10;
 
 // Make sure that the default values are consts, and that they are used in the Default impl.
 #[cfg(feature = "benchmark")]
-#[derive(Clone, Serialize, clap::Args)]
+#[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkCommand {
-    /// Wether to use cross chain messages in the transactions or not. This effectively sets the
-    /// chain group size to 1.
-    #[arg(long)]
-    pub dont_use_cross_chain_messages: bool,
-
-    /// How many chain groups to use. If not provided, the number of CPUs will be used.
-    #[arg(long)]
-    pub num_chain_groups: Option<usize>,
+    /// How many chains to use.
+    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS)]
+    pub num_chains: usize,
 
     /// How many tokens to assign to each newly created chain.
     /// These need to cover the transaction fees per chain for the benchmark.
@@ -91,21 +86,25 @@ pub struct BenchmarkCommand {
     #[arg(long)]
     pub runtime_in_seconds: Option<u64>,
 
-    /// The delay between chain groups, in milliseconds. For example, if set to 200ms, the first
-    /// chain group will start, then the second will start 200 ms after the first one, the third
+    /// The delay between chains, in milliseconds. For example, if set to 200ms, the first
+    /// chain will start, then the second will start 200 ms after the first one, the third
     /// 200 ms after the second one, and so on.
     /// This is used for slowly ramping up the TPS, so we don't pound the validators with the full
     /// TPS all at once.
     #[arg(long)]
-    pub delay_between_chain_groups_ms: Option<u64>,
+    pub delay_between_chains_ms: Option<u64>,
+
+    /// Path to YAML file containing chain IDs to send transfers to.
+    /// If not provided, only transfers between chains in the same wallet.
+    #[arg(long)]
+    pub config_path: Option<PathBuf>,
 }
 
 #[cfg(feature = "benchmark")]
 impl Default for BenchmarkCommand {
     fn default() -> Self {
         Self {
-            dont_use_cross_chain_messages: false,
-            num_chain_groups: None,
+            num_chains: DEFAULT_NUM_CHAINS,
             tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
             transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
             wrap_up_max_in_flight: DEFAULT_WRAP_UP_MAX_IN_FLIGHT,
@@ -115,7 +114,8 @@ impl Default for BenchmarkCommand {
             health_check_endpoints: None,
             confirm_before_start: false,
             runtime_in_seconds: None,
-            delay_between_chain_groups_ms: None,
+            delay_between_chains_ms: None,
+            config_path: None,
         }
     }
 }
@@ -156,6 +156,11 @@ pub enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
+
+        /// Whether to create a super owner for the new chain.
+        #[cfg(feature = "benchmark")]
+        #[arg(long)]
+        super_owner: bool,
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
@@ -492,8 +497,13 @@ pub enum ClientCommand {
         command: BenchmarkCommand,
 
         /// The delay between starting the benchmark processes, in seconds.
+        /// If --cross-wallet-transfers is true, this will be ignored.
         #[arg(long, default_value = "10")]
         delay_between_processes: u64,
+
+        /// Whether to send transfers between chains in different wallets.
+        #[arg(long)]
+        cross_wallet_transfers: bool,
     },
 
     /// Create genesis configuration for a Linera deployment.
@@ -736,6 +746,10 @@ pub enum ClientCommand {
         /// Configuration for the faucet chain listener.
         #[command(flatten)]
         config: ChainListenerConfig,
+
+        /// Path to the persistent storage file for faucet mappings.
+        #[arg(long)]
+        storage_path: Option<PathBuf>,
     },
 
     /// Publish module.
@@ -1092,6 +1106,10 @@ pub enum NetCommand {
         /// Whether to start a block exporter for each validator.
         #[arg(long, default_value = "false")]
         with_block_exporter: bool,
+
+        /// The address of the block exporter.
+        #[arg(long, default_value = "localhost")]
+        exporter_address: String,
 
         /// The port on which to run the block exporter.
         #[arg(long, default_value = "8081")]

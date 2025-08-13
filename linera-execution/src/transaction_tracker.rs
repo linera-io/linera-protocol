@@ -8,7 +8,7 @@ use std::{
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{ArithmeticError, Blob, Event, OracleResponse, StreamUpdate, Timestamp},
+    data_types::{Blob, Event, OracleResponse, StreamUpdate, Timestamp},
     ensure,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
 };
@@ -115,22 +115,14 @@ impl TransactionTracker {
         index
     }
 
-    pub fn add_outgoing_message(
-        &mut self,
-        message: OutgoingMessage,
-    ) -> Result<(), ArithmeticError> {
+    pub fn add_outgoing_message(&mut self, message: OutgoingMessage) {
         self.outgoing_messages.push(message);
-        Ok(())
     }
 
-    pub fn add_outgoing_messages(
-        &mut self,
-        messages: impl IntoIterator<Item = OutgoingMessage>,
-    ) -> Result<(), ArithmeticError> {
+    pub fn add_outgoing_messages(&mut self, messages: impl IntoIterator<Item = OutgoingMessage>) {
         for message in messages {
-            self.add_outgoing_message(message)?;
+            self.add_outgoing_message(message);
         }
-        Ok(())
     }
 
     pub fn add_event(&mut self, stream_id: StreamId, index: u32, value: Vec<u8>) {

@@ -263,7 +263,7 @@ where
         );
         let mut builder = SignatureAggregator::new(value, round, &self.committee);
         builder
-            .append(vote.public_key, vote.signature)
+            .append(self.worker.public_key(), vote.signature)
             .unwrap()
             .unwrap()
     }
@@ -3318,15 +3318,16 @@ where
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
-    let query = ChainInfoQuery::new(chain_1).with_timeout();
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
-    assert!(response.info.manager.timeout_vote.is_none());
+    let query = ChainInfoQuery::new(chain_1).with_timeout(BlockHeight(1), Round::SingleLeader(0));
+    let result = env.worker().handle_chain_info_query(query.clone()).await;
+    assert_matches!(result, Err(WorkerError::ChainError(ref error))
+        if matches!(**error, ChainError::NotTimedOutYet(_))
+    );
 
     // Set the clock to the end of the round.
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let query = ChainInfoQuery::new(chain_1).with_timeout();
     let (response, _) = env.worker().handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_1, BlockHeight::from(1), Epoch::from(0));
@@ -3336,7 +3337,7 @@ where
     let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
-        .into_certificate();
+        .into_certificate(env.worker().public_key());
     let (response, _) = env
         .worker()
         .handle_timeout_certificate(certificate_timeout)
@@ -3371,7 +3372,10 @@ where
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
-    let certificate1 = vote.with_value(value1.clone()).unwrap().into_certificate();
+    let certificate1 = vote
+        .with_value(value1.clone())
+        .unwrap()
+        .into_certificate(env.worker().public_key());
     let (response, _) = env
         .worker()
         .handle_validated_certificate(certificate1.clone())
@@ -3560,15 +3564,16 @@ where
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
-    let query = ChainInfoQuery::new(chain_id).with_timeout();
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
-    assert!(response.info.manager.timeout_vote.is_none());
+    let query = ChainInfoQuery::new(chain_id).with_timeout(BlockHeight(1), Round::Fast);
+    let result = env.worker().handle_chain_info_query(query.clone()).await;
+    assert_matches!(result, Err(WorkerError::ChainError(ref error))
+        if matches!(**error, ChainError::NotTimedOutYet(_))
+    );
 
     // Set the clock to the end of the round.
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = env.worker().handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0));
@@ -3577,7 +3582,7 @@ where
     let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
-        .into_certificate();
+        .into_certificate(env.worker().public_key());
     let (response, _) = env
         .worker()
         .handle_timeout_certificate(certificate_timeout)
@@ -3900,7 +3905,7 @@ where
         .get(&response.info.epoch)
         .unwrap()
         .validators
-        .get(&vote.public_key)
+        .get(&env.worker().public_key())
         .unwrap()
         .account_public_key;
     assert_eq!(manager.current_round, Round::Validator(0));

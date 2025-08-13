@@ -49,6 +49,7 @@ struct ServerContext {
     notification_config: NotificationConfig,
     shard: Option<usize>,
     grace_period: Duration,
+    chain_worker_ttl: Duration,
 }
 
 impl ServerContext {
@@ -74,7 +75,8 @@ impl ServerContext {
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
-        .with_grace_period(self.grace_period);
+        .with_grace_period(self.grace_period)
+        .with_chain_worker_ttl(self.chain_worker_ttl);
         (state, shard_id, shard.clone())
     }
 
@@ -351,6 +353,14 @@ enum ServerCommand {
         /// The WebAssembly runtime to use.
         #[arg(long)]
         wasm_runtime: Option<WasmRuntime>,
+
+        /// The duration in milliseconds after which an idle chain worker will free its memory.
+        #[arg(
+            long = "chain-worker-ttl-ms",
+            default_value = "30000",
+            value_parser = util::parse_millis
+        )]
+        chain_worker_ttl: Duration,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -462,6 +472,7 @@ async fn run(options: ServerOptions) {
             shard,
             grace_period,
             wasm_runtime,
+            chain_worker_ttl,
         } => {
             linera_version::VERSION_INFO.log();
 
@@ -474,6 +485,7 @@ async fn run(options: ServerOptions) {
                 notification_config,
                 shard,
                 grace_period,
+                chain_worker_ttl,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config

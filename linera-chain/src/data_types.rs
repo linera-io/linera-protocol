@@ -14,7 +14,7 @@ use linera_base::{
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex, hex_debug,
-    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, MessageId, StreamId},
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
@@ -216,17 +216,6 @@ pub struct ChainAndHeight {
     pub height: BlockHeight,
 }
 
-impl ChainAndHeight {
-    /// Returns the ID of the `index`-th message sent by the block at that height.
-    pub fn to_message_id(&self, index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index,
-        }
-    }
-}
-
 /// A bundle of cross-chain messages.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct IncomingBundle {
@@ -240,16 +229,8 @@ pub struct IncomingBundle {
 
 impl IncomingBundle {
     /// Returns an iterator over all posted messages in this bundle, together with their ID.
-    pub fn messages_and_ids(&self) -> impl Iterator<Item = (MessageId, &PostedMessage)> {
-        let chain_and_height = ChainAndHeight {
-            chain_id: self.origin,
-            height: self.bundle.height,
-        };
-        let messages = self.bundle.messages.iter();
-        messages.map(move |posted_message| {
-            let message_id = chain_and_height.to_message_id(posted_message.index);
-            (message_id, posted_message)
-        })
+    pub fn messages(&self) -> impl Iterator<Item = &PostedMessage> {
+        self.bundle.messages.iter()
     }
 }
 
@@ -414,7 +395,6 @@ struct VoteValue(CryptoHash, Round, CertificateKind);
 pub struct Vote<T> {
     pub value: T,
     pub round: Round,
-    pub public_key: ValidatorPublicKey,
     pub signature: ValidatorSignature,
 }
 
@@ -429,7 +409,6 @@ impl<T> Vote<T> {
         Self {
             value,
             round,
-            public_key: key_pair.public(),
             signature,
         }
     }
@@ -442,7 +421,6 @@ impl<T> Vote<T> {
         LiteVote {
             value: LiteValue::new(&self.value),
             round: self.round,
-            public_key: self.public_key,
             signature: self.signature,
         }
     }
@@ -459,7 +437,6 @@ impl<T> Vote<T> {
 pub struct LiteVote {
     pub value: LiteValue,
     pub round: Round,
-    pub public_key: ValidatorPublicKey,
     pub signature: ValidatorSignature,
 }
 
@@ -473,7 +450,6 @@ impl LiteVote {
         Some(Vote {
             value,
             round: self.round,
-            public_key: self.public_key,
             signature: self.signature,
         })
     }
@@ -707,15 +683,14 @@ impl LiteVote {
         Self {
             value,
             round,
-            public_key: secret_key.public(),
             signature,
         }
     }
 
     /// Verifies the signature in the vote.
-    pub fn check(&self) -> Result<(), ChainError> {
+    pub fn check(&self, public_key: ValidatorPublicKey) -> Result<(), ChainError> {
         let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
-        Ok(self.signature.check(&hash_and_round, self.public_key)?)
+        Ok(self.signature.check(&hash_and_round, public_key)?)
     }
 }
 

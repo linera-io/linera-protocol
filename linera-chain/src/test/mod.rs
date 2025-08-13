@@ -6,7 +6,7 @@
 mod http_server;
 
 use linera_base::{
-    crypto::{AccountPublicKey, Signer},
+    crypto::{AccountPublicKey, Signer, ValidatorPublicKey},
     data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
@@ -160,22 +160,22 @@ impl BlockTestExt for ProposedBlock {
 
 pub trait VoteTestExt<T: CertificateValue>: Sized {
     /// Returns a certificate for a committee consisting only of this validator.
-    fn into_certificate(self) -> GenericCertificate<T>;
+    fn into_certificate(self, public_key: ValidatorPublicKey) -> GenericCertificate<T>;
 }
 
 impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
-    fn into_certificate(self) -> GenericCertificate<T> {
+    fn into_certificate(self, public_key: ValidatorPublicKey) -> GenericCertificate<T> {
         let state = ValidatorState {
             network_address: "".to_string(),
             votes: 100,
             account_public_key: AccountPublicKey::test_key(1),
         };
         let committee = Committee::new(
-            vec![(self.public_key, state)].into_iter().collect(),
+            vec![(public_key, state)].into_iter().collect(),
             ResourceControlPolicy::only_fuel(),
         );
         SignatureAggregator::new(self.value, self.round, &committee)
-            .append(self.public_key, self.signature)
+            .append(public_key, self.signature)
             .unwrap()
             .unwrap()
     }

@@ -55,7 +55,7 @@ use crate::{
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError},
 };
 
 /// A view that supports inserting and removing values indexed by `Vec<u8>`.
@@ -64,6 +64,24 @@ pub struct ByteMapView<C, V> {
     context: C,
     deletion_set: DeletionSet,
     updates: BTreeMap<Vec<u8>, Update<V>>,
+}
+
+impl<C: Context, C2: Context, V> ReplaceContext<C2> for ByteMapView<C, V>
+where
+    V: Send + Sync + Serialize + Clone,
+{
+    type Target = ByteMapView<C2, V>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        ByteMapView {
+            context: ctx(self.context()),
+            deletion_set: self.deletion_set.clone(),
+            updates: self.updates.clone(),
+        }
+    }
 }
 
 /// Whether we have a value or its serialization.
@@ -944,6 +962,26 @@ where
 pub struct MapView<C, I, V> {
     map: ByteMapView<C, V>,
     _phantom: PhantomData<I>,
+}
+
+impl<C, C2, I, V> ReplaceContext<C2> for MapView<C, I, V>
+where
+    C: Context,
+    C2: Context,
+    I: Send + Sync,
+    V: Send + Sync + Serialize + Clone,
+{
+    type Target = MapView<C2, I, V>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        MapView {
+            map: self.map.with_context(ctx).await,
+            _phantom: self._phantom,
+        }
+    }
 }
 
 impl<C, I, V> View for MapView<C, I, V>

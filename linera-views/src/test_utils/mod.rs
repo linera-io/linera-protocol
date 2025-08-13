@@ -485,7 +485,7 @@ where
 /// selection, Scylla is forced to introduce around 100000 tombstones
 /// which triggers the crash with the default settings.
 pub async fn tombstone_triggering_test<C: KeyValueStore>(key_value_store: C) {
-    use std::time::Instant;
+    use linera_base::time::Instant;
     let t1 = Instant::now();
     let mut rng = make_deterministic_rng();
     let value_size = 100;

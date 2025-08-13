@@ -8,7 +8,7 @@ use std::{borrow::Cow, collections::BTreeMap};
 use futures::future::Either;
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Blob, BlockHeight, Epoch, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, Round, Timestamp},
     ensure,
     identifiers::{ChainId, EventId, StreamId},
 };
@@ -24,7 +24,7 @@ use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
-    views::{RootView, View},
+    views::{ReplaceContext, RootView, View},
 };
 use tokio::sync::oneshot;
 use tracing::{debug, instrument, trace, warn};
@@ -425,10 +425,17 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome = if let Some(execution_state) =
+        let verified_outcome = if let Some(mut execution_state) =
             self.state.execution_state_cache.remove(&outcome.state_hash)
         {
-            chain.execution_state = execution_state;
+            chain.execution_state = execution_state
+                .with_context(|ctx| {
+                    chain
+                        .execution_state
+                        .context()
+                        .clone_with_base_key(ctx.base_key().bytes.clone())
+                })
+                .await;
             outcome.clone()
         } else {
             chain
@@ -609,16 +616,26 @@ where
     }
 
     /// Attempts to vote for a leader timeout, if possible.
-    pub(super) async fn vote_for_leader_timeout(&mut self) -> Result<(), WorkerError> {
+    pub(super) async fn vote_for_leader_timeout(
+        &mut self,
+        height: BlockHeight,
+        round: Round,
+    ) -> Result<(), WorkerError> {
         let chain = &mut self.state.chain;
+        ensure!(
+            height == chain.tip_state.get().next_block_height,
+            WorkerError::UnexpectedBlockHeight {
+                expected_block_height: chain.tip_state.get().next_block_height,
+                found_block_height: height
+            }
+        );
         let epoch = chain.execution_state.system.epoch.get();
         let chain_id = chain.chain_id();
-        let height = chain.tip_state.get().next_block_height;
         let key_pair = self.state.config.key_pair();
         let local_time = self.state.storage.clock().current_time();
         if chain
             .manager
-            .vote_timeout(chain_id, height, *epoch, key_pair, local_time)
+            .create_timeout_vote(chain_id, height, round, *epoch, key_pair, local_time)?
         {
             self.save().await?;
         }

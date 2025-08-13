@@ -14,6 +14,7 @@ use futures::{
     Future, StreamExt,
 };
 use linera_base::{
+    crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round},
     ensure,
     identifiers::{BlobId, ChainId, GenericApplicationId},
@@ -54,6 +55,7 @@ pub enum CommunicateAction {
     },
     RequestTimeout {
         chain_id: ChainId,
+        height: BlockHeight,
         round: Round,
     },
 }
@@ -109,7 +111,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     execute: F,
     // Grace period as a fraction of time taken to reach quorum
     grace_period: f64,
-) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
+) -> Result<(K, Vec<(ValidatorPublicKey, V)>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Clone + 'static,
     F: Clone + Fn(RemoteNode<A>) -> R,
@@ -136,7 +138,7 @@ where
     let mut end_time: Option<Instant> = None;
     let mut remaining_votes = committee.total_votes();
     let mut highest_key_score = 0;
-    let mut value_scores = HashMap::new();
+    let mut value_scores: HashMap<K, (u64, Vec<(ValidatorPublicKey, V)>)> = HashMap::new();
     let mut error_scores = HashMap::new();
 
     'vote_wait: while let Ok(Some((name, result))) = timeout(
@@ -151,7 +153,7 @@ where
                 let key = group_by(&value);
                 let entry = value_scores.entry(key.clone()).or_insert((0, Vec::new()));
                 entry.0 += committee.weight(&name);
-                entry.1.push(value);
+                entry.1.push((name, value));
                 highest_key_score = highest_key_score.max(entry.0);
             }
             Err(err) => {
@@ -299,16 +301,14 @@ where
                 Err(NodeError::UnexpectedBlockHeight {
                     expected_block_height,
                     found_block_height,
-                }) => {
-                    if expected_block_height < found_block_height {
-                        // The proposal is for a a later block height, so we need to update the validator.
-                        self.send_chain_information(
-                            chain_id,
-                            found_block_height,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
-                    }
+                }) if expected_block_height < found_block_height => {
+                    // The proposal is for a later block height, so we need to update the validator.
+                    self.send_chain_information(
+                        chain_id,
+                        found_block_height,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await?;
                 }
                 Err(NodeError::MissingCrossChainUpdate { .. }) if !sent_cross_chain_updates => {
                     sent_cross_chain_updates = true;
@@ -400,25 +400,39 @@ where
         // last one, so we optimistically send that one right away.
         let remote_info = if let Ok(height) = target_block_height.try_sub_one() {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            let hash = chain.block_hashes(height..target_block_height).await?[0];
-            let certificate = self
-                .local_node
-                .storage_client()
-                .read_certificate(hash)
+            if let Some(hash) = chain
+                .block_hashes(height..target_block_height)
                 .await?
-                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
-            match self.send_confirmed_certificate(certificate, delivery).await {
-                Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
-                    if event_ids.iter().all(|event_id| {
+                .first()
+            {
+                let certificate = self
+                    .local_node
+                    .storage_client()
+                    .read_certificate(*hash)
+                    .await?
+                    .ok_or_else(|| ChainClientError::MissingConfirmedBlock(*hash))?;
+                match self.send_confirmed_certificate(certificate, delivery).await {
+                    Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(
+                        event_ids,
+                    ))) if event_ids.iter().all(|event_id| {
                         event_id.stream_id.application_id == GenericApplicationId::System
                     }) =>
-                {
-                    // The chain is missing epoch events. Send all blocks.
-                    let query = ChainInfoQuery::new(chain_id);
-                    self.remote_node.handle_chain_info_query(query).await?
+                    {
+                        // The chain is missing epoch events. Send all blocks.
+                        let query = ChainInfoQuery::new(chain_id);
+                        self.remote_node.handle_chain_info_query(query).await?
+                    }
+                    Err(err) => return Err(err),
+                    Ok(info) => info,
                 }
-                Err(err) => return Err(err),
-                Ok(info) => info,
+            } else {
+                // We don't have the block at the specified height. Send all blocks.
+                tracing::warn!(
+                    "send_chain_information called with height {target_block_height},
+                    but {chain_id:.8} does not have that block"
+                );
+                let query = ChainInfoQuery::new(chain_id);
+                self.remote_node.handle_chain_info_query(query).await?
             }
         } else {
             let query = ChainInfoQuery::new(chain_id);
@@ -516,7 +530,9 @@ where
         let vote = match action {
             CommunicateAction::SubmitBlock { proposal, blob_ids } => {
                 let info = self.send_block_proposal(proposal, blob_ids).await?;
-                info.manager.pending
+                info.manager.pending.ok_or_else(|| {
+                    NodeError::MissingVoteInValidatorResponse("submit a block proposal".into())
+                })?
             }
             CommunicateAction::FinalizeBlock {
                 certificate,
@@ -525,20 +541,19 @@ where
                 let info = self
                     .send_validated_certificate(*certificate, delivery)
                     .await?;
-                info.manager.pending
+                info.manager.pending.ok_or_else(|| {
+                    NodeError::MissingVoteInValidatorResponse("finalize a block".into())
+                })?
             }
-            CommunicateAction::RequestTimeout { .. } => {
-                let query = ChainInfoQuery::new(chain_id).with_timeout();
+            CommunicateAction::RequestTimeout { round, height, .. } => {
+                let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
                 let info = self.remote_node.handle_chain_info_query(query).await?;
-                info.manager.timeout_vote
+                info.manager.timeout_vote.ok_or_else(|| {
+                    NodeError::MissingVoteInValidatorResponse("request a timeout".into())
+                })?
             }
         };
-        match vote {
-            Some(vote) if vote.public_key == self.remote_node.public_key => {
-                vote.check()?;
-                Ok(vote)
-            }
-            Some(_) | None => Err(NodeError::MissingVoteInValidatorResponse.into()),
-        }
+        vote.check(self.remote_node.public_key)?;
+        Ok(vote)
     }
 }

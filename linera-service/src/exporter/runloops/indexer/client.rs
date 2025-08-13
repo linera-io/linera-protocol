@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
 #[cfg(with_metrics)]
 use std::{
     collections::VecDeque,
@@ -10,6 +9,7 @@ use std::{
 };
 
 use futures::StreamExt;
+use linera_base::time::Duration;
 use linera_rpc::{
     grpc::{transport::Options, GrpcError, GRPC_MAX_MESSAGE_SIZE},
     NodeOptions,
@@ -67,7 +67,7 @@ impl IndexerClient {
             let request = {
                 let stream = ReceiverStream::new(receiver).map(|element: Element| {
                     if let Some(Payload::Block(_)) = &element.payload {
-                        use std::time::Instant;
+                        use linera_base::time::Instant;
                         self.sent_latency.lock().unwrap().push_back(Instant::now());
                     }
                     element

@@ -605,7 +605,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         expected_second_message,
         expected_third_message,
         expected_fourth_message,
-    ])?;
+    ]);
     assert_eq!(
         txn_outcome.outgoing_messages,
         expected.into_outcome().unwrap().outgoing_messages
@@ -859,7 +859,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
-    expected.add_outgoing_message(expected_dummy_message)?;
+    expected.add_outgoing_message(expected_dummy_message);
     assert_eq!(
         txn_outcome.outgoing_messages,
         expected.into_outcome().unwrap().outgoing_messages
@@ -927,7 +927,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
-    expected.add_outgoing_message(expected_dummy_message)?;
+    expected.add_outgoing_message(expected_dummy_message);
     assert_eq!(
         txn_outcome.outgoing_messages,
         expected.into_outcome().unwrap().outgoing_messages
@@ -1009,7 +1009,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
-    expected.add_outgoing_message(expected_dummy_message)?;
+    expected.add_outgoing_message(expected_dummy_message);
     assert_eq!(
         txn_outcome.outgoing_messages,
         expected.into_outcome().unwrap().outgoing_messages
@@ -1143,7 +1143,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
                 bytes: b"second".to_vec(),
             },
         ),
-    ])?;
+    ]);
     assert_eq!(
         txn_outcome.outgoing_messages,
         expected.into_outcome().unwrap().outgoing_messages

@@ -248,8 +248,8 @@ pub enum NodeError {
     #[error("Response doesn't contain requested certificates: {0:?}")]
     MissingCertificates(Vec<CryptoHash>),
 
-    #[error("Validator's response to block proposal failed to include a vote")]
-    MissingVoteInValidatorResponse,
+    #[error("Validator's response failed to include a vote when trying to {0}")]
+    MissingVoteInValidatorResponse(String),
 
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
@@ -381,6 +381,13 @@ impl From<WorkerError> for NodeError {
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
             WorkerError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             WorkerError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
+            WorkerError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            } => NodeError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            },
             error => Self::WorkerError {
                 error: error.to_string(),
             },

@@ -27,8 +27,9 @@ use linera_execution::{
     ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
+use linera_views::context::InactiveContext;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{debug, instrument, trace, warn, Instrument as _};
+use tracing::{debug, instrument, trace, Instrument as _};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
@@ -39,7 +40,7 @@ use crate::{
 
 /// A request for the [`ChainWorkerActor`].
 #[derive(Debug)]
-pub enum ChainWorkerRequest<Context>
+pub(crate) enum ChainWorkerRequest<Context>
 where
     Context: linera_views::context::Context + Clone + Send + Sync + 'static,
 {
@@ -49,17 +50,6 @@ where
         height: BlockHeight,
         #[debug(skip)]
         callback: oneshot::Sender<Result<Option<ConfirmedBlockCertificate>, WorkerError>>,
-    },
-
-    /// Search for a bundle in one of the chain's inboxes.
-    #[cfg(with_testing)]
-    FindBundleInInbox {
-        inbox_id: ChainId,
-        certificate_hash: CryptoHash,
-        height: BlockHeight,
-        index: u32,
-        #[debug(skip)]
-        callback: oneshot::Sender<Result<Option<MessageBundle>, WorkerError>>,
     },
 
     /// Request a read-only view of the [`ChainStateView`].
@@ -167,7 +157,7 @@ where
 }
 
 /// The actor worker type.
-pub struct ChainWorkerActor<StorageClient>
+pub(crate) struct ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
@@ -175,7 +165,7 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
 }
@@ -184,68 +174,23 @@ impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
-    /// Runs the [`ChainWorkerActor`], first by loading the chain state from `storage` then
-    /// handling all `incoming_requests` as they arrive.
-    ///
-    /// If loading the chain state fails, the next request will receive the error reported by the
-    /// `storage`, and the actor will then try again to load the state.
+    /// Runs the [`ChainWorkerActor`]. The chain state is loaded when the first request
+    /// arrives.
     #[expect(clippy::too_many_arguments)]
-    pub async fn run(
+    pub(crate) async fn run(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
+        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
-        mut incoming_requests: mpsc::UnboundedReceiver<(
+        incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
         )>,
     ) {
-        let actor = loop {
-            let load_result = Self::load(
-                config.clone(),
-                storage.clone(),
-                block_cache.clone(),
-                execution_state_cache.clone(),
-                tracked_chains.clone(),
-                delivery_notifier.clone(),
-                chain_id,
-            )
-            .await
-            .inspect_err(|error| warn!("Failed to load chain state: {error:?}"));
-
-            match load_result {
-                Ok(actor) => break actor,
-                Err(error) => match incoming_requests.recv().await {
-                    Some((request, _span)) => request.send_error(error),
-                    None => return,
-                },
-            }
-        };
-
-        if let Err(err) = actor.handle_requests(incoming_requests).await {
-            tracing::error!("Chain actor error: {err}");
-        }
-    }
-
-    /// Creates a [`ChainWorkerActor`], loading it with the chain state for the requested
-    /// [`ChainId`].
-    pub async fn load(
-        config: ChainWorkerConfig,
-        storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<
-            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
-        >,
-        tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
-        delivery_notifier: DeliveryNotifier,
-        chain_id: ChainId,
-    ) -> Result<Self, WorkerError> {
-        Ok(ChainWorkerActor {
+        let actor = ChainWorkerActor {
             config,
             storage,
             block_values,
@@ -253,7 +198,10 @@ where
             tracked_chains,
             delivery_notifier,
             chain_id,
-        })
+        };
+        if let Err(err) = actor.handle_requests(incoming_requests).await {
+            tracing::error!("Chain actor error: {err}");
+        }
     }
 
     /// Spawns a blocking task to execute the service runtime actor.
@@ -298,7 +246,7 @@ where
         skip_all,
         fields(chain_id = format!("{:.8}", self.chain_id)),
     )]
-    pub async fn handle_requests(
+    async fn handle_requests(
         self,
         mut incoming_requests: mpsc::UnboundedReceiver<(
             ChainWorkerRequest<StorageClient::Context>,
@@ -317,6 +265,7 @@ where
                 }
             };
 
+            trace!("Loading chain state of {}", self.chain_id);
             let mut worker = ChainWorkerState::load(
                 self.config.clone(),
                 self.storage.clone(),
@@ -343,80 +292,17 @@ where
                 }
             }
 
+            trace!("Unloading chain state of {} ...", self.chain_id);
             worker.clear_shared_chain_view().await;
             drop(worker);
             if let Some(thread) = service_runtime_thread {
                 thread.join().await
             }
+            trace!("Done unloading chain state of {}", self.chain_id);
         }
 
         trace!("`ChainWorkerActor` finished");
         Ok(())
-    }
-}
-
-impl<Context> ChainWorkerRequest<Context>
-where
-    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
-{
-    /// Responds to this request with an `error`.
-    pub fn send_error(self, error: WorkerError) {
-        debug!("Immediately sending error to chain worker request {self:?}");
-
-        let responded = match self {
-            #[cfg(with_testing)]
-            ChainWorkerRequest::ReadCertificate { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            #[cfg(with_testing)]
-            ChainWorkerRequest::FindBundleInInbox { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::GetChainStateView { callback } => callback.send(Err(error)).is_ok(),
-            ChainWorkerRequest::QueryApplication { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::DescribeApplication { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::StageBlockExecution { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::ProcessTimeout { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::HandleBlockProposal { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::ProcessValidatedBlock { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::ProcessConfirmedBlock { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::ProcessCrossChainUpdate { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::ConfirmUpdatedRecipient { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::HandleChainInfoQuery { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::DownloadPendingBlob { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::HandlePendingBlob { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-            ChainWorkerRequest::UpdateReceivedCertificateTrackers { callback, .. } => {
-                callback.send(Err(error)).is_ok()
-            }
-        };
-
-        if !responded {
-            warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
-        }
     }
 }
 

@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
-
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use linera_base::time::{Duration, Instant};
 #[cfg(with_dynamodb)]
 use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]

@@ -16,7 +16,9 @@ pub enum IndexerCommand {
     Schema {
         plugin: Option<String>,
     },
-    Run {
+    /// Legacy mode: Run GraphQL server with WebSocket client (deprecated)
+    #[deprecated(note = "Use RunGrpc instead")]
+    RunGraphQL {
         #[command(flatten)]
         listener: Listener,
         /// The port of the indexer server
@@ -95,11 +97,13 @@ where
                 println!("{}", self.indexer.sdl(plugin)?);
                 Ok(())
             }
-            IndexerCommand::Run {
+            #[allow(deprecated)]
+            IndexerCommand::RunGraphQL {
                 chains,
                 listener,
                 port,
             } => {
+                warn!("Running in legacy GraphQL mode. Consider migrating to RunGrpc.");
                 info!("config: {:?}", config);
                 let chains = if chains.is_empty() {
                     listener.service.get_chains().await?

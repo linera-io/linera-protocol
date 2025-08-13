@@ -5,9 +5,9 @@ use std::{borrow::Cow, collections::BTreeSet};
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlockHeight, Epoch},
+    data_types::{BlockHeight, Epoch},
     hashed::Hashed,
-    identifiers::{BlobId, ChainId},
+    identifiers::ChainId,
 };
 use linera_chain::types::Timeout;
 
@@ -36,19 +36,6 @@ fn test_insert_single_certificate_value() {
     assert_eq!(cache.keys::<BTreeSet<_>>(), BTreeSet::from([hash]));
 }
 
-/// Tests inserting a blob in the cache.
-#[test]
-fn test_insert_single_blob() {
-    let cache = ValueCache::<BlobId, Blob>::default();
-    let value = create_dummy_blob(0);
-    let blob_id = value.id();
-
-    assert!(cache.insert(Cow::Borrowed(&value)));
-    assert!(cache.contains(&blob_id));
-    assert_eq!(cache.get(&blob_id), Some(value));
-    assert_eq!(cache.keys::<BTreeSet<_>>(), BTreeSet::from([blob_id]));
-}
-
 /// Tests inserting many certificate values in the cache, one-by-one.
 #[test]
 fn test_insert_many_certificate_values_individually() {
@@ -68,27 +55,6 @@ fn test_insert_many_certificate_values_individually() {
     assert_eq!(
         cache.keys::<BTreeSet<_>>(),
         BTreeSet::from_iter(values.iter().map(Hashed::hash))
-    );
-}
-
-/// Tests inserting many blobs in the cache, one-by-one.
-#[test]
-fn test_insert_many_blobs_individually() {
-    let cache = ValueCache::<BlobId, Blob>::default();
-    let blobs = create_dummy_blobs();
-
-    for blob in &blobs {
-        assert!(cache.insert(Cow::Borrowed(blob)));
-    }
-
-    for blob in &blobs {
-        assert!(cache.contains(&blob.id()));
-        assert_eq!(cache.get(&blob.id()).as_ref(), Some(blob));
-    }
-
-    assert_eq!(
-        cache.keys::<BTreeSet<_>>(),
-        BTreeSet::from_iter(blobs.iter().map(Blob::id))
     );
 }
 
@@ -237,33 +203,6 @@ fn test_promotion_of_reinsertion() {
     );
 }
 
-/// Test that the cache correctly filters out cached items from an iterator.
-#[test]
-fn test_filtering_out_cached_items() {
-    #[derive(Debug, Eq, PartialEq)]
-    struct DummyWrapper(CryptoHash);
-
-    let cached_values = create_dummy_certificate_values(3..7).collect::<Vec<_>>();
-    let items = create_dummy_certificate_values(0..10).map(|value| DummyWrapper(value.hash()));
-
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
-    cache.insert_all(cached_values.iter().map(Cow::Borrowed));
-
-    let output = cache.subtract_cached_items_from::<_, Vec<_>>(items, |item| &item.0);
-
-    let expected = create_dummy_certificate_values(0..3)
-        .chain(create_dummy_certificate_values(7..10))
-        .map(|value| DummyWrapper(value.hash()))
-        .collect::<Vec<_>>();
-
-    assert_eq!(output, expected);
-
-    assert_eq!(
-        cache.keys::<BTreeSet<_>>(),
-        BTreeSet::from_iter(cached_values.iter().map(|el| el.hash()))
-    );
-}
-
 /// Creates multiple dummy [`Hashed<Timeout>`]s to use in the tests.
 fn create_dummy_certificate_values<Heights>(
     heights: Heights,
@@ -275,15 +214,6 @@ where
     heights.into_iter().map(create_dummy_certificate_value)
 }
 
-/// Creates multiple dummy [`Blob`]s to use in the tests.
-fn create_dummy_blobs() -> Vec<Blob> {
-    let mut blobs = Vec::new();
-    for i in 0..DEFAULT_VALUE_CACHE_SIZE {
-        blobs.push(create_dummy_blob(i));
-    }
-    blobs
-}
-
 /// Creates a new dummy [`Hashed<Timeout>`] to use in the tests.
 fn create_dummy_certificate_value(height: impl Into<BlockHeight>) -> Hashed<Timeout> {
     Hashed::new(Timeout::new(
@@ -291,9 +221,4 @@ fn create_dummy_certificate_value(height: impl Into<BlockHeight>) -> Hashed<Time
         height.into(),
         Epoch(0),
     ))
-}
-
-/// Creates a new dummy data [`Blob`] to use in the tests.
-fn create_dummy_blob(id: usize) -> Blob {
-    Blob::new_data(format!("test{}", id).as_bytes().to_vec())
 }

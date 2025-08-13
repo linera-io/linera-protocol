@@ -128,6 +128,9 @@ impl ChainOwnership {
     /// Returns the duration of the given round.
     pub fn round_timeout(&self, round: Round) -> Option<TimeDelta> {
         let tc = &self.timeout_config;
+        if round.is_fast() && self.owners.is_empty() {
+            return None; // Fast round only times out if there are regular owners.
+        }
         match round {
             Round::Fast => tc.fast_round_duration,
             Round::MultiLeader(r) if r.saturating_add(1) == self.multi_leader_rounds => {

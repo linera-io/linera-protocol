@@ -110,6 +110,7 @@ pub struct BlockHeight(pub u64);
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum Round {
     /// The initial fast round.
     #[default]

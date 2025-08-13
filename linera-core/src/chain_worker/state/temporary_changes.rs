@@ -18,12 +18,12 @@ use linera_chain::{
 };
 use linera_execution::{Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
-use linera_views::views::{ClonableView, View};
-#[cfg(with_testing)]
-use {
-    linera_base::{crypto::CryptoHash, data_types::BlockHeight},
-    linera_chain::{data_types::MessageBundle, types::ConfirmedBlockCertificate},
+use linera_views::{
+    context::{Context, InactiveContext},
+    views::{ReplaceContext, View},
 };
+#[cfg(with_testing)]
+use {linera_base::data_types::BlockHeight, linera_chain::types::ConfirmedBlockCertificate};
 
 use super::ChainWorkerState;
 use crate::{
@@ -71,29 +71,6 @@ where
             .await?
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
-    }
-
-    /// Searches for a bundle in one of the chain's inboxes.
-    #[cfg(with_testing)]
-    pub(super) async fn find_bundle_in_inbox(
-        &mut self,
-        inbox_id: linera_base::identifiers::ChainId,
-        certificate_hash: CryptoHash,
-        height: BlockHeight,
-        index: u32,
-    ) -> Result<Option<MessageBundle>, WorkerError> {
-        self.0.ensure_is_active().await?;
-
-        let mut inbox = self.0.chain.inboxes.try_load_entry_mut(&inbox_id).await?;
-        let mut bundles = inbox.added_bundles.iter_mut().await?;
-
-        Ok(bundles
-            .find(|bundle| {
-                bundle.certificate_hash == certificate_hash
-                    && bundle.height == height
-                    && bundle.messages.iter().any(|msg| msg.index == index)
-            })
-            .cloned())
     }
 
     /// Queries an application's state on the chain.
@@ -229,7 +206,7 @@ where
         &mut self,
         content: &ProposalContent,
         published_blobs: &[Blob],
-    ) -> Result<Option<(BlockExecutionOutcome, Timestamp)>, WorkerError> {
+    ) -> Result<(BlockExecutionOutcome, Timestamp), WorkerError> {
         let ProposalContent {
             block,
             round,
@@ -267,7 +244,7 @@ where
             .update_counters(&block.transactions, &outcome.messages)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
-        Ok(Some((outcome, local_time)))
+        Ok((outcome, local_time))
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
@@ -359,7 +336,11 @@ where
             .await?;
         self.0.execution_state_cache.insert_owned(
             &outcome.state_hash,
-            self.0.chain.execution_state.clone_unchecked()?,
+            self.0
+                .chain
+                .execution_state
+                .with_context(|ctx| InactiveContext(ctx.base_key().clone()))
+                .await,
         );
         Ok(outcome)
     }

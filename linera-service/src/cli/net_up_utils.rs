@@ -179,6 +179,7 @@ pub async fn handle_net_up_service(
     policy_config: ResourceControlPolicyConfig,
     cross_chain_config: CrossChainConfig,
     with_block_exporter: bool,
+    block_exporter_address: String,
     block_exporter_port: NonZeroU16,
     path: &Option<String>,
     storage: &Option<String>,
@@ -214,7 +215,7 @@ pub async fn handle_net_up_service(
     let num_proxies = 1; // Local networks currently support exactly 1 proxy.
     let block_exporters = if with_block_exporter {
         let exporter_config = ExporterServiceConfig {
-            host: "localhost".to_owned(),
+            host: block_exporter_address,
             port: block_exporter_port.into(),
         };
         ExportersSetup::Remote(vec![exporter_config])

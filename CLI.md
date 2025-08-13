@@ -640,6 +640,7 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 * `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
 
   Default value: `0`
+* `--storage-path <STORAGE_PATH>` — Path to the persistent storage file for faucet mappings
 
 
 
@@ -1046,6 +1047,9 @@ Start a Local Linera Network
 * `--with-block-exporter` — Whether to start a block exporter for each validator
 
   Default value: `false`
+* `--exporter-address <EXPORTER_ADDRESS>` — The address of the block exporter
+
+  Default value: `localhost`
 * `--exporter-port <EXPORTER_PORT>` — The port on which to run the block exporter
 
   Default value: `8081`

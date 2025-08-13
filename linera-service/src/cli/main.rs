@@ -61,12 +61,24 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 #[cfg(feature = "benchmark")]
 use {
+    linera_base::identifiers::ChainId,
+    linera_base::time::Duration,
+    linera_client::{
+        benchmark::BenchmarkConfig,
+        chain_listener::{ChainListener, ChainListenerConfig},
+    },
+    linera_faucet_client::Faucet,
     linera_service::{
         cli::command::BenchmarkCommand,
         cli_wrappers::{local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     },
-    std::time::Duration,
-    tokio::{io::AsyncWriteExt, process::ChildStdin, sync::oneshot},
+    tempfile::NamedTempFile,
+    tokio::{
+        io::AsyncWriteExt,
+        process::{ChildStdin, Command},
+        sync::oneshot,
+        time,
+    },
 };
 
 struct Job(ClientOptions);
@@ -137,6 +149,8 @@ impl Runnable for Job {
                 chain_id,
                 owner,
                 balance,
+                #[cfg(feature = "benchmark")]
+                super_owner,
             } => {
                 let new_owner = owner.unwrap_or_else(|| signer.generate_new().into());
                 signer.persist().await?;
@@ -152,7 +166,15 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 let (description, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
+                        #[cfg(feature = "benchmark")]
+                        let ownership = if super_owner {
+                            ChainOwnership::single_super(new_owner)
+                        } else {
+                            ChainOwnership::single(new_owner)
+                        };
+                        #[cfg(not(feature = "benchmark"))]
                         let ownership = ChainOwnership::single(new_owner);
+
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
@@ -789,8 +811,7 @@ impl Runnable for Job {
             #[cfg(feature = "benchmark")]
             Benchmark(benchmark_config) => {
                 let BenchmarkCommand {
-                    dont_use_cross_chain_messages,
-                    num_chain_groups,
+                    num_chains,
                     tokens_per_chain,
                     transactions_per_block,
                     fungible_application_id,
@@ -800,16 +821,16 @@ impl Runnable for Job {
                     wrap_up_max_in_flight,
                     confirm_before_start,
                     runtime_in_seconds,
-                    delay_between_chain_groups_ms,
+                    delay_between_chains_ms,
+                    config_path,
                 } = benchmark_config;
                 assert!(
                     options.context_options.max_pending_message_bundles >= transactions_per_block,
                     "max_pending_message_bundles must be set to at least the same as the \
                      number of transactions per block ({transactions_per_block}) for benchmarking",
                 );
-                let num_chain_groups = num_chain_groups.unwrap_or(num_cpus::get());
                 assert!(
-                    num_chain_groups > 0,
+                    num_chains > 0,
                     "Number of chain groups must be greater than 0"
                 );
                 assert!(
@@ -817,27 +838,38 @@ impl Runnable for Job {
                     "Number of transactions per block must be greater than 0"
                 );
                 assert!(bps > 0, "BPS must be greater than 0");
-                let num_chains_per_chain_group = if dont_use_cross_chain_messages { 1 } else { 2 };
+                if num_chains > 1 {
+                    assert!(
+                        transactions_per_block % (num_chains - 1) == 0,
+                        "Number of transactions per block must be a multiple of the number of \
+                         chains minus 1, to make sure transactions always cancel each other out"
+                    );
+                }
+
+                let listener_config = ChainListenerConfig {
+                    skip_process_inbox: true,
+                    ..Default::default()
+                };
 
                 let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
-                    .take(num_chain_groups * num_chains_per_chain_group)
+                    .take(num_chains)
                     .collect();
                 signer.persist().await?;
 
                 let mut context = ClientContext::new(
-                    storage,
+                    storage.clone(),
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
-                let (chain_clients, blocks_infos, committee) = context
+                let (chain_clients, blocks_infos) = context
                     .prepare_for_benchmark(
-                        num_chain_groups,
-                        num_chains_per_chain_group,
+                        num_chains,
                         transactions_per_block,
                         tokens_per_chain,
                         fungible_application_id,
                         pub_keys,
+                        config_path.as_deref(),
                     )
                     .await?;
 
@@ -857,20 +889,33 @@ impl Runnable for Job {
                     }
                 }
 
+                let shutdown_notifier = CancellationToken::new();
+                tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+                let shared_context = std::sync::Arc::new(futures::lock::Mutex::new(context));
+                let chain_listener = ChainListener::new(
+                    listener_config,
+                    shared_context.clone(),
+                    storage.clone(),
+                    shutdown_notifier.clone(),
+                );
                 linera_client::benchmark::Benchmark::run_benchmark(
-                    num_chain_groups,
+                    num_chains,
                     transactions_per_block,
                     bps,
                     chain_clients.clone(),
                     blocks_infos,
-                    committee,
                     health_check_endpoints,
                     runtime_in_seconds,
-                    delay_between_chain_groups_ms,
-                    context.client_metrics().map(|m| m.timing_sender.clone()),
+                    delay_between_chains_ms,
+                    chain_listener,
+                    &shutdown_notifier,
                 )
                 .await?;
 
+                let mut context = std::sync::Arc::try_unwrap(shared_context)
+                    .map_err(|_| anyhow::anyhow!("Failed to unwrap shared context"))?
+                    .into_inner();
                 context
                     .wrap_up_benchmark(chain_clients, close_chains, wrap_up_max_in_flight)
                     .await?;
@@ -925,6 +970,7 @@ impl Runnable for Job {
                 amount,
                 limit_rate_until,
                 config,
+                storage_path,
             } => {
                 let context = ClientContext::new(
                     storage.clone(),
@@ -952,6 +998,7 @@ impl Runnable for Job {
                     end_timestamp,
                     genesis_config,
                     chain_listener_config: config,
+                    storage_path,
                 };
                 let faucet = FaucetService::new(config, context, storage).await?;
                 let cancellation_token = CancellationToken::new();
@@ -1620,6 +1667,18 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
     }
 }
 
+#[cfg(feature = "benchmark")]
+async fn kill_all_processes(pids: &[u32]) {
+    for &pid in pids {
+        info!("Killing benchmark process (pid {})", pid);
+        let _ = Command::new("kill")
+            .arg("-9")
+            .arg(pid.to_string())
+            .status()
+            .await;
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let options = ClientOptions::init();
 
@@ -1936,6 +1995,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_port,
                 faucet_amount,
                 with_block_exporter,
+                exporter_address: block_exporter_address,
                 exporter_port: block_exporter_port,
                 ..
             } => {
@@ -1948,6 +2008,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *policy_config,
                     cross_chain_config.clone(),
                     *with_block_exporter,
+                    block_exporter_address.to_owned(),
                     *block_exporter_port,
                     path,
                     // Not using the default value for storage
@@ -2130,8 +2191,10 @@ Make sure to use a Linera client compatible with this network.
             client_state_dir,
             command,
             delay_between_processes,
+            cross_wallet_transfers,
         } => {
-            let faucet = linera_faucet_client::Faucet::new(faucet.clone());
+            let mut command = command.clone();
+            let faucet = Faucet::new(faucet.clone());
             let on_drop = if command.close_chains {
                 OnClientDrop::CloseChains
             } else {
@@ -2167,20 +2230,86 @@ Make sure to use a Linera client compatible with this network.
 
             info!("Initializing wallets...");
             let mut join_set = JoinSet::new();
-            for client in clients.clone() {
-                let faucet = faucet.clone();
-                join_set.spawn(async move {
-                    client.wallet_init(Some(&faucet)).await?;
-                    client.request_chain(&faucet, true).await?;
-                    Ok::<_, anyhow::Error>(())
-                });
-            }
 
-            join_set
-                .join_all()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
+            if *cross_wallet_transfers {
+                for client in &clients {
+                    let client = client.clone();
+                    let faucet = faucet.clone();
+                    join_set.spawn(async move {
+                        client.wallet_init(Some(&faucet)).await?;
+                        client.request_chain(&faucet, true).await?;
+                        Ok::<_, anyhow::Error>(())
+                    });
+                }
+
+                join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let chains_per_wallet = command.num_chains;
+                info!(
+                    "Creating {} chains per wallet ({} total chains)...",
+                    chains_per_wallet,
+                    chains_per_wallet * processes
+                );
+
+                let mut join_set = JoinSet::new();
+                for client in &clients {
+                    let default_chain_id = client
+                        .default_chain()
+                        .ok_or_else(|| anyhow::anyhow!("No default chain found for client"))?;
+                    let client = client.clone();
+                    join_set.spawn(async move {
+                        let mut chain_ids = Vec::new();
+                        for _ in 0..chains_per_wallet {
+                            let (chain_id, _owner) = client
+                                .open_chain_super_owner(
+                                    default_chain_id,
+                                    None,
+                                    command.tokens_per_chain,
+                                )
+                                .await?;
+                            chain_ids.push(chain_id);
+                        }
+                        Ok::<Vec<ChainId>, anyhow::Error>(chain_ids)
+                    });
+                }
+
+                let all_chain_ids = join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                let config = BenchmarkConfig {
+                    chain_ids: all_chain_ids,
+                };
+
+                let (_, path) = NamedTempFile::new()?.keep()?;
+                config.save_to_file(&path)?;
+                info!("Saved chains configuration to {}", path.display());
+                command.config_path = Some(path);
+            } else {
+                for client in clients.clone() {
+                    let faucet = faucet.clone();
+                    join_set.spawn(async move {
+                        client.wallet_init(Some(&faucet)).await?;
+                        client.request_chain(&faucet, true).await?;
+                        Ok::<_, anyhow::Error>(())
+                    });
+                }
+
+                join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
+            }
 
             info!("Starting benchmark processes...");
             let confirm_before_start = command.confirm_before_start;
@@ -2246,16 +2375,16 @@ Make sure to use a Linera client compatible with this network.
                     return Ok(1);
                 }
 
-                let mut previous = tokio::time::Instant::now();
+                let mut previous = time::Instant::now();
                 let mut first = true;
                 let mut started_count = 0;
                 for child in &mut children {
                     if first {
                         first = false;
-                    } else {
+                    } else if !*cross_wallet_transfers {
                         let time_elapsed = previous.elapsed();
                         if time_elapsed < Duration::from_secs(*delay_between_processes) {
-                            tokio::time::sleep(
+                            time::sleep(
                                 Duration::from_secs(*delay_between_processes) - time_elapsed,
                             )
                             .await;
@@ -2268,7 +2397,7 @@ Make sure to use a Linera client compatible with this network.
                     started_count += 1;
                     info!("{}/{} benchmarks started", started_count, processes);
 
-                    previous = tokio::time::Instant::now();
+                    previous = time::Instant::now();
                 }
             }
 
@@ -2276,26 +2405,54 @@ Make sure to use a Linera client compatible with this network.
             tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
             let mut join_set = JoinSet::new();
+            let children_pids: Vec<u32> = children.iter().flat_map(|c| c.id()).collect();
+
             for ((mut child, stdout_handle), stderr_handle) in
                 children.into_iter().zip(stdout_handles).zip(stderr_handles)
             {
                 join_set.spawn(async move {
-                    child.wait().await?;
+                    let pid = child.id();
+                    let status = child.wait().await?;
                     stdout_handle.await?;
                     stderr_handle.await?;
-                    Ok::<_, anyhow::Error>(())
+                    Ok::<_, anyhow::Error>((pid, status))
                 });
             }
 
-            // Wait for the shutdown signal.
-            shutdown_notifier.cancelled().await;
-
-            // Wait for all children to exit.
-            join_set
-                .join_all()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
+            loop {
+                tokio::select! {
+                    result = join_set.join_next() => {
+                        match result {
+                            Some(Ok(Ok((pid, status)))) => {
+                                if !status.success() {
+                                    error!("Benchmark process (pid {:?}) failed with status: {:?}", pid, status);
+                                    kill_all_processes(&children_pids).await;
+                                    return Err(anyhow::anyhow!("Benchmark process (pid {:?}) failed", pid));
+                                }
+                            }
+                            Some(Ok(Err(e))) => {
+                                error!("Benchmark process failed: {}", e);
+                                kill_all_processes(&children_pids).await;
+                                return Err(e);
+                            }
+                            Some(Err(e)) => {
+                                error!("Benchmark process panicked: {}", e);
+                                kill_all_processes(&children_pids).await;
+                                return Err(e.into());
+                            }
+                            None => {
+                                info!("All benchmark processes have finished");
+                                break;
+                            }
+                        }
+                    }
+                    _ = shutdown_notifier.cancelled() => {
+                        info!("Shutdown signal received, waiting for all benchmark processes to finish");
+                        join_set.join_all().await.into_iter().collect::<Result<Vec<_>, _>>()?;
+                        break;
+                    }
+                }
+            }
             Ok(0)
         }
 

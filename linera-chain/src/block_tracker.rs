@@ -9,7 +9,7 @@ use linera_base::prometheus_util::MeasureLatency;
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Timestamp},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId, MessageId, StreamId},
+    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
 };
 use linera_execution::{
     ExecutionRuntimeContext, ExecutionStateView, MessageContext, OperationContext, OutgoingMessage,
@@ -118,10 +118,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 self.resource_controller_mut()
                     .track_block_size_of(&incoming_bundle)
                     .with_execution_context(chain_execution_context)?;
-                for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
+                for posted_message in incoming_bundle.messages() {
                     Box::pin(self.execute_message_in_block(
                         chain,
-                        message_id,
                         posted_message,
                         incoming_bundle,
                         round,
@@ -185,7 +184,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     async fn execute_message_in_block<C>(
         &mut self,
         chain: &mut ExecutionStateView<C>,
-        message_id: MessageId,
         posted_message: &PostedMessage,
         incoming_bundle: &IncomingBundle,
         round: Option<u32>,
@@ -199,10 +197,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency();
         let context = MessageContext {
             chain_id: self.chain_id,
+            origin: incoming_bundle.origin,
             is_bouncing: posted_message.is_bouncing(),
             height: self.block_height,
             round,
-            message_id,
             authenticated_signer: posted_message.authenticated_signer,
             refund_grant_to: posted_message.refund_grant_to,
             timestamp: self.timestamp,

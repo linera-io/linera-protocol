@@ -26,8 +26,10 @@ wasmtime = ["linera-indexer-plugins/wasmtime"]
 test = ["linera-service/test"]
 
 [dependencies]
+clap.workspace = true
 linera-indexer.workspace = true
 linera-indexer-plugins.workspace = true
+linera-version.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
@@ -49,3 +51,7 @@ tracing.workspace = true
 [[bin]]
 name = "linera-indexer"
 path = "src/main.rs"
+
+[[bin]]
+name = "linera-indexer-grpc"
+path = "src/grpc_main.rs"
