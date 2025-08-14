@@ -8,9 +8,8 @@ use std::{collections::VecDeque, path::PathBuf, str::FromStr, sync::Arc};
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
-    data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
+    data_types::{Amount, Timestamp},
     identifiers::{AccountOwner, ChainId},
-    ownership::ChainOwnership,
 };
 use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
