@@ -35,6 +35,7 @@ where
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
     expected_http_requests: Mutex<VecDeque<(http::Request, http::Response)>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
+    applications: Mutex<Option<HashMap<ApplicationId, bool>>>,
     scheduled_operations: Mutex<Vec<Vec<u8>>>,
     key_value_store: KeyValueStore,
 }
@@ -66,6 +67,7 @@ where
             query_application_handler: Mutex::new(None),
             expected_http_requests: Mutex::new(VecDeque::new()),
             blobs: Mutex::new(None),
+            applications: Mutex::new(None),
             scheduled_operations: Mutex::new(vec![]),
             key_value_store: KeyValueStore::mock(),
         }
@@ -453,6 +455,16 @@ where
         self
     }
 
+    /// Sets the existence status of an application for testing purposes.
+    pub fn set_application_exists(&self, application_id: ApplicationId, exists: bool) -> &Self {
+        self.applications
+            .lock()
+            .unwrap()
+            .get_or_insert_with(HashMap::new)
+            .insert(application_id, exists);
+        self
+    }
+
     /// Fetches a blob from a given hash.
     pub fn read_data_blob(&self, hash: DataBlobHash) -> Vec<u8> {
         self.blobs
@@ -481,6 +493,21 @@ where
                     please call `MockServiceRuntime::set_blob` first"
                 )
             });
+    }
+
+    /// Tests the existence of an application.
+    pub fn application_exists(&self, application_id: ApplicationId) -> bool {
+        self.applications
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|applications| applications.get(&application_id).copied())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Application existence for {application_id:?} has not been mocked, \
+                    please call `MockServiceRuntime::set_application_exists` first"
+                )
+            })
     }
 
     /// Loads a mocked value from the `slot` cache or panics with a provided `message`.

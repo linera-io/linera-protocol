@@ -76,6 +76,7 @@ where
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
+    expected_application_exists_requests: VecDeque<(ApplicationId, bool)>,
     expected_open_chain_calls: VecDeque<(ChainOwnership, ApplicationPermissions, Amount, ChainId)>,
     expected_publish_module_calls: VecDeque<ExpectedPublishModuleCall>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
@@ -125,6 +126,7 @@ where
             expected_http_requests: VecDeque::new(),
             expected_read_data_blob_requests: VecDeque::new(),
             expected_assert_data_blob_exists_requests: VecDeque::new(),
+            expected_application_exists_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
             expected_publish_module_calls: VecDeque::new(),
             expected_create_application_calls: VecDeque::new(),
@@ -934,6 +936,16 @@ where
             .push_back((hash, response));
     }
 
+    /// Adds an expected `application_exists` call, and the response it should return in the test.
+    pub fn add_expected_application_exists_request(
+        &mut self,
+        application_id: ApplicationId,
+        response: bool,
+    ) {
+        self.expected_application_exists_requests
+            .push_back((application_id, response));
+    }
+
     /// Queries an application service as an oracle and returns the response.
     ///
     /// Should only be used with queries where it is very likely that all validators will compute
@@ -993,6 +1005,15 @@ where
             maybe_request.expect("Unexpected assert_data_blob_exists request");
         assert_eq!(hash, expected_blob_hash);
         response.expect("Blob does not exist!");
+    }
+
+    /// Tests the existence of an application.
+    pub fn application_exists(&mut self, application_id: ApplicationId) -> bool {
+        let maybe_request = self.expected_application_exists_requests.pop_front();
+        let (expected_application_id, response) =
+            maybe_request.expect("Unexpected application_exists request");
+        assert_eq!(application_id, expected_application_id);
+        response
     }
 
     /// Returns the round in which this block was validated.
