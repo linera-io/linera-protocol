@@ -19,8 +19,8 @@ use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
 use crate::{
-    evm::inputs::ZERO_ADDRESS,
-    BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError, ServiceRuntime,
+    evm::inputs::ZERO_ADDRESS, BaseRuntime, Batch, ContractRuntime, EvmExecutionError,
+    ExecutionError, ServiceRuntime,
 };
 
 // The runtime costs are not available in service operations.

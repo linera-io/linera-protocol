@@ -527,6 +527,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_primitives::U256;
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::{
@@ -612,12 +613,14 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     let query1 = get_balanceCall { account: address1 };
     let query1 = EvmQuery::Query(query1.abi_encode());
     let result = application.run_json_query(query1.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), balance1.into());
+    let balance1_256: U256 = balance1.into();
+    assert_eq!(read_evm_u256_entry(result), balance1_256);
 
     let query2 = get_balanceCall { account: address2 };
     let query2 = EvmQuery::Query(query2.abi_encode());
     let result = application.run_json_query(query2.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), balance2.into());
+    let balance2_256: U256 = balance2.into();
+    assert_eq!(read_evm_u256_entry(result), balance2_256);
 
     // Transfering amount
 
@@ -641,10 +644,12 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     assert_eq!(balance_app_after, balance_app - amount);
 
     let result = application.run_json_query(query1).await?;
-    assert_eq!(read_evm_u256_entry(result), balance1_after.into());
+    let balance1_after_256: U256 = balance1_after.into();
+    assert_eq!(read_evm_u256_entry(result), balance1_after_256);
 
     let result = application.run_json_query(query2.clone()).await?;
-    assert_eq!(read_evm_u256_entry(result), balance2_after.into());
+    let balance2_after_256: U256 = balance2_after.into();
+    assert_eq!(read_evm_u256_entry(result), balance2_after_256);
 
     // Winding down
 

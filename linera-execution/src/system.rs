@@ -698,7 +698,6 @@ where
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
-        let source_chain_id = self.context().extra().chain_id();
         if source == AccountOwner::CHAIN {
             ensure!(
                 authenticated_signer.is_some()
