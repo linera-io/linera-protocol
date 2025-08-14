@@ -18,7 +18,9 @@ use linera_core::{
     environment,
     test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
-use tokio::sync::Notify;
+use linera_execution::ResourceControlPolicy;
+use tempfile::tempdir;
+use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
 
 struct ClientContext {
@@ -551,4 +553,90 @@ fn test_multiply() {
         [1 << 62, 1 << 62, 0]
     );
     assert_eq!(multiply(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
+}
+
+#[tokio::test]
+async fn test_batch_size_reduction_on_limit_errors() {
+    // Test that the batch processor reduces batch size when hitting BlockTooLarge limit
+
+    // Set up test environment
+    let temp_dir = tempdir().unwrap();
+    let storage_path = temp_dir.path().join("test_batch_reduction.json");
+
+    let storage_builder = MemoryStorageBuilder::default();
+    let keys = InMemorySigner::new(None);
+
+    // Create a restrictive policy that limits block size to trigger BlockTooLarge
+    let restrictive_policy = ResourceControlPolicy {
+        maximum_block_size: 800,
+        ..ResourceControlPolicy::default()
+    };
+
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+        .await
+        .unwrap()
+        .with_policy(restrictive_policy);
+
+    let client = builder
+        .add_root_chain(1, Amount::from_tokens(100))
+        .await
+        .unwrap();
+    let chain_id = client.chain_id();
+
+    let context = Arc::new(Mutex::new(ClientContext {
+        client,
+        update_calls: 0,
+    }));
+
+    let faucet_storage = Arc::new(Mutex::new(super::FaucetStorage::default()));
+    let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
+    let request_notifier = Arc::new(Notify::new());
+
+    // Create batch processor with initial batch size of 3 and disabled rate limiting
+    let initial_batch_size = 3;
+    let config = super::BatchProcessorConfig {
+        chain_id,
+        amount: Amount::from_tokens(1),
+        start_balance: Amount::from_tokens(100),
+        start_timestamp: Timestamp::from(1000), // start > end disables rate limiting
+        end_timestamp: Timestamp::from(999),
+        storage_path: storage_path.clone(),
+        max_batch_size: initial_batch_size,
+    };
+
+    let mut batch_processor = super::BatchProcessor::new(
+        config,
+        Arc::clone(&context),
+        Arc::clone(&faucet_storage),
+        Arc::clone(&pending_requests),
+        Arc::clone(&request_notifier),
+    );
+
+    // Create 3 different owners for batch processing
+    let owners = [
+        AccountOwner::from_str("0x1111111111111111111111111111111111111111").unwrap(),
+        AccountOwner::from_str("0x2222222222222222222222222222222222222222").unwrap(),
+        AccountOwner::from_str("0x3333333333333333333333333333333333333333").unwrap(),
+    ];
+
+    // Create and queue 3 pending requests
+    {
+        let mut pending_requests_guard = pending_requests.lock().await;
+        for owner in owners {
+            let (tx, _rx) = oneshot::channel();
+            pending_requests_guard.push_back(super::PendingRequest {
+                owner,
+                responder: tx,
+            });
+        }
+    }
+
+    // Execute the batch - this triggers BlockTooLarge error
+    batch_processor
+        .process_batch()
+        .await
+        .expect("Batch processing should succeed");
+
+    // Now the batch size should be reduced.
+    assert!(batch_processor.config.max_batch_size < initial_batch_size);
 }
