@@ -523,7 +523,8 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{
-        load_solidity_example_by_name, temporary_write_evm_module, read_evm_address_entry,
+        load_solidity_example_by_name, read_evm_address_entry, read_evm_u256_entry,
+        temporary_write_evm_module,
     };
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -569,6 +570,8 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
         .make_application(&chain, &application_id)
         .await?;
 
+    // Creating the subcontracts
+
     let mutation0 = createCounterCall {
         initialValue: U256::from(42),
     };
@@ -595,6 +598,24 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     let address1 = application.run_json_query(query1).await?;
     let address1 = read_evm_address_entry(address1);
     assert_ne!(address0, address1);
+
+    // Creating the applications
+
+    let application0: ApplicationId = address0.into();
+    let application0: ApplicationId<EvmAbi> = application0.with_abi();
+    let application0 = node_service.make_application(&chain, &application0).await?;
+
+    let application1: ApplicationId = address1.into();
+    let application1: ApplicationId<EvmAbi> = application1.with_abi();
+    let application1 = node_service.make_application(&chain, &application1).await?;
+
+    let query = get_valueCall {};
+    let query = EvmQuery::Query(query.abi_encode());
+    let result = application0.run_json_query(query.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), U256::from(42));
+
+    let result = application1.run_json_query(query).await?;
+    assert_eq!(read_evm_u256_entry(result), U256::from(149));
 
     node_service.ensure_is_running()?;
 

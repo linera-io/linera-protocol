@@ -942,6 +942,17 @@ impl<A> ApplicationId<A> {
     }
 }
 
+impl From<Address> for ApplicationId {
+    fn from(address: Address) -> ApplicationId {
+        let mut arr = [0_u8; 32];
+        arr[..20].copy_from_slice(address.as_slice());
+        ApplicationId {
+            application_description_hash: arr.into(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
 #[cfg(with_revm)]
 impl<A> ApplicationId<A> {
     /// Converts the `ApplicationId` into an Ethereum Address.
