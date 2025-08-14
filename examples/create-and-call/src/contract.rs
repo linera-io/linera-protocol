@@ -8,7 +8,7 @@ mod state;
 use counter_no_graphql::{CounterNoGraphQlAbi, CounterOperation, CounterRequest};
 use create_and_call::{CreateAndCallAbi, CreateAndCallOperation};
 use linera_sdk::{
-    linera_base_types::{Bytecode, VmRuntime, WithContractAbi},
+    linera_base_types::{ApplicationId, Bytecode, VmRuntime, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -72,18 +72,24 @@ impl Contract for CreateAndCallContract {
             );
         self.state.value.set(Some(application_id));
 
-        // Step 3: Testing the existence of the application
+        // Step 3(A): Testing the existence of the application
         let application_id_no_abi = application_id.forget_abi();
         let test = self.runtime.application_exists(application_id_no_abi);
-//        assert!(test);
+        assert!(test);
 
-        // Step 3: Call the service. It should return the value before
+        // Step 3(B): Testing the absence of application
+        let hash = [0_u8; 32];
+        let application_id_zero = ApplicationId::new(hash.into());
+        let test = self.runtime.application_exists(application_id_zero);
+        assert!(!test);
+
+        // Step 4: Call the service. It should return the value before
         // the initialization of this contract and thus zero.
         let counter_request = CounterRequest::Query;
         let value = self.runtime.query_service(application_id, counter_request);
         assert_eq!(value, 0);
 
-        // Step 4: Call the contract with counter increment operation
+        // Step 5: Call the contract with counter increment operation
         let counter_operation = CounterOperation::Increment(increment_value);
         self.runtime
             .call_application(true, application_id, &counter_operation)
