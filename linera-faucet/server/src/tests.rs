@@ -3,11 +3,11 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::VecDeque, path::PathBuf, str::FromStr, sync::Arc};
+use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::{AccountPublicKey, InMemorySigner},
+    crypto::{AccountPublicKey, CryptoHash, InMemorySigner, TestString},
     data_types::{Amount, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
@@ -247,9 +247,9 @@ async fn test_batch_size_reduction_on_limit_errors() {
 
     // Create 3 different owners for batch processing
     let owners = [
-        AccountOwner::from_str("0x1111111111111111111111111111111111111111").unwrap(),
-        AccountOwner::from_str("0x2222222222222222222222222222222222222222").unwrap(),
-        AccountOwner::from_str("0x3333333333333333333333333333333333333333").unwrap(),
+        CryptoHash::new(&TestString("owner1".into())).into(),
+        CryptoHash::new(&TestString("owner2".into())).into(),
+        CryptoHash::new(&TestString("owner3".into())).into(),
     ];
 
     // Create and queue 3 pending requests
