@@ -72,6 +72,11 @@ impl Contract for CreateAndCallContract {
             );
         self.state.value.set(Some(application_id));
 
+        // Step 3: Testing the existence of the application
+        let application_id_no_abi = application_id.forget_abi();
+        let test = self.runtime.application_exists(application_id_no_abi);
+//        assert!(test);
+
         // Step 3: Call the service. It should return the value before
         // the initialization of this contract and thus zero.
         let counter_request = CounterRequest::Query;
