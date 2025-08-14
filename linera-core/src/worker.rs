@@ -803,9 +803,9 @@ where
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     // Other fields will be included in handle_certificate's span.
     #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
-    pub async fn handle_lite_certificate<'a>(
+    pub async fn handle_lite_certificate(
         &self,
-        certificate: LiteCertificate<'a>,
+        certificate: LiteCertificate<'_>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         match self.full_certificate(certificate).await? {
