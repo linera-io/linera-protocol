@@ -17,7 +17,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{IncomingBundle, MessageBundle, PostedMessage},
+    data_types::{IncomingBundle, MessageBundle, PostedMessage, Transaction},
     manager::LockingBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
@@ -235,7 +235,7 @@ where
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
-        let messages = &cert.block().body.incoming_bundles;
+        let messages = cert.block().body.incoming_bundles().collect::<Vec<_>>();
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
@@ -587,8 +587,8 @@ where
     assert!(sender.pending_proposal().is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     assert_matches!(
-        certificate.block().body.operations[0].as_system_operation(),
-        Some(SystemOperation::OpenChain(_)),
+        &certificate.block().body.transactions[0],
+        Transaction::ExecuteOperation(Operation::System(system_op)) if matches!(**system_op, SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
     assert_eq!(
@@ -713,13 +713,13 @@ where
 
     let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
     assert_eq!(
-        certificate.block().body.operations.len(),
+        certificate.block().body.transactions.len(),
         1,
-        "Unexpected operations in certificate"
+        "Unexpected transactions in certificate"
     );
     assert_matches!(
-        certificate.block().body.operations[0].as_system_operation(),
-        Some(SystemOperation::CloseChain),
+        &certificate.block().body.transactions[0],
+        Transaction::ExecuteOperation(Operation::System(system_op)) if matches!(**system_op, SystemOperation::CloseChain),
         "Unexpected certificate value",
     );
     assert_eq!(
@@ -762,18 +762,17 @@ where
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].block();
-    assert!(block.body.operations.is_empty());
-    assert_eq!(block.body.incoming_bundles.len(), 1);
+    assert_eq!(block.body.transactions.len(), 1);
     assert_matches!(
-        &block.body.incoming_bundles[0],
-        IncomingBundle {
+        &block.body.transactions[..],
+        [Transaction::ReceiveMessages(IncomingBundle {
             origin: sender,
             action: MessageAction::Reject,
             bundle: MessageBundle {
                 messages,
                 ..
             },
-        } if *sender == client2.chain_id() && matches!(messages[..],
+        })] if *sender == client2.chain_id() && matches!(messages[..],
             [PostedMessage {
                 message: Message::System(SystemMessage::Credit { .. }),
                 kind: MessageKind::Tracked,
@@ -1514,11 +1513,8 @@ where
         .unwrap();
 
     // Latest block should be the burn
-    assert!(certificate_values[0]
-        .block()
-        .body
-        .operations
-        .contains(&Operation::system(SystemOperation::Transfer {
+    assert!(certificate_values[0].block().body.operations().any(|op| *op
+        == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
@@ -1526,8 +1522,12 @@ where
 
     // Block before that should be b0
     assert_eq!(
-        certificate_values[1].block().body.operations,
-        blob_0_1_operations,
+        certificate_values[1]
+            .block()
+            .body
+            .operations()
+            .collect::<Vec<_>>(),
+        blob_0_1_operations.iter().collect::<Vec<_>>(),
     );
 
     Ok(())
@@ -1624,8 +1624,9 @@ where
                 .unwrap()
                 .content
                 .block
-                .operations,
-            blob_0_1_operations,
+                .operations()
+                .collect::<Vec<_>>(),
+            blob_0_1_operations.iter().collect::<Vec<_>>(),
         );
         assert!(validator_manager.requested_locking.is_none());
     }
@@ -1645,11 +1646,8 @@ where
         .unwrap();
 
     // Latest block should be the burn
-    assert!(certificate_values[0]
-        .block()
-        .body
-        .operations
-        .contains(&Operation::system(SystemOperation::Transfer {
+    assert!(certificate_values[0].block().body.operations().any(|op| *op
+        == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
@@ -1659,8 +1657,8 @@ where
     assert!(certificate_values[1]
         .block()
         .body
-        .operations
-        .contains(&owner_change_op));
+        .operations()
+        .any(|op| *op == owner_change_op));
     Ok(())
 }
 
@@ -1881,8 +1879,9 @@ where
                 .unwrap()
                 .content
                 .block
-                .operations,
-            blob_0_1_operations,
+                .operations()
+                .collect::<Vec<_>>(),
+            blob_0_1_operations.iter().collect::<Vec<_>>(),
         );
 
         if i == 2 {
@@ -1890,7 +1889,10 @@ where
             let LockingBlock::Regular(validated) = locking else {
                 panic!("Unexpected locking fast block.");
             };
-            assert_eq!(validated.block().body.operations, blob_0_1_operations);
+            assert_eq!(
+                validated.block().body.operations().collect::<Vec<_>>(),
+                blob_0_1_operations.iter().collect::<Vec<_>>()
+            );
         } else {
             assert!(validator_manager.requested_locking.is_none());
         }
@@ -1946,14 +1948,18 @@ where
             .unwrap()
             .content
             .block
-            .operations,
-        blob_2_3_operations,
+            .operations()
+            .collect::<Vec<_>>(),
+        blob_2_3_operations.iter().collect::<Vec<_>>(),
     );
     let locking = *validator_manager.requested_locking.unwrap();
     let LockingBlock::Regular(validated) = locking else {
         panic!("Unexpected locking fast block.");
     };
-    assert_eq!(validated.block().body.operations, blob_2_3_operations);
+    assert_eq!(
+        validated.block().body.operations().collect::<Vec<_>>(),
+        blob_2_3_operations.iter().collect::<Vec<_>>()
+    );
 
     builder.set_fault_type([1], FaultType::Offline).await;
     builder.set_fault_type([0, 2, 3], FaultType::Honest).await;
@@ -1972,26 +1978,27 @@ where
         .unwrap();
 
     // Latest block should be the burn
-    assert!(certificate_values[0]
-        .block()
-        .body
-        .operations
-        .contains(&Operation::system(SystemOperation::PublishDataBlob {
+    assert!(certificate_values[0].block().body.operations().any(|op| *op
+        == Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob4.id().hash
         })));
 
     // Block before that should be b1
     assert_eq!(
-        certificate_values[1].block().body.operations,
-        blob_2_3_operations,
+        certificate_values[1]
+            .block()
+            .body
+            .operations()
+            .collect::<Vec<_>>(),
+        blob_2_3_operations.iter().collect::<Vec<_>>(),
     );
 
     // Previous should be the `ChangeOwnership` operation
     assert!(certificate_values[2]
         .block()
         .body
-        .operations
-        .contains(&owner_change_op));
+        .operations()
+        .any(|op| *op == owner_change_op));
     Ok(())
 }
 
@@ -2627,7 +2634,7 @@ where
     // This read a new blob, so it cannot be a fast block.
     assert_eq!(certificate.round, Round::MultiLeader(0));
     let block = certificate.block();
-    assert_eq!(block.body.incoming_bundles.len(), 1);
+    assert_eq!(block.body.incoming_bundles().count(), 1);
     assert_eq!(block.required_blob_ids().len(), 1);
 
     // This will go way over the limit, because of the different overheads.

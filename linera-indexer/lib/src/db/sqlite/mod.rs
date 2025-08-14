@@ -176,8 +176,8 @@ impl SqliteDatabase {
         })?;
 
         // Count aggregated data
-        let operation_count = block.body.operations.len();
-        let incoming_bundle_count = block.body.incoming_bundles.len();
+        let operation_count = block.body.operations().count();
+        let incoming_bundle_count = block.body.incoming_bundles().count();
         let message_count = block.body.messages.iter().map(|v| v.len()).sum::<usize>();
         let event_count = block.body.events.iter().map(|v| v.len()).sum::<usize>();
         let blob_count = block.body.blobs.len();
@@ -216,15 +216,29 @@ impl SqliteDatabase {
         .await?;
 
         // Insert operations
-        for (index, operation) in block.body.operations.iter().enumerate() {
-            self.insert_operation_tx(
-                tx,
-                hash,
-                index,
-                operation,
-                block.header.authenticated_signer,
-            )
-            .await?;
+        for (index, transaction) in block.body.transactions.iter().enumerate() {
+            match transaction {
+                linera_chain::data_types::Transaction::ExecuteOperation(operation) => {
+                    self.insert_operation_tx(
+                        tx,
+                        hash,
+                        index,
+                        operation,
+                        block.header.authenticated_signer,
+                    )
+                    .await?;
+                }
+                linera_chain::data_types::Transaction::ReceiveMessages(bundle) => {
+                    let bundle_id = self
+                        .insert_incoming_bundle_tx(tx, hash, index, bundle)
+                        .await?;
+
+                    for message in &bundle.bundle.messages {
+                        self.insert_bundle_message_tx(tx, bundle_id, message)
+                            .await?;
+                    }
+                }
+            }
         }
 
         // Insert outgoing messages
@@ -462,26 +476,6 @@ impl SqliteDatabase {
         .execute(&mut **tx)
         .await?;
 
-        Ok(())
-    }
-
-    /// Extract and store incoming bundles from a ConfirmedBlockCertificate
-    async fn store_incoming_bundles_tx(
-        &self,
-        tx: &mut Transaction<'_, Sqlite>,
-        block_hash: &CryptoHash,
-        incoming_bundles: Vec<IncomingBundle>,
-    ) -> Result<(), SqliteError> {
-        for (bundle_index, incoming_bundle) in incoming_bundles.iter().enumerate() {
-            let bundle_id = self
-                .insert_incoming_bundle_tx(tx, block_hash, bundle_index, incoming_bundle)
-                .await?;
-
-            for message in &incoming_bundle.bundle.messages {
-                self.insert_bundle_message_tx(tx, bundle_id, message)
-                    .await?;
-            }
-        }
         Ok(())
     }
 
@@ -1152,16 +1146,6 @@ impl IndexerDatabase for SqliteDatabase {
         data: &[u8],
     ) -> Result<(), SqliteError> {
         self.insert_block_tx(tx, hash, chain_id, height, timestamp, data)
-            .await
-    }
-
-    async fn store_incoming_bundles_tx(
-        &self,
-        tx: &mut DatabaseTransaction<'_>,
-        block_hash: &CryptoHash,
-        incoming_bundles: Vec<IncomingBundle>,
-    ) -> Result<(), SqliteError> {
-        self.store_incoming_bundles_tx(tx, block_hash, incoming_bundles)
             .await
     }
 

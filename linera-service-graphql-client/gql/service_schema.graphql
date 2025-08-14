@@ -96,15 +96,6 @@ The body of a block containing all the data included in the block.
 """
 type BlockBody {
 	"""
-	A selection of incoming messages to be executed first. Successive messages of the same
-	sender and height are grouped together for conciseness.
-	"""
-	incomingBundles: [IncomingBundle!]!
-	"""
-	The operations to execute.
-	"""
-	operations: [Operation!]!
-	"""
 	The list of outgoing messages for each transaction.
 	"""
 	messages: [[OutgoingMessage!]!]!
@@ -132,6 +123,10 @@ type BlockBody {
 	The execution result for each operation.
 	"""
 	operationResults: [OperationResult!]!
+	"""
+	Metadata about the transactions in this block.
+	"""
+	transactionMetadata: [TransactionMetadata!]!
 }
 
 """
@@ -172,13 +167,9 @@ type BlockHeader {
 	"""
 	authenticatedSigner: AccountOwner
 	"""
-	Cryptographic hash of all the incoming bundles in the block.
+	Cryptographic hash of all the transactions in the block.
 	"""
-	bundlesHash: CryptoHash!
-	"""
-	Cryptographic hash of all the operations in the block.
-	"""
-	operationsHash: CryptoHash!
+	transactionsHash: CryptoHash!
 	"""
 	Cryptographic hash of all the messages in the block.
 	"""
@@ -875,10 +866,24 @@ Notify that a chain has a new certified block or a new message
 """
 scalar Notification
 
-"""
-An operation to be executed in a block
-"""
-scalar Operation
+type Operation {
+	"""
+	The type of operation: "System" or "User"
+	"""
+	operationType: String!
+	"""
+	For user operations, the application ID
+	"""
+	applicationId: ApplicationId
+	"""
+	For user operations, the serialized bytes (as a hex string for GraphQL)
+	"""
+	userBytesHex: String
+	"""
+	For system operations, the serialized bytes (as a hex string for GraphQL)
+	"""
+	systemBytesHex: String
+}
 
 """
 The execution result of a single operation.
@@ -1241,6 +1246,24 @@ type TimestampedBundleInInbox {
 	The timestamp when the bundle was added to the inbox.
 	"""
 	seen: Timestamp!
+}
+
+"""
+GraphQL-compatible metadata about a transaction.
+"""
+type TransactionMetadata {
+	"""
+	The type of transaction: "ReceiveMessages" or "ExecuteOperation"
+	"""
+	transactionType: String!
+	"""
+	The incoming bundle, if this is a ReceiveMessages transaction
+	"""
+	incomingBundle: IncomingBundle
+	"""
+	The operation, if this is an ExecuteOperation transaction
+	"""
+	operation: Operation
 }
 
 scalar VersionInfo

@@ -409,7 +409,7 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.block().body.incoming_bundles;
+    let incoming_bundles = cert.block().body.incoming_bundles().collect::<Vec<_>>();
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
     assert_eq!(
@@ -435,7 +435,7 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.block().body.incoming_bundles;
+    let incoming_bundles = cert.block().body.incoming_bundles().collect::<Vec<_>>();
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
     assert_eq!(
@@ -453,7 +453,7 @@ where
     let mut certs = creator.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.block().body.incoming_bundles;
+    let incoming_bundles = cert.block().body.incoming_bundles().collect::<Vec<_>>();
     assert_eq!(incoming_bundles.len(), 2);
     // First message is the grant refund for the successful message sent before.
     assert_eq!(incoming_bundles[0].action, MessageAction::Accept);
@@ -595,9 +595,8 @@ where
     }
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
-    let messages = &certs[0].block().body.incoming_bundles;
-    assert!(messages
-        .iter()
+    let bundles = certs[0].block().body.incoming_bundles();
+    assert!(bundles
         .flat_map(|msg| &msg.bundle.messages)
         .any(|msg| matches!(msg.message, Message::User { .. })));
 
@@ -621,9 +620,8 @@ where
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
-    let messages = &certs[0].block().body.incoming_bundles;
-    assert!(messages
-        .iter()
+    let bundles = certs[0].block().body.incoming_bundles();
+    assert!(bundles
         .flat_map(|msg| &msg.bundle.messages)
         .any(|msg| matches!(msg.message, Message::User { .. })));
 
@@ -772,11 +770,9 @@ where
     assert_eq!(certs.len(), 1);
 
     // There should be an UpdateStreams operation due to the new post.
-    let [Operation::System(operation)] = &*certs[0].block().body.operations else {
-        panic!(
-            "Expected one operation, got {:?}",
-            certs[0].block().body.operations
-        );
+    let operations = certs[0].block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Expected one operation, got {:?}", operations);
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),

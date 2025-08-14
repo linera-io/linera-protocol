@@ -63,15 +63,6 @@ impl IndexerDatabase for MockFailingDatabase {
         Ok(())
     }
 
-    async fn store_incoming_bundles_tx(
-        &self,
-        _tx: &mut DatabaseTransaction<'_>,
-        _block_hash: &CryptoHash,
-        _incoming_bundles: Vec<IncomingBundle>,
-    ) -> Result<(), SqliteError> {
-        Ok(())
-    }
-
     async fn commit_transaction(&self, _tx: DatabaseTransaction<'_>) -> Result<(), SqliteError> {
         Ok(())
     }
@@ -177,14 +168,13 @@ impl MockSuccessDatabase {
 #[async_trait]
 impl IndexerDatabase for MockSuccessDatabase {
     /// Override the high-level method to succeed and store data
-    async fn store_block_with_blobs_and_bundles(
+    async fn store_block_with_blobs(
         &self,
         block_hash: &CryptoHash,
         chain_id: &ChainId,
         height: BlockHeight,
         block_data: &[u8],
         blobs: &[(BlobId, Vec<u8>)],
-        _incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), SqliteError> {
         // Store all blobs
         {
@@ -227,15 +217,6 @@ impl IndexerDatabase for MockSuccessDatabase {
         _height: BlockHeight,
         _timestamp: Timestamp,
         _data: &[u8],
-    ) -> Result<(), SqliteError> {
-        Ok(())
-    }
-
-    async fn store_incoming_bundles_tx(
-        &self,
-        _tx: &mut DatabaseTransaction<'_>,
-        _block_hash: &CryptoHash,
-        _incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), SqliteError> {
         Ok(())
     }

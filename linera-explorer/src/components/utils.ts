@@ -1,5 +1,6 @@
 import JSONFormatter from 'json-formatter-js'
 import { Scalars } from '../../gql/operations'
+import { TransactionMetadata, IncomingBundle, Operation } from '../../gql/service'
 import init, { short_crypto_hash, short_app_id } from "../../pkg/linera_explorer"
 import { config } from '@vue/test-utils'
 
@@ -31,4 +32,18 @@ export function set_test_config() : Promise<void> {
     await timeout(2000)
     await set_test_config_aux()
   })
+}
+
+// Extract operations from transaction metadata
+export function getOperations(transactionMetadata: TransactionMetadata[]): Operation[] {
+  return transactionMetadata
+    .filter(tx => tx.transactionType === "ExecuteOperation" && tx.operation)
+    .map(tx => tx.operation!)
+}
+
+// Extract incoming bundles from transaction metadata  
+export function getIncomingBundles(transactionMetadata: TransactionMetadata[]): IncomingBundle[] {
+  return transactionMetadata
+    .filter(tx => tx.transactionType === "ReceiveMessages" && tx.incomingBundle)
+    .map(tx => tx.incomingBundle!)
 }
