@@ -166,6 +166,11 @@ where
     pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
         base_wit::assert_data_blob_exists(hash.0.into())
     }
+
+    /// Tests the existence of an application.
+    pub fn application_exists(&mut self, application_id: ApplicationId) -> bool {
+        base_wit::application_exists(application_id.into())
+    }
 }
 
 impl<Application> ContractRuntime<Application>

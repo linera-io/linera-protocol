@@ -674,7 +674,8 @@ pub trait BaseRuntime {
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError>;
 
     /// Tests the existence of an application.
-    fn application_exists(&mut self, application_id: ApplicationId) -> Result<bool, ExecutionError>;
+    fn application_exists(&mut self, application_id: ApplicationId)
+        -> Result<bool, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
