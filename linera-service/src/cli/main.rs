@@ -841,10 +841,9 @@ impl Runnable for Job {
                         wallet,
                         signer.into_value(),
                     );
-                    let (chain_clients, blocks_infos) = context
+                    let benchmark_params = context
                         .prepare_for_benchmark(
                             num_chains,
-                            transactions_per_block,
                             tokens_per_chain,
                             fungible_application_id,
                             pub_keys,
@@ -863,7 +862,10 @@ impl Runnable for Job {
                             info!("Benchmark cancelled by user");
                             context
                                 .wrap_up_benchmark(
-                                    chain_clients,
+                                    benchmark_params
+                                        .iter()
+                                        .map(|p| p.chain_client.clone())
+                                        .collect(),
                                     close_chains,
                                     wrap_up_max_in_flight,
                                 )
@@ -882,12 +884,15 @@ impl Runnable for Job {
                         storage.clone(),
                         shutdown_notifier.clone(),
                     );
+                    let chain_clients: Vec<_> = benchmark_params
+                        .iter()
+                        .map(|p| p.chain_client.clone())
+                        .collect();
                     linera_client::benchmark::Benchmark::run_benchmark(
-                        num_chains,
-                        transactions_per_block,
                         bps,
-                        chain_clients.clone(),
-                        blocks_infos,
+                        benchmark_params,
+                        transactions_per_block,
+                        fungible_application_id,
                         health_check_endpoints.clone(),
                         runtime_in_seconds,
                         delay_between_chains_ms,
