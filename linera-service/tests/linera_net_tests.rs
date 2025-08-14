@@ -4606,16 +4606,25 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         };
 
         // Verify that the created block received the transfer message from chain 1.
-        let mut block2 = node_service2
+        let block2 = node_service2
             .query_node(&format!(
                 "query {{ block(hash: \"{hash2}\", chainId: \"{chain_id2}\") {{ \
-                    block {{ body {{ incomingBundles {{ \
-                        origin bundle {{ height }} \
+                    block {{ body {{ transactionMetadata {{ \
+                        transactionType incomingBundle {{ origin bundle {{ height }} }} \
                     }} }} }} \
                 }} }}"
             ))
             .await?;
-        let mut bundle = block2["block"]["block"]["body"]["incomingBundles"][0].take();
+        // Find the transaction metadata entry that contains an incoming bundle
+        let transaction_metadata = &block2["block"]["block"]["body"]["transactionMetadata"];
+        let mut bundle = None;
+        for metadata in transaction_metadata.as_array().unwrap() {
+            if metadata["transactionType"] == "ReceiveMessages" {
+                bundle = Some(metadata["incomingBundle"].clone());
+                break;
+            }
+        }
+        let mut bundle = bundle.expect("No ReceiveMessages transaction found");
         let origin = serde_json::from_value::<ChainId>(bundle["origin"].take())?;
         assert_eq!(origin, chain_id1);
         let sender_height =

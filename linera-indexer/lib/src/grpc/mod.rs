@@ -154,7 +154,6 @@ where
                 let chain_id = block_cert.inner().chain_id();
                 let height = block_cert.inner().height();
                 let timestamp = block_cert.inner().timestamp();
-                let incoming_bundles = block_cert.value().block().body.incoming_bundles.clone();
 
                 info!(
                     "Received block: {} for chain: {} at height: {}",
@@ -171,16 +170,15 @@ where
                     .map(|(blob_id, blob_data)| (*blob_id, blob_data.clone()))
                     .collect();
 
-                // Use the high-level atomic API with incoming bundles - this manages all locking internally
+                // Use the high-level atomic API - this manages all locking internally
                 database
-                    .store_block_with_blobs_and_bundles(
+                    .store_block_with_blobs(
                         &block_hash,
                         &chain_id,
                         height,
                         timestamp,
                         &block_data,
                         &blobs,
-                        incoming_bundles,
                     )
                     .await
                     .map_err(Into::into)?;

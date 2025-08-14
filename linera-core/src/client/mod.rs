@@ -42,6 +42,7 @@ use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockProposal, ChainAndHeight, IncomingBundle, LiteVote, MessageAction, ProposedBlock,
+        Transaction,
     },
     manager::LockingBlock,
     types::{
@@ -1248,23 +1249,31 @@ impl<Env: Environment> Client<Env> {
                     ChainExecutionContext::IncomingBundle(index),
                 ) = &**chain_error
                 {
-                    let message = block
-                        .incoming_bundles
+                    let transaction = block
+                        .transactions
                         .get_mut(*index as usize)
-                        .expect("Message at given index should exist");
-                    if message.bundle.is_protected() {
-                        error!("Protected incoming message failed to execute locally: {message:?}");
-                    } else {
-                        // Reject the faulty message from the block and continue.
-                        // TODO(#1420): This is potentially a bit heavy-handed for
-                        // retryable errors.
-                        info!(
-                            %error, origin = ?message.origin,
-                            "Message failed to execute locally and will be rejected."
+                        .expect("Transaction at given index should exist");
+                    let Transaction::ReceiveMessages(message) = transaction else {
+                        panic!(
+                            "Expected incoming bundle at transaction index {}, found operation",
+                            index
                         );
-                        message.action = MessageAction::Reject;
-                        continue;
-                    }
+                    };
+                    ensure!(
+                        !message.bundle.is_protected(),
+                        ChainClientError::BlockProposalError(
+                            "Protected incoming message failed to execute locally"
+                        )
+                    );
+                    // Reject the faulty message from the block and continue.
+                    // TODO(#1420): This is potentially a bit heavy-handed for
+                    // retryable errors.
+                    info!(
+                        %error, origin = ?message.origin,
+                        "Message failed to execute locally and will be rejected."
+                    );
+                    message.action = MessageAction::Reject;
+                    continue;
                 }
             }
             return result;
@@ -1975,11 +1984,19 @@ impl<Env: Environment> ChainClient<Env> {
         let creating_proposal_start = Instant::now();
         let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(incoming_bundles, info.timestamp);
+        let transactions = incoming_bundles
+            .iter()
+            .map(|bundle| Transaction::ReceiveMessages(bundle.clone()))
+            .chain(
+                operations
+                    .iter()
+                    .map(|operation| Transaction::ExecuteOperation(operation.clone())),
+            )
+            .collect::<Vec<_>>();
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
-            incoming_bundles: incoming_bundles.to_vec(),
-            operations: operations.to_vec(),
+            transactions,
             previous_block_hash: info.block_hash,
             height: info.next_block_height,
             authenticated_signer: Some(super_owner),
@@ -2443,11 +2460,15 @@ impl<Env: Environment> ChainClient<Env> {
         );
         let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
+        let transactions = incoming_bundles
+            .into_iter()
+            .map(Transaction::ReceiveMessages)
+            .chain(operations.into_iter().map(Transaction::ExecuteOperation))
+            .collect::<Vec<_>>();
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
-            incoming_bundles,
-            operations,
+            transactions,
             previous_block_hash: info.block_hash,
             height: info.next_block_height,
             authenticated_signer: Some(identity),
@@ -2617,11 +2638,14 @@ impl<Env: Environment> ChainClient<Env> {
         }
         let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
+        let transactions = incoming_bundles
+            .into_iter()
+            .map(Transaction::ReceiveMessages)
+            .collect::<Vec<_>>();
         let block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
-            incoming_bundles,
-            operations: Vec::new(),
+            transactions,
             previous_block_hash: info.block_hash,
             height: info.next_block_height,
             authenticated_signer: if owner == AccountOwner::CHAIN {

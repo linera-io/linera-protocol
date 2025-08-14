@@ -11,7 +11,6 @@ use linera_base::{
     data_types::{BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::IncomingBundle;
 
 use crate::{
     db::{DatabaseTransaction, IncomingBundleInfo, IndexerDatabase, PostedMessageInfo},
@@ -73,15 +72,6 @@ impl IndexerDatabase for MockFailingDatabase {
         _height: BlockHeight,
         _timestamp: Timestamp,
         _data: &[u8],
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    async fn store_incoming_bundles_tx(
-        &self,
-        _tx: &mut DatabaseTransaction<'_>,
-        _block_hash: &CryptoHash,
-        _incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -193,7 +183,7 @@ impl IndexerDatabase for MockSuccessDatabase {
     type Error = MockDatabaseError;
 
     /// Override the high-level method to succeed and store data
-    async fn store_block_with_blobs_and_bundles(
+    async fn store_block_with_blobs(
         &self,
         block_hash: &CryptoHash,
         chain_id: &ChainId,
@@ -201,7 +191,6 @@ impl IndexerDatabase for MockSuccessDatabase {
         timestamp: Timestamp,
         block_data: &[u8],
         blobs: &[(BlobId, Vec<u8>)],
-        _incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), Self::Error> {
         // Store all blobs
         {
@@ -247,15 +236,6 @@ impl IndexerDatabase for MockSuccessDatabase {
         _height: BlockHeight,
         _timestamp: Timestamp,
         _data: &[u8],
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    async fn store_incoming_bundles_tx(
-        &self,
-        _tx: &mut DatabaseTransaction<'_>,
-        _block_hash: &CryptoHash,
-        _incoming_bundles: Vec<IncomingBundle>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

@@ -51,8 +51,7 @@ fn valid_block_element_with_chain_id(chain_suffix: &str) -> Element {
     let proposed_block = ProposedBlock {
         epoch: Epoch::ZERO,
         chain_id,
-        incoming_bundles: vec![],
-        operations: vec![],
+        transactions: vec![],
         previous_block_hash: None,
         height: BlockHeight::ZERO,
         authenticated_signer: None,

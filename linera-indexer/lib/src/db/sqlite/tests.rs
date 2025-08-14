@@ -96,14 +96,13 @@ async fn test_high_level_atomic_api() {
     ];
 
     // Test atomic storage of block with blobs
-    db.store_block_with_blobs_and_bundles(
+    db.store_block_with_blobs(
         &block_hash,
         &chain_id,
         height,
         timestamp,
         &block_data,
         &blobs,
-        vec![],
     )
     .await
     .unwrap();
@@ -144,28 +143,10 @@ async fn test_incoming_bundles_storage_and_query() {
     );
 
     // First insert a test block that the bundle can reference
-    let test_block = create_test_block(
+    let mut test_block = create_test_block(
         ChainId(CryptoHash::new(&TestString::new("test_chain_id"))),
         BlockHeight(100),
     );
-    let origin_chain_id = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
-    let block_hash = Hashed::new(test_block.clone()).hash();
-    let block_data = bincode::serialize(&test_block).unwrap();
-
-    let source_cert_hash = CryptoHash::new(&TestString::new("source_cert_hash"));
-
-    let mut tx = db.begin_transaction().await.unwrap();
-
-    db.insert_block_tx(
-        &mut tx,
-        &block_hash,
-        &test_block.header.chain_id,
-        test_block.header.height,
-        test_block.header.timestamp,
-        &block_data,
-    )
-    .await
-    .unwrap();
 
     let incoming_bundle_message = PostedMessage {
         index: 0,
@@ -179,6 +160,9 @@ async fn test_incoming_bundles_storage_and_query() {
         },
     };
 
+    let origin_chain_id = ChainId(CryptoHash::new(&TestString::new("origin_chain")));
+    let source_cert_hash = CryptoHash::new(&TestString::new("source_cert_hash"));
+
     let incoming_bundle = IncomingBundle {
         origin: origin_chain_id,
         bundle: MessageBundle {
@@ -191,9 +175,28 @@ async fn test_incoming_bundles_storage_and_query() {
         action: MessageAction::Reject,
     };
 
-    db.store_incoming_bundles_tx(&mut tx, &block_hash, vec![incoming_bundle.clone()])
-        .await
-        .unwrap();
+    test_block
+        .body
+        .transactions
+        .push(linera_chain::data_types::Transaction::ReceiveMessages(
+            incoming_bundle.clone(),
+        ));
+
+    let block_hash = Hashed::new(test_block.clone()).hash();
+    let block_data = bincode::serialize(&test_block).unwrap();
+
+    let mut tx = db.begin_transaction().await.unwrap();
+
+    db.insert_block_tx(
+        &mut tx,
+        &block_hash,
+        &test_block.header.chain_id,
+        test_block.header.height,
+        test_block.header.timestamp,
+        &block_data,
+    )
+    .await
+    .unwrap();
 
     tx.commit().await.unwrap();
 
@@ -263,8 +266,7 @@ fn create_test_block(chain_id: ChainId, height: BlockHeight) -> Block {
             state_hash: CryptoHash::new(&TestString::new("test_state_hash")),
             previous_block_hash: None,
             authenticated_signer: None,
-            bundles_hash: CryptoHash::new(&TestString::new("bundles_hash")),
-            operations_hash: CryptoHash::new(&TestString::new("operations_hash")),
+            transactions_hash: CryptoHash::new(&TestString::new("transactions_hash")),
             messages_hash: CryptoHash::new(&TestString::new("messages_hash")),
             previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg_blocks_hash")),
             previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_event_blocks_hash")),
@@ -274,8 +276,7 @@ fn create_test_block(chain_id: ChainId, height: BlockHeight) -> Block {
             operation_results_hash: CryptoHash::new(&TestString::new("operation_results_hash")),
         },
         body: BlockBody {
-            incoming_bundles: vec![],
-            operations: vec![],
+            transactions: vec![],
             messages: vec![],
             previous_message_blocks: Default::default(),
             previous_event_blocks: Default::default(),

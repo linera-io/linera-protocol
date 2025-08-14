@@ -223,7 +223,7 @@ where
 
         self.0
             .chain
-            .remove_bundles_from_inboxes(block.timestamp, &block.incoming_bundles)
+            .remove_bundles_from_inboxes(block.timestamp, block.incoming_bundles())
             .await?;
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
@@ -238,11 +238,10 @@ where
         );
         let chain = &mut self.0.chain;
         // Check if the counters of tip_state would be valid.
-        chain.tip_state.get_mut().update_counters(
-            &block.incoming_bundles,
-            &block.operations,
-            &outcome.messages,
-        )?;
+        chain
+            .tip_state
+            .get_mut()
+            .update_counters(&block.transactions, &outcome.messages)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
         Ok((outcome, local_time))

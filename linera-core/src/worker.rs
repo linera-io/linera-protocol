@@ -853,8 +853,7 @@ where
                 certificate.inner().to_log_str(),
                 certificate.round.type_name(),
                 certificate.round.number(),
-                (certificate.block().body.incoming_bundles.len()
-                    + certificate.block().body.operations.len()) as u64,
+                certificate.block().body.transactions.len() as u64,
                 certificate
                     .signatures()
                     .iter()

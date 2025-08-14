@@ -27,8 +27,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, LiteValue, LiteVote,
-        MessageAction, MessageBundle, OperationResult, PostedMessage, ProposedBlock,
-        SignatureAggregator,
+        MessageAction, MessageBundle, OperationResult, PostedMessage, SignatureAggregator,
+        Transaction,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -352,10 +352,13 @@ where
             admin_id: Some(self.admin_id()),
             ..SystemExecutionState::new(chain_description)
         };
-        let block_template = match previous_confirmed_blocks.first() {
+        let mut block = match previous_confirmed_blocks.first() {
             None => make_first_block(chain_id),
             Some(cert) => make_child_block(cert.value()),
-        };
+        }
+        .with_transfer(source, recipient, amount);
+        block.authenticated_signer = Some(authenticated_signer);
+        block.epoch = epoch;
 
         let mut messages = incoming_bundles
             .iter()
@@ -383,13 +386,12 @@ where
             })
             .collect::<Vec<_>>();
 
-        let block = ProposedBlock {
-            epoch,
-            incoming_bundles,
-            authenticated_signer: Some(authenticated_signer),
-            ..block_template
-        }
-        .with_transfer(source, recipient, amount);
+        block.transactions = incoming_bundles
+            .into_iter()
+            .map(Transaction::ReceiveMessages)
+            .chain(block.transactions)
+            .collect();
+
         match recipient {
             Recipient::Account(account) => {
                 if chain_id != account.chain_id {
@@ -408,14 +410,11 @@ where
             }
             Recipient::Burn => messages.push(Vec::new()),
         }
-        let tx_count = block.operations.len() + block.incoming_bundles.len();
+        let tx_count = block.transactions.len();
         let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
         let events = iter::repeat_with(Vec::new).take(tx_count).collect();
         let blobs = iter::repeat_with(Vec::new).take(tx_count).collect();
-        let operation_results = iter::repeat_with(Vec::new)
-            .map(OperationResult)
-            .take(block.operations.len())
-            .collect();
+        let operation_results = vec![OperationResult(Vec::new()); block.operations().count()];
         let state_hash = system_state.into_hash().await;
         let previous_message_blocks = messages
             .iter()
@@ -1279,7 +1278,6 @@ where
     }
     {
         let block_proposal = make_first_block(chain_2)
-            .with_simple_transfer(chain_3, Amount::ONE)
             .with_incoming_bundle(IncomingBundle {
                 origin: chain_1,
                 bundle: MessageBundle {
@@ -1293,6 +1291,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
+            .with_simple_transfer(chain_3, Amount::ONE)
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
             .await
@@ -1326,7 +1325,6 @@ where
 
         // Then receive the next two messages.
         let block_proposal = make_child_block(&certificate.into_value())
-            .with_simple_transfer(chain_3, Amount::from_tokens(3))
             .with_incoming_bundle(IncomingBundle {
                 origin: chain_1,
                 bundle: MessageBundle {
@@ -1351,6 +1349,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
+            .with_simple_transfer(chain_3, Amount::from_tokens(3))
             .into_first_proposal(recipient_owner, &signer)
             .await
             .unwrap();

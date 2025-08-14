@@ -13,8 +13,8 @@ use linera_base::{
         ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
-    doc_scalar, ensure, hex_debug,
-    identifiers::{Account, AccountOwner, BlobId, ChainId, StreamId},
+    doc_scalar, ensure, hex, hex_debug,
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
@@ -40,18 +40,17 @@ mod data_types_tests;
 ///   received ahead of time in the inbox of the chain.
 /// * This constraint does not apply to the execution of confirmed blocks.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[graphql(complex)]
 pub struct ProposedBlock {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
     pub epoch: Epoch,
-    /// A selection of incoming messages to be executed first. Successive messages of same
-    /// sender and height are grouped together for conciseness.
+    /// The transactions to execute in this block. Each transaction can be either
+    /// incoming messages or an operation.
     #[debug(skip_if = Vec::is_empty)]
-    pub incoming_bundles: Vec<IncomingBundle>,
-    /// The operations to execute.
-    #[debug(skip_if = Vec::is_empty)]
-    pub operations: Vec<Operation>,
+    #[graphql(skip)]
+    pub transactions: Vec<Transaction>,
     /// The block height.
     pub height: BlockHeight,
     /// The timestamp when this block was created. This must be later than all messages received
@@ -71,8 +70,7 @@ pub struct ProposedBlock {
 impl ProposedBlock {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
-        self.operations
-            .iter()
+        self.operations()
             .flat_map(Operation::published_blob_ids)
             .collect()
     }
@@ -80,38 +78,49 @@ impl ProposedBlock {
     /// Returns whether the block contains only rejected incoming messages, which
     /// makes it admissible even on closed chains.
     pub fn has_only_rejected_messages(&self) -> bool {
-        self.operations.is_empty()
-            && self
-                .incoming_bundles
-                .iter()
-                .all(|message| message.action == MessageAction::Reject)
+        self.transactions.iter().all(|txn| {
+            matches!(
+                txn,
+                Transaction::ReceiveMessages(IncomingBundle {
+                    action: MessageAction::Reject,
+                    ..
+                })
+            )
+        })
     }
 
     /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
     pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
-        self.incoming_bundles
-            .iter()
+        self.incoming_bundles()
             .flat_map(|incoming_bundle| &incoming_bundle.bundle.messages)
     }
 
     /// Returns the number of incoming messages.
     pub fn message_count(&self) -> usize {
-        self.incoming_bundles
-            .iter()
+        self.incoming_bundles()
             .map(|im| im.bundle.messages.len())
             .sum()
     }
 
-    /// Returns an iterator over all transactions.
-    ///
-    /// First incoming bundles, then operations.
-    pub fn transactions(&self) -> impl Iterator<Item = Transaction<'_>> {
-        let bundles = self
-            .incoming_bundles
-            .iter()
-            .map(Transaction::ReceiveMessages);
-        let operations = self.operations.iter().map(Transaction::ExecuteOperation);
-        bundles.chain(operations)
+    /// Returns an iterator over all transactions as references.
+    pub fn transaction_refs(&self) -> impl Iterator<Item = &Transaction> {
+        self.transactions.iter()
+    }
+
+    /// Returns all operations in this block.
+    pub fn operations(&self) -> impl Iterator<Item = &Operation> {
+        self.transactions.iter().filter_map(|tx| match tx {
+            Transaction::ExecuteOperation(operation) => Some(operation),
+            Transaction::ReceiveMessages(_) => None,
+        })
+    }
+
+    /// Returns all incoming bundles in this block.
+    pub fn incoming_bundles(&self) -> impl Iterator<Item = &IncomingBundle> {
+        self.transactions.iter().filter_map(|tx| match tx {
+            Transaction::ReceiveMessages(bundle) => Some(bundle),
+            Transaction::ExecuteOperation(_) => None,
+        })
     }
 
     pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
@@ -124,13 +133,91 @@ impl ProposedBlock {
     }
 }
 
+#[async_graphql::ComplexObject]
+impl ProposedBlock {
+    /// Metadata about the transactions in this block.
+    async fn transaction_metadata(&self) -> Vec<TransactionMetadata> {
+        self.transactions
+            .iter()
+            .map(TransactionMetadata::from_transaction)
+            .collect()
+    }
+}
+
 /// A transaction in a block: incoming messages or an operation.
-#[derive(Debug, Clone)]
-pub enum Transaction<'a> {
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Transaction {
     /// Receive a bundle of incoming messages.
-    ReceiveMessages(&'a IncomingBundle),
+    ReceiveMessages(IncomingBundle),
     /// Execute an operation.
-    ExecuteOperation(&'a Operation),
+    ExecuteOperation(Operation),
+}
+
+impl BcsHashable<'_> for Transaction {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[graphql(name = "Operation")]
+pub struct OperationMetadata {
+    /// The type of operation: "System" or "User"
+    pub operation_type: String,
+    /// For user operations, the application ID
+    pub application_id: Option<ApplicationId>,
+    /// For user operations, the serialized bytes (as a hex string for GraphQL)
+    pub user_bytes_hex: Option<String>,
+    /// For system operations, the serialized bytes (as a hex string for GraphQL)
+    pub system_bytes_hex: Option<String>,
+}
+
+impl From<&Operation> for OperationMetadata {
+    fn from(operation: &Operation) -> Self {
+        match operation {
+            Operation::System(sys_op) => OperationMetadata {
+                operation_type: "System".to_string(),
+                application_id: None,
+                user_bytes_hex: None,
+                system_bytes_hex: Some(hex::encode(
+                    bcs::to_bytes(sys_op).expect("System operation should be serializable"),
+                )),
+            },
+            Operation::User {
+                application_id,
+                bytes,
+            } => OperationMetadata {
+                operation_type: "User".to_string(),
+                application_id: Some(*application_id),
+                user_bytes_hex: Some(hex::encode(bytes)),
+                system_bytes_hex: None,
+            },
+        }
+    }
+}
+
+/// GraphQL-compatible metadata about a transaction.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct TransactionMetadata {
+    /// The type of transaction: "ReceiveMessages" or "ExecuteOperation"
+    pub transaction_type: String,
+    /// The incoming bundle, if this is a ReceiveMessages transaction
+    pub incoming_bundle: Option<IncomingBundle>,
+    /// The operation, if this is an ExecuteOperation transaction
+    pub operation: Option<OperationMetadata>,
+}
+
+impl TransactionMetadata {
+    pub fn from_transaction(transaction: &Transaction) -> Self {
+        match transaction {
+            Transaction::ReceiveMessages(bundle) => TransactionMetadata {
+                transaction_type: "ReceiveMessages".to_string(),
+                incoming_bundle: Some(bundle.clone()),
+                operation: None,
+            },
+            Transaction::ExecuteOperation(op) => TransactionMetadata {
+                transaction_type: "ExecuteOperation".to_string(),
+                incoming_bundle: None,
+                operation: Some(OperationMetadata::from(op)),
+            },
+        }
+    }
 }
 
 /// A chain ID with a block height.
@@ -746,8 +833,7 @@ mod signing {
         let proposed_block = ProposedBlock {
             chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
             epoch: Epoch(11),
-            incoming_bundles: vec![],
-            operations: vec![],
+            transactions: vec![],
             height: BlockHeight(11),
             timestamp: 190000000u64.into(),
             authenticated_signer: None,
@@ -763,8 +849,8 @@ mod signing {
         // personal_sign of the `proposal_hash` done via MetaMask.
         // Wrap with proper variant so that bytes match (include the enum variant tag).
         let signature = EvmSignature::from_str(
-            "f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b0\
-            4b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b",
+            "d69d31203f59be441fd02cdf68b2504cbcdd7215905c9b7dc3a7ccbf09afe14550\
+            3c93b391810ce9edd6ee36b1e817b2d0e9dabdf4a098da8c2f670ef4198e8a1b",
         )
         .unwrap();
         let metamask_signature = AccountSignature::EvmSecp256k1 {

@@ -5754,6 +5754,7 @@ dependencies = [
  "anyhow",
  "fungible",
  "graphql_client",
+ "hex",
  "linera-base",
  "linera-chain",
  "linera-core",
