@@ -4350,7 +4350,7 @@ async fn test_end_to_end_faucet_batch_processing(config: impl LineraNetConfig) -
     let faucet = faucet_service.instance();
 
     // Test batch processing by creating multiple concurrent requests
-    const NUM_REQUESTS: usize = 5;
+    const NUM_REQUESTS: usize = 20;
     let mut handles = Vec::new();
 
     for i in 0..NUM_REQUESTS {
@@ -4398,6 +4398,17 @@ async fn test_end_to_end_faucet_batch_processing(config: impl LineraNetConfig) -
     let final_balance = client1.query_balance(Account::chain(chain1)).await?;
     let expected_transfer = Amount::from_tokens((NUM_REQUESTS * 2) as u128);
     assert!(final_balance <= balance1 - expected_transfer);
+
+    // Verify that fewer than NUM_REQUESTS blocks were created, i.e. some of them were batched.
+    let port = get_node_port().await;
+    let service = client1.run_node_service(port, ProcessInbox::Skip).await?;
+    let query =
+        format!("query {{ chain(chainId:\"{chain1}\") {{ tipState {{ nextBlockHeight }} }} }}");
+    let response = service.query_node(query).await?;
+    let height = response["chain"]["tipState"]["nextBlockHeight"]
+        .as_u64()
+        .unwrap();
+    assert!(height < NUM_REQUESTS as u64);
 
     net.ensure_is_running().await?;
     net.terminate().await?;
