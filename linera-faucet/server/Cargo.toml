@@ -27,6 +27,7 @@ async-graphql-axum.workspace = true
 axum.workspace = true
 futures.workspace = true
 linera-base.workspace = true
+linera-chain.workspace = true
 linera-client.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true

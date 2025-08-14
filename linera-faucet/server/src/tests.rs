@@ -124,7 +124,7 @@ async fn test_faucet_rate_limiting() {
     // Start the batch processor in the background
     let cancellation_token = CancellationToken::new();
     let processor_task = {
-        let batch_processor = batch_processor;
+        let mut batch_processor = batch_processor;
         let token = cancellation_token.clone();
         tokio::spawn(async move { batch_processor.run(token).await })
     };

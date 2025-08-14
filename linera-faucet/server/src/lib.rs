@@ -26,14 +26,15 @@ use linera_base::{
     identifiers::{AccountOwner, ChainId},
     ownership::ChainOwnership,
 };
+use linera_chain::{ChainError, ChainExecutionContext};
 use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
     config::GenesisConfig,
 };
-use linera_core::data_types::ClientOutcome;
+use linera_core::{client::ChainClientError, data_types::ClientOutcome};
 use linera_execution::{
     system::{OpenChainConfig, SystemOperation},
-    Operation,
+    ExecutionError, Operation,
 };
 #[cfg(feature = "metrics")]
 use linera_metrics::prometheus_server;
@@ -263,7 +264,7 @@ where
     }
 
     /// Runs the batch processor loop
-    async fn run(&self, cancellation_token: CancellationToken) {
+    async fn run(&mut self, cancellation_token: CancellationToken) {
         loop {
             tokio::select! {
                 _ = self.request_notifier.notified() => {
@@ -283,7 +284,7 @@ where
     }
 
     /// Processes batches until there are no more pending requests in the queue.
-    async fn process_batch(&self) -> Result<(), anyhow::Error> {
+    async fn process_batch(&mut self) -> Result<(), anyhow::Error> {
         let max_batch_size = self.config.max_batch_size;
 
         loop {
@@ -314,7 +315,7 @@ where
 
     /// Executes a batch of chain creation requests
     async fn execute_batch(
-        &self,
+        &mut self,
         batch_requests: Vec<PendingRequest>,
     ) -> Result<(), anyhow::Error> {
         // Pre-validate: check rate limiting and existing chains
@@ -399,12 +400,34 @@ where
         }
 
         // Execute all operations in a single block
-        let result = client.execute_operations(operations, vec![]).await?;
+        let result = client.execute_operations(operations, vec![]).await;
         self.context.lock().await.update_wallet(&client).await?;
 
         let certificate = match result {
-            ClientOutcome::Committed(certificate) => certificate,
-            ClientOutcome::WaitForTimeout(timeout) => {
+            Err(ChainClientError::ChainError(ChainError::ExecutionError(
+                exec_err,
+                ChainExecutionContext::Operation(i),
+            ))) if i > 0
+                && matches!(
+                    *exec_err,
+                    ExecutionError::BlockTooLarge
+                        | ExecutionError::FeesExceedFunding { .. }
+                        | ExecutionError::InsufficientBalance { .. }
+                        | ExecutionError::MaximumFuelExceeded(_)
+                ) =>
+            {
+                tracing::error!(%exec_err, "Execution of operation {i} failed; reducing batch size");
+                self.config.max_batch_size = i as usize;
+                // Put the valid requests back into the queue.
+                let mut pending_requests = self.pending_requests.lock().await;
+                for request in valid_requests.into_iter().rev() {
+                    pending_requests.push_front(request);
+                }
+                return Ok(()); // Don't return an error, so we retry.
+            }
+            Err(err) => return Err(err.into()),
+            Ok(ClientOutcome::Committed(certificate)) => certificate,
+            Ok(ClientOutcome::WaitForTimeout(timeout)) => {
                 let error_msg = format!(
                     "This faucet is using a multi-owner chain and is not the leader right now. \
                     Try again at {}",
@@ -629,7 +652,7 @@ where
             storage_path: self.storage_path.clone(),
             max_batch_size: self.max_batch_size,
         };
-        let batch_processor = BatchProcessor::new(
+        let mut batch_processor = BatchProcessor::new(
             batch_processor_config,
             Arc::clone(&self.context),
             Arc::clone(&self.faucet_storage),
