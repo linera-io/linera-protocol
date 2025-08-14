@@ -3,69 +3,13 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
 use linera_base::{
-    data_types::{ChainOrigin, Epoch, InitialChainConfig, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    crypto::CryptoHash,
+    data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
     ownership::ChainOwnership,
 };
-use linera_client::{chain_listener, wallet::Wallet};
-use linera_core::{client::ChainClient, environment};
-
-#[allow(dead_code)]
-struct ClientContext {
-    client: ChainClient<environment::Test>,
-    update_calls: usize,
-}
-
-impl chain_listener::ClientContext for ClientContext {
-    type Environment = environment::Test;
-
-    fn wallet(&self) -> &Wallet {
-        unimplemented!()
-    }
-
-    fn storage(&self) -> &environment::TestStorage {
-        self.client.storage_client()
-    }
-
-    fn client(&self) -> &Arc<linera_core::client::Client<environment::Test>> {
-        unimplemented!()
-    }
-
-    fn timing_sender(
-        &self,
-    ) -> Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>> {
-        None
-    }
-
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
-        assert_eq!(chain_id, self.client.chain_id());
-        self.client.clone()
-    }
-
-    async fn update_wallet_for_new_chain(
-        &mut self,
-        _: ChainId,
-        _: Option<AccountOwner>,
-        _: Timestamp,
-    ) -> Result<(), linera_client::Error> {
-        self.update_calls += 1;
-        Ok(())
-    }
-
-    async fn update_wallet(
-        &mut self,
-        _: &ChainClient<environment::Test>,
-    ) -> Result<(), linera_client::Error> {
-        self.update_calls += 1;
-        Ok(())
-    }
-}
-
-// For now, we'll focus on unit tests that don't require complex mocking
-// Integration tests will be handled at a higher level using the existing test framework
 
 #[tokio::test]
 async fn test_faucet_storage_basic() {
@@ -205,7 +149,7 @@ async fn test_faucet_batch_processing_integration() {
     let storage_path = temp_dir.path().join("test_faucet.json");
 
     // Create test data
-    let _chain_id = ChainId(super::CryptoHash::test_hash("test_chain")); // Create a test chain ID
+    let _chain_id = ChainId(CryptoHash::test_hash("test_chain")); // Create a test chain ID
     let owners = [
         AccountOwner::from_str("0x1111111111111111111111111111111111111111").unwrap(),
         AccountOwner::from_str("0x2222222222222222222222222222222222222222").unwrap(),
@@ -289,11 +233,11 @@ async fn test_faucet_batch_processing_integration() {
 
                 // Simulate successful batch processing by storing results
                 for owner in batch {
-                    let mock_description = super::ChainDescription::new(
+                    let mock_description = ChainDescription::new(
                         ChainOrigin::Root(0),
                         InitialChainConfig {
                             ownership: ChainOwnership::single(owner),
-                            balance: super::Amount::from_tokens(100),
+                            balance: Amount::from_tokens(100),
                             application_permissions: Default::default(),
                             epoch: Epoch::ZERO,
                             max_active_epoch: Epoch::from(100),
@@ -360,11 +304,11 @@ async fn test_batch_processor_error_handling() {
     // Add owner to storage first (simulating existing chain)
     {
         let mut storage = faucet_storage.lock().await;
-        let existing_description = super::ChainDescription::new(
+        let existing_description = ChainDescription::new(
             ChainOrigin::Root(1),
             InitialChainConfig {
                 ownership: ChainOwnership::single(owner),
-                balance: super::Amount::from_tokens(50),
+                balance: Amount::from_tokens(50),
                 application_permissions: Default::default(),
                 epoch: Epoch::ZERO,
                 max_active_epoch: Epoch::from(100),
