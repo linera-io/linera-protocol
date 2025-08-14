@@ -87,7 +87,7 @@ async-lock = "3.3.0"
 async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
 aws-smithy-types = "1.3.1"
-axum = "0.8.1"
+axum = "0.8.4"
 base64 = "0.22.0"
 bcs = "0.1.6"
 bincode = "1.3.3"
@@ -245,7 +245,7 @@ tonic-reflection = "0.12"
 tonic-web = "0.12"
 tonic-web-wasm-client = "0.6.0"
 tower = "0.4.13"
-tower-http = "0.5.2"
+tower-http = "0.6.6"
 tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
     "env-filter",

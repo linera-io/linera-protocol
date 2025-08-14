@@ -18,7 +18,7 @@ use crate::{config::GenesisConfig, error, Error};
 pub struct Wallet {
     pub chains: BTreeMap<ChainId, UserChain>,
     pub default: Option<ChainId>,
-    pub genesis_config: GenesisConfig,
+    genesis_config: GenesisConfig,
 }
 
 impl Extend<UserChain> for Wallet {

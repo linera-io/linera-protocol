@@ -17,7 +17,7 @@ mod error;
 pub mod util;
 pub mod wallet;
 
-#[cfg(feature = "benchmark")]
+#[cfg(not(web))]
 pub mod benchmark;
 
 #[cfg(test)]

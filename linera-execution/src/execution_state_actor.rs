@@ -622,7 +622,7 @@ pub enum ExecutionRequest {
         signer: Option<AccountOwner>,
         application_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<OutgoingMessage>,
+        callback: Sender<Option<OutgoingMessage>>,
     },
 
     SystemTimestamp {

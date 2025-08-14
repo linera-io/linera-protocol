@@ -24,7 +24,7 @@ use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 use tracing::{debug, info};
-#[cfg(feature = "benchmark")]
+#[cfg(not(web))]
 use {
     crate::benchmark::{Benchmark, BenchmarkError},
     futures::{stream, StreamExt, TryStreamExt},
@@ -663,7 +663,7 @@ where
     }
 }
 
-#[cfg(feature = "benchmark")]
+#[cfg(not(web))]
 impl<Env: Environment, W> ClientContext<Env, W>
 where
     W: Persist<Target = Wallet>,

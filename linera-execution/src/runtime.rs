@@ -1297,7 +1297,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let application_id = current_application.id;
         let signer = current_application.signer;
 
-        let message = this
+        let maybe_message = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::Claim {
                 source,
@@ -1308,7 +1308,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 callback,
             })?
             .recv_response()?;
-        this.transaction_tracker.add_outgoing_message(message);
+        this.transaction_tracker
+            .add_outgoing_messages(maybe_message);
         Ok(())
     }
 

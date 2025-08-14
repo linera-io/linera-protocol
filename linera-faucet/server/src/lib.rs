@@ -580,7 +580,7 @@ where
         })
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot, EmptySubscription> {
+    fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot, EmptySubscription> {
         let mutation_root = MutationRoot {
             faucet_storage: Arc::clone(&self.faucet_storage),
             pending_requests: Arc::clone(&self.pending_requests),

@@ -1051,9 +1051,6 @@ impl SqliteDatabase {
                         Some(owner.to_string()),
                         Some(recipient.to_string()),
                     ),
-                    SystemMessage::ApplicationCreated => {
-                        ("ApplicationCreated", None, None, None, None, None)
-                    }
                 };
 
                 MessageClassification {

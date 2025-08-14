@@ -23,6 +23,7 @@ where
 {
     application_parameters: Mutex<Option<Application::Parameters>>,
     application_id: Mutex<Option<ApplicationId<Application::Abi>>>,
+    application_creator_chain_id: Mutex<Option<ChainId>>,
     chain_id: Mutex<Option<ChainId>>,
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
@@ -40,6 +41,7 @@ where
         ServiceRuntime {
             application_parameters: Mutex::new(None),
             application_id: Mutex::new(None),
+            application_creator_chain_id: Mutex::new(None),
             chain_id: Mutex::new(None),
             next_block_height: Mutex::new(None),
             timestamp: Mutex::new(None),
@@ -76,6 +78,13 @@ where
     pub fn application_id(&self) -> ApplicationId<Application::Abi> {
         Self::fetch_value_through_cache(&self.application_id, || {
             ApplicationId::from(base_wit::get_application_id()).with_abi()
+        })
+    }
+
+    /// Returns the chain ID of the current application creator.
+    pub fn application_creator_chain_id(&self) -> ChainId {
+        Self::fetch_value_through_cache(&self.application_creator_chain_id, || {
+            base_wit::get_application_creator_chain_id().into()
         })
     }
 
