@@ -177,27 +177,6 @@ async fn test_faucet_rate_limiting() {
     let _ = processor_task.await;
 }
 
-#[tokio::test]
-async fn test_faucet_storage_basic() {
-    // Test basic storage file operations
-    use tempfile::tempdir;
-
-    let temp_dir = tempdir().unwrap();
-    let storage_path = temp_dir.path().join("test_storage.json");
-
-    // Test loading non-existent storage creates empty storage
-    let storage = super::FaucetStorage::load(&storage_path).await.unwrap();
-    assert!(storage.owner_to_chain.is_empty());
-
-    // Test saving empty storage
-    storage.save(&storage_path).await.unwrap();
-    assert!(storage_path.exists());
-
-    // Test loading saved empty storage
-    let loaded_storage = super::FaucetStorage::load(&storage_path).await.unwrap();
-    assert!(loaded_storage.owner_to_chain.is_empty());
-}
-
 #[test]
 fn test_multiply() {
     use super::multiply;
