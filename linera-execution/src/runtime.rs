@@ -965,6 +965,15 @@ where
         }
         Ok(())
     }
+
+    fn application_exists(&mut self, application_id: ApplicationId) -> Result<bool, ExecutionError> {
+        let this = self.inner();
+        let exists = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::ApplicationExists { application_id, callback })?
+            .recv_response()?;
+        Ok(exists)
+    }
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and
