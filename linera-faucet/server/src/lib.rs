@@ -31,7 +31,9 @@ use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
     config::GenesisConfig,
 };
-use linera_core::{client::ChainClientError, data_types::ClientOutcome};
+use linera_core::{
+    client::ChainClientError, data_types::ClientOutcome, worker::WorkerError, LocalNodeError,
+};
 use linera_execution::{
     system::{OpenChainConfig, SystemOperation},
     ExecutionError, Operation,
@@ -285,9 +287,8 @@ where
 
     /// Processes batches until there are no more pending requests in the queue.
     async fn process_batch(&mut self) -> Result<(), anyhow::Error> {
-        let max_batch_size = self.config.max_batch_size;
-
         loop {
+            let max_batch_size = self.config.max_batch_size;
             let mut batch_requests = Vec::new();
 
             // Collect requests from the queue.
@@ -404,26 +405,38 @@ where
         self.context.lock().await.update_wallet(&client).await?;
 
         let certificate = match result {
-            Err(ChainClientError::ChainError(ChainError::ExecutionError(
-                exec_err,
-                ChainExecutionContext::Operation(i),
-            ))) if i > 0
-                && matches!(
-                    *exec_err,
-                    ExecutionError::BlockTooLarge
-                        | ExecutionError::FeesExceedFunding { .. }
-                        | ExecutionError::InsufficientBalance { .. }
-                        | ExecutionError::MaximumFuelExceeded(_)
-                ) =>
-            {
-                tracing::error!(%exec_err, "Execution of operation {i} failed; reducing batch size");
-                self.config.max_batch_size = i as usize;
-                // Put the valid requests back into the queue.
-                let mut pending_requests = self.pending_requests.lock().await;
-                for request in valid_requests.into_iter().rev() {
-                    pending_requests.push_front(request);
+            Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(chain_err),
+            ))) => {
+                match *chain_err {
+                    ChainError::ExecutionError(exec_err, ChainExecutionContext::Operation(i))
+                        if i > 0
+                            && matches!(
+                                *exec_err,
+                                ExecutionError::BlockTooLarge
+                                    | ExecutionError::FeesExceedFunding { .. }
+                                    | ExecutionError::InsufficientBalance { .. }
+                                    | ExecutionError::MaximumFuelExceeded(_)
+                            ) =>
+                    {
+                        tracing::error!(%exec_err, "Execution of operation {i} failed; reducing batch size");
+                        self.config.max_batch_size = i as usize;
+                        // Put the valid requests back into the queue.
+                        let mut pending_requests = self.pending_requests.lock().await;
+                        for request in valid_requests.into_iter().rev() {
+                            pending_requests.push_front(request);
+                        }
+                        return Ok(()); // Don't return an error, so we retry.
+                    }
+                    chain_err => {
+                        return Err(
+                            ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                                WorkerError::ChainError(chain_err.into()),
+                            ))
+                            .into(),
+                        )
+                    }
                 }
-                return Ok(()); // Don't return an error, so we retry.
             }
             Err(err) => return Err(err.into()),
             Ok(ClientOutcome::Committed(certificate)) => certificate,
