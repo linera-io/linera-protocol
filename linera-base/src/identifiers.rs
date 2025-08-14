@@ -942,6 +942,7 @@ impl<A> ApplicationId<A> {
     }
 }
 
+#[cfg(with_revm)]
 impl From<Address> for ApplicationId {
     fn from(address: Address) -> ApplicationId {
         let mut arr = [0_u8; 32];
