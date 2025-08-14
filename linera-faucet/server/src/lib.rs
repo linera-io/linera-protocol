@@ -361,7 +361,7 @@ where
         })
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, EmptySubscription> {
+    fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, EmptySubscription> {
         let mutation_root = MutationRoot {
             chain_id: self.chain_id,
             context: Arc::clone(&self.context),

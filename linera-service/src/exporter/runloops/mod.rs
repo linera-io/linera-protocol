@@ -624,7 +624,7 @@ mod test {
         let destination = DummyValidator::default();
         destination.set_faulty();
         tokio::spawn(destination.clone().start(port, token.clone()));
-        LocalNet::ensure_grpc_server_has_started("falty validator", port as usize, "http").await?;
+        LocalNet::ensure_grpc_server_has_started("faulty validator", port as usize, "http").await?;
         let destination_address = Destination::Validator {
             port,
             endpoint: "127.0.0.1".to_owned(),

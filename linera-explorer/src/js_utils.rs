@@ -6,7 +6,7 @@ use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::prelude::*;
 
 /// JS special serializer
-pub const SER: Serializer =
+pub(crate) const SER: Serializer =
     serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);
 
 pub fn setf(target: &JsValue, field: &str, value: &JsValue) {

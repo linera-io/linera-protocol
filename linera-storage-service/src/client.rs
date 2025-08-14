@@ -20,7 +20,7 @@ use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingDatabase,
     store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
-    FutureSyncExt,
+    FutureSyncExt as _,
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};

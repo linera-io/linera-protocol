@@ -95,7 +95,7 @@ pub mod metrics {
 
     /// The metric counting how often a blob is read from storage.
     #[doc(hidden)]
-    pub static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "read_blob",
             "The metric counting how often a blob is read from storage",
@@ -105,7 +105,7 @@ pub mod metrics {
 
     /// The metric counting how often a blob state is read from storage.
     #[doc(hidden)]
-    pub static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "read_blob_state",
             "The metric counting how often a blob state is read from storage",
@@ -115,7 +115,7 @@ pub mod metrics {
 
     /// The metric counting how often blob states are read from storage.
     #[doc(hidden)]
-    pub static READ_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static READ_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "read_blob_states",
             "The metric counting how often blob states are read from storage",
@@ -125,7 +125,7 @@ pub mod metrics {
 
     /// The metric counting how often a blob is written to storage.
     #[doc(hidden)]
-    pub static WRITE_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static WRITE_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "write_blob",
             "The metric counting how often a blob is written to storage",
@@ -145,7 +145,7 @@ pub mod metrics {
 
     /// The metric counting how often certificates are read from storage.
     #[doc(hidden)]
-    pub static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "read_certificates",
             "The metric counting how often certificate are read from storage",
@@ -165,7 +165,7 @@ pub mod metrics {
 
     /// The latency to load a chain state.
     #[doc(hidden)]
-    pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    pub(crate) static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "load_chain_latency",
             "The latency to load a chain state",
@@ -176,7 +176,7 @@ pub mod metrics {
 
     /// The metric counting how often an event is read from storage.
     #[doc(hidden)]
-    pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "read_event",
             "The metric counting how often an event is read from storage",
@@ -195,7 +195,7 @@ pub mod metrics {
 
     /// The metric counting how often an event is written to storage.
     #[doc(hidden)]
-    pub static WRITE_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static WRITE_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "write_event",
             "The metric counting how often an event is written to storage",
@@ -205,7 +205,7 @@ pub mod metrics {
 
     /// The metric counting how often the network description is read from storage.
     #[doc(hidden)]
-    pub static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "network_description",
             "The metric counting how often the network description is read from storage",
@@ -215,7 +215,7 @@ pub mod metrics {
 
     /// The metric counting how often the network description is written to storage.
     #[doc(hidden)]
-    pub static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub(super) static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "write_network_description",
             "The metric counting how often the network description is written to storage",

@@ -435,7 +435,7 @@ impl LocalNet {
         13000 + validator * 100 + proxy_id + 1
     }
 
-    pub fn proxy_internal_port(validator: usize, proxy_id: usize) -> usize {
+    fn proxy_internal_port(validator: usize, proxy_id: usize) -> usize {
         10000 + validator * 100 + proxy_id + 1
     }
 
@@ -788,7 +788,7 @@ impl LocalNet {
         bail!("Failed to start {nickname}");
     }
 
-    pub async fn ensure_simple_server_has_started(
+    async fn ensure_simple_server_has_started(
         nickname: &str,
         port: usize,
         protocol: &str,
