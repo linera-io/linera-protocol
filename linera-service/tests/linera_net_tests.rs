@@ -4375,30 +4375,17 @@ async fn test_end_to_end_faucet_batch_processing(config: impl LineraNetConfig) -
 
     for i in 0..NUM_REQUESTS {
         let faucet_clone = faucet.clone();
-        handles.push(tokio::spawn(async move {
+        handles.push(async move {
             let owner = AccountOwner::from(
                 AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public(),
             );
             tracing::info!("Request {} claiming chain for owner: {}", i, owner);
             faucet_clone.claim(&owner).await
-        }));
+        });
     }
 
     // Wait for all requests to complete
-    let mut chain_descriptions = Vec::new();
-    for (i, handle) in handles.into_iter().enumerate() {
-        let result = handle.await?;
-        match result {
-            Ok(description) => {
-                tracing::info!("Request {} succeeded, got chain: {}", i, description.id());
-                chain_descriptions.push(description);
-            }
-            Err(e) => {
-                tracing::error!("Request {} failed: {}", i, e);
-                return Err(anyhow::anyhow!("Request {} failed: {}", i, e));
-            }
-        }
-    }
+    let chain_descriptions = future::try_join_all(handles).await?;
 
     // Verify all chains were created successfully
     assert_eq!(chain_descriptions.len(), NUM_REQUESTS);
@@ -4413,12 +4400,6 @@ async fn test_end_to_end_faucet_batch_processing(config: impl LineraNetConfig) -
         );
     }
 
-    // Verify balance was decremented appropriately (NUM_REQUESTS * 2 tokens + fees)
-    client1.sync(chain1).await?;
-    let final_balance = client1.query_balance(Account::chain(chain1)).await?;
-    let expected_transfer = Amount::from_tokens((NUM_REQUESTS * 2) as u128);
-    assert!(final_balance <= balance1 - expected_transfer);
-
     // Test duplicate request handling - should return existing chain
     let owner =
         AccountOwner::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
@@ -4432,6 +4413,11 @@ async fn test_end_to_end_faucet_batch_processing(config: impl LineraNetConfig) -
 
     faucet_service.ensure_is_running()?;
     faucet_service.terminate().await?;
+
+    // Verify balance was decremented appropriately (NUM_REQUESTS * 2 tokens + fees)
+    let final_balance = client1.query_balance(Account::chain(chain1)).await?;
+    let expected_transfer = Amount::from_tokens((NUM_REQUESTS * 2) as u128);
+    assert!(final_balance <= balance1 - expected_transfer);
 
     net.ensure_is_running().await?;
     net.terminate().await?;

@@ -280,48 +280,45 @@ where
         }
     }
 
-    /// Processes a batch of pending requests
+    /// Processes batches until there are no more pending requests in the queue.
     async fn process_batch(&self) -> Result<(), anyhow::Error> {
         let max_batch_size = self.config.max_batch_size;
 
-        let mut batch_requests = Vec::new();
+        loop {
+            let mut batch_requests = Vec::new();
 
-        // Collect requests from the queue
-        {
-            let mut requests = self.pending_requests.lock().await;
-            while batch_requests.len() < max_batch_size && !requests.is_empty() {
-                if let Some(request) = requests.pop_front() {
-                    batch_requests.push(request);
+            // Collect requests from the queue.
+            {
+                let mut requests = self.pending_requests.lock().await;
+                while batch_requests.len() < max_batch_size && !requests.is_empty() {
+                    if let Some(request) = requests.pop_front() {
+                        batch_requests.push(request);
+                    }
                 }
             }
-        }
 
-        if batch_requests.is_empty() {
-            return Ok(());
-        }
+            if batch_requests.is_empty() {
+                return Ok(());
+            }
 
-        tracing::info!("Processing batch of {} requests", batch_requests.len());
+            tracing::info!("Processing batch of {} requests", batch_requests.len());
 
-        match self.execute_batch(batch_requests).await {
-            Ok(()) => {}
-            Err(e) => {
-                tracing::error!("Failed to execute batch: {}", e);
-                return Err(e);
+            if let Err(err) = self.execute_batch(batch_requests).await {
+                tracing::error!("Failed to execute batch: {}", err);
+                return Err(err);
             }
         }
-
-        Ok(())
     }
 
     /// Executes a batch of chain creation requests
     async fn execute_batch(
         &self,
-        mut batch_requests: Vec<PendingRequest>,
+        batch_requests: Vec<PendingRequest>,
     ) -> Result<(), anyhow::Error> {
         // Pre-validate: check rate limiting and existing chains
         let mut valid_requests = Vec::new();
 
-        for request in batch_requests.drain(..) {
+        for request in batch_requests {
             // Check if this owner already has a chain
             {
                 let storage = self.faucet_storage.lock().await;
@@ -400,14 +397,7 @@ where
         }
 
         // Execute all operations in a single block
-        drop(client); // Release the client lock before re-acquiring
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(self.config.chain_id);
         let result = client.execute_operations(operations, vec![]).await?;
-
         self.context.lock().await.update_wallet(&client).await?;
 
         let certificate = match result {
@@ -426,16 +416,10 @@ where
         };
 
         // Parse chain descriptions from the block's blobs
-        let block = certificate.block();
-        let chain_descriptions: Result<Vec<ChainDescription>, _> = block
-            .body
-            .blobs
-            .iter()
-            .flat_map(|blob_vec| blob_vec.iter())
+        let blobs = certificate.block().body.blobs.iter().flatten();
+        let chain_descriptions = blobs
             .map(|blob| bcs::from_bytes::<ChainDescription>(blob.bytes()))
-            .collect();
-
-        let chain_descriptions = chain_descriptions?;
+            .collect::<Result<Vec<ChainDescription>, _>>()?;
 
         if chain_descriptions.len() != valid_requests.len() {
             let error_msg = format!(
