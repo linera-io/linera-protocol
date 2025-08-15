@@ -26,7 +26,7 @@ use futures::{
 };
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, Secp256k1SecretKey},
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     vm::VmRuntime,
@@ -34,7 +34,7 @@ use linera_base::{
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
     abis::fungible::NativeFungibleTokenAbi,
-    linera_base_types::{BlobContent, BlockHeight},
+    linera_base_types::{AccountSecretKey, BlobContent, BlockHeight},
     DataBlobHash,
 };
 #[cfg(any(
@@ -4320,6 +4320,95 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     faucet_service.ensure_is_running()?;
     faucet_service.terminate().await?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+/// Tests faucet batch processing with multiple concurrent chain creation requests
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_faucet_batch_processing(config: impl LineraNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client1) = config.instantiate().await?;
+
+    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    let balance1 = client1.local_balance(Account::chain(chain1)).await?;
+
+    // Start faucet with small batch size for testing
+    let mut faucet_service = client1
+        .run_faucet(None, chain1, Amount::from_tokens(2))
+        .await?;
+    let faucet = faucet_service.instance();
+
+    // Test batch processing by creating multiple concurrent requests
+    const NUM_REQUESTS: usize = 20;
+    let mut handles = Vec::new();
+
+    for i in 0..NUM_REQUESTS {
+        let faucet_clone = faucet.clone();
+        handles.push(async move {
+            let owner = AccountOwner::from(
+                AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public(),
+            );
+            tracing::info!("Request {} claiming chain for owner: {}", i, owner);
+            faucet_clone.claim(&owner).await
+        });
+    }
+
+    // Wait for all requests to complete
+    let chain_descriptions = future::try_join_all(handles).await?;
+
+    // Verify all chains were created successfully
+    assert_eq!(chain_descriptions.len(), NUM_REQUESTS);
+
+    // Verify all chains are unique
+    let mut chain_ids = std::collections::HashSet::new();
+    for desc in &chain_descriptions {
+        assert!(
+            chain_ids.insert(desc.id()),
+            "Duplicate chain ID: {}",
+            desc.id()
+        );
+    }
+
+    // Test duplicate request handling - should return existing chain
+    let owner =
+        AccountOwner::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
+    let first_claim = faucet.claim(&owner).await?;
+    let second_claim = faucet.claim(&owner).await?;
+    assert_eq!(
+        first_claim.id(),
+        second_claim.id(),
+        "Duplicate request should return same chain"
+    );
+
+    faucet_service.ensure_is_running()?;
+    faucet_service.terminate().await?;
+
+    // Verify balance was decremented appropriately (NUM_REQUESTS * 2 tokens + fees)
+    let final_balance = client1.query_balance(Account::chain(chain1)).await?;
+    let expected_transfer = Amount::from_tokens((NUM_REQUESTS * 2) as u128);
+    assert!(final_balance <= balance1 - expected_transfer);
+
+    // Verify that fewer than NUM_REQUESTS blocks were created, i.e. some of them were batched.
+    let port = get_node_port().await;
+    let service = client1.run_node_service(port, ProcessInbox::Skip).await?;
+    let query =
+        format!("query {{ chain(chainId:\"{chain1}\") {{ tipState {{ nextBlockHeight }} }} }}");
+    let response = service.query_node(query).await?;
+    let height = response["chain"]["tipState"]["nextBlockHeight"]
+        .as_u64()
+        .unwrap();
+    assert!(height < NUM_REQUESTS as u64);
 
     net.ensure_is_running().await?;
     net.terminate().await?;

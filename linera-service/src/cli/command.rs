@@ -740,6 +740,10 @@ pub enum ClientCommand {
         /// Path to the persistent storage file for faucet mappings.
         #[arg(long)]
         storage_path: Option<PathBuf>,
+
+        /// Maximum number of operations to include in a single block (default: 100).
+        #[arg(long, default_value = "100")]
+        max_batch_size: usize,
     },
 
     /// Publish module.

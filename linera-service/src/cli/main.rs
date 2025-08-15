@@ -948,6 +948,7 @@ impl Runnable for Job {
                 limit_rate_until,
                 config,
                 storage_path,
+                max_batch_size,
             } => {
                 let context = ClientContext::new(
                     storage.clone(),
@@ -976,6 +977,7 @@ impl Runnable for Job {
                     genesis_config,
                     chain_listener_config: config,
                     storage_path,
+                    max_batch_size,
                 };
                 let faucet = FaucetService::new(config, context, storage).await?;
                 let cancellation_token = CancellationToken::new();
