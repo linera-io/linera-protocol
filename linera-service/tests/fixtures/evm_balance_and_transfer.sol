@@ -16,4 +16,9 @@ contract InnerContractCheck {
         uint256 balance = account.balance;
         return balance;
     }
+
+    function null_operation() external returns (uint256) {
+        uint56 value = 0;
+        return value;
+    }
 }

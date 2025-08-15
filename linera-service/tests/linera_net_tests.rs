@@ -568,6 +568,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     sol! {
         function send_cash(address recipient, uint256 amount);
         function get_balance(address account);
+        function null_operation();
     }
 
     async fn assert_contract_balance(app: &ApplicationWrapper<EvmAbi>, address: Address, balance: Amount) -> anyhow::Result<()> {
@@ -661,11 +662,18 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     assert_contract_balance(&application1, address2, balance2_after).await?;
     assert_contract_balance(&application1, address_app, balance_app_after).await?;
 
-    // Checking the balances of application2
-    let balance_app_after = node_service2.balance(&account_app2).await?;
-    assert_eq!(balance_app_after, Amount::ZERO);
-//    assert_contract_balance(&application2, address1, Amount::ZERO).await?;
-//    assert_contract_balance(&application2, address2, Amount::ZERO).await?;
+    // Creating application2 via null_operation and checking balances.
+
+    let mutation = null_operationCall { };
+    let mutation = get_zero_mutation(mutation)?;
+    let mutation = EvmQuery::Mutation(mutation);
+    application2.run_json_query(mutation).await?;
+
+    assert_eq!(node_service2.balance(&account1).await?, Amount::ZERO);
+    assert_eq!(node_service2.balance(&account2).await?, Amount::ZERO);
+    assert_eq!(node_service2.balance(&account_app2).await?, Amount::ZERO);
+    assert_contract_balance(&application2, address1, Amount::ZERO).await?;
+    assert_contract_balance(&application2, address2, Amount::ZERO).await?;
     assert_contract_balance(&application2, address_app, Amount::ZERO).await?;
 
     // Winding down
