@@ -32,7 +32,10 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::{
-    client::ChainClientError, data_types::ClientOutcome, worker::WorkerError, LocalNodeError,
+    client::{ChainClient, ChainClientError},
+    data_types::ClientOutcome,
+    worker::WorkerError,
+    LocalNodeError,
 };
 use linera_execution::{
     system::{OpenChainConfig, SystemOperation},
@@ -61,10 +64,9 @@ pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoR
 mod tests;
 
 /// The root GraphQL query type.
-pub struct QueryRoot<C> {
-    context: Arc<Mutex<C>>,
+pub struct QueryRoot<C: ClientContext> {
+    client: ChainClient<C::Environment>,
     genesis_config: Arc<GenesisConfig>,
-    chain_id: ChainId,
 }
 
 /// The root GraphQL mutation type.
@@ -98,7 +100,6 @@ struct PendingRequest {
 
 /// Configuration for the batch processor
 struct BatchProcessorConfig {
-    chain_id: ChainId,
     amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
@@ -108,9 +109,10 @@ struct BatchProcessorConfig {
 }
 
 /// Batching coordinator for processing chain creation requests
-struct BatchProcessor<C> {
+struct BatchProcessor<C: ClientContext> {
     config: BatchProcessorConfig,
     context: Arc<Mutex<C>>,
+    client: ChainClient<C::Environment>,
     faucet_storage: Arc<Mutex<FaucetStorage>>,
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
@@ -183,8 +185,7 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let client = self.context.lock().await.make_chain_client(self.chain_id);
-        let committee = client.local_committee().await?;
+        let committee = self.client.local_committee().await?;
         Ok(committee
             .validators()
             .iter()
@@ -252,6 +253,7 @@ where
     fn new(
         config: BatchProcessorConfig,
         context: Arc<Mutex<C>>,
+        client: ChainClient<C::Environment>,
         faucet_storage: Arc<Mutex<FaucetStorage>>,
         pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
         request_notifier: Arc<Notify>,
@@ -259,6 +261,7 @@ where
         Self {
             config,
             context,
+            client,
             faucet_storage,
             pending_requests,
             request_notifier,
@@ -340,14 +343,8 @@ where
         }
 
         // Rate limiting check for the batch
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(self.config.chain_id);
-
         if self.config.start_timestamp < self.config.end_timestamp {
-            let local_time = client.storage_client().clock().current_time();
+            let local_time = self.client.storage_client().clock().current_time();
             if local_time < self.config.end_timestamp {
                 let full_duration = self
                     .config
@@ -359,7 +356,7 @@ where
                     .end_timestamp
                     .delta_since(local_time)
                     .as_micros();
-                let balance = client.local_balance().await?;
+                let balance = self.client.local_balance().await?;
 
                 let total_amount = self
                     .config
@@ -401,8 +398,12 @@ where
         }
 
         // Execute all operations in a single block
-        let result = client.execute_operations(operations, vec![]).await;
-        self.context.lock().await.update_wallet(&client).await?;
+        let result = self.client.execute_operations(operations, vec![]).await;
+        self.context
+            .lock()
+            .await
+            .update_wallet(&self.client)
+            .await?;
 
         let certificate = match result {
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
@@ -498,6 +499,7 @@ where
 {
     chain_id: ChainId,
     context: Arc<Mutex<C>>,
+    client: ChainClient<C::Environment>,
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
     storage: <C::Environment as linera_core::Environment>::Storage,
@@ -526,6 +528,7 @@ where
         Self {
             chain_id: self.chain_id,
             context: Arc::clone(&self.context),
+            client: self.client.clone(),
             genesis_config: Arc::clone(&self.genesis_config),
             config: self.config.clone(),
             storage: self.storage.clone(),
@@ -599,6 +602,7 @@ where
         Ok(Self {
             chain_id: config.chain_id,
             context,
+            client,
             genesis_config: config.genesis_config,
             config: config.chain_listener_config,
             storage,
@@ -626,8 +630,7 @@ where
         };
         let query_root = QueryRoot {
             genesis_config: Arc::clone(&self.genesis_config),
-            context: Arc::clone(&self.context),
-            chain_id: self.chain_id,
+            client: self.client.clone(),
         };
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
@@ -657,7 +660,6 @@ where
 
         // Start the batch processor
         let batch_processor_config = BatchProcessorConfig {
-            chain_id: self.chain_id,
             amount: self.amount,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
@@ -668,6 +670,7 @@ where
         let mut batch_processor = BatchProcessor::new(
             batch_processor_config,
             Arc::clone(&self.context),
+            self.client.clone(),
             Arc::clone(&self.faucet_storage),
             Arc::clone(&self.pending_requests),
             Arc::clone(&self.request_notifier),

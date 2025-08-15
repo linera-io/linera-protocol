@@ -83,9 +83,8 @@ async fn test_faucet_rate_limiting() {
         .add_root_chain(1, Amount::from_tokens(6))
         .await
         .unwrap();
-    let chain_id = client.chain_id();
     let context = ClientContext {
-        client,
+        client: client.clone(),
         update_calls: 0,
     };
     let context = Arc::new(Mutex::new(context));
@@ -105,7 +104,6 @@ async fn test_faucet_rate_limiting() {
 
     // Create the BatchProcessor configuration and instance
     let batch_config = super::BatchProcessorConfig {
-        chain_id,
         amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
@@ -117,6 +115,7 @@ async fn test_faucet_rate_limiting() {
     let batch_processor = super::BatchProcessor::new(
         batch_config,
         Arc::clone(&context),
+        client,
         Arc::clone(&faucet_storage),
         Arc::clone(&pending_requests),
         Arc::clone(&request_notifier),
@@ -214,10 +213,9 @@ async fn test_batch_size_reduction_on_limit_errors() {
         .add_root_chain(1, Amount::from_tokens(100))
         .await
         .unwrap();
-    let chain_id = client.chain_id();
 
     let context = Arc::new(Mutex::new(ClientContext {
-        client,
+        client: client.clone(),
         update_calls: 0,
     }));
 
@@ -228,7 +226,6 @@ async fn test_batch_size_reduction_on_limit_errors() {
     // Create batch processor with initial batch size of 3 and disabled rate limiting
     let initial_batch_size = 3;
     let config = super::BatchProcessorConfig {
-        chain_id,
         amount: Amount::from_tokens(1),
         start_balance: Amount::from_tokens(100),
         start_timestamp: Timestamp::from(1000), // start > end disables rate limiting
@@ -240,6 +237,7 @@ async fn test_batch_size_reduction_on_limit_errors() {
     let mut batch_processor = super::BatchProcessor::new(
         config,
         Arc::clone(&context),
+        client,
         Arc::clone(&faucet_storage),
         Arc::clone(&pending_requests),
         Arc::clone(&request_notifier),
