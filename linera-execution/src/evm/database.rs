@@ -214,10 +214,7 @@ where
         if !self.changes.is_empty() {
             // This is the case of service calls with empty storage.
             let account = self.changes.get(&address);
-            return Ok(match account {
-                Some(account) => Some(account.info.clone()),
-                None => None,
-            });
+            return Ok(account.map(|account| account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let account_owner = address.into();
