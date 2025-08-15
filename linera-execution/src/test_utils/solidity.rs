@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::Context;
-use revm_primitives::U256;
+use revm_primitives::{Address, U256};
 use serde_json::Value;
 use tempfile::{tempdir, TempDir};
 
@@ -126,6 +126,12 @@ pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
         .split_whitespace()
         .next()
         .ok_or(anyhow::anyhow!("No space found after the contract name"))?;
+    tracing::info!("load_solidity_example, contract_name={contract_name}");
+    get_bytecode(&source_code, contract_name)
+}
+
+pub fn load_solidity_example_by_name(path: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
+    let source_code = std::fs::read_to_string(path)?;
     get_bytecode(&source_code, contract_name)
 }
 
@@ -164,12 +170,13 @@ pub fn read_evm_u64_entry(value: Value) -> u64 {
 }
 
 pub fn read_evm_u256_entry(value: Value) -> U256 {
-    let result = value
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_u64().ok_or("Not a number").map(|n| n as u8))
-        .collect::<Result<Vec<u8>, _>>()
-        .unwrap();
+    let result = value_to_vec_u8(value);
     U256::from_be_slice(&result)
+}
+
+pub fn read_evm_address_entry(value: Value) -> Address {
+    let vec = value_to_vec_u8(value);
+    let mut arr = [0_u8; 20];
+    arr.copy_from_slice(&vec[12..]);
+    Address::from_slice(&arr)
 }
