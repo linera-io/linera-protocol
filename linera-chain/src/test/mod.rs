@@ -8,11 +8,10 @@ mod http_server;
 use linera_base::{
     crypto::{AccountPublicKey, Signer, ValidatorPublicKey},
     data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    system::Recipient,
     Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
 };
 
@@ -63,7 +62,7 @@ pub trait BlockTestExt: Sized {
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
 
     /// Returns the block with a transfer operation appended at the end.
-    fn with_transfer(self, owner: AccountOwner, recipient: Recipient, amount: Amount) -> Self;
+    fn with_transfer(self, owner: AccountOwner, recipient: Account, amount: Amount) -> Self;
 
     /// Returns the block with a simple transfer operation appended at the end.
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self;
@@ -110,7 +109,7 @@ impl BlockTestExt for ProposedBlock {
         self
     }
 
-    fn with_transfer(self, owner: AccountOwner, recipient: Recipient, amount: Amount) -> Self {
+    fn with_transfer(self, owner: AccountOwner, recipient: Account, amount: Amount) -> Self {
         self.with_operation(SystemOperation::Transfer {
             owner,
             recipient,
@@ -119,7 +118,7 @@ impl BlockTestExt for ProposedBlock {
     }
 
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self {
-        self.with_transfer(AccountOwner::CHAIN, Recipient::chain(chain_id), amount)
+        self.with_transfer(AccountOwner::CHAIN, Account::chain(chain_id), amount)
     }
 
 

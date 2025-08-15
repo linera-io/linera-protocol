@@ -41,7 +41,7 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, OpenChainConfig, Recipient, SystemMessage, SystemOperation,
+        AdminOperation, OpenChainConfig, SystemMessage, SystemOperation,
         EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
@@ -283,7 +283,7 @@ where
             chain_owner_pubkey,
             chain_owner_pubkey.into(),
             AccountOwner::CHAIN,
-            Recipient::chain(target_id),
+            Account::chain(target_id),
             amount,
             incoming_bundles,
             Epoch::ZERO,
@@ -301,7 +301,7 @@ where
         chain_owner_pubkey: AccountPublicKey,
         authenticated_signer: AccountOwner,
         source: AccountOwner,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
         incoming_bundles: Vec<IncomingBundle>,
         balance: Amount,
@@ -335,7 +335,7 @@ where
         chain_owner_pubkey: AccountPublicKey,
         authenticated_signer: AccountOwner,
         source: AccountOwner,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
         incoming_bundles: Vec<IncomingBundle>,
         epoch: Epoch,
@@ -392,22 +392,18 @@ where
             .chain(block.transactions)
             .collect();
 
-        match recipient {
-            Recipient::Account(account) => {
-                if chain_id != account.chain_id {
-                    messages.push(vec![direct_outgoing_message(
-                        account.chain_id,
-                        MessageKind::Tracked,
-                        SystemMessage::Credit {
-                            source,
-                            target: account.owner,
-                            amount,
-                        },
-                    )]);
-                } else {
-                    messages.push(Vec::new());
-                }
-            }
+        if chain_id != recipient.chain_id {
+            messages.push(vec![direct_outgoing_message(
+                recipient.chain_id,
+                MessageKind::Tracked,
+                SystemMessage::Credit {
+                    source,
+                    target: recipient.owner,
+                    amount,
+                },
+            )]);
+        } else {
+            messages.push(Vec::new());
         }
         let tx_count = block.transactions.len();
         let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
@@ -686,7 +682,7 @@ where
         future.await?;
 
         let system_state = SystemExecutionState {
-            balance: balance,
+            balance,
             timestamp: block_0_time,
             ..env.system_execution_state(&chain_1_desc.id())
         };
@@ -1605,7 +1601,7 @@ where
             sender_key_pair.public(),
             chain_key_pair.public().into(),
             AccountOwner::CHAIN,
-            Recipient::chain(chain_2),
+            Account::chain(chain_2),
             Amount::from_tokens(5),
             Vec::new(),
             Epoch::ZERO,
@@ -2371,7 +2367,7 @@ where
             sender_pubkey,
             sender,
             AccountOwner::CHAIN,
-            Recipient::Account(sender_account),
+            sender_account,
             Amount::from_tokens(5),
             Vec::new(),
             Amount::ONE,
@@ -2391,7 +2387,7 @@ where
             sender_pubkey,
             sender,
             sender,
-            Recipient::Account(recipient_account),
+            recipient_account,
             Amount::from_tokens(3),
             Vec::new(),
             Amount::ONE,
@@ -2410,7 +2406,7 @@ where
             sender_pubkey,
             sender,
             sender,
-            Recipient::Account(recipient_account),
+            recipient_account,
             Amount::from_tokens(2),
             Vec::new(),
             Amount::ONE,
@@ -2430,7 +2426,7 @@ where
             recipient_pubkey,
             recipient,
             recipient,
-            Recipient::Account(Account::chain(chain_2_desc.id())),
+            Account::chain(chain_2_desc.id()),
             Amount::ONE,
             vec![
                 IncomingBundle {
@@ -2489,7 +2485,7 @@ where
             sender_pubkey,
             sender,
             sender,
-            Recipient::Account(Account::chain(chain_2_desc.id())),
+            Account::chain(chain_2_desc.id()),
             Amount::from_tokens(3),
             vec![IncomingBundle {
                 origin: chain_2,
@@ -3129,7 +3125,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             key_pair0.public(),
             key_pair0.public().into(),
             AccountOwner::CHAIN,
-            Recipient::chain(id1),
+            Account::chain(id1),
             Amount::ONE,
             Vec::new(),
             Epoch::ZERO,
@@ -3144,7 +3140,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             key_pair0.public(),
             key_pair0.public().into(),
             AccountOwner::CHAIN,
-            Recipient::chain(id1),
+            Account::chain(id1),
             Amount::ONE,
             Vec::new(),
             Epoch::ZERO,
@@ -3159,7 +3155,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             key_pair0.public(),
             key_pair0.public().into(),
             AccountOwner::CHAIN,
-            Recipient::chain(id1),
+            Account::chain(id1),
             Amount::ONE,
             Vec::new(),
             Epoch::from(1),
@@ -3175,7 +3171,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             key_pair0.public(),
             key_pair0.public().into(),
             AccountOwner::CHAIN,
-            Recipient::chain(id1),
+            Account::chain(id1),
             Amount::ONE,
             Vec::new(),
             Epoch::ZERO,
@@ -3670,7 +3666,7 @@ where
     // The first round is the multi-leader round 0. Anyone is allowed to propose.
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
-        .with_transfer(AccountOwner::CHAIN, Recipient::Account(Account::chain(chain_id)), Amount::from_tokens(1))
+        .with_transfer(AccountOwner::CHAIN, Account::chain(chain_id), Amount::from_tokens(1))
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
@@ -3722,7 +3718,7 @@ where
     let proposed_block0 = make_first_block(chain_id)
         .with_transfer(
             AccountOwner::CHAIN,
-            Account::new(chain_id, owner0).into(),
+            Account::new(chain_id, owner0),
             Amount::from_tokens(1),
         )
         .with_authenticated_signer(Some(owner0))
@@ -3755,7 +3751,7 @@ where
     let proposed_block1 = make_child_block(&value0.clone())
         .with_transfer(
             AccountOwner::CHAIN,
-            Account::new(chain_id, owner0).into(),
+            Account::new(chain_id, owner0),
             Amount::from_micros(1),
         )
         .with_authenticated_signer(Some(owner0));
@@ -4152,7 +4148,7 @@ where
 
     let mut state = SystemExecutionState {
         timestamp: Timestamp::from(BLOCK_TIMESTAMP),
-        balance: balance,
+        balance,
         ..env.system_execution_state(&chain_description.id())
     }
     .into_view()

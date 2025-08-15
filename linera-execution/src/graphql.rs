@@ -14,11 +14,10 @@ use linera_views::{context::Context, map_view::MapView};
 
 use crate::{
     committee::{Committee, ValidatorState},
-    system::{Recipient, UserData},
+    system::UserData,
     ExecutionStateView, SystemExecutionStateView,
 };
 
-doc_scalar!(Recipient, "The recipient of a transfer");
 doc_scalar!(UserData, "Optional user message attached to a transfer");
 
 #[async_graphql::Object(cache_control(no_cache))]

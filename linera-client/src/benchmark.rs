@@ -12,7 +12,7 @@ use std::{
 
 use linera_base::{
     data_types::Amount,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     time::Instant,
 };
 use linera_core::{
@@ -20,7 +20,7 @@ use linera_core::{
     Environment,
 };
 use linera_execution::{
-    system::{Recipient, SystemOperation},
+    system::SystemOperation,
     Operation,
 };
 use linera_sdk::abis::fungible::{self, FungibleOperation};
@@ -696,7 +696,7 @@ impl<Env: Environment> Benchmark<Env> {
                     ),
                     None => Operation::system(SystemOperation::Transfer {
                         owner: AccountOwner::CHAIN,
-                        recipient: Recipient::chain(recipient_chain_id),
+                        recipient: Account::chain(recipient_chain_id),
                         amount,
                     }),
                 };

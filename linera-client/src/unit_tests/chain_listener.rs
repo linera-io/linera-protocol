@@ -17,7 +17,6 @@ use linera_core::{
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
 };
-use linera_execution::system::Recipient;
 use linera_storage::Storage;
 use tokio_util::sync::CancellationToken;
 
@@ -157,7 +156,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     });
     // Transfer one token to chain 0. The listener should eventually become leader and receive
     // the message.
-    let recipient0 = Recipient::chain(chain_id0);
+    let recipient0 = Account::chain(chain_id0);
     client1
         .transfer(AccountOwner::CHAIN, Amount::ONE, recipient0)
         .await?;

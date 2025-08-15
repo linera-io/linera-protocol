@@ -9,7 +9,6 @@ use linera_base::{
     time::Duration,
 };
 use linera_core::test_utils::{ChainClient, MemoryStorageBuilder, StorageBuilder, TestBuilder};
-use linera_execution::system::Recipient;
 use linera_storage::metrics::{
     READ_CERTIFICATE_COUNTER, READ_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
 };
@@ -71,7 +70,7 @@ pub async fn run_claim_bench<B>(
         Amount::from_tokens(9)
     );
 
-    let account = Recipient::chain(chain1.chain_id());
+    let account = Account::chain(chain1.chain_id());
     let cert = chain1
         .claim(owner1, chain2.chain_id(), account, amt)
         .await

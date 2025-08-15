@@ -24,7 +24,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Committee,
-    system::{Recipient, SystemOperation},
+    system::SystemOperation,
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
     SystemMessage, SystemQuery, SystemResponse,
 };
@@ -214,7 +214,7 @@ where
         .claim(
             owner,
             receiver_id,
-            Recipient::chain(sender.chain_id()),
+            Account::chain(sender.chain_id()),
             Amount::from_tokens(5),
         )
         .await
@@ -224,7 +224,7 @@ where
         .claim(
             owner,
             receiver_id,
-            Recipient::chain(sender.chain_id()),
+            Account::chain(sender.chain_id()),
             Amount::from_tokens(2),
         )
         .await
@@ -1518,7 +1518,7 @@ where
     assert!(certificate_values[0].block().body.operations().any(|op| *op
         == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::Account(Account::chain(client_2b.chain_id())),
+            recipient: (Account::chain(client_2b.chain_id())),
             amount: Amount::from_tokens(1),
         })));
 
@@ -1651,7 +1651,7 @@ where
     assert!(certificate_values[0].block().body.operations().any(|op| *op
         == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::Account(Account::chain(client2_b.chain_id())),
+            recipient: (Account::chain(client2_b.chain_id())),
             amount: Amount::from_tokens(1),
         })));
 
@@ -2087,7 +2087,7 @@ where
         .transfer(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Recipient::chain(observer_id),
+            Account::chain(observer_id),
         )
         .await
         .unwrap();
@@ -2118,7 +2118,7 @@ where
         .transfer(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Recipient::chain(observer_id),
+            Account::chain(observer_id),
         )
         .await
         .unwrap_ok_committed();
@@ -2531,7 +2531,7 @@ where
         .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
-    let recipient = Recipient::chain(receiver.chain_id());
+    let recipient = Account::chain(receiver.chain_id());
     let cert = sender
         .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
         .await
@@ -2620,7 +2620,7 @@ where
         .transfer(
             AccountOwner::CHAIN,
             Amount::from_millis(1),
-            Recipient::chain(chain_id3),
+            Account::chain(chain_id3),
         )
         .await
         .unwrap_ok_committed();

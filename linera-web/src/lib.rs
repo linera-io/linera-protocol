@@ -314,7 +314,7 @@ impl Client {
                 chain_client.transfer(
                     params.donor.unwrap_or(AccountOwner::CHAIN),
                     linera_base::data_types::Amount::from_tokens(params.amount.into()),
-                    linera_execution::system::Recipient::Account(params.recipient),
+                    params.recipient,
                 )
             })
             .await??;

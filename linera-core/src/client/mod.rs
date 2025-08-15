@@ -54,7 +54,7 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
+        AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
@@ -2238,7 +2238,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         owner: AccountOwner,
         amount: Amount,
-        recipient: Recipient,
+        recipient: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
         self.execute_operation(SystemOperation::Transfer {
@@ -2270,7 +2270,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         owner: AccountOwner,
         target_id: ChainId,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(SystemOperation::Claim {
@@ -2745,7 +2745,7 @@ impl<Env: Environment> ChainClient<Env> {
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.transfer(from, amount, Recipient::Account(account))
+        self.transfer(from, amount, account)
             .await
     }
 
@@ -3513,7 +3513,7 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(SystemOperation::Transfer {
             owner,
-            recipient: Recipient::Account(account),
+            recipient: account,
             amount,
         })
         .await
