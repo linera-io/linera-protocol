@@ -909,8 +909,6 @@ ProposedBlock:
 Recipient:
   ENUM:
     0:
-      Burn: UNIT
-    1:
       Account:
         NEWTYPE:
           TYPENAME: Account

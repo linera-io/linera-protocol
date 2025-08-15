@@ -9,7 +9,7 @@ use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{Account, AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
@@ -219,9 +219,9 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
                 .unwrap()
         }
     });
-    // Burn one token.
+    // Transfer one token.
     let certificate = client0
-        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(client0.chain_id()))
         .await?
         .unwrap();
     for i in 0.. {

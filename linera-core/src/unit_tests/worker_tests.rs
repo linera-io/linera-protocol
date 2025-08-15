@@ -408,7 +408,6 @@ where
                     messages.push(Vec::new());
                 }
             }
-            Recipient::Burn => messages.push(Vec::new()),
         }
         let tx_count = block.transactions.len();
         let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
@@ -656,10 +655,9 @@ where
     let mut env = TestEnvironment::new(storage, false, false).await;
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_id = chain_1_desc.id();
-
     {
         let block_proposal = make_first_block(chain_id)
-            .with_burn(small_transfer)
+            .with_simple_transfer(chain_id, small_transfer)
             .with_authenticated_signer(Some(owner))
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
             .into_first_proposal(owner, &signer)
@@ -676,7 +674,7 @@ where
     let certificate = {
         let block = make_first_block(chain_id)
             .with_timestamp(block_0_time)
-            .with_burn(small_transfer)
+            .with_simple_transfer(chain_id, small_transfer)
             .with_authenticated_signer(Some(owner));
         let block_proposal = block
             .clone()
@@ -688,7 +686,7 @@ where
         future.await?;
 
         let system_state = SystemExecutionState {
-            balance: balance - small_transfer,
+            balance: balance,
             timestamp: block_0_time,
             ..env.system_execution_state(&chain_1_desc.id())
         };
@@ -1556,10 +1554,10 @@ where
         .await;
     let chain_id = description.id();
     let mut state = env.system_execution_state(&description.id());
-    // Account for burnt tokens.
-    state.balance = balance - small_transfer;
+    // Account for transferred tokens.
+    state.balance = balance;
     let block = make_first_block(chain_id)
-        .with_burn(small_transfer)
+        .with_simple_transfer(chain_id, small_transfer)
         .with_authenticated_signer(Some(sender_key_pair.public().into()));
 
     let value = ConfirmedBlock::new(
@@ -2432,7 +2430,7 @@ where
             recipient_pubkey,
             recipient,
             recipient,
-            Recipient::Burn,
+            Recipient::Account(Account::chain(chain_2_desc.id())),
             Amount::ONE,
             vec![
                 IncomingBundle {
@@ -2468,7 +2466,7 @@ where
                     action: MessageAction::Accept,
                 },
             ],
-            Amount::ZERO,
+            Amount::ONE,
             BTreeMap::from_iter([(recipient, Amount::from_tokens(1))]),
             vec![],
         )
@@ -2491,7 +2489,7 @@ where
             sender_pubkey,
             sender,
             sender,
-            Recipient::Burn,
+            Recipient::Account(Account::chain(chain_2_desc.id())),
             Amount::from_tokens(3),
             vec![IncomingBundle {
                 origin: chain_2,
@@ -3672,7 +3670,7 @@ where
     // The first round is the multi-leader round 0. Anyone is allowed to propose.
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
-        .with_transfer(AccountOwner::CHAIN, Recipient::Burn, Amount::from_tokens(1))
+        .with_transfer(AccountOwner::CHAIN, Recipient::Account(Account::chain(chain_id)), Amount::from_tokens(1))
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
@@ -4128,7 +4126,7 @@ where
     clock.set(Timestamp::from(BLOCK_TIMESTAMP));
     let block = make_first_block(chain_id)
         .with_timestamp(Timestamp::from(BLOCK_TIMESTAMP))
-        .with_burn(small_transfer)
+        .with_simple_transfer(chain_id, small_transfer)
         .with_authenticated_signer(Some(owner));
 
     let block_proposal = block
@@ -4154,7 +4152,7 @@ where
 
     let mut state = SystemExecutionState {
         timestamp: Timestamp::from(BLOCK_TIMESTAMP),
-        balance: balance - small_transfer,
+        balance: balance,
         ..env.system_execution_state(&chain_description.id())
     }
     .into_view()

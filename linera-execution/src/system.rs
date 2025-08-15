@@ -279,8 +279,6 @@ pub struct SystemResponse {
 /// The recipient of a transfer.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Recipient {
-    /// This is mainly a placeholder for future extensions.
-    Burn,
     /// Transfers to the balance of the given account.
     Account(Account),
 }
@@ -295,7 +293,6 @@ impl Recipient {
 impl Display for Recipient {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Recipient::Burn => write!(f, "burn"),
             Recipient::Account(account) => write!(f, "{}", account),
         }
     }
@@ -686,7 +683,6 @@ where
                     ))
                 }
             }
-            Recipient::Burn => Ok(None),
         }
     }
 

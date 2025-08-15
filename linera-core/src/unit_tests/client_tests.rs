@@ -300,7 +300,7 @@ where
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain.
     sender
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(sender.chain_id))
         .await
         .unwrap();
     Ok(())
@@ -348,7 +348,7 @@ where
     // Cannot use the chain any more.
     assert_matches!(
         sender
-            .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+            .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(sender.chain_id))
             .await,
         Err(ChainClientError::NotAnOwner(_))
     );
@@ -369,6 +369,7 @@ where
     let new_owner = signer.generate_new().into();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let certificate = sender
         .share_ownership(new_owner, 100)
         .await
@@ -393,7 +394,7 @@ where
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain with the old client.
     sender
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(2), Account::chain(receiver.chain_id))
         .await
         .unwrap();
     let sender_info = sender.chain_info().await?;
@@ -421,7 +422,7 @@ where
 
     // We need at least three validators for making an operation.
     builder.set_fault_type([0, 1], FaultType::Offline).await;
-    let result = client.burn(AccountOwner::CHAIN, Amount::ONE).await;
+    let result = client.transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender.chain_id)).await;
     assert_matches!(
         result,
         Err(ChainClientError::CommunicationError(
@@ -431,7 +432,7 @@ where
     builder.set_fault_type([0, 1], FaultType::Honest).await;
     builder.set_fault_type([2, 3], FaultType::Offline).await;
     assert_matches!(
-        sender.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        sender.transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender.chain_id)).await,
         Err(ChainClientError::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. })
         ))
@@ -450,7 +451,7 @@ where
     );
     client.clear_pending_proposal();
     client
-        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(receiver.chain_id))
         .await
         .unwrap_ok_committed();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ONE);
@@ -462,7 +463,7 @@ where
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_proposal();
     sender
-        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(receiver.chain_id))
         .await
         .unwrap_ok_committed();
 
@@ -624,7 +625,7 @@ where
         Amount::from_tokens(3)
     );
     client
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(sender.chain_id))
         .await
         .unwrap();
     Ok(())
@@ -687,7 +688,7 @@ where
         Amount::from_tokens(3)
     );
     client
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(sender.chain_id))
         .await
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
@@ -737,7 +738,7 @@ where
     );
     // Cannot use the chain for operations any more.
     let result = client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(client2.chain_id()))
         .await;
     assert!(
         matches!(
@@ -1252,16 +1253,17 @@ where
         .await?
         .with_policy(policy);
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
 
     let obtained_error = sender
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(4), Account::chain(receiver.chain_id))
         .await;
     assert_insufficient_balance_during_operation(obtained_error, 0);
 
     let obtained_error = sender
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(receiver.chain_id))
         .await;
-    // We have balance=3, we try to burn 3 tokens but the operation itself
+    // We have balance=3, we try to transfer 3 tokens but the operation itself
     // costs 1 microtoken so we don't have enough balance to pay for it.
     assert_fees_exceed_funding(obtained_error);
     Ok(())
@@ -1289,7 +1291,7 @@ where
         .await
         .unwrap_ok_committed();
     let cert1 = sender
-        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender.chain_id))
         .await
         .unwrap_ok_committed();
     let cert2 = sender
@@ -1503,7 +1505,7 @@ where
         *info2_b.manager.requested_locking.unwrap()
     );
     let bt_certificate = client_2b
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), Account::chain(client_2b.chain_id()))
         .await
         .unwrap_ok_committed();
 
@@ -1516,7 +1518,7 @@ where
     assert!(certificate_values[0].block().body.operations().any(|op| *op
         == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::Burn,
+            recipient: Recipient::Account(Account::chain(client_2b.chain_id())),
             amount: Amount::from_tokens(1),
         })));
 
@@ -1636,7 +1638,7 @@ where
 
     client2_b.prepare_chain().await.unwrap();
     let bt_certificate = client2_b
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), Account::chain(client2_b.chain_id()))
         .await
         .unwrap_ok_committed();
 
@@ -1649,7 +1651,7 @@ where
     assert!(certificate_values[0].block().body.operations().any(|op| *op
         == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::Burn,
+            recipient: Recipient::Account(Account::chain(client2_b.chain_id())),
             amount: Amount::from_tokens(1),
         })));
 
@@ -1704,7 +1706,7 @@ where
         .set_fault_type([2, 3], FaultType::OfflineWithInfo)
         .await;
     assert!(client1
-        .burn(AccountOwner::CHAIN, Amount::from_millis(1))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_millis(1), Account::chain(client1.chain_id()))
         .await
         .is_err());
 
@@ -1714,7 +1716,7 @@ where
         .await;
     builder.set_fault_type([2, 3], FaultType::Honest).await;
     assert!(client2
-        .burn(AccountOwner::CHAIN, Amount::from_millis(2))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_millis(2), Account::chain(client2.chain_id()))
         .await
         .is_err());
 
@@ -2169,17 +2171,17 @@ where
     client1.set_preferred_owner(owner1);
     assert!(owner0 != owner1);
 
-    // Client 0 tries to burn 3 tokens. Two validators are offline, so nothing will get
+    // Client 0 tries to transfer 3 tokens. Two validators are offline, so nothing will get
     // validated or confirmed. However, client 0 now has a pending block.
     builder
         .set_fault_type([2], FaultType::OfflineWithInfo)
         .await;
     let result = client0
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(client0.chain_id()))
         .await;
     assert!(result.is_err());
 
-    // Client 1 thinks it is madness to burn 3 tokens! They want to publish a blob instead.
+    // Client 1 thinks it is madness to transfer 3 tokens! They want to publish a blob instead.
     // The validators are still faulty: They validate blocks but don't confirm them.
     builder
         .set_fault_type([2], FaultType::DontSendConfirmVote)
@@ -2215,10 +2217,10 @@ where
     );
     assert!(client0.pending_proposal().is_some());
 
-    // Client 0 now only tries to burn 1 token. Before that, they automatically finalize the
+    // Client 0 now only tries to transfer 1 token. Before that, they automatically finalize the
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
     client0
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), Account::chain(client0.chain_id()))
         .await
         .unwrap();
     client0.synchronize_from_validators().await.unwrap();
@@ -2229,10 +2231,10 @@ where
     );
     assert!(client0.pending_proposal().is_none());
 
-    // Burn another token so Client 1 sees that the blob is already published
+    // Transfer another token so Client 1 sees that the blob is already published
     client1.prepare_chain().await.unwrap();
     client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), Account::chain(client1.chain_id()))
         .await
         .unwrap();
     client1.synchronize_from_validators().await.unwrap();
@@ -2257,28 +2259,29 @@ where
 {
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let client1 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
 
-    // The client tries to burn 3 tokens. Two validators are offline, so nothing will get
-    // validated or confirmed. However, the client now has a pending block.
+    // The client1 tries to transfer 3 tokens. Two validators are offline, so nothing will get
+    // validated or confirmed. However, the client1 now has a pending block.
     builder
         .set_fault_type([2], FaultType::OfflineWithInfo)
         .await;
-    let result = client
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+    let result = client1
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(client2.chain_id()))
         .await;
     assert!(result.is_err());
 
     // Now three validators are online again.
     builder.set_fault_type([2], FaultType::Honest).await;
 
-    // The client tries to burn another token. Before that, they automatically finalize the
-    // pending block, which burns 3 tokens, leaving 10 - 3 - 1 = 6.
-    client.burn(AccountOwner::CHAIN, Amount::ONE).await.unwrap();
-    client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
+    // The client1 tries to transfer another token. Before that, they automatically finalize the
+    // pending block, which transfers 3 tokens, leaving 10 - 3 - 1 = 6.
+    client1.transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(client2.chain_id())).await.unwrap();
+    client1.synchronize_from_validators().await.unwrap();
+    client1.process_inbox().await.unwrap();
     assert_eq!(
-        client.local_balance().await.unwrap(),
+        client1.local_balance().await.unwrap(),
         Amount::from_tokens(6)
     );
     Ok(())
@@ -2298,6 +2301,7 @@ where
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = client0.chain_id();
     let owner0 = client0.identity().await.unwrap();
     let owner1 = builder.signer.generate_new().into();
@@ -2318,7 +2322,7 @@ where
         .await?;
     client1.set_preferred_owner(owner1);
 
-    // Client 0 tries to burn 3 tokens. Three validators are faulty: 1 and 2 will validate the
+    // Client 0 tries to transfer 3 tokens. Three validators are faulty: 1 and 2 will validate the
     // block but not receive it for confirmation. Validator 3 is offline.
     builder
         .set_fault_type([1, 2], FaultType::DontProcessValidated)
@@ -2326,7 +2330,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     let result = client0
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(client2.chain_id()))
         .await;
     assert!(result.is_err());
     let manager = client0
@@ -2347,7 +2351,7 @@ where
         .await
         .unwrap();
 
-    // Client 1 wants to burn 2 tokens. They learn about the proposal in round 0, but now the
+    // Client 1 wants to transfer 2 tokens. They learn about the proposal in round 0, but now the
     // validator 0 is offline, so they don't learn about the validated block and make their own
     // proposal in round 1.
     builder.set_fault_type([0], FaultType::Offline).await;
@@ -2364,12 +2368,12 @@ where
     assert!(manager.requested_locking.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(2), Account::chain(client2.chain_id()))
         .await;
     assert!(result.is_err());
 
     // Finally, three validators are online and honest again. Client 1 realizes there has been a
-    // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
+    // validated block in round 0, and re-proposes it when it tries to transfer 4 tokens.
     builder.set_fault_type([0, 1, 2], FaultType::Honest).await;
     builder.set_fault_type([3], FaultType::Offline).await;
     client1.synchronize_from_validators().await.unwrap();
@@ -2385,11 +2389,11 @@ where
     assert_eq!(manager.current_round, Round::MultiLeader(1));
     assert!(client1.pending_proposal().is_some());
     client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(4), Account::chain(client2.chain_id()))
         .await
         .unwrap();
 
-    // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
+    // Transferring 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
     client0.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client0.local_balance().await.unwrap(),
@@ -2413,6 +2417,7 @@ where
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = client0.chain_id();
     let owner0 = client0.identity().await.unwrap();
     let owner1 = builder.signer.generate_new().into();
@@ -2447,12 +2452,12 @@ where
         )
         .await?;
 
-    // Client 0 tries to burn 3 of their own tokens, but three validators are faulty.
+    // Client 0 tries to transfer 3 of their own tokens, but three validators are faulty.
     builder
         .set_fault_type([1, 2, 3], FaultType::OfflineWithInfo)
         .await;
 
-    let result = client0.burn(owner0, Amount::from_tokens(3)).await;
+    let result = client0.transfer_to_account(owner0, Amount::from_tokens(3), Account::chain(client2.chain_id)).await;
     assert!(result.is_err());
     let manager = client0
         .chain_info_with_manager_values()
@@ -2479,28 +2484,28 @@ where
     client1.synchronize_from_validators().await.unwrap();
     client1.request_leader_timeout().await.unwrap();
 
-    // Client 1 wants to burn 2 tokens. But now validators 0 and 3 is offline, so they don't learn
+    // Client 1 wants to transfer 2 tokens. But now validators 0 and 3 is offline, so they don't learn
     // about the proposed fast block and make their own instead.
     builder.set_fault_type([3], FaultType::Offline).await;
     let result = client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(2), Account::chain(client2.chain_id()))
         .await;
     assert!(result.is_err());
 
     // Finally, three validators are online and honest again. Client 1 realizes there has been a
-    // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
+    // validated block in round 0, and re-proposes it when it tries to transfer 4 tokens.
     builder.set_fault_type([0, 1, 2], FaultType::Honest).await;
     client1.synchronize_from_validators().await.unwrap();
     assert!(client1.pending_proposal().is_some());
     client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(4), Account::chain(client2.chain_id()))
         .await
         .unwrap();
     // Round 0 needs to time out again, so client 1 is actually allowed to propose.
     clock.add(TimeDelta::from_secs(5));
     client1.process_pending_block().await.unwrap();
 
-    // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
+    // Transferring 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
     client0.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client0.local_balance().await.unwrap(),

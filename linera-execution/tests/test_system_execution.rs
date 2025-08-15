@@ -42,7 +42,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     let operation = SystemOperation::Transfer {
         owner: AccountOwner::CHAIN,
         amount: Amount::from_tokens(4),
-        recipient: Recipient::Burn,
+        recipient: Recipient::chain(chain_id),
     };
     let context = OperationContext {
         chain_id,
@@ -62,7 +62,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     )
     .await
     .unwrap();
-    assert_eq!(view.system.balance.get(), &Amount::ZERO);
+    assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert!(txn_outcome.outgoing_messages.is_empty());
     Ok(())

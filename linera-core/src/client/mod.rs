@@ -2749,15 +2749,6 @@ impl<Env: Environment> ChainClient<Env> {
             .await
     }
 
-    /// Burns tokens.
-    #[instrument(level = "trace")]
-    pub async fn burn(
-        &self,
-        owner: AccountOwner,
-        amount: Amount,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.transfer(owner, amount, Recipient::Burn).await
-    }
 
     /// Attempts to synchronize chains that have sent us messages and populate our local
     /// inbox.
