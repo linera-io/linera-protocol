@@ -526,43 +526,57 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_primitives::U256;
+    use alloy_primitives::{Address, U256};
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
         test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
+    use linera_service::cli_wrappers::NodeService;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let (mut net, client) = config.instantiate().await?;
-    let chain = client.load_wallet()?.default_chain().unwrap();
-    let account_chain = Account::chain(chain);
+    let (mut net, client1) = config.instantiate().await?;
+    let client2 = net.make_client().await;
+    client2.wallet_init(None).await?;
 
-    let account_owner1 = client.get_owner().unwrap();
-    let account_owner2 = client.keygen().await?;
+    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    let chain2 = client1.open_and_assign(&client2, Amount::from_tokens(50)).await?;
+    let account_chain1 = Account::chain(chain1);
+
+    let account_owner1 = client1.get_owner().unwrap();
+    let account_owner2 = client1.keygen().await?;
     let address1 = account_owner1.to_evm_address().unwrap();
     let address2 = account_owner2.to_evm_address().unwrap();
     let account1 = Account {
-        chain_id: chain,
+        chain_id: chain1,
         owner: account_owner1,
     };
     let account2 = Account {
-        chain_id: chain,
+        chain_id: chain1,
         owner: account_owner2,
     };
-    client
-        .transfer_with_accounts(Amount::from_tokens(50), account_chain, account1)
+    client1
+        .transfer_with_accounts(Amount::from_tokens(50), account_chain1, account1)
         .await?;
-    client
-        .transfer_with_accounts(Amount::from_tokens(50), account_chain, account2)
+    client1
+        .transfer_with_accounts(Amount::from_tokens(50), account_chain1, account2)
         .await?;
 
     sol! {
         function send_cash(address recipient, uint256 amount);
         function get_balance(address account);
+    }
+
+    async fn assert_contract_balance(app: &ApplicationWrapper<EvmAbi>, address: Address, balance: Amount) -> anyhow::Result<()> {
+        let query = get_balanceCall { account: address };
+        let query = EvmQuery::Query(query.abi_encode());
+        let result = app.run_json_query(query).await?;
+        let balance_256: U256 = balance.into();
+        assert_eq!(read_evm_u256_entry(result), balance_256);
+        Ok(())
     }
 
     let constructor_argument = Vec::new();
@@ -575,7 +589,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
         value: start_value,
         argument: vec![],
     };
-    let application_id = client
+    let application_id = client1
         .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
@@ -587,38 +601,40 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
         )
         .await?;
     let account_owner_app: AccountOwner = application_id.into();
-    let account_app = Account {
-        chain_id: chain,
+    let address_app = account_owner_app.to_evm_address().unwrap();
+    let account_app1 = Account {
+        chain_id: chain1,
+        owner: account_owner_app,
+    };
+    let account_app2 = Account {
+        chain_id: chain2,
         owner: account_owner_app,
     };
 
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1: NodeService = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
-    let balance1 = node_service.balance(&account1).await?;
-    let balance2 = node_service.balance(&account2).await?;
-    let balance_app = node_service.balance(&account_app).await?;
+    let balance1 = node_service1.balance(&account1).await?;
+    let balance2 = node_service1.balance(&account2).await?;
+    let balance_app = node_service1.balance(&account_app1).await?;
     assert_eq!(balance1, Amount::from_tokens(46));
     assert_eq!(balance2, Amount::from_tokens(50));
     assert_eq!(balance_app, Amount::from_tokens(4));
 
-    let application = node_service
-        .make_application(&chain, &application_id)
+    let application1 = node_service1
+        .make_application(&chain1, &application_id)
+        .await?;
+    let application2 = node_service2
+        .make_application(&chain2, &application_id)
         .await?;
 
     // Checking the balances on input
 
-    let query1 = get_balanceCall { account: address1 };
-    let query1 = EvmQuery::Query(query1.abi_encode());
-    let result = application.run_json_query(query1.clone()).await?;
-    let balance1_256: U256 = balance1.into();
-    assert_eq!(read_evm_u256_entry(result), balance1_256);
-
-    let query2 = get_balanceCall { account: address2 };
-    let query2 = EvmQuery::Query(query2.abi_encode());
-    let result = application.run_json_query(query2.clone()).await?;
-    let balance2_256: U256 = balance2.into();
-    assert_eq!(read_evm_u256_entry(result), balance2_256);
+    assert_contract_balance(&application1, address1, balance1).await?;
+    assert_contract_balance(&application1, address2, balance2).await?;
+    assert_contract_balance(&application1, address_app, balance_app).await?;
 
     // Transfering amount
 
@@ -630,28 +646,32 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     };
     let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
-    application.run_json_query(mutation).await?;
+    application1.run_json_query(mutation).await?;
 
-    // Checking the balances
+    // Checking the balances of application1
 
-    let balance1_after = node_service.balance(&account1).await?;
-    let balance2_after = node_service.balance(&account2).await?;
-    let balance_app_after = node_service.balance(&account_app).await?;
+    let balance1_after = node_service1.balance(&account1).await?;
+    let balance2_after = node_service1.balance(&account2).await?;
+    let balance_app_after = node_service1.balance(&account_app1).await?;
     assert_eq!(balance1_after, balance1);
     assert_eq!(balance2_after, balance2 + amount);
     assert_eq!(balance_app_after, balance_app - amount);
 
-    let result = application.run_json_query(query1).await?;
-    let balance1_after_256: U256 = balance1_after.into();
-    assert_eq!(read_evm_u256_entry(result), balance1_after_256);
+    assert_contract_balance(&application1, address1, balance1_after).await?;
+    assert_contract_balance(&application1, address2, balance2_after).await?;
+    assert_contract_balance(&application1, address_app, balance_app_after).await?;
 
-    let result = application.run_json_query(query2.clone()).await?;
-    let balance2_after_256: U256 = balance2_after.into();
-    assert_eq!(read_evm_u256_entry(result), balance2_after_256);
+    // Checking the balances of application2
+    let balance_app_after = node_service2.balance(&account_app2).await?;
+    assert_eq!(balance_app_after, Amount::ZERO);
+//    assert_contract_balance(&application2, address1, Amount::ZERO).await?;
+//    assert_contract_balance(&application2, address2, Amount::ZERO).await?;
+    assert_contract_balance(&application2, address_app, Amount::ZERO).await?;
 
     // Winding down
 
-    node_service.ensure_is_running()?;
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
