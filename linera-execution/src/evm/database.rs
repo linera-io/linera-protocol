@@ -212,8 +212,12 @@ where
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
         if !self.changes.is_empty() {
-            let account = self.changes.get(&address).unwrap();
-            return Ok(Some(account.info.clone()));
+            // This is the case of service calls with empty storage.
+            let account = self.changes.get(&address);
+            return Ok(match account {
+                Some(account) => Some(account.info.clone()),
+                None => None,
+            });
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let account_owner = address.into();
