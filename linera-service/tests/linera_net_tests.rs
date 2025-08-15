@@ -443,9 +443,7 @@ fn get_zero_mutation(mutation: impl alloy_sol_types::SolCall) -> Result<Vec<u8>,
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
-    };
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -529,9 +527,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     use alloy_primitives::{Address, U256};
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
-    };
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -544,8 +540,12 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     client_c.wallet_init(None).await?;
 
     let chain_a = client_a.load_wallet()?.default_chain().unwrap();
-    let chain_b = client_a.open_and_assign(&client_b, Amount::from_tokens(50)).await?;
-    let chain_c = client_a.open_and_assign(&client_c, Amount::from_tokens(50)).await?;
+    let chain_b = client_a
+        .open_and_assign(&client_b, Amount::from_tokens(50))
+        .await?;
+    let chain_c = client_a
+        .open_and_assign(&client_c, Amount::from_tokens(50))
+        .await?;
     let account_chain_a = Account::chain(chain_a);
 
     let account_owner1 = client_a.get_owner().unwrap();
@@ -573,7 +573,11 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
         function null_operation();
     }
 
-    async fn assert_contract_balance(app: &ApplicationWrapper<EvmAbi>, address: Address, balance: Amount) -> anyhow::Result<()> {
+    async fn assert_contract_balance(
+        app: &ApplicationWrapper<EvmAbi>,
+        address: Address,
+        balance: Amount,
+    ) -> anyhow::Result<()> {
         let query = get_balanceCall { account: address };
         let query = EvmQuery::Query(query.abi_encode());
         let result = app.run_json_query(query).await?;
@@ -613,9 +617,15 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     let port_a = get_node_port().await;
     let port_b = get_node_port().await;
     let port_c = get_node_port().await;
-    let mut node_service_a = client_a.run_node_service(port_a, ProcessInbox::Skip).await?;
-    let mut node_service_b = client_b.run_node_service(port_b, ProcessInbox::Skip).await?;
-    let mut node_service_c = client_c.run_node_service(port_c, ProcessInbox::Skip).await?;
+    let mut node_service_a = client_a
+        .run_node_service(port_a, ProcessInbox::Skip)
+        .await?;
+    let mut node_service_b = client_b
+        .run_node_service(port_b, ProcessInbox::Skip)
+        .await?;
+    let mut node_service_c = client_c
+        .run_node_service(port_c, ProcessInbox::Skip)
+        .await?;
 
     let balance_a_1 = node_service_a.balance(&account_a_1).await?;
     let balance_a_2 = node_service_a.balance(&account_a_2).await?;
@@ -678,7 +688,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
         owner: account_owner_app,
     };
 
-    let mutation = null_operationCall { };
+    let mutation = null_operationCall {};
     let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
     app_b.run_json_query(mutation).await?;
@@ -690,8 +700,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     assert_contract_balance(&app_b, address2, Amount::ZERO).await?;
     assert_contract_balance(&app_b, address_app, Amount::ZERO).await?;
 
-
-    // Creating app_b via null_operation and checking balances.
+    // Creating app_b via service calls and checking balances.
     assert_contract_balance(&app_c, address1, Amount::ZERO).await?;
     assert_contract_balance(&app_c, address2, Amount::ZERO).await?;
     assert_contract_balance(&app_c, address_app, Amount::ZERO).await?;
@@ -722,9 +731,7 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
         identifiers::{GenericApplicationId, StreamId, StreamName},
         vm::{EvmInstantiation, EvmQuery},
     };
-    use linera_execution::{
-        test_utils::solidity::get_evm_contract_path,
-    };
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -836,9 +843,7 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
     use alloy_sol_types::{sol, SolValue};
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};
     use linera_base::vm::EvmInstantiation;
-    use linera_execution::{
-        test_utils::solidity::get_evm_contract_path,
-    };
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -939,9 +944,7 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
-    };
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1053,9 +1056,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     use alloy_sol_types::{sol, SolCall, SolValue};
     use counter_no_graphql::CounterNoGraphQlAbi;
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
-    };
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1152,9 +1153,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
-    };
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1277,9 +1276,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
-    };
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1360,9 +1357,7 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
-    };
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1487,9 +1482,7 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::sol;
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::get_evm_contract_path,
-    };
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1584,9 +1577,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::get_evm_contract_path,
-    };
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1767,9 +1758,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::{EvmInstantiation, EvmQuery};
-    use linera_execution::{
-        test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
-    };
+    use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());

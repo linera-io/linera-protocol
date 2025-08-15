@@ -10,6 +10,7 @@ use derive_more::Display;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
 use crate::data_types::Amount;
 
 #[derive(

@@ -43,9 +43,9 @@ use crate::{
         inputs::{
             ensure_message_length, ensure_selector_presence, forbid_execute_operation_origin,
             get_revm_execute_message_bytes, get_revm_instantiation_bytes,
-            get_revm_process_streams_bytes, has_selector,
-            EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR, PRECOMPILE_ADDRESS,
-            PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS, ZERO_ADDRESS,
+            get_revm_process_streams_bytes, has_selector, EXECUTE_MESSAGE_SELECTOR,
+            INSTANTIATE_SELECTOR, PRECOMPILE_ADDRESS, PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS,
+            ZERO_ADDRESS,
         },
     },
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime,
