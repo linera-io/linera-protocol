@@ -379,6 +379,18 @@ where
             .find_key_values_by_prefix_wait(&promise)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
+
+    /// Tests the existence of an application.
+    fn application_exists(
+        caller: &mut Caller,
+        application_id: ApplicationId,
+    ) -> Result<bool, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .application_exists(application_id)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
 }
 
 /// An implementation of the system API made available to contracts.

@@ -965,6 +965,29 @@ where
         }
         Ok(())
     }
+
+    fn application_exists(
+        &mut self,
+        application_id: ApplicationId,
+    ) -> Result<bool, ExecutionError> {
+        let this = self.inner();
+        let blob_id = application_id.description_blob_id();
+        if this
+            .transaction_tracker
+            .created_blobs()
+            .contains_key(&blob_id)
+        {
+            return Ok(true);
+        }
+        let exists = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::ApplicationExists {
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(exists)
+    }
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and

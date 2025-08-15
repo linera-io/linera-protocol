@@ -490,6 +490,23 @@ where
                 let app_permissions = self.system.application_permissions.get();
                 callback.respond(app_permissions.clone());
             }
+
+            ApplicationExists {
+                application_id,
+                callback,
+            } => {
+                let exists = match self
+                    .system
+                    .describe_application(application_id, &mut TransactionTracker::default())
+                    .await
+                {
+                    Ok(_) => true,
+                    Err(ExecutionError::BlobsNotFound(_)) => false,
+                    Err(ExecutionError::ViewError(_)) => false,
+                    Err(err) => return Err(err),
+                };
+                callback.respond(exists);
+            }
         }
 
         Ok(())
@@ -776,5 +793,11 @@ pub enum ExecutionRequest {
     GetApplicationPermissions {
         #[debug(skip)]
         callback: Sender<ApplicationPermissions>,
+    },
+
+    ApplicationExists {
+        application_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<bool>,
     },
 }
