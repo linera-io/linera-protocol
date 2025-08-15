@@ -533,36 +533,35 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
         test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
-    use linera_service::cli_wrappers::NodeService;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let (mut net, client1) = config.instantiate().await?;
-    let client2 = net.make_client().await;
-    client2.wallet_init(None).await?;
+    let (mut net, clientA) = config.instantiate().await?;
+    let clientB = net.make_client().await;
+    clientB.wallet_init(None).await?;
 
-    let chain1 = client1.load_wallet()?.default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2, Amount::from_tokens(50)).await?;
-    let account_chain1 = Account::chain(chain1);
+    let chainA = clientA.load_wallet()?.default_chain().unwrap();
+    let chainB = clientA.open_and_assign(&clientB, Amount::from_tokens(50)).await?;
+    let account_chainA = Account::chain(chainA);
 
-    let account_owner1 = client1.get_owner().unwrap();
-    let account_owner2 = client1.keygen().await?;
+    let account_owner1 = clientA.get_owner().unwrap();
+    let account_owner2 = clientA.keygen().await?;
     let address1 = account_owner1.to_evm_address().unwrap();
     let address2 = account_owner2.to_evm_address().unwrap();
-    let account1 = Account {
-        chain_id: chain1,
+    let accountA_1 = Account {
+        chain_id: chainA,
         owner: account_owner1,
     };
-    let account2 = Account {
-        chain_id: chain1,
+    let accountA_2 = Account {
+        chain_id: chainA,
         owner: account_owner2,
     };
-    client1
-        .transfer_with_accounts(Amount::from_tokens(50), account_chain1, account1)
+    clientA
+        .transfer_with_accounts(Amount::from_tokens(50), account_chainA, accountA_1)
         .await?;
-    client1
-        .transfer_with_accounts(Amount::from_tokens(50), account_chain1, account2)
+    clientA
+        .transfer_with_accounts(Amount::from_tokens(50), account_chainA, accountA_2)
         .await?;
 
     sol! {
@@ -590,7 +589,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
         value: start_value,
         argument: vec![],
     };
-    let application_id = client1
+    let application_id = clientA
         .publish_and_create::<EvmAbi, Vec<u8>, EvmInstantiation>(
             evm_contract.clone(),
             evm_contract,
@@ -603,83 +602,90 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
         .await?;
     let account_owner_app: AccountOwner = application_id.into();
     let address_app = account_owner_app.to_evm_address().unwrap();
-    let account_app1 = Account {
-        chain_id: chain1,
-        owner: account_owner_app,
-    };
-    let account_app2 = Account {
-        chain_id: chain2,
+    let accountA_app = Account {
+        chain_id: chainA,
         owner: account_owner_app,
     };
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let mut node_service1: NodeService = client1.run_node_service(port1, ProcessInbox::Skip).await?;
-    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let portA = get_node_port().await;
+    let portB = get_node_port().await;
+    let mut node_serviceA = clientA.run_node_service(portA, ProcessInbox::Skip).await?;
+    let mut node_serviceB = clientB.run_node_service(portB, ProcessInbox::Skip).await?;
 
-    let balance1 = node_service1.balance(&account1).await?;
-    let balance2 = node_service1.balance(&account2).await?;
-    let balance_app = node_service1.balance(&account_app1).await?;
-    assert_eq!(balance1, Amount::from_tokens(46));
-    assert_eq!(balance2, Amount::from_tokens(50));
-    assert_eq!(balance_app, Amount::from_tokens(4));
+    let balanceA_1 = node_serviceA.balance(&accountA_1).await?;
+    let balanceA_2 = node_serviceA.balance(&accountA_2).await?;
+    let balanceA_app = node_serviceA.balance(&accountA_app).await?;
+    assert_eq!(balanceA_1, Amount::from_tokens(46));
+    assert_eq!(balanceA_2, Amount::from_tokens(50));
+    assert_eq!(balanceA_app, Amount::from_tokens(4));
 
-    let application1 = node_service1
-        .make_application(&chain1, &application_id)
+    let applicationA = node_serviceA
+        .make_application(&chainA, &application_id)
         .await?;
-    let application2 = node_service2
-        .make_application(&chain2, &application_id)
+    let applicationB = node_serviceB
+        .make_application(&chainB, &application_id)
         .await?;
 
     // Checking the balances on input
 
-    assert_contract_balance(&application1, address1, balance1).await?;
-    assert_contract_balance(&application1, address2, balance2).await?;
-    assert_contract_balance(&application1, address_app, balance_app).await?;
+    assert_contract_balance(&applicationA, address1, balanceA_1).await?;
+    assert_contract_balance(&applicationA, address2, balanceA_2).await?;
+    assert_contract_balance(&applicationA, address_app, balanceA_app).await?;
 
     // Transfering amount
 
     let amount = Amount::from_tokens(1);
-
     let mutation = send_cashCall {
         recipient: address2,
         amount: amount.into(),
     };
     let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
-    application1.run_json_query(mutation).await?;
+    applicationA.run_json_query(mutation).await?;
 
-    // Checking the balances of application1
+    // Checking the balances of applicationA
 
-    let balance1_after = node_service1.balance(&account1).await?;
-    let balance2_after = node_service1.balance(&account2).await?;
-    let balance_app_after = node_service1.balance(&account_app1).await?;
-    assert_eq!(balance1_after, balance1);
-    assert_eq!(balance2_after, balance2 + amount);
-    assert_eq!(balance_app_after, balance_app - amount);
+    let balanceA_1_after = node_serviceA.balance(&accountA_1).await?;
+    let balanceA_2_after = node_serviceA.balance(&accountA_2).await?;
+    let balanceA_app_after = node_serviceA.balance(&accountA_app).await?;
+    assert_eq!(balanceA_1_after, balanceA_1);
+    assert_eq!(balanceA_2_after, balanceA_2 + amount);
+    assert_eq!(balanceA_app_after, balanceA_app - amount);
 
-    assert_contract_balance(&application1, address1, balance1_after).await?;
-    assert_contract_balance(&application1, address2, balance2_after).await?;
-    assert_contract_balance(&application1, address_app, balance_app_after).await?;
+    assert_contract_balance(&applicationA, address1, balanceA_1_after).await?;
+    assert_contract_balance(&applicationA, address2, balanceA_2_after).await?;
+    assert_contract_balance(&applicationA, address_app, balanceA_app_after).await?;
 
     // Creating application2 via null_operation and checking balances.
+    let accountB_1 = Account {
+        chain_id: chainB,
+        owner: account_owner1,
+    };
+    let accountB_2 = Account {
+        chain_id: chainB,
+        owner: account_owner2,
+    };
+    let accountB_app = Account {
+        chain_id: chainB,
+        owner: account_owner_app,
+    };
 
     let mutation = null_operationCall { };
     let mutation = get_zero_mutation(mutation)?;
     let mutation = EvmQuery::Mutation(mutation);
-    application2.run_json_query(mutation).await?;
+    applicationB.run_json_query(mutation).await?;
 
-    assert_eq!(node_service2.balance(&account1).await?, Amount::ZERO);
-    assert_eq!(node_service2.balance(&account2).await?, Amount::ZERO);
-    assert_eq!(node_service2.balance(&account_app2).await?, Amount::ZERO);
-    assert_contract_balance(&application2, address1, Amount::ZERO).await?;
-    assert_contract_balance(&application2, address2, Amount::ZERO).await?;
-    assert_contract_balance(&application2, address_app, Amount::ZERO).await?;
+    assert_eq!(node_serviceB.balance(&accountB_1).await?, Amount::ZERO);
+    assert_eq!(node_serviceB.balance(&accountB_2).await?, Amount::ZERO);
+    assert_eq!(node_serviceB.balance(&accountB_app).await?, Amount::ZERO);
+    assert_contract_balance(&applicationB, address1, Amount::ZERO).await?;
+    assert_contract_balance(&applicationB, address2, Amount::ZERO).await?;
+    assert_contract_balance(&applicationB, address_app, Amount::ZERO).await?;
 
     // Winding down
 
-    node_service1.ensure_is_running()?;
-    node_service2.ensure_is_running()?;
+    node_serviceA.ensure_is_running()?;
+    node_serviceB.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
