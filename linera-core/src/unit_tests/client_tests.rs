@@ -23,10 +23,8 @@ use linera_chain::{
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
-    committee::Committee,
-    system::SystemOperation,
-    ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage, SystemQuery, SystemResponse,
+    committee::Committee, system::SystemOperation, ExecutionError, Message, MessageKind, Operation,
+    QueryOutcome, ResourceControlPolicy, SystemMessage, SystemQuery, SystemResponse,
 };
 use linera_storage::Storage;
 use rand::Rng;
@@ -300,7 +298,11 @@ where
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain.
     sender
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(sender.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(sender.chain_id),
+        )
         .await
         .unwrap();
     Ok(())
@@ -348,7 +350,11 @@ where
     // Cannot use the chain any more.
     assert_matches!(
         sender
-            .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(sender.chain_id))
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_tokens(3),
+                Account::chain(sender.chain_id)
+            )
             .await,
         Err(ChainClientError::NotAnOwner(_))
     );
@@ -394,7 +400,11 @@ where
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain with the old client.
     sender
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(2), Account::chain(receiver.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(receiver.chain_id),
+        )
         .await
         .unwrap();
     let sender_info = sender.chain_info().await?;
@@ -422,7 +432,13 @@ where
 
     // We need at least three validators for making an operation.
     builder.set_fault_type([0, 1], FaultType::Offline).await;
-    let result = client.transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender.chain_id)).await;
+    let result = client
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(sender.chain_id),
+        )
+        .await;
     assert_matches!(
         result,
         Err(ChainClientError::CommunicationError(
@@ -432,7 +448,13 @@ where
     builder.set_fault_type([0, 1], FaultType::Honest).await;
     builder.set_fault_type([2, 3], FaultType::Offline).await;
     assert_matches!(
-        sender.transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender.chain_id)).await,
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::ONE,
+                Account::chain(sender.chain_id)
+            )
+            .await,
         Err(ChainClientError::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. })
         ))
@@ -451,7 +473,11 @@ where
     );
     client.clear_pending_proposal();
     client
-        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(receiver.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(receiver.chain_id),
+        )
         .await
         .unwrap_ok_committed();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ONE);
@@ -463,7 +489,11 @@ where
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_proposal();
     sender
-        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(receiver.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(receiver.chain_id),
+        )
         .await
         .unwrap_ok_committed();
 
@@ -625,7 +655,11 @@ where
         Amount::from_tokens(3)
     );
     client
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(sender.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(sender.chain_id),
+        )
         .await
         .unwrap();
     Ok(())
@@ -688,7 +722,11 @@ where
         Amount::from_tokens(3)
     );
     client
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(sender.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(sender.chain_id),
+        )
         .await
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
@@ -738,7 +776,11 @@ where
     );
     // Cannot use the chain for operations any more.
     let result = client1
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(client2.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(client2.chain_id()),
+        )
         .await;
     assert!(
         matches!(
@@ -1256,12 +1298,20 @@ where
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
 
     let obtained_error = sender
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(4), Account::chain(receiver.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(4),
+            Account::chain(receiver.chain_id),
+        )
         .await;
     assert_insufficient_balance_during_operation(obtained_error, 0);
 
     let obtained_error = sender
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(receiver.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(receiver.chain_id),
+        )
         .await;
     // We have balance=3, we try to transfer 3 tokens but the operation itself
     // costs 1 microtoken so we don't have enough balance to pay for it.
@@ -1291,7 +1341,11 @@ where
         .await
         .unwrap_ok_committed();
     let cert1 = sender
-        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender.chain_id))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(sender.chain_id),
+        )
         .await
         .unwrap_ok_committed();
     let cert2 = sender
@@ -1505,7 +1559,11 @@ where
         *info2_b.manager.requested_locking.unwrap()
     );
     let bt_certificate = client_2b
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), Account::chain(client_2b.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(client_2b.chain_id()),
+        )
         .await
         .unwrap_ok_committed();
 
@@ -1638,7 +1696,11 @@ where
 
     client2_b.prepare_chain().await.unwrap();
     let bt_certificate = client2_b
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), Account::chain(client2_b.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(client2_b.chain_id()),
+        )
         .await
         .unwrap_ok_committed();
 
@@ -1706,7 +1768,11 @@ where
         .set_fault_type([2, 3], FaultType::OfflineWithInfo)
         .await;
     assert!(client1
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_millis(1), Account::chain(client1.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_millis(1),
+            Account::chain(client1.chain_id())
+        )
         .await
         .is_err());
 
@@ -1716,7 +1782,11 @@ where
         .await;
     builder.set_fault_type([2, 3], FaultType::Honest).await;
     assert!(client2
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_millis(2), Account::chain(client2.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_millis(2),
+            Account::chain(client2.chain_id())
+        )
         .await
         .is_err());
 
@@ -2177,7 +2247,11 @@ where
         .set_fault_type([2], FaultType::OfflineWithInfo)
         .await;
     let result = client0
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(client0.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(client0.chain_id()),
+        )
         .await;
     assert!(result.is_err());
 
@@ -2220,7 +2294,11 @@ where
     // Client 0 now only tries to transfer 1 token. Before that, they automatically finalize the
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
     client0
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), Account::chain(client0.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(client0.chain_id()),
+        )
         .await
         .unwrap();
     client0.synchronize_from_validators().await.unwrap();
@@ -2234,7 +2312,11 @@ where
     // Transfer another token so Client 1 sees that the blob is already published
     client1.prepare_chain().await.unwrap();
     client1
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), Account::chain(client1.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(client1.chain_id()),
+        )
         .await
         .unwrap();
     client1.synchronize_from_validators().await.unwrap();
@@ -2268,7 +2350,11 @@ where
         .set_fault_type([2], FaultType::OfflineWithInfo)
         .await;
     let result = client1
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(client2.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(client2.chain_id()),
+        )
         .await;
     assert!(result.is_err());
 
@@ -2277,7 +2363,14 @@ where
 
     // The client1 tries to transfer another token. Before that, they automatically finalize the
     // pending block, which transfers 3 tokens, leaving 10 - 3 - 1 = 6.
-    client1.transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(client2.chain_id())).await.unwrap();
+    client1
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(client2.chain_id()),
+        )
+        .await
+        .unwrap();
     client1.synchronize_from_validators().await.unwrap();
     client1.process_inbox().await.unwrap();
     assert_eq!(
@@ -2330,7 +2423,11 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     let result = client0
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(3), Account::chain(client2.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(client2.chain_id()),
+        )
         .await;
     assert!(result.is_err());
     let manager = client0
@@ -2368,7 +2465,11 @@ where
     assert!(manager.requested_locking.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(2), Account::chain(client2.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(client2.chain_id()),
+        )
         .await;
     assert!(result.is_err());
 
@@ -2389,7 +2490,11 @@ where
     assert_eq!(manager.current_round, Round::MultiLeader(1));
     assert!(client1.pending_proposal().is_some());
     client1
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(4), Account::chain(client2.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(4),
+            Account::chain(client2.chain_id()),
+        )
         .await
         .unwrap();
 
@@ -2457,7 +2562,13 @@ where
         .set_fault_type([1, 2, 3], FaultType::OfflineWithInfo)
         .await;
 
-    let result = client0.transfer_to_account(owner0, Amount::from_tokens(3), Account::chain(client2.chain_id)).await;
+    let result = client0
+        .transfer_to_account(
+            owner0,
+            Amount::from_tokens(3),
+            Account::chain(client2.chain_id),
+        )
+        .await;
     assert!(result.is_err());
     let manager = client0
         .chain_info_with_manager_values()
@@ -2488,7 +2599,11 @@ where
     // about the proposed fast block and make their own instead.
     builder.set_fault_type([3], FaultType::Offline).await;
     let result = client1
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(2), Account::chain(client2.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(client2.chain_id()),
+        )
         .await;
     assert!(result.is_err());
 
@@ -2498,7 +2613,11 @@ where
     client1.synchronize_from_validators().await.unwrap();
     assert!(client1.pending_proposal().is_some());
     client1
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(4), Account::chain(client2.chain_id()))
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(4),
+            Account::chain(client2.chain_id()),
+        )
         .await
         .unwrap();
     // Round 0 needs to time out again, so client 1 is actually allowed to propose.

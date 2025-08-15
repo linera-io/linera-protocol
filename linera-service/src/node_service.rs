@@ -15,7 +15,9 @@ use linera_base::{
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Bytecode, Epoch, TimeDelta,
     },
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -31,9 +33,8 @@ use linera_core::{
     worker::Notification,
 };
 use linera_execution::{
-    committee::Committee,
-    system::AdminOperation,
-    Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
+    committee::Committee, system::AdminOperation, Operation, Query, QueryOutcome, QueryResponse,
+    SystemOperation,
 };
 use linera_sdk::linera_base_types::BlobContent;
 use serde::{Deserialize, Serialize};

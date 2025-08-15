@@ -3666,7 +3666,11 @@ where
     // The first round is the multi-leader round 0. Anyone is allowed to propose.
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
-        .with_transfer(AccountOwner::CHAIN, Account::chain(chain_id), Amount::from_tokens(1))
+        .with_transfer(
+            AccountOwner::CHAIN,
+            Account::chain(chain_id),
+            Amount::from_tokens(1),
+        )
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
         .await
         .unwrap();

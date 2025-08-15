@@ -76,7 +76,6 @@ pub trait BlockTestExt: Sized {
     /// Returns the block with the specified epoch.
     fn with_epoch(self, epoch: impl Into<Epoch>) -> Self;
 
-
     /// Returns a block proposal in the first round in a default ownership configuration
     /// (`Round::MultiLeader(0)`) without any hashed certificate values or validated block.
     async fn into_first_proposal<S: Signer + ?Sized>(
@@ -120,7 +119,6 @@ impl BlockTestExt for ProposedBlock {
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self {
         self.with_transfer(AccountOwner::CHAIN, Account::chain(chain_id), amount)
     }
-
 
     fn with_incoming_bundle(mut self, incoming_bundle: IncomingBundle) -> Self {
         self.transactions

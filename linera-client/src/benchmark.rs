@@ -19,10 +19,7 @@ use linera_core::{
     client::{ChainClient, ChainClientError},
     Environment,
 };
-use linera_execution::{
-    system::SystemOperation,
-    Operation,
-};
+use linera_execution::{system::SystemOperation, Operation};
 use linera_sdk::abis::fungible::{self, FungibleOperation};
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};

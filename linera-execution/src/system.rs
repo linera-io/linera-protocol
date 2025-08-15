@@ -275,7 +275,6 @@ pub struct SystemResponse {
     pub balance: Amount,
 }
 
-
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
@@ -642,8 +641,7 @@ where
                 target: recipient.owner,
             };
             Ok(Some(
-                OutgoingMessage::new(recipient.chain_id, message)
-                    .with_kind(MessageKind::Tracked),
+                OutgoingMessage::new(recipient.chain_id, message).with_kind(MessageKind::Tracked),
             ))
         }
     }

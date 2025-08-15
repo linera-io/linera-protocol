@@ -110,8 +110,7 @@ async fn transfer_to_multiple_owners() {
     let recipients = account_owners
         .iter()
         .copied()
-        .map(|account_owner| Account::new(recipient_chain.id(), account_owner))
-;
+        .map(|account_owner| Account::new(recipient_chain.id(), account_owner));
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
@@ -168,7 +167,11 @@ async fn emptied_account_disappears_from_queries() {
 
     recipient_chain
         .add_block(|block| {
-            block.with_native_token_transfer(owner, Account::chain(recipient_chain.id()), transfer_amount);
+            block.with_native_token_transfer(
+                owner,
+                Account::chain(recipient_chain.id()),
+                transfer_amount,
+            );
         })
         .await;
 

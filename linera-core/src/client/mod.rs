@@ -2745,10 +2745,8 @@ impl<Env: Environment> ChainClient<Env> {
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.transfer(from, amount, account)
-            .await
+        self.transfer(from, amount, account).await
     }
-
 
     /// Attempts to synchronize chains that have sent us messages and populate our local
     /// inbox.

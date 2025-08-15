@@ -158,13 +158,7 @@ where
                 callback,
             } => callback.respond(
                 self.system
-                    .transfer(
-                        signer,
-                        Some(application_id),
-                        source,
-                        destination,
-                        amount,
-                    )
+                    .transfer(signer, Some(application_id), source, destination, amount)
                     .await?,
             ),
 

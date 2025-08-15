@@ -19,10 +19,7 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::worker::WorkerError;
-use linera_execution::{
-    system::SystemOperation,
-    Operation,
-};
+use linera_execution::{system::SystemOperation, Operation};
 
 use super::TestValidator;
 
