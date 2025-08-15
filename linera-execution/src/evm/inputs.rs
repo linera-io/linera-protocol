@@ -15,6 +15,39 @@ use serde::{Deserialize, Serialize};
 
 use crate::EvmExecutionError;
 
+alloy_sol_types::sol! {
+    struct InternalApplicationId {
+        bytes32 application_description_hash;
+    }
+
+    struct InternalGenericApplicationId {
+        uint8 choice;
+        InternalApplicationId user;
+    }
+
+    struct InternalStreamName {
+        bytes stream_name;
+    }
+
+    struct InternalStreamId {
+        InternalGenericApplicationId application_id;
+        InternalStreamName stream_name;
+    }
+
+    struct InternalChainId {
+        bytes32 value;
+    }
+
+    struct InternalStreamUpdate {
+        InternalChainId chain_id;
+        InternalStreamId stream_id;
+        uint32 previous_index;
+        uint32 next_index;
+    }
+
+    function process_streams(InternalStreamUpdate[] internal_streams);
+}
+
 /// This is the precompile address that contains the Linera specific
 /// functionalities accessed from the EVM.
 pub(crate) const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
@@ -40,18 +73,18 @@ pub(crate) const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 pub(crate) const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
 pub(crate) fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
-    ensure!(vec != EXECUTE_MESSAGE_SELECTOR,
-            EvmExecutionError::IllegalOperationCall(
-                "function execute_message".to_string(),
-            ));
-    ensure!(vec != PROCESS_STREAMS_SELECTOR,
-            EvmExecutionError::IllegalOperationCall(
-                "function process_streams".to_string(),
-            ));
-    ensure!(vec != INSTANTIATE_SELECTOR,
-            EvmExecutionError::IllegalOperationCall(
-                "function instantiate".to_string(),
-            ));
+    ensure!(
+        vec != EXECUTE_MESSAGE_SELECTOR,
+        EvmExecutionError::IllegalOperationCall("function execute_message".to_string(),)
+    );
+    ensure!(
+        vec != PROCESS_STREAMS_SELECTOR,
+        EvmExecutionError::IllegalOperationCall("function process_streams".to_string(),)
+    );
+    ensure!(
+        vec != INSTANTIATE_SELECTOR,
+        EvmExecutionError::IllegalOperationCall("function instantiate".to_string(),)
+    );
     Ok(())
 }
 
@@ -109,44 +142,12 @@ pub(crate) fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
 
 pub(crate) fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     use alloy_primitives::{Bytes, B256};
-    use alloy_sol_types::{sol, SolCall};
+    use alloy_sol_types::SolCall;
     use linera_base::identifiers::{GenericApplicationId, StreamId};
-    sol! {
-        struct InternalApplicationId {
-            bytes32 application_description_hash;
-        }
-
-        struct InternalGenericApplicationId {
-            uint8 choice;
-            InternalApplicationId user;
-        }
-
-        struct InternalStreamName {
-            bytes stream_name;
-        }
-
-        struct InternalStreamId {
-            InternalGenericApplicationId application_id;
-            InternalStreamName stream_name;
-        }
-
-        struct InternalChainId {
-            bytes32 value;
-        }
-
-        struct InternalStreamUpdate {
-            InternalChainId chain_id;
-            InternalStreamId stream_id;
-            uint32 previous_index;
-            uint32 next_index;
-        }
-
-        function process_streams(InternalStreamUpdate[] internal_streams);
-    }
 
     fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> B256 {
-        let hash: [u64; 4] = <[u64; 4]>::from(hash);
-        let hash: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(hash);
+        let hash = <[u64; 4]>::from(hash);
+        let hash = linera_base::crypto::u64_array_to_be_bytes(hash);
         hash.into()
     }
 
@@ -216,7 +217,7 @@ pub(crate) fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<
     let internal_streams = streams
         .into_iter()
         .map(stream_update_to_internal_stream_update)
-        .collect::<Vec<_>>();
+        .collect();
 
     let fct_call = process_streamsCall { internal_streams };
     fct_call.abi_encode()
@@ -235,7 +236,8 @@ mod tests {
     use revm_primitives::keccak256;
 
     use crate::evm::inputs::{
-        EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR, PROCESS_STREAMS_SELECTOR,
+        process_streamsCall, EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR,
+        PROCESS_STREAMS_SELECTOR,
     };
 
     // The function keccak256 is not const so we cannot build the execute_message
@@ -248,39 +250,7 @@ mod tests {
 
     #[test]
     fn check_process_streams_selector() {
-        use alloy_sol_types::{sol, SolCall};
-        sol! {
-            struct InternalApplicationId {
-                bytes32 application_description_hash;
-            }
-
-            struct InternalGenericApplicationId {
-                uint8 choice;
-                InternalApplicationId user;
-            }
-
-            struct InternalStreamName {
-                bytes stream_name;
-            }
-
-            struct InternalStreamId {
-                InternalGenericApplicationId application_id;
-                InternalStreamName stream_name;
-            }
-
-            struct InternalChainId {
-                bytes32 value;
-            }
-
-            struct InternalStreamUpdate {
-                InternalChainId chain_id;
-                InternalStreamId stream_id;
-                uint32 previous_index;
-                uint32 next_index;
-            }
-
-            function process_streams(InternalStreamUpdate[] internal_streams);
-        }
+        use alloy_sol_types::SolCall;
         assert_eq!(
             process_streamsCall::SIGNATURE,
             "process_streams(((bytes32),((uint8,(bytes32)),(bytes)),uint32,uint32)[])"
