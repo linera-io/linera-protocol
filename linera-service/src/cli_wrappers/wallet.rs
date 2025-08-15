@@ -673,7 +673,12 @@ impl ClientWrapper {
     }
 
     fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
-        let formatted_args = to_args(&args)?
+        let mut formatted_args = to_args(&args)?;
+        let subcommand = formatted_args.remove(0);
+        // The subcommand is followed by the flattened options, which are preceded by "options".
+        // So remove that as well.
+        formatted_args.remove(0);
+        let options = formatted_args
             .chunks_exact(2)
             .flat_map(|pair| {
                 let option = format!("--{}", pair[0]);
@@ -685,13 +690,13 @@ impl ClientWrapper {
             })
             .collect::<Vec<_>>();
         command
-            // For benchmarks, we need to enforce a large enough max pending message bundles.
             .args([
                 "--max-pending-message-bundles",
-                &args.transactions_per_block.to_string(),
+                &args.transactions_per_block().to_string(),
             ])
             .arg("benchmark")
-            .args(formatted_args);
+            .arg(subcommand)
+            .args(options);
         Ok(())
     }
 
@@ -1382,7 +1387,7 @@ impl NodeService {
                     truncate_query_output(query)
                 )
             })?;
-            anyhow::ensure!(
+            ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
                 truncate_query_output(query),
@@ -1582,7 +1587,7 @@ impl<A> ApplicationWrapper<A> {
                         .with_context(|| format!("run_json_query: failed to post query={query}"));
                 }
             };
-            anyhow::ensure!(
+            ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
                 truncate_query_output_serialize(&query),

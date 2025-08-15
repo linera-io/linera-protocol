@@ -784,7 +784,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
-    use linera_service::cli::command::BenchmarkCommand;
+    use linera_service::cli::command::{BenchmarkCommand, BenchmarkOptions};
 
     config.num_other_initial_chains = 2;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -795,13 +795,15 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     assert_eq!(client.load_wallet()?.num_chains(), 3);
     // Launch local benchmark using some additional chains.
     client
-        .benchmark(BenchmarkCommand {
-            num_chains: 2,
-            transactions_per_block: 10,
-            bps: 2,
-            runtime_in_seconds: Some(5),
-            close_chains: true,
-            ..Default::default()
+        .benchmark(BenchmarkCommand::Single {
+            options: BenchmarkOptions {
+                num_chains: 2,
+                transactions_per_block: 10,
+                bps: 2,
+                runtime_in_seconds: Some(5),
+                close_chains: true,
+                ..Default::default()
+            },
         })
         .await?;
     assert_eq!(client.load_wallet()?.num_chains(), 3);
@@ -825,14 +827,16 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         )
         .await?;
     client
-        .benchmark(BenchmarkCommand {
-            num_chains: 2,
-            transactions_per_block: 10,
-            bps: 2,
-            runtime_in_seconds: Some(5),
-            fungible_application_id: Some(application_id.forget_abi()),
-            close_chains: true,
-            ..Default::default()
+        .benchmark(BenchmarkCommand::Single {
+            options: BenchmarkOptions {
+                num_chains: 2,
+                transactions_per_block: 10,
+                bps: 2,
+                runtime_in_seconds: Some(5),
+                fungible_application_id: Some(application_id.forget_abi()),
+                close_chains: true,
+                ..Default::default()
+            },
         })
         .await?;
 
