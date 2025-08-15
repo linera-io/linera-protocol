@@ -791,12 +791,12 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
                 runtime.transfer(source, destination, amount)?;
             }
             // In Ethereum, all transfers matter
-            if let Some(i) =
+            if let Some(error) =
                 context
                     .journal()
                     .transfer(inputs.caller, inputs.target_address, value)?
             {
-                let error = format!("{i:?}");
+                let error = format!("{error:?}");
                 let error = EvmExecutionError::TransactError(error);
                 return Err(ExecutionError::EvmError(error));
             }

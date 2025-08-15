@@ -381,10 +381,8 @@ impl GenericApplicationId {
 impl<A> From<ApplicationId<A>> for AccountOwner {
     fn from(app_id: ApplicationId<A>) -> Self {
         if app_id.is_evm() {
-            let hash_bytes: [u8; 32] = app_id.application_description_hash.into();
-            let mut address_20 = [0u8; 20];
-            address_20.copy_from_slice(&hash_bytes[0..20]);
-            AccountOwner::Address20(address_20)
+            let hash_bytes = app_id.application_description_hash.as_bytes();
+            AccountOwner::Address20(hash_bytes[..20].try_into().unwrap())
         } else {
             AccountOwner::Address32(app_id.application_description_hash)
         }

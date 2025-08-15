@@ -86,8 +86,8 @@ impl From<Amount> for U256 {
     }
 }
 
-/// Converting amount from U256 to Amount can fail since
-/// Amount is a u128.
+/// Converting amount from `U256` to Amount can fail since
+/// Amount is a `u128`.
 #[derive(Error, Debug)]
 pub struct AmountConversionError(U256);
 

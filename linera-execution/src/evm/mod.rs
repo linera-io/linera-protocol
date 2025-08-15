@@ -39,7 +39,7 @@ pub enum EvmExecutionError {
     NoDelegateCall,
     #[error("No transfer in services")]
     NoTransferInServices,
-    #[error("No transfer in wasm application call")]
+    #[error("No transfer in Wasm application call")]
     NoTransferInRuntimeCall,
     #[error("The function {0} is being called but is missing from the bytecode API")]
     MissingFunction(String),

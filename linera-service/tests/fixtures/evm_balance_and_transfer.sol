@@ -8,7 +8,7 @@ contract InnerContractCheck {
 
     function send_cash(address recipient, uint256 amount) external returns (uint64) {
         (bool success, ) = recipient.call{value: amount}("");
-        require(success, "Ether transfer failed");
+        require(success, "Native token transfer failed");
         return 1;
     }
 

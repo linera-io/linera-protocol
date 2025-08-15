@@ -15,16 +15,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::EvmExecutionError;
 
-// This is the precompile address that contains the Linera specific
-// functionalities accessed from the EVM.
+/// This is the precompile address that contains the Linera specific
+/// functionalities accessed from the EVM.
 pub(crate) const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-// This is the zero address used when no address can be obtained from `authenticated_signer`
-// and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
-// if an EVM contract calls another EVM contract.
+/// This is the zero address used when no address can be obtained from `authenticated_signer`
+/// and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
+/// if an EVM contract calls another EVM contract.
 pub(crate) const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
 
-// This is the address being used for service calls.
+/// This is the address being used for service calls.
 pub(crate) const SERVICE_ADDRESS: Address = address!("0000000000000000000000000000000000002000");
 
 /// This is the selector of `execute_message` that should be called
@@ -40,21 +40,18 @@ pub(crate) const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 pub(crate) const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
 pub(crate) fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
-    if vec == EXECUTE_MESSAGE_SELECTOR {
-        return Err(EvmExecutionError::IllegalOperationCall(
-            "function execute_message".to_string(),
-        ));
-    }
-    if vec == PROCESS_STREAMS_SELECTOR {
-        return Err(EvmExecutionError::IllegalOperationCall(
-            "function process_streams".to_string(),
-        ));
-    }
-    if vec == INSTANTIATE_SELECTOR {
-        return Err(EvmExecutionError::IllegalOperationCall(
-            "function instantiate".to_string(),
-        ));
-    }
+    ensure!(vec != EXECUTE_MESSAGE_SELECTOR,
+            EvmExecutionError::IllegalOperationCall(
+                "function execute_message".to_string(),
+            ));
+    ensure!(vec != PROCESS_STREAMS_SELECTOR,
+            EvmExecutionError::IllegalOperationCall(
+                "function process_streams".to_string(),
+            ));
+    ensure!(vec != INSTANTIATE_SELECTOR,
+            EvmExecutionError::IllegalOperationCall(
+                "function instantiate".to_string(),
+            ));
     Ok(())
 }
 
