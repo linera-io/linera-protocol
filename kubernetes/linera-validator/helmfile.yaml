@@ -19,11 +19,21 @@ hooks:
     showlogs: true
     command: bash
     args:
-      - -lc
+      - -c
       - |
         set -euxo pipefail
+
+        kube_args=(
+          {{- if .Values.kubeContext }}
+          --context {{ .Values.kubeContext }}
+          {{- end }}
+          {{- if .Values.kubeConfigPath }}
+          --kubeconfig {{ .Values.kubeConfigPath }}
+          {{- end }}
+        )
+
         echo "Installing Prometheus ServiceMonitor CRD…"
-        kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+        kubectl "${kube_args[@]}" apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
 {{- if and .Values.gcpRun .Values.usingLocalSsd }}
   - events: ["prepare"]
     showlogs: true
@@ -109,9 +119,9 @@ releases:
             echo "Deploy NodeConfig, Local-CSI driver and StorageClass"
 
             kubectl "${kube_args[@]}" apply -f ./scylla-setup/nodeconfig.yaml
-            kubectl wait --for=condition=Progressing=False --timeout=10m nodeconfig/scylla-nvme
-            kubectl wait --for=condition=Degraded=False --timeout=10m nodeconfig/scylla-nvme
-            kubectl wait --for=condition=Available=True --timeout=10m nodeconfig/scylla-nvme
+            kubectl "${kube_args[@]}" wait --for=condition=Progressing=False --timeout=10m nodeconfig/scylla-nvme
+            kubectl "${kube_args[@]}" wait --for=condition=Degraded=False --timeout=10m nodeconfig/scylla-nvme
+            kubectl "${kube_args[@]}" wait --for=condition=Available=True --timeout=10m nodeconfig/scylla-nvme
 
             kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-csi-driver
             kubectl "${kube_args[@]}" -n local-csi-driver rollout status daemonset/local-csi-driver --timeout=5m
