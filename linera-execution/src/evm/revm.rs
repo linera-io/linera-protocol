@@ -17,7 +17,7 @@ use linera_base::{
     data_types::{Amount, Bytecode, Resources, SendMessageRequest, StreamUpdate},
     ensure,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamName},
-    vm::{EvmMutation, EvmQuery, VmRuntime},
+    vm::{EvmInstantiation, EvmMutation, EvmQuery, VmRuntime},
 };
 use revm::{primitives::Bytes, InspectCommitEvm, InspectEvm, Inspector};
 use revm_context::{
@@ -43,7 +43,7 @@ use crate::{
         inputs::{
             ensure_message_length, ensure_selector_presence, forbid_execute_operation_origin,
             get_revm_execute_message_bytes, get_revm_instantiation_bytes,
-            get_revm_process_streams_bytes, has_selector, EvmInstantiation,
+            get_revm_process_streams_bytes, has_selector,
             EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR, PRECOMPILE_ADDRESS,
             PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS, ZERO_ADDRESS,
         },

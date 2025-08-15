@@ -8,13 +8,10 @@ use std::sync::Arc;
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
-    vm::{get_evm_mutation, EvmQuery},
+    vm::{get_evm_mutation, EvmInstantiation, EvmQuery},
 };
 use linera_execution::{
-    evm::{
-        inputs::EvmInstantiation,
-        revm::{EvmContractModule, EvmServiceModule},
-    },
+    evm::revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
         create_dummy_user_application_description, dummy_chain_description,
         solidity::{load_solidity_example, read_evm_u64_entry},

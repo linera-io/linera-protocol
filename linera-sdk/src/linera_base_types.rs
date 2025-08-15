@@ -9,6 +9,6 @@ pub use linera_base::{
     data_types::*,
     identifiers::*,
     ownership::*,
-    vm::{get_evm_mutation, EvmQuery, VmRuntime},
+    vm::{get_evm_mutation, EvmInstantiation, EvmQuery, VmRuntime},
     BcsHexParseError,
 };

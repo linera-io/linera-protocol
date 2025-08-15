@@ -6,12 +6,11 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, StreamUpdate},
+    data_types::StreamUpdate,
     ensure,
     identifiers::{ApplicationId, ChainId, StreamName},
 };
 use revm_primitives::{address, Address};
-use serde::{Deserialize, Serialize};
 
 use crate::EvmExecutionError;
 
@@ -221,14 +220,6 @@ pub(crate) fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<
 
     let fct_call = process_streamsCall { internal_streams };
     fct_call.abi_encode()
-}
-
-/// The instantiation argument to EVM smart contracts.
-/// `value` is the amount being transferred.
-#[derive(Default, Serialize, Deserialize)]
-pub struct EvmInstantiation {
-    pub value: Amount,
-    pub argument: Vec<u8>,
 }
 
 #[cfg(test)]

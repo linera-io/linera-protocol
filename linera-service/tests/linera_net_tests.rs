@@ -442,9 +442,8 @@ fn get_zero_mutation(mutation: impl alloy_sol_types::SolCall) -> Result<Vec<u8>,
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation,
         test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
@@ -529,9 +528,8 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::U256;
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation,
         test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
@@ -673,10 +671,10 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolValue};
     use linera_base::{
         identifiers::{GenericApplicationId, StreamId, StreamName},
-        vm::EvmQuery,
+        vm::{EvmInstantiation, EvmQuery},
     };
     use linera_execution::{
-        evm::inputs::EvmInstantiation, test_utils::solidity::get_evm_contract_path,
+        test_utils::solidity::get_evm_contract_path,
     };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -788,8 +786,9 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
 async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolValue};
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};
+    use linera_base::vm::EvmInstantiation;
     use linera_execution::{
-        evm::inputs::EvmInstantiation, test_utils::solidity::get_evm_contract_path,
+        test_utils::solidity::get_evm_contract_path,
     };
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -890,9 +889,8 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 #[test_log::test(tokio::test)]
 async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation,
         test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
@@ -1005,9 +1003,8 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
 async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
     use counter_no_graphql::CounterNoGraphQlAbi;
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation,
         test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
@@ -1105,9 +1102,8 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
 async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation,
         test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
@@ -1231,9 +1227,8 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 #[test_log::test(tokio::test)]
 async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation,
         test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
@@ -1315,9 +1310,8 @@ async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> 
 async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation,
         test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;
@@ -1443,9 +1437,9 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 #[test_log::test(tokio::test)]
 async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::sol;
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation, test_utils::solidity::get_evm_contract_path,
+        test_utils::solidity::get_evm_contract_path,
     };
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1540,9 +1534,9 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation, test_utils::solidity::get_evm_contract_path,
+        test_utils::solidity::get_evm_contract_path,
     };
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1723,9 +1717,8 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::EvmQuery;
+    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::{
-        evm::inputs::EvmInstantiation,
         test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry},
     };
     use linera_sdk::abis::evm::EvmAbi;

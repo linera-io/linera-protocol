@@ -10,6 +10,7 @@ use derive_more::Display;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use crate::data_types::Amount;
 
 #[derive(
     Clone,
@@ -83,4 +84,14 @@ pub fn get_evm_mutation(
     let value = amount.into();
     let evm_mutation = EvmMutation { value, argument };
     bcs::to_bytes(&evm_mutation)
+}
+
+/// The instantiation argument to EVM smart contracts.
+/// `value` is the amount being transferred.
+#[derive(Default, Serialize, Deserialize)]
+pub struct EvmInstantiation {
+    /// The initial value put in the instantiation of the contract.
+    pub value: Amount,
+    /// The input to the `fn instantiate` of the EVM smart contract.
+    pub argument: Vec<u8>,
 }
