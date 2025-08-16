@@ -900,7 +900,7 @@ where
             let storage = self
                 .validator_storages
                 .get_mut(&validator.public_key)
-                .ok_or_else(|| anyhow::anyhow!("validator storage not found"))?;
+                .unwrap();
             storage
                 .write_network_description(network_description)
                 .await

@@ -672,10 +672,7 @@ where
             .with_timestamp(block_0_time)
             .with_simple_transfer(chain_2, small_transfer)
             .with_authenticated_signer(Some(owner));
-        let block_proposal = block
-            .clone()
-            .into_first_proposal(owner, &signer)
-            .await?;
+        let block_proposal = block.clone().into_first_proposal(owner, &signer).await?;
         let future = env.worker().handle_block_proposal(block_proposal);
         clock.set(block_0_time);
         future.await?;
@@ -818,19 +815,19 @@ where
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
-    let block = chain.manager.validated_vote().ok_or_else(|| anyhow::anyhow!("no validated vote"))?.value().block();
+    let block = chain.manager.validated_vote().unwrap().value().block();
     // Multi-leader round - it's not confirmed yet.
     assert!(block.matches_proposed_block(&block_proposal0.content.block));
     assert!(chain.manager.confirmed_vote().is_none());
     let block_certificate0 =
-        env.make_certificate(chain.manager.validated_vote().ok_or_else(|| anyhow::anyhow!("no validated vote"))?.value().clone());
+        env.make_certificate(chain.manager.validated_vote().unwrap().value().clone());
     drop(chain);
     env.worker()
         .handle_validated_certificate(block_certificate0)
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
-    let block = chain.manager.confirmed_vote().ok_or_else(|| anyhow::anyhow!("no confirmed vote"))?.value().block();
+    let block = chain.manager.confirmed_vote().unwrap().value().block();
     // Should be confirmed after handling the certificate.
     assert!(block.matches_proposed_block(&block_proposal0.content.block));
     assert!(chain.manager.validated_vote().is_none());
@@ -847,7 +844,7 @@ where
 
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
-    let block = chain.manager.validated_vote().ok_or_else(|| anyhow::anyhow!("no validated vote"))?.value().block();
+    let block = chain.manager.validated_vote().unwrap().value().block();
     assert!(block.matches_proposed_block(&block_proposal1.content.block));
     assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
@@ -4094,10 +4091,7 @@ where
         .with_simple_transfer(chain_2, small_transfer)
         .with_authenticated_signer(Some(owner));
 
-    let block_proposal = block
-        .clone()
-        .into_first_proposal(owner, &signer)
-        .await?;
+    let block_proposal = block.clone().into_first_proposal(owner, &signer).await?;
     let _ = env.worker().handle_block_proposal(block_proposal).await?;
 
     for local_time in queries_before_confirmation {

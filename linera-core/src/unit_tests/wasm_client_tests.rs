@@ -151,9 +151,9 @@ where
         .await?;
 
     let expected = QueryOutcome {
-        response: async_graphql::Response::new(
-            async_graphql::Value::from_json(json!({"value": 15}))?,
-        ),
+        response: async_graphql::Response::new(async_graphql::Value::from_json(
+            json!({"value": 15}),
+        )?),
         operations: vec![],
     };
 
@@ -381,9 +381,9 @@ where
         .await?;
 
     let expected = QueryOutcome {
-        response: async_graphql::Response::new(
-            async_graphql::Value::from_json(json!({"value": 5}))?,
-        ),
+        response: async_graphql::Response::new(async_graphql::Value::from_json(
+            json!({"value": 5}),
+        )?),
         operations: vec![],
     };
 
@@ -401,7 +401,7 @@ where
         .await?;
     let mut certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
-    let cert = certs.pop().ok_or_else(|| anyhow::anyhow!("expected at least one certificate"))?;
+    let cert = certs.pop().unwrap();
     let incoming_bundles = cert.block().body.incoming_bundles().collect::<Vec<_>>();
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
@@ -544,9 +544,9 @@ where
     };
     let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
-    let sender_owner = sender.preferred_owner.ok_or_else(|| anyhow::anyhow!("sender has no preferred owner"))?;
-    let receiver_owner = receiver.preferred_owner.ok_or_else(|| anyhow::anyhow!("receiver has no preferred owner"))?;
-    let receiver2_owner = receiver2.preferred_owner.ok_or_else(|| anyhow::anyhow!("receiver2 has no preferred owner"))?;
+    let sender_owner = sender.preferred_owner.unwrap();
+    let receiver_owner = receiver.preferred_owner.unwrap();
+    let receiver2_owner = receiver2.preferred_owner.unwrap();
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
