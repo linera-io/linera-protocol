@@ -1500,12 +1500,9 @@ where
         LockingBlock::Regular(validated),
         *info2_b.manager.requested_locking.unwrap()
     );
+    let recipient = Account::burn_address(client_2b.chain_id());
     let bt_certificate = client_2b
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::from_tokens(1),
-            Account::chain(client_2b.chain_id()),
-        )
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
         .await
         .unwrap_ok_committed();
 
@@ -1518,7 +1515,7 @@ where
     assert!(certificate_values[0].block().body.operations().any(|op| *op
         == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Account::chain(client_2b.chain_id()),
+            recipient,
             amount: Amount::from_tokens(1),
         })));
 
@@ -1637,12 +1634,9 @@ where
     builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
 
     client2_b.prepare_chain().await.unwrap();
+    let recipient = Account::burn_address(client2_b.chain_id());
     let bt_certificate = client2_b
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::from_tokens(1),
-            Account::chain(client2_b.chain_id()),
-        )
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
         .await
         .unwrap_ok_committed();
 
@@ -1655,7 +1649,7 @@ where
     assert!(certificate_values[0].block().body.operations().any(|op| *op
         == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Account::chain(client2_b.chain_id()),
+            recipient,
             amount: Amount::from_tokens(1),
         })));
 
