@@ -708,8 +708,7 @@ where
         let block_proposal = make_child_block(&certificate.into_value())
             .with_timestamp(block_0_time.saturating_sub_micros(1))
             .into_first_proposal(owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Timestamp older than previous one
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -782,8 +781,7 @@ where
         .with_simple_transfer(chain_2, Amount::ONE)
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
     let certificate0 = env
         .make_simple_transfer_certificate(
             chain_desc.clone(),
@@ -926,8 +924,7 @@ where
     let block_proposal1 = make_child_block(certificate2.value())
         .with_simple_transfer(chain_2, Amount::from_tokens(1))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
 
     // The worker handles certificates 0 and 2 - this should succeed, and the worker
     // should now have block 0 fully processed, and block 2 preprocessed.
@@ -1125,8 +1122,7 @@ where
             .with_simple_transfer(chain_3, Amount::from_tokens(6))
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Insufficient funding
         assert_matches!(
                 env.worker().handle_block_proposal(block_proposal).await,
@@ -1181,8 +1177,7 @@ where
             })
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Inconsistent received messages.
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -1207,8 +1202,7 @@ where
             })
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Skipped message.
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -1258,8 +1252,7 @@ where
             })
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Inconsistent order in received messages (heights).
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -1285,8 +1278,7 @@ where
             .with_simple_transfer(chain_3, Amount::ONE)
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Taking the first message only is ok.
         env.worker()
             .handle_block_proposal(block_proposal.clone())
@@ -1342,8 +1334,7 @@ where
             })
             .with_simple_transfer(chain_3, Amount::from_tokens(3))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         env.worker()
             .handle_block_proposal(block_proposal.clone())
             .await?;
@@ -1375,8 +1366,7 @@ where
         .with_simple_transfer(chain_2, Amount::from_tokens(1000))
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
     assert_matches!(
         env.worker().handle_block_proposal(block_proposal).await,
         Err(
@@ -1416,8 +1406,7 @@ where
         .with_simple_transfer(chain_2, Amount::from_tokens(5))
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
 
     let (chain_info_response, _actions) =
         env.worker().handle_block_proposal(block_proposal).await?;
@@ -1470,8 +1459,7 @@ where
         .with_simple_transfer(chain_2, Amount::from_tokens(5))
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
 
     let (response, _actions) = env
         .worker()
@@ -2608,7 +2596,7 @@ where
                 vec![Event {
                     stream_id: event_id.stream_id.clone(),
                     index: event_id.index,
-                    value: bcs::to_bytes(&blob_hash).unwrap(),
+                    value: bcs::to_bytes(&blob_hash)?,
                 }],
                 Vec::new(),
             ],
@@ -2694,7 +2682,7 @@ where
                             stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                             index: 1,
                         },
-                        bcs::to_bytes(&blob_hash).unwrap(),
+                        bcs::to_bytes(&blob_hash)?,
                     ),
                     OracleResponse::Blob(committee_blob.id()),
                 ],
@@ -2796,7 +2784,7 @@ where
             events: vec![vec![Event {
                 stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                 index: 1,
-                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+                value: bcs::to_bytes(&committee_blob.id().hash)?,
             }]],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
@@ -2920,7 +2908,7 @@ where
                 vec![Event {
                     stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                     index: 1,
-                    value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+                    value: bcs::to_bytes(&committee_blob.id().hash)?,
                 }],
                 vec![Event {
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
@@ -3809,8 +3797,7 @@ where
         certificate2.clone(),
         &signer,
     )
-    .await
-    .unwrap();
+    .await?;
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
@@ -4110,8 +4097,7 @@ where
     let block_proposal = block
         .clone()
         .into_first_proposal(owner, &signer)
-        .await
-        .unwrap();
+        .await?;
     let _ = env.worker().handle_block_proposal(block_proposal).await?;
 
     for local_time in queries_before_confirmation {
