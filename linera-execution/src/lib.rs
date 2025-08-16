@@ -333,7 +333,7 @@ pub trait UserContract {
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
-    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError>;
+    fn execute_message(&mut self, is_bouncing: bool, origin: ChainId, message: Vec<u8>) -> Result<(), ExecutionError>;
 
     /// Reacts to new events on streams this application subscribes to.
     fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError>;
@@ -693,12 +693,9 @@ pub trait ContractRuntime: BaseRuntime {
     /// The authenticated signer for this execution, if there is one.
     fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
 
-    /// If the current message (if there is one) was rejected by its destination and is now
-    /// bouncing back.
-    fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError>;
+    
 
-    /// The chain ID where the current message originated from, if there is one.
-    fn message_origin_chain_id(&mut self) -> Result<Option<ChainId>, ExecutionError>;
+    
 
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.

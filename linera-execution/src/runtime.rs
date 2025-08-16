@@ -1096,7 +1096,7 @@ impl ContractSyncRuntimeHandle {
             UserAction::Operation(_context, operation) => {
                 code.execute_operation(operation).map(Option::Some)
             }
-            UserAction::Message(_context, message) => code.execute_message(message).map(|()| None),
+            UserAction::Message(context, message) => code.execute_message(context.is_bouncing, context.origin, message).map(|()| None),
             UserAction::ProcessStreams(_context, updates) => {
                 code.process_streams(updates).map(|()| None)
             }
@@ -1172,19 +1172,9 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(self.inner().authenticated_signer)
     }
 
-    fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError> {
-        Ok(self
-            .inner()
-            .executing_message
-            .map(|metadata| metadata.is_bouncing))
-    }
+    
 
-    fn message_origin_chain_id(&mut self) -> Result<Option<ChainId>, ExecutionError> {
-        Ok(self
-            .inner()
-            .executing_message
-            .map(|metadata| metadata.origin))
-    }
+    
 
     fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError> {
         let this = self.inner();

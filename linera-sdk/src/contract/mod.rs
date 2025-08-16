@@ -71,7 +71,7 @@ macro_rules! contract {
                 )
             }
 
-            fn execute_message(message: Vec<u8>) {
+            fn execute_message(is_bouncing: bool, origin: $crate::contract::wit::exports::linera::app::contract_entrypoints::ChainId, message: Vec<u8>) {
                 use $crate::util::BlockingWait;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
@@ -79,8 +79,11 @@ macro_rules! contract {
                         let message: <$contract as $crate::Contract>::Message =
                             $crate::bcs::from_bytes(&message)
                                 .expect("Failed to deserialize message");
+                        
+                        // Convert WIT ChainId to SDK ChainId
+                        let origin: $crate::ChainId = origin.into();
 
-                        contract.execute_message(message).blocking_wait()
+                        contract.execute_message(is_bouncing, origin, message).blocking_wait()
                     },
                 )
             }

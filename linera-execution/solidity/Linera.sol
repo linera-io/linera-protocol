@@ -415,27 +415,6 @@ library Linera {
         return opt_accountowner_from(output2);
     }
 
-    function message_origin_chain_id() internal returns (opt_ChainId memory) {
-        address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_origin_chain_id();
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
-        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output1) = precompile.call(input2);
-        require(success);
-        LineraTypes.opt_ChainId memory output2 = LineraTypes.bcs_deserialize_opt_ChainId(output1);
-        return opt_chainid_from(output2);
-    }
-
-    function message_is_bouncing() internal returns (OptionBool) {
-        address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_is_bouncing();
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
-        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
-        (bool success, bytes memory output1) = precompile.call(input2);
-        require(success);
-        LineraTypes.MessageIsBouncing memory output2 = LineraTypes.bcs_deserialize_MessageIsBouncing(output1);
-        return optionbool_from(output2);
-    }
 
     function authenticated_caller_id() internal returns (Linera.opt_ApplicationId memory) {
         address precompile = address(0x0b);

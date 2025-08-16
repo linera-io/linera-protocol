@@ -3,7 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use linera_sdk::{linera_base_types::WithContractAbi, Contract, ContractRuntime};
+use linera_sdk::{linera_base_types::WithContractAbi, ChainId, Contract, ContractRuntime};
 
 pub struct LlmContract;
 
@@ -27,7 +27,7 @@ impl Contract for LlmContract {
 
     async fn execute_operation(&mut self, _operation: ()) -> Self::Response {}
 
-    async fn execute_message(&mut self, _message: ()) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _chain_id: ChainId, _message: ()) {
         panic!("Llm application doesn't support any cross-chain messages");
     }
 

@@ -3,7 +3,7 @@ package linera:app;
 interface contract-entrypoints {
     instantiate: func(argument: list<u8>);
     execute-operation: func(operation: list<u8>) -> list<u8>;
-    execute-message: func(message: list<u8>);
+    execute-message: func(is-bouncing: bool, origin: chain-id, message: list<u8>);
     process-streams: func(streams: list<stream-update>);
     finalize: func();
 

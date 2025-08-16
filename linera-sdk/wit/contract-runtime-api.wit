@@ -2,8 +2,6 @@ package linera:app;
 
 interface contract-runtime-api {
     authenticated-signer: func() -> option<account-owner>;
-    message-is-bouncing: func() -> option<bool>;
-    message-origin-chain-id: func() -> option<chain-id>;
     authenticated-caller-id: func() -> option<application-id>;
     send-message: func(message: send-message-request);
     transfer: func(source: account-owner, destination: account, amount: amount);

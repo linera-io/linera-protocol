@@ -131,7 +131,7 @@ type ExecuteOperationHandler = Box<
         + Sync,
 >;
 type ExecuteMessageHandler = Box<
-    dyn FnOnce(&mut ContractSyncRuntimeHandle, Vec<u8>) -> Result<(), ExecutionError> + Send + Sync,
+    dyn FnOnce(&mut ContractSyncRuntimeHandle, bool, ChainId, Vec<u8>) -> Result<(), ExecutionError> + Send + Sync,
 >;
 type ProcessStreamHandler = Box<
     dyn FnOnce(&mut ContractSyncRuntimeHandle, Vec<StreamUpdate>) -> Result<(), ExecutionError>
@@ -206,7 +206,7 @@ impl ExpectedCall {
     /// [`UserContract::execute_message`] implementation, which is handled by the provided
     /// `handler`.
     pub fn execute_message(
-        handler: impl FnOnce(&mut ContractSyncRuntimeHandle, Vec<u8>) -> Result<(), ExecutionError>
+        handler: impl FnOnce(&mut ContractSyncRuntimeHandle, bool, ChainId, Vec<u8>) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -304,9 +304,9 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         }
     }
 
-    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
+    fn execute_message(&mut self, is_bouncing: bool, origin: ChainId, message: Vec<u8>) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::ExecuteMessage(handler)) => handler(&mut self.runtime, message),
+            Some(ExpectedCall::ExecuteMessage(handler)) => handler(&mut self.runtime, is_bouncing, origin, message),
             Some(unexpected_call) => panic!(
                 "Expected a call to `execute_message`, got a call to `{unexpected_call}` instead."
             ),

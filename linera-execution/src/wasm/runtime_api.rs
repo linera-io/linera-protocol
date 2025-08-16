@@ -400,26 +400,7 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Returns `Some(true)` if the incoming message was rejected from the original destination and
-    /// is now bouncing back, `Some(false)` if the message is being currently being delivered to
-    /// its original destination, or [`None`] if not executing an incoming message.
-    fn message_is_bouncing(caller: &mut Caller) -> Result<Option<bool>, RuntimeError> {
-        caller
-            .user_data_mut()
-            .runtime
-            .message_is_bouncing()
-            .map_err(|error| RuntimeError::Custom(error.into()))
-    }
 
-    /// Returns the chain ID where the current message originated from, or [`None`] if not executing
-    /// an incoming message.
-    fn message_origin_chain_id(caller: &mut Caller) -> Result<Option<ChainId>, RuntimeError> {
-        caller
-            .user_data_mut()
-            .runtime
-            .message_origin_chain_id()
-            .map_err(|error| RuntimeError::Custom(error.into()))
-    }
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context.
     fn authenticated_caller_id(caller: &mut Caller) -> Result<Option<ApplicationId>, RuntimeError> {

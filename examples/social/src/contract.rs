@@ -68,7 +68,7 @@ impl Contract for SocialContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _origin: ChainId, message: Message) {
         match message {
             Message::Like { key } => self.runtime.emit(STREAM_NAME.into(), &Event::Like { key }),
 

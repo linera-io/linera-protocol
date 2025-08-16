@@ -5,7 +5,7 @@
 
 use linera_sdk::{
     linera_base_types::{ApplicationId, StreamName, WithContractAbi},
-    Contract, ContractRuntime, Resources,
+    ChainId, Contract, ContractRuntime, Resources,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
 
@@ -79,11 +79,7 @@ impl Contract for MetaCounterContract {
         message.send_to(recipient_id);
     }
 
-    async fn execute_message(&mut self, message: Message) {
-        let is_bouncing = self
-            .runtime
-            .message_is_bouncing()
-            .expect("Message delivery status has to be available when executing a message");
+    async fn execute_message(&mut self, is_bouncing: bool, _chain_id: ChainId, message: Message) {
         if is_bouncing {
             log::trace!("receiving a bouncing message {message:?}");
             return;

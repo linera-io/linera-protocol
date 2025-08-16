@@ -11,7 +11,7 @@ use fungible::Account;
 use linera_sdk::{
     linera_base_types::{AccountOwner, WithContractAbi},
     views::{RootView, View},
-    Contract, ContractRuntime, DataBlobHash,
+    ChainId, Contract, ContractRuntime, DataBlobHash,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 
@@ -96,16 +96,12 @@ impl Contract for NonFungibleTokenContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    async fn execute_message(&mut self, is_bouncing: bool, _origin: ChainId, message: Message) {
         match message {
             Message::Transfer {
                 mut nft,
                 target_account,
             } => {
-                let is_bouncing = self
-                    .runtime
-                    .message_is_bouncing()
-                    .expect("Message delivery status has to be available when executing a message");
                 if !is_bouncing {
                     nft.owner = target_account.owner;
                 }

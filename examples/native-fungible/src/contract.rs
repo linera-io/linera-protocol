@@ -101,7 +101,7 @@ impl Contract for NativeFungibleTokenContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _origin: ChainId, message: Self::Message) {
         // Messages for now don't do anything, just pass messages around
         match message {
             Message::Notify => (),

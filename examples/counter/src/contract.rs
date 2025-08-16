@@ -9,7 +9,7 @@ use counter::CounterAbi;
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 };
 
 use self::state::CounterState;
@@ -51,7 +51,7 @@ impl Contract for CounterContract {
         new_value
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _origin: ChainId, _message: ()) {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
@@ -63,7 +63,7 @@ impl Contract for CounterContract {
 #[cfg(test)]
 mod tests {
     use futures::FutureExt as _;
-    use linera_sdk::{util::BlockingWait, views::View, Contract, ContractRuntime};
+    use linera_sdk::{ChainId, util::BlockingWait, views::View, Contract, ContractRuntime};
 
     use super::{CounterContract, CounterState};
 
@@ -92,7 +92,7 @@ mod tests {
         let mut counter = create_and_instantiate_counter(initial_value);
 
         counter
-            .execute_message(())
+            .execute_message(false, ChainId::default(), ())
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
     }

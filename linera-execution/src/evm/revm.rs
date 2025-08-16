@@ -108,7 +108,7 @@ mod tests {
     // selector directly.
     #[test]
     fn check_execute_message_selector() {
-        let selector = &keccak256("execute_message(bytes)".as_bytes())[..4];
+        let selector = &keccak256("execute_message(bool,bytes32,bytes)".as_bytes())[..4];
         assert_eq!(selector, EXECUTE_MESSAGE_SELECTOR);
     }
 
@@ -205,14 +205,15 @@ fn get_revm_instantiation_bytes(value: Vec<u8>) -> Vec<u8> {
     argument.abi_encode()
 }
 
-fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
-    use alloy_primitives::Bytes;
+fn get_revm_execute_message_bytes(is_bouncing: bool, origin: ChainId, value: Vec<u8>) -> Vec<u8> {
+    use alloy_primitives::{Bytes, B256};
     use alloy_sol_types::{sol, SolCall};
     sol! {
-        function execute_message(bytes value);
+        function execute_message(bool is_bouncing, bytes32 source_chain_id, bytes value);
     }
     let value = Bytes::from(value);
-    let argument = execute_messageCall { value };
+    let source_chain_id = B256::from(<[u8; 32]>::from(origin.0));
+    let argument = execute_messageCall { is_bouncing, source_chain_id, value };
     argument.abi_encode()
 }
 
@@ -505,10 +506,6 @@ enum BaseRuntimePrecompile {
 enum ContractRuntimePrecompile {
     /// Calling `authenticated_signer` of `ContractRuntime`
     AuthenticatedSigner,
-    /// Calling `message_origin_chain_id` of `ContractRuntime`
-    MessageOriginChainId,
-    /// Calling `message_is_bouncing` of `ContractRuntime`
-    MessageIsBouncing,
     /// Calling `authenticated_caller_id` of `ContractRuntime`
     AuthenticatedCallerId,
     /// Calling `send_message` of `ContractRuntime`
@@ -723,15 +720,6 @@ impl<'a> ContractPrecompile {
                 Ok(bcs::to_bytes(&account_owner)?)
             }
 
-            ContractRuntimePrecompile::MessageOriginChainId => {
-                let origin_chain_id = runtime.message_origin_chain_id()?;
-                Ok(bcs::to_bytes(&origin_chain_id)?)
-            }
-
-            ContractRuntimePrecompile::MessageIsBouncing => {
-                let result = runtime.message_is_bouncing()?;
-                Ok(bcs::to_bytes(&result)?)
-            }
             ContractRuntimePrecompile::AuthenticatedCallerId => {
                 let application_id = runtime.authenticated_caller_id()?;
                 Ok(bcs::to_bytes(&application_id)?)
@@ -1188,14 +1176,14 @@ where
         Ok(output)
     }
 
-    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
+    fn execute_message(&mut self, is_bouncing: bool, origin: ChainId, message: Vec<u8>) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
         ensure_selector_presence(
             &self.module,
             EXECUTE_MESSAGE_SELECTOR,
-            "function execute_message(bytes)",
+            "function execute_message(bool,bytes32,bytes)",
         )?;
-        let operation = get_revm_execute_message_bytes(message);
+        let operation = get_revm_execute_message_bytes(is_bouncing, origin, message);
         let caller = self.get_msg_address()?;
         self.execute_no_return_operation(operation, "message", caller)
     }

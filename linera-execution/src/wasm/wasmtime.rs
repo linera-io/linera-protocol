@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use linera_base::data_types::{Bytecode, StreamUpdate};
+use linera_base::{data_types::{Bytecode, StreamUpdate}, identifiers::ChainId};
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo};
 use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store};
@@ -145,9 +145,9 @@ where
         Ok(result)
     }
 
-    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
+    fn execute_message(&mut self, is_bouncing: bool, origin: ChainId, message: Vec<u8>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
-            .execute_message(message)
+            .execute_message(is_bouncing, origin, message)
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }

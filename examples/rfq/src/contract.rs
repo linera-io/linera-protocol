@@ -190,11 +190,7 @@ impl Contract for RfqContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
-        let origin_chain_id = self
-            .runtime
-            .message_origin_chain_id()
-            .expect("Getting message origin chain ID should not fail");
+    async fn execute_message(&mut self, _is_bouncing: bool, origin_chain_id: ChainId, message: Self::Message) {
         let request_id = message.request_id(origin_chain_id);
         match message {
             Message::RequestQuote {

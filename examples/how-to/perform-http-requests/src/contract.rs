@@ -4,7 +4,7 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use how_to_perform_http_requests::{Abi, Operation};
-use linera_sdk::{http, linera_base_types::WithContractAbi, Contract as _, ContractRuntime};
+use linera_sdk::{http, linera_base_types::WithContractAbi, ChainId, Contract as _, ContractRuntime};
 
 pub struct Contract {
     runtime: ContractRuntime<Self>,
@@ -41,7 +41,7 @@ impl linera_sdk::Contract for Contract {
         }
     }
 
-    async fn execute_message(&mut self, (): Self::Message) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _origin: ChainId, (): Self::Message) {
         panic!("This application doesn't support any cross-chain messages");
     }
 

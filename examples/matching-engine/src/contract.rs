@@ -109,7 +109,7 @@ impl Contract for MatchingEngineContract {
     }
 
     /// Execution of the order on the creation chain
-    async fn execute_message(&mut self, message: Message) {
+    async fn execute_message(&mut self, _is_bouncing: bool, origin: ChainId, message: Message) {
         assert_eq!(
             self.runtime.chain_id(),
             self.runtime.application_creator_chain_id(),
@@ -118,13 +118,10 @@ impl Contract for MatchingEngineContract {
         match message {
             Message::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
-                let origin_chain_id = self.runtime.message_origin_chain_id().expect(
-                    "Incoming message origin chain ID has to be available when executing a message",
-                );
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for ExecuteOrder message");
-                self.execute_order_local(order, origin_chain_id).await;
+                self.execute_order_local(order, origin).await;
             }
         }
     }
