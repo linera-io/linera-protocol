@@ -551,8 +551,7 @@ where
     let block_proposal = make_first_block(chain_1)
         .with_simple_transfer(chain_2, Amount::from_tokens(5))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
     let unknown_key_pair = AccountSecretKey::generate();
     let original_public_key = match block_proposal.signature {
         AccountSignature::Ed25519 { public_key, .. } => public_key,
@@ -611,8 +610,7 @@ where
         .with_simple_transfer(chain_2, Amount::ZERO)
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
     assert_matches!(
     env.worker()
         .handle_block_proposal(zero_amount_block_proposal)
@@ -660,8 +658,7 @@ where
             .with_authenticated_signer(Some(owner))
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
             .into_first_proposal(owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Timestamp too far in the future
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -675,11 +672,7 @@ where
             .with_timestamp(block_0_time)
             .with_simple_transfer(chain_2, small_transfer)
             .with_authenticated_signer(Some(owner));
-        let block_proposal = block
-            .clone()
-            .into_first_proposal(owner, &signer)
-            .await
-            .unwrap();
+        let block_proposal = block.clone().into_first_proposal(owner, &signer).await?;
         let future = env.worker().handle_block_proposal(block_proposal);
         clock.set(block_0_time);
         future.await?;
@@ -712,8 +705,7 @@ where
         let block_proposal = make_child_block(&certificate.into_value())
             .with_timestamp(block_0_time.saturating_sub_micros(1))
             .into_first_proposal(owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Timestamp older than previous one
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -750,8 +742,7 @@ where
     let unknown_sender_block_proposal = make_first_block(chain_1)
         .with_simple_transfer(chain_2, Amount::from_tokens(5))
         .into_first_proposal(unknown_owner, &new_signer)
-        .await
-        .unwrap();
+        .await?;
     assert_matches!(
         env.worker()
             .handle_block_proposal(unknown_sender_block_proposal)
@@ -787,8 +778,7 @@ where
         .with_simple_transfer(chain_2, Amount::ONE)
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
     let certificate0 = env
         .make_simple_transfer_certificate(
             chain_desc.clone(),
@@ -803,8 +793,7 @@ where
     let block_proposal1 = make_child_block(certificate0.value())
         .with_simple_transfer(chain_2, Amount::from_tokens(2))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
 
     assert_matches!(
         env.worker().handle_block_proposal(block_proposal1.clone()).await,
@@ -932,8 +921,7 @@ where
     let block_proposal1 = make_child_block(certificate2.value())
         .with_simple_transfer(chain_2, Amount::from_tokens(1))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
 
     // The worker handles certificates 0 and 2 - this should succeed, and the worker
     // should now have block 0 fully processed, and block 2 preprocessed.
@@ -1131,8 +1119,7 @@ where
             .with_simple_transfer(chain_3, Amount::from_tokens(6))
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Insufficient funding
         assert_matches!(
                 env.worker().handle_block_proposal(block_proposal).await,
@@ -1187,8 +1174,7 @@ where
             })
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Inconsistent received messages.
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -1213,8 +1199,7 @@ where
             })
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Skipped message.
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -1264,8 +1249,7 @@ where
             })
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Inconsistent order in received messages (heights).
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
@@ -1291,8 +1275,7 @@ where
             .with_simple_transfer(chain_3, Amount::ONE)
             .with_authenticated_signer(Some(recipient_owner))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         // Taking the first message only is ok.
         env.worker()
             .handle_block_proposal(block_proposal.clone())
@@ -1348,8 +1331,7 @@ where
             })
             .with_simple_transfer(chain_3, Amount::from_tokens(3))
             .into_first_proposal(recipient_owner, &signer)
-            .await
-            .unwrap();
+            .await?;
         env.worker()
             .handle_block_proposal(block_proposal.clone())
             .await?;
@@ -1381,8 +1363,7 @@ where
         .with_simple_transfer(chain_2, Amount::from_tokens(1000))
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
     assert_matches!(
         env.worker().handle_block_proposal(block_proposal).await,
         Err(
@@ -1422,8 +1403,7 @@ where
         .with_simple_transfer(chain_2, Amount::from_tokens(5))
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
 
     let (chain_info_response, _actions) =
         env.worker().handle_block_proposal(block_proposal).await?;
@@ -1476,8 +1456,7 @@ where
         .with_simple_transfer(chain_2, Amount::from_tokens(5))
         .with_authenticated_signer(Some(sender_owner))
         .into_first_proposal(sender_owner, &signer)
-        .await
-        .unwrap();
+        .await?;
 
     let (response, _actions) = env
         .worker()
@@ -2614,7 +2593,7 @@ where
                 vec![Event {
                     stream_id: event_id.stream_id.clone(),
                     index: event_id.index,
-                    value: bcs::to_bytes(&blob_hash).unwrap(),
+                    value: bcs::to_bytes(&blob_hash)?,
                 }],
                 Vec::new(),
             ],
@@ -2700,7 +2679,7 @@ where
                             stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                             index: 1,
                         },
-                        bcs::to_bytes(&blob_hash).unwrap(),
+                        bcs::to_bytes(&blob_hash)?,
                     ),
                     OracleResponse::Blob(committee_blob.id()),
                 ],
@@ -2802,7 +2781,7 @@ where
             events: vec![vec![Event {
                 stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                 index: 1,
-                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+                value: bcs::to_bytes(&committee_blob.id().hash)?,
             }]],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
@@ -2926,7 +2905,7 @@ where
                 vec![Event {
                     stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                     index: 1,
-                    value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+                    value: bcs::to_bytes(&committee_blob.id().hash)?,
                 }],
                 vec![Event {
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
@@ -3069,7 +3048,7 @@ where
             events: vec![vec![Event {
                 stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                 index: 2,
-                value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+                value: bcs::to_bytes(&committee_blob.id().hash)?,
             }]],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
@@ -3323,15 +3302,13 @@ where
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(0))
-        .await
-        .unwrap();
+        .await?;
     let result = env.worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
-        .await
-        .unwrap();
+        .await?;
     let result = env.worker().handle_block_proposal(proposal).await;
 
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
@@ -3375,8 +3352,7 @@ where
         .clone()
         .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(1))
-        .await
-        .unwrap();
+        .await?;
     let result = env
         .worker()
         .handle_block_proposal(proposal1_wrong_owner)
@@ -3385,8 +3361,7 @@ where
     let proposal1 = proposed_block1
         .clone()
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
-        .await
-        .unwrap();
+        .await?;
     let (response, _) = env.worker().handle_block_proposal(proposal1).await?;
     let value1 = ValidatedBlock::new(block1.clone());
 
@@ -3444,8 +3419,7 @@ where
         .clone()
         .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(5))
-        .await
-        .unwrap();
+        .await?;
     let result = env.worker().handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
@@ -3460,8 +3434,7 @@ where
         certificate2.clone(),
         &signer,
     )
-    .await
-    .unwrap();
+    .await?;
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
     let (response, _) = env
@@ -3489,8 +3462,7 @@ where
     // Since the validator now voted for block2, it can't vote for block1 anymore.
     let proposal = proposed_block1
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(6))
-        .await
-        .unwrap();
+        .await?;
     let result = env.worker().handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
@@ -3570,14 +3542,12 @@ where
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_id, small_transfer)
         .into_proposal_with_round(owner1, &signer, Round::Fast)
-        .await
-        .unwrap();
+        .await?;
     let result = env.worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
-        .await
-        .unwrap();
+        .await?;
     let result = env.worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
@@ -3616,8 +3586,7 @@ where
         .clone()
         .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
-        .await
-        .unwrap();
+        .await?;
     let _ = env.worker().handle_block_proposal(proposal1).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
@@ -3670,8 +3639,7 @@ where
     let proposal = make_child_block(&change_ownership_value)
         .with_burn(Amount::from_tokens(1))
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
-        .await
-        .unwrap();
+        .await?;
     let result = env.worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
         ChainError::ExecutionError(error, _) if matches!(&**error,
@@ -3683,8 +3651,7 @@ where
         .with_simple_transfer(chain_id, small_transfer)
         .with_authenticated_signer(Some(owner))
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
-        .await
-        .unwrap();
+        .await?;
     let (block, _) = env
         .worker()
         .stage_block_execution(proposal.content.block.clone(), None, vec![])
@@ -3760,8 +3727,7 @@ where
     let proposal1 = proposed_block1
         .clone()
         .into_proposal_with_round(owner0, &signer, Round::Fast)
-        .await
-        .unwrap();
+        .await?;
     let (block1, _) = env
         .worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
@@ -3791,8 +3757,7 @@ where
     // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
     let proposal1b =
         BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
-            .await
-            .unwrap();
+            .await?;
     let (response, _) = env.worker().handle_block_proposal(proposal1b).await?;
 
     let vote = response.info.manager.pending.as_ref().unwrap();
@@ -3806,16 +3771,14 @@ where
     let proposal2 = proposed_block2
         .clone()
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
-        .await
-        .unwrap();
+        .await?;
     let result = env.worker().handle_block_proposal(proposal2).await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
     let proposal3 =
         BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
-            .await
-            .unwrap();
+            .await?;
     env.worker().handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
@@ -3831,8 +3794,7 @@ where
         certificate2.clone(),
         &signer,
     )
-    .await
-    .unwrap();
+    .await?;
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
@@ -4129,11 +4091,7 @@ where
         .with_simple_transfer(chain_2, small_transfer)
         .with_authenticated_signer(Some(owner));
 
-    let block_proposal = block
-        .clone()
-        .into_first_proposal(owner, &signer)
-        .await
-        .unwrap();
+    let block_proposal = block.clone().into_first_proposal(owner, &signer).await?;
     let _ = env.worker().handle_block_proposal(block_proposal).await?;
 
     for local_time in queries_before_confirmation {
