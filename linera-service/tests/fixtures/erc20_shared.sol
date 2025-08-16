@@ -70,11 +70,9 @@ contract ERC20_shared is Context, IERC20, IERC20Errors {
      * This is the function run on the receiving chain in order to credit
      * the user with the tokens.
      */
-    function execute_message(bytes memory input) external {
+    function execute_message(bool is_bouncing, bytes32 source_chain_id, bytes memory input) external {
         (address source, address destination, uint256 amount) = abi.decode(input, (address, address, uint256));
-        Linera.OptionBool result = Linera.message_is_bouncing();
-        require(result != Linera.OptionBool.None);
-        if (result == Linera.OptionBool.True) {
+        if (is_bouncing) {
             _mint(source, amount);
         } else {
             _mint(destination, amount);

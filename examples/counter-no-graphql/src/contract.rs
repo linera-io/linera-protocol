@@ -9,7 +9,7 @@ use counter_no_graphql::{CounterNoGraphQlAbi, CounterOperation};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 };
 
 use self::state::CounterState;
@@ -53,7 +53,7 @@ impl Contract for CounterContract {
         new_value
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _chain_id: ChainId, _message: ()) {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
@@ -94,8 +94,9 @@ mod tests {
         let initial_value = 72_u64;
         let mut counter = create_and_instantiate_counter(initial_value);
 
+        use linera_sdk::linera_base_types::ChainId;
         counter
-            .execute_message(())
+            .execute_message(false, ChainId::default(), ())
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
     }

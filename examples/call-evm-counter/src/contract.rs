@@ -9,7 +9,7 @@ use call_evm_counter::{CallCounterAbi, CallCounterOperation};
 use linera_sdk::{
     abis::evm::EvmAbi,
     linera_base_types::{ApplicationId, WithContractAbi},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 };
 
 pub struct CallCounterContract {
@@ -68,7 +68,7 @@ impl Contract for CallCounterContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _origin: ChainId, _message: ()) {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
