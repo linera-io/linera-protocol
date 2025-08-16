@@ -44,7 +44,7 @@ use crate::{
 
 /// This is the selector of the `execute_message` that should be called
 /// only from a submitted message
-const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
+const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[164, 240, 137, 222];
 
 /// This is the selector of the `process_streams` that should be called
 /// only from a submitted message

@@ -227,22 +227,6 @@ library Linera {
 
     enum OptionBool { None, True, False }
 
-    function optionbool_from(LineraTypes.MessageIsBouncing memory entry)
-        internal
-        pure
-        returns (OptionBool)
-    {
-        if (entry.value == LineraTypes.OptionBool.True) {
-            return OptionBool.True;
-        }
-        if (entry.value == LineraTypes.OptionBool.False) {
-            return OptionBool.False;
-        }
-        return OptionBool.None;
-    }
-
-
-
     struct StreamUpdate {
         ChainId chain_id;
         StreamId stream_id;
