@@ -5,7 +5,7 @@ mod state;
 use linera_sdk::{{
     linera_base_types::WithContractAbi,
     views::{{RootView, View}},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 }};
 
 use {module_name}::Operation;
@@ -50,7 +50,13 @@ impl Contract for {project_name}Contract {{
         }}
     }}
 
-    async fn execute_message(&mut self, _message: Self::Message) {{}}
+    async fn execute_message(
+        &mut self,
+        _is_bouncing: bool,
+        _origin: ChainId,
+        _message: Self::Message,
+    ) {{
+    }}
 
     async fn store(mut self) {{
         self.state.save().await.expect("Failed to save state");
