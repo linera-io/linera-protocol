@@ -3366,8 +3366,7 @@ where
     assert_eq!(response.info.manager.leader, Some(owner0));
 
     // Now owner 0 can propose a block, but owner 1 can't.
-    let proposed_block1 =
-        make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
+    let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
     let (block1, _) = env
         .worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
@@ -3669,11 +3668,7 @@ where
     // The first round is the multi-leader round 0. Anyone is allowed to propose.
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
-        .with_transfer(
-            AccountOwner::CHAIN,
-            Account::chain(chain_id),
-            Amount::from_tokens(1),
-        )
+        .with_burn(Amount::from_tokens(1))
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
