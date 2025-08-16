@@ -5,7 +5,10 @@
 
 use std::{marker::Unpin, sync::LazyLock};
 
-use linera_base::{data_types::{Bytecode, StreamUpdate}, identifiers::ChainId};
+use linera_base::{
+    data_types::{Bytecode, StreamUpdate},
+    identifiers::ChainId,
+};
 use linera_witty::{
     wasmer::{EntrypointInstance, InstanceBuilder},
     ExportTo,
@@ -140,7 +143,12 @@ where
             .map_err(WasmExecutionError::from)?)
     }
 
-    fn execute_message(&mut self, is_bouncing: bool, origin: ChainId, message: Vec<u8>) -> Result<(), ExecutionError> {
+    fn execute_message(
+        &mut self,
+        is_bouncing: bool,
+        origin: ChainId,
+        message: Vec<u8>,
+    ) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .execute_message(is_bouncing, origin, message)
             .map_err(WasmExecutionError::from)?;

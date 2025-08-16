@@ -213,7 +213,11 @@ fn get_revm_execute_message_bytes(is_bouncing: bool, origin: ChainId, value: Vec
     }
     let value = Bytes::from(value);
     let source_chain_id = B256::from(<[u8; 32]>::from(origin.0));
-    let argument = execute_messageCall { is_bouncing, source_chain_id, value };
+    let argument = execute_messageCall {
+        is_bouncing,
+        source_chain_id,
+        value,
+    };
     argument.abi_encode()
 }
 
@@ -1176,7 +1180,12 @@ where
         Ok(output)
     }
 
-    fn execute_message(&mut self, is_bouncing: bool, origin: ChainId, message: Vec<u8>) -> Result<(), ExecutionError> {
+    fn execute_message(
+        &mut self,
+        is_bouncing: bool,
+        origin: ChainId,
+        message: Vec<u8>,
+    ) -> Result<(), ExecutionError> {
         self.db.set_contract_address()?;
         ensure_selector_presence(
             &self.module,

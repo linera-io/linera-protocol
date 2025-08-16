@@ -175,10 +175,6 @@ where
             .get_or_insert_with(|| contract_wit::authenticated_signer().map(AccountOwner::from))
     }
 
-    
-
-    
-
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
     /// is executing a cross-application call.
     pub fn authenticated_caller_id(&mut self) -> Option<ApplicationId> {

@@ -286,7 +286,6 @@ where
         )
     }
 
-
     /// Configures the authenticated caller ID to return during the test.
     pub fn with_authenticated_caller_id(
         mut self,

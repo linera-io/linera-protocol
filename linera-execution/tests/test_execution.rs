@@ -1406,10 +1406,12 @@ async fn test_message_receipt_spending_chain_balance(
         owner: AccountOwner::CHAIN,
     };
 
-    application.expect_call(ExpectedCall::execute_message(move |runtime, _is_bouncing, _origin, _message| {
-        runtime.transfer(receiver_chain_account, recipient, amount)?;
-        Ok(())
-    }));
+    application.expect_call(ExpectedCall::execute_message(
+        move |runtime, _is_bouncing, _origin, _message| {
+            runtime.transfer(receiver_chain_account, recipient, amount)?;
+            Ok(())
+        },
+    ));
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_message_context(chain_id, authenticated_signer);

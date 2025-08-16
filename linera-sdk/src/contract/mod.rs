@@ -79,7 +79,7 @@ macro_rules! contract {
                         let message: <$contract as $crate::Contract>::Message =
                             $crate::bcs::from_bytes(&message)
                                 .expect("Failed to deserialize message");
-                        
+
                         // Convert WIT ChainId to SDK ChainId
                         let origin: $crate::ChainId = origin.into();
 

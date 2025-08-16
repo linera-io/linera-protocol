@@ -265,12 +265,14 @@ async fn test_fee_consumption(
         oracle_responses.extend(spend.expected_oracle_responses());
     }
 
-    application.expect_call(ExpectedCall::execute_message(move |runtime, _is_bouncing, _origin, _message| {
-        for spend in spends {
-            spend.execute(runtime)?;
-        }
-        Ok(())
-    }));
+    application.expect_call(ExpectedCall::execute_message(
+        move |runtime, _is_bouncing, _origin, _message| {
+            for spend in spends {
+                spend.execute(runtime)?;
+            }
+            Ok(())
+        },
+    ));
     application.expect_call(ExpectedCall::default_finalize());
 
     let refund_grant_to = authenticated_signer

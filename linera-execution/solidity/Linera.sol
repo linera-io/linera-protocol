@@ -225,8 +225,6 @@ library Linera {
         return opt_ChainId(false, ChainId(bytes32(0)));
     }
 
-    enum OptionBool { None, True, False }
-
     struct StreamUpdate {
         ChainId chain_id;
         StreamId stream_id;

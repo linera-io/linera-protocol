@@ -400,8 +400,6 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-
-
     /// Returns the authenticated caller ID, if the caller configured it and if the current context.
     fn authenticated_caller_id(caller: &mut Caller) -> Result<Option<ApplicationId>, RuntimeError> {
         caller

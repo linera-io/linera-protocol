@@ -1096,7 +1096,9 @@ impl ContractSyncRuntimeHandle {
             UserAction::Operation(_context, operation) => {
                 code.execute_operation(operation).map(Option::Some)
             }
-            UserAction::Message(context, message) => code.execute_message(context.is_bouncing, context.origin, message).map(|()| None),
+            UserAction::Message(context, message) => code
+                .execute_message(context.is_bouncing, context.origin, message)
+                .map(|()| None),
             UserAction::ProcessStreams(_context, updates) => {
                 code.process_streams(updates).map(|()| None)
             }
@@ -1171,10 +1173,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError> {
         Ok(self.inner().authenticated_signer)
     }
-
-    
-
-    
 
     fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError> {
         let this = self.inner();
