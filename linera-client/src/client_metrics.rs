@@ -132,6 +132,7 @@ impl ClientMetrics {
         let mut histograms =
             BlockTimingsHistograms::new().expect("Failed to create timing histograms");
 
+        let mut report_needed = false;
         let mut report_timer = time::interval(time::Duration::from_secs(report_interval_secs));
         report_timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
@@ -142,6 +143,8 @@ impl ClientMetrics {
                         Some((duration_ms, timing_type)) => {
                             if let Err(e) = histograms.record_timing(duration_ms, timing_type) {
                                 warn!("Failed to record timing data: {}", e);
+                            } else {
+                                report_needed = true;
                             }
                         }
                         None => {
@@ -151,7 +154,10 @@ impl ClientMetrics {
                     }
                 }
                 _ = report_timer.tick() => {
-                    Self::print_timing_report(&histograms);
+                    if report_needed {
+                        Self::print_timing_report(&histograms);
+                        report_needed = false;
+                    }
                 }
             }
         }
