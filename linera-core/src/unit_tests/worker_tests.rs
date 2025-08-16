@@ -650,10 +650,13 @@ where
     let small_transfer = Amount::from_micros(1);
     let mut env = TestEnvironment::new(storage, false, false).await;
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
-    let chain_id = chain_1_desc.id();
+    let chain_2_desc = env.add_root_chain(2, owner, balance).await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2 = chain_2_desc.id();
+
     {
-        let block_proposal = make_first_block(chain_id)
-            .with_simple_transfer(chain_id, small_transfer)
+        let block_proposal = make_first_block(chain_1)
+            .with_simple_transfer(chain_2, small_transfer)
             .with_authenticated_signer(Some(owner))
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
             .into_first_proposal(owner, &signer)
@@ -668,9 +671,9 @@ where
 
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
     let certificate = {
-        let block = make_first_block(chain_id)
+        let block = make_first_block(chain_1)
             .with_timestamp(block_0_time)
-            .with_simple_transfer(chain_id, small_transfer)
+            .with_simple_transfer(chain_2, small_transfer)
             .with_authenticated_signer(Some(owner));
         let block_proposal = block
             .clone()
@@ -682,7 +685,7 @@ where
         future.await?;
 
         let system_state = SystemExecutionState {
-            balance,
+            balance: balance - small_transfer,
             timestamp: block_0_time,
             ..env.system_execution_state(&chain_1_desc.id())
         };
