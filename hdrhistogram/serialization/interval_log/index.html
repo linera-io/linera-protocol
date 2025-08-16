@@ -1,0 +1,186 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Interval log parsing and writing."><title>hdrhistogram::serialization::interval_log - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hdrhistogram" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../hdrhistogram/index.html">hdrhistogram</a><span class="version">7.5.4</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module interval_<wbr>log</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#timestamps" title="Timestamps">Timestamps</a><ul><li><a href="#example-scenario" title="Example scenario">Example scenario</a></li><li><a href="#java-interop" title="Java interop">Java interop</a></li></ul></li><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In hdrhistogram::<wbr>serialization</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">hdrhistogram</a>::<wbr><a href="../index.html">serialization</a></div><h1>Module <span>interval_log</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/hdrhistogram/serialization/interval_log/mod.rs.html#1-822">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Interval log parsing and writing.</p>
+<p>Interval logs, as handled by the Java implementation’s <code>HistogramLogWriter</code>,
+<code>HistogramLogReader</code>, and <code>HistogramLogProcessor</code>, are a way to record a sequence of histograms
+over time. Suppose you were running a load test for an hour: you might want to record a
+histogram per second or minute so that you could correlate measurements with behavior you might
+see in logs, etc.</p>
+<p>An interval log contains some initial metadata, then a sequence of histograms, each with some
+additional metadata (timestamps, etc). See <code>IntervalLogHistogram</code>.</p>
+<p>The intervals in the log should be ordered by start timestamp. It’s possible to write (and
+parse) logs with intervals in any order, but the expectation is that they will be sorted.</p>
+<p>To parse a log, see <code>IntervalLogIterator</code>. To write a log, see <code>IntervalLogWriterBuilder</code>.</p>
+<h2 id="timestamps"><a class="doc-anchor" href="#timestamps">§</a>Timestamps</h2>
+<p>Each interval has a timestamp in seconds associated with it. However, it’s not necessarily as
+simple as just interpreting the number as seconds since the epoch. There are two optional pieces
+of header metadata: “StartTime” and “BaseTime”. Neither, one, or both of these may be present.
+It is possible to have multiple StartTime or BaseTime entries in the log, or even interleaved
+with interval histograms, but that is confusing, so this API prevents you from doing so.</p>
+<p>When BaseTime is present, per-interval timestamps are the number of seconds since BaseTime. When
+it is absent, the per-interval timestamps represent fractional seconds since the epoch (aka
+Unix time). BaseTime is useful because it allows you to have somewhat human-readable timestamps
+for each interval – it’s easier to see 245.3 and see that that’s 4 minutes after the start of
+whatever it is you’re doing than it is to mentally parse a Unix timestamp. Naturally, you can
+always calculate the deltas after the fact if you’re willing to write a little tooling, but in
+some cases log files are consumed by humans too.</p>
+<p>While BaseTime is used to redefine per-interval timestamps for human readability, StartTime
+provides information about when the process that is generating the log reached some “start”
+condition. It’s frequently the case that intervals will start some seconds after the process
+started, whether due to initial warmup before a benchmark or because it just takes a
+while to start up. If this is relevant to your workload, use StartTime to record the actual
+process start time (or other relevant “start” condition, like when a benchmark begins on an
+already long-running process). You could then use this when processing a log to more accurately
+plot interval data over time. Put differently, StartTime doesn’t change the interpretation of
+interval timestamps directly like BaseTime; instead, it provides a hint to the consumer of the
+log that the “start” (whatever that means to you – process start, etc) was at a different time
+than that associated with the first interval.</p>
+<h5 id="example-scenario"><a class="doc-anchor" href="#example-scenario">§</a>Example scenario</h5>
+<p>To explain their usage, suppose we’re running a multi-hour benchmark on a process that starts
+up at a Unix time of 1500000000. We’ll be recording separate log files per hour just to
+demonstrate the interaction between BaseTime, StartTime, and interval log timestamps.</p>
+<p>The process starts up, warms up its caches, JIT compiles, etc and is ready to start its
+benchmark 40 seconds later, so we create the first interval log file and record a StartTime of
+1500000040. If the actual process start (rather than benchmark start) is more useful to you,
+using a StartTime of 1500000000 would be reasonable, but we’ll stick with 1500000040.</p>
+<p>We’ll use a BaseTime of 1500000040 because that’s when the benchmark began, but 1500000000 would
+also be a reasonable choice here – it would just make the per-interval deltas 40 seconds
+larger, which might be a more useful way of recording them, depending on the situation.</p>
+<p>The benchmark produces an interval histogram for each 60 seconds of workload, so the first one
+is ready at 1500000100, and is recorded with a delta timestamp of 60. This goes on for another
+hour, with the last one being 3540 seconds after the start of the benchmark with a corresponding
+delta of 3540.</p>
+<p>At the start of the second hour, the time is 1500003640 and the first log file is ended (which
+is straightforward: just stop writing to it and close the file) and the second log file is
+opened. It still uses a StartTime of 1500000040 because we want to represent that this log
+pertains to something that started an hour ago, but we’ll use a BaseTime of 1500003640 so that
+our delta timestamps start over at 0. Again, you could just as well decide to use the same
+BaseTime of 1500000040 if you prefer, but it’s arguably easier for a human to parse “h hours
+into the benchmark, s seconds past the hour” than it is to mentally divide by 3600, so we’ll
+go with the new BaseTime.</p>
+<p>Suppose now you wanted to process these logs and show information (e.g. the 0.999th quantile of
+each interval) as the y-axis on a plot where time is the x-axis. You would want to have
+StartTime be the zero of the x-axis. For each interval, calculate the Unix time by adding its
+timestamp to BaseTime, where BaseTime is assumed to be zero if it’s not specified. The point on
+the x-axis for that interval would be the result of subtracting StartTime from that Unix time.
+As an example, the 17th minute in the 2nd hour would have an interval timestamp of approximately
+1020, which when added to 1500003640 is 1500004660. The difference between StartTime and then is
+4620. You might choose to display that in units of minutes, which would be 4620 / 60 = 77.</p>
+<h5 id="java-interop"><a class="doc-anchor" href="#java-interop">§</a>Java interop</h5>
+<p>Since you may be interoperating with the Java reference implementation, here’s a summary of the
+logic used by the <code>HistogramLogReader</code> class for StartTime and BaseTime. It’s slightly different
+than what was described above, presumably for legacy compatibility reasons. This class stores
+the StartTime as a field which is exposed via a getter, and also integrates filtering intervals
+based on windows for either “absolute” (Unix time) timestamps or “offset” timestamps (delta vs
+the StartTime), so if you’re using that filtering functionality, you need to understand how it
+ends up setting its internal version of StartTime.</p>
+<ul>
+<li>Neither StartTime nor BaseTime are present: interval timestamps are interpreted as seconds
+since the epoch. The first interval’s timestamp is stored to the StartTime field.</li>
+<li>StartTime is present: StartTime is a number of seconds since epoch, and interval timestamps
+may be interpreted as deltas to be added to StartTime or as “absolute” Unix time depending on a
+heuristic. In other words, the heuristic chooses between setting the effective BaseTime to 0 or
+to StartTime. Specifically, the heuristic interprets interval timestamps as deltas if they are
+more than a year’s worth of seconds smaller than StartTime and as absolute timestamps otherwise.</li>
+<li>BaseTime is present: BaseTime is a number of seconds since epoch, and interval timestamps are
+interpreted as deltas. The first interval’s (delta) timestamp is stored to the StartTime field.
+This is likely a bug, since StartTime should be an absolute timestamp, and appears to cause
+erroneous behavior when filtering by offset timestamps.</li>
+<li>BaseTime and StartTime are present: The BaseTime is used like it is when it’s the only one
+present: it’s a number of seconds since epoch that serves as the starting point for the
+per-interval deltas to get a wall-clock time for each interval. No heuristics are applied to
+guess whether or not the intervals are absolute or deltas.</li>
+</ul>
+<p>The Java implementation also supports re-setting the StartTime and BaseTime if those entries
+exist more than once in the log. Suppose that you had an hour’s worth of per-minute intervals,
+and then you set another StartTime to the current time and added a second hour’s worth of
+intervals. Filtering for “all intervals between 5 and 10 minutes past the start” would result in
+two disjoint sequences of intervals, which is at the very least arguably unintuitive. However,
+you may well be working with log files that are structured that way, so this implementation’s
+<code>IntervalLogIterator</code> will expose multiple StartTime, etc, entries as they appear in the log
+file.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Parse a single interval from a log.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::time;
+<span class="kw">use </span>hdrhistogram::serialization::interval_log;
+
+<span class="comment">// two newline-separated log lines: a comment, then an interval
+</span><span class="kw">let </span>log = <span class="string">b"#I'm a comment\nTag=t,0.127,1.007,2.769,base64EncodedHisto\n"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>iter = interval_log::IntervalLogIterator::new(<span class="kw-2">&amp;</span>log[..]);
+
+<span class="comment">// the comment is consumed and ignored by the parser, so the first event is an Interval
+</span><span class="kw">match </span>iter.next().unwrap() {
+    <span class="prelude-val">Ok</span>(interval_log::LogEntry::Interval(h)) =&gt; {
+        <span class="macro">assert_eq!</span>(time::Duration::new(<span class="number">0</span>, <span class="number">127_000_000</span>), h.start_timestamp());
+    }
+    <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>()
+}
+
+<span class="comment">// there are no more lines in the log; iteration complete
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, iter.next());</code></pre></div>
+<p>Skip logs that started before 3 seconds.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hdrhistogram::serialization::interval_log;
+
+<span class="kw">let </span>log = <span class="string">"\
+    #I'm a comment\n\
+    Tag=a,0.123,1.007,2.769,base64EncodedHisto\n\
+    1.456,1.007,2.769,base64EncodedHisto\n\
+    3.789,1.007,2.769,base64EncodedHisto\n\
+    Tag=b,4.123,1.007,2.769,base64EncodedHisto\n\
+    5.456,1.007,2.769,base64EncodedHisto\n\
+    #Another comment\n"
+</span>.as_bytes();
+
+<span class="kw">let </span>iter = interval_log::IntervalLogIterator::new(<span class="kw-2">&amp;</span>log);
+
+<span class="kw">let </span>count = iter
+    <span class="comment">// only look at intervals (which are the only non-comment lines in this log)
+    </span>.filter_map(|e| <span class="kw">match </span>e {
+        <span class="prelude-val">Ok</span>(interval_log::LogEntry::Interval(ilh)) =&gt; <span class="prelude-val">Some</span>(ilh),
+         <span class="kw">_ </span>=&gt; <span class="prelude-val">None
+    </span>})
+    <span class="comment">// do any filtering you want
+    </span>.filter(|ilh| ilh.start_timestamp().as_secs() &gt;= <span class="number">3</span>)
+    .count();
+
+<span class="macro">assert_eq!</span>(<span class="number">3</span>, count);</code></pre></div>
+<p>Write a log.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{str, time};
+<span class="kw">use </span>hdrhistogram;
+<span class="kw">use </span>hdrhistogram::serialization;
+<span class="kw">use </span>hdrhistogram::serialization::interval_log;
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+<span class="kw">let </span><span class="kw-2">mut </span>serializer = serialization::V2Serializer::new();
+
+<span class="kw">let </span><span class="kw-2">mut </span>h = hdrhistogram::Histogram::&lt;u64&gt;::new_with_bounds(
+    <span class="number">1</span>, u64::max_value(), <span class="number">3</span>).unwrap();
+h.record(<span class="number">12345</span>).unwrap();
+
+<span class="comment">// limit scope of mutable borrow of `buf`
+</span>{
+    <span class="kw">let </span>now = time::SystemTime::now();
+    <span class="kw">let </span><span class="kw-2">mut </span>log_writer = interval_log::IntervalLogWriterBuilder::new()
+        .add_comment(<span class="string">"Comments are great"</span>)
+        .with_start_time(now)
+        .begin_log_with(<span class="kw-2">&amp;mut </span>buf, <span class="kw-2">&amp;mut </span>serializer)
+        .unwrap();
+
+    log_writer.write_comment(
+        <span class="string">"You can have comments anywhere in the log"</span>).unwrap();
+
+    log_writer
+        .write_histogram(
+            <span class="kw-2">&amp;</span>h,
+            now.elapsed().unwrap(),
+            time::Duration::new(<span class="number">12</span>, <span class="number">345_678_901</span>),
+            interval_log::Tag::new(<span class="string">"im-a-tag"</span>)
+        )
+        .unwrap();
+}
+
+<span class="comment">// `buf` is now full of stuff; we check for the first line
+</span><span class="macro">assert_eq!</span>(<span class="string">"#Comments are great\n"</span>, <span class="kw-2">&amp;</span>str::from_utf8(<span class="kw-2">&amp;</span>buf).unwrap()[<span class="number">0</span>..<span class="number">20</span>]);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.IntervalLogHistogram.html" title="struct hdrhistogram::serialization::interval_log::IntervalLogHistogram">Interval<wbr>LogHistogram</a></dt><dd>An individual interval histogram parsed from an interval log.</dd><dt><a class="struct" href="struct.IntervalLogIterator.html" title="struct hdrhistogram::serialization::interval_log::IntervalLogIterator">Interval<wbr>LogIterator</a></dt><dd>Parse interval logs.</dd><dt><a class="struct" href="struct.IntervalLogWriter.html" title="struct hdrhistogram::serialization::interval_log::IntervalLogWriter">Interval<wbr>LogWriter</a></dt><dd>Writes interval histograms in an interval log.</dd><dt><a class="struct" href="struct.IntervalLogWriterBuilder.html" title="struct hdrhistogram::serialization::interval_log::IntervalLogWriterBuilder">Interval<wbr>LogWriter<wbr>Builder</a></dt><dd>Prepare an <code>IntervalLogWriter</code>.</dd><dt><a class="struct" href="struct.Tag.html" title="struct hdrhistogram::serialization::interval_log::Tag">Tag</a></dt><dd>A tag for an interval histogram.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.IntervalLogWriterError.html" title="enum hdrhistogram::serialization::interval_log::IntervalLogWriterError">Interval<wbr>LogWriter<wbr>Error</a></dt><dd>Errors that can occur while writing a log.</dd><dt><a class="enum" href="enum.LogEntry.html" title="enum hdrhistogram::serialization::interval_log::LogEntry">LogEntry</a></dt><dd>Represents one non-comment line in an interval log.</dd><dt><a class="enum" href="enum.LogIteratorError.html" title="enum hdrhistogram::serialization::interval_log::LogIteratorError">LogIterator<wbr>Error</a></dt><dd>Errors that occur when parsing an interval log.</dd></dl></section></div></main></body></html>

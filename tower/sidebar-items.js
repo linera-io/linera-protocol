@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["service_fn"],"mod":["buffer","builder","layer","make","retry","timeout","util"],"struct":["ServiceBuilder"],"trait":["Layer","MakeService","Service","ServiceExt"],"type":["BoxError"]};

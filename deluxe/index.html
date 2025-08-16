@@ -1,0 +1,455 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Deluxe"><title>deluxe - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="deluxe" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../deluxe/index.html">deluxe</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#deluxe" title="Deluxe">Deluxe</a><ul><li><a href="#abstract" title="Abstract">Abstract</a></li><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#related-crates" title="Related Crates">Related Crates</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums-1" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li><li><a href="#derives" title="Derive Macros">Derive Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>deluxe</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/deluxe/lib.rs.html#1-778">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="deluxe"><a class="doc-anchor" href="#deluxe">§</a>Deluxe</h2>
+<p>A procedural macro attribute parser.</p>
+<h4 id="abstract"><a class="doc-anchor" href="#abstract">§</a>Abstract</h4>
+<p>This crate offers attribute parsing closer to the design of attributes in C#. It has an
+interface similar to <a href="https://serde.rs">serde</a>. Attributes are written as plain Rust structs or
+enums, and then parsers for them are generated automatically. They can contain arbitrary
+expressions and can inherit from other attributes using a flattening mechanism.</p>
+<p>The parsers in this crate directly parse token streams using <a href="https://docs.rs/syn/2.0.105/syn/index.html" title="mod syn"><code>syn</code></a>. As a result, most
+built-in Rust types and <code>syn</code> types can be used directly as fields.</p>
+<h4 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h4>
+<p>Functionality in this crate is centered around three traits, and their respective derive macros:</p>
+<ul>
+<li>
+<p><strong><a href="derive.ExtractAttributes.html" title="derive deluxe::ExtractAttributes"><code>ExtractAttributes</code></a></strong></p>
+<p>Extracts attributes from an object containing a list of <a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute"><code>syn::Attribute</code></a>, and parses them
+into a Rust type. Should be implemented for top-level structures that will be parsed directly
+out of a set of matching attributes.</p>
+</li>
+<li>
+<p><strong><a href="derive.ParseAttributes.html" title="derive deluxe::ParseAttributes"><code>ParseAttributes</code></a></strong></p>
+<p>Parses a Rust type from any object containing a list of <a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute"><code>syn::Attribute</code></a>. Should be used if
+the set of matching attributes can potentially be shared between this type and other types.</p>
+</li>
+<li>
+<p><strong><a href="derive.ParseMetaItem.html" title="derive deluxe::ParseMetaItem"><code>ParseMetaItem</code></a></strong></p>
+<p>Parses a Rust type from a <a href="https://docs.rs/syn/2.0.105/syn/parse/type.ParseStream.html" title="type syn::parse::ParseStream"><code>ParseStream</code></a>. Should be implemented for
+any types that can be nested inside an attribute.</p>
+</li>
+</ul>
+<p>Basic usage of this crate in derive macros requires simply deriving one (or a few) of these
+traits, and then calling <a href="fn.extract_attributes.html" title="fn deluxe::extract_attributes"><code>extract_attributes</code></a> or <a href="fn.parse_attributes.html" title="fn deluxe::parse_attributes"><code>parse_attributes</code></a>. For more advanced
+functionality, several <code>#[deluxe(...)]</code> attributes are supported on structs, enums, variants
+and fields. See the examples below, and the documentation for each derive macro for a complete
+description of the supported attributes.</p>
+<p>A list of field types supported by default can be seen in the list of provided <a href="trait.ParseMetaItem.html#foreign-impls" title="trait deluxe::ParseMetaItem"><code>ParseMetaItem</code>
+implementations</a>. For more complex usage, manual
+implementations of these traits can be provided. See the documentation on individual traits in
+<a href="../deluxe_core/index.html" title="mod deluxe_core"><code>deluxe_core</code></a> for more details on how to manually implement your own parsers.</p>
+<h4 id="related-crates"><a class="doc-anchor" href="#related-crates">§</a>Related Crates</h4>
+<p>Deluxe takes inspiration from the <a href="https://docs.rs/darling">darling</a> crate, but offers a few
+enhancements over it. Darling is built around pre-parsed <a href="https://docs.rs/syn/2.0.105/syn/attr/enum.Meta.html" title="enum syn::attr::Meta"><code>syn::Meta</code></a> objects, and therefore
+is restricted to the <a href="https://doc.rust-lang.org/stable/reference/attributes.html#meta-item-attribute-syntax">meta
+syntax</a>.
+Deluxe parses its types directly from <a href="../proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream"><code>TokenStream</code></a> objects in the
+attributes and so is able to use any syntax that parses as a valid token tree. Deluxe also does
+not provide extra traits for parsing special <code>syn</code> objects like
+<a href="https://docs.rs/syn/2.0.105/syn/derive/struct.DeriveInput.html" title="struct syn::derive::DeriveInput"><code>DeriveInput</code></a> and <a href="https://docs.rs/syn/2.0.105/syn/data/struct.Field.html" title="struct syn::data::Field"><code>Field</code></a>. Instead, Deluxe uses a generic
+trait to parse from any type containing a <code><a href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute">syn::Attribute</a>&gt;</code>.</p>
+<h4 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h4><h5 id="basic-derive-macro"><a class="doc-anchor" href="#basic-derive-macro">§</a>Basic Derive Macro</h5>
+<p>To create a derive macro that can add some simple metadata to a Rust type from an attribute,
+start by defining a struct that derives <a href="derive.ExtractAttributes.html" title="derive deluxe::ExtractAttributes"><code>ExtractAttributes</code></a>. Then,
+call <a href="fn.extract_attributes.html" title="fn deluxe::extract_attributes"><code>extract_attributes</code></a> in your derive macro to create an instance of the struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(my_desc))]
+</span><span class="kw">struct </span>MyDescription {
+    name: String,
+    version: String,
+}
+
+<span class="kw">fn </span>my_derive(item: proc_macro2::TokenStream) -&gt; deluxe::Result&lt;proc_macro2::TokenStream&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>input = syn::parse2::&lt;syn::DeriveInput&gt;(item)<span class="question-mark">?</span>;
+
+    <span class="comment">// Extract the attributes!
+    </span><span class="kw">let </span>MyDescription { name, version } = deluxe::extract_attributes(<span class="kw-2">&amp;mut </span>input)<span class="question-mark">?</span>;
+
+    <span class="comment">// Now get some info to generate an associated function...
+    </span><span class="kw">let </span>ident = <span class="kw-2">&amp;</span>input.ident;
+    <span class="kw">let </span>(impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+
+    <span class="prelude-val">Ok</span>(<span class="macro">quote::quote!</span> {
+        <span class="kw">impl </span>#impl_generics #ident #type_generics #where_clause {
+            <span class="kw">fn </span>my_desc() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+                <span class="macro">concat!</span>(<span class="string">"Name: "</span>, #name, <span class="string">", Version: "</span>, #version)
+            }
+        }
+    })
+}
+</code></pre></div>
+<p>Then, try adding the attribute in some code that uses your macro:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// In your macros crate
+
+</span><span class="attr">#[proc_macro_derive(MyDescription, attributes(my_desc))]
+</span><span class="kw">pub fn </span>derive_my_description(item: proc_macro::TokenStream) -&gt; proc_macro::TokenStream {
+    my_derive(item.into()).unwrap().into()
+}</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// In your normal code
+
+</span><span class="attr">#[derive(MyDescription, Default)]
+#[my_desc(name = <span class="string">"hello world"</span>, version = <span class="string">"0.2"</span>)]
+</span><span class="kw">struct </span>Hello {
+    a: i32,
+    b: String
+}
+
+<span class="kw">let </span>hello: Hello = Default::default();
+<span class="macro">assert_eq!</span>(hello.my_desc(), <span class="string">"Name: hello world, Version: 0.2"</span>);</code></pre></div>
+<h5 id="basic-attribute-macro"><a class="doc-anchor" href="#basic-attribute-macro">§</a>Basic Attribute Macro</h5>
+<p>The <code>parse</code> and <code>parse2</code> functions included in this crate can also be used as simple helpers
+for attribute macros:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ParseMetaItem)]
+</span><span class="kw">struct </span>MyDescription {
+    name: String,
+    version: String,
+}
+
+<span class="kw">fn </span>my_desc_attr(
+    attr: proc_macro2::TokenStream,
+    item: proc_macro2::TokenStream,
+) -&gt; deluxe::Result&lt;proc_macro2::TokenStream&gt; {
+    <span class="kw">let </span>MyDescription { name, version } = deluxe::parse2::&lt;MyDescription&gt;(attr)<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(<span class="macro">quote::quote!</span> {
+        <span class="kw">fn </span>my_desc() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+            <span class="macro">concat!</span>(<span class="string">"Name: "</span>, #name, <span class="string">", Version: "</span>, #version)
+        }
+        #item
+    })
+}
+</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// In your macros crate
+
+</span><span class="attr">#[proc_macro_attribute]
+</span><span class="kw">pub fn </span>my_desc(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -&gt; proc_macro::TokenStream {
+    my_desc_attr(attr.into(), item.into()).unwrap().into()
+}</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// In your normal code
+
+</span><span class="attr">#[my_desc(name = <span class="string">"hello world"</span>, version = <span class="string">"0.2"</span>)]
+</span><span class="kw">fn </span>nothing() {}
+
+<span class="macro">assert_eq!</span>(my_desc(), <span class="string">"Name: hello world, Version: 0.2"</span>);</code></pre></div>
+<h5 id="field-attributes"><a class="doc-anchor" href="#field-attributes">§</a>Field Attributes</h5>
+<p>The attributes <a href="derive.ParseMetaItem.html#deluxealias--ident-1" title="derive deluxe::ParseMetaItem"><code>alias</code></a>,
+<a href="derive.ParseMetaItem.html#deluxedefault-1" title="derive deluxe::ParseMetaItem"><code>default</code></a>,
+<a href="derive.ParseMetaItem.html#deluxerename--ident-1" title="derive deluxe::ParseMetaItem"><code>rename</code></a>, and
+<a href="derive.ParseMetaItem.html#deluxeskip-1" title="derive deluxe::ParseMetaItem"><code>skip</code></a> are supported, and behave the same as in Serde. The
+<a href="derive.ParseMetaItem.html#deluxeappend" title="derive deluxe::ParseMetaItem"><code>append</code></a> attribute can be used on <a href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec"><code>Vec</code></a> fields to
+aggregate all duplicates of a key. The <a href="derive.ParseMetaItem.html#deluxerest" title="derive deluxe::ParseMetaItem"><code>rest</code></a> attribute can
+be used to do custom processing on any unknown keys.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(my_object))]
+</span><span class="kw">struct </span>MyObject {
+    <span class="comment">// Can be specified with key `id` or `object_id`
+    </span><span class="attr">#[deluxe(alias = object_id)]
+    </span>id: u64,
+
+    <span class="comment">// Field is optional, defaults to `Default::default` if not present
+    </span><span class="attr">#[deluxe(default)]
+    </span>count: u64,
+
+    <span class="comment">// Defaults to "Empty" if not present
+    </span><span class="attr">#[deluxe(default = String::from(<span class="string">"Empty"</span>))]
+    </span>contents: String,
+
+    <span class="comment">// Can be specified only with key `name`
+    </span><span class="attr">#[deluxe(rename = name)]
+    </span>s: String,
+
+    <span class="comment">// Skipped during parsing entirely
+    </span><span class="attr">#[deluxe(skip)]
+    </span>internal_flag: bool,
+
+    <span class="comment">// Appends any extra fields with the key `expr` to the Vec
+    </span><span class="attr">#[deluxe(append, rename = expr)]
+    </span>exprs: Vec&lt;syn::Expr&gt;,
+
+    <span class="comment">// Adds any unknown keys to the hash map
+    </span><span class="attr">#[deluxe(rest)]
+    </span>rest: std::collections::HashMap&lt;syn::Path, syn::Expr&gt;,
+}</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Omitted fields will be set to defaults
+</span><span class="attr">#[derive(MyObject)]
+#[my_object(id = <span class="number">1</span>, name = <span class="string">"First"</span>, expr = <span class="number">1 </span>+ <span class="number">2</span>, count = <span class="number">3</span>)]
+</span><span class="kw">struct </span>FirstObject;
+
+<span class="comment">// `expr` can be specified multiple times because of the `append` attribute
+</span><span class="attr">#[derive(MyObject)]
+#[my_object(object_id = <span class="number">2</span>, name = <span class="string">"Second"</span>, expr = <span class="number">1 </span>+ <span class="number">2</span>, expr = <span class="number">3 </span>+ <span class="number">4</span>)]
+</span><span class="kw">struct </span>SecondObject;
+
+<span class="comment">// `unknown` and `extra` will be stored in the `rest` hashmap
+</span><span class="attr">#[derive(MyObject)]
+#[my_object(id = <span class="number">3</span>, name = <span class="string">"Third"</span>, unknown = <span class="number">1 </span>+ <span class="number">2</span>, extra = <span class="number">3 </span>+ <span class="number">4</span>)]
+</span><span class="kw">struct </span>ThirdObject;</code></pre></div>
+<h5 id="inheritance"><a class="doc-anchor" href="#inheritance">§</a>Inheritance</h5>
+<p>The <a href="derive.ParseMetaItem.html#deluxeflatten-1" title="derive deluxe::ParseMetaItem"><code>flatten</code></a> attribute can be used to parse keys from
+one structure inside another:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ParseMetaItem)]
+</span><span class="kw">struct </span>A {
+    id: u64,
+}
+
+<span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(b))]
+</span><span class="kw">struct </span>B {
+    <span class="attr">#[deluxe(flatten)]
+    </span>a: A,
+    name: String,
+}</code></pre></div>
+<p>Then, fields from both <code>A</code> and <code>B</code> can be used when deriving <code>B</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(B)]
+#[b(id = <span class="number">123</span>, name = <span class="string">"object"</span>)]
+</span><span class="kw">struct </span>Object;</code></pre></div>
+<h5 id="attributes-in-nested-code"><a class="doc-anchor" href="#attributes-in-nested-code">§</a>Attributes in Nested Code</h5>
+<p>Extra attributes can be taken from within the code block attached to a macro. When used in an
+attribute macro, the attributes should be consumed so as not to produce an “unknown attribute”
+error when outputting tokens.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ParseMetaItem, deluxe::ExtractAttributes)]
+</span><span class="kw">struct </span>MyDescription {
+    name: String,
+    version: String,
+}
+
+<span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(author))]
+</span><span class="kw">struct </span>Authors(<span class="attr">#[deluxe(flatten)] </span>Vec&lt;String&gt;);
+
+<span class="kw">fn </span>my_derive(item: proc_macro2::TokenStream) -&gt; deluxe::Result&lt;proc_macro2::TokenStream&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>input = syn::parse2::&lt;syn::DeriveInput&gt;(item)<span class="question-mark">?</span>;
+    <span class="kw">let </span>MyDescription { name, version } = deluxe::extract_attributes(<span class="kw-2">&amp;mut </span>input)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>authors = Vec::new();
+    <span class="kw">if let </span>syn::Data::Struct(s) = <span class="kw-2">&amp;mut </span>input.data {
+         <span class="comment">// Look through all fields in the struct for `author` attributes
+        </span><span class="kw">for </span>field <span class="kw">in </span>s.fields.iter_mut() {
+            <span class="kw">let </span>Authors(a) = deluxe::extract_attributes(field)<span class="question-mark">?</span>;
+            authors.extend(a);
+        }
+    }
+
+    <span class="kw">let </span>ident = <span class="kw-2">&amp;</span>input.ident;
+    <span class="kw">let </span>(impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+
+    <span class="prelude-val">Ok</span>(<span class="macro">quote::quote!</span> {
+        <span class="kw">impl </span>#impl_generics #ident #type_generics #where_clause {
+            <span class="kw">fn </span>my_desc() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+                <span class="macro">concat!</span>(<span class="string">"Name: "</span>, #name, <span class="string">", Version: "</span>, #version #(, <span class="string">", Author: "</span>, #authors)<span class="kw-2">*</span>)
+            }
+        }
+    })
+}
+
+
+<span class="kw">fn </span>my_desc_mod(
+    attr: proc_macro2::TokenStream,
+    item: proc_macro2::TokenStream,
+) -&gt; deluxe::Result&lt;proc_macro2::TokenStream&gt; {
+    <span class="kw">let </span>MyDescription { name, version } = deluxe::parse2::&lt;MyDescription&gt;(attr)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>authors = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>module = syn::parse2::&lt;syn::ItemMod&gt;(item)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>(<span class="kw">_</span>, items) = module.content.as_mut().unwrap();
+
+    <span class="comment">// Look through all items in the module for `author` attributes
+    </span><span class="kw">for </span>i <span class="kw">in </span>items.iter_mut() {
+        <span class="comment">// Extract the attributes to remove them from the final output
+        </span><span class="kw">let </span>Authors(a) = deluxe::extract_attributes(i)<span class="question-mark">?</span>;
+        authors.extend(a);
+    }
+
+    <span class="comment">// Place a new function inside the module
+    </span>items.push(<span class="macro">syn::parse_quote!</span> {
+        <span class="kw">fn </span>my_desc() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+            <span class="macro">concat!</span>(<span class="string">"Name: "</span>, #name, <span class="string">", Version: "</span>, #version #(, <span class="string">", Author: "</span>, #authors)<span class="kw-2">*</span>)
+        }
+    });
+
+    <span class="prelude-val">Ok</span>(<span class="macro">quote::quote!</span> { #module })
+}
+</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// In your normal code
+
+</span><span class="attr">#[derive(MyDescription, Default)]
+#[my_desc(name = <span class="string">"hello world"</span>, version = <span class="string">"0.2"</span>)]
+</span><span class="kw">struct </span>Hello {
+    <span class="attr">#[author(<span class="string">"Alice"</span>)]
+    </span>a: i32,
+    <span class="attr">#[author(<span class="string">"Bob"</span>)]
+    </span>b: String
+}
+
+<span class="kw">let </span>hello: Hello = Default::default();
+<span class="macro">assert_eq!</span>(hello.my_desc(), <span class="string">"Name: hello world, Version: 0.2, Author: Alice, Author: Bob"</span>);
+
+<span class="attr">#[my_desc_mod(name = <span class="string">"hello world"</span>, version = <span class="string">"0.2"</span>)]
+</span><span class="kw">mod </span>abc {
+    <span class="attr">#[author(<span class="string">"Alice"</span>, <span class="string">"Bob"</span>)]
+    </span><span class="kw">fn </span>func1() {}
+
+    <span class="attr">#[author(<span class="string">"Carol"</span>)]
+    #[author(<span class="string">"Dave"</span>)]
+    </span><span class="kw">fn </span>func2() {}
+}
+
+<span class="macro">assert_eq!</span>(
+    abc::my_desc(),
+    <span class="string">"Name: hello world, Version: 0.2, Author: Alice, Author: Bob, Author: Carol, Author: Dave"
+</span>);</code></pre></div>
+<h5 id="tuple-structs-tuples-and-vecs"><a class="doc-anchor" href="#tuple-structs-tuples-and-vecs">§</a>Tuple Structs, Tuples and Vecs</h5>
+<p>Deluxe also supports parsing into data structures with unnamed fields.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(my_tuple))]
+</span><span class="kw">struct </span>MyTuple(u64, String);
+
+<span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(my_idents))]
+</span><span class="kw">struct </span>MyIdents {
+    id: u64,
+    names: (String, String),
+    idents: Vec&lt;syn::Ident&gt;
+}</code></pre></div>
+<p>The standard attribute syntax with parenthesis can be used when specifying a <a href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec"><code>Vec</code></a> type. The
+alternative syntax <code>key = [...]</code> can also be used to have an appearance similar to an array
+literal.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(MyTuple)]
+#[my_tuple(<span class="number">123</span>, <span class="string">"object"</span>)]
+</span><span class="kw">struct </span>Object;
+
+<span class="attr">#[derive(MyIdents)]
+#[my_idents(id = <span class="number">7</span>, names(<span class="string">"hello"</span>, <span class="string">"world"</span>), idents(a, b, c))]
+</span><span class="kw">struct </span>ABC;
+
+<span class="comment">// `idents` contains same values as above
+</span><span class="attr">#[derive(MyIdents)]
+#[my_idents(id = <span class="number">7</span>, names(<span class="string">"hello"</span>, <span class="string">"world"</span>), idents = [a, b, c]</span>)]
+<span class="kw">struct </span>ABC2;</code></pre></div>
+<h5 id="c-styled-attributes"><a class="doc-anchor" href="#c-styled-attributes">§</a>C#-styled Attributes</h5>
+<p>Attributes in C# can support positional arguments first with the named
+arguments afterwards. This style can be emulated by using a tuple struct with a
+normal struct flattened at the end. Placing
+<a href="derive.ParseMetaItem.html#deluxedefault" title="derive deluxe::ParseMetaItem"><code>#[deluxe(default)]</code></a> on the struct behaves the same as
+Serde, by filling in all fields with values from <a href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a>, allowing every named argument to
+be optional.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ParseMetaItem, Default)]
+#[deluxe(default)]
+</span><span class="kw">struct </span>Flags {
+    native: bool,
+}
+
+<span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(a))]
+</span><span class="kw">struct </span>A(u64, String, <span class="attr">#[deluxe(flatten)] </span>Flags);</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(A)]
+#[a(<span class="number">123</span>, <span class="string">"object"</span>)]
+</span><span class="kw">struct </span>Object;
+
+<span class="attr">#[derive(A)]
+#[a(<span class="number">123</span>, <span class="string">"native-object"</span>, native = <span class="bool-val">true</span>)]
+</span><span class="kw">struct </span>NativeObject;</code></pre></div>
+<h5 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h5>
+<p>Enums are supported by using the variant name as a single key, in snake-case. Variants can be
+renamed, aliased and skipped in the same way as fields.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(my_enum))]
+</span><span class="kw">enum </span>MyEnum {
+    A,
+    B,
+    C,
+    <span class="attr">#[deluxe(alias = d)]
+    </span>AnotherOne,
+    <span class="attr">#[deluxe(rename = e)]
+    </span>AnotherTwo,
+    <span class="attr">#[deluxe(skip)]
+    </span>SkipMe
+}</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(MyEnum)]
+#[my_enum(b)]
+</span><span class="kw">struct </span>ObjectB;
+
+<span class="attr">#[derive(MyEnum)]
+#[my_enum(another_one)]
+</span><span class="kw">struct </span>ObjectD;</code></pre></div>
+<h5 id="complex-enums"><a class="doc-anchor" href="#complex-enums">§</a>Complex Enums</h5>
+<p>Enums with struct and tuple variants are also supported. The data inside is used as arguments
+to the attribute. All field attributes from structs are also supported inside variants.</p>
+<p>Additionally, enum variants with named fields can be flattened. The behavior of a flattened
+variant is similar to Serde’s <code>untagged</code> mode. In a flattened variant, the name of the variant
+will be ignored. Instead, Deluxe will attempt to use the unique keys in each variant to
+determine if that variant was specified. A compile error will be thrown if it is not possible
+to determine a unique, unambiguous key between two variants.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ExtractAttributes)]
+#[deluxe(attributes(my_enum))]
+</span><span class="kw">enum </span>MyEnum {
+    A,
+    B(u64, String),
+    C { id: u64, name: String },
+    <span class="attr">#[deluxe(flatten)]
+    </span>D { d: u64, name: String },
+}</code></pre></div>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(MyEnum)]
+#[my_enum(a)]
+</span><span class="kw">struct </span>ObjectA;
+
+<span class="attr">#[derive(MyEnum)]
+#[my_enum(b(<span class="number">1</span>, <span class="string">"hello"</span>))]
+</span><span class="kw">struct </span>ObjectB;
+
+<span class="attr">#[derive(MyEnum)]
+#[my_enum(c(id = <span class="number">2</span>, name = <span class="string">"world"</span>))]
+</span><span class="kw">struct </span>ObjectC;
+
+<span class="comment">// No inner parenthesis needed here due to flattening
+</span><span class="attr">#[derive(MyEnum)]
+#[my_enum(d = <span class="number">3</span>, name = <span class="string">"moon"</span>)]
+</span><span class="kw">struct </span>ObjectD;</code></pre></div>
+<h5 id="storing-containers"><a class="doc-anchor" href="#storing-containers">§</a>Storing Containers</h5>
+<p>During parsing, Deluxe can store references to the container type holding the attributes for
+easier access. Container fields are skipped during attribute parsing.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(deluxe::ParseAttributes)]
+#[deluxe(attributes(my_object))]
+</span><span class="kw">struct </span>MyObject&lt;<span class="lifetime">'t</span>&gt; {
+    id: u64,
+    <span class="comment">// Fill `container` in using the parsed type. Note this restricts the
+    // derived `ParseAttributes` impl so it can only be used on `DeriveInput`.
+    </span><span class="attr">#[deluxe(container)]
+    </span>container: <span class="kw-2">&amp;</span><span class="lifetime">'t </span>syn::DeriveInput,
+}
+
+<span class="kw">fn </span>my_object(item: proc_macro2::TokenStream) -&gt; deluxe::Result&lt;proc_macro2::TokenStream&gt; {
+    <span class="kw">let </span>input = syn::parse2::&lt;syn::DeriveInput&gt;(item)<span class="question-mark">?</span>;
+
+    <span class="comment">// `obj.container` now holds a reference to `input`
+    </span><span class="kw">let </span>obj: MyObject = deluxe::parse_attributes(<span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(<span class="macro">quote::quote!</span> { <span class="comment">/* ... generate some code here ... */ </span>})
+}</code></pre></div>
+<p>To support both extracting and parsing, a container field can also be a value type. In that
+case, the container will be cloned into the structure.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="validations/index.html" title="mod deluxe::validations">validations</a></dt><dd>Additional helper functions for validating after parsing.</dd><dt><a class="mod" href="with/index.html" title="mod deluxe::with">with</a></dt><dd>Custom parsing helpers for <code>#[deluxe(with = ...)]</code>.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.define_with_collection.html" title="macro deluxe::define_with_collection">define_<wbr>with_<wbr>collection</a></dt><dd>Generates a module for parsing a collection using `#[deluxe(with = …)].</dd><dt><a class="macro" href="macro.define_with_map.html" title="macro deluxe::define_with_map">define_<wbr>with_<wbr>map</a></dt><dd>Generates a module for parsing a map collection using `#[deluxe(with = …)].</dd><dt><a class="macro" href="macro.define_with_optional.html" title="macro deluxe::define_with_optional">define_<wbr>with_<wbr>optional</a></dt><dd>Generates a module for parsing an optional value using `#[deluxe(with = …)].</dd><dt><a class="macro" href="macro.parse_named_meta_item_with.html" title="macro deluxe::parse_named_meta_item_with">parse_<wbr>named_<wbr>meta_<wbr>item_<wbr>with</a></dt><dd>Parses a <a href="trait.ParseMetaItem.html" title="trait deluxe::ParseMetaItem"><code>ParseMetaItem</code></a> following a name, using a custom parse
+module.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Errors.html" title="struct deluxe::Errors">Errors</a></dt><dd>A wrapper for a list of errors. Can be empty.</dd><dt><a class="struct" href="struct.Flag.html" title="struct deluxe::Flag">Flag</a></dt><dd>A value for a boolean named field that can only be a name (set) or omitted (unset).</dd><dt><a class="struct" href="struct.SpannedValue.html" title="struct deluxe::SpannedValue">Spanned<wbr>Value</a></dt><dd>A wrapper for adding a <a href="../proc_macro2/struct.Span.html" title="struct proc_macro2::Span"><code>Span</code></a> to an arbitrary value.</dd></dl><h2 id="enums-1" class="section-header">Enums<a href="#enums-1" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.ParseMode.html" title="enum deluxe::ParseMode">Parse<wbr>Mode</a></dt><dd>The context a meta item parser is operating in.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.ExtractAttributes.html" title="trait deluxe::ExtractAttributes">Extract<wbr>Attributes</a></dt><dd>Extracts a structure out of a <a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute"><code>syn::Attribute</code></a> list.</dd><dt><a class="trait" href="trait.HasAttributes.html" title="trait deluxe::HasAttributes">HasAttributes</a></dt><dd>Trait for a <a href="https://docs.rs/syn/2.0.105/syn/index.html" title="mod syn"><code>syn</code></a> type containing a list of attributes.</dd><dt><a class="trait" href="trait.ParseAttributes.html" title="trait deluxe::ParseAttributes">Parse<wbr>Attributes</a></dt><dd>Parses a structure out of a <a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute"><code>syn::Attribute</code></a> list.</dd><dt><a class="trait" href="trait.ParseMetaItem.html" title="trait deluxe::ParseMetaItem">Parse<wbr>Meta<wbr>Item</a></dt><dd>Base trait for parsing a single field out of <a href="https://docs.rs/syn/2.0.105/syn/parse/type.ParseStream.html" title="type syn::parse::ParseStream"><code>syn::parse::ParseStream</code></a>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.extract_attributes.html" title="fn deluxe::extract_attributes">extract_<wbr>attributes</a></dt><dd>Extracts attributes out of another type holding a list of <a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute"><code>syn::Attribute</code></a>, then parses them
+into a required Rust type.</dd><dt><a class="fn" href="fn.extract_attributes_optional.html" title="fn deluxe::extract_attributes_optional">extract_<wbr>attributes_<wbr>optional</a></dt><dd>Extracts attributes out of another type holding a list of <a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute"><code>syn::Attribute</code></a>, then parses them
+into a Rust type, returning a default value on failure.</dd><dt><a class="fn" href="fn.parse.html" title="fn deluxe::parse">parse</a></dt><dd>Parses a required Rust type out of a token stream.</dd><dt><a class="fn" href="fn.parse2.html" title="fn deluxe::parse2">parse2</a></dt><dd>Parses a required Rust type out of a token stream.</dd><dt><a class="fn" href="fn.parse2_optional.html" title="fn deluxe::parse2_optional">parse2_<wbr>optional</a></dt><dd>Parses a Rust type out of a token stream, returning a default value on failure.</dd><dt><a class="fn" href="fn.parse_attributes.html" title="fn deluxe::parse_attributes">parse_<wbr>attributes</a></dt><dd>Parses a required Rust type out of another type holding a list of <a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute"><code>syn::Attribute</code></a>.</dd><dt><a class="fn" href="fn.parse_attributes_optional.html" title="fn deluxe::parse_attributes_optional">parse_<wbr>attributes_<wbr>optional</a></dt><dd>Parses a Rust type out of another type holding a list of <a href="https://docs.rs/syn/2.0.105/syn/attr/struct.Attribute.html" title="struct syn::attr::Attribute"><code>syn::Attribute</code></a>, returning a default value on failure.</dd><dt><a class="fn" href="fn.parse_optional.html" title="fn deluxe::parse_optional">parse_<wbr>optional</a></dt><dd>Parses a Rust type out of a token stream, returning a default value on failure.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Error.html" title="type deluxe::Error">Error</a></dt><dd>The error type for parsers.</dd><dt><a class="type" href="type.Result.html" title="type deluxe::Result">Result</a></dt><dd>The result of a parse method.</dd></dl><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><dl class="item-table"><dt><a class="derive" href="derive.ExtractAttributes.html" title="derive deluxe::ExtractAttributes">Extract<wbr>Attributes</a></dt><dd>Generates <a href="deluxe_core::ExtractAttributes"><code>ExtractAttributes</code></a> for a struct or enum.</dd><dt><a class="derive" href="derive.ParseAttributes.html" title="derive deluxe::ParseAttributes">Parse<wbr>Attributes</a></dt><dd>Generates <a href="deluxe_core::ParseAttributes"><code>ParseAttributes</code></a> for a struct or enum.</dd><dt><a class="derive" href="derive.ParseMetaItem.html" title="derive deluxe::ParseMetaItem">Parse<wbr>Meta<wbr>Item</a></dt><dd>Generates <a href="deluxe_core::ParseMetaItem"><code>ParseMetaItem</code></a> for a struct or enum.</dd></dl></section></div></main></body></html>

@@ -1,0 +1,698 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.47.1/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">tokio/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![allow(
+<a href=#2 id=2 data-nosnippet>2</a>    clippy::cognitive_complexity,
+<a href=#3 id=3 data-nosnippet>3</a>    clippy::large_enum_variant,
+<a href=#4 id=4 data-nosnippet>4</a>    clippy::module_inception,
+<a href=#5 id=5 data-nosnippet>5</a>    clippy::needless_doctest_main
+<a href=#6 id=6 data-nosnippet>6</a>)]
+<a href=#7 id=7 data-nosnippet>7</a>#![warn(
+<a href=#8 id=8 data-nosnippet>8</a>    missing_debug_implementations,
+<a href=#9 id=9 data-nosnippet>9</a>    missing_docs,
+<a href=#10 id=10 data-nosnippet>10</a>    rust_2018_idioms,
+<a href=#11 id=11 data-nosnippet>11</a>    unreachable_pub
+<a href=#12 id=12 data-nosnippet>12</a>)]
+<a href=#13 id=13 data-nosnippet>13</a>#![deny(unused_must_use)]
+<a href=#14 id=14 data-nosnippet>14</a>#![doc(test(
+<a href=#15 id=15 data-nosnippet>15</a>    no_crate_inject,
+<a href=#16 id=16 data-nosnippet>16</a>    attr(deny(warnings, rust_2018_idioms), allow(dead_code, unused_variables))
+<a href=#17 id=17 data-nosnippet>17</a>))]
+<a href=#18 id=18 data-nosnippet>18</a>#![cfg_attr(docsrs, feature(doc_cfg))]
+<a href=#19 id=19 data-nosnippet>19</a>#![cfg_attr(docsrs, allow(unused_attributes))]
+<a href=#20 id=20 data-nosnippet>20</a>#![cfg_attr(loom, allow(dead_code, unreachable_pub))]
+<a href=#21 id=21 data-nosnippet>21</a>#![cfg_attr(windows, allow(rustdoc::broken_intra_doc_links))]
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a></span><span class="doccomment">//! A runtime for writing reliable network applications without compromising speed.
+<a href=#24 id=24 data-nosnippet>24</a>//!
+<a href=#25 id=25 data-nosnippet>25</a>//! Tokio is an event-driven, non-blocking I/O platform for writing asynchronous
+<a href=#26 id=26 data-nosnippet>26</a>//! applications with the Rust programming language. At a high level, it
+<a href=#27 id=27 data-nosnippet>27</a>//! provides a few major components:
+<a href=#28 id=28 data-nosnippet>28</a>//!
+<a href=#29 id=29 data-nosnippet>29</a>//! * Tools for [working with asynchronous tasks][tasks], including
+<a href=#30 id=30 data-nosnippet>30</a>//!   [synchronization primitives and channels][sync] and [timeouts, sleeps, and
+<a href=#31 id=31 data-nosnippet>31</a>//!   intervals][time].
+<a href=#32 id=32 data-nosnippet>32</a>//! * APIs for [performing asynchronous I/O][io], including [TCP and UDP][net] sockets,
+<a href=#33 id=33 data-nosnippet>33</a>//!   [filesystem][fs] operations, and [process] and [signal] management.
+<a href=#34 id=34 data-nosnippet>34</a>//! * A [runtime] for executing asynchronous code, including a task scheduler,
+<a href=#35 id=35 data-nosnippet>35</a>//!   an I/O driver backed by the operating system's event queue (`epoll`, `kqueue`,
+<a href=#36 id=36 data-nosnippet>36</a>//!   `IOCP`, etc...), and a high performance timer.
+<a href=#37 id=37 data-nosnippet>37</a>//!
+<a href=#38 id=38 data-nosnippet>38</a>//! Guide level documentation is found on the [website].
+<a href=#39 id=39 data-nosnippet>39</a>//!
+<a href=#40 id=40 data-nosnippet>40</a>//! [tasks]: #working-with-tasks
+<a href=#41 id=41 data-nosnippet>41</a>//! [sync]: crate::sync
+<a href=#42 id=42 data-nosnippet>42</a>//! [time]: crate::time
+<a href=#43 id=43 data-nosnippet>43</a>//! [io]: #asynchronous-io
+<a href=#44 id=44 data-nosnippet>44</a>//! [net]: crate::net
+<a href=#45 id=45 data-nosnippet>45</a>//! [fs]: crate::fs
+<a href=#46 id=46 data-nosnippet>46</a>//! [process]: crate::process
+<a href=#47 id=47 data-nosnippet>47</a>//! [signal]: crate::signal
+<a href=#48 id=48 data-nosnippet>48</a>//! [fs]: crate::fs
+<a href=#49 id=49 data-nosnippet>49</a>//! [runtime]: crate::runtime
+<a href=#50 id=50 data-nosnippet>50</a>//! [website]: https://tokio.rs/tokio/tutorial
+<a href=#51 id=51 data-nosnippet>51</a>//!
+<a href=#52 id=52 data-nosnippet>52</a>//! # A Tour of Tokio
+<a href=#53 id=53 data-nosnippet>53</a>//!
+<a href=#54 id=54 data-nosnippet>54</a>//! Tokio consists of a number of modules that provide a range of functionality
+<a href=#55 id=55 data-nosnippet>55</a>//! essential for implementing asynchronous applications in Rust. In this
+<a href=#56 id=56 data-nosnippet>56</a>//! section, we will take a brief tour of Tokio, summarizing the major APIs and
+<a href=#57 id=57 data-nosnippet>57</a>//! their uses.
+<a href=#58 id=58 data-nosnippet>58</a>//!
+<a href=#59 id=59 data-nosnippet>59</a>//! The easiest way to get started is to enable all features. Do this by
+<a href=#60 id=60 data-nosnippet>60</a>//! enabling the `full` feature flag:
+<a href=#61 id=61 data-nosnippet>61</a>//!
+<a href=#62 id=62 data-nosnippet>62</a>//! ```toml
+<a href=#63 id=63 data-nosnippet>63</a>//! tokio = { version = "1", features = ["full"] }
+<a href=#64 id=64 data-nosnippet>64</a>//! ```
+<a href=#65 id=65 data-nosnippet>65</a>//!
+<a href=#66 id=66 data-nosnippet>66</a>//! ### Authoring applications
+<a href=#67 id=67 data-nosnippet>67</a>//!
+<a href=#68 id=68 data-nosnippet>68</a>//! Tokio is great for writing applications and most users in this case shouldn't
+<a href=#69 id=69 data-nosnippet>69</a>//! worry too much about what features they should pick. If you're unsure, we suggest
+<a href=#70 id=70 data-nosnippet>70</a>//! going with `full` to ensure that you don't run into any road blocks while you're
+<a href=#71 id=71 data-nosnippet>71</a>//! building your application.
+<a href=#72 id=72 data-nosnippet>72</a>//!
+<a href=#73 id=73 data-nosnippet>73</a>//! #### Example
+<a href=#74 id=74 data-nosnippet>74</a>//!
+<a href=#75 id=75 data-nosnippet>75</a>//! This example shows the quickest way to get started with Tokio.
+<a href=#76 id=76 data-nosnippet>76</a>//!
+<a href=#77 id=77 data-nosnippet>77</a>//! ```toml
+<a href=#78 id=78 data-nosnippet>78</a>//! tokio = { version = "1", features = ["full"] }
+<a href=#79 id=79 data-nosnippet>79</a>//! ```
+<a href=#80 id=80 data-nosnippet>80</a>//!
+<a href=#81 id=81 data-nosnippet>81</a>//! ### Authoring libraries
+<a href=#82 id=82 data-nosnippet>82</a>//!
+<a href=#83 id=83 data-nosnippet>83</a>//! As a library author your goal should be to provide the lightest weight crate
+<a href=#84 id=84 data-nosnippet>84</a>//! that is based on Tokio. To achieve this you should ensure that you only enable
+<a href=#85 id=85 data-nosnippet>85</a>//! the features you need. This allows users to pick up your crate without having
+<a href=#86 id=86 data-nosnippet>86</a>//! to enable unnecessary features.
+<a href=#87 id=87 data-nosnippet>87</a>//!
+<a href=#88 id=88 data-nosnippet>88</a>//! #### Example
+<a href=#89 id=89 data-nosnippet>89</a>//!
+<a href=#90 id=90 data-nosnippet>90</a>//! This example shows how you may want to import features for a library that just
+<a href=#91 id=91 data-nosnippet>91</a>//! needs to `tokio::spawn` and use a `TcpStream`.
+<a href=#92 id=92 data-nosnippet>92</a>//!
+<a href=#93 id=93 data-nosnippet>93</a>//! ```toml
+<a href=#94 id=94 data-nosnippet>94</a>//! tokio = { version = "1", features = ["rt", "net"] }
+<a href=#95 id=95 data-nosnippet>95</a>//! ```
+<a href=#96 id=96 data-nosnippet>96</a>//!
+<a href=#97 id=97 data-nosnippet>97</a>//! ## Working With Tasks
+<a href=#98 id=98 data-nosnippet>98</a>//!
+<a href=#99 id=99 data-nosnippet>99</a>//! Asynchronous programs in Rust are based around lightweight, non-blocking
+<a href=#100 id=100 data-nosnippet>100</a>//! units of execution called [_tasks_][tasks]. The [`tokio::task`] module provides
+<a href=#101 id=101 data-nosnippet>101</a>//! important tools for working with tasks:
+<a href=#102 id=102 data-nosnippet>102</a>//!
+<a href=#103 id=103 data-nosnippet>103</a>//! * The [`spawn`] function and [`JoinHandle`] type, for scheduling a new task
+<a href=#104 id=104 data-nosnippet>104</a>//!   on the Tokio runtime and awaiting the output of a spawned task, respectively,
+<a href=#105 id=105 data-nosnippet>105</a>//! * Functions for [running blocking operations][blocking] in an asynchronous
+<a href=#106 id=106 data-nosnippet>106</a>//!   task context.
+<a href=#107 id=107 data-nosnippet>107</a>//!
+<a href=#108 id=108 data-nosnippet>108</a>//! The [`tokio::task`] module is present only when the "rt" feature flag
+<a href=#109 id=109 data-nosnippet>109</a>//! is enabled.
+<a href=#110 id=110 data-nosnippet>110</a>//!
+<a href=#111 id=111 data-nosnippet>111</a>//! [tasks]: task/index.html#what-are-tasks
+<a href=#112 id=112 data-nosnippet>112</a>//! [`tokio::task`]: crate::task
+<a href=#113 id=113 data-nosnippet>113</a>//! [`spawn`]: crate::task::spawn()
+<a href=#114 id=114 data-nosnippet>114</a>//! [`JoinHandle`]: crate::task::JoinHandle
+<a href=#115 id=115 data-nosnippet>115</a>//! [blocking]: task/index.html#blocking-and-yielding
+<a href=#116 id=116 data-nosnippet>116</a>//!
+<a href=#117 id=117 data-nosnippet>117</a>//! The [`tokio::sync`] module contains synchronization primitives to use when
+<a href=#118 id=118 data-nosnippet>118</a>//! needing to communicate or share data. These include:
+<a href=#119 id=119 data-nosnippet>119</a>//!
+<a href=#120 id=120 data-nosnippet>120</a>//! * channels ([`oneshot`], [`mpsc`], [`watch`], and [`broadcast`]), for sending values
+<a href=#121 id=121 data-nosnippet>121</a>//!   between tasks,
+<a href=#122 id=122 data-nosnippet>122</a>//! * a non-blocking [`Mutex`], for controlling access to a shared, mutable
+<a href=#123 id=123 data-nosnippet>123</a>//!   value,
+<a href=#124 id=124 data-nosnippet>124</a>//! * an asynchronous [`Barrier`] type, for multiple tasks to synchronize before
+<a href=#125 id=125 data-nosnippet>125</a>//!   beginning a computation.
+<a href=#126 id=126 data-nosnippet>126</a>//!
+<a href=#127 id=127 data-nosnippet>127</a>//! The `tokio::sync` module is present only when the "sync" feature flag is
+<a href=#128 id=128 data-nosnippet>128</a>//! enabled.
+<a href=#129 id=129 data-nosnippet>129</a>//!
+<a href=#130 id=130 data-nosnippet>130</a>//! [`tokio::sync`]: crate::sync
+<a href=#131 id=131 data-nosnippet>131</a>//! [`Mutex`]: crate::sync::Mutex
+<a href=#132 id=132 data-nosnippet>132</a>//! [`Barrier`]: crate::sync::Barrier
+<a href=#133 id=133 data-nosnippet>133</a>//! [`oneshot`]: crate::sync::oneshot
+<a href=#134 id=134 data-nosnippet>134</a>//! [`mpsc`]: crate::sync::mpsc
+<a href=#135 id=135 data-nosnippet>135</a>//! [`watch`]: crate::sync::watch
+<a href=#136 id=136 data-nosnippet>136</a>//! [`broadcast`]: crate::sync::broadcast
+<a href=#137 id=137 data-nosnippet>137</a>//!
+<a href=#138 id=138 data-nosnippet>138</a>//! The [`tokio::time`] module provides utilities for tracking time and
+<a href=#139 id=139 data-nosnippet>139</a>//! scheduling work. This includes functions for setting [timeouts][timeout] for
+<a href=#140 id=140 data-nosnippet>140</a>//! tasks, [sleeping][sleep] work to run in the future, or [repeating an operation at an
+<a href=#141 id=141 data-nosnippet>141</a>//! interval][interval].
+<a href=#142 id=142 data-nosnippet>142</a>//!
+<a href=#143 id=143 data-nosnippet>143</a>//! In order to use `tokio::time`, the "time" feature flag must be enabled.
+<a href=#144 id=144 data-nosnippet>144</a>//!
+<a href=#145 id=145 data-nosnippet>145</a>//! [`tokio::time`]: crate::time
+<a href=#146 id=146 data-nosnippet>146</a>//! [sleep]: crate::time::sleep()
+<a href=#147 id=147 data-nosnippet>147</a>//! [interval]: crate::time::interval()
+<a href=#148 id=148 data-nosnippet>148</a>//! [timeout]: crate::time::timeout()
+<a href=#149 id=149 data-nosnippet>149</a>//!
+<a href=#150 id=150 data-nosnippet>150</a>//! Finally, Tokio provides a _runtime_ for executing asynchronous tasks. Most
+<a href=#151 id=151 data-nosnippet>151</a>//! applications can use the [`#[tokio::main]`][main] macro to run their code on the
+<a href=#152 id=152 data-nosnippet>152</a>//! Tokio runtime. However, this macro provides only basic configuration options. As
+<a href=#153 id=153 data-nosnippet>153</a>//! an alternative, the [`tokio::runtime`] module provides more powerful APIs for configuring
+<a href=#154 id=154 data-nosnippet>154</a>//! and managing runtimes. You should use that module if the `#[tokio::main]` macro doesn't
+<a href=#155 id=155 data-nosnippet>155</a>//! provide the functionality you need.
+<a href=#156 id=156 data-nosnippet>156</a>//!
+<a href=#157 id=157 data-nosnippet>157</a>//! Using the runtime requires the "rt" or "rt-multi-thread" feature flags, to
+<a href=#158 id=158 data-nosnippet>158</a>//! enable the current-thread [single-threaded scheduler][rt] and the [multi-thread
+<a href=#159 id=159 data-nosnippet>159</a>//! scheduler][rt-multi-thread], respectively. See the [`runtime` module
+<a href=#160 id=160 data-nosnippet>160</a>//! documentation][rt-features] for details. In addition, the "macros" feature
+<a href=#161 id=161 data-nosnippet>161</a>//! flag enables the `#[tokio::main]` and `#[tokio::test]` attributes.
+<a href=#162 id=162 data-nosnippet>162</a>//!
+<a href=#163 id=163 data-nosnippet>163</a>//! [main]: attr.main.html
+<a href=#164 id=164 data-nosnippet>164</a>//! [`tokio::runtime`]: crate::runtime
+<a href=#165 id=165 data-nosnippet>165</a>//! [`Builder`]: crate::runtime::Builder
+<a href=#166 id=166 data-nosnippet>166</a>//! [`Runtime`]: crate::runtime::Runtime
+<a href=#167 id=167 data-nosnippet>167</a>//! [rt]: runtime/index.html#current-thread-scheduler
+<a href=#168 id=168 data-nosnippet>168</a>//! [rt-multi-thread]: runtime/index.html#multi-thread-scheduler
+<a href=#169 id=169 data-nosnippet>169</a>//! [rt-features]: runtime/index.html#runtime-scheduler
+<a href=#170 id=170 data-nosnippet>170</a>//!
+<a href=#171 id=171 data-nosnippet>171</a>//! ## CPU-bound tasks and blocking code
+<a href=#172 id=172 data-nosnippet>172</a>//!
+<a href=#173 id=173 data-nosnippet>173</a>//! Tokio is able to concurrently run many tasks on a few threads by repeatedly
+<a href=#174 id=174 data-nosnippet>174</a>//! swapping the currently running task on each thread. However, this kind of
+<a href=#175 id=175 data-nosnippet>175</a>//! swapping can only happen at `.await` points, so code that spends a long time
+<a href=#176 id=176 data-nosnippet>176</a>//! without reaching an `.await` will prevent other tasks from running. To
+<a href=#177 id=177 data-nosnippet>177</a>//! combat this, Tokio provides two kinds of threads: Core threads and blocking threads.
+<a href=#178 id=178 data-nosnippet>178</a>//!
+<a href=#179 id=179 data-nosnippet>179</a>//! The core threads are where all asynchronous code runs, and Tokio will by default
+<a href=#180 id=180 data-nosnippet>180</a>//! spawn one for each CPU core. You can use the environment variable `TOKIO_WORKER_THREADS`
+<a href=#181 id=181 data-nosnippet>181</a>//! to override the default value.
+<a href=#182 id=182 data-nosnippet>182</a>//!
+<a href=#183 id=183 data-nosnippet>183</a>//! The blocking threads are spawned on demand, can be used to run blocking code
+<a href=#184 id=184 data-nosnippet>184</a>//! that would otherwise block other tasks from running and are kept alive when
+<a href=#185 id=185 data-nosnippet>185</a>//! not used for a certain amount of time which can be configured with [`thread_keep_alive`].
+<a href=#186 id=186 data-nosnippet>186</a>//! Since it is not possible for Tokio to swap out blocking tasks, like it
+<a href=#187 id=187 data-nosnippet>187</a>//! can do with asynchronous code, the upper limit on the number of blocking
+<a href=#188 id=188 data-nosnippet>188</a>//! threads is very large. These limits can be configured on the [`Builder`].
+<a href=#189 id=189 data-nosnippet>189</a>//!
+<a href=#190 id=190 data-nosnippet>190</a>//! To spawn a blocking task, you should use the [`spawn_blocking`] function.
+<a href=#191 id=191 data-nosnippet>191</a>//!
+<a href=#192 id=192 data-nosnippet>192</a>//! [`Builder`]: crate::runtime::Builder
+<a href=#193 id=193 data-nosnippet>193</a>//! [`spawn_blocking`]: crate::task::spawn_blocking()
+<a href=#194 id=194 data-nosnippet>194</a>//! [`thread_keep_alive`]: crate::runtime::Builder::thread_keep_alive()
+<a href=#195 id=195 data-nosnippet>195</a>//!
+<a href=#196 id=196 data-nosnippet>196</a>//! ```
+<a href=#197 id=197 data-nosnippet>197</a>//! #[tokio::main]
+<a href=#198 id=198 data-nosnippet>198</a>//! async fn main() {
+<a href=#199 id=199 data-nosnippet>199</a>//!     // This is running on a core thread.
+<a href=#200 id=200 data-nosnippet>200</a>//!
+<a href=#201 id=201 data-nosnippet>201</a>//!     let blocking_task = tokio::task::spawn_blocking(|| {
+<a href=#202 id=202 data-nosnippet>202</a>//!         // This is running on a blocking thread.
+<a href=#203 id=203 data-nosnippet>203</a>//!         // Blocking here is ok.
+<a href=#204 id=204 data-nosnippet>204</a>//!     });
+<a href=#205 id=205 data-nosnippet>205</a>//!
+<a href=#206 id=206 data-nosnippet>206</a>//!     // We can wait for the blocking task like this:
+<a href=#207 id=207 data-nosnippet>207</a>//!     // If the blocking task panics, the unwrap below will propagate the
+<a href=#208 id=208 data-nosnippet>208</a>//!     // panic.
+<a href=#209 id=209 data-nosnippet>209</a>//!     blocking_task.await.unwrap();
+<a href=#210 id=210 data-nosnippet>210</a>//! }
+<a href=#211 id=211 data-nosnippet>211</a>//! ```
+<a href=#212 id=212 data-nosnippet>212</a>//!
+<a href=#213 id=213 data-nosnippet>213</a>//! If your code is CPU-bound and you wish to limit the number of threads used
+<a href=#214 id=214 data-nosnippet>214</a>//! to run it, you should use a separate thread pool dedicated to CPU bound tasks.
+<a href=#215 id=215 data-nosnippet>215</a>//! For example, you could consider using the [rayon] library for CPU-bound
+<a href=#216 id=216 data-nosnippet>216</a>//! tasks. It is also possible to create an extra Tokio runtime dedicated to
+<a href=#217 id=217 data-nosnippet>217</a>//! CPU-bound tasks, but if you do this, you should be careful that the extra
+<a href=#218 id=218 data-nosnippet>218</a>//! runtime runs _only_ CPU-bound tasks, as IO-bound tasks on that runtime
+<a href=#219 id=219 data-nosnippet>219</a>//! will behave poorly.
+<a href=#220 id=220 data-nosnippet>220</a>//!
+<a href=#221 id=221 data-nosnippet>221</a>//! Hint: If using rayon, you can use a [`oneshot`] channel to send the result back
+<a href=#222 id=222 data-nosnippet>222</a>//! to Tokio when the rayon task finishes.
+<a href=#223 id=223 data-nosnippet>223</a>//!
+<a href=#224 id=224 data-nosnippet>224</a>//! [rayon]: https://docs.rs/rayon
+<a href=#225 id=225 data-nosnippet>225</a>//! [`oneshot`]: crate::sync::oneshot
+<a href=#226 id=226 data-nosnippet>226</a>//!
+<a href=#227 id=227 data-nosnippet>227</a>//! ## Asynchronous IO
+<a href=#228 id=228 data-nosnippet>228</a>//!
+<a href=#229 id=229 data-nosnippet>229</a>//! As well as scheduling and running tasks, Tokio provides everything you need
+<a href=#230 id=230 data-nosnippet>230</a>//! to perform input and output asynchronously.
+<a href=#231 id=231 data-nosnippet>231</a>//!
+<a href=#232 id=232 data-nosnippet>232</a>//! The [`tokio::io`] module provides Tokio's asynchronous core I/O primitives,
+<a href=#233 id=233 data-nosnippet>233</a>//! the [`AsyncRead`], [`AsyncWrite`], and [`AsyncBufRead`] traits. In addition,
+<a href=#234 id=234 data-nosnippet>234</a>//! when the "io-util" feature flag is enabled, it also provides combinators and
+<a href=#235 id=235 data-nosnippet>235</a>//! functions for working with these traits, forming as an asynchronous
+<a href=#236 id=236 data-nosnippet>236</a>//! counterpart to [`std::io`].
+<a href=#237 id=237 data-nosnippet>237</a>//!
+<a href=#238 id=238 data-nosnippet>238</a>//! Tokio also includes APIs for performing various kinds of I/O and interacting
+<a href=#239 id=239 data-nosnippet>239</a>//! with the operating system asynchronously. These include:
+<a href=#240 id=240 data-nosnippet>240</a>//!
+<a href=#241 id=241 data-nosnippet>241</a>//! * [`tokio::net`], which contains non-blocking versions of [TCP], [UDP], and
+<a href=#242 id=242 data-nosnippet>242</a>//!   [Unix Domain Sockets][UDS] (enabled by the "net" feature flag),
+<a href=#243 id=243 data-nosnippet>243</a>//! * [`tokio::fs`], similar to [`std::fs`] but for performing filesystem I/O
+<a href=#244 id=244 data-nosnippet>244</a>//!   asynchronously (enabled by the "fs" feature flag),
+<a href=#245 id=245 data-nosnippet>245</a>//! * [`tokio::signal`], for asynchronously handling Unix and Windows OS signals
+<a href=#246 id=246 data-nosnippet>246</a>//!   (enabled by the "signal" feature flag),
+<a href=#247 id=247 data-nosnippet>247</a>//! * [`tokio::process`], for spawning and managing child processes (enabled by
+<a href=#248 id=248 data-nosnippet>248</a>//!   the "process" feature flag).
+<a href=#249 id=249 data-nosnippet>249</a>//!
+<a href=#250 id=250 data-nosnippet>250</a>//! [`tokio::io`]: crate::io
+<a href=#251 id=251 data-nosnippet>251</a>//! [`AsyncRead`]: crate::io::AsyncRead
+<a href=#252 id=252 data-nosnippet>252</a>//! [`AsyncWrite`]: crate::io::AsyncWrite
+<a href=#253 id=253 data-nosnippet>253</a>//! [`AsyncBufRead`]: crate::io::AsyncBufRead
+<a href=#254 id=254 data-nosnippet>254</a>//! [`std::io`]: std::io
+<a href=#255 id=255 data-nosnippet>255</a>//! [`tokio::net`]: crate::net
+<a href=#256 id=256 data-nosnippet>256</a>//! [TCP]: crate::net::tcp
+<a href=#257 id=257 data-nosnippet>257</a>//! [UDP]: crate::net::UdpSocket
+<a href=#258 id=258 data-nosnippet>258</a>//! [UDS]: crate::net::unix
+<a href=#259 id=259 data-nosnippet>259</a>//! [`tokio::fs`]: crate::fs
+<a href=#260 id=260 data-nosnippet>260</a>//! [`std::fs`]: std::fs
+<a href=#261 id=261 data-nosnippet>261</a>//! [`tokio::signal`]: crate::signal
+<a href=#262 id=262 data-nosnippet>262</a>//! [`tokio::process`]: crate::process
+<a href=#263 id=263 data-nosnippet>263</a>//!
+<a href=#264 id=264 data-nosnippet>264</a>//! # Examples
+<a href=#265 id=265 data-nosnippet>265</a>//!
+<a href=#266 id=266 data-nosnippet>266</a>//! A simple TCP echo server:
+<a href=#267 id=267 data-nosnippet>267</a>//!
+<a href=#268 id=268 data-nosnippet>268</a>//! ```no_run
+<a href=#269 id=269 data-nosnippet>269</a>//! use tokio::net::TcpListener;
+<a href=#270 id=270 data-nosnippet>270</a>//! use tokio::io::{AsyncReadExt, AsyncWriteExt};
+<a href=#271 id=271 data-nosnippet>271</a>//!
+<a href=#272 id=272 data-nosnippet>272</a>//! #[tokio::main]
+<a href=#273 id=273 data-nosnippet>273</a>//! async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+<a href=#274 id=274 data-nosnippet>274</a>//!     let listener = TcpListener::bind("127.0.0.1:8080").await?;
+<a href=#275 id=275 data-nosnippet>275</a>//!
+<a href=#276 id=276 data-nosnippet>276</a>//!     loop {
+<a href=#277 id=277 data-nosnippet>277</a>//!         let (mut socket, _) = listener.accept().await?;
+<a href=#278 id=278 data-nosnippet>278</a>//!
+<a href=#279 id=279 data-nosnippet>279</a>//!         tokio::spawn(async move {
+<a href=#280 id=280 data-nosnippet>280</a>//!             let mut buf = [0; 1024];
+<a href=#281 id=281 data-nosnippet>281</a>//!
+<a href=#282 id=282 data-nosnippet>282</a>//!             // In a loop, read data from the socket and write the data back.
+<a href=#283 id=283 data-nosnippet>283</a>//!             loop {
+<a href=#284 id=284 data-nosnippet>284</a>//!                 let n = match socket.read(&amp;mut buf).await {
+<a href=#285 id=285 data-nosnippet>285</a>//!                     // socket closed
+<a href=#286 id=286 data-nosnippet>286</a>//!                     Ok(0) =&gt; return,
+<a href=#287 id=287 data-nosnippet>287</a>//!                     Ok(n) =&gt; n,
+<a href=#288 id=288 data-nosnippet>288</a>//!                     Err(e) =&gt; {
+<a href=#289 id=289 data-nosnippet>289</a>//!                         eprintln!("failed to read from socket; err = {:?}", e);
+<a href=#290 id=290 data-nosnippet>290</a>//!                         return;
+<a href=#291 id=291 data-nosnippet>291</a>//!                     }
+<a href=#292 id=292 data-nosnippet>292</a>//!                 };
+<a href=#293 id=293 data-nosnippet>293</a>//!
+<a href=#294 id=294 data-nosnippet>294</a>//!                 // Write the data back
+<a href=#295 id=295 data-nosnippet>295</a>//!                 if let Err(e) = socket.write_all(&amp;buf[0..n]).await {
+<a href=#296 id=296 data-nosnippet>296</a>//!                     eprintln!("failed to write to socket; err = {:?}", e);
+<a href=#297 id=297 data-nosnippet>297</a>//!                     return;
+<a href=#298 id=298 data-nosnippet>298</a>//!                 }
+<a href=#299 id=299 data-nosnippet>299</a>//!             }
+<a href=#300 id=300 data-nosnippet>300</a>//!         });
+<a href=#301 id=301 data-nosnippet>301</a>//!     }
+<a href=#302 id=302 data-nosnippet>302</a>//! }
+<a href=#303 id=303 data-nosnippet>303</a>//! ```
+<a href=#304 id=304 data-nosnippet>304</a>//!
+<a href=#305 id=305 data-nosnippet>305</a>//! # Feature flags
+<a href=#306 id=306 data-nosnippet>306</a>//!
+<a href=#307 id=307 data-nosnippet>307</a>//! Tokio uses a set of [feature flags] to reduce the amount of compiled code. It
+<a href=#308 id=308 data-nosnippet>308</a>//! is possible to just enable certain features over others. By default, Tokio
+<a href=#309 id=309 data-nosnippet>309</a>//! does not enable any features but allows one to enable a subset for their use
+<a href=#310 id=310 data-nosnippet>310</a>//! case. Below is a list of the available feature flags. You may also notice
+<a href=#311 id=311 data-nosnippet>311</a>//! above each function, struct and trait there is listed one or more feature flags
+<a href=#312 id=312 data-nosnippet>312</a>//! that are required for that item to be used. If you are new to Tokio it is
+<a href=#313 id=313 data-nosnippet>313</a>//! recommended that you use the `full` feature flag which will enable all public APIs.
+<a href=#314 id=314 data-nosnippet>314</a>//! Beware though that this will pull in many extra dependencies that you may not
+<a href=#315 id=315 data-nosnippet>315</a>//! need.
+<a href=#316 id=316 data-nosnippet>316</a>//!
+<a href=#317 id=317 data-nosnippet>317</a>//! - `full`: Enables all features listed below except `test-util` and `tracing`.
+<a href=#318 id=318 data-nosnippet>318</a>//! - `rt`: Enables `tokio::spawn`, the current-thread scheduler,
+<a href=#319 id=319 data-nosnippet>319</a>//!   and non-scheduler utilities.
+<a href=#320 id=320 data-nosnippet>320</a>//! - `rt-multi-thread`: Enables the heavier, multi-threaded, work-stealing scheduler.
+<a href=#321 id=321 data-nosnippet>321</a>//! - `io-util`: Enables the IO based `Ext` traits.
+<a href=#322 id=322 data-nosnippet>322</a>//! - `io-std`: Enable `Stdout`, `Stdin` and `Stderr` types.
+<a href=#323 id=323 data-nosnippet>323</a>//! - `net`: Enables `tokio::net` types such as `TcpStream`, `UnixStream` and
+<a href=#324 id=324 data-nosnippet>324</a>//!   `UdpSocket`, as well as (on Unix-like systems) `AsyncFd` and (on
+<a href=#325 id=325 data-nosnippet>325</a>//!   FreeBSD) `PollAio`.
+<a href=#326 id=326 data-nosnippet>326</a>//! - `time`: Enables `tokio::time` types and allows the schedulers to enable
+<a href=#327 id=327 data-nosnippet>327</a>//!   the built in timer.
+<a href=#328 id=328 data-nosnippet>328</a>//! - `process`: Enables `tokio::process` types.
+<a href=#329 id=329 data-nosnippet>329</a>//! - `macros`: Enables `#[tokio::main]` and `#[tokio::test]` macros.
+<a href=#330 id=330 data-nosnippet>330</a>//! - `sync`: Enables all `tokio::sync` types.
+<a href=#331 id=331 data-nosnippet>331</a>//! - `signal`: Enables all `tokio::signal` types.
+<a href=#332 id=332 data-nosnippet>332</a>//! - `fs`: Enables `tokio::fs` types.
+<a href=#333 id=333 data-nosnippet>333</a>//! - `test-util`: Enables testing based infrastructure for the Tokio runtime.
+<a href=#334 id=334 data-nosnippet>334</a>//! - `parking_lot`: As a potential optimization, use the `_parking_lot_` crate's
+<a href=#335 id=335 data-nosnippet>335</a>//!   synchronization primitives internally. Also, this
+<a href=#336 id=336 data-nosnippet>336</a>//!   dependency is necessary to construct some of our primitives
+<a href=#337 id=337 data-nosnippet>337</a>//!   in a `const` context. `MSRV` may increase according to the
+<a href=#338 id=338 data-nosnippet>338</a>//!   `_parking_lot_` release in use.
+<a href=#339 id=339 data-nosnippet>339</a>//!
+<a href=#340 id=340 data-nosnippet>340</a>//! _Note: `AsyncRead` and `AsyncWrite` traits do not require any features and are
+<a href=#341 id=341 data-nosnippet>341</a>//! always available._
+<a href=#342 id=342 data-nosnippet>342</a>//!
+<a href=#343 id=343 data-nosnippet>343</a>//! ## Unstable features
+<a href=#344 id=344 data-nosnippet>344</a>//!
+<a href=#345 id=345 data-nosnippet>345</a>//! Some feature flags are only available when specifying the `tokio_unstable` flag:
+<a href=#346 id=346 data-nosnippet>346</a>//!
+<a href=#347 id=347 data-nosnippet>347</a>//! - `tracing`: Enables tracing events.
+<a href=#348 id=348 data-nosnippet>348</a>//!
+<a href=#349 id=349 data-nosnippet>349</a>//! Likewise, some parts of the API are only available with the same flag:
+<a href=#350 id=350 data-nosnippet>350</a>//!
+<a href=#351 id=351 data-nosnippet>351</a>//! - [`task::Builder`]
+<a href=#352 id=352 data-nosnippet>352</a>//! - Some methods on [`task::JoinSet`]
+<a href=#353 id=353 data-nosnippet>353</a>//! - [`runtime::RuntimeMetrics`]
+<a href=#354 id=354 data-nosnippet>354</a>//! - [`runtime::Builder::on_task_spawn`]
+<a href=#355 id=355 data-nosnippet>355</a>//! - [`runtime::Builder::on_task_terminate`]
+<a href=#356 id=356 data-nosnippet>356</a>//! - [`runtime::Builder::unhandled_panic`]
+<a href=#357 id=357 data-nosnippet>357</a>//! - [`runtime::TaskMeta`]
+<a href=#358 id=358 data-nosnippet>358</a>//!
+<a href=#359 id=359 data-nosnippet>359</a>//! This flag enables **unstable** features. The public API of these features
+<a href=#360 id=360 data-nosnippet>360</a>//! may break in 1.x releases. To enable these features, the `--cfg
+<a href=#361 id=361 data-nosnippet>361</a>//! tokio_unstable` argument must be passed to `rustc` when compiling. This
+<a href=#362 id=362 data-nosnippet>362</a>//! serves to explicitly opt-in to features which may break semver conventions,
+<a href=#363 id=363 data-nosnippet>363</a>//! since Cargo [does not yet directly support such opt-ins][unstable features].
+<a href=#364 id=364 data-nosnippet>364</a>//!
+<a href=#365 id=365 data-nosnippet>365</a>//! You can specify it in your project's `.cargo/config.toml` file:
+<a href=#366 id=366 data-nosnippet>366</a>//!
+<a href=#367 id=367 data-nosnippet>367</a>//! ```toml
+<a href=#368 id=368 data-nosnippet>368</a>//! [build]
+<a href=#369 id=369 data-nosnippet>369</a>//! rustflags = ["--cfg", "tokio_unstable"]
+<a href=#370 id=370 data-nosnippet>370</a>//! ```
+<a href=#371 id=371 data-nosnippet>371</a>//!
+<a href=#372 id=372 data-nosnippet>372</a>//! &lt;div class="warning"&gt;
+<a href=#373 id=373 data-nosnippet>373</a>//! The &lt;code&gt;[build]&lt;/code&gt; section does &lt;strong&gt;not&lt;/strong&gt; go in a
+<a href=#374 id=374 data-nosnippet>374</a>//! &lt;code&gt;Cargo.toml&lt;/code&gt; file. Instead it must be placed in the Cargo config
+<a href=#375 id=375 data-nosnippet>375</a>//! file &lt;code&gt;.cargo/config.toml&lt;/code&gt;.
+<a href=#376 id=376 data-nosnippet>376</a>//! &lt;/div&gt;
+<a href=#377 id=377 data-nosnippet>377</a>//!
+<a href=#378 id=378 data-nosnippet>378</a>//! Alternatively, you can specify it with an environment variable:
+<a href=#379 id=379 data-nosnippet>379</a>//!
+<a href=#380 id=380 data-nosnippet>380</a>//! ```sh
+<a href=#381 id=381 data-nosnippet>381</a>//! ## Many *nix shells:
+<a href=#382 id=382 data-nosnippet>382</a>//! export RUSTFLAGS="--cfg tokio_unstable"
+<a href=#383 id=383 data-nosnippet>383</a>//! cargo build
+<a href=#384 id=384 data-nosnippet>384</a>//! ```
+<a href=#385 id=385 data-nosnippet>385</a>//!
+<a href=#386 id=386 data-nosnippet>386</a>//! ```powershell
+<a href=#387 id=387 data-nosnippet>387</a>//! ## Windows PowerShell:
+<a href=#388 id=388 data-nosnippet>388</a>//! $Env:RUSTFLAGS="--cfg tokio_unstable"
+<a href=#389 id=389 data-nosnippet>389</a>//! cargo build
+<a href=#390 id=390 data-nosnippet>390</a>//! ```
+<a href=#391 id=391 data-nosnippet>391</a>//!
+<a href=#392 id=392 data-nosnippet>392</a>//! [unstable features]: https://internals.rust-lang.org/t/feature-request-unstable-opt-in-non-transitive-crate-features/16193#why-not-a-crate-feature-2
+<a href=#393 id=393 data-nosnippet>393</a>//! [feature flags]: https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-section
+<a href=#394 id=394 data-nosnippet>394</a>//!
+<a href=#395 id=395 data-nosnippet>395</a>//! # Supported platforms
+<a href=#396 id=396 data-nosnippet>396</a>//!
+<a href=#397 id=397 data-nosnippet>397</a>//! Tokio currently guarantees support for the following platforms:
+<a href=#398 id=398 data-nosnippet>398</a>//!
+<a href=#399 id=399 data-nosnippet>399</a>//!  * Linux
+<a href=#400 id=400 data-nosnippet>400</a>//!  * Windows
+<a href=#401 id=401 data-nosnippet>401</a>//!  * Android (API level 21)
+<a href=#402 id=402 data-nosnippet>402</a>//!  * macOS
+<a href=#403 id=403 data-nosnippet>403</a>//!  * iOS
+<a href=#404 id=404 data-nosnippet>404</a>//!  * FreeBSD
+<a href=#405 id=405 data-nosnippet>405</a>//!
+<a href=#406 id=406 data-nosnippet>406</a>//! Tokio will continue to support these platforms in the future. However,
+<a href=#407 id=407 data-nosnippet>407</a>//! future releases may change requirements such as the minimum required libc
+<a href=#408 id=408 data-nosnippet>408</a>//! version on Linux, the API level on Android, or the supported FreeBSD
+<a href=#409 id=409 data-nosnippet>409</a>//! release.
+<a href=#410 id=410 data-nosnippet>410</a>//!
+<a href=#411 id=411 data-nosnippet>411</a>//! Beyond the above platforms, Tokio is intended to work on all platforms
+<a href=#412 id=412 data-nosnippet>412</a>//! supported by the mio crate. You can find a longer list [in mio's
+<a href=#413 id=413 data-nosnippet>413</a>//! documentation][mio-supported]. However, these additional platforms may
+<a href=#414 id=414 data-nosnippet>414</a>//! become unsupported in the future.
+<a href=#415 id=415 data-nosnippet>415</a>//!
+<a href=#416 id=416 data-nosnippet>416</a>//! Note that Wine is considered to be a different platform from Windows. See
+<a href=#417 id=417 data-nosnippet>417</a>//! mio's documentation for more information on Wine support.
+<a href=#418 id=418 data-nosnippet>418</a>//!
+<a href=#419 id=419 data-nosnippet>419</a>//! [mio-supported]: https://crates.io/crates/mio#platforms
+<a href=#420 id=420 data-nosnippet>420</a>//!
+<a href=#421 id=421 data-nosnippet>421</a>//! ## `WASM` support
+<a href=#422 id=422 data-nosnippet>422</a>//!
+<a href=#423 id=423 data-nosnippet>423</a>//! Tokio has some limited support for the `WASM` platform. Without the
+<a href=#424 id=424 data-nosnippet>424</a>//! `tokio_unstable` flag, the following features are supported:
+<a href=#425 id=425 data-nosnippet>425</a>//!
+<a href=#426 id=426 data-nosnippet>426</a>//!  * `sync`
+<a href=#427 id=427 data-nosnippet>427</a>//!  * `macros`
+<a href=#428 id=428 data-nosnippet>428</a>//!  * `io-util`
+<a href=#429 id=429 data-nosnippet>429</a>//!  * `rt`
+<a href=#430 id=430 data-nosnippet>430</a>//!  * `time`
+<a href=#431 id=431 data-nosnippet>431</a>//!
+<a href=#432 id=432 data-nosnippet>432</a>//! Enabling any other feature (including `full`) will cause a compilation
+<a href=#433 id=433 data-nosnippet>433</a>//! failure.
+<a href=#434 id=434 data-nosnippet>434</a>//!
+<a href=#435 id=435 data-nosnippet>435</a>//! The `time` module will only work on `WASM` platforms that have support for
+<a href=#436 id=436 data-nosnippet>436</a>//! timers (e.g. wasm32-wasi). The timing functions will panic if used on a `WASM`
+<a href=#437 id=437 data-nosnippet>437</a>//! platform that does not support timers.
+<a href=#438 id=438 data-nosnippet>438</a>//!
+<a href=#439 id=439 data-nosnippet>439</a>//! Note also that if the runtime becomes indefinitely idle, it will panic
+<a href=#440 id=440 data-nosnippet>440</a>//! immediately instead of blocking forever. On platforms that don't support
+<a href=#441 id=441 data-nosnippet>441</a>//! time, this means that the runtime can never be idle in any way.
+<a href=#442 id=442 data-nosnippet>442</a>//!
+<a href=#443 id=443 data-nosnippet>443</a>//! ## Unstable `WASM` support
+<a href=#444 id=444 data-nosnippet>444</a>//!
+<a href=#445 id=445 data-nosnippet>445</a>//! Tokio also has unstable support for some additional `WASM` features. This
+<a href=#446 id=446 data-nosnippet>446</a>//! requires the use of the `tokio_unstable` flag.
+<a href=#447 id=447 data-nosnippet>447</a>//!
+<a href=#448 id=448 data-nosnippet>448</a>//! Using this flag enables the use of `tokio::net` on the wasm32-wasi target.
+<a href=#449 id=449 data-nosnippet>449</a>//! However, not all methods are available on the networking types as `WASI`
+<a href=#450 id=450 data-nosnippet>450</a>//! currently does not support the creation of new sockets from within `WASM`.
+<a href=#451 id=451 data-nosnippet>451</a>//! Because of this, sockets must currently be created via the `FromRawFd`
+<a href=#452 id=452 data-nosnippet>452</a>//! trait.
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a></span><span class="comment">// Test that pointer width is compatible. This asserts that e.g. usize is at
+<a href=#455 id=455 data-nosnippet>455</a>// least 32 bits, which a lot of components in Tokio currently assumes.
+<a href=#456 id=456 data-nosnippet>456</a>//
+<a href=#457 id=457 data-nosnippet>457</a>// TODO: improve once we have MSRV access to const eval to make more flexible.
+<a href=#458 id=458 data-nosnippet>458</a></span><span class="attr">#[cfg(not(any(target_pointer_width = <span class="string">"32"</span>, target_pointer_width = <span class="string">"64"</span>)))]
+<a href=#459 id=459 data-nosnippet>459</a></span><span class="macro">compile_error!</span> {
+<a href=#460 id=460 data-nosnippet>460</a>    <span class="string">"Tokio requires the platform pointer width to be at least 32 bits"
+<a href=#461 id=461 data-nosnippet>461</a></span>}
+<a href=#462 id=462 data-nosnippet>462</a>
+<a href=#463 id=463 data-nosnippet>463</a><span class="attr">#[cfg(all(
+<a href=#464 id=464 data-nosnippet>464</a>    not(tokio_unstable),
+<a href=#465 id=465 data-nosnippet>465</a>    target_family = <span class="string">"wasm"</span>,
+<a href=#466 id=466 data-nosnippet>466</a>    any(
+<a href=#467 id=467 data-nosnippet>467</a>        feature = <span class="string">"fs"</span>,
+<a href=#468 id=468 data-nosnippet>468</a>        feature = <span class="string">"io-std"</span>,
+<a href=#469 id=469 data-nosnippet>469</a>        feature = <span class="string">"net"</span>,
+<a href=#470 id=470 data-nosnippet>470</a>        feature = <span class="string">"process"</span>,
+<a href=#471 id=471 data-nosnippet>471</a>        feature = <span class="string">"rt-multi-thread"</span>,
+<a href=#472 id=472 data-nosnippet>472</a>        feature = <span class="string">"signal"
+<a href=#473 id=473 data-nosnippet>473</a>    </span>)
+<a href=#474 id=474 data-nosnippet>474</a>))]
+<a href=#475 id=475 data-nosnippet>475</a></span><span class="macro">compile_error!</span>(<span class="string">"Only features sync,macros,io-util,rt,time are supported on wasm."</span>);
+<a href=#476 id=476 data-nosnippet>476</a>
+<a href=#477 id=477 data-nosnippet>477</a><span class="attr">#[cfg(all(not(tokio_unstable), tokio_taskdump))]
+<a href=#478 id=478 data-nosnippet>478</a></span><span class="macro">compile_error!</span>(<span class="string">"The `tokio_taskdump` feature requires `--cfg tokio_unstable`."</span>);
+<a href=#479 id=479 data-nosnippet>479</a>
+<a href=#480 id=480 data-nosnippet>480</a><span class="attr">#[cfg(all(
+<a href=#481 id=481 data-nosnippet>481</a>    tokio_taskdump,
+<a href=#482 id=482 data-nosnippet>482</a>    not(doc),
+<a href=#483 id=483 data-nosnippet>483</a>    not(all(
+<a href=#484 id=484 data-nosnippet>484</a>        target_os = <span class="string">"linux"</span>,
+<a href=#485 id=485 data-nosnippet>485</a>        any(target_arch = <span class="string">"aarch64"</span>, target_arch = <span class="string">"x86"</span>, target_arch = <span class="string">"x86_64"</span>)
+<a href=#486 id=486 data-nosnippet>486</a>    ))
+<a href=#487 id=487 data-nosnippet>487</a>))]
+<a href=#488 id=488 data-nosnippet>488</a></span><span class="macro">compile_error!</span>(
+<a href=#489 id=489 data-nosnippet>489</a>    <span class="string">"The `tokio_taskdump` feature is only currently supported on \
+<a href=#490 id=490 data-nosnippet>490</a>linux, on `aarch64`, `x86` and `x86_64`."
+<a href=#491 id=491 data-nosnippet>491</a></span>);
+<a href=#492 id=492 data-nosnippet>492</a>
+<a href=#493 id=493 data-nosnippet>493</a><span class="comment">// Includes re-exports used by macros.
+<a href=#494 id=494 data-nosnippet>494</a>//
+<a href=#495 id=495 data-nosnippet>495</a>// This module is not intended to be part of the public API. In general, any
+<a href=#496 id=496 data-nosnippet>496</a>// `doc(hidden)` code is not part of Tokio's public and stable API.
+<a href=#497 id=497 data-nosnippet>497</a></span><span class="attr">#[macro_use]
+<a href=#498 id=498 data-nosnippet>498</a>#[doc(hidden)]
+<a href=#499 id=499 data-nosnippet>499</a></span><span class="kw">pub mod </span>macros;
+<a href=#500 id=500 data-nosnippet>500</a>
+<a href=#501 id=501 data-nosnippet>501</a><span class="macro">cfg_fs!</span> {
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">pub mod </span>fs;
+<a href=#503 id=503 data-nosnippet>503</a>}
+<a href=#504 id=504 data-nosnippet>504</a>
+<a href=#505 id=505 data-nosnippet>505</a><span class="kw">mod </span>future;
+<a href=#506 id=506 data-nosnippet>506</a>
+<a href=#507 id=507 data-nosnippet>507</a><span class="kw">pub mod </span>io;
+<a href=#508 id=508 data-nosnippet>508</a><span class="kw">pub mod </span>net;
+<a href=#509 id=509 data-nosnippet>509</a>
+<a href=#510 id=510 data-nosnippet>510</a><span class="kw">mod </span>loom;
+<a href=#511 id=511 data-nosnippet>511</a>
+<a href=#512 id=512 data-nosnippet>512</a><span class="macro">cfg_process!</span> {
+<a href=#513 id=513 data-nosnippet>513</a>    <span class="kw">pub mod </span>process;
+<a href=#514 id=514 data-nosnippet>514</a>}
+<a href=#515 id=515 data-nosnippet>515</a>
+<a href=#516 id=516 data-nosnippet>516</a><span class="attr">#[cfg(any(
+<a href=#517 id=517 data-nosnippet>517</a>    feature = <span class="string">"fs"</span>,
+<a href=#518 id=518 data-nosnippet>518</a>    feature = <span class="string">"io-std"</span>,
+<a href=#519 id=519 data-nosnippet>519</a>    feature = <span class="string">"net"</span>,
+<a href=#520 id=520 data-nosnippet>520</a>    all(windows, feature = <span class="string">"process"</span>),
+<a href=#521 id=521 data-nosnippet>521</a>))]
+<a href=#522 id=522 data-nosnippet>522</a></span><span class="kw">mod </span>blocking;
+<a href=#523 id=523 data-nosnippet>523</a>
+<a href=#524 id=524 data-nosnippet>524</a><span class="macro">cfg_rt!</span> {
+<a href=#525 id=525 data-nosnippet>525</a>    <span class="kw">pub mod </span>runtime;
+<a href=#526 id=526 data-nosnippet>526</a>}
+<a href=#527 id=527 data-nosnippet>527</a><span class="macro">cfg_not_rt!</span> {
+<a href=#528 id=528 data-nosnippet>528</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>runtime;
+<a href=#529 id=529 data-nosnippet>529</a>}
+<a href=#530 id=530 data-nosnippet>530</a>
+<a href=#531 id=531 data-nosnippet>531</a><span class="macro">cfg_signal!</span> {
+<a href=#532 id=532 data-nosnippet>532</a>    <span class="kw">pub mod </span>signal;
+<a href=#533 id=533 data-nosnippet>533</a>}
+<a href=#534 id=534 data-nosnippet>534</a>
+<a href=#535 id=535 data-nosnippet>535</a><span class="macro">cfg_signal_internal!</span> {
+<a href=#536 id=536 data-nosnippet>536</a>    <span class="attr">#[cfg(not(feature = <span class="string">"signal"</span>))]
+<a href=#537 id=537 data-nosnippet>537</a>    #[allow(dead_code)]
+<a href=#538 id=538 data-nosnippet>538</a>    #[allow(unreachable_pub)]
+<a href=#539 id=539 data-nosnippet>539</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>signal;
+<a href=#540 id=540 data-nosnippet>540</a>}
+<a href=#541 id=541 data-nosnippet>541</a>
+<a href=#542 id=542 data-nosnippet>542</a><span class="macro">cfg_sync!</span> {
+<a href=#543 id=543 data-nosnippet>543</a>    <span class="kw">pub mod </span>sync;
+<a href=#544 id=544 data-nosnippet>544</a>}
+<a href=#545 id=545 data-nosnippet>545</a><span class="macro">cfg_not_sync!</span> {
+<a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">mod </span>sync;
+<a href=#547 id=547 data-nosnippet>547</a>}
+<a href=#548 id=548 data-nosnippet>548</a>
+<a href=#549 id=549 data-nosnippet>549</a><span class="kw">pub mod </span>task;
+<a href=#550 id=550 data-nosnippet>550</a><span class="macro">cfg_rt!</span> {
+<a href=#551 id=551 data-nosnippet>551</a>    <span class="kw">pub use </span>task::spawn;
+<a href=#552 id=552 data-nosnippet>552</a>}
+<a href=#553 id=553 data-nosnippet>553</a>
+<a href=#554 id=554 data-nosnippet>554</a><span class="macro">cfg_time!</span> {
+<a href=#555 id=555 data-nosnippet>555</a>    <span class="kw">pub mod </span>time;
+<a href=#556 id=556 data-nosnippet>556</a>}
+<a href=#557 id=557 data-nosnippet>557</a>
+<a href=#558 id=558 data-nosnippet>558</a><span class="kw">mod </span>trace {
+<a href=#559 id=559 data-nosnippet>559</a>    <span class="kw">use </span>std::future::Future;
+<a href=#560 id=560 data-nosnippet>560</a>    <span class="kw">use </span>std::pin::Pin;
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="kw">use </span>std::task::{Context, Poll};
+<a href=#562 id=562 data-nosnippet>562</a>
+<a href=#563 id=563 data-nosnippet>563</a>    <span class="macro">cfg_taskdump!</span> {
+<a href=#564 id=564 data-nosnippet>564</a>        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span><span class="kw">crate</span>::runtime::task::trace::trace_leaf;
+<a href=#565 id=565 data-nosnippet>565</a>    }
+<a href=#566 id=566 data-nosnippet>566</a>
+<a href=#567 id=567 data-nosnippet>567</a>    <span class="macro">cfg_not_taskdump!</span> {
+<a href=#568 id=568 data-nosnippet>568</a>        <span class="attr">#[inline(always)]
+<a href=#569 id=569 data-nosnippet>569</a>        #[allow(dead_code)]
+<a href=#570 id=570 data-nosnippet>570</a>        </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>trace_leaf(<span class="kw">_</span>: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::task::Poll&lt;()&gt; {
+<a href=#571 id=571 data-nosnippet>571</a>            std::task::Poll::Ready(())
+<a href=#572 id=572 data-nosnippet>572</a>        }
+<a href=#573 id=573 data-nosnippet>573</a>    }
+<a href=#574 id=574 data-nosnippet>574</a>
+<a href=#575 id=575 data-nosnippet>575</a>    <span class="attr">#[cfg_attr(not(feature = <span class="string">"sync"</span>), allow(dead_code))]
+<a href=#576 id=576 data-nosnippet>576</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>async_trace_leaf() -&gt; <span class="kw">impl </span>Future&lt;Output = ()&gt; {
+<a href=#577 id=577 data-nosnippet>577</a>        <span class="kw">struct </span>Trace;
+<a href=#578 id=578 data-nosnippet>578</a>
+<a href=#579 id=579 data-nosnippet>579</a>        <span class="kw">impl </span>Future <span class="kw">for </span>Trace {
+<a href=#580 id=580 data-nosnippet>580</a>            <span class="kw">type </span>Output = ();
+<a href=#581 id=581 data-nosnippet>581</a>
+<a href=#582 id=582 data-nosnippet>582</a>            <span class="attr">#[inline(always)]
+<a href=#583 id=583 data-nosnippet>583</a>            </span><span class="kw">fn </span>poll(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;()&gt; {
+<a href=#584 id=584 data-nosnippet>584</a>                trace_leaf(cx)
+<a href=#585 id=585 data-nosnippet>585</a>            }
+<a href=#586 id=586 data-nosnippet>586</a>        }
+<a href=#587 id=587 data-nosnippet>587</a>
+<a href=#588 id=588 data-nosnippet>588</a>        Trace
+<a href=#589 id=589 data-nosnippet>589</a>    }
+<a href=#590 id=590 data-nosnippet>590</a>}
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a><span class="kw">mod </span>util;
+<a href=#593 id=593 data-nosnippet>593</a>
+<a href=#594 id=594 data-nosnippet>594</a><span class="doccomment">/// Due to the `Stream` trait's inclusion in `std` landing later than Tokio's 1.0
+<a href=#595 id=595 data-nosnippet>595</a>/// release, most of the Tokio stream utilities have been moved into the [`tokio-stream`]
+<a href=#596 id=596 data-nosnippet>596</a>/// crate.
+<a href=#597 id=597 data-nosnippet>597</a>///
+<a href=#598 id=598 data-nosnippet>598</a>/// # Why was `Stream` not included in Tokio 1.0?
+<a href=#599 id=599 data-nosnippet>599</a>///
+<a href=#600 id=600 data-nosnippet>600</a>/// Originally, we had planned to ship Tokio 1.0 with a stable `Stream` type
+<a href=#601 id=601 data-nosnippet>601</a>/// but unfortunately the [RFC] had not been merged in time for `Stream` to
+<a href=#602 id=602 data-nosnippet>602</a>/// reach `std` on a stable compiler in time for the 1.0 release of Tokio. For
+<a href=#603 id=603 data-nosnippet>603</a>/// this reason, the team has decided to move all `Stream` based utilities to
+<a href=#604 id=604 data-nosnippet>604</a>/// the [`tokio-stream`] crate. While this is not ideal, once `Stream` has made
+<a href=#605 id=605 data-nosnippet>605</a>/// it into the standard library and the `MSRV` period has passed, we will implement
+<a href=#606 id=606 data-nosnippet>606</a>/// stream for our different types.
+<a href=#607 id=607 data-nosnippet>607</a>///
+<a href=#608 id=608 data-nosnippet>608</a>/// While this may seem unfortunate, not all is lost as you can get much of the
+<a href=#609 id=609 data-nosnippet>609</a>/// `Stream` support with `async/await` and `while let` loops. It is also possible
+<a href=#610 id=610 data-nosnippet>610</a>/// to create a `impl Stream` from `async fn` using the [`async-stream`] crate.
+<a href=#611 id=611 data-nosnippet>611</a>///
+<a href=#612 id=612 data-nosnippet>612</a>/// [`tokio-stream`]: https://docs.rs/tokio-stream
+<a href=#613 id=613 data-nosnippet>613</a>/// [`async-stream`]: https://docs.rs/async-stream
+<a href=#614 id=614 data-nosnippet>614</a>/// [RFC]: https://github.com/rust-lang/rfcs/pull/2996
+<a href=#615 id=615 data-nosnippet>615</a>///
+<a href=#616 id=616 data-nosnippet>616</a>/// # Example
+<a href=#617 id=617 data-nosnippet>617</a>///
+<a href=#618 id=618 data-nosnippet>618</a>/// Convert a [`sync::mpsc::Receiver`] to an `impl Stream`.
+<a href=#619 id=619 data-nosnippet>619</a>///
+<a href=#620 id=620 data-nosnippet>620</a>/// ```rust,no_run
+<a href=#621 id=621 data-nosnippet>621</a>/// use tokio::sync::mpsc;
+<a href=#622 id=622 data-nosnippet>622</a>///
+<a href=#623 id=623 data-nosnippet>623</a>/// let (tx, mut rx) = mpsc::channel::&lt;usize&gt;(16);
+<a href=#624 id=624 data-nosnippet>624</a>///
+<a href=#625 id=625 data-nosnippet>625</a>/// let stream = async_stream::stream! {
+<a href=#626 id=626 data-nosnippet>626</a>///     while let Some(item) = rx.recv().await {
+<a href=#627 id=627 data-nosnippet>627</a>///         yield item;
+<a href=#628 id=628 data-nosnippet>628</a>///     }
+<a href=#629 id=629 data-nosnippet>629</a>/// };
+<a href=#630 id=630 data-nosnippet>630</a>/// ```
+<a href=#631 id=631 data-nosnippet>631</a></span><span class="kw">pub mod </span>stream {}
+<a href=#632 id=632 data-nosnippet>632</a>
+<a href=#633 id=633 data-nosnippet>633</a><span class="comment">// local re-exports of platform specific things, allowing for decent
+<a href=#634 id=634 data-nosnippet>634</a>// documentation to be shimmed in on docs.rs
+<a href=#635 id=635 data-nosnippet>635</a>
+<a href=#636 id=636 data-nosnippet>636</a></span><span class="attr">#[cfg(all(docsrs, unix))]
+<a href=#637 id=637 data-nosnippet>637</a></span><span class="kw">pub mod </span>doc;
+<a href=#638 id=638 data-nosnippet>638</a>
+<a href=#639 id=639 data-nosnippet>639</a><span class="attr">#[cfg(any(feature = <span class="string">"net"</span>, feature = <span class="string">"fs"</span>))]
+<a href=#640 id=640 data-nosnippet>640</a>#[cfg(all(docsrs, unix))]
+<a href=#641 id=641 data-nosnippet>641</a>#[allow(unused)]
+<a href=#642 id=642 data-nosnippet>642</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span><span class="self">self</span>::doc::os;
+<a href=#643 id=643 data-nosnippet>643</a>
+<a href=#644 id=644 data-nosnippet>644</a><span class="attr">#[cfg(not(all(docsrs, unix)))]
+<a href=#645 id=645 data-nosnippet>645</a>#[allow(unused)]
+<a href=#646 id=646 data-nosnippet>646</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>std::os;
+<a href=#647 id=647 data-nosnippet>647</a>
+<a href=#648 id=648 data-nosnippet>648</a><span class="macro">cfg_macros!</span> {
+<a href=#649 id=649 data-nosnippet>649</a>    <span class="doccomment">/// Implementation detail of the `select!` macro. This macro is **not**
+<a href=#650 id=650 data-nosnippet>650</a>    /// intended to be used as part of the public API and is permitted to
+<a href=#651 id=651 data-nosnippet>651</a>    /// change.
+<a href=#652 id=652 data-nosnippet>652</a>    </span><span class="attr">#[doc(hidden)]
+<a href=#653 id=653 data-nosnippet>653</a>    </span><span class="kw">pub use </span>tokio_macros::select_priv_declare_output_enum;
+<a href=#654 id=654 data-nosnippet>654</a>
+<a href=#655 id=655 data-nosnippet>655</a>    <span class="doccomment">/// Implementation detail of the `select!` macro. This macro is **not**
+<a href=#656 id=656 data-nosnippet>656</a>    /// intended to be used as part of the public API and is permitted to
+<a href=#657 id=657 data-nosnippet>657</a>    /// change.
+<a href=#658 id=658 data-nosnippet>658</a>    </span><span class="attr">#[doc(hidden)]
+<a href=#659 id=659 data-nosnippet>659</a>    </span><span class="kw">pub use </span>tokio_macros::select_priv_clean_pattern;
+<a href=#660 id=660 data-nosnippet>660</a>
+<a href=#661 id=661 data-nosnippet>661</a>    <span class="macro">cfg_rt!</span> {
+<a href=#662 id=662 data-nosnippet>662</a>        <span class="attr">#[cfg(feature = <span class="string">"rt-multi-thread"</span>)]
+<a href=#663 id=663 data-nosnippet>663</a>        #[cfg_attr(docsrs, doc(cfg(feature = <span class="string">"macros"</span>)))]
+<a href=#664 id=664 data-nosnippet>664</a>        #[doc(inline)]
+<a href=#665 id=665 data-nosnippet>665</a>        </span><span class="kw">pub use </span>tokio_macros::main;
+<a href=#666 id=666 data-nosnippet>666</a>
+<a href=#667 id=667 data-nosnippet>667</a>        <span class="attr">#[cfg(feature = <span class="string">"rt-multi-thread"</span>)]
+<a href=#668 id=668 data-nosnippet>668</a>        #[cfg_attr(docsrs, doc(cfg(feature = <span class="string">"macros"</span>)))]
+<a href=#669 id=669 data-nosnippet>669</a>        #[doc(inline)]
+<a href=#670 id=670 data-nosnippet>670</a>        </span><span class="kw">pub use </span>tokio_macros::test;
+<a href=#671 id=671 data-nosnippet>671</a>
+<a href=#672 id=672 data-nosnippet>672</a>        <span class="macro">cfg_not_rt_multi_thread!</span> {
+<a href=#673 id=673 data-nosnippet>673</a>            <span class="attr">#[doc(inline)]
+<a href=#674 id=674 data-nosnippet>674</a>            </span><span class="kw">pub use </span>tokio_macros::main_rt <span class="kw">as </span>main;
+<a href=#675 id=675 data-nosnippet>675</a>
+<a href=#676 id=676 data-nosnippet>676</a>            <span class="attr">#[doc(inline)]
+<a href=#677 id=677 data-nosnippet>677</a>            </span><span class="kw">pub use </span>tokio_macros::test_rt <span class="kw">as </span>test;
+<a href=#678 id=678 data-nosnippet>678</a>        }
+<a href=#679 id=679 data-nosnippet>679</a>    }
+<a href=#680 id=680 data-nosnippet>680</a>
+<a href=#681 id=681 data-nosnippet>681</a>    <span class="comment">// Always fail if rt is not enabled.
+<a href=#682 id=682 data-nosnippet>682</a>    </span><span class="macro">cfg_not_rt!</span> {
+<a href=#683 id=683 data-nosnippet>683</a>        <span class="attr">#[doc(inline)]
+<a href=#684 id=684 data-nosnippet>684</a>        </span><span class="kw">pub use </span>tokio_macros::main_fail <span class="kw">as </span>main;
+<a href=#685 id=685 data-nosnippet>685</a>
+<a href=#686 id=686 data-nosnippet>686</a>        <span class="attr">#[doc(inline)]
+<a href=#687 id=687 data-nosnippet>687</a>        </span><span class="kw">pub use </span>tokio_macros::test_fail <span class="kw">as </span>test;
+<a href=#688 id=688 data-nosnippet>688</a>    }
+<a href=#689 id=689 data-nosnippet>689</a>}
+<a href=#690 id=690 data-nosnippet>690</a>
+<a href=#691 id=691 data-nosnippet>691</a><span class="comment">// TODO: rm
+<a href=#692 id=692 data-nosnippet>692</a></span><span class="attr">#[cfg(feature = <span class="string">"io-util"</span>)]
+<a href=#693 id=693 data-nosnippet>693</a>#[cfg(test)]
+<a href=#694 id=694 data-nosnippet>694</a></span><span class="kw">fn </span>is_unpin&lt;T: Unpin&gt;() {}
+<a href=#695 id=695 data-nosnippet>695</a>
+<a href=#696 id=696 data-nosnippet>696</a><span class="doccomment">/// fuzz test (`fuzz_linked_list`)
+<a href=#697 id=697 data-nosnippet>697</a></span><span class="attr">#[cfg(fuzzing)]
+<a href=#698 id=698 data-nosnippet>698</a></span><span class="kw">pub mod </span>fuzz;</code></pre></div></section></main></body></html>

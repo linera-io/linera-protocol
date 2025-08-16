@@ -1,0 +1,153 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Unroll the given for loop"><title>unroll in crunchy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="crunchy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../crunchy/index.html">crunchy</a><span class="version">0.2.4</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">crunchy</a></div><h1>Macro <span class="macro">unroll</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/crunchy/home/runner/work/linera-protocol/linera-protocol/target/debug/build/crunchy-775cb32d3e04bc8a/out/lib.rs.html#24-841">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! unroll {
+    (for $v:ident in 0..0 $c:block) =&gt; { ... };
+    (for $v:ident &lt; $max:tt in ($start:tt..$end:tt).step_by($val:expr) {$($c:tt)*}) =&gt; { ... };
+    (for $v:ident in ($start:tt..$end:tt).step_by($val:expr) {$($c:tt)*}) =&gt; { ... };
+    (for $v:ident in ($start:tt..$end:tt) {$($c:tt)*}) =&gt; { ... };
+    (for $v:ident in $start:tt..$end:tt {$($c:tt)*}) =&gt; { ... };
+    (for $v:ident &lt; $max:tt in $start:tt..$end:tt $c:block) =&gt; { ... };
+    (for $v:ident in 0..$end:tt {$($statement:tt)*}) =&gt; { ... };
+    (@$v:ident, $a:expr, 0, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 1, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 2, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 3, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 4, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 5, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 6, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 7, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 8, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 9, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 10, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 11, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 12, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 13, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 14, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 15, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 16, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 17, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 18, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 19, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 20, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 21, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 22, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 23, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 24, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 25, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 26, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 27, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 28, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 29, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 30, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 31, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 32, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 33, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 34, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 35, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 36, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 37, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 38, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 39, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 40, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 41, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 42, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 43, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 44, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 45, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 46, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 47, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 48, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 49, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 50, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 51, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 52, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 53, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 54, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 55, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 56, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 57, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 58, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 59, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 60, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 61, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 62, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 63, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 64, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 65, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 66, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 67, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 68, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 69, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 70, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 71, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 72, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 73, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 74, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 75, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 76, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 77, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 78, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 79, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 80, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 81, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 82, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 83, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 84, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 85, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 86, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 87, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 88, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 89, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 90, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 91, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 92, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 93, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 94, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 95, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 96, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 97, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 98, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 99, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 100, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 101, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 102, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 103, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 104, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 105, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 106, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 107, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 108, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 109, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 110, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 111, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 112, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 113, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 114, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 115, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 116, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 117, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 118, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 119, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 120, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 121, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 122, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 123, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 124, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 125, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 126, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 127, $c:block) =&gt; { ... };
+    (@$v:ident, $a:expr, 128, $c:block) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Unroll the given for loop</p>
+<p>Example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">unroll!</span> {
+  <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">5 </span>{
+    <span class="macro">println!</span>(<span class="string">"Iteration {}"</span>, i);
+  }
+}</code></pre></div>
+<p>will expand into:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>{ <span class="macro">println!</span>(<span class="string">"Iteration {}"</span>, <span class="number">0</span>); }
+{ <span class="macro">println!</span>(<span class="string">"Iteration {}"</span>, <span class="number">1</span>); }
+{ <span class="macro">println!</span>(<span class="string">"Iteration {}"</span>, <span class="number">2</span>); }
+{ <span class="macro">println!</span>(<span class="string">"Iteration {}"</span>, <span class="number">3</span>); }
+{ <span class="macro">println!</span>(<span class="string">"Iteration {}"</span>, <span class="number">4</span>); }</code></pre></div>
+</div></details></section></div></main></body></html>

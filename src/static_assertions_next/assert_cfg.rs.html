@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/static_assertions_next-1.1.2/src/assert_cfg.rs`."><title>assert_cfg.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="static_assertions_next" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">static_assertions_next/</div>assert_cfg.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">/// Asserts that a given configuration is set.
+<a href=#2 id=2 data-nosnippet>2</a>///
+<a href=#3 id=3 data-nosnippet>3</a>/// # Examples
+<a href=#4 id=4 data-nosnippet>4</a>///
+<a href=#5 id=5 data-nosnippet>5</a>/// A project will simply fail to compile if the given configuration is not set.
+<a href=#6 id=6 data-nosnippet>6</a>///
+<a href=#7 id=7 data-nosnippet>7</a>/// ```
+<a href=#8 id=8 data-nosnippet>8</a>/// # #[macro_use] extern crate static_assertions; fn main() {}
+<a href=#9 id=9 data-nosnippet>9</a>/// // We're not masochists
+<a href=#10 id=10 data-nosnippet>10</a>/// # #[cfg(not(target_pointer_width = "16"))] // Just in case
+<a href=#11 id=11 data-nosnippet>11</a>/// assert_cfg!(not(target_pointer_width = "16"));
+<a href=#12 id=12 data-nosnippet>12</a>/// ```
+<a href=#13 id=13 data-nosnippet>13</a>///
+<a href=#14 id=14 data-nosnippet>14</a>/// If a project does not support a set of configurations, you may want to
+<a href=#15 id=15 data-nosnippet>15</a>/// report why. There is the option of providing a compile error message string:
+<a href=#16 id=16 data-nosnippet>16</a>///
+<a href=#17 id=17 data-nosnippet>17</a>/// ```
+<a href=#18 id=18 data-nosnippet>18</a>/// # #[macro_use] extern crate static_assertions; fn main() {}
+<a href=#19 id=19 data-nosnippet>19</a>/// # #[cfg(any(unix, windows))]
+<a href=#20 id=20 data-nosnippet>20</a>/// assert_cfg!(any(unix, windows), "There is only support for Unix or Windows");
+<a href=#21 id=21 data-nosnippet>21</a>///
+<a href=#22 id=22 data-nosnippet>22</a>/// // User needs to specify a database back-end
+<a href=#23 id=23 data-nosnippet>23</a>/// # #[cfg(target_pointer_width = "0")] // Impossible
+<a href=#24 id=24 data-nosnippet>24</a>/// assert_cfg!(all(not(all(feature = "mysql", feature = "mongodb")),
+<a href=#25 id=25 data-nosnippet>25</a>///                 any(    feature = "mysql", feature = "mongodb")),
+<a href=#26 id=26 data-nosnippet>26</a>///             "Must exclusively use MySQL or MongoDB as database back-end");
+<a href=#27 id=27 data-nosnippet>27</a>/// ```
+<a href=#28 id=28 data-nosnippet>28</a>///
+<a href=#29 id=29 data-nosnippet>29</a>/// Some configurations are impossible. For example, we can't be compiling for
+<a href=#30 id=30 data-nosnippet>30</a>/// both macOS _and_ Windows simultaneously:
+<a href=#31 id=31 data-nosnippet>31</a>///
+<a href=#32 id=32 data-nosnippet>32</a>/// ```compile_fail
+<a href=#33 id=33 data-nosnippet>33</a>/// # #[macro_use] extern crate static_assertions; fn main() {}
+<a href=#34 id=34 data-nosnippet>34</a>/// assert_cfg!(all(target_os = "macos",
+<a href=#35 id=35 data-nosnippet>35</a>///                 target_os = "windows"),
+<a href=#36 id=36 data-nosnippet>36</a>///             "No, that's not how it works! ಠ_ಠ");
+<a href=#37 id=37 data-nosnippet>37</a>/// ```
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="attr">#[macro_export]
+<a href=#39 id=39 data-nosnippet>39</a></span><span class="macro">macro_rules!</span> assert_cfg {
+<a href=#40 id=40 data-nosnippet>40</a>    () =&gt; {};
+<a href=#41 id=41 data-nosnippet>41</a>    ($(<span class="macro-nonterminal">$cfg</span>:meta)+, <span class="macro-nonterminal">$msg</span>:expr $(,)<span class="question-mark">?</span>) =&gt; {
+<a href=#42 id=42 data-nosnippet>42</a>        <span class="attr">#[cfg(not($(<span class="macro-nonterminal">$cfg</span>)+))]
+<a href=#43 id=43 data-nosnippet>43</a>        </span><span class="macro">compile_error!</span>(<span class="macro-nonterminal">$msg</span>);
+<a href=#44 id=44 data-nosnippet>44</a>    };
+<a href=#45 id=45 data-nosnippet>45</a>    ($(<span class="macro-nonterminal">$cfg</span>:tt)<span class="kw-2">*</span>) =&gt; {
+<a href=#46 id=46 data-nosnippet>46</a>        <span class="attr">#[cfg(not($(<span class="macro-nonterminal">$cfg</span>)<span class="kw-2">*</span>))]
+<a href=#47 id=47 data-nosnippet>47</a>        </span><span class="macro">compile_error!</span>(<span class="macro">concat!</span>(<span class="string">"Cfg does not pass: "</span>, <span class="macro">stringify!</span>($(<span class="macro-nonterminal">$cfg</span>)<span class="kw-2">*</span>)));
+<a href=#48 id=48 data-nosnippet>48</a>    };
+<a href=#49 id=49 data-nosnippet>49</a>}</code></pre></div></section></main></body></html>

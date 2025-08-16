@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["boxed","empty_body"],"type":["BoxBody"]};
