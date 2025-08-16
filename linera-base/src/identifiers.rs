@@ -101,6 +101,16 @@ impl Account {
             owner: AccountOwner::CHAIN,
         }
     }
+
+    /// An address used exclusively for tests
+    #[cfg(with_testing)]
+    pub fn burn_address(chain_id: ChainId) -> Self {
+        let hash = CryptoHash::test_hash("burn");
+        Account {
+            chain_id,
+            owner: hash.into(),
+        }
+    }
 }
 
 impl fmt::Display for Account {

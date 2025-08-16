@@ -67,8 +67,7 @@ async fn transfer_to_owner() {
     let transfer_amount = Amount::from_tokens(2);
     let funding_chain = validator.get_chain(&validator.admin_chain_id());
     let owner = AccountOwner::from(CryptoHash::test_hash("owner"));
-    let account = Account::new(recipient_chain.id(), owner);
-    let recipient = account;
+    let recipient = Account::new(recipient_chain.id(), owner);
 
     let transfer_certificate = funding_chain
         .add_block(|block| {

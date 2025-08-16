@@ -218,13 +218,9 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
                 .unwrap()
         }
     });
-    // Transfer one token.
+    // Burn one token.
     let certificate = client0
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(client0.chain_id()),
-        )
+        .burn(AccountOwner::CHAIN, Amount::ONE)
         .await?
         .unwrap();
     for i in 0.. {

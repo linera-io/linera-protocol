@@ -2748,6 +2748,18 @@ impl<Env: Environment> ChainClient<Env> {
         self.transfer(from, amount, account).await
     }
 
+    /// Burns tokens (transfer to a special address).
+    #[cfg(with_testing)]
+    #[instrument(level = "trace")]
+    pub async fn burn(
+        &self,
+        owner: AccountOwner,
+        amount: Amount,
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
+        let recipient = Account::burn_address(self.chain_id);
+        self.transfer(owner, amount, recipient).await
+    }
+
     /// Attempts to synchronize chains that have sent us messages and populate our local
     /// inbox.
     ///
@@ -3507,11 +3519,11 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         owner: AccountOwner,
         amount: Amount,
-        account: Account,
+        recipient: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(SystemOperation::Transfer {
             owner,
-            recipient: account,
+            recipient,
             amount,
         })
         .await
