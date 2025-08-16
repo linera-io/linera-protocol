@@ -39,17 +39,15 @@ fn reqwest_client() -> reqwest::Client {
         .unwrap()
 }
 
-async fn run_indexer(path_provider: &PathProvider) -> Child {
+async fn run_indexer(path_provider: &PathProvider) -> anyhow::Result<Child> {
     let port = 8081;
-    let path = resolve_binary("linera-indexer", "linera-indexer-example")
-        .await
-        .unwrap();
+    let path = resolve_binary("linera-indexer", "linera-indexer-example").await?;
     let mut command = Command::new(path);
     command
         .current_dir(path_provider.path())
         .kill_on_drop(true)
         .args(["run-graph-ql"]);
-    let child = command.spawn().unwrap();
+    let child = command.spawn()?;
     let client = reqwest_client();
     for i in 0..10 {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
@@ -59,7 +57,7 @@ async fn run_indexer(path_provider: &PathProvider) -> Child {
             .await;
         if request.is_ok() {
             info!("Indexer has started");
-            return child;
+            return Ok(child);
         } else {
             warn!("Waiting for indexer to start");
         }
@@ -73,17 +71,21 @@ fn indexer_running(child: &mut Child) {
     }
 }
 
-async fn transfer(client: &reqwest::Client, from: ChainId, to: Account, amount: &str) {
+async fn transfer(
+    client: &reqwest::Client,
+    from: ChainId,
+    to: Account,
+    amount: &str,
+) -> anyhow::Result<()> {
     let variables = transfer::Variables {
         chain_id: from,
         owner: AccountOwner::CHAIN,
         recipient_chain: to.chain_id,
         recipient_account: to.owner,
-        amount: Amount::from_str(amount).unwrap(),
+        amount: Amount::from_str(amount)?,
     };
-    request::<Transfer, _>(client, "http://localhost:8080", variables)
-        .await
-        .unwrap();
+    request::<Transfer, _>(client, "http://localhost:8080", variables).await?;
+    Ok(())
 }
 
 #[cfg(debug_assertions)]
@@ -96,22 +98,20 @@ const TRANSFER_DELAY_MILLIS: u64 = 100;
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
+async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) -> anyhow::Result<()> {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client) = config.instantiate().await.unwrap();
+    let (mut net, client) = config.instantiate().await?;
     let mut node_service = client
         .run_node_service(None, ProcessInbox::Automatic)
-        .await
-        .unwrap();
-    let mut indexer = run_indexer(&client.path_provider).await;
+        .await?;
+    let mut indexer = run_indexer(&client.path_provider).await?;
 
     // check operations plugin
     let req_client = reqwest_client();
     let plugins = request::<Plugins, _>(&req_client, "http://localhost:8081", plugins::Variables)
-        .await
-        .unwrap()
+        .await?
         .plugins;
     assert_eq!(
         plugins,
@@ -121,13 +121,13 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
 
     // making a few transfers
     let node_chains = {
-        let wallet = client.load_wallet().unwrap();
+        let wallet = client.load_wallet()?;
         wallet.chain_ids()
     };
     let chain0 = node_chains[0];
     let chain1 = Account::chain(node_chains[1]);
     for _ in 0..10 {
-        transfer(&req_client, chain0, chain1, "0.1").await;
+        transfer(&req_client, chain0, chain1, "0.1").await?;
         linera_base::time::timer::sleep(Duration::from_millis(TRANSFER_DELAY_MILLIS)).await;
     }
     linera_base::time::timer::sleep(Duration::from_secs(2)).await;
@@ -138,15 +138,13 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
         chain_id: chain0,
     };
     let last_block = request::<Block, _>(&req_client, "http://localhost:8080", variables)
-        .await
-        .unwrap()
+        .await?
         .block
         .unwrap_or_else(|| panic!("no block found"));
     let last_hash = last_block.clone().hash;
 
     let indexer_state = request::<State, _>(&req_client, "http://localhost:8081", state::Variables)
-        .await
-        .unwrap()
+        .await?
         .state;
     let indexer_hash =
         indexer_state
@@ -168,8 +166,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
 
     let indexer_operation =
         request::<GetOperation, _>(&req_client, "http://localhost:8081/operations", variables)
-            .await
-            .unwrap()
+            .await?
             .operation;
     match indexer_operation {
         Some(get_operation::GetOperationOperation { key, block, .. }) => {
@@ -190,6 +187,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     }
 
     indexer_running(&mut indexer);
-    node_service.ensure_is_running().unwrap();
-    net.terminate().await.unwrap();
+    node_service.ensure_is_running()?;
+    net.terminate().await?;
+    Ok(())
 }
