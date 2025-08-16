@@ -3320,14 +3320,14 @@ where
     assert_eq!(response.info.manager.leader, Some(owner1));
 
     // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal = make_child_block(&value0.clone())
+    let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(0))
         .await
         .unwrap();
     let result = env.worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
-    let proposal = make_child_block(&value0.clone())
+    let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
@@ -3367,7 +3367,7 @@ where
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let proposed_block1 =
-        make_child_block(&value0.clone()).with_simple_transfer(chain_1, small_transfer);
+        make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
     let (block1, _) = env
         .worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
@@ -3601,7 +3601,7 @@ where
 
     // Once we provide the validator with a timeout certificate, the next round starts.
     let certificate_timeout = vote
-        .with_value(value_timeout.clone())
+        .with_value(value_timeout)
         .unwrap()
         .into_certificate(env.worker().public_key());
     let (response, _) = env
@@ -3755,7 +3755,7 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Owner 0 proposes another block. The validator votes to confirm.
-    let proposed_block1 = make_child_block(&value0.clone())
+    let proposed_block1 = make_child_block(&value0)
         .with_transfer(
             AccountOwner::CHAIN,
             Account::new(chain_id, owner0),
@@ -4062,12 +4062,14 @@ where
     let small_transfer = Amount::from_micros(1);
 
     let mut env = TestEnvironment::new(storage.clone(), false, true).await;
-    let chain_description = env.add_root_chain(1, owner, balance).await;
-    let chain_id = chain_description.id();
+    let chain_1_desc = env.add_root_chain(1, owner, balance).await;
+    let chain_2_desc = env.add_root_chain(2, owner, balance).await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2 = chain_2_desc.id();
 
     let (application_id, application);
     {
-        let mut chain = storage.load_chain(chain_id).await?;
+        let mut chain = storage.load_chain(chain_1).await?;
         (application_id, application, _) =
             chain.execution_state.register_mock_application(0).await?;
         chain.save().await?;
@@ -4092,7 +4094,7 @@ where
         queries_before_new_block
             .clone()
             .map(|local_time| QueryContext {
-                chain_id,
+                chain_id: chain_1,
                 next_block_height: BlockHeight(0),
                 local_time,
             });
@@ -4100,7 +4102,7 @@ where
         queries_after_new_block
             .clone()
             .map(|local_time| QueryContext {
-                chain_id,
+                chain_id: chain_1,
                 next_block_height: BlockHeight(1),
                 local_time,
             });
@@ -4117,7 +4119,7 @@ where
 
         assert_eq!(
             env.worker()
-                .query_application(chain_id, query.clone())
+                .query_application(chain_1, query.clone())
                 .await?,
             QueryOutcome {
                 response: QueryResponse::User(vec![]),
@@ -4127,9 +4129,9 @@ where
     }
 
     clock.set(Timestamp::from(BLOCK_TIMESTAMP));
-    let block = make_first_block(chain_id)
+    let block = make_first_block(chain_1)
         .with_timestamp(Timestamp::from(BLOCK_TIMESTAMP))
-        .with_simple_transfer(chain_id, small_transfer)
+        .with_simple_transfer(chain_2, small_transfer)
         .with_authenticated_signer(Some(owner));
 
     let block_proposal = block
@@ -4144,7 +4146,7 @@ where
 
         assert_eq!(
             env.worker()
-                .query_application(chain_id, query.clone())
+                .query_application(chain_1, query.clone())
                 .await?,
             QueryOutcome {
                 response: QueryResponse::User(vec![]),
@@ -4155,8 +4157,8 @@ where
 
     let mut state = SystemExecutionState {
         timestamp: Timestamp::from(BLOCK_TIMESTAMP),
-        balance,
-        ..env.system_execution_state(&chain_description.id())
+        balance: balance - small_transfer,
+        ..env.system_execution_state(&chain_1_desc.id())
     }
     .into_view()
     .await;
@@ -4192,7 +4194,7 @@ where
 
         assert_eq!(
             env.worker()
-                .query_application(chain_id, query.clone())
+                .query_application(chain_1, query.clone())
                 .await?,
             QueryOutcome {
                 response: QueryResponse::User(vec![]),
