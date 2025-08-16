@@ -8,11 +8,10 @@ mod http_server;
 use linera_base::{
     crypto::{AccountPublicKey, Signer, ValidatorPublicKey},
     data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    system::Recipient,
     Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
 };
 
@@ -63,7 +62,7 @@ pub trait BlockTestExt: Sized {
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
 
     /// Returns the block with a transfer operation appended at the end.
-    fn with_transfer(self, owner: AccountOwner, recipient: Recipient, amount: Amount) -> Self;
+    fn with_transfer(self, owner: AccountOwner, recipient: Account, amount: Amount) -> Self;
 
     /// Returns the block with a simple transfer operation appended at the end.
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self;
@@ -77,7 +76,7 @@ pub trait BlockTestExt: Sized {
     /// Returns the block with the specified epoch.
     fn with_epoch(self, epoch: impl Into<Epoch>) -> Self;
 
-    /// Returns the block with the burn operation appended at the end.
+    /// Returns the block with the burn operation (transfer to a special address) appended at the end.
     fn with_burn(self, amount: Amount) -> Self;
 
     /// Returns a block proposal in the first round in a default ownership configuration
@@ -112,7 +111,7 @@ impl BlockTestExt for ProposedBlock {
         self
     }
 
-    fn with_transfer(self, owner: AccountOwner, recipient: Recipient, amount: Amount) -> Self {
+    fn with_transfer(self, owner: AccountOwner, recipient: Account, amount: Amount) -> Self {
         self.with_operation(SystemOperation::Transfer {
             owner,
             recipient,
@@ -121,13 +120,14 @@ impl BlockTestExt for ProposedBlock {
     }
 
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self {
-        self.with_transfer(AccountOwner::CHAIN, Recipient::chain(chain_id), amount)
+        self.with_transfer(AccountOwner::CHAIN, Account::chain(chain_id), amount)
     }
 
     fn with_burn(self, amount: Amount) -> Self {
+        let recipient = Account::burn_address(self.chain_id);
         self.with_operation(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::Burn,
+            recipient,
             amount,
         })
     }

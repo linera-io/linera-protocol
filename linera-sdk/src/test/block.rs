@@ -8,7 +8,7 @@
 use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Blob, Epoch, Round, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
@@ -19,10 +19,7 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::worker::WorkerError;
-use linera_execution::{
-    system::{Recipient, SystemOperation},
-    Operation,
-};
+use linera_execution::{system::SystemOperation, Operation};
 
 use super::TestValidator;
 
@@ -87,7 +84,7 @@ impl BlockBuilder {
     pub fn with_native_token_transfer(
         &mut self,
         sender: AccountOwner,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     ) -> &mut Self {
         self.with_system_operation(SystemOperation::Transfer {

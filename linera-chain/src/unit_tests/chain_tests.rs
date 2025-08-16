@@ -18,13 +18,12 @@ use linera_base::{
         ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
     },
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    system::Recipient,
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
     Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation, TestExecutionRuntimeContext,
@@ -161,7 +160,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
     let time = Timestamp::from(0);
 
     // The size of the executed valid block below.
-    let maximum_block_size = 261;
+    let maximum_block_size = 260;
 
     let config = env.make_open_chain_config();
 
@@ -199,7 +198,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
         .with_authenticated_signer(Some(owner))
         .with_operation(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::chain(env.admin_id()),
+            recipient: Account::chain(env.admin_id()),
             amount: Amount::ONE,
         });
 
@@ -208,7 +207,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
         .clone()
         .with_operation(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::chain(env.admin_id()),
+            recipient: Account::chain(env.admin_id()),
             amount: Amount::ONE,
         });
 

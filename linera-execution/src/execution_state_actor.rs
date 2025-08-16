@@ -20,7 +20,7 @@ use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
 
 use crate::{
-    system::{CreateApplicationResult, OpenChainConfig, Recipient},
+    system::{CreateApplicationResult, OpenChainConfig},
     util::RespondExt,
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
     ExecutionStateView, ModuleId, OutgoingMessage, ResourceController, TransactionTracker,
@@ -158,13 +158,7 @@ where
                 callback,
             } => callback.respond(
                 self.system
-                    .transfer(
-                        signer,
-                        Some(application_id),
-                        source,
-                        Recipient::Account(destination),
-                        amount,
-                    )
+                    .transfer(signer, Some(application_id), source, destination, amount)
                     .await?,
             ),
 
@@ -182,7 +176,7 @@ where
                         Some(application_id),
                         source.owner,
                         source.chain_id,
-                        Recipient::Account(destination),
+                        destination,
                         amount,
                     )
                     .await?,

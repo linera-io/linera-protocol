@@ -12,17 +12,14 @@ use std::{
 
 use linera_base::{
     data_types::Amount,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     time::Instant,
 };
 use linera_core::{
     client::{ChainClient, ChainClientError},
     Environment,
 };
-use linera_execution::{
-    system::{Recipient, SystemOperation},
-    Operation,
-};
+use linera_execution::{system::SystemOperation, Operation};
 use linera_sdk::abis::fungible::{self, FungibleOperation};
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
@@ -696,7 +693,7 @@ impl<Env: Environment> Benchmark<Env> {
                     ),
                     None => Operation::system(SystemOperation::Transfer {
                         owner: AccountOwner::CHAIN,
-                        recipient: Recipient::chain(recipient_chain_id),
+                        recipient: Account::chain(recipient_chain_id),
                         amount,
                     }),
                 };

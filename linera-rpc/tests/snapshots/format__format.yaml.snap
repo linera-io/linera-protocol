@@ -906,14 +906,6 @@ ProposedBlock:
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
-Recipient:
-  ENUM:
-    0:
-      Burn: UNIT
-    1:
-      Account:
-        NEWTYPE:
-          TYPENAME: Account
 ResourceControlPolicy:
   STRUCT:
     - wasm_fuel_unit:
@@ -1146,7 +1138,7 @@ SystemMessage:
           - amount:
               TYPENAME: Amount
           - recipient:
-              TYPENAME: Recipient
+              TYPENAME: Account
 SystemOperation:
   ENUM:
     0:
@@ -1155,7 +1147,7 @@ SystemOperation:
           - owner:
               TYPENAME: AccountOwner
           - recipient:
-              TYPENAME: Recipient
+              TYPENAME: Account
           - amount:
               TYPENAME: Amount
     1:
@@ -1166,7 +1158,7 @@ SystemOperation:
           - target_id:
               TYPENAME: ChainId
           - recipient:
-              TYPENAME: Recipient
+              TYPENAME: Account
           - amount:
               TYPENAME: Amount
     2:

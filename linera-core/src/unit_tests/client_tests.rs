@@ -23,10 +23,8 @@ use linera_chain::{
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
-    committee::Committee,
-    system::{Recipient, SystemOperation},
-    ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage, SystemQuery, SystemResponse,
+    committee::Committee, system::SystemOperation, ExecutionError, Message, MessageKind, Operation,
+    QueryOutcome, ResourceControlPolicy, SystemMessage, SystemQuery, SystemResponse,
 };
 use linera_storage::Storage;
 use rand::Rng;
@@ -214,7 +212,7 @@ where
         .claim(
             owner,
             receiver_id,
-            Recipient::chain(sender.chain_id()),
+            Account::chain(sender.chain_id()),
             Amount::from_tokens(5),
         )
         .await
@@ -224,7 +222,7 @@ where
         .claim(
             owner,
             receiver_id,
-            Recipient::chain(sender.chain_id()),
+            Account::chain(sender.chain_id()),
             Amount::from_tokens(2),
         )
         .await
@@ -1502,8 +1500,9 @@ where
         LockingBlock::Regular(validated),
         *info2_b.manager.requested_locking.unwrap()
     );
+    let recipient = Account::burn_address(client_2b.chain_id());
     let bt_certificate = client_2b
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
         .await
         .unwrap_ok_committed();
 
@@ -1516,7 +1515,7 @@ where
     assert!(certificate_values[0].block().body.operations().any(|op| *op
         == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::Burn,
+            recipient,
             amount: Amount::from_tokens(1),
         })));
 
@@ -1635,8 +1634,9 @@ where
     builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
 
     client2_b.prepare_chain().await.unwrap();
+    let recipient = Account::burn_address(client2_b.chain_id());
     let bt_certificate = client2_b
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
         .await
         .unwrap_ok_committed();
 
@@ -1649,7 +1649,7 @@ where
     assert!(certificate_values[0].block().body.operations().any(|op| *op
         == Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::Burn,
+            recipient,
             amount: Amount::from_tokens(1),
         })));
 
@@ -2085,7 +2085,7 @@ where
         .transfer(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Recipient::chain(observer_id),
+            Account::chain(observer_id),
         )
         .await
         .unwrap();
@@ -2116,7 +2116,7 @@ where
         .transfer(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Recipient::chain(observer_id),
+            Account::chain(observer_id),
         )
         .await
         .unwrap_ok_committed();
@@ -2215,7 +2215,7 @@ where
     );
     assert!(client0.pending_proposal().is_some());
 
-    // Client 0 now only tries to burn 1 token. Before that, they automatically finalize the
+    // Client 0 now only tries to transfer 1 token. Before that, they automatically finalize the
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
     client0
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
@@ -2229,7 +2229,7 @@ where
     );
     assert!(client0.pending_proposal().is_none());
 
-    // Burn another token so Client 1 sees that the blob is already published
+    // Transfer another token so Client 1 sees that the blob is already published
     client1.prepare_chain().await.unwrap();
     client1
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
@@ -2273,7 +2273,7 @@ where
     builder.set_fault_type([2], FaultType::Honest).await;
 
     // The client tries to burn another token. Before that, they automatically finalize the
-    // pending block, which burns 3 tokens, leaving 10 - 3 - 1 = 6.
+    // pending block, which transfers 3 tokens, leaving 10 - 3 - 1 = 6.
     client.burn(AccountOwner::CHAIN, Amount::ONE).await.unwrap();
     client.synchronize_from_validators().await.unwrap();
     client.process_inbox().await.unwrap();
@@ -2526,7 +2526,7 @@ where
         .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
-    let recipient = Recipient::chain(receiver.chain_id());
+    let recipient = Account::chain(receiver.chain_id());
     let cert = sender
         .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
         .await
@@ -2615,7 +2615,7 @@ where
         .transfer(
             AccountOwner::CHAIN,
             Amount::from_millis(1),
-            Recipient::chain(chain_id3),
+            Account::chain(chain_id3),
         )
         .await
         .unwrap_ok_committed();

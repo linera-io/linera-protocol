@@ -8,7 +8,6 @@ mod tests;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
-    fmt::{Display, Formatter},
     mem,
 };
 
@@ -166,7 +165,7 @@ pub enum SystemOperation {
     /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
         owner: AccountOwner,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     },
     /// Claims `amount` units of value from the given owner's account in the remote
@@ -175,7 +174,7 @@ pub enum SystemOperation {
     Claim {
         owner: AccountOwner,
         target_id: ChainId,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     },
     /// Creates (or activates) a new chain.
@@ -261,7 +260,7 @@ pub enum SystemMessage {
     Withdraw {
         owner: AccountOwner,
         amount: Amount,
-        recipient: Recipient,
+        recipient: Account,
     },
 }
 
@@ -274,43 +273,6 @@ pub struct SystemQuery;
 pub struct SystemResponse {
     pub chain_id: ChainId,
     pub balance: Amount,
-}
-
-/// The recipient of a transfer.
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
-pub enum Recipient {
-    /// This is mainly a placeholder for future extensions.
-    Burn,
-    /// Transfers to the balance of the given account.
-    Account(Account),
-}
-
-impl Recipient {
-    /// Returns the default recipient for the given chain (no owner).
-    pub fn chain(chain_id: ChainId) -> Recipient {
-        Recipient::Account(Account::chain(chain_id))
-    }
-}
-
-impl Display for Recipient {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Recipient::Burn => write!(f, "burn"),
-            Recipient::Account(account) => write!(f, "{}", account),
-        }
-    }
-}
-
-impl From<ChainId> for Recipient {
-    fn from(chain_id: ChainId) -> Self {
-        Recipient::chain(chain_id)
-    }
-}
-
-impl From<Account> for Recipient {
-    fn from(account: Account) -> Self {
-        Recipient::Account(account)
-    }
 }
 
 /// Optional user message attached to a transfer.
@@ -662,31 +624,25 @@ where
     async fn credit_or_send_message(
         &mut self,
         source: AccountOwner,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
-        match recipient {
-            Recipient::Account(account) => {
-                let source_chain_id = self.context().extra().chain_id();
-                if account.chain_id == source_chain_id {
-                    // Handle same-chain transfer locally.
-                    let target = account.owner;
-                    self.credit(&target, amount).await?;
-                    Ok(None)
-                } else {
-                    // Handle cross-chain transfer with message.
-                    let message = SystemMessage::Credit {
-                        amount,
-                        source,
-                        target: account.owner,
-                    };
-                    Ok(Some(
-                        OutgoingMessage::new(account.chain_id, message)
-                            .with_kind(MessageKind::Tracked),
-                    ))
-                }
-            }
-            Recipient::Burn => Ok(None),
+        let source_chain_id = self.context().extra().chain_id();
+        if recipient.chain_id == source_chain_id {
+            // Handle same-chain transfer locally.
+            let target = recipient.owner;
+            self.credit(&target, amount).await?;
+            Ok(None)
+        } else {
+            // Handle cross-chain transfer with message.
+            let message = SystemMessage::Credit {
+                amount,
+                source,
+                target: recipient.owner,
+            };
+            Ok(Some(
+                OutgoingMessage::new(recipient.chain_id, message).with_kind(MessageKind::Tracked),
+            ))
         }
     }
 
@@ -695,7 +651,7 @@ where
         authenticated_signer: Option<AccountOwner>,
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         if source == AccountOwner::CHAIN {
@@ -728,7 +684,7 @@ where
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
         target_id: ChainId,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         ensure!(

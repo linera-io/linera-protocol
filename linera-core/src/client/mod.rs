@@ -54,7 +54,7 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
+        AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
@@ -2238,7 +2238,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         owner: AccountOwner,
         amount: Amount,
-        recipient: Recipient,
+        recipient: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
         self.execute_operation(SystemOperation::Transfer {
@@ -2270,7 +2270,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         owner: AccountOwner,
         target_id: ChainId,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(SystemOperation::Claim {
@@ -2745,18 +2745,19 @@ impl<Env: Environment> ChainClient<Env> {
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.transfer(from, amount, Recipient::Account(account))
-            .await
+        self.transfer(from, amount, account).await
     }
 
-    /// Burns tokens.
+    /// Burns tokens (transfer to a special address).
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn burn(
         &self,
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.transfer(owner, amount, Recipient::Burn).await
+        let recipient = Account::burn_address(self.chain_id);
+        self.transfer(owner, amount, recipient).await
     }
 
     /// Attempts to synchronize chains that have sent us messages and populate our local
@@ -3518,11 +3519,11 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         owner: AccountOwner,
         amount: Amount,
-        account: Account,
+        recipient: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(SystemOperation::Transfer {
             owner,
-            recipient: Recipient::Account(account),
+            recipient,
             amount,
         })
         .await

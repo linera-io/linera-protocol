@@ -6,11 +6,10 @@
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::AccountOwner,
+    identifiers::{Account, AccountOwner},
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    system::Recipient,
     test_utils::{
         dummy_chain_description, dummy_chain_description_with_ownership_and_balance,
         SystemExecutionState,
@@ -39,10 +38,11 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         ..SystemExecutionState::default()
     };
     let mut view = state.into_view().await;
+    let recipient = Account::burn_address(chain_id);
     let operation = SystemOperation::Transfer {
         owner: AccountOwner::CHAIN,
         amount: Amount::from_tokens(4),
-        recipient: Recipient::Burn,
+        recipient,
     };
     let context = OperationContext {
         chain_id,

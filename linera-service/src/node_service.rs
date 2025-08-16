@@ -15,7 +15,9 @@ use linera_base::{
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Bytecode, Epoch, TimeDelta,
     },
-    identifiers::{AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -31,9 +33,8 @@ use linera_core::{
     worker::Notification,
 };
 use linera_execution::{
-    committee::Committee,
-    system::{AdminOperation, Recipient},
-    Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
+    committee::Committee, system::AdminOperation, Operation, Query, QueryOutcome, QueryResponse,
+    SystemOperation,
 };
 use linera_sdk::linera_base_types::BlobContent;
 use serde::{Deserialize, Serialize};
@@ -214,7 +215,7 @@ where
         &self,
         chain_id: ChainId,
         owner: AccountOwner,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     ) -> Result<CryptoHash, Error> {
         self.apply_client_command(&chain_id, move |client| async move {
@@ -236,7 +237,7 @@ where
         chain_id: ChainId,
         owner: AccountOwner,
         target_id: ChainId,
-        recipient: Recipient,
+        recipient: Account,
         amount: Amount,
     ) -> Result<CryptoHash, Error> {
         self.apply_client_command(&chain_id, move |client| async move {

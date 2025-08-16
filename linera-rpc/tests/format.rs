@@ -5,7 +5,7 @@
 use linera_base::{
     crypto::{AccountPublicKey, AccountSignature, CryptoHash, TestString},
     data_types::{BlobContent, ChainDescription, ChainOrigin, OracleResponse, Round},
-    identifiers::{AccountOwner, BlobType, GenericApplicationId},
+    identifiers::{Account, AccountOwner, BlobType, GenericApplicationId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -16,7 +16,7 @@ use linera_chain::{
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
-    system::{AdminOperation, Recipient, SystemMessage, SystemOperation},
+    system::{AdminOperation, SystemMessage, SystemOperation},
     Message, MessageKind, Operation,
 };
 use linera_rpc::RpcMessage;
@@ -57,7 +57,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<AccountSignature>(&samples)?;
     tracer.trace_type::<Round>(&samples)?;
     tracer.trace_type::<OracleResponse>(&samples)?;
-    tracer.trace_type::<Recipient>(&samples)?;
+    tracer.trace_type::<Account>(&samples)?;
     tracer.trace_type::<SystemOperation>(&samples)?;
     tracer.trace_type::<AdminOperation>(&samples)?;
     tracer.trace_type::<SystemMessage>(&samples)?;

@@ -764,13 +764,13 @@ type MutationRoot {
 	Transfers `amount` units of value from the given owner's account to the recipient.
 	If no owner is given, try to take the units out of the chain account.
 	"""
-	transfer(chainId: ChainId!, owner: AccountOwner!, recipient: Recipient!, amount: Amount!): CryptoHash!
+	transfer(chainId: ChainId!, owner: AccountOwner!, recipient: Account!, amount: Amount!): CryptoHash!
 	"""
 	Claims `amount` units of value from the given owner's account in the remote
 	`target` chain. Depending on its configuration, the `target` chain may refuse to
 	process the message.
 	"""
-	claim(chainId: ChainId!, owner: AccountOwner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!): CryptoHash!
+	claim(chainId: ChainId!, owner: AccountOwner!, targetId: ChainId!, recipient: Account!, amount: Amount!): CryptoHash!
 	"""
 	Test if a data blob is readable from a transaction in the current chain.
 	"""
@@ -1014,11 +1014,6 @@ type QueryRoot {
 type QueueView_MessageBundle_f4399f0b {
 	entries(count: Int): [MessageBundle!]!
 }
-
-"""
-The recipient of a transfer
-"""
-scalar Recipient
 
 type ReentrantCollectionView_AccountOwner_PendingBlobsView_d58d342d {
 	keys: [AccountOwner!]!
