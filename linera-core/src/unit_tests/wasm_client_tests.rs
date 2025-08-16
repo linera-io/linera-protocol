@@ -127,8 +127,8 @@ where
         .unwrap_ok_committed();
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
 
-    creator.synchronize_from_validators().await.unwrap();
-    creator.process_inbox().await.unwrap();
+    creator.synchronize_from_validators().await?;
+    creator.process_inbox().await?;
 
     // No fuel was used so far.
     let balance_after_messaging = creator.local_balance().await?;
@@ -143,18 +143,16 @@ where
     let increment = 5_u64;
     creator
         .execute_operation(Operation::user(application_id, &increment)?)
-        .await
-        .unwrap();
+        .await?;
 
     let query = Request::new("{ value }");
     let outcome = creator
         .query_user_application(application_id, &query)
-        .await
-        .unwrap();
+        .await?;
 
     let expected = QueryOutcome {
         response: async_graphql::Response::new(
-            async_graphql::Value::from_json(json!({"value": 15})).unwrap(),
+            async_graphql::Value::from_json(json!({"value": 15}))?,
         ),
         operations: vec![],
     };
@@ -278,7 +276,7 @@ where
 
     // Handling the message causes an oracle request to the counter service, so no fast blocks
     // are allowed.
-    let receiver_key = receiver.identity().await.unwrap();
+    let receiver_key = receiver.identity().await?;
 
     receiver
         .change_ownership(ChainOwnership::multiple(
@@ -286,18 +284,16 @@ where
             100,
             TimeoutConfig::default(),
         ))
-        .await
-        .unwrap();
+        .await?;
 
-    let creator_key = creator.identity().await.unwrap();
+    let creator_key = creator.identity().await?;
     creator
         .change_ownership(ChainOwnership::multiple(
             [(creator_key, 100)],
             100,
             TimeoutConfig::default(),
         ))
-        .await
-        .unwrap();
+        .await?;
 
     let (module_id1, _cert1) = {
         let (contract_path, service_path) =
@@ -328,7 +324,7 @@ where
         module_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
 
     // Creator receives the bytecode files then creates the app.
-    creator.synchronize_from_validators().await.unwrap();
+    creator.synchronize_from_validators().await?;
     let initial_value = 10_u64;
     let (application_id1, _) = creator
         .create_application(module_id1, &(), &initial_value, vec![])
@@ -370,25 +366,23 @@ where
         assert_eq!(&responses[..], &[]);
         panic!("Unexpected oracle responses: {:?}", responses);
     };
-    let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
+    let response_json = serde_json::from_slice::<serde_json::Value>(json)?;
     assert_eq!(response_json["data"], json!({"value": 10}));
 
-    receiver.synchronize_from_validators().await.unwrap();
+    receiver.synchronize_from_validators().await?;
     receiver
         .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    receiver.process_inbox().await.unwrap();
+        .await?;
+    receiver.process_inbox().await?;
 
     let query = Request::new("{ value }");
     let outcome = receiver
         .query_user_application(application_id2, &query)
-        .await
-        .unwrap();
+        .await?;
 
     let expected = QueryOutcome {
         response: async_graphql::Response::new(
-            async_graphql::Value::from_json(json!({"value": 5})).unwrap(),
+            async_graphql::Value::from_json(json!({"value": 5}))?,
         ),
         operations: vec![],
     };
@@ -404,11 +398,10 @@ where
 
     receiver
         .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    let mut certs = receiver.process_inbox().await.unwrap().0;
+        .await?;
+    let mut certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
-    let cert = certs.pop().unwrap();
+    let cert = certs.pop().ok_or_else(|| anyhow::anyhow!("expected at least one certificate"))?;
     let incoming_bundles = cert.block().body.incoming_bundles().collect::<Vec<_>>();
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
@@ -551,9 +544,9 @@ where
     };
     let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
-    let sender_owner = sender.preferred_owner.unwrap();
-    let receiver_owner = receiver.preferred_owner.unwrap();
-    let receiver2_owner = receiver2.preferred_owner.unwrap();
+    let sender_owner = sender.preferred_owner.ok_or_else(|| anyhow::anyhow!("sender has no preferred owner"))?;
+    let receiver_owner = receiver.preferred_owner.ok_or_else(|| anyhow::anyhow!("receiver has no preferred owner"))?;
+    let receiver2_owner = receiver2.preferred_owner.ok_or_else(|| anyhow::anyhow!("receiver2 has no preferred owner"))?;
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };

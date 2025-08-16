@@ -878,7 +878,7 @@ where
             application_permissions: ApplicationPermissions::default(),
         };
         let description = ChainDescription::new(origin, open_chain_config, Timestamp::from(0));
-        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee).unwrap());
+        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee)?);
         if index == 0 {
             self.admin_description = Some(description.clone());
             self.network_description = Some(NetworkDescription {
@@ -900,7 +900,7 @@ where
             let storage = self
                 .validator_storages
                 .get_mut(&validator.public_key)
-                .unwrap();
+                .ok_or_else(|| anyhow::anyhow!("validator storage not found"))?;
             storage
                 .write_network_description(network_description)
                 .await
@@ -917,14 +917,13 @@ where
                 };
                 storage
                     .create_chain(ChainDescription::new(origin, config, Timestamp::from(0)))
-                    .await
-                    .unwrap();
+                    .await?;
             } else {
-                storage.create_chain(description.clone()).await.unwrap();
+                storage.create_chain(description.clone()).await?;
             }
         }
         for storage in self.chain_client_storages.iter_mut() {
-            storage.create_chain(description.clone()).await.unwrap();
+            storage.create_chain(description.clone()).await?;
         }
         let chain_id = description.id();
         self.chain_owners.insert(chain_id, public_key.into());
@@ -968,7 +967,7 @@ where
     pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
         let storage = self.storage_builder.build().await?;
         let network_description = self.network_description.as_ref().unwrap();
-        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee).unwrap());
+        let committee_blob = Blob::new_committee(bcs::to_bytes(&self.initial_committee)?);
         storage
             .write_network_description(network_description)
             .await

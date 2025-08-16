@@ -175,7 +175,7 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(
-        sender.local_balance().await.unwrap(),
+        sender.local_balance().await?,
         Amount::from_millis(900)
     );
     receiver
@@ -184,20 +184,20 @@ where
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
-        receiver.local_owner_balance(friend).await.unwrap(),
+        receiver.local_owner_balance(friend).await?,
         Amount::from_millis(100)
     );
     // The received amount is not in the unprotected balance.
-    assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(receiver.local_balance().await?, Amount::ZERO);
     assert_eq!(
-        receiver.local_owner_balance(owner).await.unwrap(),
+        receiver.local_owner_balance(owner).await?,
         Amount::from_tokens(3)
     );
     assert_eq!(
-        receiver.local_balances_with_owner(owner).await.unwrap(),
+        receiver.local_balances_with_owner(owner).await?,
         (Amount::ZERO, Some(Amount::from_tokens(3)))
     );
-    assert_eq!(receiver.query_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(receiver.query_balance().await?, Amount::ZERO);
     assert_eq!(
         receiver.query_owner_balance(owner).await.unwrap(),
         Amount::from_millis(3000)
