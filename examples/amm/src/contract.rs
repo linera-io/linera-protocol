@@ -55,7 +55,12 @@ impl Contract for AmmContract {
         }
     }
 
-    async fn execute_message(&mut self, _is_bouncing: bool, origin: ChainId, message: Self::Message) {
+    async fn execute_message(
+        &mut self,
+        _is_bouncing: bool,
+        origin: ChainId,
+        message: Self::Message,
+    ) {
         assert_eq!(
             self.runtime.chain_id(),
             self.runtime.application_creator_chain_id(),

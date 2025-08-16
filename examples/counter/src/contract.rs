@@ -63,7 +63,7 @@ impl Contract for CounterContract {
 #[cfg(test)]
 mod tests {
     use futures::FutureExt as _;
-    use linera_sdk::{ChainId, util::BlockingWait, views::View, Contract, ContractRuntime};
+    use linera_sdk::{util::BlockingWait, views::View, ChainId, Contract, ContractRuntime};
 
     use super::{CounterContract, CounterState};
 

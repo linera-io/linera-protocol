@@ -4,7 +4,9 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use how_to_perform_http_requests::{Abi, Operation};
-use linera_sdk::{http, linera_base_types::WithContractAbi, ChainId, Contract as _, ContractRuntime};
+use linera_sdk::{
+    http, linera_base_types::WithContractAbi, ChainId, Contract as _, ContractRuntime,
+};
 
 pub struct Contract {
     runtime: ContractRuntime<Self>,
