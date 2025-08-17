@@ -176,6 +176,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.next_application_index,
             self.next_chain_index,
             self.oracle_responses()?,
+            &self.blobs,
         ))
     }
 

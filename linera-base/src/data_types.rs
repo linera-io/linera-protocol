@@ -1353,6 +1353,14 @@ impl Blob {
         Blob { hash, content }
     }
 
+    /// Creates a blob from ud and content without checks
+    pub fn new_with_hash_unchecked(blob_id: BlobId, content: BlobContent) -> Self {
+        Blob {
+            hash: blob_id.hash,
+            content,
+        }
+    }
+
     /// Creates a blob without checking that the hash actually matches the content.
     pub fn new_with_id_unchecked(blob_id: BlobId, bytes: impl Into<Box<[u8]>>) -> Self {
         Blob {

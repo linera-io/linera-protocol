@@ -17,6 +17,7 @@ members = [
     "meta-counter",
     "native-fungible",
     "non-fungible",
+    "publish-read-data-blob",
     "rfq",
     "social",
 ]

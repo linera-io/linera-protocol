@@ -5721,6 +5721,7 @@ dependencies = [
  "prometheus",
  "proptest",
  "prost",
+ "publish-read-data-blob",
  "quick_cache",
  "rand 0.8.5",
  "reqwest 0.11.27",
@@ -7513,6 +7514,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "publish-read-data-blob"
+version = "0.1.0"
+dependencies = [
+ "linera-sdk",
+ "serde",
 ]
 
 [[package]]
