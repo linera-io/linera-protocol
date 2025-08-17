@@ -98,7 +98,10 @@ impl Contract for AmmContract {
                 self.transfer(owner, input_amount, amm_account, input_token_idx);
 
                 let amm_app_owner = self.get_amm_app_owner();
-                let message_origin_account = self.get_message_origin_account(origin, owner);
+                let message_origin_account = Account {
+                    chain_id: origin,
+                    owner,
+                };
                 self.transfer(
                     amm_app_owner,
                     output_amount,
@@ -185,7 +188,10 @@ impl Contract for AmmContract {
                 }
 
                 let amm_account = self.get_amm_account();
-                let message_origin_account = self.get_message_origin_account(origin, owner);
+                let message_origin_account = Account {
+                    chain_id: origin,
+                    owner,
+                };
                 // See if we'll need to send refunds
                 if token0_amount < max_token0_amount {
                     self.transfer(
@@ -277,7 +283,10 @@ impl Contract for AmmContract {
                     self.get_shares(other_amount, token_to_remove_amount, &balance0_bigint)
                 };
 
-                let message_origin_account = self.get_message_origin_account(origin, owner);
+                let message_origin_account = Account {
+                    chain_id: origin,
+                    owner,
+                };
                 let current_shares = self
                     .current_shares_or_default(&message_origin_account)
                     .await;
@@ -300,7 +309,10 @@ impl Contract for AmmContract {
                     .check_account_permission(owner)
                     .expect("Permission for RemoveAllAddedLiquidity message");
 
-                let message_origin_account = self.get_message_origin_account(origin, owner);
+                let message_origin_account = Account {
+                    chain_id: origin,
+                    owner,
+                };
                 let current_shares = self
                     .current_shares_or_default(&message_origin_account)
                     .await;
@@ -446,13 +458,6 @@ impl AmmContract {
         Account {
             chain_id: self.get_amm_chain_id(),
             owner: self.get_amm_app_owner(),
-        }
-    }
-
-    fn get_message_origin_account(&mut self, origin: ChainId, owner: AccountOwner) -> Account {
-        Account {
-            chain_id: origin,
-            owner,
         }
     }
 
