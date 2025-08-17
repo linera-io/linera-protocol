@@ -46,15 +46,60 @@ pub enum InvalidSolution {
         max_steps: u16,
     },
 
-    /// The initial conditions are not satisfied.
-    #[error("Initial conditions are not satisfied")]
-    InitialConditionsNotMet,
+    /// One or more initial conditions are not satisfied.
+    #[error("Initial condition {condition_index} failed: {reason}")]
+    InitialConditionFailed {
+        /// The index of the failed condition.
+        condition_index: usize,
+        /// The specific reason why the condition failed.
+        reason: ConditionFailureReason,
+    },
 
-    /// The final conditions are not satisfied after running the simulation.
-    #[error("Final conditions are not satisfied after {steps} steps")]
-    FinalConditionsNotMet {
+    /// One or more final conditions are not satisfied after running the simulation.
+    #[error("Final condition {condition_index} failed after {steps} steps: {reason}")]
+    FinalConditionFailed {
+        /// The index of the failed condition.
+        condition_index: usize,
         /// The number of steps that were executed.
         steps: u16,
+        /// The specific reason why the condition failed.
+        reason: ConditionFailureReason,
+    },
+}
+
+/// Specific reasons why a condition failed.
+#[derive(Debug, Error, Clone, PartialEq)]
+pub enum ConditionFailureReason {
+    /// A position condition failed.
+    #[error("Position ({x}, {y}) expected to be {expected_state} but was {actual_state}")]
+    PositionMismatch {
+        /// The x coordinate.
+        x: u16,
+        /// The y coordinate.
+        y: u16,
+        /// Whether the cell was expected to be alive.
+        expected_state: bool,
+        /// Whether the cell was actually alive.
+        actual_state: bool,
+    },
+
+    /// A rectangle condition failed due to count mismatch.
+    #[error("Rectangle [{x_start}..{x_end}, {y_start}..{y_end}] expected {min_count}-{max_count} live cells but found {actual_count}")]
+    RectangleCountMismatch {
+        /// Start of x range.
+        x_start: u16,
+        /// End of x range.
+        x_end: u16,
+        /// Start of y range.
+        y_start: u16,
+        /// End of y range.
+        y_end: u16,
+        /// Minimum expected live cells.
+        min_count: u32,
+        /// Maximum expected live cells.
+        max_count: u32,
+        /// Actual number of live cells found.
+        actual_count: u32,
     },
 }
 
@@ -165,6 +210,81 @@ struct Cell {
     value: u8,
 }
 
+/// Another representation the board, allowing direct access to the cells.
+#[derive(Debug, Clone)]
+struct DirectBoard {
+    /// The width and height of the board, in cells.
+    size: u16,
+    /// The coordinates of the live cells indexed along the `x` then `y` axis.
+    index: BTreeMap<u16, BTreeSet<u16>>,
+}
+
+impl DirectBoard {
+    fn is_live(&self, position: Position) -> bool {
+        let Position { x, y } = position;
+        self.index.get(&x).map_or(false, |set| set.contains(&y))
+    }
+
+    /// Print the board as ASCII art.
+    /// Live cells are represented by '●' and dead cells by '·'.
+    fn to_string(&self) -> String {
+        let mut result = String::new();
+
+        // Add top border with column numbers for reference
+        result.push_str("   ");
+        for x in 0..self.size {
+            result.push_str(&format!("{:2}", x % 10));
+        }
+        result.push('\n');
+
+        for y in 0..self.size {
+            // Add row number for reference
+            result.push_str(&format!("{:2} ", y));
+
+            for x in 0..self.size {
+                result.push(' ');
+                if self.is_live(Position { x, y }) {
+                    result.push('●');
+                } else {
+                    result.push('·');
+                }
+            }
+            result.push('\n');
+        }
+
+        result
+    }
+
+    /// Print the board as compact ASCII art without numbers.
+    /// Live cells are represented by '●' and dead cells by '·'.
+    fn to_compact_string(&self) -> String {
+        let mut result = String::new();
+
+        for y in 0..self.size {
+            for x in 0..self.size {
+                if self.is_live(Position { x, y }) {
+                    result.push('●');
+                } else {
+                    result.push('·');
+                }
+            }
+            result.push('\n');
+        }
+
+        result
+    }
+
+    fn check_conditions(
+        &self,
+        conditions: &[Condition],
+    ) -> Result<(), (usize, ConditionFailureReason)> {
+        for (index, condition) in conditions.iter().enumerate() {
+            condition.check(&self).map_err(|reason| (index, reason))?;
+        }
+        Ok(())
+    }
+}
+
 impl Board {
     /// Creates a new board with the given size and player owners.
     pub fn new(size: u16) -> Self {
@@ -231,84 +351,61 @@ impl Board {
     }
 
     /// Apply the GoL rules to advance board until the stopping condition is met. Return
-    /// the board and the number of steps, if we succeeded on or before `max_steps`.
-    pub fn advance_until(&self, conditions: &[Condition], max_steps: u16) -> Option<(u16, Self)> {
+    /// the board and the number of steps, if we succeed on or before `max_steps`.
+    /// Otherwise return the last error.
+    pub fn advance_until(
+        &self,
+        conditions: &[Condition],
+        max_steps: u16,
+    ) -> Result<(u16, Self), (usize, ConditionFailureReason)> {
         let mut board = self.clone();
-        for i in 0..=max_steps {
-            if board.check_conditions(conditions) {
-                return Some((i, board));
+        let mut i = 0;
+        loop {
+            let result = board.check_conditions(conditions);
+            match result {
+                Ok(()) => {
+                    return Ok((i, board));
+                }
+                Err(error) => {
+                    if i == max_steps {
+                        return Err(error);
+                    }
+                    i += 1;
+                    board = board.advance_once();
+                }
             }
-            board = board.advance_once();
         }
-        None
     }
 
-    fn index_cells(&self) -> BTreeMap<u16, BTreeSet<u16>> {
+    fn index(&self) -> DirectBoard {
         let mut index = BTreeMap::<_, BTreeSet<_>>::new();
         for Position { x, y } in self.live_cells.iter().cloned() {
             index.entry(x).or_default().insert(y);
         }
-        index
+        DirectBoard {
+            size: self.size,
+            index,
+        }
     }
 
     /// Print the board as ASCII art.
     /// Live cells are represented by '●' and dead cells by '·'.
     pub fn to_string(&self) -> String {
-        let live_cells = self.index_cells();
-        let mut result = String::new();
-
-        // Add top border with column numbers for reference
-        result.push_str("   ");
-        for x in 0..self.size {
-            result.push_str(&format!("{:2}", x % 10));
-        }
-        result.push('\n');
-
-        for y in 0..self.size {
-            // Add row number for reference
-            result.push_str(&format!("{:2} ", y));
-
-            for x in 0..self.size {
-                let is_live = live_cells.get(&x).map_or(false, |set| set.contains(&y));
-                result.push(' ');
-                if is_live {
-                    result.push('●');
-                } else {
-                    result.push('·');
-                }
-            }
-            result.push('\n');
-        }
-
-        result
+        self.index().to_string()
     }
 
     /// Print the board as compact ASCII art without numbers.
     /// Live cells are represented by '●' and dead cells by '·'.
     pub fn to_compact_string(&self) -> String {
-        let live_cells = self.index_cells();
-        let mut result = String::new();
-
-        for y in 0..self.size {
-            for x in 0..self.size {
-                let is_live = live_cells.get(&x).map_or(false, |set| set.contains(&y));
-                if is_live {
-                    result.push('●');
-                } else {
-                    result.push('·');
-                }
-            }
-            result.push('\n');
-        }
-
-        result
+        self.index().to_compact_string()
     }
 
-    fn check_conditions(&self, conditions: &[Condition]) -> bool {
-        let live_cells = self.index_cells();
-        conditions
-            .iter()
-            .all(|condition| condition.check(&live_cells))
+    /// Check that the board satisfies a given set of conditions.
+    pub fn check_conditions(
+        &self,
+        conditions: &[Condition],
+    ) -> Result<(), (usize, ConditionFailureReason)> {
+        self.index().check_conditions(conditions)
     }
 
     /// Check that the board satisfies the given puzzle.
@@ -326,14 +423,23 @@ impl Board {
                 max_steps: puzzle.maximal_steps,
             });
         }
-        if !self.check_conditions(&puzzle.initial_conditions) {
-            return Err(InvalidSolution::InitialConditionsNotMet);
+        if let Err((condition_index, reason)) = self.check_conditions(&puzzle.initial_conditions) {
+            return Err(InvalidSolution::InitialConditionFailed {
+                condition_index,
+                reason,
+            });
         }
         let final_board = self.advance(steps);
-        if final_board.check_conditions(&puzzle.final_conditions) {
-            Ok(())
+        if let Err((condition_index, reason)) =
+            final_board.check_conditions(&puzzle.final_conditions)
+        {
+            Err(InvalidSolution::FinalConditionFailed {
+                condition_index,
+                steps,
+                reason,
+            })
         } else {
-            Err(InvalidSolution::FinalConditionsNotMet { steps })
+            Ok(())
         }
     }
 }
@@ -353,12 +459,21 @@ impl Cell {
 }
 
 impl Condition {
-    fn check(&self, live_cells: &BTreeMap<u16, BTreeSet<u16>>) -> bool {
+    fn check(&self, board: &DirectBoard) -> Result<(), ConditionFailureReason> {
         match self {
-            Self::Position { position, is_live } => match live_cells.get(&position.x) {
-                Some(set) => *is_live == set.contains(&position.y),
-                None => !*is_live,
-            },
+            Self::Position { position, is_live } => {
+                let actual_state = board.is_live(*position);
+                if *is_live == actual_state {
+                    Ok(())
+                } else {
+                    Err(ConditionFailureReason::PositionMismatch {
+                        x: position.x,
+                        y: position.y,
+                        expected_state: *is_live,
+                        actual_state,
+                    })
+                }
+            }
             Self::Rectangle {
                 x_range,
                 y_range,
@@ -366,13 +481,23 @@ impl Condition {
                 max_live_count,
             } => {
                 let mut count = 0;
-                for (_, set) in live_cells.range(x_range.clone()) {
+                for (_, set) in board.index.range(x_range.clone()) {
                     count += set.range(y_range.clone()).count() as u32;
-                    if count > *max_live_count {
-                        return false;
-                    }
                 }
-                count >= *min_live_count
+
+                if count >= *min_live_count && count <= *max_live_count {
+                    Ok(())
+                } else {
+                    Err(ConditionFailureReason::RectangleCountMismatch {
+                        x_start: x_range.start,
+                        x_end: x_range.end,
+                        y_start: y_range.start,
+                        y_end: y_range.end,
+                        min_count: *min_live_count,
+                        max_count: *max_live_count,
+                        actual_count: count,
+                    })
+                }
             }
         }
     }
@@ -531,44 +656,46 @@ mod tests {
 
     #[test]
     fn test_position_condition_check() {
-        let mut live_cells = BTreeMap::new();
-        live_cells.insert(1, BTreeSet::from([2, 3]));
-        live_cells.insert(2, BTreeSet::from([1]));
+        let mut index = BTreeMap::new();
+        index.insert(1, BTreeSet::from([2, 3]));
+        index.insert(2, BTreeSet::from([1]));
+        let board = DirectBoard { index, size: 4 };
 
         // Test live cell condition
         let condition = Condition::Position {
             position: Position { x: 1, y: 2 },
             is_live: true,
         };
-        assert!(condition.check(&live_cells));
+        assert!(condition.check(&board).is_ok());
 
         // Test dead cell condition
         let condition = Condition::Position {
             position: Position { x: 1, y: 2 },
             is_live: false,
         };
-        assert!(!condition.check(&live_cells));
+        assert!(condition.check(&board).is_err());
 
         // Test empty position
         let condition = Condition::Position {
             position: Position { x: 0, y: 0 },
             is_live: false,
         };
-        assert!(condition.check(&live_cells));
+        assert!(condition.check(&board).is_ok());
 
         let condition = Condition::Position {
             position: Position { x: 0, y: 0 },
             is_live: true,
         };
-        assert!(!condition.check(&live_cells));
+        assert!(condition.check(&board).is_err());
     }
 
     #[test]
     fn test_rectangle_condition_check() {
-        let mut live_cells = BTreeMap::new();
-        live_cells.insert(1, BTreeSet::from([1, 2]));
-        live_cells.insert(2, BTreeSet::from([1, 2, 3]));
-        live_cells.insert(3, BTreeSet::from([2]));
+        let mut index = BTreeMap::new();
+        index.insert(1, BTreeSet::from([1, 2]));
+        index.insert(2, BTreeSet::from([1, 2, 3]));
+        index.insert(3, BTreeSet::from([2]));
+        let board = DirectBoard { index, size: 5 };
 
         // Rectangle containing 4 cells (at positions (1,1), (1,2), (2,1), (2,2))
         let condition = Condition::Rectangle {
@@ -577,7 +704,7 @@ mod tests {
             min_live_count: 3,
             max_live_count: 5,
         };
-        assert!(condition.check(&live_cells));
+        assert!(condition.check(&board).is_ok());
 
         // Same rectangle but expecting too many cells
         let condition = Condition::Rectangle {
@@ -586,7 +713,7 @@ mod tests {
             min_live_count: 5,
             max_live_count: 10,
         };
-        assert!(!condition.check(&live_cells));
+        assert!(condition.check(&board).is_err());
 
         // Same rectangle but allowing too few cells
         let condition = Condition::Rectangle {
@@ -595,7 +722,7 @@ mod tests {
             min_live_count: 1,
             max_live_count: 3,
         };
-        assert!(!condition.check(&live_cells));
+        assert!(condition.check(&board).is_err());
     }
 
     #[test]
@@ -673,7 +800,15 @@ mod tests {
 
         assert_eq!(
             board.check_puzzle(&puzzle, 3),
-            Err(InvalidSolution::InitialConditionsNotMet)
+            Err(InvalidSolution::InitialConditionFailed {
+                condition_index: 0,
+                reason: ConditionFailureReason::PositionMismatch {
+                    x: 0,
+                    y: 0,
+                    expected_state: true,
+                    actual_state: false,
+                }
+            })
         );
     }
 
@@ -796,7 +931,7 @@ mod tests {
             ],
         };
 
-        assert!(board.advance_until(&puzzle.final_conditions, 30).is_none());
+        assert!(board.advance_until(&puzzle.final_conditions, 30).is_err());
         assert_eq!(
             board.advance_until(&puzzle.final_conditions, 40).unwrap().0,
             31
@@ -873,7 +1008,137 @@ mod tests {
 
         assert_eq!(
             board.check_puzzle(&puzzle, 1),
-            Err(InvalidSolution::FinalConditionsNotMet { steps: 1 })
+            Err(InvalidSolution::FinalConditionFailed {
+                condition_index: 0,
+                steps: 1,
+                reason: ConditionFailureReason::PositionMismatch {
+                    x: 2,
+                    y: 2,
+                    expected_state: true,
+                    actual_state: false,
+                }
+            })
         );
+    }
+
+    #[test]
+    fn test_detailed_error_messages() {
+        // Test detailed error messages for different failure scenarios
+        let mut board = Board::new(8);
+        board.live_cells.extend([
+            Position { x: 1, y: 1 },
+            Position { x: 2, y: 2 },
+            Position { x: 3, y: 3 },
+        ]);
+
+        let puzzle = Puzzle {
+            title: "Detailed Error Test".to_string(),
+            summary: "Test detailed error reporting".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 8,
+            minimal_steps: 1,
+            maximal_steps: 2,
+            initial_conditions: vec![
+                // This should pass
+                Condition::Position {
+                    position: Position { x: 1, y: 1 },
+                    is_live: true,
+                },
+                // This should fail - position (0,0) should be alive but isn't
+                Condition::Position {
+                    position: Position { x: 0, y: 0 },
+                    is_live: true,
+                },
+                // This rectangle condition should also fail
+                Condition::Rectangle {
+                    x_range: 4..8,
+                    y_range: 4..8,
+                    min_live_count: 2,
+                    max_live_count: 4,
+                },
+            ],
+            final_conditions: vec![],
+        };
+
+        // Test initial condition failure with detailed information
+        match board.check_puzzle(&puzzle, 1) {
+            Err(InvalidSolution::InitialConditionFailed {
+                condition_index,
+                reason,
+            }) => {
+                assert_eq!(condition_index, 1); // Second condition should fail
+                match reason {
+                    ConditionFailureReason::PositionMismatch {
+                        x,
+                        y,
+                        expected_state,
+                        actual_state,
+                    } => {
+                        assert_eq!(x, 0);
+                        assert_eq!(y, 0);
+                        assert_eq!(expected_state, true);
+                        assert_eq!(actual_state, false);
+                    }
+                    _ => panic!("Expected PositionMismatch error"),
+                }
+            }
+            other => panic!("Expected InitialConditionFailed, got {:?}", other),
+        }
+
+        // Test rectangle condition failure
+        let mut board2 = Board::new(8);
+        board2.live_cells.push(Position { x: 0, y: 0 }); // Satisfy first condition
+
+        let puzzle2 = Puzzle {
+            title: "Rectangle Error Test".to_string(),
+            summary: "Test rectangle error reporting".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 8,
+            minimal_steps: 1,
+            maximal_steps: 2,
+            initial_conditions: vec![
+                Condition::Position {
+                    position: Position { x: 0, y: 0 },
+                    is_live: true,
+                },
+                Condition::Rectangle {
+                    x_range: 2..6,
+                    y_range: 2..6,
+                    min_live_count: 3,
+                    max_live_count: 5,
+                },
+            ],
+            final_conditions: vec![],
+        };
+
+        match board2.check_puzzle(&puzzle2, 1) {
+            Err(InvalidSolution::InitialConditionFailed {
+                condition_index,
+                reason,
+            }) => {
+                assert_eq!(condition_index, 1); // Rectangle condition should fail
+                match reason {
+                    ConditionFailureReason::RectangleCountMismatch {
+                        x_start,
+                        x_end,
+                        y_start,
+                        y_end,
+                        min_count,
+                        max_count,
+                        actual_count,
+                    } => {
+                        assert_eq!(x_start, 2);
+                        assert_eq!(x_end, 6);
+                        assert_eq!(y_start, 2);
+                        assert_eq!(y_end, 6);
+                        assert_eq!(min_count, 3);
+                        assert_eq!(max_count, 5);
+                        assert_eq!(actual_count, 0);
+                    }
+                    _ => panic!("Expected RectangleCountMismatch error"),
+                }
+            }
+            other => panic!("Expected InitialConditionFailed, got {:?}", other),
+        }
     }
 }
