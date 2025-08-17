@@ -9,6 +9,7 @@ members = [
     "crowd-funding",
     "ethereum-tracker",
     "fungible",
+    "game-of-life-challenge",
     "gen-nft",
     "hex-game",
     "how-to/perform-http-requests",
@@ -50,6 +51,7 @@ sha3 = "0.10.8"
 test-log = { version = "0.2.15", default-features = false, features = [
     "trace",
 ] }
+thiserror = "1.0.65"
 tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = [
     "unstable_wasm",
 ] }

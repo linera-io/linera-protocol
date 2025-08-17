@@ -2931,6 +2931,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
+name = "gol-challenge"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "bcs",
+ "linera-sdk",
+ "log",
+ "serde",
+ "serde_json",
+ "test-log",
+ "thiserror 1.0.65",
+ "tokio",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
