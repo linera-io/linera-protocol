@@ -4,10 +4,11 @@
 /*! ABI of the Requests For Quotes Example Application */
 
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
-use fungible::Account;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, ContractAbi, ServiceAbi},
+    linera_base_types::{
+        Account, AccountOwner, Amount, ApplicationId, ChainId, ContractAbi, ServiceAbi,
+    },
 };
 use serde::{Deserialize, Serialize};
 

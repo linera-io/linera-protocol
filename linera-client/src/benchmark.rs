@@ -20,7 +20,7 @@ use linera_core::{
     Environment,
 };
 use linera_execution::{system::SystemOperation, Operation};
-use linera_sdk::abis::fungible::{self, FungibleOperation};
+use linera_sdk::abis::fungible::FungibleOperation;
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
 use rand::{seq::SliceRandom, thread_rng};
@@ -718,7 +718,7 @@ impl<Env: Environment> Benchmark<Env> {
         receiver: AccountOwner,
         amount: Amount,
     ) -> Operation {
-        let target_account = fungible::Account {
+        let target_account = Account {
             chain_id,
             owner: receiver,
         };

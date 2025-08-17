@@ -13,7 +13,7 @@ use linera_base::{
     time::Instant,
     vm::VmRuntime,
 };
-use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
+use linera_sdk::abis::fungible::{FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
     local_net::{PathProvider, ProcessInbox},
     ApplicationWrapper, ClientWrapper, Faucet, Network, OnClientDrop,
@@ -196,7 +196,7 @@ async fn benchmark_with_fungible(
                 sender_app.transfer(
                     sender_context.owner,
                     Amount::ONE,
-                    fungible::Account {
+                    Account {
                         chain_id: receiver_context.default_chain,
                         owner: receiver_context.owner,
                     },
@@ -284,7 +284,7 @@ impl FungibleApp {
         &self,
         account_owner: AccountOwner,
         amount_transfer: Amount,
-        destination: fungible::Account,
+        destination: Account,
     ) -> Result<Value> {
         let mutation = format!(
             "transfer(owner: {}, amount: \"{}\", targetAccount: {})",

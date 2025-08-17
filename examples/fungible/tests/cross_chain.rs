@@ -5,10 +5,10 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{Account, FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters};
+use fungible::{FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{Account, AccountOwner, Amount},
     test::{MessageAction, TestValidator},
 };
 

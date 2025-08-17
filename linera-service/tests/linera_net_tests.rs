@@ -144,7 +144,7 @@ impl NativeFungibleApp {
         &self,
         account_owner: &AccountOwner,
         amount_transfer: Amount,
-        destination: fungible::Account,
+        destination: Account,
     ) -> Value {
         let mutation = format!(
             "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
@@ -155,7 +155,7 @@ impl NativeFungibleApp {
         self.0.mutate(mutation).await.unwrap()
     }
 
-    async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
+    async fn claim(&self, source: Account, target: Account, amount: Amount) {
         // Claiming tokens from chain1 to chain2.
         let mutation = format!(
             "claim(sourceAccount: {}, amount: \"{}\", targetAccount: {})",
@@ -236,7 +236,7 @@ impl FungibleApp {
         &self,
         account_owner: &AccountOwner,
         amount_transfer: Amount,
-        destination: fungible::Account,
+        destination: Account,
     ) -> Value {
         let mutation = format!(
             "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
@@ -252,7 +252,7 @@ impl FungibleApp {
         owner: &AccountOwner,
         spender: &AccountOwner,
         amount_transfer: Amount,
-        destination: fungible::Account,
+        destination: Account,
     ) -> Value {
         let mutation = format!(
             "transferFrom(owner: {}, spender: {}, amount: \"{}\", targetAccount: {})",
@@ -320,7 +320,7 @@ impl NonFungibleApp {
         &self,
         source_owner: &AccountOwner,
         token_id: &String,
-        target_account: &fungible::Account,
+        target_account: &Account,
     ) -> Value {
         let mutation = format!(
             "transfer(sourceOwner: {}, tokenId: {}, targetAccount: {})",
@@ -333,9 +333,9 @@ impl NonFungibleApp {
 
     async fn claim(
         &self,
-        source_account: &fungible::Account,
+        source_account: &Account,
         token_id: &String,
-        target_account: &fungible::Account,
+        target_account: &Account,
     ) -> Value {
         // Claiming tokens from chain1 to chain2.
         let mutation = format!(
@@ -1995,7 +1995,7 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
         &owner1,
         &owner2,
         Amount::from_tokens(2),
-        fungible::Account {
+        Account {
             chain_id: chain2,
             owner: owner3,
         },
@@ -2136,7 +2136,7 @@ async fn test_wasm_end_to_end_fungible(
     app1.transfer(
         &account_owner1,
         Amount::ONE,
-        fungible::Account {
+        Account {
             chain_id: chain2,
             owner: account_owner2,
         },
@@ -2172,11 +2172,11 @@ async fn test_wasm_end_to_end_fungible(
 
     // Claiming more money from chain1 to chain2.
     app2.claim(
-        fungible::Account {
+        Account {
             chain_id: chain1,
             owner: account_owner2,
         },
-        fungible::Account {
+        Account {
             chain_id: chain2,
             owner: account_owner2,
         },
@@ -2233,7 +2233,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 ) -> Result<()> {
     use std::collections::BTreeMap;
 
-    use fungible::{Account, InitialState, Parameters};
+    use fungible::{InitialState, Parameters};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -2415,7 +2415,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     app1.transfer(
         &account_owner1,
         &nft1_id,
-        &fungible::Account {
+        &Account {
             chain_id: chain2,
             owner: account_owner1,
         },
@@ -2447,12 +2447,12 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     // Claiming another NFT from chain2 to chain1.
     app1.claim(
-        &fungible::Account {
+        &Account {
             chain_id: chain2,
             owner: account_owner1,
         },
         &nft1_id,
-        &fungible::Account {
+        &Account {
             chain_id: chain1,
             owner: account_owner1,
         },
@@ -2479,7 +2479,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     app1.transfer(
         &account_owner1,
         &nft1_id,
-        &fungible::Account {
+        &Account {
             chain_id: chain2,
             owner: account_owner2,
         },
@@ -2547,7 +2547,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     app2.transfer(
         &account_owner2,
         &nft2_id,
-        &fungible::Account {
+        &Account {
             chain_id: chain1,
             owner: account_owner2,
         },
@@ -2572,12 +2572,12 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     // Claiming another NFT from chain1 to chain2.
     app2.claim(
-        &fungible::Account {
+        &Account {
             chain_id: chain1,
             owner: account_owner2,
         },
         &nft2_id,
-        &fungible::Account {
+        &Account {
             chain_id: chain2,
             owner: account_owner2,
         },
@@ -2699,7 +2699,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         .transfer(
             &account_owner1,
             Amount::ONE,
-            fungible::Account {
+            Account {
                 chain_id: chain2,
                 owner: account_owner2,
             },
@@ -3107,7 +3107,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .transfer(
             &owner_amm_chain,
             Amount::from_tokens(100),
-            fungible::Account {
+            Account {
                 chain_id: chain0,
                 owner: owner0,
             },
@@ -3117,7 +3117,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .transfer(
             &owner_amm_chain,
             Amount::from_tokens(170),
-            fungible::Account {
+            Account {
                 chain_id: chain1,
                 owner: owner1,
             },
@@ -3128,7 +3128,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .transfer(
             &owner_amm_chain,
             Amount::from_tokens(150),
-            fungible::Account {
+            Account {
                 chain_id: chain0,
                 owner: owner0,
             },
@@ -3138,7 +3138,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .transfer(
             &owner_amm_chain,
             Amount::from_tokens(100),
-            fungible::Account {
+            Account {
                 chain_id: chain1,
                 owner: owner1,
             },
@@ -3806,7 +3806,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     app1.transfer(
         &owner,
         Amount::from_tokens(8),
-        fungible::Account {
+        Account {
             chain_id: chain2,
             owner,
         },
@@ -3825,7 +3825,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     app2.transfer(
         &owner,
         Amount::from_tokens(4),
-        fungible::Account {
+        Account {
             chain_id: chain1,
             owner,
         },

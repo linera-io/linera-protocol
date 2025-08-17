@@ -6,10 +6,10 @@
 mod state;
 
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
-use fungible::{Account, FungibleTokenAbi};
+use fungible::FungibleTokenAbi;
 use linera_sdk::{
     abis::fungible::FungibleOperation,
-    linera_base_types::{AccountOwner, Amount, ApplicationId, WithContractAbi},
+    linera_base_types::{Account, AccountOwner, Amount, ApplicationId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
