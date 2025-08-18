@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{InputObject, SimpleObject};
-use gol_challenge::Board;
+use gol_challenge::game::Board;
 use linera_sdk::{
     linera_base_types::Timestamp,
     views::{linera_views, LogView, RootView, ViewStorageContext},
