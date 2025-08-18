@@ -13,20 +13,20 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch},
+    data_types::{Blob, BlockHeight, Epoch},
     ensure,
     hashed::Hashed,
-    identifiers::{ApplicationId, BlobId, BlobType, ChainId},
+    identifiers::{BlobId, BlobType, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposedBlock},
-    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    data_types::{BlockExecutionOutcome, ProposedBlock},
+    types::Block,
     ChainError, ChainStateView,
 };
-use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
+use linera_execution::{ExecutionStateView, ServiceRuntimeEndpoint};
 use linera_storage::{ResultReadCertificates, Storage};
 use linera_views::{context::InactiveContext, views::ClonableView};
-use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
+use tokio::sync::{OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{instrument, warn};
 
 use self::guard::ChainWorkerGuard;
@@ -100,20 +100,25 @@ where
         // TODO(#2237): Spawn concurrent tasks for read-only operations
         let responded = match request {
             #[cfg(with_testing)]
-            ChainWorkerRequest::ReadCertificate { height, callback } => {
-                callback.send(self.read_certificate(height).await).is_ok()
-            }
+            ChainWorkerRequest::ReadCertificate { height, callback } => callback
+                .send(self.guard().await.read_certificate(height).await)
+                .is_ok(),
             ChainWorkerRequest::GetChainStateView { callback } => {
                 callback.send(self.chain_state_view().await).is_ok()
             }
-            ChainWorkerRequest::QueryApplication { query, callback } => {
-                callback.send(self.query_application(query).await).is_ok()
-            }
+            ChainWorkerRequest::QueryApplication { query, callback } => callback
+                .send(self.guard().await.query_application(query).await)
+                .is_ok(),
             ChainWorkerRequest::DescribeApplication {
                 application_id,
                 callback,
             } => callback
-                .send(self.describe_application(application_id).await)
+                .send(
+                    self.guard()
+                        .await
+                        .describe_application(application_id)
+                        .await,
+                )
                 .is_ok(),
             ChainWorkerRequest::StageBlockExecution {
                 block,
@@ -122,7 +127,9 @@ where
                 callback,
             } => callback
                 .send(
-                    self.stage_block_execution(block, round, &published_blobs)
+                    self.guard()
+                        .await
+                        .stage_block_execution(block, round, &published_blobs)
                         .await,
                 )
                 .is_ok(),
@@ -130,16 +137,21 @@ where
                 certificate,
                 callback,
             } => callback
-                .send(self.process_timeout(certificate).await)
+                .send(self.guard().await.process_timeout(certificate).await)
                 .is_ok(),
             ChainWorkerRequest::HandleBlockProposal { proposal, callback } => callback
-                .send(self.handle_block_proposal(proposal).await)
+                .send(self.guard().await.handle_block_proposal(proposal).await)
                 .is_ok(),
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
                 callback,
             } => callback
-                .send(self.process_validated_block(certificate).await)
+                .send(
+                    self.guard()
+                        .await
+                        .process_validated_block(certificate)
+                        .await,
+                )
                 .is_ok(),
             ChainWorkerRequest::ProcessConfirmedBlock {
                 certificate,
@@ -147,7 +159,9 @@ where
                 callback,
             } => callback
                 .send(
-                    self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
+                    self.guard()
+                        .await
+                        .process_confirmed_block(certificate, notify_when_messages_are_delivered)
                         .await,
                 )
                 .is_ok(),
@@ -156,7 +170,12 @@ where
                 bundles,
                 callback,
             } => callback
-                .send(self.process_cross_chain_update(origin, bundles).await)
+                .send(
+                    self.guard()
+                        .await
+                        .process_cross_chain_update(origin, bundles)
+                        .await,
+                )
                 .is_ok(),
             ChainWorkerRequest::ConfirmUpdatedRecipient {
                 recipient,
@@ -164,7 +183,9 @@ where
                 callback,
             } => callback
                 .send(
-                    self.confirm_updated_recipient(recipient, latest_height)
+                    self.guard()
+                        .await
+                        .confirm_updated_recipient(recipient, latest_height)
                         .await,
                 )
                 .is_ok(),
@@ -174,9 +195,9 @@ where
             ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
                 .send(self.download_pending_blob(blob_id).await)
                 .is_ok(),
-            ChainWorkerRequest::HandlePendingBlob { blob, callback } => {
-                callback.send(self.handle_pending_blob(blob).await).is_ok()
-            }
+            ChainWorkerRequest::HandlePendingBlob { blob, callback } => callback
+                .send(self.guard().await.handle_pending_blob(blob).await)
+                .is_ok(),
             ChainWorkerRequest::UpdateReceivedCertificateTrackers {
                 new_trackers,
                 callback,
@@ -213,77 +234,6 @@ where
             .await)
     }
 
-    /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
-    #[cfg(with_testing)]
-    pub(super) async fn read_certificate(
-        &mut self,
-        height: BlockHeight,
-    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .read_certificate(height)
-            .await
-    }
-
-    /// Queries an application's state on the chain.
-    pub(super) async fn query_application(
-        &mut self,
-        query: Query,
-    ) -> Result<QueryOutcome, WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .query_application(query)
-            .await
-    }
-
-    /// Returns an application's description.
-    pub(super) async fn describe_application(
-        &mut self,
-        application_id: ApplicationId,
-    ) -> Result<ApplicationDescription, WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .describe_application(application_id)
-            .await
-    }
-
-    /// Executes a block without persisting any changes to the state.
-    pub(super) async fn stage_block_execution(
-        &mut self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        let (block, response) = ChainWorkerGuard::new(self)
-            .await
-            .stage_block_execution(block, round, published_blobs)
-            .await?;
-        Ok((block, response))
-    }
-
-    /// Processes a leader timeout issued for this multi-owner chain.
-    pub(super) async fn process_timeout(
-        &mut self,
-        certificate: TimeoutCertificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .process_timeout(certificate)
-            .await
-    }
-
-    /// Handles a proposal for the next block for this chain.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn handle_block_proposal(
-        &mut self,
-        proposal: BlockProposal,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .handle_block_proposal(proposal)
-            .await
-    }
-
     /// Clears the shared chain view, and acquires and drops its write lock.
     ///
     /// This is the only place a write lock is acquired, and read locks are acquired in
@@ -295,56 +245,6 @@ where
         if let Some(shared_chain_view) = self.shared_chain_view.take() {
             let _: RwLockWriteGuard<_> = shared_chain_view.write().await;
         }
-    }
-
-    /// Processes a validated block issued for this multi-owner chain.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn process_validated_block(
-        &mut self,
-        certificate: ValidatedBlockCertificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .process_validated_block(certificate)
-            .await
-    }
-
-    /// Processes a confirmed block (aka a commit).
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn process_confirmed_block(
-        &mut self,
-        certificate: ConfirmedBlockCertificate,
-        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .process_confirmed_block(certificate, notify_when_messages_are_delivered)
-            .await
-    }
-
-    /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn process_cross_chain_update(
-        &mut self,
-        origin: ChainId,
-        bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .process_cross_chain_update(origin, bundles)
-            .await
-    }
-
-    /// Handles the cross-chain request confirming that the recipient was updated.
-    pub(super) async fn confirm_updated_recipient(
-        &mut self,
-        recipient: ChainId,
-        latest_height: BlockHeight,
-    ) -> Result<(), WorkerError> {
-        ChainWorkerGuard::new(self)
-            .await
-            .confirm_updated_recipient(recipient, latest_height)
-            .await
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
@@ -365,7 +265,8 @@ where
                 .vote_for_fallback()
                 .await?;
         }
-        let response = ChainWorkerGuard::new(self)
+        let response = self
+            .guard()
             .await
             .prepare_chain_info_response(query)
             .await?;
@@ -381,18 +282,6 @@ where
         }
         let blob = self.storage.read_blob(blob_id).await?;
         blob.ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
-    }
-
-    /// Adds the blob to pending blocks or validated block certificates that are missing it.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn handle_pending_blob(
-        &mut self,
-        blob: Blob,
-    ) -> Result<ChainInfoResponse, WorkerError> {
-        ChainWorkerGuard::new(&mut *self)
-            .await
-            .handle_pending_blob(blob)
-            .await
     }
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are
@@ -603,10 +492,14 @@ where
         &mut self,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
-        ChainWorkerGuard::new(self)
+        self.guard()
             .await
             .update_received_certificate_trackers(new_trackers)
             .await
+    }
+
+    async fn guard(&mut self) -> ChainWorkerGuard<'_, StorageClient> {
+        ChainWorkerGuard::new(self).await
     }
 }
 
