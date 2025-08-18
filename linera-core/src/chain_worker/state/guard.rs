@@ -64,7 +64,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let (chain_epoch, committee) = self.0.chain.current_committee()?;
         ensure!(
             certificate.inner().epoch() == chain_epoch,
@@ -83,10 +83,7 @@ where
             .get()
             .already_validated_block(certificate.inner().height())?
         {
-            return Ok((
-                ChainInfoResponse::new(&self.0.chain, self.0.config.key_pair()),
-                actions,
-            ));
+            return Ok((self.chain_info_response(), actions));
         }
         let old_round = self.0.chain.manager.current_round();
         let timeout_chain_id = certificate.inner().chain_id();
@@ -105,9 +102,8 @@ where
                 },
             })
         }
-        let info = ChainInfoResponse::new(&self.0.chain, self.0.config.key_pair());
         self.save().await?;
-        Ok((info, actions))
+        Ok((self.chain_info_response(), actions))
     }
 
     /// Tries to load all blobs published in this proposal.
@@ -159,40 +155,6 @@ where
         Ok(published_blobs)
     }
 
-    /// Votes for a block proposal for the next block for this chain.
-    pub(super) async fn vote_for_block_proposal(
-        &mut self,
-        proposal: BlockProposal,
-        outcome: BlockExecutionOutcome,
-        local_time: Timestamp,
-    ) -> Result<(), WorkerError> {
-        // Create the vote and store it in the chain state.
-        let block = outcome.with(proposal.content.block.clone());
-        let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
-        let blobs = self
-            .0
-            .get_required_blobs(proposal.expected_blob_ids(), &created_blobs)
-            .await?;
-        let key_pair = self.0.config.key_pair();
-        let manager = &mut self.0.chain.manager;
-        match manager.create_vote(proposal, block, key_pair, local_time, blobs)? {
-            // Cache the value we voted on, so the client doesn't have to send it again.
-            Some(Either::Left(vote)) => {
-                self.0
-                    .block_values
-                    .insert(Cow::Borrowed(vote.value.inner()));
-            }
-            Some(Either::Right(vote)) => {
-                self.0
-                    .block_values
-                    .insert(Cow::Borrowed(vote.value.inner()));
-            }
-            None => (),
-        }
-        self.save().await?;
-        Ok(())
-    }
-
     /// Processes a validated block issued for this multi-owner chain.
     pub(super) async fn process_validated_block(
         &mut self,
@@ -204,7 +166,7 @@ where
         let height = header.height;
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let (epoch, committee) = self.0.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -224,11 +186,7 @@ where
         };
         if already_committed_block || should_skip_validated_block()? {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((
-                ChainInfoResponse::new(&self.0.chain, self.0.config.key_pair()),
-                actions,
-                true,
-            ));
+            return Ok((self.chain_info_response(), actions, true));
         }
 
         self.0
@@ -260,7 +218,6 @@ where
             self.0.storage.clock().current_time(),
             blobs,
         )?;
-        let info = ChainInfoResponse::new(&self.0.chain, self.0.config.key_pair());
         self.save().await?;
         let round = self.0.chain.manager.current_round();
         if round > old_round {
@@ -269,7 +226,7 @@ where
                 reason: Reason::NewRound { height, round },
             })
         }
-        Ok((info, actions, false))
+        Ok((self.chain_info_response(), actions, false))
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -289,8 +246,7 @@ where
             let actions = self.0.create_network_actions().await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            let info = ChainInfoResponse::new(&self.0.chain, self.0.config.key_pair());
-            return Ok((info, actions));
+            return Ok((self.chain_info_response(), actions));
         }
 
         // We haven't processed the block - verify the certificate first
@@ -374,8 +330,7 @@ where
             trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            let info = ChainInfoResponse::new(&self.0.chain, self.0.config.key_pair());
-            return Ok((info, actions));
+            return Ok((self.chain_info_response(), actions));
         }
 
         // This should always be true for valid certificates.
@@ -387,7 +342,7 @@ where
         // If we got here, `height` is equal to `tip.next_block_height` and the block is
         // properly chained. Verify that the chain is active and that the epoch we used for
         // verifying the certificate is actually the active one on the chain.
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let (epoch, _) = self.0.chain.current_committee()?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
@@ -403,7 +358,7 @@ where
         // because we already wrote the blob state above, so the client can now upload the
         // blob, which will get accepted, and retry.
         if height == BlockHeight::ZERO {
-            self.0.ensure_is_active().await?;
+            self.ensure_is_active().await?;
             let (epoch, _) = self.0.chain.current_committee()?;
             check_block_epoch(epoch, chain_id, block.header.epoch)?;
         }
@@ -481,9 +436,8 @@ where
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
-        let info = ChainInfoResponse::new(&self.0.chain, self.0.config.key_pair());
 
-        Ok((info, actions))
+        Ok((self.chain_info_response(), actions))
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
@@ -686,10 +640,7 @@ where
         }
         ensure!(was_expected, WorkerError::UnexpectedBlob);
         self.save().await?;
-        Ok(ChainInfoResponse::new(
-            &self.0.chain,
-            self.0.config.key_pair(),
-        ))
+        Ok(self.chain_info_response())
     }
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
@@ -698,7 +649,7 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let certificate_hash = match self.0.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -717,7 +668,7 @@ where
         &mut self,
         query: Query,
     ) -> Result<QueryOutcome, WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let outcome = self
             .0
@@ -732,7 +683,7 @@ where
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let response = self.0.chain.describe_application(application_id).await?;
         Ok(response)
     }
@@ -744,7 +695,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let (_, committee) = self.0.chain.current_committee()?;
@@ -754,6 +705,7 @@ where
             .execute_block(&block, local_time, round, published_blobs)
             .await?;
 
+        // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.0.chain, None);
         if let Some(signer) = signer {
             response.info.requested_owner_balance = self
@@ -769,12 +721,12 @@ where
         Ok((outcome.with(block), response))
     }
 
-    /// Validates a proposal's signatures; returns `manager::Outcome::Skip` if we already voted
-    /// for it.
-    pub(super) async fn check_proposed_block(
-        &self,
-        proposal: &BlockProposal,
-    ) -> Result<manager::Outcome, WorkerError> {
+    /// Validates and executes a block proposed to extend this chain.
+    pub(super) async fn handle_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        self.ensure_is_active().await?;
         proposal
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
@@ -784,7 +736,7 @@ where
             content,
             original_proposal,
             signature: _,
-        } = proposal;
+        } = &proposal;
         let block = &content.block;
         let chain = &self.0.chain;
         // Check the epoch.
@@ -811,7 +763,7 @@ where
             Some(OriginalProposal::Fast(signature)) => {
                 let original_proposal = BlockProposal {
                     content: ProposalContent {
-                        block: proposal.content.block.clone(),
+                        block: content.block.clone(),
                         round: Round::Fast,
                         outcome: None,
                     },
@@ -837,15 +789,12 @@ where
         }
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
-        Ok(chain.manager.check_proposed_block(proposal)?)
-    }
+        if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
+            // We already voted for this block.
+            return Ok((self.chain_info_response(), NetworkActions::default()));
+        }
 
-    /// Validates and executes a block proposed to extend this chain.
-    pub(super) async fn validate_proposal_content(
-        &mut self,
-        content: &ProposalContent,
-        published_blobs: &[Blob],
-    ) -> Result<(BlockExecutionOutcome, Timestamp), WorkerError> {
+        let published_blobs = self.load_proposal_blobs(&proposal).await?;
         let ProposalContent {
             block,
             round,
@@ -867,7 +816,7 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            self.execute_block(block, local_time, round.multi_leader(), published_blobs)
+            self.execute_block(block, local_time, round.multi_leader(), &published_blobs)
                 .await?
         };
 
@@ -883,7 +832,35 @@ where
             .update_counters(&block.transactions, &outcome.messages)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
-        Ok((outcome, local_time))
+        // Don't save the changes since the block is not confirmed yet.
+        chain.rollback();
+
+        // Create the vote and store it in the chain state.
+        let block = outcome.with(proposal.content.block.clone());
+        let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
+        let blobs = self
+            .0
+            .get_required_blobs(proposal.expected_blob_ids(), &created_blobs)
+            .await?;
+        let key_pair = self.0.config.key_pair();
+        let manager = &mut self.0.chain.manager;
+        match manager.create_vote(proposal, block, key_pair, local_time, blobs)? {
+            // Cache the value we voted on, so the client doesn't have to send it again.
+            Some(Either::Left(vote)) => {
+                self.0
+                    .block_values
+                    .insert(Cow::Borrowed(vote.value.inner()));
+            }
+            Some(Either::Right(vote)) => {
+                self.0
+                    .block_values
+                    .insert(Cow::Borrowed(vote.value.inner()));
+            }
+            None => (),
+        }
+        self.save().await?;
+        let actions = self.0.create_network_actions().await?;
+        Ok((self.chain_info_response(), actions))
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
@@ -891,7 +868,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let chain = &self.0.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
@@ -982,6 +959,21 @@ where
                 .await,
         );
         Ok(outcome)
+    }
+
+    /// Ensures that the current chain is active, returning an error otherwise.
+    async fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
+        if !self.0.knows_chain_is_active {
+            let local_time = self.0.storage.clock().current_time();
+            self.0.chain.ensure_is_active(local_time).await?;
+            self.save().await?;
+            self.0.knows_chain_is_active = true;
+        }
+        Ok(())
+    }
+
+    fn chain_info_response(&self) -> ChainInfoResponse {
+        ChainInfoResponse::new(&self.0.chain, self.0.config.key_pair())
     }
 
     /// Stores the chain state in persistent storage.
