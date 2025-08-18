@@ -45,6 +45,12 @@ use crate::{
     util::ChildExt,
 };
 
+/// Maximum number of shards allowed.
+const MAX_NUMBER_SHARD: usize = 100;
+
+/// Maximum number of validators allowed.
+const MAX_NUMBER_VALIDATOR: usize = 10;
+
 pub enum ProcessInbox {
     Skip,
     Automatic,
@@ -340,6 +346,18 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_initial_validators > 0,
             "There should be at least one initial validator"
         );
+        ensure!(
+            self.num_initial_validators <= MAX_NUMBER_VALIDATOR,
+            "Number of initial validators ({}) exceeds maximum allowed ({})",
+            self.num_initial_validators,
+            MAX_NUMBER_VALIDATOR
+        );
+        ensure!(
+            self.num_shards <= MAX_NUMBER_SHARD,
+            "Number of shards ({}) exceeds maximum allowed ({})",
+            self.num_shards,
+            MAX_NUMBER_SHARD
+        );
         net.generate_initial_validator_config().await?;
         client
             .create_genesis_config(
@@ -432,27 +450,27 @@ impl LocalNet {
     }
 
     pub fn proxy_public_port(validator: usize, proxy_id: usize) -> usize {
-        13000 + validator * 100 + proxy_id + 1
+        13000 + validator * MAX_NUMBER_SHARD + proxy_id + 1
     }
 
     fn proxy_internal_port(validator: usize, proxy_id: usize) -> usize {
-        10000 + validator * 100 + proxy_id + 1
+        10000 + validator * MAX_NUMBER_SHARD + proxy_id + 1
     }
 
     fn shard_port(validator: usize, shard: usize) -> usize {
-        9000 + validator * 100 + shard + 1
+        9000 + validator * MAX_NUMBER_SHARD + shard + 1
     }
 
     fn proxy_metrics_port(validator: usize, proxy_id: usize) -> usize {
-        12000 + validator * 100 + proxy_id + 1
+        12000 + validator * MAX_NUMBER_SHARD + proxy_id + 1
     }
 
     fn shard_metrics_port(validator: usize, shard: usize) -> usize {
-        11000 + validator * 100 + shard + 1
+        11000 + validator * MAX_NUMBER_SHARD + shard + 1
     }
 
     fn block_exporter_port(validator: usize, exporter_id: usize) -> usize {
-        12000 + validator * 100 + exporter_id + 1
+        12000 + validator * MAX_NUMBER_SHARD + exporter_id + 1
     }
 
     fn block_exporter_metrics_port(exporter_id: usize) -> usize {
