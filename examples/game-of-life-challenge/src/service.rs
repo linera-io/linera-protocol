@@ -227,11 +227,11 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             size: 3,
             minimal_steps: 1,
             maximal_steps: 1,
-            initial_conditions: vec![Condition::Position {
+            initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 1, y: 1 },
                 is_live: true,
             }],
-            final_conditions: vec![Condition::Position {
+            final_conditions: vec![Condition::TestPosition {
                 position: Position { x: 1, y: 1 },
                 is_live: false,
             }],
@@ -375,11 +375,11 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             size: 3,
             minimal_steps: 1,
             maximal_steps: 2,
-            initial_conditions: vec![Condition::Position {
+            initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 1, y: 1 },
                 is_live: true,
             }],
-            final_conditions: vec![Condition::Position {
+            final_conditions: vec![Condition::TestPosition {
                 position: Position { x: 1, y: 1 },
                 is_live: false,
             }],
@@ -428,7 +428,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                     "maximalSteps": 2,
                     "initialConditions": [
                         {
-                            "Position": {
+                            "TestPosition": {
                                 "is_live": true,
                                 "position": {
                                     "x": 1,
@@ -439,7 +439,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                     ],
                     "finalConditions": [
                         {
-                            "Position": {
+                            "TestPosition": {
                                 "is_live": false,
                                 "position": {
                                     "x": 1,

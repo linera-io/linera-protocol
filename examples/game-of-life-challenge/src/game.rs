@@ -48,14 +48,14 @@ pub enum Difficulty {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Condition {
     /// Testing a single cell.
-    Position {
+    TestPosition {
         /// The position being tested.
         position: Position,
         /// The desired state of the cell.
         is_live: bool,
     },
     /// Testing a rectangle of cells.
-    Rectangle {
+    TestRectangle {
         /// The range of `x`-coordinates being tested.
         x_range: Range<u16>,
         /// The range of `y`-coordinates being tested.
@@ -435,7 +435,7 @@ impl Cell {
 impl Condition {
     fn check(&self, board: &DirectBoard) -> Result<(), ConditionFailureReason> {
         match self {
-            Self::Position { position, is_live } => {
+            Self::TestPosition { position, is_live } => {
                 let actual_state = board.is_live(*position);
                 if *is_live == actual_state {
                     Ok(())
@@ -448,7 +448,7 @@ impl Condition {
                     })
                 }
             }
-            Self::Rectangle {
+            Self::TestRectangle {
                 x_range,
                 y_range,
                 min_live_count,
@@ -636,27 +636,27 @@ mod tests {
         let board = DirectBoard { index, size: 4 };
 
         // Test live cell condition
-        let condition = Condition::Position {
+        let condition = Condition::TestPosition {
             position: Position { x: 1, y: 2 },
             is_live: true,
         };
         assert!(condition.check(&board).is_ok());
 
         // Test dead cell condition
-        let condition = Condition::Position {
+        let condition = Condition::TestPosition {
             position: Position { x: 1, y: 2 },
             is_live: false,
         };
         assert!(condition.check(&board).is_err());
 
         // Test empty position
-        let condition = Condition::Position {
+        let condition = Condition::TestPosition {
             position: Position { x: 0, y: 0 },
             is_live: false,
         };
         assert!(condition.check(&board).is_ok());
 
-        let condition = Condition::Position {
+        let condition = Condition::TestPosition {
             position: Position { x: 0, y: 0 },
             is_live: true,
         };
@@ -672,7 +672,7 @@ mod tests {
         let board = DirectBoard { index, size: 5 };
 
         // Rectangle containing 4 cells (at positions (1,1), (1,2), (2,1), (2,2))
-        let condition = Condition::Rectangle {
+        let condition = Condition::TestRectangle {
             x_range: 1..3,
             y_range: 1..3,
             min_live_count: 3,
@@ -681,7 +681,7 @@ mod tests {
         assert!(condition.check(&board).is_ok());
 
         // Same rectangle but expecting too many cells
-        let condition = Condition::Rectangle {
+        let condition = Condition::TestRectangle {
             x_range: 1..3,
             y_range: 1..3,
             min_live_count: 5,
@@ -690,7 +690,7 @@ mod tests {
         assert!(condition.check(&board).is_err());
 
         // Same rectangle but allowing too few cells
-        let condition = Condition::Rectangle {
+        let condition = Condition::TestRectangle {
             x_range: 1..3,
             y_range: 1..3,
             min_live_count: 1,
@@ -765,7 +765,7 @@ mod tests {
             size: 5,
             minimal_steps: 1,
             maximal_steps: 5,
-            initial_conditions: vec![Condition::Position {
+            initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 0, y: 0 },
                 is_live: true,
             }],
@@ -804,29 +804,29 @@ mod tests {
             minimal_steps: 1,
             maximal_steps: 3,
             initial_conditions: vec![
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 2, y: 1 },
                     is_live: true,
                 },
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 2, y: 2 },
                     is_live: true,
                 },
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 2, y: 3 },
                     is_live: true,
                 },
             ],
             final_conditions: vec![
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 2, y: 1 },
                     is_live: true,
                 },
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 2, y: 2 },
                     is_live: true,
                 },
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 2, y: 3 },
                     is_live: true,
                 },
@@ -861,20 +861,20 @@ mod tests {
             maximal_steps: 40,
             initial_conditions: vec![
                 // All 5 cells should be in top-left square (0-7, 0-7).
-                Condition::Rectangle {
+                Condition::TestRectangle {
                     x_range: 0..8,
                     y_range: 0..8,
                     min_live_count: 5,
                     max_live_count: 5,
                 },
                 // No cells elsewhere.
-                Condition::Rectangle {
+                Condition::TestRectangle {
                     x_range: 8..16,
                     y_range: 0..8,
                     min_live_count: 0,
                     max_live_count: 0,
                 },
-                Condition::Rectangle {
+                Condition::TestRectangle {
                     x_range: 0..16,
                     y_range: 8..16,
                     min_live_count: 0,
@@ -883,20 +883,20 @@ mod tests {
             ],
             final_conditions: vec![
                 // All 5 cells should be in top-right square (8-15, 8-15)
-                Condition::Rectangle {
+                Condition::TestRectangle {
                     x_range: 8..16,
                     y_range: 8..16,
                     min_live_count: 5,
                     max_live_count: 5,
                 },
                 // No cells elsewhere.
-                Condition::Rectangle {
+                Condition::TestRectangle {
                     x_range: 0..8,
                     y_range: 0..16,
                     min_live_count: 0,
                     max_live_count: 0,
                 },
-                Condition::Rectangle {
+                Condition::TestRectangle {
                     x_range: 8..16,
                     y_range: 0..8,
                     min_live_count: 0,
@@ -970,11 +970,11 @@ mod tests {
             size: 5,
             minimal_steps: 1,
             maximal_steps: 1,
-            initial_conditions: vec![Condition::Position {
+            initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 2, y: 2 },
                 is_live: true,
             }],
-            final_conditions: vec![Condition::Position {
+            final_conditions: vec![Condition::TestPosition {
                 position: Position { x: 2, y: 2 },
                 is_live: true, // But single cell dies after 1 step
             }],
@@ -1014,17 +1014,17 @@ mod tests {
             maximal_steps: 2,
             initial_conditions: vec![
                 // This should pass
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 1, y: 1 },
                     is_live: true,
                 },
                 // This should fail - position (0,0) should be alive but isn't
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 0, y: 0 },
                     is_live: true,
                 },
                 // This rectangle condition should also fail
-                Condition::Rectangle {
+                Condition::TestRectangle {
                     x_range: 4..8,
                     y_range: 4..8,
                     min_live_count: 2,
@@ -1071,11 +1071,11 @@ mod tests {
             minimal_steps: 1,
             maximal_steps: 2,
             initial_conditions: vec![
-                Condition::Position {
+                Condition::TestPosition {
                     position: Position { x: 0, y: 0 },
                     is_live: true,
                 },
-                Condition::Rectangle {
+                Condition::TestRectangle {
                     x_range: 2..6,
                     y_range: 2..6,
                     min_live_count: 3,
