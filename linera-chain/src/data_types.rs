@@ -475,18 +475,6 @@ impl MessageBundle {
         self.messages.iter().all(PostedMessage::is_skippable)
     }
 
-    pub fn is_tracked(&self) -> bool {
-        let mut tracked = false;
-        for posted_message in &self.messages {
-            match posted_message.kind {
-                MessageKind::Simple | MessageKind::Bouncing => {}
-                MessageKind::Protected => return false,
-                MessageKind::Tracked => tracked = true,
-            }
-        }
-        tracked
-    }
-
     pub fn is_protected(&self) -> bool {
         self.messages.iter().any(PostedMessage::is_protected)
     }

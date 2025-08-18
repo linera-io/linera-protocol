@@ -1351,7 +1351,7 @@ impl MessagePolicy {
         if self.is_reject() {
             if bundle.bundle.is_skippable() {
                 return false;
-            } else if bundle.bundle.is_tracked() {
+            } else if !bundle.bundle.is_protected() {
                 bundle.action = MessageAction::Reject;
             }
         }
