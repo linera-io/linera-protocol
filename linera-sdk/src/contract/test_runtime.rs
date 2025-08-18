@@ -979,10 +979,10 @@ where
     }
 
     /// Reads a data blob with the given hash from storage.
-    pub fn read_data_blob(&mut self, hash: &DataBlobHash) -> Vec<u8> {
+    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
         let maybe_request = self.expected_read_data_blob_requests.pop_front();
         let (expected_hash, response) = maybe_request.expect("Unexpected read_data_blob request");
-        assert_eq!(*hash, expected_hash);
+        assert_eq!(hash, expected_hash);
         response
     }
 
