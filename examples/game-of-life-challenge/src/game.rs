@@ -165,7 +165,9 @@ pub struct Board {
     /// The width and height of the board, in cells.
     size: u16,
     /// The coordinates of the live cells.
-    live_cells: Vec<Position>,
+    // NOTE: Serde treats `BTreeSet` as a sequence, therefore BCS won't be able to enforce
+    // a strict-ordering of positions in the BCS bytes for this field.
+    live_cells: BTreeSet<Position>,
 }
 
 /// The state of a GoL cell. Used for computations.
@@ -273,7 +275,7 @@ impl Board {
     pub fn new(size: u16) -> Self {
         Board {
             size,
-            live_cells: Vec::new(),
+            live_cells: BTreeSet::new(),
         }
     }
 
@@ -527,7 +529,7 @@ mod tests {
     #[test]
     fn test_advance_single_cell_dies() {
         let mut board = Board::new(5);
-        board.live_cells.push(Position { x: 2, y: 2 });
+        board.live_cells.insert(Position { x: 2, y: 2 });
 
         let next_board = board.advance_once();
         assert!(next_board.live_cells.is_empty());
@@ -958,7 +960,7 @@ mod tests {
     fn test_check_puzzle_final_conditions_not_met() {
         // Create a simple board with a single cell
         let mut board = Board::new(5);
-        board.live_cells.push(Position { x: 2, y: 2 });
+        board.live_cells.insert(Position { x: 2, y: 2 });
 
         let puzzle = Puzzle {
             title: "Impossible Test".to_string(),
@@ -1058,7 +1060,7 @@ mod tests {
 
         // Test rectangle condition failure
         let mut board2 = Board::new(8);
-        board2.live_cells.push(Position { x: 0, y: 0 }); // Satisfy first condition
+        board2.live_cells.insert(Position { x: 0, y: 0 }); // Satisfy first condition
 
         let puzzle2 = Puzzle {
             title: "Rectangle Error Test".to_string(),
