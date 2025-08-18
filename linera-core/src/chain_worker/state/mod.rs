@@ -25,11 +25,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
-use linera_storage::{Clock as _, ResultReadCertificates, Storage};
-use linera_views::{
-    context::InactiveContext,
-    views::{ClonableView, RootView},
-};
+use linera_storage::{ResultReadCertificates, Storage};
+use linera_views::{context::InactiveContext, views::ClonableView};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{instrument, warn};
 
@@ -282,7 +279,6 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        self.ensure_is_active().await?;
         if ChainWorkerGuard::new(&mut *self)
             .await
             .check_proposed_block(&proposal)
@@ -421,18 +417,6 @@ where
             .await
             .handle_pending_blob(blob)
             .await
-    }
-
-    /// Ensures that the current chain is active, returning an error otherwise.
-    async fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
-        if !self.knows_chain_is_active {
-            let local_time = self.storage.clock().current_time();
-            self.chain.ensure_is_active(local_time).await?;
-            self.clear_shared_chain_view().await;
-            self.chain.save().await?;
-            self.knows_chain_is_active = true;
-        }
-        Ok(())
     }
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are

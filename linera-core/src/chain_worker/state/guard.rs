@@ -64,7 +64,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let (chain_epoch, committee) = self.0.chain.current_committee()?;
         ensure!(
             certificate.inner().epoch() == chain_epoch,
@@ -204,7 +204,7 @@ where
         let height = header.height;
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let (epoch, committee) = self.0.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -387,7 +387,7 @@ where
         // If we got here, `height` is equal to `tip.next_block_height` and the block is
         // properly chained. Verify that the chain is active and that the epoch we used for
         // verifying the certificate is actually the active one on the chain.
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let (epoch, _) = self.0.chain.current_committee()?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
@@ -403,7 +403,7 @@ where
         // because we already wrote the blob state above, so the client can now upload the
         // blob, which will get accepted, and retry.
         if height == BlockHeight::ZERO {
-            self.0.ensure_is_active().await?;
+            self.ensure_is_active().await?;
             let (epoch, _) = self.0.chain.current_committee()?;
             check_block_epoch(epoch, chain_id, block.header.epoch)?;
         }
@@ -698,7 +698,7 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let certificate_hash = match self.0.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -717,7 +717,7 @@ where
         &mut self,
         query: Query,
     ) -> Result<QueryOutcome, WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let outcome = self
             .0
@@ -732,7 +732,7 @@ where
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let response = self.0.chain.describe_application(application_id).await?;
         Ok(response)
     }
@@ -744,7 +744,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let (_, committee) = self.0.chain.current_committee()?;
@@ -772,9 +772,10 @@ where
     /// Validates a proposal's signatures; returns `manager::Outcome::Skip` if we already voted
     /// for it.
     pub(super) async fn check_proposed_block(
-        &self,
+        &mut self,
         proposal: &BlockProposal,
     ) -> Result<manager::Outcome, WorkerError> {
+        self.ensure_is_active().await?;
         proposal
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
@@ -891,7 +892,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.0.ensure_is_active().await?;
+        self.ensure_is_active().await?;
         let chain = &self.0.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
@@ -982,6 +983,17 @@ where
                 .await,
         );
         Ok(outcome)
+    }
+
+    /// Ensures that the current chain is active, returning an error otherwise.
+    async fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
+        if !self.0.knows_chain_is_active {
+            let local_time = self.0.storage.clock().current_time();
+            self.0.chain.ensure_is_active(local_time).await?;
+            self.save().await?;
+            self.0.knows_chain_is_active = true;
+        }
+        Ok(())
     }
 
     /// Stores the chain state in persistent storage.
