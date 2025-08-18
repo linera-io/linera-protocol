@@ -3,8 +3,7 @@
 
 //! The state and functionality of a chain worker.
 
-mod attempted_changes;
-mod temporary_changes;
+mod guard;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -34,12 +33,9 @@ use linera_views::{
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
 use tracing::{instrument, warn};
 
+use self::guard::ChainWorkerGuard;
 #[cfg(test)]
-pub(crate) use self::attempted_changes::CrossChainUpdateHelper;
-use self::{
-    attempted_changes::ChainWorkerStateWithAttemptedChanges,
-    temporary_changes::ChainWorkerStateWithTemporaryChanges,
-};
+pub(crate) use self::guard::CrossChainUpdateHelper;
 use super::{ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier};
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -227,7 +223,7 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .read_certificate(height)
             .await
@@ -238,7 +234,7 @@ where
         &mut self,
         query: Query,
     ) -> Result<QueryOutcome, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .query_application(query)
             .await
@@ -249,7 +245,7 @@ where
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .describe_application(application_id)
             .await
@@ -262,7 +258,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        let (block, response) = ChainWorkerStateWithTemporaryChanges::new(self)
+        let (block, response) = ChainWorkerGuard::new(self)
             .await
             .stage_block_execution(block, round, published_blobs)
             .await?;
@@ -274,7 +270,7 @@ where
         &mut self,
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .process_timeout(certificate)
             .await
@@ -287,7 +283,7 @@ where
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         self.ensure_is_active().await?;
-        if ChainWorkerStateWithTemporaryChanges::new(&mut *self)
+        if ChainWorkerGuard::new(&mut *self)
             .await
             .check_proposed_block(&proposal)
             .await?
@@ -297,16 +293,16 @@ where
             let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
             return Ok((info, NetworkActions::default()));
         };
-        let published_blobs = ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+        let published_blobs = ChainWorkerGuard::new(&mut *self)
             .await
             .load_proposal_blobs(&proposal)
             .await?;
-        let (outcome, local_time) = ChainWorkerStateWithTemporaryChanges::new(self)
+        let (outcome, local_time) = ChainWorkerGuard::new(self)
             .await
             .validate_proposal_content(&proposal.content, &published_blobs)
             .await?;
 
-        ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+        ChainWorkerGuard::new(&mut *self)
             .await
             .vote_for_block_proposal(proposal, outcome, local_time)
             .await?;
@@ -335,7 +331,7 @@ where
         &mut self,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .process_validated_block(certificate)
             .await
@@ -348,7 +344,7 @@ where
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await
@@ -361,7 +357,7 @@ where
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .process_cross_chain_update(origin, bundles)
             .await
@@ -373,7 +369,7 @@ where
         recipient: ChainId,
         latest_height: BlockHeight,
     ) -> Result<(), WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .confirm_updated_recipient(recipient, latest_height)
             .await
@@ -386,18 +382,18 @@ where
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         if let Some((height, round)) = query.request_leader_timeout {
-            ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+            ChainWorkerGuard::new(&mut *self)
                 .await
                 .vote_for_leader_timeout(height, round)
                 .await?;
         }
         if query.request_fallback {
-            ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+            ChainWorkerGuard::new(&mut *self)
                 .await
                 .vote_for_fallback()
                 .await?;
         }
-        let response = ChainWorkerStateWithTemporaryChanges::new(self)
+        let response = ChainWorkerGuard::new(self)
             .await
             .prepare_chain_info_response(query)
             .await?;
@@ -421,7 +417,7 @@ where
         &mut self,
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+        ChainWorkerGuard::new(&mut *self)
             .await
             .handle_pending_blob(blob)
             .await
@@ -647,7 +643,7 @@ where
         &mut self,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
-        ChainWorkerStateWithAttemptedChanges::new(self)
+        ChainWorkerGuard::new(self)
             .await
             .update_received_certificate_trackers(new_trackers)
             .await
