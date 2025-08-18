@@ -42,7 +42,6 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
     state: &'state mut ChainWorkerState<StorageClient>,
-    succeeded: bool,
 }
 
 impl<'state, StorageClient> ChainWorkerStateWithAttemptedChanges<'state, StorageClient>
@@ -57,10 +56,7 @@ where
             "`ChainStateView` has unexpected leftover changes"
         );
 
-        ChainWorkerStateWithAttemptedChanges {
-            state,
-            succeeded: false,
-        }
+        ChainWorkerStateWithAttemptedChanges { state }
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
@@ -715,7 +711,6 @@ where
     async fn save(&mut self) -> Result<(), WorkerError> {
         self.state.clear_shared_chain_view().await;
         self.state.chain.save().await?;
-        self.succeeded = true;
         Ok(())
     }
 }
@@ -725,9 +720,7 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
     fn drop(&mut self) {
-        if !self.succeeded {
-            self.state.chain.rollback();
-        }
+        self.state.chain.rollback();
     }
 }
 
