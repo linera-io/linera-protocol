@@ -82,6 +82,11 @@ impl GolChallengeState {
         let puzzle = bcs::from_bytes(&puzzle_bytes).expect("Failed to deserialize puzzle");
         board.check_puzzle(&puzzle, steps).is_ok()
     }
+
+    /// Print the ASCII representation of a board.
+    async fn print_board(&self, board: Board) -> String {
+        format!("{}", board)
+    }
 }
 
 #[cfg(test)]
@@ -284,5 +289,52 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .expect("Response should be JSON");
 
         assert_eq!(response, json!({ "validateSolution": false }));
+    }
+
+    #[test]
+    fn query_print_board() {
+        let runtime = ServiceRuntime::<GolChallengeService>::new();
+        let state = GolChallengeState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = GolChallengeService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        // Test printing a board with a simple pattern
+        let response = service
+            .handle_query(Request::new(
+                "{
+                    printBoard(board: {size: 3, liveCells: [ {x: 1, y: 0}, {x: 1, y: 1}, {x: 1, y: 2} ]})
+                }",
+            ))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        // The response should contain a string representation of the board
+        // This will be the compact format (without line numbers)
+        let expected_output = "·●·\n·●·\n·●·\n";
+        assert_eq!(response, json!({ "printBoard": expected_output }));
+
+        // Test with an empty board
+        let response = service
+            .handle_query(Request::new(
+                "{
+                    printBoard(board: {size: 2, liveCells: []})
+                }",
+            ))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        let expected_output = "··\n··\n";
+        assert_eq!(response, json!({ "printBoard": expected_output }));
     }
 }
