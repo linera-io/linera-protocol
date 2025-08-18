@@ -45,11 +45,10 @@ use crate::{
     util::ChildExt,
 };
 
-/// Maximum number of shards allowed.
-const MAX_NUMBER_SHARD: usize = 100;
+/// Maximum allowed number of shards over all validators.
+const MAX_NUMBER_SHARDS: usize = 1000;
 
-/// Maximum number of validators allowed.
-const MAX_NUMBER_VALIDATOR: usize = 10;
+pub const FIRST_PUBLIC_PORT: usize = 13000;
 
 pub enum ProcessInbox {
     Skip,
@@ -346,17 +345,12 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_initial_validators > 0,
             "There should be at least one initial validator"
         );
+        let total_number_shards = self.num_initial_validators * self.num_shards;
         ensure!(
-            self.num_initial_validators <= MAX_NUMBER_VALIDATOR,
-            "Number of initial validators ({}) exceeds maximum allowed ({})",
-            self.num_initial_validators,
-            MAX_NUMBER_VALIDATOR
-        );
-        ensure!(
-            self.num_shards <= MAX_NUMBER_SHARD,
-            "Number of shards ({}) exceeds maximum allowed ({})",
+            total_number_shards <= MAX_NUMBER_SHARDS,
+            "Total number of shards ({}) exceeds maximum allowed ({})",
             self.num_shards,
-            MAX_NUMBER_SHARD
+            MAX_NUMBER_SHARDS
         );
         net.generate_initial_validator_config().await?;
         client
@@ -449,32 +443,36 @@ impl LocalNet {
         crate::util::read_json(path.join("genesis.json"))
     }
 
-    pub fn proxy_public_port(validator: usize, proxy_id: usize) -> usize {
-        13000 + validator * MAX_NUMBER_SHARD + proxy_id + 1
+    fn shard_port(&self, validator: usize, shard: usize) -> usize {
+        9000 + validator * self.num_shards + shard + 1
     }
 
-    fn proxy_internal_port(validator: usize, proxy_id: usize) -> usize {
-        10000 + validator * MAX_NUMBER_SHARD + proxy_id + 1
+    fn proxy_internal_port(&self, validator: usize, proxy_id: usize) -> usize {
+        10000 + validator * self.num_shards + proxy_id + 1
     }
 
-    fn shard_port(validator: usize, shard: usize) -> usize {
-        9000 + validator * MAX_NUMBER_SHARD + shard + 1
+    fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
+        11000 + validator * self.num_shards + shard + 1
     }
 
-    fn proxy_metrics_port(validator: usize, proxy_id: usize) -> usize {
-        12000 + validator * MAX_NUMBER_SHARD + proxy_id + 1
+    fn proxy_metrics_port(&self, validator: usize, proxy_id: usize) -> usize {
+        12000 + validator * self.num_shards + proxy_id + 1
     }
 
-    fn shard_metrics_port(validator: usize, shard: usize) -> usize {
-        11000 + validator * MAX_NUMBER_SHARD + shard + 1
+    fn block_exporter_port(&self, validator: usize, exporter_id: usize) -> usize {
+        12000 + validator * self.num_shards + exporter_id + 1
     }
 
-    fn block_exporter_port(validator: usize, exporter_id: usize) -> usize {
-        12000 + validator * MAX_NUMBER_SHARD + exporter_id + 1
+    pub fn proxy_public_port(&self, validator: usize, proxy_id: usize) -> usize {
+        FIRST_PUBLIC_PORT + validator * self.num_shards + proxy_id + 1
+    }
+
+    pub fn first_public_port() -> usize {
+        FIRST_PUBLIC_PORT + 1
     }
 
     fn block_exporter_metrics_port(exporter_id: usize) -> usize {
-        13000 + exporter_id + 1
+        FIRST_PUBLIC_PORT + exporter_id + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
@@ -483,7 +481,7 @@ impl LocalNet {
             .path_provider
             .path()
             .join(format!("validator_{n}.toml"));
-        let port = Self::proxy_public_port(n, 0);
+        let port = self.proxy_public_port(n, 0);
         let external_protocol = self.network.external.toml();
         let internal_protocol = self.network.internal.toml();
         let external_host = self.network.external.localhost();
@@ -499,8 +497,8 @@ impl LocalNet {
         );
 
         for k in 0..self.num_proxies {
-            let internal_port = Self::proxy_internal_port(n, k);
-            let metrics_port = Self::proxy_metrics_port(n, k);
+            let internal_port = self.proxy_internal_port(n, k);
+            let metrics_port = self.proxy_metrics_port(n, k);
             // In the local network, the validator ingress is
             // the proxy - so the `public_port` is the validator
             // port.
@@ -517,8 +515,8 @@ impl LocalNet {
         }
 
         for k in 0..self.num_shards {
-            let shard_port = Self::shard_port(n, k);
-            let shard_metrics_port = Self::shard_metrics_port(n, k);
+            let shard_port = self.shard_port(n, k);
+            let shard_metrics_port = self.shard_metrics_port(n, k);
             content.push_str(&format!(
                 r#"
 
@@ -534,7 +532,7 @@ impl LocalNet {
             ExportersSetup::Local(ref exporters) => {
                 for (j, exporter) in exporters.iter().enumerate() {
                     let host = Network::Grpc.localhost();
-                    let port = Self::block_exporter_port(n, j);
+                    let port = self.block_exporter_port(n, j);
                     let config_content = format!(
                         r#"
 
@@ -593,7 +591,7 @@ impl LocalNet {
     ) -> String {
         let n = validator;
         let host = Network::Grpc.localhost();
-        let port = Self::block_exporter_port(n, exporter_id as usize);
+        let port = self.block_exporter_port(n, exporter_id as usize);
         let metrics_port = Self::block_exporter_metrics_port(exporter_id as usize);
         let mut config = format!(
             r#"
@@ -713,7 +711,7 @@ impl LocalNet {
             .args(["--storage", &storage.to_string()])
             .spawn_into()?;
 
-        let port = Self::proxy_public_port(validator, 0);
+        let port = self.proxy_public_port(validator, 0);
         let nickname = format!("validator proxy {validator}");
         match self.network.external {
             Network::Grpc => {
@@ -753,12 +751,12 @@ impl LocalNet {
 
         match self.network.internal {
             Network::Grpc => {
-                let port = Self::block_exporter_port(validator, exporter_id as usize);
+                let port = self.block_exporter_port(validator, exporter_id as usize);
                 let nickname = format!("block exporter {validator}:{exporter_id}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
             }
             Network::Grpcs => {
-                let port = Self::block_exporter_port(validator, exporter_id as usize);
+                let port = self.block_exporter_port(validator, exporter_id as usize);
                 let nickname = format!("block exporter  {validator}:{exporter_id}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "https").await?;
             }
@@ -884,7 +882,7 @@ impl LocalNet {
             .args(self.cross_chain_config.to_args());
         let child = command.spawn_into()?;
 
-        let port = Self::shard_port(validator, shard);
+        let port = self.shard_port(validator, shard);
         let nickname = format!("validator server {validator}:{shard}");
         match self.network.internal {
             Network::Grpc => {
@@ -962,7 +960,7 @@ impl LocalNet {
     /// Returns the address to connect to a validator's proxy.
     /// In local networks, the zeroth proxy _is_ the validator ingress.
     pub fn validator_address(&self, validator: usize) -> String {
-        let port = Self::proxy_public_port(validator, 0);
+        let port = self.proxy_public_port(validator, 0);
         let schema = self.network.external.schema();
 
         format!("{schema}:localhost:{port}")

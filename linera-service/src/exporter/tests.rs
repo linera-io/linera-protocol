@@ -27,9 +27,13 @@ use test_case::test_case;
 async fn test_linera_exporter(database: Database, network: Network) -> Result<()> {
     tracing::info!("Starting test {}", test_name!());
 
+    let num_shards = 1;
+    let num_initial_validators = 1;
+    // This is based on the formula for proxy_public_port in local_net.rs
+    let port = LocalNet::first_public_port() + num_shards;
     let destination = Destination::Validator {
         endpoint: "127.0.0.1".to_owned(),
-        port: LocalNet::proxy_public_port(1, 0) as u16,
+        port: port as u16,
     };
 
     let destination_config = DestinationConfig {
@@ -49,8 +53,8 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
     };
 
     let config = LocalNetConfig {
-        num_initial_validators: 1,
-        num_shards: 1,
+        num_initial_validators,
+        num_shards,
         block_exporters: ExportersSetup::Local(vec![block_exporter_config]),
         ..LocalNetConfig::new_test(database, network)
     };
