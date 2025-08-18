@@ -91,6 +91,11 @@ impl GolChallengeState {
         format!("{}", board)
     }
 
+    /// Print the pretty ASCII representation of a board with coordinates.
+    async fn pretty_print_board(&self, board: Board) -> String {
+        format!("{:#}", board)
+    }
+
     /// Retrieve a puzzle by its ID.
     async fn puzzle(&self, ctx: &Context<'_>, puzzle_id: DataBlobHash) -> Option<Puzzle> {
         let runtime = ctx
@@ -351,6 +356,36 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
 
         let expected_output = "··\n··\n";
         assert_eq!(response, json!({ "printBoard": expected_output }));
+    }
+
+    #[test]
+    fn query_pretty_print_board() {
+        let runtime = ServiceRuntime::<GolChallengeService>::new();
+        let state = GolChallengeState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = GolChallengeService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        // Test pretty printing a board with a simple pattern
+        let response = service
+            .handle_query(Request::new(
+                "{
+                    prettyPrintBoard(board: {size: 3, liveCells: [ {x: 1, y: 0}, {x: 1, y: 1}, {x: 1, y: 2} ]})
+                }",
+            ))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        // The response should contain the pretty string representation with coordinates
+        let expected_output = "    0 1 2\n 0  · ● ·\n 1  · ● ·\n 2  · ● ·\n";
+        assert_eq!(response, json!({ "prettyPrintBoard": expected_output }));
     }
 
     #[test]
