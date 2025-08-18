@@ -13,10 +13,8 @@ use gol_challenge::{
     Operation,
 };
 use linera_sdk::{
-    graphql::GraphQLMutationRoot,
-    linera_base_types::{BlobContent, CryptoHash, WithServiceAbi},
-    views::View,
-    DataBlobHash, Service, ServiceRuntime,
+    graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, DataBlobHash,
+    Service, ServiceRuntime,
 };
 
 use self::state::GolChallengeState;
@@ -114,17 +112,19 @@ impl GolChallengeState {
             .data::<Arc<ServiceRuntime<GolChallengeService>>>()
             .unwrap();
         let puzzle_bytes = runtime.read_data_blob(puzzle_id);
-        match bcs::from_bytes::<Puzzle>(&puzzle_bytes) {
-            Ok(puzzle) => Some(puzzle),
-            Err(_) => None,
-        }
+        bcs::from_bytes::<Puzzle>(&puzzle_bytes).ok()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use async_graphql::{futures_util::FutureExt, Request};
-    use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
+    use linera_sdk::{
+        linera_base_types::{BlobContent, CryptoHash},
+        util::BlockingWait,
+        views::View,
+        Service, ServiceRuntime,
+    };
     use serde_json::json;
 
     use super::*;
@@ -264,7 +264,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
 
         // Test with a valid solution
         let response = service
-            .handle_query(Request::new(&format!(
+            .handle_query(Request::new(format!(
                 r#"{{
                     validateSolution(
                         board: {{size: 3, liveCells: [{{x: 1, y: 1}}]}},
@@ -297,7 +297,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
 
         // Test with an invalid solution (wrong initial state)
         let response = service
-            .handle_query(Request::new(&format!(
+            .handle_query(Request::new(format!(
                 r#"{{
                     validateSolution(
                         board: {{size: 3, liveCells: [{{x: 0, y: 0}}]}},
@@ -328,7 +328,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
 
         // Test with invalid steps (too many)
         let response = service
-            .handle_query(Request::new(&format!(
+            .handle_query(Request::new(format!(
                 r#"{{
                     validateSolution(
                         board: {{size: 3, liveCells: [{{x: 1, y: 1}}]}},
@@ -476,7 +476,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
 
         // Test retrieving the puzzle
         let response = service
-            .handle_query(Request::new(&format!(
+            .handle_query(Request::new(format!(
                 r#"{{
                     puzzle(puzzleId: "{}") {{
                         title
