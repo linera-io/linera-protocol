@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use async_graphql::{ComplexObject, Context, EmptySubscription, Request, Response, Schema};
 use gol_challenge::{
-    game::{Board, Puzzle},
+    game::{Board, Puzzle, ValidationResult},
     Operation,
 };
 use linera_sdk::{
@@ -77,13 +77,25 @@ impl GolChallengeState {
         board: Board,
         puzzle_id: DataBlobHash,
         steps: u16,
-    ) -> bool {
+    ) -> ValidationResult {
         let runtime = ctx
             .data::<Arc<ServiceRuntime<GolChallengeService>>>()
             .unwrap();
         let puzzle_bytes = runtime.read_data_blob(puzzle_id);
         let puzzle = bcs::from_bytes(&puzzle_bytes).expect("Failed to deserialize puzzle");
-        board.check_puzzle(&puzzle, steps).is_ok()
+
+        match board.check_puzzle(&puzzle, steps) {
+            Ok(()) => ValidationResult {
+                is_valid: true,
+                error_message: None,
+                error_details: None,
+            },
+            Err(error) => ValidationResult {
+                is_valid: false,
+                error_message: Some(error.to_string()),
+                error_details: Some(error),
+            },
+        }
     }
 
     /// Print the ASCII representation of a board.
@@ -258,7 +270,11 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                         board: {{size: 3, liveCells: [{{x: 1, y: 1}}]}},
                         puzzleId: "{}",
                         steps: 1
-                    )
+                    ) {{
+                        isValid
+                        errorMessage
+                        errorDetails
+                    }}
                 }}"#,
                 puzzle_id.0
             )))
@@ -268,7 +284,16 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .into_json()
             .expect("Response should be JSON");
 
-        assert_eq!(response, json!({ "validateSolution": true }));
+        assert_eq!(
+            response,
+            json!({
+                "validateSolution": {
+                    "isValid": true,
+                    "errorMessage": null,
+                    "errorDetails": null
+                }
+            })
+        );
 
         // Test with an invalid solution (wrong initial state)
         let response = service
@@ -278,7 +303,11 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                         board: {{size: 3, liveCells: [{{x: 0, y: 0}}]}},
                         puzzleId: "{}",
                         steps: 1
-                    )
+                    ) {{
+                        isValid
+                        errorMessage
+                        errorDetails
+                    }}
                 }}"#,
                 puzzle_id.0
             )))
@@ -288,7 +317,14 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .into_json()
             .expect("Response should be JSON");
 
-        assert_eq!(response, json!({ "validateSolution": false }));
+        // Check that it's invalid and has an error message
+        let result = &response["validateSolution"];
+        assert_eq!(result["isValid"], false);
+        assert!(result["errorMessage"]
+            .as_str()
+            .unwrap()
+            .contains("Initial condition 0 failed"));
+        assert!(result["errorDetails"].is_object());
 
         // Test with invalid steps (too many)
         let response = service
@@ -298,7 +334,11 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                         board: {{size: 3, liveCells: [{{x: 1, y: 1}}]}},
                         puzzleId: "{}",
                         steps: 2
-                    )
+                    ) {{
+                        isValid
+                        errorMessage
+                        errorDetails
+                    }}
                 }}"#,
                 puzzle_id.0
             )))
@@ -308,7 +348,14 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .into_json()
             .expect("Response should be JSON");
 
-        assert_eq!(response, json!({ "validateSolution": false }));
+        // Check that it's invalid and has an error message about steps
+        let result = &response["validateSolution"];
+        assert_eq!(result["isValid"], false);
+        assert!(result["errorMessage"]
+            .as_str()
+            .unwrap()
+            .contains("Steps 2 is outside the allowed range"));
+        assert!(result["errorDetails"].is_object());
     }
 
     #[test]

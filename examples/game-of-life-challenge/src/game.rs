@@ -68,7 +68,7 @@ pub enum Condition {
 }
 
 /// Error type for invalid puzzle solutions.
-#[derive(Debug, Error, Clone, PartialEq)]
+#[derive(Debug, Error, Clone, PartialEq, Serialize, Deserialize)]
 pub enum InvalidSolution {
     /// The board size does not match the puzzle size.
     #[error("Board size {board_size} does not match puzzle size {puzzle_size}")]
@@ -112,7 +112,7 @@ pub enum InvalidSolution {
 }
 
 /// Specific reasons why a condition failed.
-#[derive(Debug, Error, Clone, PartialEq)]
+#[derive(Debug, Error, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ConditionFailureReason {
     /// A position condition failed.
     #[error("Position ({x}, {y}) expected to be {expected_state} but was {actual_state}")]
@@ -158,6 +158,19 @@ pub struct Position {
 
 async_graphql::scalar!(Position);
 async_graphql::scalar!(Condition);
+async_graphql::scalar!(InvalidSolution);
+async_graphql::scalar!(ConditionFailureReason);
+
+/// Result of validating a puzzle solution.
+#[derive(Debug, Clone, SimpleObject)]
+pub struct ValidationResult {
+    /// Whether the solution is valid.
+    pub is_valid: bool,
+    /// Error message if validation failed.
+    pub error_message: Option<String>,
+    /// Detailed error information if validation failed.
+    pub error_details: Option<InvalidSolution>,
+}
 
 /// The state of a GoL board. We use a sparse encoding for storage efficiency reasons.
 #[derive(Debug, Clone, Serialize, Deserialize, InputObject, SimpleObject)]
