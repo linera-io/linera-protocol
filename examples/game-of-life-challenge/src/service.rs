@@ -7,11 +7,13 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{ComplexObject, EmptySubscription, Request, Response, Schema};
+use async_graphql::{ComplexObject, Context, EmptySubscription, Request, Response, Schema};
 use gol_challenge::{game::Board, Operation};
 use linera_sdk::{
-    graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service,
-    ServiceRuntime,
+    graphql::GraphQLMutationRoot,
+    linera_base_types::{BlobContent, CryptoHash, WithServiceAbi},
+    views::View,
+    DataBlobHash, Service, ServiceRuntime,
 };
 
 use self::state::GolChallengeState;
@@ -55,8 +57,30 @@ impl Service for GolChallengeService {
 
 #[ComplexObject]
 impl GolChallengeState {
+    /// Advance a board by one step using Conway's Game of Life rules.
     async fn advance_board_once(&self, board: Board) -> Board {
         board.advance_once()
+    }
+
+    /// Advance a board by multiple steps.
+    async fn advance_board(&self, board: Board, steps: u16) -> Board {
+        board.advance(steps)
+    }
+
+    /// Check if a board solves a puzzle.
+    async fn validate_solution(
+        &self,
+        ctx: &Context<'_>,
+        board: Board,
+        puzzle_id: DataBlobHash,
+        steps: u16,
+    ) -> bool {
+        let runtime = ctx
+            .data::<Arc<ServiceRuntime<GolChallengeService>>>()
+            .unwrap();
+        let puzzle_bytes = runtime.read_data_blob(puzzle_id);
+        let puzzle = bcs::from_bytes(&puzzle_bytes).expect("Failed to deserialize puzzle");
+        board.check_puzzle(&puzzle, steps).is_ok()
     }
 }
 
@@ -117,5 +141,148 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                 }}
             )
         );
+    }
+
+    #[test]
+    fn query_advance_board_multiple_steps() {
+        let runtime = ServiceRuntime::<GolChallengeService>::new();
+        let state = GolChallengeState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = GolChallengeService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        let response = service
+            .handle_query(Request::new(
+                "{
+                    advanceBoard(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1, y: 2} ]}, steps: 2) {
+                        size
+                        liveCells
+                    }
+                }",
+            ))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        assert_eq!(
+            response,
+            json!({
+                "advanceBoard": {
+                    "size": 3,
+                    "liveCells": [
+                        { "x": 1, "y": 0 },
+                        { "x": 1, "y": 1 },
+                        { "x": 1, "y": 2 }
+                    ]
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn query_validate_solution() {
+        use gol_challenge::game::{Condition, Difficulty, Position, Puzzle};
+
+        let runtime = ServiceRuntime::<GolChallengeService>::new();
+        let state = GolChallengeState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = GolChallengeService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        // Create a simple puzzle: a single cell that dies after 1 step
+        let puzzle = Puzzle {
+            title: "Single Cell Death".to_string(),
+            summary: "A single cell should die after one step".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 3,
+            minimal_steps: 1,
+            maximal_steps: 1,
+            initial_conditions: vec![Condition::Position {
+                position: Position { x: 1, y: 1 },
+                is_live: true,
+            }],
+            final_conditions: vec![Condition::Position {
+                position: Position { x: 1, y: 1 },
+                is_live: false,
+            }],
+        };
+
+        // Serialize the puzzle and store it as a data blob
+        let puzzle_bytes = bcs::to_bytes(&puzzle).expect("Failed to serialize puzzle");
+        // Create a dummy DataBlobHash for testing
+        let puzzle_id = DataBlobHash(CryptoHash::new(&BlobContent::new_data(
+            puzzle_bytes.clone(),
+        )));
+        service.runtime.set_blob(puzzle_id, puzzle_bytes);
+
+        // Test with a valid solution
+        let response = service
+            .handle_query(Request::new(&format!(
+                r#"{{
+                    validateSolution(
+                        board: {{size: 3, liveCells: [{{x: 1, y: 1}}]}},
+                        puzzleId: "{}",
+                        steps: 1
+                    )
+                }}"#,
+                puzzle_id.0
+            )))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        assert_eq!(response, json!({ "validateSolution": true }));
+
+        // Test with an invalid solution (wrong initial state)
+        let response = service
+            .handle_query(Request::new(&format!(
+                r#"{{
+                    validateSolution(
+                        board: {{size: 3, liveCells: [{{x: 0, y: 0}}]}},
+                        puzzleId: "{}",
+                        steps: 1
+                    )
+                }}"#,
+                puzzle_id.0
+            )))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        assert_eq!(response, json!({ "validateSolution": false }));
+
+        // Test with invalid steps (too many)
+        let response = service
+            .handle_query(Request::new(&format!(
+                r#"{{
+                    validateSolution(
+                        board: {{size: 3, liveCells: [{{x: 1, y: 1}}]}},
+                        puzzleId: "{}",
+                        steps: 2
+                    )
+                }}"#,
+                puzzle_id.0
+            )))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        assert_eq!(response, json!({ "validateSolution": false }));
     }
 }

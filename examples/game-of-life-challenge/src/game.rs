@@ -151,9 +151,9 @@ pub enum ConditionFailureReason {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Position {
     /// The first coordinate.
-    x: u16,
+    pub x: u16,
     /// The second coordinate.
-    y: u16,
+    pub y: u16,
 }
 
 async_graphql::scalar!(Position);
