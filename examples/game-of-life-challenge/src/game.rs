@@ -8,12 +8,12 @@ use std::{
     ops::Range,
 };
 
-use async_graphql::{InputObject, SimpleObject};
+use async_graphql::{Enum, InputObject, SimpleObject};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// A GoL puzzle.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct Puzzle {
     /// A title for this puzzle.
     pub title: String,
@@ -34,7 +34,7 @@ pub struct Puzzle {
 }
 
 /// The difficulty of a puzzle.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy, Enum)]
 pub enum Difficulty {
     /// Easy.
     Easy,
@@ -157,6 +157,7 @@ pub struct Position {
 }
 
 async_graphql::scalar!(Position);
+async_graphql::scalar!(Condition);
 
 /// The state of a GoL board. We use a sparse encoding for storage efficiency reasons.
 #[derive(Debug, Clone, Serialize, Deserialize, InputObject, SimpleObject)]

@@ -8,7 +8,10 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{ComplexObject, Context, EmptySubscription, Request, Response, Schema};
-use gol_challenge::{game::Board, Operation};
+use gol_challenge::{
+    game::{Board, Puzzle},
+    Operation,
+};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{BlobContent, CryptoHash, WithServiceAbi},
@@ -86,6 +89,18 @@ impl GolChallengeState {
     /// Print the ASCII representation of a board.
     async fn print_board(&self, board: Board) -> String {
         format!("{}", board)
+    }
+
+    /// Retrieve a puzzle by its ID.
+    async fn puzzle(&self, ctx: &Context<'_>, puzzle_id: DataBlobHash) -> Option<Puzzle> {
+        let runtime = ctx
+            .data::<Arc<ServiceRuntime<GolChallengeService>>>()
+            .unwrap();
+        let puzzle_bytes = runtime.read_data_blob(puzzle_id);
+        match bcs::from_bytes::<Puzzle>(&puzzle_bytes) {
+            Ok(puzzle) => Some(puzzle),
+            Err(_) => None,
+        }
     }
 }
 
@@ -336,5 +351,105 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
 
         let expected_output = "··\n··\n";
         assert_eq!(response, json!({ "printBoard": expected_output }));
+    }
+
+    #[test]
+    fn query_puzzle() {
+        use gol_challenge::game::{Condition, Difficulty, Position, Puzzle};
+
+        let runtime = ServiceRuntime::<GolChallengeService>::new();
+        let state = GolChallengeState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = GolChallengeService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        // Create a test puzzle
+        let puzzle = Puzzle {
+            title: "Test Puzzle".to_string(),
+            summary: "A simple test puzzle".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 3,
+            minimal_steps: 1,
+            maximal_steps: 2,
+            initial_conditions: vec![Condition::Position {
+                position: Position { x: 1, y: 1 },
+                is_live: true,
+            }],
+            final_conditions: vec![Condition::Position {
+                position: Position { x: 1, y: 1 },
+                is_live: false,
+            }],
+        };
+
+        // Serialize the puzzle and store it as a data blob
+        let puzzle_bytes = bcs::to_bytes(&puzzle).expect("Failed to serialize puzzle");
+        let puzzle_id = DataBlobHash(CryptoHash::new(&BlobContent::new_data(
+            puzzle_bytes.clone(),
+        )));
+        service.runtime.set_blob(puzzle_id, puzzle_bytes);
+
+        // Test retrieving the puzzle
+        let response = service
+            .handle_query(Request::new(&format!(
+                r#"{{
+                    puzzle(puzzleId: "{}") {{
+                        title
+                        summary
+                        difficulty
+                        size
+                        minimalSteps
+                        maximalSteps
+                        initialConditions
+                        finalConditions
+                    }}
+                }}"#,
+                puzzle_id.0
+            )))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        // The response should contain the puzzle object with all fields
+        assert_eq!(
+            response,
+            json!({
+                "puzzle": {
+                    "title": "Test Puzzle",
+                    "summary": "A simple test puzzle",
+                    "difficulty": "EASY",
+                    "size": 3,
+                    "minimalSteps": 1,
+                    "maximalSteps": 2,
+                    "initialConditions": [
+                        {
+                            "Position": {
+                                "is_live": true,
+                                "position": {
+                                    "x": 1,
+                                    "y": 1
+                                }
+                            }
+                        }
+                    ],
+                    "finalConditions": [
+                        {
+                            "Position": {
+                                "is_live": false,
+                                "position": {
+                                    "x": 1,
+                                    "y": 1
+                                }
+                            }
+                        }
+                    ]
+                }
+            })
+        );
     }
 }
