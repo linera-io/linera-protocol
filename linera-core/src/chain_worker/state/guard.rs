@@ -832,6 +832,8 @@ where
             .update_counters(&block.transactions, &outcome.messages)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
+        // Don't save the changes since the block is not confirmed yet.
+        chain.rollback();
 
         // Create the vote and store it in the chain state.
         let block = outcome.with(proposal.content.block.clone());
