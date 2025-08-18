@@ -20,7 +20,6 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposedBlock},
-    manager,
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
@@ -279,33 +278,10 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        if ChainWorkerGuard::new(&mut *self)
+        ChainWorkerGuard::new(self)
             .await
-            .check_proposed_block(&proposal)
-            .await?
-            == manager::Outcome::Skip
-        {
-            // Skipping: We already voted for this block.
-            let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-            return Ok((info, NetworkActions::default()));
-        };
-        let published_blobs = ChainWorkerGuard::new(&mut *self)
+            .handle_block_proposal(proposal)
             .await
-            .load_proposal_blobs(&proposal)
-            .await?;
-        let (outcome, local_time) = ChainWorkerGuard::new(self)
-            .await
-            .validate_proposal_content(&proposal.content, &published_blobs)
-            .await?;
-
-        ChainWorkerGuard::new(&mut *self)
-            .await
-            .vote_for_block_proposal(proposal, outcome, local_time)
-            .await?;
-        let actions = self.create_network_actions().await?;
-
-        let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
-        Ok((info, actions))
     }
 
     /// Clears the shared chain view, and acquires and drops its write lock.
