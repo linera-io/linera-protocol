@@ -160,6 +160,7 @@ async_graphql::scalar!(Position);
 
 /// The state of a GoL board. We use a sparse encoding for storage efficiency reasons.
 #[derive(Debug, Clone, Serialize, Deserialize, InputObject, SimpleObject)]
+#[graphql(input_name = "BoardInput")]
 pub struct Board {
     /// The width and height of the board, in cells.
     size: u16,
@@ -921,7 +922,7 @@ mod tests {
             Position { x: 2, y: 2 },
         ]);
 
-        let ascii = board.to_string();
+        let ascii = format!("{:#}", board);
         assert_eq!(
             String::from("\n") + &ascii,
             r#"

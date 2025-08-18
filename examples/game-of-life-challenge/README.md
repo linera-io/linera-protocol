@@ -54,9 +54,24 @@ OWNER_2="${INFO_2[1]}"
 Note that `linera --with-wallet 1` or `linera -w1` is equivalent to `linera --wallet
 "$LINERA_WALLET_1"  --keystore "$LINERA_KEYSTORE_1" --storage "$LINERA_STORAGE_1"`.
 
+### Creating the GoL challenge application
+
+We open a new chain owned by both `$OWNER_1` and `$OWNER_2`, create the application on it, and
+start the node service.
+
+```bash
+APP_ID=$(linera -w1 --wait-for-outgoing-messages \
+  project publish-and-create examples/game-of-life-challenge gol_challenge $CHAIN_1 \
+    --json-argument "null")
+
+linera -w1 service --port 8080 &
+sleep 1
+```
+
 ### Creating a new puzzle
 
-
+TODO
 
 ### Submitting a solution to a puzzle
 
+TODO

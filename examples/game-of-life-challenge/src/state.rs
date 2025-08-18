@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 /// The application state.
 #[derive(RootView, SimpleObject)]
+#[graphql(complex)]
 #[view(context = ViewStorageContext)]
 pub struct GolChallengeState {
     pub solutions: LogView<Solution>,

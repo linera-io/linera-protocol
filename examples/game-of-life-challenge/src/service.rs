@@ -7,8 +7,8 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{EmptySubscription, Request, Response, Schema};
-use gol_challenge::Operation;
+use async_graphql::{ComplexObject, EmptySubscription, Request, Response, Schema};
+use gol_challenge::{game::Board, Operation};
 use linera_sdk::{
     graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service,
     ServiceRuntime,
@@ -50,5 +50,72 @@ impl Service for GolChallengeService {
         .data(self.runtime.clone())
         .finish();
         schema.execute(request).await
+    }
+}
+
+#[ComplexObject]
+impl GolChallengeState {
+    async fn advance_board_once(&self, board: Board) -> Board {
+        board.advance_once()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use async_graphql::{futures_util::FutureExt, Request};
+    use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn query_advance_board_once() {
+        let runtime = ServiceRuntime::<GolChallengeService>::new();
+        let state = GolChallengeState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = GolChallengeService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        let response = service
+            .handle_query(Request::new(
+                "{
+advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1, y: 2} ]}) {
+    size
+    liveCells
+}
+}",
+            ))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        assert_eq!(
+            response,
+            json!(
+                { "advanceBoardOnce": {
+                    "size": 3,
+                    "liveCells": [
+                        {
+                            "x": 0,
+                            "y": 1
+                        },
+                        {
+                            "x": 1,
+                            "y": 1
+                        },
+                        {
+                            "x": 2,
+                            "y": 1
+                        }
+                    ]
+                }}
+            )
+        );
     }
 }

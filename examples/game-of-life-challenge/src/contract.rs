@@ -5,6 +5,7 @@
 
 mod state;
 
+use async_graphql::ComplexObject;
 use gol_challenge::{GolChallengeAbi, Operation};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
@@ -50,7 +51,7 @@ impl Contract for GolChallengeContract {
             board,
             steps,
         } = operation;
-        let puzzle_bytes = self.runtime.read_data_blob(&puzzle_id);
+        let puzzle_bytes = self.runtime.read_data_blob(puzzle_id);
         let puzzle = bcs::from_bytes(&puzzle_bytes).expect("Failed to deserialize puzzle");
         board
             .check_puzzle(&puzzle, steps)
@@ -77,3 +78,7 @@ impl Contract for GolChallengeContract {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message;
+
+/// This implementation is only nonempty in the service.
+#[ComplexObject]
+impl GolChallengeState {}
