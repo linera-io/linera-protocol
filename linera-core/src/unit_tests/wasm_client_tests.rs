@@ -19,9 +19,10 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use fungible::{FungibleOperation, InitialState, Parameters};
+use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::{Amount, Bytecode, Event, OracleResponse},
+    data_types::{Amount, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse},
     identifiers::{ApplicationId, BlobId, BlobType, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -929,6 +930,112 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         )
         .await
         .is_err());
+
+    Ok(())
+}
+
+/// Tests that if a client synchronizes a shared chain from the validators and learns about
+/// a proposal from another owner that it can't successfully execute locally anymore (e.g. due
+/// to validation time-based oracles), it is still able to successfully propose new blocks.
+/// Specifially, it doesn't try to propose in the same round as the failed conflicting proposal.
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_skipping_proposal(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_skipping_proposal(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_skipping_proposal<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut keys = InMemorySigner::new(None);
+    let owner_a = keys.generate_new().into();
+    let owner_b = keys.generate_new().into();
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 2, 0, keys).await?;
+
+    // We use the Hex game example: it uses the validation time-based assert_before oracle.
+    let creator = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("hex-game")?;
+    let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
+    let service_bytecode = Bytecode::load_from_file(service_path).await?;
+    let (module_id, _cert) = creator
+        .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
+        .await
+        .unwrap_ok_committed();
+    let module_id = module_id.with_abi::<HexAbi, (), Timeouts>();
+    let timeouts = Timeouts::default();
+    let (app_id, _) = creator
+        .create_application(module_id, &(), &timeouts, vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Start a game with players A and B.
+    let start_op = HexOperation::Start {
+        players: [owner_a, owner_b],
+        board_size: 11,
+        fee_budget: Amount::ONE,
+        timeouts: None, // Use the default timeouts.
+    };
+    let cert = creator
+        .execute_operation(Operation::user(app_id, &start_op)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Get the game chain ID from the certificate.
+    let blobs = cert.inner().block().created_blobs();
+    let chain_blob = blobs
+        .values()
+        .find(|blob| blob.content().blob_type() == BlobType::ChainDescription)
+        .unwrap();
+    let chain_id = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?.into();
+
+    // Create clients for the new game chain.
+    let mut client_a = builder
+        .make_client(chain_id, None, BlockHeight::ZERO)
+        .await?;
+    client_a.set_preferred_owner(owner_a);
+    let mut client_b = builder
+        .make_client(chain_id, None, BlockHeight::ZERO)
+        .await?;
+    client_b.set_preferred_owner(owner_b);
+
+    // Client A makes the first move, starting the game at time 0.
+    client_a.synchronize_from_validators().await?;
+    let move_op = HexOperation::MakeMove { x: 5, y: 5 };
+    client_a
+        .execute_operation(Operation::user(app_id, &move_op)?)
+        .await?;
+
+    // Client B tries to make a move but fails: the validators go down after signing to validate.
+    client_b.synchronize_from_validators().await?;
+    builder
+        .set_fault_type([0, 1], FaultType::DontProcessValidated)
+        .await;
+    let move_op = HexOperation::MakeMove { x: 4, y: 4 };
+    let result = client_b
+        .execute_operation(Operation::user(app_id, &move_op)?)
+        .await;
+    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+
+    // Advance the clock so much that player B times out.
+    clock.add(timeouts.start_time * 2);
+
+    // Set the validators back to Honest.
+    builder.set_fault_type([0, 1], FaultType::Honest).await;
+
+    // Now player A tries to claim victory since B has timed out.
+    let claim_victory_operation = HexOperation::ClaimVictory;
+    client_a.synchronize_from_validators().await?;
+    let result = client_a
+        .execute_operation(Operation::user(app_id, &claim_victory_operation)?)
+        .await;
+
+    // This fails due to the expected bug: game_client_a proposed in multi-leader round 0 again.
+    // TODO(#2971): Fix this and assert that it passes.
+    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
 
     Ok(())
 }

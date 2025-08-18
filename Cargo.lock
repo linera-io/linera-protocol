@@ -4214,6 +4214,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-game"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "bcs",
+ "linera-sdk",
+ "log",
+ "serde",
+]
+
+[[package]]
 name = "hkdf"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5252,6 +5263,7 @@ dependencies = [
  "dashmap 5.5.3",
  "fungible",
  "futures",
+ "hex-game",
  "linera-base",
  "linera-chain",
  "linera-core",

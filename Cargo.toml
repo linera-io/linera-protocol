@@ -309,6 +309,7 @@ create-and-call = { path = "./examples/create-and-call" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
+hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
 meta-counter = { path = "./examples/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
