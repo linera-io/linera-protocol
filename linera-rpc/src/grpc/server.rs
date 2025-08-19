@@ -5,11 +5,14 @@ use std::{
     net::{IpAddr, SocketAddr},
     str::FromStr,
     task::{Context, Poll},
-    time::{Duration, Instant},
 };
 
 use futures::{channel::mpsc, future::BoxFuture, FutureExt as _};
-use linera_base::{data_types::Blob, identifiers::ChainId};
+use linera_base::{
+    data_types::Blob,
+    identifiers::ChainId,
+    time::{Duration, Instant},
+};
 use linera_core::{
     join_set_ext::JoinSet,
     node::NodeError,

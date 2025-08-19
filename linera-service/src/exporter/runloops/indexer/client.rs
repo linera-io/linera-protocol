@@ -5,7 +5,6 @@
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex},
-    time::Instant,
 };
 
 use futures::StreamExt;
@@ -32,7 +31,7 @@ pub(super) struct IndexerClient {
     client: IndexerClientInner<Channel>,
     #[cfg(with_metrics)]
     // Tracks timestamps of when we start exporting a Block to an indexer.
-    sent_latency: Arc<Mutex<VecDeque<Instant>>>,
+    sent_latency: Arc<Mutex<VecDeque<linera_base::time::Instant>>>,
     #[cfg(with_metrics)]
     address: String,
 }

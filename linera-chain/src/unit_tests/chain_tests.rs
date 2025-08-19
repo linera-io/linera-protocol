@@ -6,7 +6,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     thread,
-    time::{Duration, Instant},
 };
 
 use assert_matches::assert_matches;
@@ -20,6 +19,7 @@ use linera_base::{
     http,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
+    time::{Duration, Instant},
     vm::VmRuntime,
 };
 use linera_execution::{
