@@ -219,7 +219,7 @@ where
     /// If no owner is given, try to take the units out of the chain account.
     async fn transfer(
         &self,
-        #[graphql(desc = "The chain on which native tokens are being transferred from.")]
+        #[graphql(desc = "The chain which native tokens are being transferred from.")]
         chain_id: ChainId,
         #[graphql(desc = "The account being debited on the chain.")] owner: AccountOwner,
         #[graphql(desc = "The recipient of the transfer.")] recipient: Account,
@@ -241,8 +241,8 @@ where
     /// process the message.
     async fn claim(
         &self,
-        #[graphql(desc = "The chain paying for the transfer fees.")] chain_id: ChainId,
-        #[graphql(desc = "The owner of chain target_id being debited.")] owner: AccountOwner,
+        #[graphql(desc = "The chain for whom owner is one of the owner.")] chain_id: ChainId,
+        #[graphql(desc = "The owner of chain targetId being debited.")] owner: AccountOwner,
         #[graphql(desc = "The chain whose owner is being debited.")] target_id: ChainId,
         #[graphql(desc = "The recipient of the transfer.")] recipient: Account,
         #[graphql(desc = "The amount being transferred.")] amount: Amount,
@@ -276,7 +276,7 @@ where
         .await
     }
 
-    /// Creates a new single owner chain.
+    /// Creates a new single-owner chain.
     async fn open_chain(
         &self,
         #[graphql(desc = "The chain paying for the creation of the new chain.")] chain_id: ChainId,
@@ -302,16 +302,16 @@ where
         Ok(description.id())
     }
 
-    /// Creates a new multi owner chain.
+    /// Creates a new multi-owner chain.
     #[expect(clippy::too_many_arguments)]
     async fn open_multi_owner_chain(
         &self,
         #[graphql(desc = "The chain paying for the creation of the new chain.")] chain_id: ChainId,
-        #[graphql(desc = "Permission for applications of the chain")]
+        #[graphql(desc = "Permissions for applications on the new chain")]
         application_permissions: Option<ApplicationPermissions>,
         #[graphql(desc = "The owners of the chain")] owners: Vec<AccountOwner>,
-        #[graphql(desc = "The weights of the owners of the chain")] weights: Option<Vec<u64>>,
-        #[graphql(desc = "The multi leader round of the chain")] multi_leader_rounds: Option<u32>,
+        #[graphql(desc = "The weights of the owners")] weights: Option<Vec<u64>>,
+        #[graphql(desc = "The number of multi-leader rounds")] multi_leader_rounds: Option<u32>,
         #[graphql(desc = "The balance of the chain. Zero if `None`")] balance: Option<Amount>,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
@@ -374,7 +374,7 @@ where
         Ok(description.id())
     }
 
-    /// Closes the chain. Return `Some(certificate)` if successful or `None` if it was already closed.
+    /// Closes the chain. Returns the new block hash if successful or `None` if it was already closed.
     async fn close_chain(
         &self,
         #[graphql(desc = "The chain being closed.")] chain_id: ChainId,
@@ -410,10 +410,10 @@ where
         &self,
         #[graphql(desc = "The chain whose ownership changes")] chain_id: ChainId,
         #[graphql(desc = "The new list of owners of the chain")] new_owners: Vec<AccountOwner>,
-        #[graphql(desc = "The new list of weights of the chain")] new_weights: Vec<u64>,
-        #[graphql(desc = "The multi leader round of the chain")] multi_leader_rounds: u32,
+        #[graphql(desc = "The new list of weights of the owners")] new_weights: Vec<u64>,
+        #[graphql(desc = "The multi-leader round of the chain")] multi_leader_rounds: u32,
         #[graphql(
-            desc = "Whether multi leader rounds are unrestricted, that is not limited to chain owners."
+            desc = "Whether multi-leader rounds are unrestricted, that is not limited to chain owners."
         )]
         open_multi_leader_rounds: bool,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
@@ -455,11 +455,13 @@ where
     #[expect(clippy::too_many_arguments)]
     async fn change_application_permissions(
         &self,
-        #[graphql(desc = "The chain whose permission are being changed")] chain_id: ChainId,
+        #[graphql(desc = "The chain whose permissions are being changed")] chain_id: ChainId,
         #[graphql(desc = "These applications are allowed to close the current chain.")]
         close_chain: Vec<ApplicationId>,
         #[graphql(
-            desc = "If this is `None`, all system operations and application operations are allowed. If it is `Some`, only operations from the specified applications are allowed, and no system operations."
+            desc = "If this is `None`, all system operations and application operations are allowed.
+If it is `Some`, only operations from the specified applications are allowed,
+and no system operations."
         )]
         execute_operations: Option<Vec<ApplicationId>>,
         #[graphql(
@@ -520,11 +522,11 @@ where
     /// Publishes a new application module.
     async fn publish_module(
         &self,
-        #[graphql(desc = "The chain being considered")] chain_id: ChainId,
+        #[graphql(desc = "The chain publishing the module")] chain_id: ChainId,
         #[graphql(desc = "The bytecode of the contract code")] contract: Bytecode,
         #[graphql(desc = "The bytecode of the service code (only relevant for WebAssembly)")]
         service: Bytecode,
-        #[graphql(desc = "The virtual machine being used (either Vasm or Evm)")]
+        #[graphql(desc = "The virtual machine being used (either Wasm or Evm)")]
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, Error> {
         self.apply_client_command(&chain_id, move |client| {
@@ -546,7 +548,7 @@ where
     async fn publish_data_blob(
         &self,
         #[graphql(desc = "The chain paying for the blob publication")] chain_id: ChainId,
-        #[graphql(desc = "The data of the data blob being created")] bytes: Vec<u8>,
+        #[graphql(desc = "The content of the data blob being created")] bytes: Vec<u8>,
     ) -> Result<CryptoHash, Error> {
         self.apply_client_command(&chain_id, |client| {
             let bytes = bytes.clone();
@@ -563,14 +565,14 @@ where
     async fn create_application(
         &self,
         #[graphql(desc = "The chain paying for the creation of the application")] chain_id: ChainId,
-        #[graphql(desc = "The module id of the application being created")] module_id: ModuleId,
-        #[graphql(desc = "The json serialization of the parameters of the application")]
+        #[graphql(desc = "The module ID of the application being created")] module_id: ModuleId,
+        #[graphql(desc = "The JSON serialization of the parameters of the application")]
         parameters: String,
         #[graphql(
-            desc = "The json serialization of the instantiation argument of the application"
+            desc = "The JSON serialization of the instantiation argument of the application"
         )]
         instantiation_argument: String,
-        #[graphql(desc = "The required applications of the application being created")]
+        #[graphql(desc = "The dependencies of the application being created")]
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, Error> {
         self.apply_client_command(&chain_id, move |client| {

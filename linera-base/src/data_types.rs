@@ -1161,7 +1161,7 @@ pub enum DecompressionError {
     InvalidCompressedBytecode(#[from] io::Error),
 }
 
-/// A compressed module bytecode (WebAssembly or Evm).
+/// A compressed module bytecode (WebAssembly or EVM).
 #[derive(Clone, Debug, Deserialize, Hash, Serialize, WitType, WitStore)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct CompressedBytecode {
@@ -1521,7 +1521,7 @@ impl StreamUpdate {
 
 impl BcsHashable<'_> for Event {}
 
-doc_scalar!(Bytecode, "A module bytecode (WebAssembly or Evm)");
+doc_scalar!(Bytecode, "A module bytecode (WebAssembly or EVM)");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
 doc_scalar!(
     Epoch,

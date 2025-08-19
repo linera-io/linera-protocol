@@ -228,7 +228,7 @@ type BundleInInbox {
 }
 
 """
-A module bytecode (WebAssembly or Evm)
+A module bytecode (WebAssembly or EVM)
 """
 scalar Bytecode
 
@@ -776,7 +776,7 @@ type MutationRoot {
 	"""
 	transfer(
 		"""
-		The chain on which native tokens are being transferred from.
+		The chain which native tokens are being transferred from.
 		"""
 		chainId: ChainId!,
 		"""
@@ -799,11 +799,11 @@ type MutationRoot {
 	"""
 	claim(
 		"""
-		The chain paying for the transfer fees.
+		The chain for whom owner is one of the owner.
 		"""
 		chainId: ChainId!,
 		"""
-		The owner of chain target_id being debited.
+		The owner of chain targetId being debited.
 		"""
 		owner: AccountOwner!,
 		"""
@@ -824,7 +824,7 @@ type MutationRoot {
 	"""
 	readDataBlob(chainId: ChainId!, hash: CryptoHash!): CryptoHash!
 	"""
-	Creates a new single owner chain.
+	Creates a new single-owner chain.
 	"""
 	openChain(
 		"""
@@ -841,7 +841,7 @@ type MutationRoot {
 		balance: Amount
 	): ChainId!
 	"""
-	Creates a new multi owner chain.
+	Creates a new multi-owner chain.
 	"""
 	openMultiOwnerChain(
 		"""
@@ -849,7 +849,7 @@ type MutationRoot {
 		"""
 		chainId: ChainId!,
 		"""
-		Permission for applications of the chain
+		Permissions for applications on the new chain
 		"""
 		applicationPermissions: ApplicationPermissions,
 		"""
@@ -857,11 +857,11 @@ type MutationRoot {
 		"""
 		owners: [AccountOwner!]!,
 		"""
-		The weights of the owners of the chain
+		The weights of the owners
 		"""
 		weights: [Int!],
 		"""
-		The multi leader round of the chain
+		The number of multi-leader rounds
 		"""
 		multiLeaderRounds: Int,
 		"""
@@ -886,7 +886,7 @@ type MutationRoot {
 		fallbackDurationMs: Int! = 86400000
 	): ChainId!
 	"""
-	Closes the chain. Return `Some(certificate)` if successful or `None` if it was already closed.
+	Closes the chain. Returns the new block hash if successful or `None` if it was already closed.
 	"""
 	closeChain(
 		"""
@@ -920,15 +920,15 @@ type MutationRoot {
 		"""
 		newOwners: [AccountOwner!]!,
 		"""
-		The new list of weights of the chain
+		The new list of weights of the owners
 		"""
 		newWeights: [Int!]!,
 		"""
-		The multi leader round of the chain
+		The multi-leader round of the chain
 		"""
 		multiLeaderRounds: Int!,
 		"""
-		Whether multi leader rounds are unrestricted, that is not limited to chain owners.
+		Whether multi-leader rounds are unrestricted, that is not limited to chain owners.
 		"""
 		openMultiLeaderRounds: Boolean!,
 		"""
@@ -953,7 +953,7 @@ type MutationRoot {
 	"""
 	changeApplicationPermissions(
 		"""
-		The chain whose permission are being changed
+		The chain whose permissions are being changed
 		"""
 		chainId: ChainId!,
 		"""
@@ -961,7 +961,9 @@ type MutationRoot {
 		"""
 		closeChain: [ApplicationId!]!,
 		"""
-		If this is `None`, all system operations and application operations are allowed. If it is `Some`, only operations from the specified applications are allowed, and no system operations.
+		If this is `None`, all system operations and application operations are allowed.
+		If it is `Some`, only operations from the specified applications are allowed,
+		and no system operations.
 		"""
 		executeOperations: [ApplicationId!],
 		"""
@@ -998,7 +1000,7 @@ type MutationRoot {
 	"""
 	publishModule(
 		"""
-		The chain being considered
+		The chain publishing the module
 		"""
 		chainId: ChainId!,
 		"""
@@ -1010,7 +1012,7 @@ type MutationRoot {
 		"""
 		service: Bytecode!,
 		"""
-		The virtual machine being used (either Vasm or Evm)
+		The virtual machine being used (either Wasm or Evm)
 		"""
 		vmRuntime: VmRuntime!
 	): ModuleId!
@@ -1023,7 +1025,7 @@ type MutationRoot {
 		"""
 		chainId: ChainId!,
 		"""
-		The data of the data blob being created
+		The content of the data blob being created
 		"""
 		bytes: [Int!]!
 	): CryptoHash!
@@ -1036,19 +1038,19 @@ type MutationRoot {
 		"""
 		chainId: ChainId!,
 		"""
-		The module id of the application being created
+		The module ID of the application being created
 		"""
 		moduleId: ModuleId!,
 		"""
-		The json serialization of the parameters of the application
+		The JSON serialization of the parameters of the application
 		"""
 		parameters: String!,
 		"""
-		The json serialization of the instantiation argument of the application
+		The JSON serialization of the instantiation argument of the application
 		"""
 		instantiationArgument: String!,
 		"""
-		The required applications of the application being created
+		The dependencies of the application being created
 		"""
 		requiredApplicationIds: [ApplicationId!]!
 	): ApplicationId!
