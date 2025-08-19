@@ -3730,10 +3730,10 @@ impl<Env: Environment> ChainClient<Env> {
                     .await
             {
                 if let Reason::NewBlock { .. } = notification.reason {
-                    match await_while_polling(
+                    match Box::pin(await_while_polling(
                         this.update_notification_streams(&mut senders).fuse(),
                         &mut process_notifications,
-                    )
+                    ))
                     .await
                     {
                         Ok(handler) => process_notifications.push(handler),
