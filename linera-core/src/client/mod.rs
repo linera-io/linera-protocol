@@ -3798,10 +3798,6 @@ impl<Env: Environment> ChainClient<Env> {
                     this.client
                         .synchronize_chain_state_from(&remote_node, this.chain_id)
                         .await?;
-                    if this.is_tracked() {
-                        this.find_received_certificates_from_validator(remote_node)
-                            .await?;
-                    }
                     Ok::<_, ChainClientError>(stream)
                 }
             })
