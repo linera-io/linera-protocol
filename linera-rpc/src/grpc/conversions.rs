@@ -18,7 +18,9 @@ use linera_chain::{
     },
 };
 use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{
+        CertificatesByRangeRequest, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
+    },
     node::NodeError,
     worker::Notification,
 };
@@ -1007,6 +1009,31 @@ impl TryFrom<api::CertificatesBatchResponse> for Vec<Certificate> {
             .into_iter()
             .map(Certificate::try_from)
             .collect()
+    }
+}
+
+impl From<CertificatesByRangeRequest> for api::DownloadCertificatesByRangeRequest {
+    fn from(request: CertificatesByRangeRequest) -> Self {
+        Self {
+            chain_id: Some(request.chain_id.into()),
+            start_height: Some(request.start_height.into()),
+            limit: request.limit,
+        }
+    }
+}
+
+impl TryFrom<api::DownloadCertificatesByRangeRequest> for CertificatesByRangeRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::DownloadCertificatesByRangeRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: try_proto_convert(request.chain_id)?,
+            start_height: request
+                .start_height
+                .map(Into::into)
+                .ok_or(GrpcProtoConversionError::MissingField)?,
+            limit: request.limit,
+        })
     }
 }
 

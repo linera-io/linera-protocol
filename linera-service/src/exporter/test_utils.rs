@@ -346,6 +346,13 @@ impl ValidatorNode for DummyValidator {
         unimplemented!()
     }
 
+    async fn download_certificates_by_range(
+        &self,
+        _request: Request<linera_rpc::grpc::api::DownloadCertificatesByRangeRequest>,
+    ) -> Result<Response<linera_rpc::grpc::api::CertificatesBatchResponse>, Status> {
+        unimplemented!()
+    }
+
     async fn blob_last_used_by(
         &self,
         _request: Request<linera_rpc::grpc::api::BlobId>,

@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    data_types::{ChainInfoQuery, ChainInfoResponse},
+    data_types::{BlockHeightRange, ChainInfoQuery, ChainInfoResponse},
     worker::{Notification, WorkerError},
 };
 
@@ -145,6 +145,13 @@ pub trait ValidatorNode {
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
 
+    /// Requests a batch of certificates from a specific chain by height range.
+    async fn download_certificates_by_range(
+        &self,
+        chain_id: ChainId,
+        range: BlockHeightRange,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
+
     /// Returns the hash of the `Certificate` that last used a blob.
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
 
@@ -247,6 +254,12 @@ pub enum NodeError {
 
     #[error("Response doesn't contain requested certificates: {0:?}")]
     MissingCertificates(Vec<CryptoHash>),
+
+    #[error("Missing certificates for chain {chain_id} in range {range}")]
+    MissingCertificatesByRange {
+        chain_id: ChainId,
+        range: BlockHeightRange,
+    },
 
     #[error("Validator's response failed to include a vote when trying to {0}")]
     MissingVoteInValidatorResponse(String),

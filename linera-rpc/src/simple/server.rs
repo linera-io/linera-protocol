@@ -383,6 +383,8 @@ where
             | RpcMessage::MissingBlobIdsResponse(_)
             | RpcMessage::DownloadCertificates(_)
             | RpcMessage::DownloadCertificatesResponse(_)
+            | RpcMessage::DownloadCertificatesByRange(_, _)
+            | RpcMessage::DownloadCertificatesByRangeResponse(_)
             | RpcMessage::UploadBlob(_)
             | RpcMessage::UploadBlobResponse(_)
             | RpcMessage::DownloadCertificatesByHeights(_, _)

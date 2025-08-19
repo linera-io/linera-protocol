@@ -12,7 +12,7 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
 };
 use linera_version::VersionInfo;
@@ -40,6 +40,7 @@ pub enum RpcMessage {
     DownloadConfirmedBlock(Box<CryptoHash>),
     DownloadCertificates(Vec<CryptoHash>),
     DownloadCertificatesByHeights(ChainId, Vec<BlockHeight>),
+    DownloadCertificatesByRange(ChainId, BlockHeightRange),
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Vec<BlobId>),
     VersionInfoQuery,
@@ -57,6 +58,7 @@ pub enum RpcMessage {
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
     DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
     DownloadCertificatesByHeightsResponse(Vec<ConfirmedBlockCertificate>),
+    DownloadCertificatesByRangeResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Vec<BlobId>),
 
@@ -80,6 +82,7 @@ impl RpcMessage {
             ChainInfoQuery(query) => query.chain_id,
             CrossChainRequest(request) => request.target_chain_id(),
             DownloadPendingBlob(request) => request.0,
+            DownloadCertificatesByRange(chain_id, _) => *chain_id,
             HandlePendingBlob(request) => request.0,
             Vote(_)
             | Error(_)
@@ -97,6 +100,7 @@ impl RpcMessage {
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesByHeights(_, _)
             | DownloadCertificatesByHeightsResponse(_)
+            | DownloadCertificatesByRangeResponse(_)
             | DownloadCertificates(_)
             | BlobLastUsedBy(_)
             | BlobLastUsedByResponse(_)
@@ -123,7 +127,8 @@ impl RpcMessage {
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
             | MissingBlobIds(_)
-            | DownloadCertificates(_) => true,
+            | DownloadCertificates(_)
+            | DownloadCertificatesByRange(_, _) => true,
             BlockProposal(_)
             | LiteCertificate(_)
             | TimeoutCertificate(_)
@@ -146,7 +151,8 @@ impl RpcMessage {
             | MissingBlobIdsResponse(_)
             | DownloadCertificatesResponse(_)
             | DownloadCertificatesByHeights(_, _)
-            | DownloadCertificatesByHeightsResponse(_) => false,
+            | DownloadCertificatesByHeightsResponse(_)
+            | DownloadCertificatesByRangeResponse(_) => false,
         }
     }
 }

@@ -13,7 +13,7 @@ use linera_chain::{
     },
 };
 use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse},
+    data_types::{BlockHeightRange, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
 
@@ -242,6 +242,27 @@ impl ValidatorNode for Client {
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.download_certificates(hashes).await?,
+        })
+    }
+
+    async fn download_certificates_by_range(
+        &self,
+        chain_id: ChainId,
+        range: BlockHeightRange,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .download_certificates_by_range(chain_id, range)
+                    .await?
+            }
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client
+                    .download_certificates_by_range(chain_id, range)
+                    .await?
+            }
         })
     }
 

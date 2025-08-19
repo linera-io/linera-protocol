@@ -19,7 +19,7 @@ use linera_chain::{
     },
 };
 use linera_core::{
-    data_types::ChainInfoResponse,
+    data_types::{CertificatesByRangeRequest, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
@@ -432,6 +432,30 @@ impl ValidatorNode for GrpcClient {
             NodeError::MissingCertificates(missing_hashes)
         );
         Ok(certs_collected)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    async fn download_certificates_by_range(
+        &self,
+        chain_id: ChainId,
+        range: linera_core::data_types::BlockHeightRange,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let request = CertificatesByRangeRequest {
+            chain_id,
+            start_height: range.start,
+            limit: range.limit,
+        };
+        let received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
+            client_delegate!(self, download_certificates_by_range, request)?,
+        )?
+        .into_iter()
+        .map(|cert| {
+            ConfirmedBlockCertificate::try_from(cert)
+                .map_err(|_| NodeError::UnexpectedCertificateValue)
+        })
+        .collect::<Result<_, _>>()?;
+
+        Ok(received)
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]

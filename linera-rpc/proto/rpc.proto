@@ -86,11 +86,21 @@ service ValidatorNode {
   // Download a batch of certificates.
   rpc DownloadCertificates(CertificatesBatchRequest) returns (CertificatesBatchResponse);
 
+  /// Download a batch of certificates by height range.
+  rpc DownloadCertificatesByRange(DownloadCertificatesByRangeRequest) returns (CertificatesBatchResponse);
+
   // Return the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
   // Return the `BlobId`s that are not contained as `Blob`.
   rpc MissingBlobIds(BlobIds) returns (BlobIds);
+}
+
+// A request for downloading certificates by height range.
+message DownloadCertificatesByRangeRequest {
+  ChainId chain_id = 1;
+  BlockHeight start_height = 2;
+  optional uint64 limit = 3;
 }
 
 // A request for a batch of certificates.

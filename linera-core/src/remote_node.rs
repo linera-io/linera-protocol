@@ -254,8 +254,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         chain_id: ChainId,
         range: BlockHeightRange,
     ) -> Result<Vec<CryptoHash>, NodeError> {
-        let query =
-            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range.clone());
+        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
         let response = self.handle_chain_info_query(query).await?;
         let hashes = response.requested_sent_certificate_hashes;
 

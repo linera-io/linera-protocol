@@ -22,7 +22,7 @@ use linera_client::{
 };
 use linera_core::{
     client::ChainClient,
-    data_types::{ChainInfoQuery, ChainInfoResponse},
+    data_types::{BlockHeightRange, ChainInfoQuery, ChainInfoResponse},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
@@ -127,6 +127,14 @@ impl ValidatorNode for DummyValidatorNode {
     async fn download_certificates(
         &self,
         _: Vec<CryptoHash>,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn download_certificates_by_range(
+        &self,
+        _: ChainId,
+        _: BlockHeightRange,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }

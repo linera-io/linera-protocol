@@ -18,7 +18,7 @@ use linera_chain::{
     },
 };
 use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse},
+    data_types::{BlockHeightRange, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
 use linera_version::VersionInfo;
@@ -220,6 +220,23 @@ impl ValidatorNode for SimpleClient {
         } else {
             Ok(certificates)
         }
+    }
+
+    async fn download_certificates_by_range(
+        &self,
+        chain_id: ChainId,
+        range: BlockHeightRange,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let certificates: Vec<ConfirmedBlockCertificate> = self
+            .query(RpcMessage::DownloadCertificatesByRange(chain_id, range))
+            .await?;
+
+        let expected_count = range.highest().0 - range.start.0 + 1;
+
+        if (certificates.len() as u64) < expected_count {
+            return Err(NodeError::MissingCertificatesByRange { chain_id, range });
+        }
+        Ok(certificates)
     }
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {

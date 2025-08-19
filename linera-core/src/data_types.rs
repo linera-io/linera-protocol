@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, ops::Not};
+use std::{collections::BTreeMap, fmt::Display, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use crate::client::ChainClientError;
 
 /// A range of block heights as used in `ChainInfoQuery`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Eq, PartialEq))]
 pub struct BlockHeightRange {
     /// Starting point
@@ -55,6 +55,20 @@ impl BlockHeightRange {
     pub fn highest(&self) -> BlockHeight {
         self.limit
             .map_or(self.start, |limit| BlockHeight(self.start.0 + limit - 1))
+    }
+}
+
+impl Display for BlockHeightRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(limit) = self.limit {
+            if limit == 0 && limit == 1 {
+                write!(f, "{}", self.start)
+            } else {
+                write!(f, "{}..={}", self.start, self.start.0 + limit - 1)
+            }
+        } else {
+            write!(f, "{}", self.start)
+        }
     }
 }
 
@@ -313,6 +327,14 @@ impl ChainInfoResponse {
 }
 
 impl BcsSignable<'_> for ChainInfo {}
+
+/// Request for downloading certificates by height range.
+#[derive(Debug, Clone)]
+pub struct CertificatesByRangeRequest {
+    pub chain_id: ChainId,
+    pub start_height: BlockHeight,
+    pub limit: Option<u64>,
+}
 
 /// The outcome of trying to commit a list of operations to the chain.
 #[derive(Debug)]
