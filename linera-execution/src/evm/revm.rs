@@ -37,9 +37,9 @@ use crate::{
         data_types::AmountU256,
         database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
     },
-    BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, DataBlobHash, EvmExecutionError, EvmRuntime,
-    ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
-    UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, DataBlobHash, EvmExecutionError,
+    EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
+    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called

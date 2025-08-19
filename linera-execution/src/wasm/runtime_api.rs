@@ -220,7 +220,10 @@ where
     }
 
     /// Asserts the existence of a data blob with the given hash.
-    fn assert_data_blob_exists(caller: &mut Caller, hash: DataBlobHash) -> Result<(), RuntimeError> {
+    fn assert_data_blob_exists(
+        caller: &mut Caller,
+        hash: DataBlobHash,
+    ) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()
             .runtime

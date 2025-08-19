@@ -68,7 +68,6 @@ pub use self::{
     views::{KeyValueStore, ViewStorageContext},
 };
 
-
 /// The contract interface of a Linera application.
 ///
 /// As opposed to the [`Service`] interface of an application, contract entry points

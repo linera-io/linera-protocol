@@ -10,7 +10,9 @@ use linera_base::{
         Timestamp,
     },
     ensure, http,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, DataBlobHash, ModuleId, StreamName},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, ChainId, DataBlobHash, ModuleId, StreamName,
+    },
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },

@@ -32,10 +32,11 @@ use crate::{
     resources::ResourceController,
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
-    ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, DataBlobHash, ExecutionError,
-    FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation, OutgoingMessage,
-    QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker, UserContractCode,
-    UserContractInstance, UserServiceCode, UserServiceInstance, MAX_STREAM_NAME_LEN,
+    ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, DataBlobHash,
+    ExecutionError, FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation,
+    OutgoingMessage, QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker,
+    UserContractCode, UserContractInstance, UserServiceCode, UserServiceInstance,
+    MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]

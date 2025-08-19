@@ -9,7 +9,7 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     http,
-    identifiers::{AccountOwner, DataBlobHash, ApplicationId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash},
 };
 use serde::Serialize;
 

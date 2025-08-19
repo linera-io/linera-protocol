@@ -309,7 +309,9 @@ impl<'a> Deserialize<'a> for BlobId {
 }
 
 /// Hash of a data blob.
-#[derive(Eq, Hash, PartialEq, Debug, Serialize, Deserialize, Clone, Copy, WitType, WitLoad, WitStore)]
+#[derive(
+    Eq, Hash, PartialEq, Debug, Serialize, Deserialize, Clone, Copy, WitType, WitLoad, WitStore,
+)]
 pub struct DataBlobHash(pub CryptoHash);
 
 /// A unique identifier for a user application from a blob.
