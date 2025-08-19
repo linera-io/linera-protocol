@@ -431,7 +431,7 @@ where
             count: self.count,
             state_cache: self.state_cache.clone(),
             state_updates_buffer: self.state_updates_buffer.clone(),
-            state_context: self.state_context.clone_unchecked()?,
+            state_context: self.state_context.clone_unchecked(),
         })
     }
 

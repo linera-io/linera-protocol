@@ -69,7 +69,7 @@ where
         );
 
         let states = view.destination_states.get().clone();
-        let canonical_state = view.canonical_state.clone_unchecked()?;
+        let canonical_state = view.canonical_state.clone_unchecked();
 
         Ok((view, canonical_state, states))
     }

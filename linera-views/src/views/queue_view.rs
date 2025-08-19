@@ -160,14 +160,14 @@ where
     C: Context,
     T: Clone + Send + Sync + Serialize,
 {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(QueueView {
+    fn clone_unchecked(&mut self) -> Self {
+        QueueView {
             context: self.context.clone(),
             stored_indices: self.stored_indices.clone(),
             front_delete_count: self.front_delete_count,
             delete_storage_first: self.delete_storage_first,
             new_back_values: self.new_back_values.clone(),
-        })
+        }
     }
 }
 

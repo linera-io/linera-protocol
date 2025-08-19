@@ -126,12 +126,12 @@ impl<C: Context> View for ByteSetView<C> {
 }
 
 impl<C: Context> ClonableView for ByteSetView<C> {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(ByteSetView {
+    fn clone_unchecked(&mut self) -> Self {
+        ByteSetView {
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             updates: self.updates.clone(),
-        })
+        }
     }
 }
 
@@ -440,11 +440,11 @@ where
     C: Context,
     I: Send + Sync + Serialize,
 {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(SetView {
-            set: self.set.clone_unchecked()?,
+    fn clone_unchecked(&mut self) -> Self {
+        SetView {
+            set: self.set.clone_unchecked(),
             _phantom: PhantomData,
-        })
+        }
     }
 }
 
@@ -705,11 +705,11 @@ where
     C: Context,
     I: Send + Sync + CustomSerialize,
 {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(CustomSetView {
-            set: self.set.clone_unchecked()?,
+    fn clone_unchecked(&mut self) -> Self {
+        CustomSetView {
+            set: self.set.clone_unchecked(),
             _phantom: PhantomData,
-        })
+        }
     }
 }
 
