@@ -68,7 +68,7 @@ impl Exporter {
                 self.work_queue_size,
                 destination_state.load(Ordering::Acquire) as usize,
                 outgoing_stream,
-                storage.clone().unwrap(),
+                storage.clone(),
             );
 
             let mut acknowledgement_task =
