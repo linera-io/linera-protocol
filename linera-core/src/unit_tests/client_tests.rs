@@ -100,7 +100,7 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let chain_2 = builder.add_root_chain(2, Amount::ZERO).await?;
     // Listen to the notifications on the sender chain.
-    let mut notifications = sender.subscribe().await?;
+    let mut notifications = sender.subscribe()?;
     let (listener, _listen_handle, _) = sender.listen().await?;
     tokio::spawn(listener);
     {

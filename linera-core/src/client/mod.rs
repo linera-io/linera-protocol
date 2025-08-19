@@ -1705,16 +1705,13 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Subscribes to notifications from this client's chain.
     #[instrument(level = "trace")]
-    pub async fn subscribe(&self) -> Result<NotificationStream, LocalNodeError> {
-        self.subscribe_to(self.chain_id).await
+    pub fn subscribe(&self) -> Result<NotificationStream, LocalNodeError> {
+        self.subscribe_to(self.chain_id)
     }
 
     /// Subscribes to notifications from the specified chain.
     #[instrument(level = "trace")]
-    pub async fn subscribe_to(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<NotificationStream, LocalNodeError> {
+    pub fn subscribe_to(&self, chain_id: ChainId) -> Result<NotificationStream, LocalNodeError> {
         Ok(Box::pin(UnboundedReceiverStream::new(
             self.client.notifier.subscribe(vec![chain_id]),
         )))
@@ -3708,8 +3705,8 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
-        let notifications = self.subscribe().await?;
-        let (abortable_notifications, abort) = stream::abortable(self.subscribe().await?);
+        let notifications = self.subscribe()?;
+        let (abortable_notifications, abort) = stream::abortable(self.subscribe()?);
         let sync_result = if self.is_tracked() {
             self.synchronize_from_validators().await
         } else {
