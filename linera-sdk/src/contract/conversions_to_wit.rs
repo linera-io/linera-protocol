@@ -8,7 +8,9 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, Bytecode, Resources, SendMessageRequest, TimeDelta,
     },
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamName},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, ChainId, DataBlobHash, ModuleId, StreamName,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -25,6 +27,14 @@ impl From<CryptoHash> for wit_contract_api::CryptoHash {
             part2: parts[1],
             part3: parts[2],
             part4: parts[3],
+        }
+    }
+}
+
+impl From<DataBlobHash> for wit_contract_api::DataBlobHash {
+    fn from(hash_value: DataBlobHash) -> Self {
+        wit_contract_api::DataBlobHash {
+            inner0: hash_value.0.into(),
         }
     }
 }

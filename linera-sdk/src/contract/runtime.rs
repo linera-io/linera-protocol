@@ -161,12 +161,12 @@ where
 
     /// Reads a data blob with the given hash from storage.
     pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
-        base_wit::read_data_blob(hash.0.into())
+        base_wit::read_data_blob(hash.into())
     }
 
     /// Asserts that a data blob with the given hash exists in storage.
     pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
-        base_wit::assert_data_blob_exists(hash.0.into())
+        base_wit::assert_data_blob_exists(hash.into())
     }
 }
 
@@ -384,8 +384,8 @@ where
 
     /// Creates a new data blob and returns its hash.
     pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
-        let blob_id = contract_wit::create_data_blob(&bytes);
-        DataBlobHash(blob_id.hash.into())
+        let hash = contract_wit::create_data_blob(&bytes);
+        hash.into()
     }
 
     /// Publishes a module with contract and service bytecode and returns the module ID.

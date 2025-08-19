@@ -152,12 +152,12 @@ where
 
     /// Reads a data blob with the given hash from storage.
     pub fn read_data_blob(&self, hash: DataBlobHash) -> Vec<u8> {
-        base_wit::read_data_blob(hash.0.into())
+        base_wit::read_data_blob(hash.into())
     }
 
     /// Asserts that a data blob with the given hash exists in storage.
     pub fn assert_data_blob_exists(&self, hash: DataBlobHash) {
-        base_wit::assert_data_blob_exists(hash.0.into())
+        base_wit::assert_data_blob_exists(hash.into())
     }
 }
 
