@@ -3758,10 +3758,15 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
-        // Synchronize to make sure local_committee doesn't fail.
-        self.synchronize_chain_state(self.chain_id).await?;
         let (nodes, local_node) = {
-            let committee = self.local_committee().await?;
+            let committee = match self.local_committee().await {
+                Ok(committee) => committee,
+                Err(LocalNodeError::BlobsNotFound(_)) => {
+                    self.synchronize_chain_state(self.chain_id).await?;
+                    self.local_committee().await?
+                }
+                Err(err) => return Err(err.into()),
+            };
             let nodes: HashMap<_, _> = self
                 .client
                 .validator_node_provider()
