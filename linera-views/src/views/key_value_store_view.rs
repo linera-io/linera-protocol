@@ -368,17 +368,17 @@ impl<C: Context> View for KeyValueStoreView<C> {
 }
 
 impl<C: Context> ClonableView for KeyValueStoreView<C> {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(KeyValueStoreView {
+    fn clone_unchecked(&mut self) -> Self {
+        KeyValueStoreView {
             context: self.context.clone(),
             deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
             stored_total_size: self.stored_total_size,
             total_size: self.total_size,
-            sizes: self.sizes.clone_unchecked()?,
+            sizes: self.sizes.clone_unchecked(),
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut().unwrap()),
-        })
+        }
     }
 }
 

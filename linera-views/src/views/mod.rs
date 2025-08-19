@@ -187,5 +187,5 @@ pub trait CryptoHashRootView: RootView + CryptoHashView {}
 pub trait ClonableView: View {
     /// Creates a clone of this view, sharing the underlying storage context but prone to
     /// data races which can corrupt the view state.
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError>;
+    fn clone_unchecked(&mut self) -> Self;
 }

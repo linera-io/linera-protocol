@@ -159,7 +159,7 @@ impl<W: View> View for ByteCollectionView<W::Context, W> {
 }
 
 impl<W: ClonableView> ClonableView for ByteCollectionView<W::Context, W> {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+    fn clone_unchecked(&mut self) -> Self {
         let cloned_updates = self
             .updates
             .get_mut()
@@ -167,17 +167,17 @@ impl<W: ClonableView> ClonableView for ByteCollectionView<W::Context, W> {
             .map(|(key, value)| {
                 let cloned_value = match value {
                     Update::Removed => Update::Removed,
-                    Update::Set(view) => Update::Set(view.clone_unchecked()?),
+                    Update::Set(view) => Update::Set(view.clone_unchecked()),
                 };
-                Ok((key.clone(), cloned_value))
+                (key.clone(), cloned_value)
             })
-            .collect::<Result<_, ViewError>>()?;
+            .collect();
 
-        Ok(ByteCollectionView {
+        ByteCollectionView {
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             updates: RwLock::new(cloned_updates),
-        })
+        }
     }
 }
 
@@ -734,11 +734,11 @@ impl<I, W: ClonableView> ClonableView for CollectionView<W::Context, I, W>
 where
     I: Send + Sync + Serialize + DeserializeOwned,
 {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(CollectionView {
-            collection: self.collection.clone_unchecked()?,
+    fn clone_unchecked(&mut self) -> Self {
+        CollectionView {
+            collection: self.collection.clone_unchecked(),
             _phantom: PhantomData,
-        })
+        }
     }
 }
 
@@ -1084,11 +1084,11 @@ impl<I: Send + Sync, W: View> View for CustomCollectionView<W::Context, I, W> {
 }
 
 impl<I: Send + Sync, W: ClonableView> ClonableView for CustomCollectionView<W::Context, I, W> {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(CustomCollectionView {
-            collection: self.collection.clone_unchecked()?,
+    fn clone_unchecked(&mut self) -> Self {
+        CustomCollectionView {
+            collection: self.collection.clone_unchecked(),
             _phantom: PhantomData,
-        })
+        }
     }
 }
 

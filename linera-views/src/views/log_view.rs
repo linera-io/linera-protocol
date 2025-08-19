@@ -134,13 +134,13 @@ where
     C: Context,
     T: Clone + Send + Sync + Serialize,
 {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(LogView {
+    fn clone_unchecked(&mut self) -> Self {
+        LogView {
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             stored_count: self.stored_count,
             new_values: self.new_values.clone(),
-        })
+        }
     }
 }
 

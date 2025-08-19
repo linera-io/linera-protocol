@@ -137,13 +137,13 @@ where
     C: Context,
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
-    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(RegisterView {
+    fn clone_unchecked(&mut self) -> Self {
+        RegisterView {
             delete_storage_first: self.delete_storage_first,
             context: self.context.clone(),
             stored_value: self.stored_value.clone(),
             update: self.update.clone(),
-        })
+        }
     }
 }
 
