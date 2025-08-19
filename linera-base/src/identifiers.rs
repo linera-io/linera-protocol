@@ -1095,7 +1095,7 @@ doc_scalar!(
     AccountOwner,
     "A unique identifier for a user or an application."
 );
-doc_scalar!(Account, "An account");
+doc_scalar!(Account, "An account, that is a ChainId and an AccountOwner");
 doc_scalar!(
     BlobId,
     "A content-addressed blob ID i.e. the hash of the `BlobContent`"
