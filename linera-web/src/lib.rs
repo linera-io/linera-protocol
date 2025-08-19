@@ -244,7 +244,6 @@ impl Client {
                 .await
                 .unwrap()
                 .subscribe()
-                .await
                 .unwrap();
             while let Some(notification) = notifications.next().await {
                 tracing::debug!("received notification: {notification:?}");
@@ -282,7 +281,7 @@ impl Client {
                 Ok(WaitForTimeout(timeout)) => timeout,
                 Err(e) => break Ok(Err(e)),
             };
-            let mut stream = chain_client.subscribe().await?;
+            let mut stream = chain_client.subscribe()?;
             linera_client::util::wait_for_next_round(&mut stream, timeout).await;
         };
 

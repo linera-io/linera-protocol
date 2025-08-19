@@ -113,7 +113,7 @@ where
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
         let client = self.context.lock().await.make_chain_client(chain_id);
-        Ok(client.subscribe().await?)
+        Ok(client.subscribe()?)
     }
 }
 
@@ -155,7 +155,7 @@ where
     {
         loop {
             let client = self.context.lock().await.make_chain_client(*chain_id);
-            let mut stream = client.subscribe().await?;
+            let mut stream = client.subscribe()?;
             let (result, client) = f(client).await;
             self.context.lock().await.update_wallet(&client).await?;
             let timeout = match result? {
@@ -186,7 +186,7 @@ where
             match maybe_timeout {
                 None => return Ok(hashes),
                 Some(timestamp) => {
-                    let mut stream = client.subscribe().await?;
+                    let mut stream = client.subscribe()?;
                     drop(client);
                     util::wait_for_next_round(&mut stream, timestamp).await;
                 }
@@ -901,7 +901,7 @@ where
                 ClientOutcome::Committed(certificate) => break certificate.hash(),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
-            let mut stream = client.subscribe().await.map_err(|_| {
+            let mut stream = client.subscribe().map_err(|_| {
                 ChainClientError::InternalError("Could not subscribe to the local node.")
             })?;
             util::wait_for_next_round(&mut stream, timeout).await;
