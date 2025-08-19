@@ -841,7 +841,7 @@ type MutationRoot {
 		balance: Amount
 	): ChainId!
 	"""
-	Creates (or activates) a new chain by installing the given authentication keys.
+	Creates a new multi owner chain.
 	"""
 	openMultiOwnerChain(
 		"""
@@ -865,7 +865,7 @@ type MutationRoot {
 		"""
 		multiLeaderRounds: Int,
 		"""
-		The balance of the chain
+		The balance of the chain. Zero if `None`
 		"""
 		balance: Amount,
 		"""
