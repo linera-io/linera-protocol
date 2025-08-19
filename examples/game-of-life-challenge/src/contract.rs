@@ -52,7 +52,7 @@ impl Contract for GolChallengeContract {
             steps,
         } = operation;
         let puzzle_bytes = self.runtime.read_data_blob(puzzle_id);
-        let puzzle = bcs::from_bytes(&puzzle_bytes).expect("Failed to deserialize puzzle");
+        let puzzle = bcs::from_bytes(&puzzle_bytes).expect("Deserialize puzzle");
         board
             .check_puzzle(&puzzle, steps)
             .expect("Invalid solution");
@@ -63,7 +63,7 @@ impl Contract for GolChallengeContract {
             steps,
             timestamp,
         };
-        self.state.solutions.push(solution);
+        self.state.solutions.insert(&puzzle_id, solution).expect("Store solution");
     }
 
     async fn execute_message(&mut self, message: Message) {
