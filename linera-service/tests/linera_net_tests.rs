@@ -4740,8 +4740,8 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_track_instantiation_load_operation(config: impl LineraNetConfig) -> Result<()> {
-    use track_instantiation_load_operation::{Query, TrackInstantiationLoadOperationAbi};
+async fn test_wasm_track_instantiation(config: impl LineraNetConfig) -> Result<()> {
+    use track_instantiation::{Query, TrackInstantiationAbi};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -4749,10 +4749,10 @@ async fn test_wasm_track_instantiation_load_operation(config: impl LineraNetConf
     let (mut net, client) = config.instantiate().await?;
 
     let chain = client.load_wallet()?.default_chain().unwrap();
-    let (contract, service) = client.build_example("track-instantiation-load-operation").await?;
+    let (contract, service) = client.build_example("track-instantiation").await?;
 
     let application_id = client
-        .publish_and_create::<TrackInstantiationLoadOperationAbi, (), ()>(
+        .publish_and_create::<TrackInstantiationAbi, (), ()>(
             contract,
             service,
             VmRuntime::Wasm,
@@ -4772,7 +4772,6 @@ async fn test_wasm_track_instantiation_load_operation(config: impl LineraNetConf
     let application = node_service
         .make_application(&chain, &application_id)
         .await?;
-
 
     let query = Query::GetCount;
     let stats: Value = application.run_json_query(&query).await?;

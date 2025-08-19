@@ -5,38 +5,38 @@
 
 mod state;
 
-use track_instantiation_load_operation::TrackInstantiationLoadOperationAbi;
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
 };
+use track_instantiation::TrackInstantiationAbi;
 
-use self::state::TrackInstantiationLoadOperationState;
+use self::state::TrackInstantiationState;
 
-pub struct TrackInstantiationLoadOperationContract {
-    state: TrackInstantiationLoadOperationState,
+pub struct TrackInstantiationContract {
+    state: TrackInstantiationState,
     runtime: ContractRuntime<Self>,
 }
 
-linera_sdk::contract!(TrackInstantiationLoadOperationContract);
+linera_sdk::contract!(TrackInstantiationContract);
 
-impl WithContractAbi for TrackInstantiationLoadOperationContract {
-    type Abi = TrackInstantiationLoadOperationAbi;
+impl WithContractAbi for TrackInstantiationContract {
+    type Abi = TrackInstantiationAbi;
 }
 
-impl Contract for TrackInstantiationLoadOperationContract {
+impl Contract for TrackInstantiationContract {
     type Message = ();
     type InstantiationArgument = ();
     type Parameters = ();
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = TrackInstantiationLoadOperationState::load(runtime.root_view_storage_context())
+        let state = TrackInstantiationState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
 
-        TrackInstantiationLoadOperationContract { state, runtime }
+        TrackInstantiationContract { state, runtime }
     }
 
     async fn instantiate(&mut self, _argument: ()) {
@@ -50,7 +50,7 @@ impl Contract for TrackInstantiationLoadOperationContract {
             .send_to(creator_chain);
     }
 
-    async fn execute_operation(&mut self, _operation: ()) -> () {
+    async fn execute_operation(&mut self, _operation: ()) {
         panic!("No operation being executed");
     }
 

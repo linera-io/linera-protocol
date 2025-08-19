@@ -5,8 +5,8 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use track_instantiation_load_operation::{Query, TrackInstantiationLoadOperationAbi};
 use linera_sdk::test::TestValidator;
+use track_instantiation::{Query, TrackInstantiationAbi};
 
 /// Test transferring tokens across microchains.
 ///
@@ -16,9 +16,7 @@ use linera_sdk::test::TestValidator;
 #[tokio::test]
 async fn test_instantiation_messages() {
     let (validator, module_id) =
-        TestValidator::with_current_module::<TrackInstantiationLoadOperationAbi, (), ()>(
-        )
-        .await;
+        TestValidator::with_current_module::<TrackInstantiationAbi, (), ()>().await;
     let mut sender_chain = validator.new_chain().await;
 
     let application_id = sender_chain

@@ -5747,7 +5747,7 @@ dependencies = [
  "tower-http 0.6.6",
  "tracing",
  "tracing-subscriber 0.3.19",
- "track-instantiation-load-operation",
+ "track-instantiation",
 ]
 
 [[package]]
@@ -10348,12 +10348,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "track-instantiation-load-operation"
+name = "track-instantiation"
 version = "0.1.0"
 dependencies = [
  "linera-sdk",
  "serde",
- "serde_json",
 ]
 
 [[package]]

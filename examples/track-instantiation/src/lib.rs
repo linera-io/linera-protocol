@@ -6,19 +6,19 @@
 use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
-pub struct TrackInstantiationLoadOperationAbi;
+pub struct TrackInstantiationAbi;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Query {
     GetCount,
 }
 
-impl ContractAbi for TrackInstantiationLoadOperationAbi {
+impl ContractAbi for TrackInstantiationAbi {
     type Operation = ();
     type Response = ();
 }
 
-impl ServiceAbi for TrackInstantiationLoadOperationAbi {
+impl ServiceAbi for TrackInstantiationAbi {
     type Query = Query;
     type QueryResponse = u64;
 }

@@ -162,7 +162,7 @@ test-log = { workspace = true, features = ["trace"] }
 test-strategy.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
-track-instantiation-load-operation.workspace = true
+track-instantiation.workspace = true
 
 [[bin]]
 name = "linera"
