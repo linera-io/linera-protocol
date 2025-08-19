@@ -5,7 +5,7 @@ use async_graphql::{InputObject, SimpleObject};
 use gol_challenge::game::Board;
 use linera_sdk::{
     linera_base_types::Timestamp,
-    views::{linera_views, LogView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RootView, ViewStorageContext},
     DataBlobHash,
 };
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 #[graphql(complex)]
 #[view(context = ViewStorageContext)]
 pub struct GolChallengeState {
-    pub solutions: LogView<Solution>,
+    pub solutions: MapView<DataBlobHash, Solution>,
 }
 
 /// A verified solution to a GoL puzzle.

@@ -63,7 +63,10 @@ impl Contract for GolChallengeContract {
             steps,
             timestamp,
         };
-        self.state.solutions.insert(&puzzle_id, solution).expect("Store solution");
+        self.state
+            .solutions
+            .insert(&puzzle_id, solution)
+            .expect("Store solution");
     }
 
     async fn execute_message(&mut self, message: Message) {
