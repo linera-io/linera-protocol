@@ -6,6 +6,7 @@
 #![deny(clippy::large_futures)]
 
 use std::{
+    cmp,
     collections::{BTreeMap, BTreeSet},
     env,
     path::PathBuf,
@@ -20,7 +21,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
@@ -70,6 +71,84 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
+
+/// Parameters for opening multiple chains
+struct OpenChainsParams {
+    chain_id: Option<ChainId>,
+    ownership: ChainOwnership,
+    application_permissions: ApplicationPermissions,
+    balance: Amount,
+    num_chains: usize,
+    operation_name: String,
+    owner_for_wallet: Option<AccountOwner>,
+}
+
+/// Helper function to handle opening multiple chains with common logic
+async fn open_multiple_chains<S>(
+    storage: S,
+    context_options: ClientContextOptions,
+    wallet: persistent::File<Wallet>,
+    signer: InMemorySigner,
+    params: OpenChainsParams,
+) -> anyhow::Result<()>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    let mut context = ClientContext::new(storage, context_options, wallet, signer);
+    let chain_id = params.chain_id.unwrap_or_else(|| context.default_chain());
+    let chain_client = context.make_chain_client(chain_id);
+    info!(
+        "Opening {} new {} from existing chain {}",
+        params.num_chains, params.operation_name, chain_id
+    );
+    let time_start = Instant::now();
+    let (descriptions, certificate) = context
+        .apply_client_command(&chain_client, |chain_client| {
+            let ownership = params.ownership.clone();
+            let application_permissions = params.application_permissions.clone();
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .open_chains(
+                        ownership,
+                        application_permissions,
+                        params.balance,
+                        params.num_chains,
+                    )
+                    .await
+            }
+        })
+        .await
+        .context("Failed to open chains")?;
+    let timestamp = certificate.block().header.timestamp;
+
+    // Update wallet and print chain IDs for all created chains
+    for description in &descriptions {
+        let id = description.id();
+        context
+            .update_wallet_for_new_chain(id, params.owner_for_wallet, timestamp)
+            .await?;
+        println!("{}", id);
+    }
+
+    let time_total = time_start.elapsed();
+    info!(
+        "Opening {} new {} confirmed after {} ms",
+        params.num_chains,
+        params.operation_name,
+        time_total.as_millis()
+    );
+    debug!("{:?}", certificate);
+
+    // Print owner if specified
+    if let Some(owner) = params.owner_for_wallet {
+        for _ in 0..params.num_chains {
+            println!("{}", owner);
+        }
+    }
+
+    Ok(())
+}
 
 struct Job(ClientOptions);
 
@@ -135,107 +214,109 @@ impl Runnable for Job {
                 debug!("{:?}", certificate);
             }
 
-            OpenChain {
-                chain_id,
-                owner,
-                balance,
-                super_owner,
-            } => {
-                let new_owner = owner.unwrap_or_else(|| signer.generate_new().into());
+            OpenChain { args } => {
+                let new_owner = args.owner.unwrap_or_else(|| signer.generate_new().into());
                 signer.persist().await?;
-                let mut context = ClientContext::new(
+                let ownership = if args.super_owner {
+                    ChainOwnership::single_super(new_owner)
+                } else {
+                    ChainOwnership::single(new_owner)
+                };
+                open_multiple_chains(
                     storage,
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
-                );
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(chain_id);
-                info!("Opening a new chain from existing chain {}", chain_id);
-                let time_start = Instant::now();
-                let (description, certificate) = context
-                    .apply_client_command(&chain_client, |chain_client| {
-                        let ownership = if super_owner {
-                            ChainOwnership::single_super(new_owner)
-                        } else {
-                            ChainOwnership::single(new_owner)
-                        };
-
-                        let chain_client = chain_client.clone();
-                        async move {
-                            chain_client
-                                .open_chain(ownership, ApplicationPermissions::default(), balance)
-                                .await
-                        }
-                    })
-                    .await
-                    .context("Failed to open chain")?;
-                let timestamp = certificate.block().header.timestamp;
-                let id = description.id();
-                context
-                    .update_wallet_for_new_chain(id, Some(new_owner), timestamp)
-                    .await?;
-                let time_total = time_start.elapsed();
-                info!(
-                    "Opening a new chain confirmed after {} ms",
-                    time_total.as_millis()
-                );
-                debug!("{:?}", certificate);
-                // Print the new chain ID, and owner on stdout for scripting purposes.
-                println!("{}", id);
-                println!("{}", new_owner);
+                    OpenChainsParams {
+                        chain_id: args.chain_id,
+                        ownership,
+                        application_permissions: ApplicationPermissions::default(),
+                        balance: args.balance,
+                        num_chains: 1,
+                        operation_name: "chain".to_string(),
+                        owner_for_wallet: Some(new_owner),
+                    },
+                )
+                .await?
             }
 
             OpenMultiOwnerChain {
-                chain_id,
-                balance,
+                args,
                 ownership_config,
                 application_permissions_config,
             } => {
-                let mut context = ClientContext::new(
+                let ownership = ChainOwnership::try_from(ownership_config)?;
+                let application_permissions =
+                    ApplicationPermissions::from(application_permissions_config);
+                open_multiple_chains(
                     storage,
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
-                );
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(chain_id);
-                info!(
-                    "Opening a new multi-owner chain from existing chain {}",
-                    chain_id
-                );
-                let time_start = Instant::now();
+                    OpenChainsParams {
+                        chain_id: args.chain_id,
+                        ownership,
+                        application_permissions,
+                        balance: args.balance,
+                        num_chains: 1,
+                        operation_name: "multi-owner chain".to_string(),
+                        owner_for_wallet: None,
+                    },
+                )
+                .await?
+            }
+
+            OpenChains { args, num_chains } => {
+                let new_owner = args.owner.unwrap_or_else(|| signer.generate_new().into());
+                signer.persist().await?;
+                let ownership = if args.super_owner {
+                    ChainOwnership::single_super(new_owner)
+                } else {
+                    ChainOwnership::single(new_owner)
+                };
+                open_multiple_chains(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                    OpenChainsParams {
+                        chain_id: args.chain_id,
+                        ownership,
+                        application_permissions: ApplicationPermissions::default(),
+                        balance: args.balance,
+                        num_chains,
+                        operation_name: "chains".to_string(),
+                        owner_for_wallet: Some(new_owner),
+                    },
+                )
+                .await?
+            }
+
+            OpenMultiOwnerChains {
+                args,
+                ownership_config,
+                application_permissions_config,
+                num_chains,
+            } => {
                 let ownership = ChainOwnership::try_from(ownership_config)?;
                 let application_permissions =
                     ApplicationPermissions::from(application_permissions_config);
-                let (description, certificate) = context
-                    .apply_client_command(&chain_client, |chain_client| {
-                        let ownership = ownership.clone();
-                        let application_permissions = application_permissions.clone();
-                        let chain_client = chain_client.clone();
-                        async move {
-                            chain_client
-                                .open_chain(ownership, application_permissions, balance)
-                                .await
-                        }
-                    })
-                    .await
-                    .context("Failed to open chain")?;
-                let id = description.id();
-                // No owner. This chain can be assigned explicitly using the assign command.
-                let owner = None;
-                let timestamp = certificate.block().header.timestamp;
-                context
-                    .update_wallet_for_new_chain(id, owner, timestamp)
-                    .await?;
-                let time_total = time_start.elapsed();
-                info!(
-                    "Opening a new multi-owner chain confirmed after {} ms",
-                    time_total.as_millis()
-                );
-                debug!("{:?}", certificate);
-                // Print the new chain ID on stdout for scripting purposes.
-                println!("{}", id);
+                open_multiple_chains(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                    OpenChainsParams {
+                        chain_id: args.chain_id,
+                        ownership,
+                        application_permissions,
+                        balance: args.balance,
+                        num_chains,
+                        operation_name: "multi-owner chains".to_string(),
+                        owner_for_wallet: None,
+                    },
+                )
+                .await?
             }
 
             ChangeOwnership {
@@ -983,18 +1064,24 @@ impl Runnable for Job {
                             })?;
                             let client = client.clone();
                             join_set.spawn(async move {
-                                let mut chain_ids = Vec::new();
-                                for _ in 0..chains_per_wallet {
-                                    let (chain_id, _owner) = client
-                                        .open_chain_super_owner(
+                                let mut all_chain_ids = Vec::with_capacity(chains_per_wallet);
+                                let mut chains_left = chains_per_wallet;
+                                while chains_left > 0 {
+                                    let batch_size = cmp::min(900, chains_left);
+                                    let chain_ids = client
+                                        .open_chains_super_owner(
                                             default_chain_id,
                                             None,
                                             benchmark_options.tokens_per_chain,
+                                            batch_size,
                                         )
-                                        .await?;
-                                    chain_ids.push(chain_id);
+                                        .await?
+                                        .into_iter()
+                                        .map(|(chain_id, _owner)| chain_id);
+                                    all_chain_ids.extend(chain_ids);
+                                    chains_left -= batch_size;
                                 }
-                                Ok::<Vec<ChainId>, anyhow::Error>(chain_ids)
+                                Ok::<Vec<ChainId>, anyhow::Error>(all_chain_ids)
                             });
                         }
 

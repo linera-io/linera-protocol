@@ -284,15 +284,24 @@ where
                 let ownership = ownership.clone();
                 async move {
                     let result = client
-                        .open_chain(ownership, ApplicationPermissions::default(), balance)
+                        .open_chains(ownership, ApplicationPermissions::default(), balance, 1)
                         .await
                         .map_err(Error::from)
-                        .map(|outcome| outcome.map(|(chain_id, _)| chain_id));
+                        .and_then(|outcome| match outcome {
+                            ClientOutcome::Committed((descriptions, _)) => descriptions
+                                .into_iter()
+                                .next()
+                                .map(|desc| ClientOutcome::Committed(desc.id()))
+                                .ok_or_else(|| Error::from("No chain description returned")),
+                            ClientOutcome::WaitForTimeout(timeout) => {
+                                Ok(ClientOutcome::WaitForTimeout(timeout))
+                            }
+                        });
                     (result, client)
                 }
             })
             .await?;
-        Ok(description.id())
+        Ok(description)
     }
 
     /// Creates (or activates) a new chain by installing the given authentication keys.
@@ -356,15 +365,24 @@ where
                 let application_permissions = application_permissions.clone().unwrap_or_default();
                 async move {
                     let result = client
-                        .open_chain(ownership, application_permissions, balance)
+                        .open_chains(ownership, application_permissions, balance, 1)
                         .await
                         .map_err(Error::from)
-                        .map(|outcome| outcome.map(|(chain_id, _)| chain_id));
+                        .and_then(|outcome| match outcome {
+                            ClientOutcome::Committed((descriptions, _)) => descriptions
+                                .into_iter()
+                                .next()
+                                .map(|desc| ClientOutcome::Committed(desc.id()))
+                                .ok_or_else(|| Error::from("No chain description returned")),
+                            ClientOutcome::WaitForTimeout(timeout) => {
+                                Ok(ClientOutcome::WaitForTimeout(timeout))
+                            }
+                        });
                     (result, client)
                 }
             })
             .await?;
-        Ok(description.id())
+        Ok(description)
     }
 
     /// Closes the chain. Returns `None` if it was already closed.
@@ -376,6 +394,135 @@ where
             })
             .await?;
         Ok(maybe_cert.as_ref().map(GenericCertificate::hash))
+    }
+
+    /// Creates (or activates) multiple new chains with the given owner.
+    /// This will automatically subscribe to the future committees created by `admin_id`.
+    async fn open_chains(
+        &self,
+        chain_id: ChainId,
+        owner: AccountOwner,
+        balance: Option<Amount>,
+        num_chains: usize,
+    ) -> Result<Vec<ChainId>, Error> {
+        let ownership = ChainOwnership::single(owner);
+        let balance = balance.unwrap_or(Amount::ZERO);
+        let descriptions = self
+            .apply_client_command(&chain_id, move |client| {
+                let ownership = ownership.clone();
+                async move {
+                    let result = client
+                        .open_chains(
+                            ownership,
+                            ApplicationPermissions::default(),
+                            balance,
+                            num_chains,
+                        )
+                        .await
+                        .map_err(Error::from)
+                        .map(|outcome| match outcome {
+                            ClientOutcome::Committed((descriptions, _)) => {
+                                ClientOutcome::Committed(
+                                    descriptions
+                                        .into_iter()
+                                        .map(|desc| desc.id())
+                                        .collect::<Vec<_>>(),
+                                )
+                            }
+                            ClientOutcome::WaitForTimeout(timeout) => {
+                                ClientOutcome::WaitForTimeout(timeout)
+                            }
+                        });
+                    (result, client)
+                }
+            })
+            .await?;
+        Ok(descriptions)
+    }
+
+    /// Creates (or activates) multiple new chains by installing the given authentication keys.
+    /// This will automatically subscribe to the future committees created by `admin_id`.
+    #[expect(clippy::too_many_arguments)]
+    async fn open_multi_owner_chains(
+        &self,
+        chain_id: ChainId,
+        application_permissions: Option<ApplicationPermissions>,
+        owners: Vec<AccountOwner>,
+        weights: Option<Vec<u64>>,
+        multi_leader_rounds: Option<u32>,
+        balance: Option<Amount>,
+        num_chains: usize,
+        #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
+        fast_round_ms: Option<u64>,
+        #[graphql(
+            desc = "The duration of the first single-leader and all multi-leader rounds",
+            default = 10_000
+        )]
+        base_timeout_ms: u64,
+        #[graphql(
+            desc = "The number of milliseconds by which the timeout increases after each \
+                    single-leader round",
+            default = 1_000
+        )]
+        timeout_increment_ms: u64,
+        #[graphql(
+            desc = "The age of an incoming tracked or protected message after which the \
+                    validators start transitioning the chain to fallback mode, in milliseconds.",
+            default = 86_400_000
+        )]
+        fallback_duration_ms: u64,
+    ) -> Result<Vec<ChainId>, Error> {
+        let owners = if let Some(weights) = weights {
+            if weights.len() != owners.len() {
+                return Err(Error::new(format!(
+                    "There are {} owners but {} weights.",
+                    owners.len(),
+                    weights.len()
+                )));
+            }
+            owners.into_iter().zip(weights).collect::<Vec<_>>()
+        } else {
+            owners
+                .into_iter()
+                .zip(iter::repeat(100))
+                .collect::<Vec<_>>()
+        };
+        let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
+        let timeout_config = TimeoutConfig {
+            fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
+            base_timeout: TimeDelta::from_millis(base_timeout_ms),
+            timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
+            fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
+        };
+        let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
+        let balance = balance.unwrap_or(Amount::ZERO);
+        let descriptions = self
+            .apply_client_command(&chain_id, move |client| {
+                let ownership = ownership.clone();
+                let application_permissions = application_permissions.clone().unwrap_or_default();
+                async move {
+                    let result = client
+                        .open_chains(ownership, application_permissions, balance, num_chains)
+                        .await
+                        .map_err(Error::from)
+                        .map(|outcome| match outcome {
+                            ClientOutcome::Committed((descriptions, _)) => {
+                                ClientOutcome::Committed(
+                                    descriptions
+                                        .into_iter()
+                                        .map(|desc| desc.id())
+                                        .collect::<Vec<_>>(),
+                                )
+                            }
+                            ClientOutcome::WaitForTimeout(timeout) => {
+                                ClientOutcome::WaitForTimeout(timeout)
+                            }
+                        });
+                    (result, client)
+                }
+            })
+            .await?;
+        Ok(descriptions)
     }
 
     /// Changes the authentication key of the chain.

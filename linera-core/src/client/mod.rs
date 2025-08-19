@@ -3140,14 +3140,15 @@ impl<Env: Environment> ChainClient<Env> {
         .await
     }
 
-    /// Opens a new chain with a derived UID.
+    /// Opens new chains with a derived UIDs.
     #[instrument(level = "trace", skip(self))]
-    pub async fn open_chain(
+    pub async fn open_chains(
         &self,
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, ChainClientError>
+        num_chains: usize,
+    ) -> Result<ClientOutcome<(Vec<ChainDescription>, ConfirmedBlockCertificate)>, ChainClientError>
     {
         loop {
             let config = OpenChainConfig {
@@ -3155,30 +3156,38 @@ impl<Env: Environment> ChainClient<Env> {
                 balance,
                 application_permissions: application_permissions.clone(),
             };
-            let operation = Operation::system(SystemOperation::OpenChain(config));
-            let certificate = match self.execute_block(vec![operation], vec![]).await? {
+            let operations = (0..num_chains)
+                .map(|_| Operation::system(SystemOperation::OpenChain(config.clone())))
+                .collect::<Vec<_>>();
+            let certificate = match self.execute_block(operations, vec![]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
             };
-            // The only operation, i.e. the last transaction, created the new chain.
-            let chain_blob = certificate
-                .block()
-                .body
-                .blobs
-                .last()
-                .and_then(|blobs| blobs.last())
-                .ok_or_else(|| ChainClientError::InternalError("Failed to create a new chain"))?;
-            let description = bcs::from_bytes::<ChainDescription>(chain_blob.bytes())?;
-            // Add the new chain to the list of tracked chains
-            self.client.track_chain(description.id());
+            // Collect all chain descriptions from the created chains
+            let mut descriptions = Vec::new();
+            for blobs in &certificate.block().body.blobs {
+                for blob in blobs {
+                    if blob.id().blob_type == BlobType::ChainDescription {
+                        let description = bcs::from_bytes::<ChainDescription>(blob.bytes())?;
+                        // Add the new chain to the list of tracked chains
+                        self.client.track_chain(description.id());
+                        descriptions.push(description);
+                    }
+                }
+            }
+            if descriptions.len() != num_chains {
+                return Err(ChainClientError::InternalError(
+                    "Failed to create the expected number of chains",
+                ));
+            }
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)
                 .await?;
-            return Ok(ClientOutcome::Committed((description, certificate)));
+            return Ok(ClientOutcome::Committed((descriptions, certificate)));
         }
     }
 

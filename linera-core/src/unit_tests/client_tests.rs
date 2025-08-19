@@ -489,14 +489,16 @@ where
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     // Open the new chain.
-    let (new_description, certificate) = sender
-        .open_chain(
+    let (new_descriptions, certificate) = sender
+        .open_chains(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
             Amount::ZERO,
+            1,
         )
         .await
         .unwrap_ok_committed();
+    let new_description = new_descriptions.into_iter().next().unwrap();
     let new_id = new_description.id();
 
     assert_eq!(
@@ -564,14 +566,16 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (new_description2, certificate) = parent
-        .open_chain(
+    let (new_descriptions2, certificate) = parent
+        .open_chains(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
             Amount::ZERO,
+            1,
         )
         .await
         .unwrap_ok_committed();
+    let new_description2 = new_descriptions2.into_iter().next().unwrap();
     let new_id2 = new_description2.id();
     assert_eq!(new_id, new_id2);
     assert_eq!(
@@ -647,10 +651,16 @@ where
     // Open the new chain. We are both regular and super owner.
     let ownership = ChainOwnership::single(new_public_key.into())
         .with_regular_owner(new_public_key.into(), 100);
-    let (new_description, creation_certificate) = sender
-        .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
+    let (new_descriptions, creation_certificate) = sender
+        .open_chains(
+            ownership,
+            ApplicationPermissions::default(),
+            Amount::ZERO,
+            1,
+        )
         .await
         .unwrap_ok_committed();
+    let new_description = new_descriptions.into_iter().next().unwrap();
     let new_id = new_description.id();
     // Transfer after creating the chain.
     let transfer_certificate = sender

@@ -777,11 +777,26 @@ impl ClientWrapper {
         initial_balance: Amount,
         super_owner: bool,
     ) -> Result<(ChainId, AccountOwner)> {
+        let result = self
+            .open_chains_internal(from, owner, initial_balance, super_owner, 1)
+            .await?;
+        Ok((result[0].0, result[0].1))
+    }
+
+    async fn open_chains_internal(
+        &self,
+        from: ChainId,
+        owner: Option<AccountOwner>,
+        initial_balance: Amount,
+        super_owner: bool,
+        num_chains: usize,
+    ) -> Result<Vec<(ChainId, AccountOwner)>> {
         let mut command = self.command().await?;
         command
-            .arg("open-chain")
+            .arg("open-chains")
             .args(["--from", &from.to_string()])
-            .args(["--initial-balance", &initial_balance.to_string()]);
+            .args(["--initial-balance", &initial_balance.to_string()])
+            .args(["--num-chains", &num_chains.to_string()]);
 
         if let Some(owner) = owner {
             command.args(["--owner", &owner.to_string()]);
@@ -792,13 +807,40 @@ impl ClientWrapper {
         }
 
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        let mut split = stdout.split('\n');
-        let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
-        let new_owner = AccountOwner::from_str(split.next().context("no owner in output")?)?;
-        if let Some(owner) = owner {
-            assert_eq!(owner, new_owner);
+        let lines: Vec<&str> = stdout.split('\n').filter(|s| !s.is_empty()).collect();
+
+        // Each chain produces 2 lines: chain_id and owner
+        let expected_lines = num_chains * 2;
+        if lines.len() != expected_lines {
+            return Err(anyhow::anyhow!(
+                "Expected {} lines of output but got {}",
+                expected_lines,
+                lines.len()
+            ));
         }
-        Ok((chain_id, new_owner))
+
+        let mut results = Vec::new();
+        for i in 0..num_chains {
+            let chain_id = ChainId::from_str(lines[i * 2])
+                .with_context(|| format!("parsing chain ID at line {}", i * 2))?;
+            let new_owner = AccountOwner::from_str(lines[i * 2 + 1])
+                .with_context(|| format!("parsing owner at line {}", i * 2 + 1))?;
+
+            if let Some(expected_owner) = owner {
+                if new_owner != expected_owner {
+                    return Err(anyhow::anyhow!(
+                        "Expected owner {} but got {} for chain {}",
+                        expected_owner,
+                        new_owner,
+                        chain_id
+                    ));
+                }
+            }
+
+            results.push((chain_id, new_owner));
+        }
+
+        Ok(results)
     }
 
     /// Runs `linera open-chain --super-owner`.
@@ -820,6 +862,30 @@ impl ClientWrapper {
         initial_balance: Amount,
     ) -> Result<(ChainId, AccountOwner)> {
         self.open_chain_internal(from, owner, initial_balance, false)
+            .await
+    }
+
+    /// Runs `linera open-chains --super-owner`.
+    pub async fn open_chains_super_owner(
+        &self,
+        from: ChainId,
+        owner: Option<AccountOwner>,
+        initial_balance: Amount,
+        num_chains: usize,
+    ) -> Result<Vec<(ChainId, AccountOwner)>> {
+        self.open_chains_internal(from, owner, initial_balance, true, num_chains)
+            .await
+    }
+
+    /// Runs `linera open-chains`.
+    pub async fn open_chains(
+        &self,
+        from: ChainId,
+        owner: Option<AccountOwner>,
+        initial_balance: Amount,
+        num_chains: usize,
+    ) -> Result<Vec<(ChainId, AccountOwner)>> {
+        self.open_chains_internal(from, owner, initial_balance, false, num_chains)
             .await
     }
 

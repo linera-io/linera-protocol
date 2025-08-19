@@ -166,6 +166,26 @@ use crate::util::{
     DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
 
+/// Common fields for chain opening commands
+#[derive(Clone, clap::Args)]
+pub struct OpenChainArgs {
+    /// Chain ID (must be one of our chains).
+    #[arg(long = "from")]
+    pub chain_id: Option<ChainId>,
+
+    /// The initial balance of the new chain. This is subtracted from the parent chain's
+    /// balance.
+    #[arg(long = "initial-balance", default_value = "0")]
+    pub balance: Amount,
+
+    /// The new owner (otherwise create a key pair and remember it) - only for single owner chains
+    #[arg(long = "owner")]
+    pub owner: Option<AccountOwner>,
+
+    /// Whether to create a super owner for the new chain - only for single owner chains
+    #[arg(long)]
+    pub super_owner: bool,
+}
 #[derive(Clone, clap::Subcommand)]
 pub enum ClientCommand {
     /// Transfer funds
@@ -184,29 +204,36 @@ pub enum ClientCommand {
 
     /// Open (i.e. activate) a new chain deriving the UID from an existing one.
     OpenChain {
-        /// Chain ID (must be one of our chains).
-        #[arg(long = "from")]
-        chain_id: Option<ChainId>,
-
-        /// The new owner (otherwise create a key pair and remember it)
-        #[arg(long = "owner")]
-        owner: Option<AccountOwner>,
-
-        /// The initial balance of the new chain. This is subtracted from the parent chain's
-        /// balance.
-        #[arg(long = "initial-balance", default_value = "0")]
-        balance: Amount,
-
-        /// Whether to create a super owner for the new chain.
-        #[arg(long)]
-        super_owner: bool,
+        #[clap(flatten)]
+        args: OpenChainArgs,
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
     OpenMultiOwnerChain {
-        /// Chain ID (must be one of our chains).
-        #[arg(long = "from")]
-        chain_id: Option<ChainId>,
+        #[clap(flatten)]
+        args: OpenChainArgs,
+
+        #[clap(flatten)]
+        ownership_config: ChainOwnershipConfig,
+
+        #[clap(flatten)]
+        application_permissions_config: ApplicationPermissionsConfig,
+    },
+
+    /// Open (i.e. activate) multiple new chains deriving the UIDs from an existing one.
+    OpenChains {
+        #[clap(flatten)]
+        args: OpenChainArgs,
+
+        /// Number of chains to create
+        #[arg(long, default_value = "1")]
+        num_chains: usize,
+    },
+
+    /// Open (i.e. activate) multiple new multi-owner chains deriving the UIDs from an existing one.
+    OpenMultiOwnerChains {
+        #[clap(flatten)]
+        args: OpenChainArgs,
 
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
@@ -214,10 +241,9 @@ pub enum ClientCommand {
         #[clap(flatten)]
         application_permissions_config: ApplicationPermissionsConfig,
 
-        /// The initial balance of the new chain. This is subtracted from the parent chain's
-        /// balance.
-        #[arg(long = "initial-balance", default_value = "0")]
-        balance: Amount,
+        /// Number of chains to create
+        #[arg(long, default_value = "1")]
+        num_chains: usize,
     },
 
     /// Change who owns the chain, and how the owners work together proposing blocks.
@@ -950,6 +976,8 @@ impl ClientCommand {
             ClientCommand::Transfer { .. }
             | ClientCommand::OpenChain { .. }
             | ClientCommand::OpenMultiOwnerChain { .. }
+            | ClientCommand::OpenChains { .. }
+            | ClientCommand::OpenMultiOwnerChains { .. }
             | ClientCommand::ChangeOwnership { .. }
             | ClientCommand::SetPreferredOwner { .. }
             | ClientCommand::ChangeApplicationPermissions { .. }
