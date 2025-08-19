@@ -97,7 +97,7 @@ impl From<CryptoHash> for AccountOwner {
 pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
-    /// The owner of the account, or `None` for the chain balance.
+    /// The owner of the account.
     pub owner: AccountOwner,
 }
 
