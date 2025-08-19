@@ -4741,7 +4741,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_track_instantiation_load_operation(config: impl LineraNetConfig) -> Result<()> {
-    use track_instantiation_load_operation::{Query, Stats, TrackInstantiationLoadOperationAbi};
+    use track_instantiation_load_operation::{Query, TrackInstantiationLoadOperationAbi};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -4774,14 +4774,11 @@ async fn test_wasm_track_instantiation_load_operation(config: impl LineraNetConf
         .await?;
 
 
-    let query = Query::GetStats;
+    let query = Query::GetCount;
     let stats: Value = application.run_json_query(&query).await?;
-    let stats: Stats = serde_json::from_value(stats)?;
+    let stats: u64 = serde_json::from_value(stats)?;
     tracing::info!("Stats after instantiation: {:?}", stats);
-
-    assert_eq!(stats.instantiation_count, 1);
-    assert_eq!(stats.load_count, 0);
-    assert_eq!(stats.execute_operation_count, 0);
+    assert_eq!(stats, 1);
 
     node_service.ensure_is_running()?;
     net.ensure_is_running().await?;

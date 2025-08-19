@@ -5,16 +5,13 @@
 
 mod state;
 
-use std::sync::Arc;
-
 use linera_sdk::{linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
-use track_instantiation_load_operation::{Query, Stats, TrackInstantiationLoadOperationAbi};
+use track_instantiation_load_operation::{Query, TrackInstantiationLoadOperationAbi};
 
 use self::state::TrackInstantiationLoadOperationState;
 
 pub struct TrackInstantiationLoadOperationService {
     state: TrackInstantiationLoadOperationState,
-    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(TrackInstantiationLoadOperationService);
@@ -32,19 +29,12 @@ impl Service for TrackInstantiationLoadOperationService {
             .expect("Failed to load state");
         TrackInstantiationLoadOperationService {
             state,
-            runtime: Arc::new(runtime),
         }
     }
 
-    async fn handle_query(&self, query: Query) -> Stats {
+    async fn handle_query(&self, query: Query) -> u64 {
         match query {
-            Query::GetStats => {
-                self.state.stats.get().clone()
-            },
-            Query::ExecuteOperation => {
-                self.runtime.schedule_operation(&());
-                self.state.stats.get().clone()
-            }
+            Query::GetCount => *self.state.stats.get(),
         }
     }
 }

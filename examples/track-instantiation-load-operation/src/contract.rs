@@ -5,7 +5,7 @@
 
 mod state;
 
-use track_instantiation_load_operation::{MessageContent, Stats, TrackInstantiationLoadOperationAbi};
+use track_instantiation_load_operation::TrackInstantiationLoadOperationAbi;
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
@@ -26,24 +26,15 @@ impl WithContractAbi for TrackInstantiationLoadOperationContract {
 }
 
 impl Contract for TrackInstantiationLoadOperationContract {
-    type Message = MessageContent;
+    type Message = ();
     type InstantiationArgument = ();
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(mut runtime: ContractRuntime<Self>) -> Self {
+    async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = TrackInstantiationLoadOperationState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-
-        // Send message to creator chain about load operation
-        let creator_chain = runtime.application_creator_chain_id();
-        if creator_chain != runtime.chain_id() {
-            runtime
-                .prepare_message(MessageContent::IncrementLoad)
-                .with_authentication()
-                .send_to(creator_chain);
-        }
 
         TrackInstantiationLoadOperationContract { state, runtime }
     }
@@ -54,42 +45,18 @@ impl Contract for TrackInstantiationLoadOperationContract {
         // Send message to creator chain about instantiation
         let creator_chain = self.runtime.application_creator_chain_id();
         self.runtime
-            .prepare_message(MessageContent::IncrementInstantiation)
+            .prepare_message(())
             .with_authentication()
             .send_to(creator_chain);
     }
 
     async fn execute_operation(&mut self, _operation: ()) -> () {
-        let mut current_stats = self.state.stats.get().clone();
-        current_stats.execute_operation_count += 1;
-        self.state.stats.set(current_stats);
-
-        // Send message to creator chain about execute_operation
-        let creator_chain = self.runtime.application_creator_chain_id();
-        if creator_chain != self.runtime.chain_id() {
-            self.runtime
-                .prepare_message(MessageContent::IncrementExecuteOperation)
-                .with_authentication()
-                .send_to(creator_chain);
-        }
+        panic!("No operation being executed");
     }
 
-    async fn execute_message(&mut self, message: MessageContent) {
-        let mut current_stats = self.state.stats.get().clone();
-
-        match message {
-            MessageContent::IncrementInstantiation => {
-                current_stats.instantiation_count += 1;
-            }
-            MessageContent::IncrementLoad => {
-                current_stats.load_count += 1;
-            }
-            MessageContent::IncrementExecuteOperation => {
-                current_stats.execute_operation_count += 1;
-            }
-        }
-
-        self.state.stats.set(current_stats);
+    async fn execute_message(&mut self, _message: ()) {
+        let count = self.state.stats.get_mut();
+        *count += 1;
     }
 
     async fn store(mut self) {

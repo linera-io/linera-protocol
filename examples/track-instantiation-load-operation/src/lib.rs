@@ -9,23 +9,8 @@ use serde::{Deserialize, Serialize};
 pub struct TrackInstantiationLoadOperationAbi;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MessageContent {
-    IncrementInstantiation,
-    IncrementLoad,
-    IncrementExecuteOperation,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Query {
-    GetStats,
-    ExecuteOperation,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Stats {
-    pub instantiation_count: u64,
-    pub load_count: u64,
-    pub execute_operation_count: u64,
+    GetCount,
 }
 
 impl ContractAbi for TrackInstantiationLoadOperationAbi {
@@ -35,5 +20,5 @@ impl ContractAbi for TrackInstantiationLoadOperationAbi {
 
 impl ServiceAbi for TrackInstantiationLoadOperationAbi {
     type Query = Query;
-    type QueryResponse = Stats;
+    type QueryResponse = u64;
 }
