@@ -32,8 +32,7 @@ use linera_base::{
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
     abis::fungible::NativeFungibleTokenAbi,
-    linera_base_types::{AccountSecretKey, BlobContent, BlockHeight},
-    DataBlobHash,
+    linera_base_types::{AccountSecretKey, BlobContent, BlockHeight, DataBlobHash},
 };
 #[cfg(any(
     feature = "dynamodb",

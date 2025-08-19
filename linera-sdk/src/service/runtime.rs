@@ -9,12 +9,12 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, DataBlobHash, ApplicationId, ChainId},
 };
 use serde::Serialize;
 
 use super::wit::{base_runtime_api as base_wit, service_runtime_api as service_wit};
-use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
+use crate::{KeyValueStore, Service, ViewStorageContext};
 
 /// The runtime available during execution of a query.
 pub struct ServiceRuntime<Application>

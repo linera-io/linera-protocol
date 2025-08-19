@@ -10,7 +10,7 @@ use linera_base::{
         Timestamp,
     },
     ensure, http,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamName},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, DataBlobHash, ModuleId, StreamName},
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
@@ -19,7 +19,7 @@ use linera_base::{
 use serde::Serialize;
 
 use super::wit::{base_runtime_api as base_wit, contract_runtime_api as contract_wit};
-use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
+use crate::{Contract, KeyValueStore, ViewStorageContext};
 
 /// The common runtime to interface with the host executing the contract.
 ///

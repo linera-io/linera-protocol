@@ -16,7 +16,7 @@ use linera_base::{
         CompressedBytecode, OracleResponse,
     },
     http,
-    identifiers::{Account, AccountOwner, ApplicationId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, DataBlobHash, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -957,17 +957,17 @@ async fn test_create_multiple_data_blobs() -> anyhow::Result<()> {
     let test_data2 = &[];
     let expected_blob1 = Blob::new_data(test_data1.to_vec());
     let expected_blob2 = Blob::new_data(test_data2.to_vec());
-    let expected_blob_id1 = expected_blob1.id();
-    let expected_blob_id2 = expected_blob2.id();
+    let expected_blob_hash1 = DataBlobHash(expected_blob1.id().hash);
+    let expected_blob_hash2 = DataBlobHash(expected_blob2.id().hash);
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _operation| {
-            let blob_id1 = runtime.create_data_blob(test_data1.to_vec()).unwrap();
-            let blob_id2 = runtime.create_data_blob(test_data2.to_vec()).unwrap();
+            let blob_hash1 = runtime.create_data_blob(test_data1.to_vec()).unwrap();
+            let blob_hash2 = runtime.create_data_blob(test_data2.to_vec()).unwrap();
 
-            assert_eq!(blob_id1, expected_blob_id1);
-            assert_eq!(blob_id2, expected_blob_id2);
-            assert_ne!(blob_id1, blob_id2); // Should be different blobs
+            assert_eq!(blob_hash1, expected_blob_hash1);
+            assert_eq!(blob_hash2, expected_blob_hash2);
+            assert_ne!(blob_hash1, blob_hash2); // Should be different blobs
 
             Ok(vec![])
         },
@@ -990,11 +990,11 @@ async fn test_create_multiple_data_blobs() -> anyhow::Result<()> {
 
     // Verify both blobs were created and tracked
     let created_blobs = tracker.created_blobs();
-    assert!(created_blobs.contains_key(&expected_blob_id1));
-    assert!(created_blobs.contains_key(&expected_blob_id2));
+    assert!(created_blobs.contains_key(&expected_blob1.id()));
+    assert!(created_blobs.contains_key(&expected_blob2.id()));
 
-    let created_blob1 = created_blobs.get(&expected_blob_id1).unwrap();
-    let created_blob2 = created_blobs.get(&expected_blob_id2).unwrap();
+    let created_blob1 = created_blobs.get(&expected_blob1.id()).unwrap();
+    let created_blob2 = created_blobs.get(&expected_blob2.id()).unwrap();
     assert_eq!(created_blob1.bytes(), test_data1);
     assert_eq!(created_blob2.bytes(), test_data2);
 

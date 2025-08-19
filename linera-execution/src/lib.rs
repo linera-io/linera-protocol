@@ -41,7 +41,7 @@ use linera_base::{
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, DataBlobHash, EventId,
         GenericApplicationId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
@@ -668,10 +668,10 @@ pub trait BaseRuntime {
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError>;
 
     /// Reads a data blob specified by a given hash.
-    fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError>;
+    fn read_data_blob(&mut self, hash: DataBlobHash) -> Result<Vec<u8>, ExecutionError>;
 
     /// Asserts the existence of a data blob with the given hash.
-    fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError>;
+    fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -803,8 +803,8 @@ pub trait ContractRuntime: BaseRuntime {
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, ExecutionError>;
 
-    /// Creates a new data blob and returns its ID.
-    fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<BlobId, ExecutionError>;
+    /// Creates a new data blob and returns its hash.
+    fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<DataBlobHash, ExecutionError>;
 
     /// Publishes a module with contract and service bytecode and returns the module ID.
     fn publish_module(

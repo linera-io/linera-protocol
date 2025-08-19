@@ -13,11 +13,11 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     hex, http,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
+use crate::{KeyValueStore, Service, ViewStorageContext};
 
 /// The runtime available during execution of a query.
 pub struct MockServiceRuntime<Application>
