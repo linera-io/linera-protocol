@@ -1854,10 +1854,16 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
-    pub async fn local_committee(&self) -> Result<Committee, LocalNodeError> {
-        self.chain_info_with_committees()
-            .await?
-            .into_current_committee()
+    pub async fn local_committee(&self) -> Result<Committee, ChainClientError> {
+        let info = match self.chain_info_with_committees().await {
+            Ok(info) => info,
+            Err(LocalNodeError::BlobsNotFound(_)) => {
+                self.synchronize_chain_state(self.chain_id).await?;
+                self.chain_info_with_committees().await?
+            }
+            Err(err) => return Err(err.into()),
+        };
+        Ok(info.into_current_committee()?)
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
@@ -3759,14 +3765,7 @@ impl<Env: Environment> ChainClient<Env> {
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (nodes, local_node) = {
-            let committee = match self.local_committee().await {
-                Ok(committee) => committee,
-                Err(LocalNodeError::BlobsNotFound(_)) => {
-                    self.synchronize_chain_state(self.chain_id).await?;
-                    self.local_committee().await?
-                }
-                Err(err) => return Err(err.into()),
-            };
+            let committee = self.local_committee().await?;
             let nodes: HashMap<_, _> = self
                 .client
                 .validator_node_provider()
