@@ -314,6 +314,7 @@ meta-counter = { path = "./examples/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
 social = { path = "./examples/social" }
+track-instantiation-load-operation = { path = "./examples/track-instantiation-load-operation" }
 
 [workspace.dependencies.aws-config]
 default-features = false

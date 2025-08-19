@@ -4733,3 +4733,59 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
 
     Ok(())
 }
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_track_instantiation_load_operation(config: impl LineraNetConfig) -> Result<()> {
+    use track_instantiation_load_operation::{Query, Stats, TrackInstantiationLoadOperationAbi};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let (contract, service) = client.build_example("track-instantiation-load-operation").await?;
+
+    let application_id = client
+        .publish_and_create::<TrackInstantiationLoadOperationAbi, (), ()>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &(),
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+
+    // Process any pending messages
+    client.process_inbox(chain).await?;
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await?;
+
+
+    let query = Query::GetStats;
+    let stats: Value = application.run_json_query(&query).await?;
+    let stats: Stats = serde_json::from_value(stats)?;
+    tracing::info!("Stats after instantiation: {:?}", stats);
+
+    assert_eq!(stats.instantiation_count, 1);
+    assert_eq!(stats.load_count, 0);
+    assert_eq!(stats.execute_operation_count, 0);
+
+    node_service.ensure_is_running()?;
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}

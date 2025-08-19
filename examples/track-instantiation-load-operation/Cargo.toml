@@ -1,0 +1,20 @@
+[package]
+name = "track-instantiation-load-operation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+linera-sdk = { path = "../../linera-sdk" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+futures = "0.3"
+
+[[bin]]
+name = "track_instantiation_load_operation_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "track_instantiation_load_operation_service"
+path = "src/service.rs"
