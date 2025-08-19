@@ -6,7 +6,6 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     sync::{Arc, Mutex},
-    time::Instant,
 };
 
 use custom_debug_derive::Debug;
@@ -22,6 +21,7 @@ use linera_base::{
         StreamName,
     },
     ownership::ChainOwnership,
+    time::Instant,
     vm::VmRuntime,
 };
 use linera_views::batch::Batch;

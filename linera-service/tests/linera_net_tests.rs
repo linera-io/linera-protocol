@@ -12,10 +12,7 @@
 
 mod guard;
 
-use std::{
-    env,
-    time::{Duration, Instant},
-};
+use std::env;
 
 use anyhow::Result;
 use async_graphql::InputType;
@@ -29,6 +26,7 @@ use linera_base::{
     crypto::{CryptoHash, Secp256k1SecretKey},
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    time::{Duration, Instant},
     vm::VmRuntime,
 };
 use linera_core::worker::{Notification, Reason};

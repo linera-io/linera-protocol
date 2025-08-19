@@ -10,7 +10,7 @@ use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
-    time::timer::Instant,
+    time::Instant,
     vm::VmRuntime,
 };
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};

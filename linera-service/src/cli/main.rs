@@ -11,7 +11,6 @@ use std::{
     path::PathBuf,
     process,
     sync::Arc,
-    time::Instant,
 };
 
 use anyhow::{anyhow, bail, ensure, Context, Error};
@@ -25,7 +24,7 @@ use linera_base::{
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use linera_client::{
     benchmark::BenchmarkConfig,
