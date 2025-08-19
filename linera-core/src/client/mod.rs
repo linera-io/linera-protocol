@@ -3707,14 +3707,6 @@ impl<Env: Environment> ChainClient<Env> {
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
         let notifications = self.subscribe()?;
         let (abortable_notifications, abort) = stream::abortable(self.subscribe()?);
-        let sync_result = if self.is_tracked() {
-            self.synchronize_from_validators().await
-        } else {
-            self.synchronize_chain_state(self.chain_id).await
-        };
-        if let Err(error) = sync_result {
-            error!("Failed to synchronize from validators: {}", error);
-        }
 
         // Beware: if this future ceases to make progress, notification processing will
         // deadlock, because of the issue described in
@@ -3766,14 +3758,16 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
-        let (chain_id, nodes, local_node) = {
+        // Synchronize to make sure local_committee doesn't fail.
+        self.synchronize_chain_state(self.chain_id).await?;
+        let (nodes, local_node) = {
             let committee = self.local_committee().await?;
             let nodes: HashMap<_, _> = self
                 .client
                 .validator_node_provider()
                 .make_nodes(&committee)?
                 .collect();
-            (self.chain_id, nodes, self.client.local_node.clone())
+            (nodes, self.client.local_node.clone())
         };
         // Drop removed validators.
         senders.retain(|validator, abort| {
@@ -3788,9 +3782,23 @@ impl<Env: Environment> ChainClient<Env> {
             let hash_map::Entry::Vacant(entry) = senders.entry(public_key) else {
                 continue;
             };
+            let this = self.clone();
             let stream = stream::once({
                 let node = node.clone();
-                async move { node.subscribe(vec![chain_id]).await }
+                async move {
+                    let stream = node.subscribe(vec![this.chain_id]).await?;
+                    // Only now the notification stream is established. We may have missed
+                    // notifications since the last time we synchronized.
+                    let remote_node = RemoteNode { public_key, node };
+                    this.client
+                        .synchronize_chain_state_from(&remote_node, this.chain_id)
+                        .await?;
+                    if this.is_tracked() {
+                        this.find_received_certificates_from_validator(remote_node)
+                            .await?;
+                    }
+                    Ok::<_, ChainClientError>(stream)
+                }
             })
             .filter_map(move |result| async move {
                 if let Err(error) = &result {
