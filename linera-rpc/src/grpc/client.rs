@@ -406,6 +406,9 @@ impl ValidatorNode for GrpcClient {
         let mut missing_hashes = hashes;
         let mut certs_collected = Vec::with_capacity(missing_hashes.len());
         loop {
+            if missing_hashes.is_empty() {
+                break;
+            }
             // Macro doesn't compile if we pass `missing_hashes.clone()` directly to `client_delegate!`.
             let missing = missing_hashes.clone();
             let mut received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
