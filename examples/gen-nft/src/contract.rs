@@ -12,7 +12,7 @@ use gen_nft::{GenNftAbi, Message, Nft, Operation, TokenId};
 use linera_sdk::{
     linera_base_types::{AccountOwner, WithContractAbi},
     views::{RootView, View},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 };
 
 use self::state::GenNftState;
@@ -91,16 +91,12 @@ impl Contract for GenNftContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    async fn execute_message(&mut self, is_bouncing: bool, _origin: ChainId, message: Message) {
         match message {
             Message::Transfer {
                 mut nft,
                 target_account,
             } => {
-                let is_bouncing = self
-                    .runtime
-                    .message_is_bouncing()
-                    .expect("Message delivery status has to be available when executing a message");
                 if !is_bouncing {
                     nft.owner = target_account.owner;
                 }

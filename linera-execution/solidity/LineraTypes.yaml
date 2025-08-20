@@ -80,14 +80,6 @@ BlockHeight:
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
-BlockHeight:
-  NEWTYPESTRUCT: U64
-MessageIsBouncing:
-  NEWTYPESTRUCT:
-    OPTION: BOOL
-MessageIsBouncing:
-  NEWTYPESTRUCT:
-    OPTION: BOOL
 OptionU32:
   NEWTYPESTRUCT:
     OPTION: U32
@@ -136,30 +128,26 @@ ContractRuntimePrecompile:
     0:
       AuthenticatedSigner: UNIT
     1:
-      MessageOriginChainId: UNIT
-    2:
-      MessageIsBouncing: UNIT
-    3:
       AuthenticatedCallerId: UNIT
-    4:
+    2:
       SendMessage:
         STRUCT:
           - destination:
               TYPENAME: ChainId
           - message: BYTES
-    5:
+    3:
       TryCallApplication:
         STRUCT:
           - target:
               TYPENAME: ApplicationId
           - argument: BYTES
-    6:
+    4:
       Emit:
         STRUCT:
           - stream_name:
               TYPENAME: StreamName
           - value: BYTES
-    7:
+    5:
       ReadEvent:
         STRUCT:
           - chain_id:
@@ -167,7 +155,7 @@ ContractRuntimePrecompile:
           - stream_name:
               TYPENAME: StreamName
           - index: U32
-    8:
+    6:
       SubscribeToEvents:
         STRUCT:
           - chain_id:
@@ -176,7 +164,7 @@ ContractRuntimePrecompile:
               TYPENAME: ApplicationId
           - stream_name:
               TYPENAME: StreamName
-    9:
+    7:
       UnsubscribeFromEvents:
         STRUCT:
           - chain_id:
@@ -185,13 +173,13 @@ ContractRuntimePrecompile:
               TYPENAME: ApplicationId
           - stream_name:
               TYPENAME: StreamName
-    10:
+    8:
       QueryService:
         STRUCT:
           - application_id:
               TYPENAME: ApplicationId
           - query: BYTES
-    11:
+    9:
       ValidationRound: UNIT
 ServiceRuntimePrecompile:
   ENUM:

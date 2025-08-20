@@ -10,7 +10,7 @@ use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 };
 
 use self::state::EthereumTrackerState;
@@ -66,7 +66,7 @@ impl Contract for EthereumTrackerContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _origin: ChainId, _message: ()) {
         panic!("Messages not supported");
     }
 

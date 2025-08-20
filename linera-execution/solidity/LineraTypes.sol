@@ -566,24 +566,22 @@ library LineraTypes {
     struct ContractRuntimePrecompile {
         uint8 choice;
         // choice=0 corresponds to AuthenticatedSigner
-        // choice=1 corresponds to MessageOriginChainId
-        // choice=2 corresponds to MessageIsBouncing
-        // choice=3 corresponds to AuthenticatedCallerId
-        // choice=4 corresponds to SendMessage
+        // choice=1 corresponds to AuthenticatedCallerId
+        // choice=2 corresponds to SendMessage
         ContractRuntimePrecompile_SendMessage send_message;
-        // choice=5 corresponds to TryCallApplication
+        // choice=3 corresponds to TryCallApplication
         ContractRuntimePrecompile_TryCallApplication try_call_application;
-        // choice=6 corresponds to Emit
+        // choice=4 corresponds to Emit
         ContractRuntimePrecompile_Emit emit_;
-        // choice=7 corresponds to ReadEvent
+        // choice=5 corresponds to ReadEvent
         ContractRuntimePrecompile_ReadEvent read_event;
-        // choice=8 corresponds to SubscribeToEvents
+        // choice=6 corresponds to SubscribeToEvents
         ContractRuntimePrecompile_SubscribeToEvents subscribe_to_events;
-        // choice=9 corresponds to UnsubscribeFromEvents
+        // choice=7 corresponds to UnsubscribeFromEvents
         ContractRuntimePrecompile_UnsubscribeFromEvents unsubscribe_from_events;
-        // choice=10 corresponds to QueryService
+        // choice=8 corresponds to QueryService
         ContractRuntimePrecompile_QueryService query_service;
-        // choice=11 corresponds to ValidationRound
+        // choice=9 corresponds to ValidationRound
     }
 
     function ContractRuntimePrecompile_case_authenticated_signer()
@@ -601,7 +599,7 @@ library LineraTypes {
         return ContractRuntimePrecompile(uint8(0), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
-    function ContractRuntimePrecompile_case_message_origin_chain_id()
+    function ContractRuntimePrecompile_case_authenticated_caller_id()
         internal
         pure
         returns (ContractRuntimePrecompile memory)
@@ -616,36 +614,6 @@ library LineraTypes {
         return ContractRuntimePrecompile(uint8(1), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
-    function ContractRuntimePrecompile_case_message_is_bouncing()
-        internal
-        pure
-        returns (ContractRuntimePrecompile memory)
-    {
-        ContractRuntimePrecompile_SendMessage memory send_message;
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
-        ContractRuntimePrecompile_Emit memory emit_;
-        ContractRuntimePrecompile_ReadEvent memory read_event;
-        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
-        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(2), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
-    }
-
-    function ContractRuntimePrecompile_case_authenticated_caller_id()
-        internal
-        pure
-        returns (ContractRuntimePrecompile memory)
-    {
-        ContractRuntimePrecompile_SendMessage memory send_message;
-        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
-        ContractRuntimePrecompile_Emit memory emit_;
-        ContractRuntimePrecompile_ReadEvent memory read_event;
-        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
-        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(3), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
-    }
-
     function ContractRuntimePrecompile_case_send_message(ContractRuntimePrecompile_SendMessage memory send_message)
         internal
         pure
@@ -657,7 +625,7 @@ library LineraTypes {
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
         ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(4), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+        return ContractRuntimePrecompile(uint8(2), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_try_call_application(ContractRuntimePrecompile_TryCallApplication memory try_call_application)
@@ -671,7 +639,7 @@ library LineraTypes {
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
         ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(5), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+        return ContractRuntimePrecompile(uint8(3), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_emit(ContractRuntimePrecompile_Emit memory emit_)
@@ -685,7 +653,7 @@ library LineraTypes {
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
         ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(6), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+        return ContractRuntimePrecompile(uint8(4), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_read_event(ContractRuntimePrecompile_ReadEvent memory read_event)
@@ -699,7 +667,7 @@ library LineraTypes {
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
         ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(7), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+        return ContractRuntimePrecompile(uint8(5), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_subscribe_to_events(ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events)
@@ -713,7 +681,7 @@ library LineraTypes {
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
         ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(8), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+        return ContractRuntimePrecompile(uint8(6), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_unsubscribe_from_events(ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events)
@@ -727,7 +695,7 @@ library LineraTypes {
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(9), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+        return ContractRuntimePrecompile(uint8(7), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_query_service(ContractRuntimePrecompile_QueryService memory query_service)
@@ -741,7 +709,7 @@ library LineraTypes {
         ContractRuntimePrecompile_ReadEvent memory read_event;
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        return ContractRuntimePrecompile(uint8(10), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+        return ContractRuntimePrecompile(uint8(8), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function ContractRuntimePrecompile_case_validation_round()
@@ -756,7 +724,7 @@ library LineraTypes {
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
         ContractRuntimePrecompile_QueryService memory query_service;
-        return ContractRuntimePrecompile(uint8(11), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
+        return ContractRuntimePrecompile(uint8(9), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service);
     }
 
     function bcs_serialize_ContractRuntimePrecompile(ContractRuntimePrecompile memory input)
@@ -764,25 +732,25 @@ library LineraTypes {
         pure
         returns (bytes memory)
     {
-        if (input.choice == 4) {
+        if (input.choice == 2) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_SendMessage(input.send_message));
         }
-        if (input.choice == 5) {
+        if (input.choice == 3) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_TryCallApplication(input.try_call_application));
         }
-        if (input.choice == 6) {
+        if (input.choice == 4) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_Emit(input.emit_));
         }
-        if (input.choice == 7) {
+        if (input.choice == 5) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_ReadEvent(input.read_event));
         }
-        if (input.choice == 8) {
+        if (input.choice == 6) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_SubscribeToEvents(input.subscribe_to_events));
         }
-        if (input.choice == 9) {
+        if (input.choice == 7) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_UnsubscribeFromEvents(input.unsubscribe_from_events));
         }
-        if (input.choice == 10) {
+        if (input.choice == 8) {
             return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_QueryService(input.query_service));
         }
         return abi.encodePacked(input.choice);
@@ -797,34 +765,34 @@ library LineraTypes {
         uint8 choice;
         (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
         ContractRuntimePrecompile_SendMessage memory send_message;
-        if (choice == 4) {
+        if (choice == 2) {
             (new_pos, send_message) = bcs_deserialize_offset_ContractRuntimePrecompile_SendMessage(new_pos, input);
         }
         ContractRuntimePrecompile_TryCallApplication memory try_call_application;
-        if (choice == 5) {
+        if (choice == 3) {
             (new_pos, try_call_application) = bcs_deserialize_offset_ContractRuntimePrecompile_TryCallApplication(new_pos, input);
         }
         ContractRuntimePrecompile_Emit memory emit_;
-        if (choice == 6) {
+        if (choice == 4) {
             (new_pos, emit_) = bcs_deserialize_offset_ContractRuntimePrecompile_Emit(new_pos, input);
         }
         ContractRuntimePrecompile_ReadEvent memory read_event;
-        if (choice == 7) {
+        if (choice == 5) {
             (new_pos, read_event) = bcs_deserialize_offset_ContractRuntimePrecompile_ReadEvent(new_pos, input);
         }
         ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
-        if (choice == 8) {
+        if (choice == 6) {
             (new_pos, subscribe_to_events) = bcs_deserialize_offset_ContractRuntimePrecompile_SubscribeToEvents(new_pos, input);
         }
         ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
-        if (choice == 9) {
+        if (choice == 7) {
             (new_pos, unsubscribe_from_events) = bcs_deserialize_offset_ContractRuntimePrecompile_UnsubscribeFromEvents(new_pos, input);
         }
         ContractRuntimePrecompile_QueryService memory query_service;
-        if (choice == 10) {
+        if (choice == 8) {
             (new_pos, query_service) = bcs_deserialize_offset_ContractRuntimePrecompile_QueryService(new_pos, input);
         }
-        require(choice < 12);
+        require(choice < 10);
         return (new_pos, ContractRuntimePrecompile(choice, send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service));
     }
 
@@ -1223,41 +1191,6 @@ library LineraTypes {
         return value;
     }
 
-    struct MessageIsBouncing {
-        OptionBool value;
-    }
-
-    function bcs_serialize_MessageIsBouncing(MessageIsBouncing memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return bcs_serialize_OptionBool(input.value);
-    }
-
-    function bcs_deserialize_offset_MessageIsBouncing(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, MessageIsBouncing memory)
-    {
-        uint256 new_pos;
-        OptionBool value;
-        (new_pos, value) = bcs_deserialize_offset_OptionBool(pos, input);
-        return (new_pos, MessageIsBouncing(value));
-    }
-
-    function bcs_deserialize_MessageIsBouncing(bytes memory input)
-        internal
-        pure
-        returns (MessageIsBouncing memory)
-    {
-        uint256 new_pos;
-        MessageIsBouncing memory value;
-        (new_pos, value) = bcs_deserialize_offset_MessageIsBouncing(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct OptionAccountOwner {
         opt_AccountOwner value;
     }
@@ -1324,54 +1257,6 @@ library LineraTypes {
         uint256 new_pos;
         OptionApplicationId memory value;
         (new_pos, value) = bcs_deserialize_offset_OptionApplicationId(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    enum OptionBool { None, True, False }
-
-    function bcs_serialize_OptionBool(OptionBool input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        if (input == OptionBool.None) {
-            return abi.encodePacked(uint8(0));
-        }
-        if (input == OptionBool.False) {
-            return abi.encodePacked(uint8(1), uint8(0));
-        }
-        return abi.encodePacked(uint8(1), uint8(1));
-    }
-
-    function bcs_deserialize_offset_OptionBool(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OptionBool)
-    {
-        uint8 choice = uint8(input[pos]);
-        if (choice == 0) {
-           return (pos + 1, OptionBool.None);
-        } else {
-            require(choice == 1);
-            uint8 value = uint8(input[pos + 1]);
-            if (value == 0) {
-                return (pos + 2, OptionBool.False);
-            } else {
-                require(value == 1);
-                return (pos + 2, OptionBool.True);
-            }
-        }
-    }
-
-    function bcs_deserialize_OptionBool(bytes memory input)
-        internal
-        pure
-        returns (OptionBool)
-    {
-        uint256 new_pos;
-        OptionBool value;
-        (new_pos, value) = bcs_deserialize_offset_OptionBool(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

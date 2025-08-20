@@ -50,6 +50,7 @@ pub use linera_base::{
     abi,
     data_types::{Resources, SendMessageRequest},
     ensure, http,
+    identifiers::ChainId,
 };
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
@@ -131,7 +132,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     ///
     /// For a message to be executed, a user must mark it to be received in a block of the receiver
     /// chain.
-    async fn execute_message(&mut self, message: Self::Message);
+    async fn execute_message(&mut self, is_bouncing: bool, origin: ChainId, message: Self::Message);
 
     /// Reacts to new events on streams.
     ///

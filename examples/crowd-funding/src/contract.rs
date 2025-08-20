@@ -11,7 +11,7 @@ use linera_sdk::{
     abis::fungible::FungibleOperation,
     linera_base_types::{AccountOwner, Amount, ApplicationId, WithContractAbi},
     views::{RootView, View},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 };
 use state::{CrowdFundingState, Status};
 
@@ -66,7 +66,7 @@ impl Contract for CrowdFundingContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _origin: ChainId, message: Message) {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 assert_eq!(

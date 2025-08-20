@@ -6,7 +6,7 @@ import "./Linera.sol";
 
 contract ExampleExecuteMessage {
     uint64 value;
-    Linera.opt_ChainId last_message_origin_chain_id;
+    bytes32 last_message_origin_chain_id;
 
     constructor(uint64 test_value) {
        require(test_value == 42);
@@ -17,10 +17,10 @@ contract ExampleExecuteMessage {
         value = read_value;
     }
 
-    function execute_message(bytes memory input) external {
+    function execute_message(bool is_bouncing, bytes32 origin, bytes memory input) external {
         uint64 increment = abi.decode(input, (uint64));
         value = value + increment;
-        last_message_origin_chain_id = Linera.message_origin_chain_id();
+        last_message_origin_chain_id = origin;
     }
 
     function move_value_to_chain(bytes32 chain_id, uint64 moved_value) external {

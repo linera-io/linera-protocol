@@ -12,7 +12,7 @@ use fungible::{
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
     views::{RootView, View},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 };
 
 use self::state::FungibleTokenState;
@@ -124,17 +124,13 @@ impl Contract for FungibleTokenContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    async fn execute_message(&mut self, is_bouncing: bool, _chain_id: ChainId, message: Message) {
         match message {
             Message::Credit {
                 amount,
                 target,
                 source,
             } => {
-                let is_bouncing = self
-                    .runtime
-                    .message_is_bouncing()
-                    .expect("Message delivery status has to be available when executing a message");
                 let receiver = if is_bouncing { source } else { target };
                 self.state.credit(receiver, amount).await;
             }

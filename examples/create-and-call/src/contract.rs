@@ -10,7 +10,7 @@ use create_and_call::{CreateAndCallAbi, CreateAndCallOperation};
 use linera_sdk::{
     linera_base_types::{Bytecode, VmRuntime, WithContractAbi},
     views::{RootView, View},
-    Contract, ContractRuntime,
+    ChainId, Contract, ContractRuntime,
 };
 
 use self::state::CreateAndCallState;
@@ -84,7 +84,7 @@ impl Contract for CreateAndCallContract {
             .call_application(true, application_id, &counter_operation)
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    async fn execute_message(&mut self, _is_bouncing: bool, _origin: ChainId, _message: ()) {
         panic!("Create and call application doesn't support any cross-chain messages");
     }
 
