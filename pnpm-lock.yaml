@@ -9,11 +9,17 @@ importers:
   examples/counter:
     dependencies:
       '@linera/client':
-        specifier: workspace:linera-web
+        specifier: workspace:*
         version: link:../../linera-web
+      '@linera/signer':
+        specifier: workspace:*
+        version: link:../../linera-web/signer
+      ethers:
+        specifier: ^6.14.3
+        version: 6.15.0
     devDependencies:
       vite:
-        specifier: ^5.4.10
+        specifier: ^5.4.11
         version: 5.4.19(@types/node@24.3.0)
 
   linera-web:
