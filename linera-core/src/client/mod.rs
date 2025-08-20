@@ -3582,7 +3582,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                self.find_received_certificates_from_validator(remote_node, origin, height)
+                self.find_received_certificates_from_validator(remote_node)
                     .await?;
                 if self.local_next_height_to_receive(origin).await? <= height {
                     warn!(
@@ -3814,8 +3814,6 @@ impl<Env: Environment> ChainClient<Env> {
     async fn find_received_certificates_from_validator(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
-        origin: ChainId,
-        height: BlockHeight,
     ) -> Result<(), ChainClientError> {
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.
