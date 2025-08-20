@@ -147,11 +147,11 @@ impl TransactionTracker {
         });
     }
 
-    pub fn get_blob_content(&self, blob_id: &BlobId) -> Option<BlobContent> {
+    pub fn get_blob_content(&self, blob_id: &BlobId) -> Option<&BlobContent> {
         if let Some(content) = self.blobs.get(blob_id) {
-            return Some(content.clone());
+            return Some(content);
         }
-        self.previously_created_blobs.get(blob_id).cloned()
+        self.previously_created_blobs.get(blob_id)
     }
 
     pub fn add_created_blob(&mut self, blob: Blob) {

@@ -266,7 +266,7 @@ pub trait Storage: Sized {
     ) -> Result<UserContractCode, ExecutionError> {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&contract_bytecode_blob_id) {
-            Some(content) => content,
+            Some(content) => content.clone(),
             None => self
                 .read_blob(contract_bytecode_blob_id)
                 .await?
@@ -276,7 +276,7 @@ pub trait Storage: Sized {
                 .into_content(),
         };
         let compressed_contract_bytecode = CompressedBytecode {
-            compressed_bytes: content.into_bytes().to_vec(),
+            compressed_bytes: content.into_bytes().into_vec(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
         let contract_bytecode =
@@ -333,7 +333,7 @@ pub trait Storage: Sized {
     ) -> Result<UserServiceCode, ExecutionError> {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&service_bytecode_blob_id) {
-            Some(content) => content,
+            Some(content) => content.clone(),
             None => self
                 .read_blob(service_bytecode_blob_id)
                 .await?
@@ -343,7 +343,7 @@ pub trait Storage: Sized {
                 .into_content(),
         };
         let compressed_service_bytecode = CompressedBytecode {
-            compressed_bytes: content.into_bytes().to_vec(),
+            compressed_bytes: content.into_bytes().into_vec(),
         };
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
         let service_bytecode = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(

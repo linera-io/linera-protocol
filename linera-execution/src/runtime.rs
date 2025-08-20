@@ -941,7 +941,7 @@ where
         let mut this = self.inner();
         let blob_id = hash.into();
         if let Some(content) = this.transaction_tracker.get_blob_content(&blob_id) {
-            return Ok(content.into_bytes().into_vec());
+            return Ok(content.bytes().to_vec());
         };
         let (content, is_new) = this
             .execution_state_sender
