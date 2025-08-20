@@ -6,7 +6,7 @@ use std::{collections::HashSet, time::Duration};
 use custom_debug_derive::Debug;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId},
@@ -237,55 +237,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 None
             }
         }
-    }
-
-    /// Returns the list of certificate hashes on the given chain in the given range of heights.
-    /// Returns an error if the number of hashes does not match the size of the range.
-    #[instrument(level = "trace")]
-    pub(crate) async fn fetch_sent_certificate_hashes(
-        &self,
-        chain_id: ChainId,
-        range: BlockHeightRange,
-    ) -> Result<Vec<CryptoHash>, NodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
-        let response = self.handle_chain_info_query(query).await?;
-        let hashes = response.requested_sent_certificate_hashes;
-
-        if range
-            .limit
-            .is_some_and(|limit| hashes.len() as u64 != limit)
-        {
-            warn!(
-                ?range,
-                received_num = hashes.len(),
-                "Validator sent invalid number of certificate hashes."
-            );
-            return Err(NodeError::InvalidChainInfoResponse);
-        }
-        Ok(hashes)
-    }
-
-    #[instrument(level = "trace")]
-    pub async fn download_certificates(
-        &self,
-        hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        if hashes.is_empty() {
-            return Ok(Vec::new());
-        }
-        let certificates = self.node.download_certificates(hashes.clone()).await?;
-        let returned = certificates
-            .iter()
-            .map(ConfirmedBlockCertificate::hash)
-            .collect();
-        ensure!(
-            returned == hashes,
-            NodeError::UnexpectedCertificates {
-                returned,
-                requested: hashes
-            }
-        );
-        Ok(certificates)
     }
 
     /// Downloads a range of certificates from the given chain.
