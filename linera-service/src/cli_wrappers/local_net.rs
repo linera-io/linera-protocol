@@ -299,8 +299,7 @@ impl Validator {
 
 #[cfg(with_testing)]
 impl LocalNetConfig {
-    pub fn new_test(database: Database, network: Network) -> Self {
-        let num_shards = 4;
+    fn get_test(database: Database, network: Network, num_shards: usize, num_initial_validators: usize) -> Self {
         let num_proxies = 1;
         let storage_config_builder = InnerStorageConfigBuilder::TestConfig;
         let path_provider = PathProvider::create_temporary_directory().unwrap();
@@ -317,13 +316,21 @@ impl LocalNetConfig {
             cross_chain_config,
             testing_prng_seed: Some(37),
             namespace: linera_views::random::generate_test_namespace(),
-            num_initial_validators: 4,
+            num_initial_validators,
             num_shards,
             num_proxies,
             storage_config_builder,
             path_provider,
             block_exporters: ExportersSetup::Local(vec![]),
         }
+    }
+
+    pub fn new_test(database: Database, network: Network) -> Self {
+        get_test(database, network, 4, 4)
+    }
+
+    pub fn unit_test(database: Database, network: Network) -> Self {
+        get_test(database, network, 1, 1)
     }
 }
 
