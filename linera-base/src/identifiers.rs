@@ -308,6 +308,18 @@ impl<'a> Deserialize<'a> for BlobId {
     }
 }
 
+/// Hash of a data blob.
+#[derive(
+    Eq, Hash, PartialEq, Debug, Serialize, Deserialize, Clone, Copy, WitType, WitLoad, WitStore,
+)]
+pub struct DataBlobHash(pub CryptoHash);
+
+impl From<DataBlobHash> for BlobId {
+    fn from(hash: DataBlobHash) -> BlobId {
+        BlobId::new(hash.0, BlobType::Data)
+    }
+}
+
 /// A unique identifier for a user application from a blob.
 #[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
@@ -1079,6 +1091,7 @@ impl From<ChainDescription> for ChainId {
 }
 
 bcs_scalar!(ApplicationId, "A unique identifier for a user application");
+doc_scalar!(DataBlobHash, "Hash of a Data Blob");
 doc_scalar!(
     GenericApplicationId,
     "A unique identifier for a user application or for the system application"

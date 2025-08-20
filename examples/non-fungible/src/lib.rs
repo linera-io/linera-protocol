@@ -9,8 +9,10 @@ use async_graphql::{InputObject, Request, Response, SimpleObject};
 use fungible::Account;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, ApplicationId, ChainId, ContractAbi, ServiceAbi},
-    DataBlobHash, ToBcsBytes,
+    linera_base_types::{
+        AccountOwner, ApplicationId, ChainId, ContractAbi, DataBlobHash, ServiceAbi,
+    },
+    ToBcsBytes,
 };
 use serde::{Deserialize, Serialize};
 

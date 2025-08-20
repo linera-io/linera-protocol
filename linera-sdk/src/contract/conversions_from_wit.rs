@@ -7,7 +7,8 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, StreamUpdate},
     identifiers::{
-        AccountOwner, ApplicationId, ChainId, GenericApplicationId, ModuleId, StreamId, StreamName,
+        AccountOwner, ApplicationId, ChainId, DataBlobHash, GenericApplicationId, ModuleId,
+        StreamId, StreamName,
     },
     ownership::{ChangeApplicationPermissionsError, CloseChainError},
     vm::VmRuntime,
@@ -26,6 +27,12 @@ impl From<wit_contract_api::CryptoHash> for CryptoHash {
             crypto_hash.part3,
             crypto_hash.part4,
         ])
+    }
+}
+
+impl From<wit_contract_api::DataBlobHash> for DataBlobHash {
+    fn from(hash_value: wit_contract_api::DataBlobHash) -> Self {
+        DataBlobHash(hash_value.inner0.into())
     }
 }
 

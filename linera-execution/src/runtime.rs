@@ -10,15 +10,13 @@ use std::{
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Bytecode,
         OracleResponse, SendMessageRequest, Timestamp,
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
-        StreamName,
+        Account, AccountOwner, ChainId, EventId, GenericApplicationId, StreamId, StreamName,
     },
     ownership::ChainOwnership,
     time::Instant,
@@ -33,10 +31,11 @@ use crate::{
     resources::ResourceController,
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
-    ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, ExecutionError,
-    FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation, OutgoingMessage,
-    QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker, UserContractCode,
-    UserContractInstance, UserServiceCode, UserServiceInstance, MAX_STREAM_NAME_LEN,
+    ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, DataBlobHash,
+    ExecutionError, FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation,
+    OutgoingMessage, QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker,
+    UserContractCode, UserContractInstance, UserServiceCode, UserServiceInstance,
+    MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -938,9 +937,9 @@ where
         Ok(())
     }
 
-    fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
+    fn read_data_blob(&mut self, hash: DataBlobHash) -> Result<Vec<u8>, ExecutionError> {
         let mut this = self.inner();
-        let blob_id = BlobId::new(*hash, BlobType::Data);
+        let blob_id = hash.into();
         let (blob_content, is_new) = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
@@ -952,9 +951,9 @@ where
         Ok(blob_content.into_bytes().into_vec())
     }
 
-    fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
+    fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let blob_id = BlobId::new(*hash, BlobType::Data);
+        let blob_id = hash.into();
         let is_new = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
@@ -1602,11 +1601,11 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(app_id)
     }
 
-    fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<BlobId, ExecutionError> {
+    fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<DataBlobHash, ExecutionError> {
         let blob = Blob::new_data(bytes);
         let blob_id = blob.id();
         self.inner().transaction_tracker.add_created_blob(blob);
-        Ok(blob_id)
+        Ok(DataBlobHash(blob_id.hash))
     }
 
     fn publish_module(

@@ -37,9 +37,9 @@ use crate::{
         data_types::AmountU256,
         database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
     },
-    BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime,
-    ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
-    UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, DataBlobHash, EvmExecutionError,
+    EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
+    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -495,9 +495,9 @@ enum BaseRuntimePrecompile {
     /// Calling `chain_ownership` of `BaseRuntime`
     ChainOwnership,
     /// Calling `read_data_blob` of `BaseRuntime`
-    ReadDataBlob(CryptoHash),
+    ReadDataBlob(DataBlobHash),
     /// Calling `assert_data_blob_exists` of `BaseRuntime`
-    AssertDataBlobExists(CryptoHash),
+    AssertDataBlobExists(DataBlobHash),
 }
 
 /// Some functionalities from the ContractRuntime not in BaseRuntime
@@ -648,9 +648,9 @@ fn base_runtime_call<Runtime: BaseRuntime>(
             let chain_ownership = runtime.chain_ownership()?;
             Ok(bcs::to_bytes(&chain_ownership)?)
         }
-        BaseRuntimePrecompile::ReadDataBlob(hash) => runtime.read_data_blob(&hash),
+        BaseRuntimePrecompile::ReadDataBlob(hash) => runtime.read_data_blob(hash),
         BaseRuntimePrecompile::AssertDataBlobExists(hash) => {
-            runtime.assert_data_blob_exists(&hash)?;
+            runtime.assert_data_blob_exists(hash)?;
             Ok(Vec::new())
         }
     }

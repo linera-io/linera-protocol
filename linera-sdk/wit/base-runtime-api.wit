@@ -14,8 +14,8 @@ interface base-runtime-api {
     read-balance-owners: func() -> list<account-owner>;
     perform-http-request: func(request: http-request) -> http-response;
     assert-before: func(timestamp: timestamp);
-    read-data-blob: func(hash: crypto-hash) -> list<u8>;
-    assert-data-blob-exists: func(hash: crypto-hash);
+    read-data-blob: func(hash: data-blob-hash) -> list<u8>;
+    assert-data-blob-exists: func(hash: data-blob-hash);
     log: func(message: string, level: log-level);
     contains-key-new: func(key: list<u8>) -> u32;
     contains-key-wait: func(promise-id: u32) -> bool;
@@ -71,6 +71,10 @@ interface base-runtime-api {
         part2: u64,
         part3: u64,
         part4: u64,
+    }
+
+    record data-blob-hash {
+        inner0: crypto-hash,
     }
 
     record http-header {

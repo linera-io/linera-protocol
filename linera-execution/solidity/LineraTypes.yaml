@@ -75,6 +75,9 @@ CryptoHash:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+DataBlobHash:
+  NEWTYPESTRUCT:
+    TYPENAME: CryptoHash
 BlockHeight:
   NEWTYPESTRUCT: U64
 ChainId:
@@ -126,11 +129,11 @@ BaseRuntimePrecompile:
     9:
       ReadDataBlob:
         NEWTYPE:
-          TYPENAME: CryptoHash
+          TYPENAME: DataBlobHash
     10:
       AssertDataBlobExists:
         NEWTYPE:
-          TYPENAME: CryptoHash
+          TYPENAME: DataBlobHash
 ContractRuntimePrecompile:
   ENUM:
     0:

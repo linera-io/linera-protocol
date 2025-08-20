@@ -7,7 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
@@ -26,6 +26,12 @@ macro_rules! impl_from_wit {
                     hash_value.part3,
                     hash_value.part4,
                 ])
+            }
+        }
+
+        impl From<$wit_base_api::DataBlobHash> for DataBlobHash {
+            fn from(hash_value: $wit_base_api::DataBlobHash) -> Self {
+                DataBlobHash(hash_value.inner0.into())
             }
         }
 

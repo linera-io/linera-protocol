@@ -53,11 +53,9 @@ pub use linera_base::{
 };
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
-    crypto::CryptoHash,
     data_types::StreamUpdate,
-    doc_scalar,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json;
 
 #[doc(hidden)]
@@ -69,12 +67,6 @@ pub use self::{
     service::ServiceRuntime,
     views::{KeyValueStore, ViewStorageContext},
 };
-
-/// Hash of a data blob.
-#[derive(Eq, Hash, PartialEq, Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct DataBlobHash(pub CryptoHash);
-
-doc_scalar!(DataBlobHash, "Hash of a Data Blob");
 
 /// The contract interface of a Linera application.
 ///

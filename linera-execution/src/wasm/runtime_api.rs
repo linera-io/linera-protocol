@@ -4,12 +4,11 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
-    crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Bytecode, SendMessageRequest, Timestamp,
     },
     http,
-    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamName},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamName},
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
     vm::VmRuntime,
 };
@@ -18,7 +17,7 @@ use linera_witty::{wit_export, Instance, RuntimeError};
 use tracing::log;
 
 use super::WasmExecutionError;
-use crate::{BaseRuntime, ContractRuntime, ExecutionError, ModuleId, ServiceRuntime};
+use crate::{BaseRuntime, ContractRuntime, DataBlobHash, ExecutionError, ModuleId, ServiceRuntime};
 
 /// Common host data used as the `UserData` of the system API implementations.
 pub struct RuntimeApiData<Runtime> {
@@ -212,20 +211,23 @@ where
     }
 
     /// Reads a data blob from storage.
-    fn read_data_blob(caller: &mut Caller, hash: CryptoHash) -> Result<Vec<u8>, RuntimeError> {
+    fn read_data_blob(caller: &mut Caller, hash: DataBlobHash) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_data_blob(&hash)
+            .read_data_blob(hash)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
     /// Asserts the existence of a data blob with the given hash.
-    fn assert_data_blob_exists(caller: &mut Caller, hash: CryptoHash) -> Result<(), RuntimeError> {
+    fn assert_data_blob_exists(
+        caller: &mut Caller,
+        hash: DataBlobHash,
+    ) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .assert_data_blob_exists(&hash)
+            .assert_data_blob_exists(hash)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -533,8 +535,8 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Creates a new data blob and returns its ID.
-    fn create_data_blob(caller: &mut Caller, bytes: Vec<u8>) -> Result<BlobId, RuntimeError> {
+    /// Creates a new data blob and returns its hash.
+    fn create_data_blob(caller: &mut Caller, bytes: Vec<u8>) -> Result<DataBlobHash, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
