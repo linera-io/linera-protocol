@@ -60,6 +60,5 @@ impl Contract for PublishReadDataBlobContract {
         panic!("Publish-Read Data Blob application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {
-    }
+    async fn store(self) {}
 }
