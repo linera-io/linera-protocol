@@ -36,6 +36,7 @@
       </div>
 
       <div class="logs">
+        <h2>Connected as <code id="owner" class="hex">requesting owner…</code> </h2>
         <h2>Chain history for <code id="chain-id" class="hex">requesting chain…</code></h2>
         <ul id="logs">
           <template>
@@ -50,23 +51,28 @@
     <script type="importmap">
       {
           "imports": {
-              "@linera/client": "./js/@linera/client/linera_web.js"
+              "@linera/client": "./js/@linera/client/linera_web.js",
+              "@linera/signer": "./js/@linera/signer/index.js"
           }
       }
     </script>
 
     <script type="module">
       import * as linera from '@linera/client';
+      import { PrivateKey } from '@linera/signer';
+      import { ethers } from 'ethers';
 
-      const COUNTER_APP_ID = '2b1a0df8868206a4b7d6c2fdda911e4355d6c0115b896d4947ef8e535ee3c6b8';
-
-      async function run() {
+     async function run() {
           await linera.default();
-          const faucet = await new linera.Faucet('https://faucet.testnet-babbage.linera.net');
+          const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
+          const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
+          const signer = PrivateKey.fromMnemonic(mnemonic);
           const wallet = await faucet.createWallet();
-          const client = await new linera.Client(wallet);
-          document.getElementById('chain-id').innerText = await faucet.claimChain(client);
-          const counter = await client.frontend().application(COUNTER_APP_ID);
+          const owner = await signer.address();
+          document.getElementById('owner').innerText = owner;
+          document.getElementById('chain-id').innerText = await faucet.claimChain(wallet, owner);
+          const client = await new linera.Client(wallet, signer);
+          const counter = await client.frontend().application(import.meta.env.LINERA_APPLICATION_ID);
           const logs = document.getElementById('logs');
           const incrementButton = document.getElementById('increment-btn');
           const blockTemplate = document.getElementById('block-template');
@@ -77,7 +83,6 @@
               entry.querySelector('.hash').textContent = block.hash;
               logs.insertBefore(entry, logs.firstChild);
           }
-
 
           async function updateCount() {
               const response = await counter.query('{ "query": "query { value }" }');
