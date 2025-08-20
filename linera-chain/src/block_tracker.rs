@@ -142,7 +142,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     height: self.block_height,
                     round,
                     authenticated_signer: self.authenticated_signer,
-                    authenticated_caller_id: None,
                     timestamp: self.timestamp,
                 };
                 Box::pin(chain.execute_operation(

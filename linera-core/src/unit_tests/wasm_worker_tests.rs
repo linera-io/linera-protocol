@@ -262,7 +262,6 @@ where
     let operation_context = OperationContext {
         chain_id: creator_chain.id(),
         authenticated_signer: None,
-        authenticated_caller_id: None,
         height: run_block.height,
         round: Some(0),
         timestamp: Timestamp::from(3),

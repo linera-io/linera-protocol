@@ -49,7 +49,6 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         height: BlockHeight(0),
         round: Some(0),
         authenticated_signer: Some(owner),
-        authenticated_caller_id: None,
         timestamp: Default::default(),
     };
     let mut controller = ResourceController::default();
