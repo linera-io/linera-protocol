@@ -8,7 +8,7 @@ use std::{
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Blob, Event, OracleResponse, StreamUpdate, Timestamp},
+    data_types::{Blob, BlobContent, Event, OracleResponse, StreamUpdate, Timestamp},
     ensure,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
 };
@@ -44,7 +44,9 @@ pub struct TransactionTracker {
     /// - [`EvmBytecode`]
     /// - [`ApplicationDescription`]
     /// - [`ChainDescription`]
-    blobs: BTreeMap<BlobId, Blob>,
+    blobs: BTreeMap<BlobId, BlobContent>,
+    /// The blobs created in the previous transactions.
+    previously_created_blobs: BTreeMap<BlobId, BlobContent>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
     /// Streams that have been updated but not yet processed during this transaction.
@@ -79,18 +81,26 @@ impl TransactionTracker {
         next_application_index: u32,
         next_chain_index: u32,
         oracle_responses: Option<Vec<OracleResponse>>,
+        blobs: &[Vec<Blob>],
     ) -> Self {
+        let mut previously_created_blobs = BTreeMap::new();
+        for tx_blobs in blobs {
+            for blob in tx_blobs {
+                previously_created_blobs.insert(blob.id(), blob.content().clone());
+            }
+        }
         TransactionTracker {
             local_time,
             transaction_index,
             next_application_index,
             next_chain_index,
             replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
+            previously_created_blobs,
             ..Self::default()
         }
     }
 
-    pub fn with_blobs(mut self, blobs: BTreeMap<BlobId, Blob>) -> Self {
+    pub fn with_blobs(mut self, blobs: BTreeMap<BlobId, BlobContent>) -> Self {
         self.blobs = blobs;
         self
     }
@@ -137,15 +147,22 @@ impl TransactionTracker {
         });
     }
 
+    pub fn get_blob_content(&self, blob_id: &BlobId) -> Option<&BlobContent> {
+        if let Some(content) = self.blobs.get(blob_id) {
+            return Some(content);
+        }
+        self.previously_created_blobs.get(blob_id)
+    }
+
     pub fn add_created_blob(&mut self, blob: Blob) {
-        self.blobs.insert(blob.id(), blob);
+        self.blobs.insert(blob.id(), blob.into_content());
     }
 
     pub fn add_published_blob(&mut self, blob_id: BlobId) {
         self.blobs_published.insert(blob_id);
     }
 
-    pub fn created_blobs(&self) -> &BTreeMap<BlobId, Blob> {
+    pub fn created_blobs(&self) -> &BTreeMap<BlobId, BlobContent> {
         &self.blobs
     }
 
@@ -262,6 +279,7 @@ impl TransactionTracker {
             next_chain_index,
             events,
             blobs,
+            previously_created_blobs: _,
             operation_result,
             streams_to_process,
             blobs_published,
@@ -276,13 +294,17 @@ impl TransactionTracker {
                 ExecutionError::UnexpectedOracleResponse
             );
         }
+        let blobs = blobs
+            .into_iter()
+            .map(|(blob_id, content)| Blob::new_with_hash_unchecked(blob_id, content))
+            .collect::<Vec<_>>();
         Ok(TransactionOutcome {
             outgoing_messages,
             oracle_responses,
             next_application_index,
             next_chain_index,
             events,
-            blobs: blobs.into_values().collect(),
+            blobs,
             operation_result: operation_result.unwrap_or_default(),
             blobs_published,
         })
@@ -294,7 +316,7 @@ impl TransactionTracker {
     /// Creates a new [`TransactionTracker`] for testing, with default values and the given
     /// oracle responses.
     pub fn new_replaying(oracle_responses: Vec<OracleResponse>) -> Self {
-        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses))
+        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses), &[])
     }
 
     /// Creates a new [`TransactionTracker`] for testing, with default values and oracle responses

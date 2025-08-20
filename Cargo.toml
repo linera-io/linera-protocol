@@ -313,6 +313,7 @@ matching-engine = { path = "./examples/matching-engine" }
 meta-counter = { path = "./examples/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
+publish-read-data-blob = { path = "./examples/publish-read-data-blob" }
 social = { path = "./examples/social" }
 
 [workspace.dependencies.aws-config]

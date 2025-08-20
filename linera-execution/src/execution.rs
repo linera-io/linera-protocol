@@ -131,6 +131,7 @@ where
             next_application_index,
             next_chain_index,
             None,
+            &[],
         );
         txn_tracker.add_created_blob(blob);
         self.run_user_action(

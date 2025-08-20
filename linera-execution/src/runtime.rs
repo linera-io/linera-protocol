@@ -940,7 +940,10 @@ where
     fn read_data_blob(&mut self, hash: DataBlobHash) -> Result<Vec<u8>, ExecutionError> {
         let mut this = self.inner();
         let blob_id = hash.into();
-        let (blob_content, is_new) = this
+        if let Some(content) = this.transaction_tracker.get_blob_content(&blob_id) {
+            return Ok(content.bytes().to_vec());
+        };
+        let (content, is_new) = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
             .recv_response()?;
@@ -948,7 +951,7 @@ where
             this.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
-        Ok(blob_content.into_bytes().into_vec())
+        Ok(content.into_bytes().into_vec())
     }
 
     fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError> {

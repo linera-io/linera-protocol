@@ -5014,6 +5014,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "publish-read-data-blob"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "pulp"
 version = "0.18.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"

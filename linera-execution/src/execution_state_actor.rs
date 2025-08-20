@@ -70,14 +70,14 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
-        let description = match txn_tracker.created_blobs().get(&blob_id) {
+        let description = match txn_tracker.get_blob_content(&blob_id) {
             Some(blob) => bcs::from_bytes(blob.bytes())?,
             None => self.system.describe_application(id, txn_tracker).await?,
         };
         let code = self
             .context()
             .extra()
-            .get_user_contract(&description, txn_tracker.created_blobs())
+            .get_user_contract(&description, txn_tracker)
             .await?;
         Ok((code, description))
     }
@@ -90,14 +90,14 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::LOAD_SERVICE_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
-        let description = match txn_tracker.created_blobs().get(&blob_id) {
+        let description = match txn_tracker.get_blob_content(&blob_id) {
             Some(blob) => bcs::from_bytes(blob.bytes())?,
             None => self.system.describe_application(id, txn_tracker).await?,
         };
         let code = self
             .context()
             .extra()
-            .get_user_service(&description, txn_tracker.created_blobs())
+            .get_user_service(&description, txn_tracker)
             .await?;
         Ok((code, description))
     }
@@ -393,18 +393,18 @@ where
             }
 
             ReadBlobContent { blob_id, callback } => {
-                let blob = self.system.read_blob_content(blob_id).await?;
+                let content = self.system.read_blob_content(blob_id).await?;
                 if blob_id.blob_type == BlobType::Data {
                     resource_controller
                         .with_state(&mut self.system)
                         .await?
-                        .track_blob_read(blob.bytes().len() as u64)?;
+                        .track_blob_read(content.bytes().len() as u64)?;
                 }
                 let is_new = self
                     .system
                     .blob_used(&mut TransactionTracker::default(), blob_id)
                     .await?;
-                callback.respond((blob, is_new))
+                callback.respond((content, is_new))
             }
 
             AssertBlobExists { blob_id, callback } => {

@@ -937,12 +937,12 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<ApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
-        let blob_content = match txn_tracker.created_blobs().get(&blob_id) {
-            Some(blob) => blob.content().clone(),
+        let content = match txn_tracker.created_blobs().get(&blob_id) {
+            Some(content) => content.clone(),
             None => self.read_blob_content(blob_id).await?,
         };
         self.blob_used(txn_tracker, blob_id).await?;
-        let description: ApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
+        let description: ApplicationDescription = bcs::from_bytes(content.bytes())?;
 
         let blob_ids = self
             .check_bytecode_blobs(&description.module_id, txn_tracker)
