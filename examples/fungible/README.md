@@ -45,13 +45,13 @@ source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 Next, start the local Linera network and run a faucet:
 
 ```bash
-LINERA_FAUCET_PORT=8079
-LINERA_FAUCET_URL=http://localhost:$LINERA_FAUCET_PORT
-linera_spawn linera net up --with-faucet --faucet-port $LINERA_FAUCET_PORT
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
 
 # If you're using a testnet, run this instead:
 #   LINERA_TMP_DIR=$(mktemp -d)
-#   LINERA_FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
 
 Create the user wallet and add chains to it:
@@ -61,12 +61,12 @@ export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
 export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
-linera wallet init --faucet $LINERA_FAUCET_URL
+linera wallet init --faucet $FAUCET_URL
 
-INFO_1=($(linera wallet request-chain --faucet $LINERA_FAUCET_URL))
+INFO_1=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
 OWNER_1="${INFO_1[1]}"
-INFO_2=($(linera wallet request-chain --faucet $LINERA_FAUCET_URL))
+INFO_2=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_2="${INFO_2[0]}"
 OWNER_2="${INFO_2[1]}"
 ```
@@ -104,7 +104,7 @@ for the account.
 The example below creates a token application on the default chain CHAIN_1 and gives the owner 100 tokens:
 
 ```bash
-LINERA_APPLICATION_ID=$(linera create-application $MODULE_ID \
+APP_ID=$(linera create-application $MODULE_ID \
     --json-argument "{ \"accounts\": {
         \"$OWNER_1\": \"100.\"
     } }" \
@@ -112,7 +112,7 @@ LINERA_APPLICATION_ID=$(linera create-application $MODULE_ID \
 )
 ```
 
-This will store the application ID in a new variable `LINERA_APPLICATION_ID`.
+This will store the application ID in a new variable `APP_ID`.
 
 ### Using the Token Application
 
@@ -131,7 +131,7 @@ linera service --port $PORT &
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
-- Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$LINERA_APPLICATION_ID"`.
+- Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID"`.
 - To get the current balance of user $OWNER_1, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
@@ -203,15 +203,33 @@ query {
 }
 ```
 
-#### Using the Web frontend
+#### Using web frontend
 
-Build and run the application frontend with
+Installing and starting the web server:
 
 ```bash
-export LINERA_APPLICATION_ID LINERA_FAUCET_URL
-pnpm install
-pnpm dev
+cd examples/fungible/web-frontend
+npm install --no-save
+
+# Start the server but not open the web page right away.
+BROWSER=none npm start &
 ```
 
-This will start a server and print its address; access that URL to use
-the application frontend.
+Web UIs for specific accounts can be opened by navigating URLs of the form
+`http://localhost:3000/$CHAIN?app=$APP_ID&owner=$OWNER&port=$PORT` where
+
+- the path is the ID of the chain where the account is located.
+- the argument `app` is the token application ID obtained when creating the token.
+- `owner` is the address of the chosen user account (owner must have permissions to create blocks in the given chain).
+- `port` is the port of the wallet service (the wallet must know the secret key of `owner`).
+
+In this example, two web pages for OWNER_1 and OWNER_2 can be opened by navigating these URLs:
+
+```bash
+echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_1&port=$PORT"
+echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_2&port=$PORT"
+```
+
+OWNER_2 doesn't have the applications loaded initially. Using the first page to
+transfer tokens from OWNER_1 to OWNER_2 at CHAIN_2 will instantly update the UI of the
+second page.
