@@ -192,7 +192,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone().unwrap(),
+            exporter_storage.clone(),
             vec![],
         );
         let mut block_processor = BlockProcessor::new(
@@ -328,7 +328,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone().unwrap(),
+            exporter_storage.clone(),
             vec![],
         );
         let mut block_processor = BlockProcessor::new(
@@ -444,7 +444,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone().unwrap(),
+            exporter_storage.clone(),
             vec![],
         );
         let mut block_processor = BlockProcessor::new(
@@ -531,7 +531,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone().unwrap(),
+            exporter_storage.clone(),
             vec![],
         );
         let mut block_processor = BlockProcessor::new(
@@ -640,7 +640,7 @@ mod test {
             NodeOptions::default(),
             0,
             signal.clone(),
-            exporter_storage.clone().unwrap(),
+            exporter_storage.clone(),
             vec![],
         );
         let mut block_processor = BlockProcessor::new(
