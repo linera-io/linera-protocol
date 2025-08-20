@@ -12,9 +12,7 @@ For example, if the contract was initialized with 1, querying the contract would
 `increment` it by 3, we will have to perform an operation with the parameter being 3. Now querying the
 application would give us 4 (1+3 = 4).
 
-## Usage
-
-### Setting Up
+## Setup and Deployment
 
 Before getting started, make sure that the binary tools `linera*` corresponding to
 your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
@@ -24,7 +22,7 @@ From the root of Linera repository, this can be achieved as follows:
 
 ```bash
 export PATH="$PWD/target/debug:$PATH"
-source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
+eval "$(linera net helper 2>/dev/null)"
 ```
 
 Next, start the local Linera network and run a faucet:
@@ -48,9 +46,9 @@ export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
 linera wallet init --faucet $LINERA_FAUCET_URL
 
-INFO_1=($(linera wallet request-chain --faucet $LINERA_FAUCET_URL))
-CHAIN_1="${INFO_1[0]}"
-OWNER_1="${INFO_1[1]}"
+INFO=($(linera wallet request-chain --faucet $LINERA_FAUCET_URL))
+CHAIN="${INFO[0]}"
+OWNER="${INFO[1]}"
 ```
 
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.
@@ -65,36 +63,7 @@ LINERA_APPLICATION_ID=$(linera publish-and-create \
 
 We have saved the `LINERA_APPLICATION_ID` as it will be useful later.
 
-### Using the Counter Application
-
-First, a node service for the current wallet has to be started:
-
-```bash
-PORT=8080
-linera service --port $PORT &
-```
-
-#### Using GraphiQL
-
-Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
-
-- Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$LINERA_APPLICATION_ID"`.
-- To get the current value of `counter`, run the query:
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$LINERA_APPLICATION_ID
-query {
-  value
-}
-```
-- To increase the value of the counter by 3, perform the `increment` operation.
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$LINERA_APPLICATION_ID
-mutation Increment {
-  increment(field0: 3)
-}
-```
-- Running the query again would yield `4`.
-
-
-#### Using the Web frontend
+## Connecting with the Web Frontend
 
 Build and run the application frontend with
 
@@ -110,3 +79,40 @@ the application frontend.
 Alternatively, there is a frontend in `metamask` that signs
 transactions using the user's MetaMask wallet; it can be accessed the
 same way.
+
+## Connecting with the GraphQL Client
+
+Alternatively, you can connect to the application using the GraphQL
+client.  This is useful for inspecting and debugging the backend APIs.
+
+First, a node service for the current wallet has to be started:
+
+```bash
+PORT=8080
+linera service --port $PORT &
+echo "http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID"
+```
+
+Clicking the printed URL will take you to a
+[GraphiQL](https://www.gatsbyjs.com/docs/how-to/querying-data/running-queries-with-graphiql/)
+environment connected to your app.
+
+To get the current value of `counter`, you can run the query:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
+query {
+  value
+}
+```
+
+To increase the value of the counter, you can run the `increment`
+mutation. Note that the result of a mutation is the hash of the
+resulting block, if any.
+
+```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
+mutation Increment {
+  increment(value: 3)
+}
+```
+
+If you run the query again, you'll now see a value of 4.
