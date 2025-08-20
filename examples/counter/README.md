@@ -106,3 +106,7 @@ pnpm dev
 
 This will start a server and print its address; access that URL to use
 the application frontend.
+
+Alternatively, there is a frontend in `metamask` that signs
+transactions using the user's MetaMask wallet; it can be accessed the
+same way.

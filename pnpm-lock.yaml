@@ -22,6 +22,19 @@ importers:
         specifier: ^5.4.11
         version: 5.4.19(@types/node@24.3.0)
 
+  examples/counter/metamask:
+    dependencies:
+      '@linera/client':
+        specifier: workspace:*
+        version: link:../../../linera-web
+      '@linera/signer':
+        specifier: workspace:*
+        version: link:../../../linera-web/signer
+    devDependencies:
+      vite:
+        specifier: ^5.4.11
+        version: 5.4.19(@types/node@24.3.0)
+
   examples/fungible:
     dependencies:
       '@linera/client':

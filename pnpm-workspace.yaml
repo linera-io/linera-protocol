@@ -2,4 +2,5 @@ packages:
 - linera-web
 - linera-web/signer
 - examples/counter
+- examples/counter/metamask
 - examples/fungible
