@@ -299,7 +299,12 @@ impl Validator {
 
 #[cfg(with_testing)]
 impl LocalNetConfig {
-    fn get_test(database: Database, network: Network, num_shards: usize, num_initial_validators: usize) -> Self {
+    fn get_test(
+        database: Database,
+        network: Network,
+        num_shards: usize,
+        num_initial_validators: usize,
+    ) -> Self {
         let num_proxies = 1;
         let storage_config_builder = InnerStorageConfigBuilder::TestConfig;
         let path_provider = PathProvider::create_temporary_directory().unwrap();

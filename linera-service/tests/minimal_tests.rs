@@ -8,21 +8,12 @@ mod guard;
 
 use anyhow::Result;
 use guard::INTEGRATION_TEST_GUARD;
-use linera_base::{
-    crypto::CryptoHash,
-    vm::VmRuntime,
-};
-use linera_sdk::{
-    linera_base_types::{BlobContent, DataBlobHash},
-};
-
-use linera_service::cli_wrappers::local_net::{Database, LocalNetConfig};
-use linera_service::cli_wrappers::Network;
-
+use linera_base::{crypto::CryptoHash, vm::VmRuntime};
+use linera_sdk::linera_base_types::{BlobContent, DataBlobHash};
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, ProcessInbox},
-        LineraNet, LineraNetConfig,
+        local_net::{get_node_port, Database, LocalNetConfig, ProcessInbox},
+        LineraNet, LineraNetConfig, Network,
     },
     test_name,
 };
@@ -167,4 +158,3 @@ async fn test_wasm_end_to_end_publish_read_data_blob(config: impl LineraNetConfi
 
     Ok(())
 }
-
