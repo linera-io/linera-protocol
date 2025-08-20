@@ -234,25 +234,24 @@ pub enum Database {
 
 /// The processes of a running validator.
 struct Validator {
-    proxy: Child,
+    proxies: Vec<Child>,
     servers: Vec<Child>,
     exporters: Vec<Child>,
 }
 
 impl Validator {
-    fn new(proxy: Child) -> Self {
+    fn new() -> Self {
         Self {
-            proxy,
+            proxies: vec![],
             servers: vec![],
             exporters: vec![],
         }
     }
 
     async fn terminate(&mut self) -> Result<()> {
-        self.proxy
-            .kill()
-            .await
-            .context("terminating validator proxy")?;
+        for proxy in &mut self.proxies {
+            proxy.kill().await.context("terminating validator proxy")?;
+        }
         for server in &mut self.servers {
             server
                 .kill()
@@ -260,6 +259,10 @@ impl Validator {
                 .context("terminating validator server")?;
         }
         Ok(())
+    }
+
+    fn add_proxy(&mut self, proxy: Child) {
+        self.proxies.push(proxy)
     }
 
     fn add_server(&mut self, server: Child) {
@@ -281,7 +284,9 @@ impl Validator {
     }
 
     fn ensure_is_running(&mut self) -> Result<()> {
-        self.proxy.ensure_is_running()?;
+        for proxy in &mut self.proxies {
+            proxy.ensure_is_running()?;
+        }
         for child in &mut self.servers {
             child.ensure_is_running()?;
         }
@@ -333,8 +338,8 @@ impl LineraNetConfig for LocalNetConfig {
             self.testing_prng_seed,
             self.namespace,
             self.num_initial_validators,
-            self.num_shards,
             self.num_proxies,
+            self.num_shards,
             storage_config,
             self.cross_chain_config,
             self.path_provider,
@@ -448,7 +453,7 @@ impl LocalNet {
     }
 
     fn proxy_internal_port(&self, validator: usize, proxy_id: usize) -> usize {
-        10000 + validator * self.num_shards + proxy_id + 1
+        10000 + validator * self.num_proxies + proxy_id + 1
     }
 
     fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
@@ -456,7 +461,7 @@ impl LocalNet {
     }
 
     fn proxy_metrics_port(&self, validator: usize, proxy_id: usize) -> usize {
-        12000 + validator * self.num_shards + proxy_id + 1
+        12000 + validator * self.num_proxies + proxy_id + 1
     }
 
     fn block_exporter_port(&self, validator: usize, exporter_id: usize) -> usize {
@@ -464,7 +469,7 @@ impl LocalNet {
     }
 
     pub fn proxy_public_port(&self, validator: usize, proxy_id: usize) -> usize {
-        FIRST_PUBLIC_PORT + validator * self.num_shards + proxy_id + 1
+        FIRST_PUBLIC_PORT + validator * self.num_proxies + proxy_id + 1
     }
 
     pub fn first_public_port() -> usize {
@@ -497,6 +502,7 @@ impl LocalNet {
         );
 
         for k in 0..self.num_proxies {
+            let public_port = self.proxy_public_port(n, k);
             let internal_port = self.proxy_internal_port(n, k);
             let metrics_port = self.proxy_metrics_port(n, k);
             // In the local network, the validator ingress is
@@ -506,7 +512,7 @@ impl LocalNet {
                 r#"
                 [[proxies]]
                 host = "{internal_host}"
-                public_port = {port}
+                public_port = {public_port}
                 private_port = {internal_port}
                 metrics_host = "{external_host}"
                 metrics_port = {metrics_port}
@@ -699,7 +705,7 @@ impl LocalNet {
         Ok(())
     }
 
-    async fn run_proxy(&mut self, validator: usize) -> Result<Child> {
+    async fn run_proxy(&mut self, validator: usize, proxy_id: usize) -> Result<Child> {
         let storage = self
             .initialized_validator_storages
             .get(&validator)
@@ -709,9 +715,10 @@ impl LocalNet {
             .await?
             .arg(format!("server_{}.json", validator))
             .args(["--storage", &storage.to_string()])
+            .args(["--id", &proxy_id.to_string()])
             .spawn_into()?;
 
-        let port = self.proxy_public_port(validator, 0);
+        let port = self.proxy_public_port(validator, proxy_id);
         let nickname = format!("validator proxy {validator}");
         match self.network.external {
             Network::Grpc => {
@@ -917,8 +924,11 @@ impl LocalNet {
     /// Restart a validator. This is similar to `start_validator` except that the
     /// database was already initialized once.
     pub async fn restart_validator(&mut self, index: usize) -> Result<()> {
-        let proxy = self.run_proxy(index).await?;
-        let mut validator = Validator::new(proxy);
+        let mut validator = Validator::new();
+        for k in 0..self.num_proxies {
+            let proxy = self.run_proxy(index, k).await?;
+            validator.add_proxy(proxy);
+        }
         for shard in 0..self.num_shards {
             let server = self.run_server(index, shard).await?;
             validator.add_server(server);
