@@ -169,14 +169,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         limit: u64,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         tracing::debug!(name = ?self.public_key, ?chain_id, ?start, ?limit, "Querying certificates");
-        let range = BlockHeightRange {
-            start,
-            limit: Some(limit),
-        };
-        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
-        let info = self.handle_chain_info_query(query).await?;
-        self.node
-            .download_certificates(info.requested_sent_certificate_hashes)
+        self.download_certificates_range(chain_id, start, Some(limit))
             .await?
             .into_iter()
             .map(|c| {
@@ -293,6 +286,24 @@ impl<N: ValidatorNode> RemoteNode<N> {
             }
         );
         Ok(certificates)
+    }
+
+    /// Downloads a range of certificates from the given chain.
+    #[instrument(level = "trace")]
+    pub async fn download_certificates_range(
+        &self,
+        chain_id: ChainId,
+        start: BlockHeight,
+        limit: Option<u64>,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let range = if let Some(limit) = limit {
+            BlockHeightRange::multi(start, limit)
+        } else {
+            BlockHeightRange::single(start)
+        };
+        self.node
+            .download_certificates_by_range(chain_id, range)
+            .await
     }
 
     /// Downloads a blob, but does not verify if it has actually been published and
