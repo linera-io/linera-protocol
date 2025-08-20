@@ -422,7 +422,6 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
 
         loop {
             // Try applying f. Return if committed.
-            client.prepare_chain().await?;
             let result = f(client).await;
             self.update_wallet_from_client(client).await?;
             let timeout = match result? {
