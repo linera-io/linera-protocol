@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linera | Counter</title>
+    <link href="/style.css" rel="stylesheet">
+    <link href="/icon.png" rel="icon">
+    <style type="text/css">
+      .ui {
+          display: flex;
+          flex-direction: column;
+      }
+
+      .ui .counter {
+          font-size: 1.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <div class="description">
+          <h1>Counter</h1>
+          <p>
+            This is a simple application tracking some on-chain state that remembers the value of an integer counter.
+          </p>
+          <p>
+            Click the button to submit a block that increments the counter, and watch your local node's state update in real-time.
+          </p>
+        </div>
+        <div class="ui">
+          <p class="counter">Clicks: <span id="count">0</span></p>
+          <button id="increment-btn">Click me!</button>
+        </div>
+      </div>
+
+      <div class="logs">
+        <h2>Chain history for <code id="chain-id" class="hex">requesting chain…</code></h2>
+        <ul id="logs">
+          <template>
+            <li>
+              <span class="height"></span>: <span class="code hash"></span>
+            </li>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+          "imports": {
+              "@linera/client": "./js/@linera/client/linera_web.js"
+          }
+      }
+    </script>
+
+    <script type="module">
+      import * as linera from '@linera/client';
+
+      const COUNTER_APP_ID = '2b1a0df8868206a4b7d6c2fdda911e4355d6c0115b896d4947ef8e535ee3c6b8';
+
+      async function run() {
+          await linera.default();
+          const faucet = await new linera.Faucet('https://faucet.testnet-babbage.linera.net');
+          const wallet = await faucet.createWallet();
+          const client = await new linera.Client(wallet);
+          document.getElementById('chain-id').innerText = await faucet.claimChain(client);
+          const counter = await client.frontend().application(COUNTER_APP_ID);
+          const logs = document.getElementById('logs');
+          const incrementButton = document.getElementById('increment-btn');
+          const blockTemplate = document.getElementById('block-template');
+
+          function addLogEntry(block) {
+              const entry = logs.getElementsByTagName('template')[0].content.cloneNode(true);
+              entry.querySelector('.height').textContent = block.height;
+              entry.querySelector('.hash').textContent = block.hash;
+              logs.insertBefore(entry, logs.firstChild);
+          }
+
+
+          async function updateCount() {
+              const response = await counter.query('{ "query": "query { value }" }');
+              document.getElementById('count').innerText
+                  = JSON.parse(response).data.value;
+          }
+
+          updateCount();
+          client.onNotification(notification => {
+              let newBlock = notification.reason.NewBlock;
+              if (!newBlock) return;
+              addLogEntry(newBlock);
+              updateCount();
+          });
+
+          incrementButton.addEventListener('click', () => {
+              counter.query('{ "query": "mutation { increment(value: 1) }" }');
+          });
+      }
+
+      if (document.readyState === 'loading')
+          document.addEventListener('DOMContentLoaded', run);
+      else
+          run();
+    </script>
+  </body>
+</html>
