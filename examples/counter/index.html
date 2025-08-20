@@ -62,7 +62,7 @@
       import { PrivateKey } from '@linera/signer';
       import { ethers } from 'ethers';
 
-     async function run() {
+      async function run() {
           await linera.default();
           const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
           const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;

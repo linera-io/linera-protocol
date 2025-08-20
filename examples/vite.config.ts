@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -8,6 +9,11 @@ export default defineConfig({
     headers: {
       'Cross-Origin-Embedder-Policy': 'require-corp',
       'Cross-Origin-Opener-Policy': 'same-origin',
+    },
+    fs: {
+      allow: [
+        path.resolve(__dirname, '../linera-web'),
+      ],
     },
   },
   build: {
