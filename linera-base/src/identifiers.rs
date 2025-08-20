@@ -314,6 +314,12 @@ impl<'a> Deserialize<'a> for BlobId {
 )]
 pub struct DataBlobHash(pub CryptoHash);
 
+impl From<DataBlobHash> for BlobId {
+    fn from(hash: DataBlobHash) -> BlobId {
+        BlobId::new(hash.0, BlobType::Data)
+    }
+}
+
 /// A unique identifier for a user application from a blob.
 #[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]

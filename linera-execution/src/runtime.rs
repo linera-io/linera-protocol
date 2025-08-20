@@ -16,8 +16,7 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
-        StreamName,
+        Account, AccountOwner, ChainId, EventId, GenericApplicationId, StreamId, StreamName,
     },
     ownership::ChainOwnership,
     time::Instant,
@@ -940,7 +939,7 @@ where
 
     fn read_data_blob(&mut self, hash: DataBlobHash) -> Result<Vec<u8>, ExecutionError> {
         let mut this = self.inner();
-        let blob_id = BlobId::new(hash.0, BlobType::Data);
+        let blob_id = hash.into();
         let (blob_content, is_new) = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
@@ -954,7 +953,7 @@ where
 
     fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let blob_id = BlobId::new(hash.0, BlobType::Data);
+        let blob_id = hash.into();
         let is_new = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
