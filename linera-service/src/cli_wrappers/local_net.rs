@@ -326,11 +326,11 @@ impl LocalNetConfig {
     }
 
     pub fn new_test(database: Database, network: Network) -> Self {
-        get_test(database, network, 4, 4)
+        Self::get_test(database, network, 4, 4)
     }
 
-    pub fn unit_test(database: Database, network: Network) -> Self {
-        get_test(database, network, 1, 1)
+    pub fn minimal_test(database: Database, network: Network) -> Self {
+        Self::get_test(database, network, 1, 1)
     }
 }
 
