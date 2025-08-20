@@ -145,7 +145,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(Some(chain_1)).await?;
 
     if matches!(network, Network::Grpc) {
-        assert_eq!(faucet.current_validators().await?.len(), 5);
+        assert!(
+            eventually(|| async { faucet.current_validators().await.unwrap().len() == 5 }).await
+        );
     }
 
     // Add 6th validator
