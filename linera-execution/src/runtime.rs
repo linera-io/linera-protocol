@@ -940,7 +940,6 @@ where
     fn read_data_blob(&mut self, hash: DataBlobHash) -> Result<Vec<u8>, ExecutionError> {
         let mut this = self.inner();
         let blob_id = hash.into();
-        let (blob_content, is_new) = this
         if let Some(content) = this.transaction_tracker.get_blob_content(&blob_id) {
             return Ok(content.into_bytes().into_vec());
         };
