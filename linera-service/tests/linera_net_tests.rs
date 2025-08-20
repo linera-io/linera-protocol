@@ -4776,11 +4776,9 @@ async fn test_wasm_end_to_end_publish_read_data_blob(config: impl LineraNetConfi
     let mutation = ServiceQuery::PublishDataBlob(test_data.clone());
     application.run_json_query(&mutation).await?;
 
-    // getting the blob_id.
-    let query = ServiceQuery::GetHash;
-    let result = application.run_json_query(&query).await?;
-    let result: Vec<u8> = serde_json::from_value(result)?;
-    let hash: DataBlobHash = bcs::from_bytes(&result)?;
+    // getting the hash
+    let content = BlobContent::new_data(test_data.clone());
+    let hash = DataBlobHash(CryptoHash::new(&content));
 
     // reading and checking
     let mutation = ServiceQuery::ReadDataBlob(hash, test_data);

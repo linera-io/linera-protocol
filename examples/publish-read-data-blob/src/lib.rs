@@ -19,7 +19,6 @@ pub enum Operation {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ServiceQuery {
-    GetHash,
     PublishDataBlob(Vec<u8>),
     ReadDataBlob(DataBlobHash, Vec<u8>),
     PublishAndCreateOneOperation(Vec<u8>),

@@ -7,15 +7,11 @@ mod state;
 
 use linera_sdk::{
     linera_base_types::{DataBlobHash, WithContractAbi},
-    views::{RootView, View},
     Contract, ContractRuntime,
 };
 use publish_read_data_blob::{Operation, PublishReadDataBlobAbi};
 
-use self::state::PublishReadDataBlobState;
-
 pub struct PublishReadDataBlobContract {
-    state: PublishReadDataBlobState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -32,10 +28,7 @@ impl Contract for PublishReadDataBlobContract {
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = PublishReadDataBlobState::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
-        PublishReadDataBlobContract { state, runtime }
+        PublishReadDataBlobContract { runtime }
     }
 
     async fn instantiate(&mut self, _argument: ()) {
@@ -46,8 +39,7 @@ impl Contract for PublishReadDataBlobContract {
     async fn execute_operation(&mut self, operation: Operation) {
         match operation {
             Operation::CreateDataBlob(data) => {
-                let hash: DataBlobHash = self.runtime.create_data_blob(data);
-                self.state.hash.set(Some(hash));
+                self.runtime.create_data_blob(data);
             }
             Operation::ReadDataBlob(hash, expected_data) => {
                 let data = self.runtime.read_data_blob(hash);
@@ -58,7 +50,6 @@ impl Contract for PublishReadDataBlobContract {
             }
             Operation::CreateAndReadDataBlob(data) => {
                 let hash: DataBlobHash = self.runtime.create_data_blob(data.clone());
-                self.state.hash.set(Some(hash));
                 let data_read = self.runtime.read_data_blob(hash);
                 assert_eq!(data_read, data);
             }
@@ -69,7 +60,6 @@ impl Contract for PublishReadDataBlobContract {
         panic!("Publish-Read Data Blob application doesn't support any cross-chain messages");
     }
 
-    async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+    async fn store(self) {
     }
 }
