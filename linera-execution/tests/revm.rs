@@ -86,7 +86,6 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         height: BlockHeight(0),
         round: Some(0),
         authenticated_signer: None,
-        authenticated_caller_id: None,
         timestamp: Default::default(),
     };
 
@@ -210,7 +209,6 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
         height: BlockHeight(0),
         round: Some(0),
         authenticated_signer: None,
-        authenticated_caller_id: None,
         timestamp: Default::default(),
     };
 
@@ -387,7 +385,6 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
         height: BlockHeight(0),
         round: Some(0),
         authenticated_signer: None,
-        authenticated_caller_id: None,
         timestamp: Default::default(),
     };
 

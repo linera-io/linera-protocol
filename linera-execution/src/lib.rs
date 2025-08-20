@@ -412,10 +412,6 @@ pub struct OperationContext {
     /// The authenticated signer of the operation, if any.
     #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<AccountOwner>,
-    /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
-    /// call to be authenticated (e.g. for safety reasons).
-    #[debug(skip_if = Option::is_none)]
-    pub authenticated_caller_id: Option<ApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.

@@ -118,7 +118,6 @@ pub fn create_dummy_operation_context(chain_id: ChainId) -> OperationContext {
         height: BlockHeight(0),
         round: Some(0),
         authenticated_signer: None,
-        authenticated_caller_id: None,
         timestamp: Default::default(),
     }
 }
