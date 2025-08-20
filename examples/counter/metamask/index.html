@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linera | Counter</title>
+    <link href="/style.css" rel="stylesheet">
+    <link href="/icon.png" rel="icon">
+    <style type="text/css">
+      .ui {
+          display: flex;
+          flex-direction: column;
+      }
+
+      .ui .counter {
+          font-size: 1.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <div class="description">
+          <h1>MetaMask Counter</h1>
+          <p>
+            This is a simple application tracking some on-chain state that remembers the value of an integer counter, with transactions signed by MetaMask.
+          </p>
+          <p>
+            You'll need to have MetaMask installed and connected to the page for this demo to run.
+          </p>
+          <p>
+            Click the button to ask MetaMask to sign a block with your key that increments the counter.
+          </p>
+        </div>
+        <div class="ui">
+          <p class="counter">Clicks: <span id="count">0</span></p>
+          <button id="increment-btn">Click me!</button>
+        </div>
+      </div>
+
+      <div class="logs">
+        <h2>Connected as <code id="owner" class="hex">requesting owner…</code> </h2>
+        <h2>Chain history for <code id="chain-id" class="hex">requesting chain…</code></h2>
+        <ul id="logs">
+          <template>
+            <li>
+              <span class="height"></span>: <span class="code hash"></span>
+            </li>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+          "imports": {
+              "@linera/client": "./js/@linera/client/linera_web.js",
+              "@linera/signer": "./js/@linera/signer/index.js"
+          }
+      }
+    </script>
+
+    <script type="module">
+      import * as linera from '@linera/client';
+      import * as linera_signer from '@linera/signer';
+
+      async function run() {
+          await linera.default();
+          const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
+          const signer = await new linera_signer.MetaMask();
+          const wallet = await faucet.createWallet();
+          const owner = await signer.address();
+          document.getElementById('owner').innerText = owner;
+          document.getElementById('chain-id').innerText = await faucet.claimChain(wallet, owner);
+          const client = await new linera.Client(wallet, signer);
+          const counter = await client.frontend().application(import.meta.env.LINERA_APPLICATION_ID);
+          const logs = document.getElementById('logs');
+          const incrementButton = document.getElementById('increment-btn');
+          const blockTemplate = document.getElementById('block-template');
+
+          function addLogEntry(block) {
+              const entry = logs.getElementsByTagName('template')[0].content.cloneNode(true);
+              entry.querySelector('.height').textContent = block.height;
+              entry.querySelector('.hash').textContent = block.hash;
+              logs.insertBefore(entry, logs.firstChild);
+          }
+
+          async function updateCount() {
+              const response = await counter.query('{ "query": "query { value }" }');
+              document.getElementById('count').innerText
+                  = JSON.parse(response).data.value;
+          }
+
+          updateCount();
+          client.onNotification(notification => {
+              let newBlock = notification.reason.NewBlock;
+              if (!newBlock) return;
+              addLogEntry(newBlock);
+              updateCount();
+          });
+
+          incrementButton.addEventListener('click', () => {
+              counter.query('{ "query": "mutation { increment(value: 1) }" }');
+          });
+      }
+
+      if (document.readyState === 'loading')
+          document.addEventListener('DOMContentLoaded', run);
+      else
+          run();
+    </script>
+  </body>
+</html>
