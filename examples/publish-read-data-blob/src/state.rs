@@ -3,7 +3,7 @@
 
 use linera_sdk::{
     views::{linera_views, RegisterView, RootView, ViewStorageContext},
-    DataBlobHash,
+    linera_base_types::DataBlobHash,
 };
 
 #[derive(RootView)]

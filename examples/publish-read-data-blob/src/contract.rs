@@ -6,9 +6,9 @@
 mod state;
 
 use linera_sdk::{
-    linera_base_types::WithContractAbi,
+    linera_base_types::{DataBlobHash, WithContractAbi},
     views::{RootView, View},
-    Contract, ContractRuntime, DataBlobHash,
+    Contract, ContractRuntime,
 };
 use publish_read_data_blob::{Operation, PublishReadDataBlobAbi};
 

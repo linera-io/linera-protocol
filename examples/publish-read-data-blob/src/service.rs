@@ -9,9 +9,9 @@ use std::sync::Arc;
 
 use linera_sdk::{
     bcs,
-    linera_base_types::{BlobContent, CryptoHash, WithServiceAbi},
+    linera_base_types::{BlobContent, CryptoHash, DataBlobHash, WithServiceAbi},
     views::View,
-    DataBlobHash, Service, ServiceRuntime,
+    Service, ServiceRuntime,
 };
 use publish_read_data_blob::{Operation, PublishReadDataBlobAbi, ServiceQuery};
 
