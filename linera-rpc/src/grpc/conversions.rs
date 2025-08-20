@@ -19,7 +19,7 @@ use linera_chain::{
 };
 use linera_core::{
     data_types::{
-        CertificatesByRangeRequest, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
+        CertificatesByHeightRequest, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
     },
     node::NodeError,
     worker::Notification,
@@ -1012,27 +1012,22 @@ impl TryFrom<api::CertificatesBatchResponse> for Vec<Certificate> {
     }
 }
 
-impl From<CertificatesByRangeRequest> for api::DownloadCertificatesByRangeRequest {
-    fn from(request: CertificatesByRangeRequest) -> Self {
+impl From<CertificatesByHeightRequest> for api::DownloadCertificatesByHeightsRequest {
+    fn from(request: CertificatesByHeightRequest) -> Self {
         Self {
             chain_id: Some(request.chain_id.into()),
-            start_height: Some(request.start_height.into()),
-            limit: request.limit,
+            heights: request.heights.into_iter().map(Into::into).collect(),
         }
     }
 }
 
-impl TryFrom<api::DownloadCertificatesByRangeRequest> for CertificatesByRangeRequest {
+impl TryFrom<api::DownloadCertificatesByHeightsRequest> for CertificatesByHeightRequest {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(request: api::DownloadCertificatesByRangeRequest) -> Result<Self, Self::Error> {
+    fn try_from(request: api::DownloadCertificatesByHeightsRequest) -> Result<Self, Self::Error> {
         Ok(Self {
             chain_id: try_proto_convert(request.chain_id)?,
-            start_height: request
-                .start_height
-                .map(Into::into)
-                .ok_or(GrpcProtoConversionError::MissingField)?,
-            limit: request.limit,
+            heights: request.heights.into_iter().map(Into::into).collect(),
         })
     }
 }

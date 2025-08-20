@@ -801,12 +801,9 @@ impl<Env: Environment> Client<Env> {
                     other_sender_chains.push(sender_chain_id);
                     return None;
                 };
-                let height0 = *remote_heights.first()?;
-                // Find the hashes of the blocks we need.
-                let limit = remote_heights.last()?.0 + 1 - height0.0;
                 Some(async move {
                     let certificates = remote_node
-                        .download_certificates_range(sender_chain_id, height0, Some(limit))
+                        .download_certificates_by_heights(sender_chain_id, remote_heights)
                         .await?;
                     Ok::<Vec<_>, ChainClientError>(certificates)
                 })
@@ -817,6 +814,11 @@ impl<Env: Environment> Client<Env> {
         .flatten()
         .collect::<Vec<_>>();
 
+        info!(
+            "Received {} certificates from validator {:?} for chain {chain_id:.8}",
+            certificates.len(),
+            remote_node.public_key
+        );
         let mut certificates_by_height_by_chain = BTreeMap::new();
 
         // Check the signatures and keep only the ones that are valid.

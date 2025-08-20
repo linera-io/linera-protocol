@@ -22,7 +22,7 @@ use rand::seq::SliceRandom as _;
 use tracing::{instrument, warn};
 
 use crate::{
-    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
 };
 
@@ -169,7 +169,10 @@ impl<N: ValidatorNode> RemoteNode<N> {
         limit: u64,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         tracing::debug!(name = ?self.public_key, ?chain_id, ?start, ?limit, "Querying certificates");
-        self.download_certificates_range(chain_id, start, Some(limit))
+        let heights = (start.0..start.0 + limit)
+            .map(BlockHeight)
+            .collect::<Vec<_>>();
+        self.download_certificates_by_heights(chain_id, heights)
             .await?
             .into_iter()
             .map(|c| {
@@ -241,19 +244,13 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     /// Downloads a range of certificates from the given chain.
     #[instrument(level = "trace")]
-    pub async fn download_certificates_range(
+    pub async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
-        start: BlockHeight,
-        limit: Option<u64>,
+        heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let range = if let Some(limit) = limit {
-            BlockHeightRange::multi(start, limit)
-        } else {
-            BlockHeightRange::single(start)
-        };
         self.node
-            .download_certificates_by_range(chain_id, range)
+            .download_certificates_by_heights(chain_id, heights)
             .await
     }
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, NetworkDescription, Timestamp},
+    data_types::{BlobContent, BlockHeight, NetworkDescription, Timestamp},
     identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_chain::{
@@ -22,7 +22,7 @@ use linera_client::{
 };
 use linera_core::{
     client::ChainClient,
-    data_types::{BlockHeightRange, ChainInfoQuery, ChainInfoResponse},
+    data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
@@ -131,10 +131,10 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn download_certificates_by_range(
+    async fn download_certificates_by_heights(
         &self,
         _: ChainId,
-        _: BlockHeightRange,
+        _: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }

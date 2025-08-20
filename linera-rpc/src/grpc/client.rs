@@ -6,7 +6,7 @@ use std::{fmt, future::Future, iter};
 use futures::{future, stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, NetworkDescription},
+    data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
     identifiers::{BlobId, ChainId},
     time::Duration,
@@ -19,7 +19,7 @@ use linera_chain::{
     },
 };
 use linera_core::{
-    data_types::{CertificatesByRangeRequest, ChainInfoResponse},
+    data_types::{CertificatesByHeightRequest, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
@@ -438,16 +438,12 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
-    async fn download_certificates_by_range(
+    async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
-        range: linera_core::data_types::BlockHeightRange,
+        heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let request = CertificatesByRangeRequest {
-            chain_id,
-            start_height: range.start,
-            limit: range.limit,
-        };
+        let request = CertificatesByHeightRequest { chain_id, heights };
         let received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
             client_delegate!(self, download_certificates_by_range, request)?,
         )?

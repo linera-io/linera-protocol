@@ -7,7 +7,7 @@ use std::future::Future;
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, NetworkDescription},
+    data_types::{BlobContent, BlockHeight, NetworkDescription},
     identifiers::{BlobId, ChainId},
     time::{timer, Duration},
 };
@@ -18,7 +18,7 @@ use linera_chain::{
     },
 };
 use linera_core::{
-    data_types::{BlockHeightRange, ChainInfoQuery, ChainInfoResponse},
+    data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
 use linera_version::VersionInfo;
@@ -222,19 +222,21 @@ impl ValidatorNode for SimpleClient {
         }
     }
 
-    async fn download_certificates_by_range(
+    async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
-        range: BlockHeightRange,
+        heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let expected_count = heights.len();
         let certificates: Vec<ConfirmedBlockCertificate> = self
-            .query(RpcMessage::DownloadCertificatesByRange(chain_id, range))
+            .query(RpcMessage::DownloadCertificatesByHeights(
+                chain_id,
+                heights.clone(),
+            ))
             .await?;
 
-        let expected_count = range.highest().0 - range.start.0 + 1;
-
-        if (certificates.len() as u64) < expected_count {
-            return Err(NodeError::MissingCertificatesByRange { chain_id, range });
+        if certificates.len() < expected_count {
+            return Err(NodeError::MissingCertificatesByHeights { chain_id, heights });
         }
         Ok(certificates)
     }

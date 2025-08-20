@@ -56,12 +56,31 @@ impl BlockHeightRange {
         self.limit
             .map_or(self.start, |limit| BlockHeight(self.start.0 + limit - 1))
     }
+
+    /// Creates a block height range from a vector of block heights.
+    pub fn from_heights(heights: Vec<BlockHeight>) -> Self {
+        if heights.is_empty() {
+            BlockHeightRange {
+                start: BlockHeight(0),
+                limit: None,
+            }
+        } else {
+            let start = *heights.first().expect("Heights vector is not empty");
+            let end = *heights.last().expect("Heights vector is not empty");
+            BlockHeightRange {
+                start,
+                limit: Some(end.0 - start.0 + 1),
+            }
+        }
+    }
 }
 
 impl Display for BlockHeightRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(limit) = self.limit {
-            if limit == 0 && limit == 1 {
+            if limit == 0 {
+                write!(f, "empty")
+            } else if limit == 1 {
                 write!(f, "{}", self.start)
             } else {
                 write!(f, "{}..={}", self.start, self.start.0 + limit - 1)
@@ -330,10 +349,9 @@ impl BcsSignable<'_> for ChainInfo {}
 
 /// Request for downloading certificates by height range.
 #[derive(Debug, Clone)]
-pub struct CertificatesByRangeRequest {
+pub struct CertificatesByHeightRequest {
     pub chain_id: ChainId,
-    pub start_height: BlockHeight,
-    pub limit: Option<u64>,
+    pub heights: Vec<BlockHeight>,
 }
 
 /// The outcome of trying to commit a list of operations to the chain.

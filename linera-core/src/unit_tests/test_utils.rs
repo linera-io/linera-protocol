@@ -238,13 +238,13 @@ where
         .await
     }
 
-    async fn download_certificates_by_range(
+    async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
-        range: BlockHeightRange,
+        heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_download_certificates_by_range(chain_id, range, sender)
+            validator.do_download_certificates_by_heights(chain_id, heights, sender)
         })
         .await
     }
@@ -607,14 +607,15 @@ where
         sender.send(certificates)
     }
 
-    async fn do_download_certificates_by_range(
+    async fn do_download_certificates_by_heights(
         self,
         chain_id: ChainId,
-        range: BlockHeightRange,
+        heights: Vec<BlockHeight>,
         sender: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>, NodeError>>,
     ) -> Result<(), Result<Vec<ConfirmedBlockCertificate>, NodeError>> {
         // First, use do_handle_chain_info_query to get the certificate hashes
         let (query_sender, query_receiver) = oneshot::channel();
+        let range = BlockHeightRange::from_heights(heights);
         let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
 
         let self_clone = self.clone();
