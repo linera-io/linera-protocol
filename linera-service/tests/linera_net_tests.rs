@@ -4806,3 +4806,92 @@ async fn test_wasm_end_to_end_publish_read_data_blob(config: impl LineraNetConfi
 
     Ok(())
 }
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_contract_call(config: impl LineraNetConfig) -> Result<()> {
+    use contract_call::{ContractTransferAbi, Parameters, Query};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    // Create network and client
+    let (mut net, client) = config.instantiate().await?;
+
+    // Get default chain and create two accounts
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let account_chain = Account::chain(chain);
+    let owner1 = get_account_owner(&client);
+
+    // Generate a second owner
+    let owner2 = client.keygen().await?;
+
+    // Create accounts for both owners
+    let account1 = Account {
+        chain_id: chain,
+        owner: owner1,
+    };
+    let account2 = Account {
+        chain_id: chain,
+        owner: owner2,
+    };
+
+    // Give initial balance to owner2's account
+    client
+        .transfer_with_accounts(Amount::from_tokens(100), account_chain, account1)
+        .await?;
+
+    // Build and publish the contract-call module
+    let (contract, service) = client.build_example("contract-call").await?;
+
+    let module_id = client
+        .publish_module::<ContractTransferAbi, Parameters, ()>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            None,
+        )
+        .await?;
+
+    // Create parameters for the application
+    let untyped_module_id = module_id.forget_abi();
+    let parameters = Parameters {
+        module_id: untyped_module_id,
+    };
+
+    // Create the application
+    let application_id = client
+        .create_application(&module_id, &parameters, &(), &[], None)
+        .await?;
+
+    // Start node service to interact with the application
+    let port = get_node_port().await;
+    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await?;
+
+    // Test indirect transfer: transfer from owner1 to owner2 via application creation
+    let transfer_amount = Amount::from_tokens(1);
+
+    // Use Query to trigger indirect transfer operation via service
+    let query = Query::IndirectTransfer {
+        source: owner1,
+        destination: account2,
+        amount: transfer_amount,
+    };
+
+    // Execute the indirect transfer query (which schedules the operation)
+    application.run_json_query(&query).await?;
+
+    tracing::info!("Contract transfer test completed successfully");
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+    Ok(())
+}
