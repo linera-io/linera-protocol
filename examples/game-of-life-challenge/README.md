@@ -44,11 +44,11 @@ linera --with-wallet 1 wallet init --faucet $FAUCET_URL
 linera --with-wallet 2 wallet init --faucet $FAUCET_URL
 
 INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
-INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
+# INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
-CHAIN_2="${INFO_2[0]}"
+# CHAIN_2="${INFO_2[0]}"
 OWNER_1="${INFO_1[1]}"
-OWNER_2="${INFO_2[1]}"
+# OWNER_2="${INFO_2[1]}"
 ```
 
 Note that `linera --with-wallet 1` or `linera -w1` is equivalent to `linera --wallet
@@ -56,8 +56,8 @@ Note that `linera --with-wallet 1` or `linera -w1` is equivalent to `linera --wa
 
 ### Creating the GoL challenge application
 
-We open a new chain owned by both `$OWNER_1` and `$OWNER_2`, create the application on it, and
-start the node service.
+We use the default chain of the first wallet to create the application on it and start the
+node service.
 
 ```bash
 APP_ID=$(linera -w1 --wait-for-outgoing-messages \
