@@ -25,7 +25,7 @@ use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
+        local_net::{get_node_port, Database, LocalNetConfig, ProcessInbox},
         ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     test_name,
@@ -99,7 +99,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let address = format!(
         "{}:127.0.0.1:{}",
         network.short(),
-        LocalNet::proxy_public_port(0, 0)
+        net.proxy_public_port(0, 0)
     );
     assert_eq!(
         client.query_validator(&address).await?,
@@ -124,7 +124,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let address = format!(
         "{}:127.0.0.1:{}",
         network.short(),
-        LocalNet::proxy_public_port(4, 0)
+        net.proxy_public_port(4, 0)
     );
 
     assert_eq!(
@@ -136,7 +136,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client
         .set_validator(
             net.validator_keys(4).unwrap(),
-            LocalNet::proxy_public_port(4, 0),
+            net.proxy_public_port(4, 0),
             100,
         )
         .await?;
@@ -154,7 +154,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client
         .set_validator(
             net.validator_keys(5).unwrap(),
-            LocalNet::proxy_public_port(5, 0),
+            net.proxy_public_port(5, 0),
             100,
         )
         .await?;
@@ -291,7 +291,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
     let address = format!(
         "{}:127.0.0.1:{}",
         network.short(),
-        LocalNet::proxy_public_port(4, 0)
+        net.proxy_public_port(4, 0)
     );
 
     assert_eq!(
@@ -303,7 +303,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
     client
         .set_validator(
             net.validator_keys(4).unwrap(),
-            LocalNet::proxy_public_port(4, 0),
+            net.proxy_public_port(4, 0),
             100,
         )
         .await?;
@@ -388,7 +388,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     let address = format!(
         "{}:127.0.0.1:{}",
         network.short(),
-        LocalNet::proxy_public_port(4, 0)
+        net.proxy_public_port(4, 0)
     );
 
     assert_eq!(
@@ -400,7 +400,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     client
         .set_validator(
             net.validator_keys(4).unwrap(),
-            LocalNet::proxy_public_port(4, 0),
+            net.proxy_public_port(4, 0),
             100,
         )
         .await?;
@@ -436,7 +436,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     let address = format!(
         "{}:127.0.0.1:{}",
         network.short(),
-        LocalNet::proxy_public_port(5, 0)
+        net.proxy_public_port(5, 0)
     );
 
     assert_eq!(
@@ -448,7 +448,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     client
         .set_validator(
             net.validator_keys(5).unwrap(),
-            LocalNet::proxy_public_port(5, 0),
+            net.proxy_public_port(5, 0),
             100,
         )
         .await?;
