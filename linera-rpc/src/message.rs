@@ -4,7 +4,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, NetworkDescription},
+    data_types::{BlobContent, BlockHeight, NetworkDescription},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -39,6 +39,7 @@ pub enum RpcMessage {
     HandlePendingBlob(Box<(ChainId, BlobContent)>),
     DownloadConfirmedBlock(Box<CryptoHash>),
     DownloadCertificates(Vec<CryptoHash>),
+    DownloadCertificatesByHeights(ChainId, Vec<BlockHeight>),
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Vec<BlobId>),
     VersionInfoQuery,
@@ -55,6 +56,7 @@ pub enum RpcMessage {
     DownloadPendingBlobResponse(Box<BlobContent>),
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
     DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
+    DownloadCertificatesByHeightsResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Vec<BlobId>),
 
@@ -93,6 +95,8 @@ impl RpcMessage {
             | DownloadPendingBlobResponse(_)
             | DownloadConfirmedBlock(_)
             | DownloadConfirmedBlockResponse(_)
+            | DownloadCertificatesByHeights(_, _)
+            | DownloadCertificatesByHeightsResponse(_)
             | DownloadCertificates(_)
             | BlobLastUsedBy(_)
             | BlobLastUsedByResponse(_)
@@ -140,7 +144,9 @@ impl RpcMessage {
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
-            | DownloadCertificatesResponse(_) => false,
+            | DownloadCertificatesResponse(_)
+            | DownloadCertificatesByHeights(_, _)
+            | DownloadCertificatesByHeightsResponse(_) => false,
         }
     }
 }

@@ -610,6 +610,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
+            request_sent_certificate_hashes_by_heights: vec![],
         })
     }
 }
@@ -1152,6 +1153,7 @@ pub mod tests {
             request_manager_values: false,
             request_leader_timeout: None,
             request_fallback: true,
+            request_sent_certificate_hashes_by_heights: vec![],
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
     }

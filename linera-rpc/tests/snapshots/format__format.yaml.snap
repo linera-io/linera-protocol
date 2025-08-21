@@ -362,6 +362,9 @@ ChainInfoQuery:
             - TYPENAME: BlockHeight
             - TYPENAME: Round
     - request_fallback: BOOL
+    - request_sent_certificate_hashes_by_heights:
+        SEQ:
+          TYPENAME: BlockHeight
 ChainInfoResponse:
   STRUCT:
     - info:
@@ -789,6 +792,21 @@ NodeError:
       ResponseHandlingError:
         STRUCT:
           - error: STR
+    29:
+      MissingCertificatesByHeights:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - heights:
+              SEQ:
+                TYPENAME: BlockHeight
+    30:
+      TooManyCertificatesReturned:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - remote_node:
+              TYPENAME: Secp256k1PublicKey
 OpenChainConfig:
   STRUCT:
     - ownership:
@@ -1038,69 +1056,80 @@ RpcMessage:
           SEQ:
             TYPENAME: CryptoHash
     12:
+      DownloadCertificatesByHeights:
+        TUPLE:
+          - TYPENAME: ChainId
+          - SEQ:
+              TYPENAME: BlockHeight
+    13:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    13:
+    14:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    14:
-      VersionInfoQuery: UNIT
     15:
-      NetworkDescriptionQuery: UNIT
+      VersionInfoQuery: UNIT
     16:
+      NetworkDescriptionQuery: UNIT
+    17:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    17:
+    18:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    18:
+    19:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    19:
+    20:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    20:
+    21:
       NetworkDescriptionResponse:
         NEWTYPE:
           TYPENAME: NetworkDescription
-    21:
+    22:
       UploadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobId
-    22:
+    23:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    23:
+    24:
       DownloadPendingBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    24:
+    25:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: Block
-    25:
+    26:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    26:
+    27:
+      DownloadCertificatesByHeightsResponse:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: ConfirmedBlockCertificate
+    28:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    27:
+    29:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    28:
+    30:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

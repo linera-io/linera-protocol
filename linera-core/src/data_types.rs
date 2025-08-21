@@ -90,6 +90,9 @@ pub struct ChainInfoQuery {
     /// Include a vote to switch to fallback mode, if appropriate.
     #[debug(skip_if = Not::not)]
     pub request_fallback: bool,
+    /// Query for certificate hashes at block heights.
+    #[debug(skip_if = Vec::is_empty)]
+    pub request_sent_certificate_hashes_by_heights: Vec<BlockHeight>,
 }
 
 impl ChainInfoQuery {
@@ -105,6 +108,7 @@ impl ChainInfoQuery {
             request_manager_values: false,
             request_leader_timeout: None,
             request_fallback: false,
+            request_sent_certificate_hashes_by_heights: Vec::new(),
         }
     }
 

@@ -384,7 +384,11 @@ where
             | RpcMessage::DownloadCertificates(_)
             | RpcMessage::DownloadCertificatesResponse(_)
             | RpcMessage::UploadBlob(_)
-            | RpcMessage::UploadBlobResponse(_) => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::UploadBlobResponse(_)
+            | RpcMessage::DownloadCertificatesByHeights(_, _)
+            | RpcMessage::DownloadCertificatesByHeightsResponse(_) => {
+                Err(NodeError::UnexpectedMessage)
+            }
         };
 
         self.server.packets_processed += 1;
