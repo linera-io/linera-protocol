@@ -405,10 +405,7 @@ impl ValidatorNode for GrpcClient {
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         let mut missing_hashes = hashes;
         let mut certs_collected = Vec::with_capacity(missing_hashes.len());
-        loop {
-            if missing_hashes.is_empty() {
-                break;
-            }
+        while !missing_hashes.is_empty() {
             // Macro doesn't compile if we pass `missing_hashes.clone()` directly to `client_delegate!`.
             let missing = missing_hashes.clone();
             let mut received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
@@ -443,18 +440,33 @@ impl ValidatorNode for GrpcClient {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let request = CertificatesByHeightRequest { chain_id, heights };
-        let received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
-            client_delegate!(self, download_certificates_by_heights, request)?,
-        )?
-        .into_iter()
-        .map(|cert| {
-            ConfirmedBlockCertificate::try_from(cert)
-                .map_err(|_| NodeError::UnexpectedCertificateValue)
-        })
-        .collect::<Result<_, _>>()?;
+        let mut missing = heights;
+        let mut certs_collected = vec![];
+        while !missing.is_empty() {
+            let request = CertificatesByHeightRequest {
+                chain_id,
+                heights: missing.clone(),
+            };
+            let mut received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
+                client_delegate!(self, download_certificates_by_heights, request)?,
+            )?
+            .into_iter()
+            .map(|cert| {
+                ConfirmedBlockCertificate::try_from(cert)
+                    .map_err(|_| NodeError::UnexpectedCertificateValue)
+            })
+            .collect::<Result<_, _>>()?;
 
-        Ok(received)
+            if received.is_empty() {
+                break;
+            }
+
+            // Honest validator should return certificates in the same order as the requested hashes.
+            missing = missing[received.len()..].to_vec();
+            certs_collected.append(&mut received);
+        }
+
+        Ok(certs_collected)
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]

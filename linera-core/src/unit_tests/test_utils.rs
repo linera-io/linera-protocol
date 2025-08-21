@@ -632,8 +632,7 @@ where
         let hashes = match chain_info_response {
             Ok(response) => response.info.requested_sent_certificate_hashes,
             Err(e) => {
-                sender.send(Err(e)).ok();
-                return Ok(());
+                return sender.send(Err(e));
             }
         };
 
