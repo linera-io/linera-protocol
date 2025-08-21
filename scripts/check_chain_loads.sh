@@ -18,7 +18,7 @@ sed -i -e '/linera-storage\/src\/lib\.rs/d' "$USAGES_FILE"
 sed -i -e '/linera-storage\/src\/db_storage\.rs/d' "$USAGES_FILE"
 
 # The chain worker is where the most important usage happens
-sed -i -e '/linera-core\/src\/chain_worker\/state\/mod\.rs/d' "$USAGES_FILE"
+sed -i -e '/linera-core\/src\/chain_worker\/state\.rs/d' "$USAGES_FILE"
 
 # Worker tests load chains in order to populate them with test data
 sed -i -e '/linera-core\/src\/unit_tests\/worker_tests\.rs/d' "$USAGES_FILE"
