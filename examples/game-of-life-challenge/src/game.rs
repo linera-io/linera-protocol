@@ -19,7 +19,7 @@ pub struct Puzzle {
     pub title: String,
     /// A summary of the goal of the puzzle.
     pub summary: String,
-    /// A summary of the goal of the puzzle.
+    /// The difficulty level, according to the puzzle's creator.
     pub difficulty: Difficulty,
     /// The grid size.
     pub size: u16,
