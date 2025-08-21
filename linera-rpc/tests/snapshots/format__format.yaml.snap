@@ -733,53 +733,45 @@ NodeError:
           SEQ:
             TYPENAME: CryptoHash
     13:
-      MissingCertificatesByHeights:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - heights:
-              SEQ:
-                TYPENAME: BlockHeight
-    14:
       MissingVoteInValidatorResponse:
         NEWTYPE: STR
-    15:
+    14:
       InvalidChainInfoResponse: UNIT
-    16:
+    15:
       UnexpectedCertificateValue: UNIT
-    17:
+    16:
       InvalidDecoding: UNIT
-    18:
+    17:
       UnexpectedMessage: UNIT
-    19:
+    18:
       GrpcError:
         STRUCT:
           - error: STR
-    20:
+    19:
       ClientIoError:
         STRUCT:
           - error: STR
-    21:
+    20:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    22:
+    21:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    23:
+    22:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    24:
+    23:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    25:
+    24:
       DuplicatesInBlobsNotFound: UNIT
-    26:
+    25:
       UnexpectedEntriesInBlobsNotFound: UNIT
-    27:
+    26:
       UnexpectedCertificates:
         STRUCT:
           - returned:
@@ -788,9 +780,9 @@ NodeError:
           - requested:
               SEQ:
                 TYPENAME: CryptoHash
-    28:
+    27:
       EmptyBlobsNotFound: UNIT
-    29:
+    28:
       ResponseHandlingError:
         STRUCT:
           - error: STR

@@ -255,18 +255,6 @@ pub enum NodeError {
     #[error("Response doesn't contain requested certificates: {0:?}")]
     MissingCertificates(Vec<CryptoHash>),
 
-    #[error("Missing certificates for chain {chain_id} in heights {heights:?}")]
-    MissingCertificatesByHeights {
-        chain_id: ChainId,
-        heights: Vec<BlockHeight>,
-    },
-
-    #[error("Too many certificates returned for chain {chain_id} from {remote_node}")]
-    TooManyCertificatesReturned {
-        chain_id: ChainId,
-        remote_node: Box<ValidatorPublicKey>,
-    },
-
     #[error("Validator's response failed to include a vote when trying to {0}")]
     MissingVoteInValidatorResponse(String),
 
