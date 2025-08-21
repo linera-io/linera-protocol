@@ -75,6 +75,13 @@ spec:
             - name: linera-db
               mountPath: "/linera.db"
             {{- end }}
+          {{- if .Values.enableCpuPinning }}
+          resources:
+            requests:
+              cpu: "1"
+            limits:
+              cpu: "1"
+          {{- end }}
       volumes:
         - name: config
           configMap:
