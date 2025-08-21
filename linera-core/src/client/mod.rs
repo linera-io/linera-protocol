@@ -814,11 +814,6 @@ impl<Env: Environment> Client<Env> {
         .flatten()
         .collect::<Vec<_>>();
 
-        info!(
-            "Received {} certificates from validator {:?} for chain {chain_id:.8}",
-            certificates.len(),
-            remote_node.public_key
-        );
         let mut certificates_by_height_by_chain = BTreeMap::new();
 
         // Check the signatures and keep only the ones that are valid.
