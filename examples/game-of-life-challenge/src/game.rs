@@ -280,7 +280,7 @@ impl DirectBoard {
 
 impl Display for Board {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.index().fmt(formatter)
+        self.to_direct_board().fmt(formatter)
     }
 }
 
@@ -376,7 +376,7 @@ impl Board {
         }
     }
 
-    fn index(&self) -> DirectBoard {
+    fn to_direct_board(&self) -> DirectBoard {
         let mut index = BTreeMap::<_, BTreeSet<_>>::new();
         for Position { x, y } in self.live_cells.iter().cloned() {
             index.entry(x).or_default().insert(y);
@@ -392,7 +392,7 @@ impl Board {
         &self,
         conditions: &[Condition],
     ) -> Result<(), (usize, ConditionFailureReason)> {
-        self.index().check_conditions(conditions)
+        self.to_direct_board().check_conditions(conditions)
     }
 
     /// Check that the board satisfies the given puzzle.

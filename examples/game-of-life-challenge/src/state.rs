@@ -4,9 +4,8 @@
 use async_graphql::{InputObject, SimpleObject};
 use gol_challenge::game::Board;
 use linera_sdk::{
-    linera_base_types::Timestamp,
+    linera_base_types::{DataBlobHash, Timestamp},
     views::{linera_views, MapView, RootView, ViewStorageContext},
-    DataBlobHash,
 };
 use serde::{Deserialize, Serialize};
 

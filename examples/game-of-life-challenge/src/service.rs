@@ -13,7 +13,9 @@ use gol_challenge::{
     Operation,
 };
 use linera_sdk::{
-    graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, DataBlobHash,
+    graphql::GraphQLMutationRoot,
+    linera_base_types::{DataBlobHash, WithServiceAbi},
+    views::View,
     Service, ServiceRuntime,
 };
 
