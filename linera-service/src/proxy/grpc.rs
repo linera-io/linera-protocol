@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{
-    data_types::{BlockHeightRange, CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
+    data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
     notifier::ChannelNotifier,
     JoinSetExt as _,
 };
@@ -635,9 +635,8 @@ where
         request: Request<api::DownloadCertificatesByHeightsRequest>,
     ) -> Result<Response<CertificatesBatchResponse>, Status> {
         let original_request: CertificatesByHeightRequest = request.into_inner().try_into()?;
-        let requested_range = BlockHeightRange::from_heights(original_request.heights);
         let chain_info_request = ChainInfoQuery::new(original_request.chain_id)
-            .with_sent_certificate_hashes_in_range(requested_range);
+            .with_sent_certificate_hashes_by_heights(original_request.heights);
 
         // Use handle_chain_info_query to get the certificate hashes
         let chain_info_response = self
