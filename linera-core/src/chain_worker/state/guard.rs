@@ -794,6 +794,12 @@ where
             return Ok((self.chain_info_response(), NetworkActions::default()));
         }
 
+        // Make sure we remember that a proposal was signed, to determine the correct round to
+        // propose in.
+        if self.0.chain.manager.update_signed_proposal(&proposal) {
+            self.save().await?;
+        }
+
         let published_blobs = self.load_proposal_blobs(&proposal).await?;
         let ProposalContent {
             block,

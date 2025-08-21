@@ -373,6 +373,9 @@ ChainManagerInfo:
   STRUCT:
     - ownership:
         TYPENAME: ChainOwnership
+    - requested_signed_proposal:
+        OPTION:
+          TYPENAME: BlockProposal
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal

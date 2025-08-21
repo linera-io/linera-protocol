@@ -1024,6 +1024,9 @@ impl<Env: Environment> Client<Env> {
             self.handle_certificate(Box::new(*timeout)).await?;
         }
         let mut proposals = Vec::new();
+        if let Some(proposal) = remote_info.manager.requested_signed_proposal {
+            proposals.push(*proposal);
+        }
         if let Some(proposal) = remote_info.manager.requested_proposed {
             proposals.push(*proposal);
         }
@@ -2996,9 +2999,11 @@ impl<Env: Environment> ChainClient<Env> {
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.
         let conflict = manager
-            .requested_proposed
+            .requested_signed_proposal
             .as_ref()
-            .is_some_and(|proposal| proposal.content.round == manager.current_round)
+            .into_iter()
+            .chain(&manager.requested_proposed)
+            .any(|proposal| proposal.content.round == manager.current_round)
             || (manager.current_round.is_fast() && has_oracle_responses);
         let round = if !conflict {
             manager.current_round

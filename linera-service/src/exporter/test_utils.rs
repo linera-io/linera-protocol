@@ -199,26 +199,11 @@ impl ValidatorNode for DummyValidator {
             }
         }
 
-        let manager = ChainManagerInfo {
-            ownership: Default::default(),
-            requested_proposed: None,
-            requested_locking: None,
-            timeout: None,
-            pending: None,
-            timeout_vote: None,
-            fallback_vote: None,
-            requested_confirmed: None,
-            requested_validated: None,
-            current_round: Default::default(),
-            leader: None,
-            round_timeout: None,
-        };
-
         let chain_info = ChainInfo {
             chain_id: ChainId(CryptoHash::test_hash("test")),
             epoch: Epoch::ZERO,
             description: None,
-            manager: manager.into(),
+            manager: ChainManagerInfo::default().into(),
             chain_balance: Amount::ONE,
             block_hash: None,
             timestamp: Timestamp::now(),
