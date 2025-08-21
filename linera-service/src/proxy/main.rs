@@ -385,7 +385,11 @@ where
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)
-            | UploadBlobResponse(_) => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
+            | UploadBlobResponse(_)
+            | DownloadCertificatesByHeights(_, _)
+            | DownloadCertificatesByHeightsResponse(_) => {
+                Err(anyhow::Error::from(NodeError::UnexpectedMessage))
+            }
         }
     }
 }

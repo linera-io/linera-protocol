@@ -288,6 +288,18 @@ pub enum NodeError {
     EmptyBlobsNotFound,
     #[error("Local error handling validator response: {error}")]
     ResponseHandlingError { error: String },
+
+    #[error("Missing certificates for chain {chain_id} in heights {heights:?}")]
+    MissingCertificatesByHeights {
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    },
+
+    #[error("Too many certificates returned for chain {chain_id} from {remote_node}")]
+    TooManyCertificatesReturned {
+        chain_id: ChainId,
+        remote_node: Box<ValidatorPublicKey>,
+    },
 }
 
 impl From<tonic::Status> for NodeError {
