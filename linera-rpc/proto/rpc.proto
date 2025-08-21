@@ -194,26 +194,23 @@ message ChainInfoQuery {
   // Query the received messages that are waiting to be picked in the next block.
   bool request_pending_message_bundles = 4;
 
-  // Query a range of certificates hashes sent from the chain.
-  optional bytes request_sent_certificate_hashes_in_range = 5;
-
   // Query new certificate removed from the chain.
-  optional uint64 request_received_log_excluding_first_n = 6;
+  optional uint64 request_received_log_excluding_first_n = 5;
 
   // Query values from the chain manager, not just votes.
-  bool request_manager_values = 7;
+  bool request_manager_values = 6;
 
   // Request a signed vote for a leader timeout for the given height and round.
-  optional bytes request_leader_timeout = 8;
+  optional bytes request_leader_timeout = 7;
 
   // Query the balance of a given owner.
-  AccountOwner request_owner_balance = 9;
+  AccountOwner request_owner_balance = 8;
 
   // Request a signed vote for fallback mode.
-  bool request_fallback = 10;
+  bool request_fallback = 9;
 
   // Query for certificate hashes at block heights sent from the chain.
-  optional bytes request_sent_certificate_hashes_by_heights = 11;
+  optional bytes request_sent_certificate_hashes_by_heights = 10;
 }
 
 // An authenticated proposal for a new block.

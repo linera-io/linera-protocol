@@ -75,9 +75,6 @@ pub struct ChainInfoQuery {
     /// Query the received messages that are waiting to be picked in the next block.
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
-    /// Query a range of certificate hashes sent from the chain.
-    #[debug(skip_if = Option::is_none)]
-    pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query for certificate hashes at block heights.
     #[debug(skip_if = Vec::is_empty)]
     pub request_sent_certificate_hashes_by_heights: Vec<BlockHeight>,
@@ -106,7 +103,6 @@ impl ChainInfoQuery {
             request_committees: false,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
-            request_sent_certificate_hashes_in_range: None,
             request_sent_certificate_hashes_by_heights: Vec::new(),
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
@@ -136,15 +132,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_sent_certificate_hashes_in_range(mut self, range: BlockHeightRange) -> Self {
-        self.request_sent_certificate_hashes_in_range = Some(range);
-        self.request_sent_certificate_hashes_by_heights = Vec::new();
-        self
-    }
-
     pub fn with_sent_certificate_hashes_by_heights(mut self, heights: Vec<BlockHeight>) -> Self {
         self.request_sent_certificate_hashes_by_heights = heights;
-        self.request_sent_certificate_hashes_in_range = None;
         self
     }
 

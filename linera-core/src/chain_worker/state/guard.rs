@@ -919,30 +919,16 @@ where
 
             info.requested_pending_message_bundles = messages;
         }
-        if !query.request_sent_certificate_hashes_by_heights.is_empty() {
-            let mut hashes = Vec::new();
-            for height in query.request_sent_certificate_hashes_by_heights {
-                let hash = chain
-                    .confirmed_log
-                    .get(height.try_into()?)
-                    .await?
-                    .ok_or(WorkerError::ReadCertificatesError(vec![]))?;
-                hashes.push(hash);
-            }
-            info.requested_sent_certificate_hashes = hashes;
+        let mut hashes = Vec::new();
+        for height in query.request_sent_certificate_hashes_by_heights {
+            let hash = chain
+                .confirmed_log
+                .get(height.try_into()?)
+                .await?
+                .ok_or(WorkerError::ReadCertificatesError(vec![]))?;
+            hashes.push(hash);
         }
-        if let Some(range) = query.request_sent_certificate_hashes_in_range {
-            let start: usize = range.start.try_into()?;
-            let end = match range.limit {
-                None => chain.confirmed_log.count(),
-                Some(limit) => start
-                    .checked_add(usize::try_from(limit).map_err(|_| ArithmeticError::Overflow)?)
-                    .ok_or(ArithmeticError::Overflow)?
-                    .min(chain.confirmed_log.count()),
-            };
-            let keys = chain.confirmed_log.read(start..end).await?;
-            info.requested_sent_certificate_hashes = keys;
-        }
+        info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
             info.requested_received_log = chain.received_log.read(start..).await?;

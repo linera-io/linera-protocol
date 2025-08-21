@@ -1077,11 +1077,8 @@ where
         block_height: BlockHeight,
         target_count: usize,
     ) -> Option<ConfirmedBlockCertificate> {
-        let query =
-            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(BlockHeightRange {
-                start: block_height,
-                limit: Some(1),
-            });
+        let query = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_by_heights(vec![block_height]);
         let mut count = 0;
         let mut certificate = None;
         for validator in self.validator_clients.clone() {
