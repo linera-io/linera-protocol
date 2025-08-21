@@ -921,12 +921,7 @@ where
         }
         let mut hashes = Vec::new();
         for height in query.request_sent_certificate_hashes_by_heights {
-            let hash = chain
-                .confirmed_log
-                .get(height.try_into()?)
-                .await?
-                .ok_or(WorkerError::ReadCertificatesError(vec![]))?;
-            hashes.push(hash);
+            hashes.extend(chain.block_hashes(height..=height).await?);
         }
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
