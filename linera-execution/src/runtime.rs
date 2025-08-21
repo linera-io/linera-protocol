@@ -87,9 +87,6 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     height: BlockHeight,
     /// The current consensus round. Only available during block validation in multi-leader rounds.
     round: Option<u32>,
-    /// The authenticated signer of the operation or message, if any.
-    #[debug(skip_if = Option::is_none)]
-    authenticated_signer: Option<AccountOwner>,
     /// The current message being executed, if there is one.
     #[debug(skip_if = Option::is_none)]
     executing_message: Option<ExecutingMessage>,
@@ -311,7 +308,6 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
         chain_id: ChainId,
         height: BlockHeight,
         round: Option<u32>,
-        authenticated_signer: Option<AccountOwner>,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
         deadline: Option<Instant>,
@@ -324,7 +320,6 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             chain_id,
             height,
             round,
-            authenticated_signer,
             executing_message,
             execution_state_sender,
             is_finalizing: false,
@@ -1008,7 +1003,6 @@ impl ContractSyncRuntime {
                 chain_id,
                 action.height(),
                 action.round(),
-                action.signer(),
                 if let UserAction::Message(context, _) = action {
                     Some(context.into())
                 } else {
@@ -1085,7 +1079,6 @@ impl ContractSyncRuntimeHandle {
 
         {
             let runtime = self.inner();
-            assert_eq!(runtime.authenticated_signer, action.signer());
             assert_eq!(runtime.chain_id, chain_id);
             assert_eq!(runtime.height, action.height());
         }
@@ -1171,7 +1164,8 @@ impl ContractSyncRuntimeHandle {
 
 impl ContractRuntime for ContractSyncRuntimeHandle {
     fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError> {
-        Ok(self.inner().authenticated_signer)
+        let this = self.inner();
+        Ok(this.current_application().signer)
     }
 
     fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError> {
@@ -1684,7 +1678,6 @@ impl ServiceSyncRuntime {
             SyncRuntimeInternal::new(
                 context.chain_id,
                 context.next_block_height,
-                None,
                 None,
                 None,
                 execution_state_sender,

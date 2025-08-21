@@ -180,7 +180,6 @@ where
         BlockHeight(0),
         Some(0),
         None,
-        None,
         execution_state_sender,
         None,
         None,
