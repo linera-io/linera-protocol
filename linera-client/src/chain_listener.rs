@@ -261,6 +261,9 @@ impl<C: ClientContext> ChainListener<C> {
                 }
                 self.process_new_events(notification.chain_id).await?;
             }
+            Reason::NewEvents { .. } => {
+                self.process_new_events(notification.chain_id).await?;
+            }
         }
         Self::sleep(self.config.delay_after_ms).await;
         Ok(())

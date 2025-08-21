@@ -3677,11 +3677,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                 }
             }
-            Reason::NewBlock {
-                height,
-                hash,
-                event_streams,
-            } => {
+            Reason::NewBlock { height, .. } => {
                 let chain_id = notification.chain_id;
                 if self
                     .local_next_block_height(chain_id, &mut local_node)
@@ -3707,29 +3703,41 @@ impl<Env: Environment> ChainClient<Env> {
                             error!("NewBlock: Fail to synchronize new block after notification");
                         }
                     }
-                    ListeningMode::EventsOnly(relevant_events) => {
-                        if relevant_events.intersection(&event_streams).count() == 0 {
-                            debug!(
-                                %chain_id,
-                                %height,
-                                "NewBlock: got a notification, but no relevant event streams in it"
-                            );
-                            return Ok(());
-                        }
-                        let mut certificates =
-                            remote_node.download_certificates(vec![hash]).await?;
-                        // download_certificates ensure that we will get exactly one
-                        // certificate in the result
-                        let certificate = certificates.pop().unwrap();
-                        self.client
-                            .receive_sender_certificate(
-                                certificate,
-                                ReceiveCertificateMode::NeedsCheck,
-                                None,
-                            )
-                            .await?;
-                    }
+                    ListeningMode::EventsOnly(_) => {}
                 }
+            }
+            Reason::NewEvents {
+                height,
+                hash,
+                event_streams,
+            } => {
+                let should_process = match listening_mode {
+                    ListeningMode::FullChain => true,
+                    ListeningMode::EventsOnly(relevant_events) => {
+                        relevant_events.intersection(&event_streams).count() != 0
+                    }
+                };
+                if !should_process {
+                    debug!(
+                        chain_id=%notification.chain_id,
+                        %height,
+                        "NewEvents: got a notification, but no relevant event streams in it"
+                    );
+                    return Ok(());
+                }
+                let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
+                // download_certificates ensure that we will get exactly one
+                // certificate in the result
+                let certificate = certificates
+                    .pop()
+                    .expect("download_certificates should have returned one certificate");
+                self.client
+                    .receive_sender_certificate(
+                        certificate,
+                        ReceiveCertificateMode::NeedsCheck,
+                        None,
+                    )
+                    .await?;
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;

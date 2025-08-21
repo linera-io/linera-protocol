@@ -132,6 +132,10 @@ pub enum Reason {
     NewBlock {
         height: BlockHeight,
         hash: CryptoHash,
+    },
+    NewEvents {
+        height: BlockHeight,
+        hash: CryptoHash,
         event_streams: BTreeSet<StreamId>,
     },
     NewIncomingBundle {

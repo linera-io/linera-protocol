@@ -806,7 +806,11 @@ where
         let mut actions = self.create_network_actions().await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         let hash = certificate.hash();
-        let event_streams = certificate
+        actions.notifications.push(Notification {
+            chain_id,
+            reason: Reason::NewBlock { height, hash },
+        });
+        let event_streams: BTreeSet<_> = certificate
             .value()
             .block()
             .body
@@ -815,14 +819,16 @@ where
             .flatten()
             .map(|event| event.stream_id.clone())
             .collect();
-        actions.notifications.push(Notification {
-            chain_id,
-            reason: Reason::NewBlock {
-                height,
-                hash,
-                event_streams,
-            },
-        });
+        if !event_streams.is_empty() {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewEvents {
+                    height,
+                    hash,
+                    event_streams,
+                },
+            });
+        }
         // Persist chain.
         self.save().await?;
 

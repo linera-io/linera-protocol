@@ -1301,7 +1301,6 @@ pub mod tests {
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
                 hash: CryptoHash::new(&Foo("".into())),
-                event_streams: Default::default(),
             },
         };
         let message = api::Notification::try_from(notification.clone()).unwrap();
