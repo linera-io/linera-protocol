@@ -13,8 +13,6 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
-    key_value_store_view::KeyValueStoreView,
-    small_key_value_store_view::SmallKeyValueStoreView,
     map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
     views::{ClonableView, ReplaceContext, View},
@@ -45,7 +43,10 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, ApplicationId, SmallKeyValueStoreView<C>>,
+    #[cfg(not(feature = "smallkeyvaluestoreview"))]
+    pub users: HashedReentrantCollectionView<C, ApplicationId, linera_views::small_key_value_store_view::SmallKeyValueStoreView<C>>,
+    #[cfg(feature = "smallkeyvaluestoreview")]
+    pub users: HashedReentrantCollectionView<C, ApplicationId, linera_views::key_value_store_view::KeyValueStoreView<C>>,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
 }
