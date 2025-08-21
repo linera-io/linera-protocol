@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, time::Duration};
+use std::{
+    collections::{BTreeSet, HashSet},
+    time::Duration,
+};
 
 use custom_debug_derive::Debug;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
@@ -249,9 +252,30 @@ impl<N: ValidatorNode> RemoteNode<N> {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        self.node
+        let mut expected_heights = heights.clone().into_iter().collect::<BTreeSet<_>>();
+        let certificates = self
+            .node
             .download_certificates_by_heights(chain_id, heights)
-            .await
+            .await?;
+
+        for cert in &certificates {
+            ensure!(
+                cert.inner().chain_id() == chain_id,
+                NodeError::UnexpectedCertificateValue
+            );
+            ensure!(
+                expected_heights.remove(&cert.inner().height()),
+                NodeError::UnexpectedCertificateValue
+            );
+        }
+        ensure!(
+            expected_heights.is_empty(),
+            NodeError::MissingCertificatesByHeights {
+                chain_id,
+                heights: expected_heights.into_iter().collect(),
+            }
+        );
+        Ok(certificates)
     }
 
     /// Downloads a blob, but does not verify if it has actually been published and
