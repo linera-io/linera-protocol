@@ -16,7 +16,7 @@ use crate::{
     register_view::RegisterView,
     sha3,
     store::ReadableKeyValueStore,
-    views::{ClonableView, HashableView, Hasher, View},
+    views::{ClonableView, HashableView, Hasher, ReplaceContext, View},
     ViewError,
 };
 
@@ -137,6 +137,22 @@ pub struct SmallKeyValueStoreView<C> {
     map: RegisterView<C, BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
+impl<C, C2> ReplaceContext<C2> for SmallKeyValueStoreView<C>
+where
+    C: Context,
+    C2: Context,
+{
+    type Target = SmallKeyValueStoreView<C2>;
+
+    async fn with_context(
+        &mut self,
+        ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
+    ) -> Self::Target {
+        let map = self.map.with_context(ctx).await;
+        SmallKeyValueStoreView { map }
+    }
+}
+
 impl<C> View for SmallKeyValueStoreView<C>
 where
     C: Context,
@@ -146,7 +162,7 @@ where
     type Context = C;
 
     fn context(&self) -> &C {
-        &self.map.context()
+        self.map.context()
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
