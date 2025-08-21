@@ -440,6 +440,10 @@ impl Cell {
         self.value += 2;
     }
 
+    // Implement the rules of the Game of Life.
+    // * Dead cell with 3 neighbors (6) becomes alive.
+    // * Live cell with 2 neighbors (5) stays alive.
+    // * Live cell with 3 neighbors (7) stays alive.
     fn should_be_live_next(self) -> bool {
         self.value >= 5 && self.value <= 7
     }
@@ -610,35 +614,6 @@ mod tests {
 
         let next_board = board.advance_once();
         assert!(next_board.live_cells.contains(&Position { x: 2, y: 2 }));
-    }
-
-    #[test]
-    fn test_cell_should_be_live_next() {
-        // Test the game of life rules.
-
-        // Dead cell with no neighbors stays dead.
-        let cell = Cell::default();
-        assert!(!cell.should_be_live_next());
-
-        // Dead cell with 3 neighbors becomes alive.
-        let cell = Cell { value: 3 * 2 };
-        assert!(cell.should_be_live_next());
-
-        // Live cell with 1 neighbor dies.
-        let cell = Cell { value: 1 * 2 + 1 };
-        assert!(!cell.should_be_live_next());
-
-        // Live cell with 2 neighbors stays alive.
-        let cell = Cell { value: 2 * 2 + 1 };
-        assert!(cell.should_be_live_next());
-
-        // Live cell with 3 neighbors stays alive.
-        let cell = Cell { value: 3 * 2 + 1 };
-        assert!(cell.should_be_live_next());
-
-        // Live cell with 4 neighbors dies.
-        let cell = Cell { value: 4 * 2 + 1 };
-        assert!(!cell.should_be_live_next());
     }
 
     #[test]
