@@ -154,10 +154,10 @@ where
     /// The probability distribution for choosing a fallback round leader.
     #[cfg_attr(with_graphql, graphql(skip))] // Derived from validator weights.
     pub fallback_distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
-    /// Highest-round authenticated block that we have received, but not necessarily check yet.
-    /// If there are multiple proposals in the same round, this contains only the first one.
-    /// This can even contain proposals that did not execute successfully, to determine which round
-    /// to propose in.
+    /// Highest-round authenticated block that we have received, but not necessarily
+    /// checked yet. If there are multiple proposals in the same round, this contains only the
+    /// first one. This can even contain proposals that did not execute successfully, to determine
+    /// which round to propose in.
     #[cfg_attr(with_graphql, graphql(skip))]
     pub signed_proposal: RegisterView<C, Option<BlockProposal>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
