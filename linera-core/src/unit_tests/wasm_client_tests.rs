@@ -980,16 +980,12 @@ where
     // Set the validators back to Honest.
     builder.set_fault_type([0, 1], FaultType::Honest).await;
 
-    // Now player A tries to claim victory since B has timed out.
+    // Now player A claim victory since B has timed out. This works because it sees the existing
+    // block proposal and makes a new proposal in the next round instead.
     let claim_victory_operation = HexOperation::ClaimVictory;
     client_a.synchronize_from_validators().await?;
-    let result = client_a
+    client_a
         .execute_operation(Operation::user(app_id, &claim_victory_operation)?)
-        .await;
-
-    // This fails due to the expected bug: game_client_a proposed in multi-leader round 0 again.
-    // TODO(#2971): Fix this and assert that it passes.
-    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
-
+        .await?;
     Ok(())
 }

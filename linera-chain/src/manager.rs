@@ -154,6 +154,12 @@ where
     /// The probability distribution for choosing a fallback round leader.
     #[cfg_attr(with_graphql, graphql(skip))] // Derived from validator weights.
     pub fallback_distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
+    /// Highest-round authenticated block that we have received, but not necessarily check yet.
+    /// If there are multiple proposals in the same round, this contains only the first one.
+    /// This can even contain proposals that did not execute successfully, to determine which round
+    /// to propose in.
+    #[cfg_attr(with_graphql, graphql(skip))]
+    pub signed_proposal: RegisterView<C, Option<BlockProposal>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
     #[cfg_attr(with_graphql, graphql(skip))]
@@ -676,6 +682,26 @@ where
         self.ownership.get().super_owners.contains(owner)
     }
 
+    /// Sets the signed proposal, if it is newer than the known one, and not from a single-leader
+    /// round. Returns whether it was updated.
+    pub fn update_signed_proposal(&mut self, proposal: &BlockProposal) -> bool {
+        if proposal.content.round > Round::MultiLeader(u32::MAX) {
+            return false;
+        }
+        if let Some(old_proposal) = self.signed_proposal.get() {
+            if old_proposal.content.round >= proposal.content.round {
+                return false;
+            }
+        }
+        if let Some(old_proposal) = self.proposed.get() {
+            if old_proposal.content.round >= proposal.content.round {
+                return false;
+            }
+        }
+        self.signed_proposal.set(Some(proposal.clone()));
+        true
+    }
+
     /// Sets the proposed block, if it is newer than our known latest proposal.
     fn update_proposed(
         &mut self,
@@ -685,6 +711,11 @@ where
         if let Some(old_proposal) = self.proposed.get() {
             if old_proposal.content.round >= proposal.content.round {
                 return Ok(());
+            }
+        }
+        if let Some(old_proposal) = self.signed_proposal.get() {
+            if old_proposal.content.round <= proposal.content.round {
+                self.signed_proposal.set(None);
             }
         }
         self.proposed.set(Some(proposal));
@@ -721,7 +752,10 @@ where
 pub struct ChainManagerInfo {
     /// The configuration of the chain's owners.
     pub ownership: ChainOwnership,
-    /// Latest authenticated block that we have received, if requested.
+    /// Latest authenticated block that we have received, if requested. This can even contain
+    /// proposals that did not execute successfully, to determine which round to propose in.
+    pub requested_signed_proposal: Option<Box<BlockProposal>>,
+    /// Latest authenticated block that we have received and checked, if requested.
     #[debug(skip_if = Option::is_none)]
     pub requested_proposed: Option<Box<BlockProposal>>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
@@ -775,6 +809,7 @@ where
         };
         ChainManagerInfo {
             ownership: manager.ownership.get().clone(),
+            requested_signed_proposal: None,
             requested_proposed: None,
             requested_locking: None,
             timeout: manager.timeout.get().clone().map(Box::new),
@@ -797,6 +832,7 @@ impl ChainManagerInfo {
         C: Context + Clone + Send + Sync + 'static,
         C::Extra: ExecutionRuntimeContext,
     {
+        self.requested_signed_proposal = manager.signed_proposal.get().clone().map(Box::new);
         self.requested_proposed = manager.proposed.get().clone().map(Box::new);
         self.requested_locking = manager.locking_block.get().clone().map(Box::new);
         self.requested_confirmed = manager
