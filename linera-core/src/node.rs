@@ -261,6 +261,12 @@ pub enum NodeError {
         heights: Vec<BlockHeight>,
     },
 
+    #[error("Too many certificates returned for chain {chain_id} from {remote_node}")]
+    TooManyCertificatesReturned {
+        chain_id: ChainId,
+        remote_node: Box<ValidatorPublicKey>,
+    },
+
     #[error("Validator's response failed to include a vote when trying to {0}")]
     MissingVoteInValidatorResponse(String),
 

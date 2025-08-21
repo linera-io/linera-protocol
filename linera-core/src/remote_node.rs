@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{HashSet, VecDeque},
     time::Duration,
 };
 
@@ -252,22 +252,34 @@ impl<N: ValidatorNode> RemoteNode<N> {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let mut expected_heights = heights.clone().into_iter().collect::<BTreeSet<_>>();
+        let mut expected_heights = VecDeque::from(heights.clone());
         let certificates = self
             .node
             .download_certificates_by_heights(chain_id, heights)
             .await?;
 
-        for cert in &certificates {
-            ensure!(
-                cert.inner().chain_id() == chain_id,
-                NodeError::UnexpectedCertificateValue
-            );
-            ensure!(
-                expected_heights.remove(&cert.inner().height()),
-                NodeError::UnexpectedCertificateValue
-            );
+        if certificates.len() > expected_heights.len() {
+            return Err(NodeError::TooManyCertificatesReturned {
+                chain_id,
+                remote_node: Box::new(self.public_key),
+            });
         }
+
+        for certificate in &certificates {
+            ensure!(
+                certificate.inner().chain_id() == chain_id,
+                NodeError::UnexpectedCertificateValue
+            );
+            if let Some(expected_height) = expected_heights.pop_front() {
+                ensure!(
+                    expected_height == certificate.inner().height(),
+                    NodeError::UnexpectedCertificateValue
+                );
+            } else {
+                return Err(NodeError::UnexpectedCertificateValue);
+            }
+        }
+
         ensure!(
             expected_heights.is_empty(),
             NodeError::MissingCertificatesByHeights {
