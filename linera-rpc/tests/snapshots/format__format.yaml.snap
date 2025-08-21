@@ -353,6 +353,9 @@ ChainInfoQuery:
     - request_sent_certificate_hashes_in_range:
         OPTION:
           TYPENAME: BlockHeightRange
+    - request_sent_certificate_hashes_by_heights:
+        SEQ:
+          TYPENAME: BlockHeight
     - request_received_log_excluding_first_n:
         OPTION: U64
     - request_manager_values: BOOL
@@ -739,45 +742,53 @@ NodeError:
           SEQ:
             TYPENAME: CryptoHash
     13:
+      MissingCertificatesByHeights:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - heights:
+              SEQ:
+                TYPENAME: BlockHeight
+    14:
       MissingVoteInValidatorResponse:
         NEWTYPE: STR
-    14:
-      InvalidChainInfoResponse: UNIT
     15:
-      UnexpectedCertificateValue: UNIT
+      InvalidChainInfoResponse: UNIT
     16:
-      InvalidDecoding: UNIT
+      UnexpectedCertificateValue: UNIT
     17:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     18:
+      UnexpectedMessage: UNIT
+    19:
       GrpcError:
         STRUCT:
           - error: STR
-    19:
+    20:
       ClientIoError:
         STRUCT:
           - error: STR
-    20:
+    21:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    21:
+    22:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    22:
+    23:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    23:
+    24:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    24:
-      DuplicatesInBlobsNotFound: UNIT
     25:
-      UnexpectedEntriesInBlobsNotFound: UNIT
+      DuplicatesInBlobsNotFound: UNIT
     26:
+      UnexpectedEntriesInBlobsNotFound: UNIT
+    27:
       UnexpectedCertificates:
         STRUCT:
           - returned:
@@ -786,9 +797,9 @@ NodeError:
           - requested:
               SEQ:
                 TYPENAME: CryptoHash
-    27:
-      EmptyBlobsNotFound: UNIT
     28:
+      EmptyBlobsNotFound: UNIT
+    29:
       ResponseHandlingError:
         STRUCT:
           - error: STR
