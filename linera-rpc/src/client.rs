@@ -248,8 +248,9 @@ impl ValidatorNode for Client {
     async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
-        heights: Vec<BlockHeight>,
+        mut heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        heights.sort();
         Ok(match self {
             Client::Grpc(grpc_client) => {
                 grpc_client

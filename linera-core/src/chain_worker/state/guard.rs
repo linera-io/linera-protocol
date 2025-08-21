@@ -919,6 +919,18 @@ where
 
             info.requested_pending_message_bundles = messages;
         }
+        if !query.request_sent_certificate_hashes_by_heights.is_empty() {
+            let mut hashes = Vec::new();
+            for height in query.request_sent_certificate_hashes_by_heights {
+                let hash = chain
+                    .confirmed_log
+                    .get(height.try_into()?)
+                    .await?
+                    .ok_or(WorkerError::ReadCertificatesError(vec![]))?;
+                hashes.push(hash);
+            }
+            info.requested_sent_certificate_hashes = hashes;
+        }
         if let Some(range) = query.request_sent_certificate_hashes_in_range {
             let start: usize = range.start.try_into()?;
             let end = match range.limit {

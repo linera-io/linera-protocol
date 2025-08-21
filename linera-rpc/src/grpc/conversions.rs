@@ -595,6 +595,11 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             .request_sent_certificate_hashes_in_range
             .map(|range| bincode::deserialize(&range))
             .transpose()?;
+        let request_sent_certificate_hashes_by_heights = chain_info_query
+            .request_sent_certificate_hashes_by_heights
+            .map(|heights| bincode::deserialize(&heights))
+            .transpose()?
+            .unwrap_or_default();
         let request_leader_timeout = chain_info_query
             .request_leader_timeout
             .map(|height_and_round| bincode::deserialize(&height_and_round))
@@ -612,7 +617,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
-            request_sent_certificate_hashes_by_heights: vec![],
+            request_sent_certificate_hashes_by_heights,
         })
     }
 }
@@ -625,6 +630,8 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             .request_sent_certificate_hashes_in_range
             .map(|range| bincode::serialize(&range))
             .transpose()?;
+        let request_sent_certificate_hashes_by_heights =
+            bincode::serialize(&chain_info_query.request_sent_certificate_hashes_by_heights)?;
         let request_owner_balance = Some(chain_info_query.request_owner_balance.try_into()?);
         let request_leader_timeout = chain_info_query
             .request_leader_timeout
@@ -638,6 +645,9 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_sent_certificate_hashes_in_range,
+            request_sent_certificate_hashes_by_heights: Some(
+                request_sent_certificate_hashes_by_heights,
+            ),
             request_received_log_excluding_first_n: chain_info_query
                 .request_received_log_excluding_first_n,
             request_manager_values: chain_info_query.request_manager_values,
@@ -1171,6 +1181,7 @@ pub mod tests {
                     limit: Some(5),
                 },
             ),
+            request_sent_certificate_hashes_by_heights: Vec::new(),
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: None,

@@ -445,7 +445,7 @@ impl ValidatorNode for GrpcClient {
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         let request = CertificatesByHeightRequest { chain_id, heights };
         let received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
-            client_delegate!(self, download_certificates_by_range, request)?,
+            client_delegate!(self, download_certificates_by_heights, request)?,
         )?
         .into_iter()
         .map(|cert| {

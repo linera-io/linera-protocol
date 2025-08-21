@@ -111,6 +111,9 @@ pub struct ChainInfoQuery {
     /// Query a range of certificate hashes sent from the chain.
     #[debug(skip_if = Option::is_none)]
     pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
+    /// Query for certificate hashes at block heights.
+    #[debug(skip_if = Vec::is_empty)]
+    pub request_sent_certificate_hashes_by_heights: Vec<BlockHeight>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
     #[debug(skip_if = Option::is_none)]
     pub request_received_log_excluding_first_n: Option<u64>,
@@ -137,6 +140,7 @@ impl ChainInfoQuery {
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: None,
+            request_sent_certificate_hashes_by_heights: Vec::new(),
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: None,
@@ -167,6 +171,13 @@ impl ChainInfoQuery {
 
     pub fn with_sent_certificate_hashes_in_range(mut self, range: BlockHeightRange) -> Self {
         self.request_sent_certificate_hashes_in_range = Some(range);
+        self.request_sent_certificate_hashes_by_heights = Vec::new();
+        self
+    }
+
+    pub fn with_sent_certificate_hashes_by_heights(mut self, heights: Vec<BlockHeight>) -> Self {
+        self.request_sent_certificate_hashes_by_heights = heights;
+        self.request_sent_certificate_hashes_in_range = None;
         self
     }
 

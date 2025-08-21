@@ -615,8 +615,7 @@ where
     ) -> Result<(), Result<Vec<ConfirmedBlockCertificate>, NodeError>> {
         // First, use do_handle_chain_info_query to get the certificate hashes
         let (query_sender, query_receiver) = oneshot::channel();
-        let range = BlockHeightRange::from_heights(heights);
-        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
+        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights);
 
         let self_clone = self.clone();
         self.do_handle_chain_info_query(query, query_sender)

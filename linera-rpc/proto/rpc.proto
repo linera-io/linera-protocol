@@ -87,7 +87,7 @@ service ValidatorNode {
   rpc DownloadCertificates(CertificatesBatchRequest) returns (CertificatesBatchResponse);
 
   /// Download a batch of certificates by height range.
-  rpc DownloadCertificatesByRange(DownloadCertificatesByHeightsRequest) returns (CertificatesBatchResponse);
+  rpc DownloadCertificatesByHeights(DownloadCertificatesByHeightsRequest) returns (CertificatesBatchResponse);
 
   // Return the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
@@ -211,6 +211,9 @@ message ChainInfoQuery {
 
   // Request a signed vote for fallback mode.
   bool request_fallback = 10;
+
+  // Query for certificate hashes at block heights sent from the chain.
+  optional bytes request_sent_certificate_hashes_by_heights = 11;
 }
 
 // An authenticated proposal for a new block.

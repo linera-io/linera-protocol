@@ -630,7 +630,7 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
-    async fn download_certificates_by_range(
+    async fn download_certificates_by_heights(
         &self,
         request: Request<api::DownloadCertificatesByHeightsRequest>,
     ) -> Result<Response<CertificatesBatchResponse>, Status> {
