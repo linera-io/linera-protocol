@@ -24,7 +24,7 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
-    map_view::{HashedMapView, MapView},
+    map_view::HashedMapView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
     views::{ClonableView, HashableView, ReplaceContext, View},
@@ -90,7 +90,7 @@ pub struct SystemExecutionStateView<C> {
     /// Blobs that have been used or published on this chain.
     pub used_blobs: HashedSetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
-    pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
+    pub event_subscriptions: HashedMapView<C, (ChainId, StreamId), EventSubscriptions>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
