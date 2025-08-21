@@ -1165,12 +1165,11 @@ pub mod tests {
             request_committees: false,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
-            request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: None,
             request_fallback: true,
-            request_sent_certificate_hashes_by_heights: vec![],
+            request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
     }

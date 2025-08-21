@@ -76,8 +76,6 @@ pub struct ChainInfoQuery {
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
     /// Query for certificate hashes at block heights.
-    #[debug(skip_if = Vec::is_empty)]
-    pub request_sent_certificate_hashes_by_heights: Vec<BlockHeight>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
     #[debug(skip_if = Option::is_none)]
     pub request_received_log_excluding_first_n: Option<u64>,
@@ -103,7 +101,6 @@ impl ChainInfoQuery {
             request_committees: false,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
-            request_sent_certificate_hashes_by_heights: Vec::new(),
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: None,
