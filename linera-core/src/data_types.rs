@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Display, ops::Not};
+use std::{collections::BTreeMap, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -55,22 +55,6 @@ impl BlockHeightRange {
     pub fn highest(&self) -> BlockHeight {
         self.limit
             .map_or(self.start, |limit| BlockHeight(self.start.0 + limit - 1))
-    }
-}
-
-impl Display for BlockHeightRange {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(limit) = self.limit {
-            if limit == 0 {
-                write!(f, "empty")
-            } else if limit == 1 {
-                write!(f, "{}", self.start)
-            } else {
-                write!(f, "{}..={}", self.start, self.start.0 + limit - 1)
-            }
-        } else {
-            write!(f, "{}", self.start)
-        }
     }
 }
 
