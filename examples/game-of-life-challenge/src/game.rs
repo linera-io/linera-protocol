@@ -218,7 +218,7 @@ impl DirectBoard {
     fn to_pretty_string(&self) -> String {
         let mut result = String::new();
 
-        // Add top border with column numbers for reference
+        // Add top border with column numbers for reference.
         result.push_str("   ");
         for x in 0..self.size {
             result.push_str(&format!("{:2}", x % 10));
@@ -226,7 +226,7 @@ impl DirectBoard {
         result.push('\n');
 
         for y in 0..self.size {
-            // Add row number for reference
+            // Add row number for reference.
             result.push_str(&format!("{:2} ", y));
 
             for x in 0..self.size {
@@ -551,7 +551,7 @@ mod tests {
 
     #[test]
     fn test_advance_block_pattern_stable() {
-        // Block pattern (2x2 square) should remain stable
+        // Block pattern (2x2 square) should remain stable.
         let mut board = Board::new(5);
         board.live_cells.extend([
             Position { x: 1, y: 1 },
@@ -570,7 +570,7 @@ mod tests {
 
     #[test]
     fn test_advance_blinker_pattern() {
-        // Blinker pattern should oscillate between horizontal and vertical
+        // Blinker pattern should oscillate between horizontal and vertical.
         let mut board = Board::new(5);
         board.live_cells.extend([
             Position { x: 2, y: 1 },
@@ -584,7 +584,7 @@ mod tests {
         assert!(next_board.live_cells.contains(&Position { x: 2, y: 2 }));
         assert!(next_board.live_cells.contains(&Position { x: 3, y: 2 }));
 
-        // Advance again to get back to original
+        // Advance again to get back to original.
         let next_next_board = next_board.advance_once();
         assert_eq!(next_next_board.live_cells.len(), 3);
         assert!(next_next_board
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn test_advance_birth_of_new_cell() {
-        // Three cells in an L shape should create a fourth cell
+        // Three cells in an L shape should create a fourth cell.
         let mut board = Board::new(5);
         board.live_cells.extend([
             Position { x: 1, y: 1 },
@@ -614,30 +614,30 @@ mod tests {
 
     #[test]
     fn test_cell_should_be_live_next() {
-        // Test the game of life rules
+        // Test the game of life rules.
 
-        // Dead cell with no neighbors stays dead
+        // Dead cell with no neighbors stays dead.
         let cell = Cell::default();
         assert!(!cell.should_be_live_next());
 
-        // Dead cell with 3 neighbors becomes alive
-        let cell = Cell { value: 6 }; // 3 neighbors * 2 = 6
+        // Dead cell with 3 neighbors becomes alive.
+        let cell = Cell { value: 3 * 2 };
         assert!(cell.should_be_live_next());
 
-        // Live cell with 2 neighbors stays alive
-        let cell = Cell { value: 5 }; // live (1) + 2 neighbors * 2 = 5
-        assert!(cell.should_be_live_next());
-
-        // Live cell with 3 neighbors stays alive
-        let cell = Cell { value: 7 }; // live (1) + 3 neighbors * 2 = 7
-        assert!(cell.should_be_live_next());
-
-        // Live cell with 1 neighbor dies
-        let cell = Cell { value: 3 }; // live (1) + 1 neighbor * 2 = 3
+        // Live cell with 1 neighbor dies.
+        let cell = Cell { value: 1 * 2 + 1 };
         assert!(!cell.should_be_live_next());
 
-        // Live cell with 4 neighbors dies
-        let cell = Cell { value: 9 }; // live (1) + 4 neighbors * 2 = 9
+        // Live cell with 2 neighbors stays alive.
+        let cell = Cell { value: 2 * 2 + 1 };
+        assert!(cell.should_be_live_next());
+
+        // Live cell with 3 neighbors stays alive.
+        let cell = Cell { value: 3 * 2 + 1 };
+        assert!(cell.should_be_live_next());
+
+        // Live cell with 4 neighbors dies.
+        let cell = Cell { value: 4 * 2 + 1 };
         assert!(!cell.should_be_live_next());
     }
 
@@ -648,21 +648,21 @@ mod tests {
         index.insert(2, BTreeSet::from([1]));
         let board = DirectBoard { index, size: 4 };
 
-        // Test live cell condition
+        // Test live cell condition..
         let condition = Condition::TestPosition {
             position: Position { x: 1, y: 2 },
             is_live: true,
         };
         assert!(condition.check(&board).is_ok());
 
-        // Test dead cell condition
+        // Test dead cell condition..
         let condition = Condition::TestPosition {
             position: Position { x: 1, y: 2 },
             is_live: false,
         };
         assert!(condition.check(&board).is_err());
 
-        // Test empty position
+        // Test empty position..
         let condition = Condition::TestPosition {
             position: Position { x: 0, y: 0 },
             is_live: false,
@@ -684,7 +684,7 @@ mod tests {
         index.insert(3, BTreeSet::from([2]));
         let board = DirectBoard { index, size: 5 };
 
-        // Rectangle containing 4 cells (at positions (1,1), (1,2), (2,1), (2,2))
+        // Rectangle containing 4 cells (at positions (1,1), (1,2), (2,1), (2,2)).
         let condition = Condition::TestRectangle {
             x_range: 1..3,
             y_range: 1..3,
@@ -693,7 +693,7 @@ mod tests {
         };
         assert!(condition.check(&board).is_ok());
 
-        // Same rectangle but expecting too many cells
+        // Same rectangle but expecting too many cells.
         let condition = Condition::TestRectangle {
             x_range: 1..3,
             y_range: 1..3,
@@ -702,7 +702,7 @@ mod tests {
         };
         assert!(condition.check(&board).is_err());
 
-        // Same rectangle but allowing too few cells
+        // Same rectangle but allowing too few cells.
         let condition = Condition::TestRectangle {
             x_range: 1..3,
             y_range: 1..3,
@@ -756,7 +756,7 @@ mod tests {
                 min_steps: 2,
                 max_steps: 4
             })
-        ); // Too few steps
+        ); // Too few steps.
         assert_eq!(
             board.check_puzzle(&puzzle, 5),
             Err(InvalidSolution::StepsOutOfRange {
@@ -764,8 +764,8 @@ mod tests {
                 min_steps: 2,
                 max_steps: 4
             })
-        ); // Too many steps
-        assert_eq!(board.check_puzzle(&puzzle, 3), Ok(())); // Valid steps
+        ); // Too many steps.
+        assert_eq!(board.check_puzzle(&puzzle, 3), Ok(())); // Valid steps.
     }
 
     #[test]
@@ -801,7 +801,7 @@ mod tests {
 
     #[test]
     fn test_check_puzzle_complete_workflow() {
-        // Create a board with a blinker pattern
+        // Create a board with a blinker pattern.
         let mut board = Board::new(5);
         board.live_cells.extend([
             Position { x: 2, y: 1 },
@@ -846,14 +846,14 @@ mod tests {
             ],
         };
 
-        // Test that after 2 steps (full blinker cycle), we get back to the initial pattern
+        // Test that after 2 steps (full blinker cycle), we get back to the initial pattern.
         assert_eq!(board.check_puzzle(&puzzle, 2), Ok(()));
     }
 
     #[test]
     fn test_glider_puzzle_with_rectangle_conditions() {
         // Create a 16x16 board divided into 4 squares (8x8 each):
-        // Use a glider that travels from bottom-left to top-right
+        // Use a glider that travels from bottom-left to top-right.
 
         let mut board = Board::new(16);
         // Place a glider pattern in the bottom-left square.
@@ -928,7 +928,7 @@ mod tests {
 
     #[test]
     fn test_to_string() {
-        // Test with a simple glider pattern
+        // Test with a simple glider pattern.
         let mut board = Board::new(8);
         board.live_cells.extend([
             Position { x: 1, y: 0 }, // .●.
@@ -972,7 +972,7 @@ mod tests {
 
     #[test]
     fn test_check_puzzle_final_conditions_not_met() {
-        // Create a simple board with a single cell
+        // Create a simple board with a single cell.
         let mut board = Board::new(5);
         board.live_cells.insert(Position { x: 2, y: 2 });
 
@@ -989,7 +989,7 @@ mod tests {
             }],
             final_conditions: vec![Condition::TestPosition {
                 position: Position { x: 2, y: 2 },
-                is_live: true, // But single cell dies after 1 step
+                is_live: true, // But single cell dies after 1 step.
             }],
         };
 
@@ -1010,7 +1010,7 @@ mod tests {
 
     #[test]
     fn test_detailed_error_messages() {
-        // Test detailed error messages for different failure scenarios
+        // Test detailed error messages for different failure scenarios.
         let mut board = Board::new(8);
         board.live_cells.extend([
             Position { x: 1, y: 1 },
@@ -1026,17 +1026,17 @@ mod tests {
             minimal_steps: 1,
             maximal_steps: 2,
             initial_conditions: vec![
-                // This should pass
+                // This should pass.
                 Condition::TestPosition {
                     position: Position { x: 1, y: 1 },
                     is_live: true,
                 },
-                // This should fail - position (0,0) should be alive but isn't
+                // This should fail - position (0,0) should be alive but isn't.
                 Condition::TestPosition {
                     position: Position { x: 0, y: 0 },
                     is_live: true,
                 },
-                // This rectangle condition should also fail
+                // This rectangle condition should also fail.
                 Condition::TestRectangle {
                     x_range: 4..8,
                     y_range: 4..8,
@@ -1047,13 +1047,13 @@ mod tests {
             final_conditions: vec![],
         };
 
-        // Test initial condition failure with detailed information
+        // Test initial condition failure with detailed information.
         match board.check_puzzle(&puzzle, 1) {
             Err(InvalidSolution::InitialConditionFailed {
                 condition_index,
                 reason,
             }) => {
-                assert_eq!(condition_index, 1); // Second condition should fail
+                assert_eq!(condition_index, 1); // Second condition should fail.
                 match reason {
                     ConditionFailureReason::PositionMismatch {
                         x,
@@ -1072,9 +1072,9 @@ mod tests {
             other => panic!("Expected InitialConditionFailed, got {:?}", other),
         }
 
-        // Test rectangle condition failure
+        // Test rectangle condition failure.
         let mut board2 = Board::new(8);
-        board2.live_cells.insert(Position { x: 0, y: 0 }); // Satisfy first condition
+        board2.live_cells.insert(Position { x: 0, y: 0 }); // Satisfy first condition.
 
         let puzzle2 = Puzzle {
             title: "Rectangle Error Test".to_string(),
@@ -1103,7 +1103,7 @@ mod tests {
                 condition_index,
                 reason,
             }) => {
-                assert_eq!(condition_index, 1); // Rectangle condition should fail
+                assert_eq!(condition_index, 1); // Rectangle condition should fail.
                 match reason {
                     ConditionFailureReason::RectangleCountMismatch {
                         x_start,

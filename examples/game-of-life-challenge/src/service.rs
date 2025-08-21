@@ -238,7 +238,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             runtime: Arc::new(runtime),
         };
 
-        // Create a simple puzzle: a single cell that dies after 1 step
+        // Create a simple puzzle: a single cell that dies after 1 step.
         let puzzle = Puzzle {
             title: "Single Cell Death".to_string(),
             summary: "A single cell should die after one step".to_string(),
@@ -256,15 +256,15 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             }],
         };
 
-        // Serialize the puzzle and store it as a data blob
+        // Serialize the puzzle and store it as a data blob.
         let puzzle_bytes = bcs::to_bytes(&puzzle).expect("Failed to serialize puzzle");
-        // Create a dummy DataBlobHash for testing
+        // Create a dummy DataBlobHash for testing.
         let puzzle_id = DataBlobHash(CryptoHash::new(&BlobContent::new_data(
             puzzle_bytes.clone(),
         )));
         service.runtime.set_blob(puzzle_id, puzzle_bytes);
 
-        // Test with a valid solution
+        // Test with a valid solution.
         let response = service
             .handle_query(Request::new(format!(
                 r#"{{
@@ -319,7 +319,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .into_json()
             .expect("Response should be JSON");
 
-        // Check that it's invalid and has an error message
+        // Check that it's invalid and has an error message.
         let result = &response["validateSolution"];
         assert_eq!(result["isValid"], false);
         assert!(result["errorMessage"]
@@ -328,7 +328,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .contains("Initial condition 0 failed"));
         assert!(result["errorDetails"].is_object());
 
-        // Test with invalid steps (too many)
+        // Test with invalid steps (too many).
         let response = service
             .handle_query(Request::new(format!(
                 r#"{{
@@ -350,7 +350,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .into_json()
             .expect("Response should be JSON");
 
-        // Check that it's invalid and has an error message about steps
+        // Check that it's invalid and has an error message about steps.
         let result = &response["validateSolution"];
         assert_eq!(result["isValid"], false);
         assert!(result["errorMessage"]
@@ -372,7 +372,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             runtime: Arc::new(runtime),
         };
 
-        // Test printing a board with a simple pattern
+        // Test printing a board with a simple pattern.
         let response = service
             .handle_query(Request::new(
                 "{
@@ -385,12 +385,12 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .into_json()
             .expect("Response should be JSON");
 
-        // The response should contain a string representation of the board
-        // This will be the compact format (without line numbers)
+        // The response should contain a string representation of the board.
+        // This will be the compact format (without line numbers).
         let expected_output = "·●·\n·●·\n·●·\n";
         assert_eq!(response, json!({ "printBoard": expected_output }));
 
-        // Test with an empty board
+        // Test with an empty board.
         let response = service
             .handle_query(Request::new(
                 "{
@@ -419,7 +419,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             runtime: Arc::new(runtime),
         };
 
-        // Test pretty printing a board with a simple pattern
+        // Test pretty printing a board with a simple pattern.
         let response = service
             .handle_query(Request::new(
                 "{
@@ -432,7 +432,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .into_json()
             .expect("Response should be JSON");
 
-        // The response should contain the pretty string representation with coordinates
+        // The response should contain the pretty string representation with coordinates.
         let expected_output = "    0 1 2\n 0  · ● ·\n 1  · ● ·\n 2  · ● ·\n";
         assert_eq!(response, json!({ "prettyPrintBoard": expected_output }));
     }
@@ -451,7 +451,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             runtime: Arc::new(runtime),
         };
 
-        // Create a test puzzle
+        // Create a test puzzle.
         let puzzle = Puzzle {
             title: "Test Puzzle".to_string(),
             summary: "A simple test puzzle".to_string(),
@@ -469,14 +469,14 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             }],
         };
 
-        // Serialize the puzzle and store it as a data blob
+        // Serialize the puzzle and store it as a data blob.
         let puzzle_bytes = bcs::to_bytes(&puzzle).expect("Failed to serialize puzzle");
         let puzzle_id = DataBlobHash(CryptoHash::new(&BlobContent::new_data(
             puzzle_bytes.clone(),
         )));
         service.runtime.set_blob(puzzle_id, puzzle_bytes);
 
-        // Test retrieving the puzzle
+        // Test retrieving the puzzle.
         let response = service
             .handle_query(Request::new(format!(
                 r#"{{
@@ -499,7 +499,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             .into_json()
             .expect("Response should be JSON");
 
-        // The response should contain the puzzle object with all fields
+        // The response should contain the puzzle object with all fields.
         assert_eq!(
             response,
             json!({
