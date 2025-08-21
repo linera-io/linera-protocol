@@ -23,14 +23,14 @@ use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Amount, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse},
-    identifiers::{ApplicationId, BlobId, BlobType, StreamId, StreamName},
+    identifiers::{ApplicationId, BlobId, BlobType, ModuleId, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
 use linera_chain::{data_types::MessageAction, ChainError, ChainExecutionContext};
 use linera_execution::{
-    ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage, SystemOperation, WasmRuntime,
+    wasm_test, ExecutionError, Message, MessageKind, Operation, QueryOutcome,
+    ResourceControlPolicy, SystemMessage, SystemOperation, WasmRuntime,
 };
 use linera_storage::Storage as _;
 use serde_json::json;
@@ -47,12 +47,31 @@ use crate::client::client_tests::ServiceStorageBuilder;
 use crate::{
     client::{
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ChainClientError,
+        ChainClient, ChainClientError,
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
     worker::WorkerError,
+    Environment,
 };
+
+trait ChainClientExt {
+    /// Reads the bytecode of a Wasm example and publishes it. Returns the new module ID.
+    async fn publish_wasm_example(&self, name: &str) -> anyhow::Result<ModuleId>;
+}
+
+impl<Env: Environment> ChainClientExt for ChainClient<Env> {
+    async fn publish_wasm_example(&self, name: &str) -> anyhow::Result<ModuleId> {
+        let (contract_path, service_path) = wasm_test::get_example_bytecode_paths(name)?;
+        let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
+        let service_bytecode = Bytecode::load_from_file(service_path).await?;
+        let (module_id, _cert) = self
+            .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
+            .await
+            .unwrap_ok_committed();
+        Ok(module_id)
+    }
+}
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -265,7 +284,6 @@ where
     B: StorageBuilder,
 {
     let keys = InMemorySigner::new(None);
-    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -300,31 +318,9 @@ where
         .await
         .unwrap();
 
-    let (module_id1, _cert1) = {
-        let (contract_path, service_path) =
-            linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
-        publisher
-            .publish_module(
-                Bytecode::load_from_file(contract_path).await?,
-                Bytecode::load_from_file(service_path).await?,
-                vm_runtime,
-            )
-            .await
-            .unwrap_ok_committed()
-    };
+    let module_id1 = publisher.publish_wasm_example("counter").await?;
     let module_id1 = module_id1.with_abi::<counter::CounterAbi, (), u64>();
-    let (module_id2, _cert2) = {
-        let (contract_path, service_path) =
-            linera_execution::wasm_test::get_example_bytecode_paths("meta_counter")?;
-        publisher
-            .publish_module(
-                Bytecode::load_from_file(contract_path).await?,
-                Bytecode::load_from_file(service_path).await?,
-                vm_runtime,
-            )
-            .await
-            .unwrap_ok_committed()
-    };
+    let module_id2 = publisher.publish_wasm_example("meta-counter").await?;
     let module_id2 =
         module_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
 
@@ -528,7 +524,6 @@ where
     B: StorageBuilder,
 {
     let keys = InMemorySigner::new(None);
-    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -537,19 +532,7 @@ where
     let receiver = builder.add_root_chain(2, Amount::ONE).await?;
     let receiver2 = builder.add_root_chain(3, Amount::ONE).await?;
 
-    let (module_id, _pub_cert) = {
-        let bytecode_name = "fungible";
-        let (contract_path, service_path) =
-            linera_execution::wasm_test::get_example_bytecode_paths(bytecode_name)?;
-        sender
-            .publish_module(
-                Bytecode::load_from_file(contract_path).await?,
-                Bytecode::load_from_file(service_path).await?,
-                vm_runtime,
-            )
-            .await
-            .unwrap_ok_committed()
-    };
+    let module_id = sender.publish_wasm_example("fungible").await?;
     let module_id = module_id.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
 
     let sender_owner = sender.preferred_owner.unwrap();
@@ -711,7 +694,6 @@ where
     B: StorageBuilder,
 {
     let keys = InMemorySigner::new(None);
-    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -720,18 +702,7 @@ where
     let sender = builder.add_root_chain(0, Amount::ONE).await?;
     let receiver = builder.add_root_chain(1, Amount::ONE).await?;
 
-    let (module_id, _pub_cert) = {
-        let (contract_path, service_path) =
-            linera_execution::wasm_test::get_example_bytecode_paths("social")?;
-        receiver
-            .publish_module(
-                Bytecode::load_from_file(contract_path).await?,
-                Bytecode::load_from_file(service_path).await?,
-                vm_runtime,
-            )
-            .await
-            .unwrap_ok_committed()
-    };
+    let module_id = receiver.publish_wasm_example("social").await?;
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
 
     let (application_id, _cert) = receiver
@@ -864,7 +835,6 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm;
     let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
     // Set a fuel limit that is enough to instantiate the application and do one increment
     // operation, but not ten. We also verify blob fees for the bytecode.
@@ -882,18 +852,9 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         .with_policy(policy.clone());
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
 
-    let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
-
     let mut expected_balance = publisher.local_balance().await?;
-    let (module_id, _cert) = publisher
-        .publish_module(
-            Bytecode::load_from_file(contract_path).await?,
-            Bytecode::load_from_file(service_path).await?,
-            vm_runtime,
-        )
-        .await
-        .unwrap_ok_committed();
+
+    let module_id = publisher.publish_wasm_example("counter").await?;
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
     let mut blobs = publisher
         .storage_client()
@@ -957,14 +918,7 @@ where
 
     // We use the Hex game example: it uses the validation time-based assert_before oracle.
     let creator = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
-    let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("hex-game")?;
-    let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
-    let service_bytecode = Bytecode::load_from_file(service_path).await?;
-    let (module_id, _cert) = creator
-        .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
-        .await
-        .unwrap_ok_committed();
+    let module_id = creator.publish_wasm_example("hex-game").await?;
     let module_id = module_id.with_abi::<HexAbi, (), Timeouts>();
     let timeouts = Timeouts::default();
     let (app_id, _) = creator
