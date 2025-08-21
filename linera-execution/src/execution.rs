@@ -44,9 +44,17 @@ pub struct ExecutionStateView<C> {
     pub system: SystemExecutionStateView<C>,
     /// User applications.
     #[cfg(not(feature = "smallkeyvaluestoreview"))]
-    pub users: HashedReentrantCollectionView<C, ApplicationId, linera_views::small_key_value_store_view::SmallKeyValueStoreView<C>>,
+    pub users: HashedReentrantCollectionView<
+        C,
+        ApplicationId,
+        linera_views::small_key_value_store_view::SmallKeyValueStoreView<C>,
+    >,
     #[cfg(feature = "smallkeyvaluestoreview")]
-    pub users: HashedReentrantCollectionView<C, ApplicationId, linera_views::key_value_store_view::KeyValueStoreView<C>>,
+    pub users: HashedReentrantCollectionView<
+        C,
+        ApplicationId,
+        linera_views::key_value_store_view::KeyValueStoreView<C>,
+    >,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
 }
