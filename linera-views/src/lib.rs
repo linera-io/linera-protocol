@@ -125,5 +125,5 @@ pub use generic_array;
 pub use sha3;
 pub use views::{
     bucket_queue_view, collection_view, hashable_wrapper, key_value_store_view, log_view, map_view,
-    queue_view, reentrant_collection_view, register_view, set_view,
+    queue_view, reentrant_collection_view, register_view, set_view, small_key_value_store_view,
 };
