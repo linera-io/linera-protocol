@@ -201,6 +201,9 @@ where
             warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
         }
 
+        // Roll back any unsaved changes to the chain state: If there was an error while trying
+        // to handle the request, the chain state might contain unsaved and potentially invalid
+        // changes. The next request needs to be applied to the chain state as it is in storage.
         self.chain.rollback();
     }
 
