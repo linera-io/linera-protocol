@@ -50,6 +50,12 @@ spec:
       labels:
         app: proxy
     spec:
+      nodeSelector:
+        workload: proxies
+      tolerations:
+      - key: proxies
+        value: "true"
+        effect: NoSchedule
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-proxy-initializer
