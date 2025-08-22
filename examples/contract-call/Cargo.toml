@@ -8,6 +8,10 @@ edition = "2021"
 linera-sdk = { path = "../../linera-sdk" }
 serde = { version = "1.0.152", features = ["derive"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio.workspace = true
+
 [[bin]]
 name = "contract_call_contract"
 path = "src/contract.rs"
