@@ -433,9 +433,7 @@ impl ActiveChain {
     ///
     /// Returns a tuple with the loaded contract and service [`Bytecode`]s,
     /// ready to be published.
-    pub async fn find_bytecode_files_in(
-        repository: &Path,
-    ) -> (Bytecode, Bytecode) {
+    pub async fn find_bytecode_files_in(repository: &Path) -> (Bytecode, Bytecode) {
         let manifest_path = repository.join("Cargo.toml");
         let cargo_manifest =
             Manifest::from_path(manifest_path).expect("Failed to load Cargo.toml manifest");

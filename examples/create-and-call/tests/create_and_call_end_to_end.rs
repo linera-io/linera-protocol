@@ -25,8 +25,8 @@ async fn test_create_and_call_end_to_end() {
 
     // Build and find the counter-no-graphql bytecode files
     ActiveChain::build_bytecode_files_in(&counter_no_graphql_path).await;
-    let (counter_contract, counter_service) = ActiveChain::find_bytecode_files_in(&counter_no_graphql_path)
-        .await;
+    let (counter_contract, counter_service) =
+        ActiveChain::find_bytecode_files_in(&counter_no_graphql_path).await;
 
     // Extract the raw bytes from the bytecode
     let counter_contract_bytes = counter_contract.bytes.to_vec();
