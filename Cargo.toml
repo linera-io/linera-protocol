@@ -303,7 +303,6 @@ linera-witty-macros = { version = "0.15.0", path = "./linera-witty-macros" }
 
 amm = { path = "./examples/amm" }
 call-evm-counter = { path = "./examples/call-evm-counter" }
-contract-call = { path = "./examples/contract-call" }
 counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
 create-and-call = { path = "./examples/create-and-call" }
