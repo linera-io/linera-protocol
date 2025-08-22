@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "amm",
     "call-evm-counter",
+    "contract-call",
     "counter",
     "counter-no-graphql",
     "create-and-call",

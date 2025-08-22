@@ -1,0 +1,21 @@
+[package]
+name = "contract-call"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+linera-sdk = { path = "../../linera-sdk" }
+serde = { version = "1.0.152", features = ["derive"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio.workspace = true
+
+[[bin]]
+name = "contract_call_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "contract_call_service"
+path = "src/service.rs"
