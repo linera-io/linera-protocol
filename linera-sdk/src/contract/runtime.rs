@@ -35,11 +35,9 @@ where
     application_id: Option<ApplicationId<Application::Abi>>,
     application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
-    authenticated_signer: Option<Option<AccountOwner>>,
     block_height: Option<BlockHeight>,
     message_is_bouncing: Option<Option<bool>>,
     message_origin_chain_id: Option<Option<ChainId>>,
-    authenticated_caller_id: Option<Option<ApplicationId>>,
     timestamp: Option<Timestamp>,
 }
 
@@ -54,11 +52,9 @@ where
             application_id: None,
             application_creator_chain_id: None,
             chain_id: None,
-            authenticated_signer: None,
             block_height: None,
             message_is_bouncing: None,
             message_origin_chain_id: None,
-            authenticated_caller_id: None,
             timestamp: None,
         }
     }
@@ -176,9 +172,7 @@ where
 {
     /// Returns the authenticated signer for this execution, if there is one.
     pub fn authenticated_signer(&mut self) -> Option<AccountOwner> {
-        *self
-            .authenticated_signer
-            .get_or_insert_with(|| contract_wit::authenticated_signer().map(AccountOwner::from))
+        contract_wit::authenticated_signer().map(AccountOwner::from)
     }
 
     /// Returns [`true`] if the incoming message was rejected from the original destination and is
@@ -200,9 +194,7 @@ where
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
     /// is executing a cross-application call.
     pub fn authenticated_caller_id(&mut self) -> Option<ApplicationId> {
-        *self
-            .authenticated_caller_id
-            .get_or_insert_with(|| contract_wit::authenticated_caller_id().map(ApplicationId::from))
+        contract_wit::authenticated_caller_id().map(ApplicationId::from)
     }
 
     /// Verifies that the current execution context authorizes operations on a given account.
