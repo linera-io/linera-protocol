@@ -54,10 +54,11 @@ OWNER="${INFO[1]}"
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.
 
 ```bash
-(cd examples/counter && cargo build --release --target wasm32-unknown-unknown)
+cd examples/counter
+cargo build --release --target wasm32-unknown-unknown
 
 LINERA_APPLICATION_ID=$(linera publish-and-create \
-  examples/target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
+  ../target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
   --json-argument "1")
 ```
 
