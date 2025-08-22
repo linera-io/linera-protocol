@@ -13,7 +13,7 @@ use linera_sdk::test::{ActiveChain, TestValidator};
 /// application to dynamically create an instance of the counter and increment it.
 /// The test verifies that the counter is correctly initialized and incremented.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_create_and_call_end_to_end() {
+async fn test_create_and_call() {
     let (validator, create_call_module_id) =
         TestValidator::with_current_module::<create_and_call::CreateAndCallAbi, (), ()>().await;
     let mut chain = validator.new_chain().await;
