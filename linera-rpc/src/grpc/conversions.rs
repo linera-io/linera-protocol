@@ -613,6 +613,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             request_sent_certificate_hashes_by_heights,
+            request_sent_certificate_hashes_in_range: None,
         })
     }
 }
@@ -1170,6 +1171,7 @@ pub mod tests {
             request_leader_timeout: None,
             request_fallback: true,
             request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
+            request_sent_certificate_hashes_in_range: None,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
     }

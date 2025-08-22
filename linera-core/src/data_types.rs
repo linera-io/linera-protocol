@@ -75,6 +75,9 @@ pub struct ChainInfoQuery {
     /// Query the received messages that are waiting to be picked in the next block.
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
+    /// Query a range of certificate hashes sent from the chain.
+    #[debug(skip_if = Option::is_none)]
+    pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query for certificate hashes at block heights.
     /// Query new certificate sender chain IDs and block heights received from the chain.
     #[debug(skip_if = Option::is_none)]
@@ -101,6 +104,7 @@ impl ChainInfoQuery {
             request_committees: false,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
+            request_sent_certificate_hashes_in_range: None,
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: None,
