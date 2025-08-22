@@ -201,6 +201,7 @@ impl TryFrom<RpcMessage> for Vec<ConfirmedBlockCertificate> {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::DownloadCertificatesResponse(certificates) => Ok(certificates),
+            RpcMessage::DownloadCertificatesByHeightsResponse(certificates) => Ok(certificates),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }
