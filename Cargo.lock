@@ -2711,15 +2711,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "create-and-call"
-version = "0.1.0"
-dependencies = [
- "counter-no-graphql",
- "linera-sdk",
- "serde",
-]
-
-[[package]]
 name = "criterion"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5691,7 +5682,6 @@ dependencies = [
  "convert_case",
  "counter",
  "counter-no-graphql",
- "create-and-call",
  "criterion",
  "crowd-funding",
  "current_platform",
