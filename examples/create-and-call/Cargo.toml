@@ -11,11 +11,7 @@ serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
-tokio = { workspace = true, features = ["rt", "sync"] }
-
-[dev-dependencies]
-assert_matches.workspace = true
-linera-sdk = { workspace = true, features = ["test"] }
+tokio.workspace = true
 
 [[bin]]
 name = "create_and_call_contract"

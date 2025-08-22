@@ -1795,7 +1795,6 @@ dependencies = [
 name = "create-and-call"
 version = "0.1.0"
 dependencies = [
- "assert_matches",
  "counter-no-graphql",
  "linera-sdk",
  "serde",

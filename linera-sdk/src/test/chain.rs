@@ -386,7 +386,7 @@ impl ActiveChain {
             .await
             .expect("Failed to obtain absolute application repository path");
         Self::build_bytecode_files_in(&repository_path).await;
-        let (contract, service) = self.find_bytecode_files_in(&repository_path).await;
+        let (contract, service) = Self::find_compressed_bytecode_files_in(&repository_path).await;
         let contract_blob = Blob::new_contract_bytecode(contract);
         let service_blob = Blob::new_service_bytecode(service);
         let contract_blob_hash = contract_blob.id().hash;
@@ -412,7 +412,7 @@ impl ActiveChain {
     }
 
     /// Compiles the crate in the `repository` path.
-    async fn build_bytecode_files_in(repository: &Path) {
+    pub async fn build_bytecode_files_in(repository: &Path) {
         let output = std::process::Command::new("cargo")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .current_dir(repository)
@@ -431,12 +431,11 @@ impl ActiveChain {
     /// Searches the Cargo manifest of the crate calling this method for binaries to use as the
     /// contract and service bytecode files.
     ///
-    /// Returns a tuple with the loaded contract and service [`CompressedBytecode`]s,
+    /// Returns a tuple with the loaded contract and service [`Bytecode`]s,
     /// ready to be published.
-    async fn find_bytecode_files_in(
-        &self,
+    pub async fn find_bytecode_files_in(
         repository: &Path,
-    ) -> (CompressedBytecode, CompressedBytecode) {
+    ) -> (Bytecode, Bytecode) {
         let manifest_path = repository.join("Cargo.toml");
         let cargo_manifest =
             Manifest::from_path(manifest_path).expect("Failed to load Cargo.toml manifest");
@@ -461,8 +460,7 @@ impl ActiveChain {
             (&binaries[1], &binaries[0])
         };
 
-        let base_path = self
-            .find_output_directory_of(repository)
+        let base_path = Self::find_output_directory_of(repository)
             .await
             .expect("Failed to look for output binaries");
         let contract_path = base_path.join(format!("{}.wasm", contract_binary));
@@ -474,7 +472,15 @@ impl ActiveChain {
         let service = Bytecode::load_from_file(service_path)
             .await
             .expect("Failed to load service bytecode from file");
+        (contract, service)
+    }
 
+    /// Returns a tuple with the loaded contract and service [`CompressedBytecode`]s,
+    /// ready to be published.
+    pub async fn find_compressed_bytecode_files_in(
+        repository: &Path,
+    ) -> (CompressedBytecode, CompressedBytecode) {
+        let (contract, service) = Self::find_bytecode_files_in(repository).await;
         tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
             .await
             .expect("Failed to compress bytecode files")
@@ -486,7 +492,7 @@ impl ActiveChain {
     /// `target/wasm32-unknown-unknown/release` sub-directory. However, since the crate with the
     /// binaries could be part of a workspace, that output sub-directory must be searched in parent
     /// directories as well.
-    async fn find_output_directory_of(&self, repository: &Path) -> Result<PathBuf, io::Error> {
+    async fn find_output_directory_of(repository: &Path) -> Result<PathBuf, io::Error> {
         let output_sub_directory = Path::new("target/wasm32-unknown-unknown/release");
         let mut current_directory = repository;
         let mut output_path = current_directory.join(output_sub_directory);
