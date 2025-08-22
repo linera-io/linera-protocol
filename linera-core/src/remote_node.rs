@@ -176,17 +176,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             .map(BlockHeight)
             .collect::<Vec<_>>();
         self.download_certificates_by_heights(chain_id, heights)
-            .await?
-            .into_iter()
-            .map(|c| {
-                ensure!(
-                    c.inner().chain_id() == chain_id,
-                    NodeError::UnexpectedCertificateValue
-                );
-                ConfirmedBlockCertificate::try_from(c)
-                    .map_err(|_| NodeError::InvalidChainInfoResponse)
-            })
-            .collect()
+            .await
     }
 
     #[instrument(level = "trace")]
