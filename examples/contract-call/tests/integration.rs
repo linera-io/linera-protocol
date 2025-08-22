@@ -5,8 +5,6 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-
-
 use contract_call::{ContractTransferAbi, Parameters};
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount},
