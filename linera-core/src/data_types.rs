@@ -78,7 +78,6 @@ pub struct ChainInfoQuery {
     /// Query a range of certificate hashes sent from the chain.
     #[debug(skip_if = Option::is_none)]
     pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
-    /// Query for certificate hashes at block heights.
     /// Query new certificate sender chain IDs and block heights received from the chain.
     #[debug(skip_if = Option::is_none)]
     pub request_received_log_excluding_first_n: Option<u64>,
