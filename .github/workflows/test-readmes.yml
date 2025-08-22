@@ -41,6 +41,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: pnpm/action-setup@v4
+      with:
+        version: 10.11.0
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
