@@ -81,7 +81,7 @@ importers:
         specifier: ^5.4.11
         version: 5.4.19(@types/node@24.3.0)
 
-  fungible:
+  native-fungible:
     dependencies:
       '@linera/client':
         specifier: workspace:*
