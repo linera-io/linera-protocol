@@ -10,7 +10,7 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{AccountPublicKey, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
         CompressedBytecode, OracleResponse,
@@ -1054,5 +1054,74 @@ async fn test_publish_module_different_bytecode() -> anyhow::Result<()> {
     let created_blobs = tracker.created_blobs();
     assert_eq!(created_blobs.len(), 4);
 
+    Ok(())
+}
+
+#[test_log::test(tokio::test)]
+async fn test_callee_api_calls() -> anyhow::Result<()> {
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
+    let mut view = state.into_view().await;
+
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
+
+    let owner = AccountOwner::from(AccountPublicKey::test_key(0));
+    let dummy_operation = vec![1];
+
+    caller_application.expect_call({
+        let dummy_operation = dummy_operation.clone();
+        ExpectedCall::execute_operation(move |runtime, operation| {
+            assert_eq!(operation, dummy_operation);
+
+            // Call the target application with authentication.
+            let response =
+                runtime.try_call_application(/* authenticated */ true, target_id, vec![])?;
+            assert!(response.is_empty());
+
+            // Call the target application without authentication.
+            let response =
+                runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
+            assert!(response.is_empty());
+
+            Ok(vec![])
+        })
+    });
+
+    target_application.expect_call(ExpectedCall::execute_operation(move |runtime, argument| {
+        assert!(argument.is_empty());
+        assert_eq!(runtime.authenticated_signer().unwrap(), Some(owner));
+        assert_eq!(runtime.authenticated_caller_id().unwrap(), Some(caller_id));
+        Ok(vec![])
+    }));
+    target_application.expect_call(ExpectedCall::execute_operation(move |runtime, argument| {
+        assert!(argument.is_empty());
+        assert_eq!(runtime.authenticated_signer().unwrap(), None);
+        assert_eq!(runtime.authenticated_caller_id().unwrap(), None);
+        Ok(vec![])
+    }));
+
+    target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
+
+    let context = OperationContext {
+        authenticated_signer: Some(owner),
+        ..create_dummy_operation_context(chain_id)
+    };
+    let mut controller = ResourceController::default();
+    let mut txn_tracker =
+        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
+    view.execute_operation(
+        context,
+        Operation::User {
+            application_id: caller_id,
+            bytes: dummy_operation.clone(),
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await
+    .unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
+    assert!(txn_outcome.outgoing_messages.is_empty());
     Ok(())
 }
