@@ -53,10 +53,12 @@ Compile the `native-fungible` application WebAssembly binaries, and publish them
 module:
 
 ```bash
-(cd examples/native-fungible && cargo build --release --target wasm32-unknown-unknown)
+cd examples/native-fungible
+
+cargo build --release --target wasm32-unknown-unknown
 
 MODULE_ID="$(linera publish-module \
-    examples/target/wasm32-unknown-unknown/release/native_fungible_{contract,service}.wasm)"
+    ../target/wasm32-unknown-unknown/release/native_fungible_{contract,service}.wasm)"
 ```
 
 Here, we stored the new module ID in a variable `MODULE_ID` to be reused it later.
