@@ -76,6 +76,8 @@ pub struct ChainInfoQuery {
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
     /// Query a range of certificate hashes sent from the chain.
+    //  dev: this field is left and unused to maintain backwards compatibility
+    //  after hotfixing testnet conway.
     #[debug(skip_if = Option::is_none)]
     pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
