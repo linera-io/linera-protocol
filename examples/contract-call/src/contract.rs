@@ -104,12 +104,12 @@ impl Contract for ContractTransferContract {
                     .call_application(false, application_id, &operation);
             }
             Operation::TestNoneAuthenticatedSignerCaller => {
-//                assert!(self.runtime.authenticated_signer().is_none());
-//                assert!(self.runtime.authenticated_caller_id().is_none());
+                assert!(self.runtime.authenticated_signer().is_none());
+                assert!(self.runtime.authenticated_caller_id().is_none());
             }
             Operation::TestSomeAuthenticatedSignerCaller => {
-//                assert!(self.runtime.authenticated_signer().is_some());
-//                assert!(self.runtime.authenticated_caller_id().is_some());
+                assert!(self.runtime.authenticated_signer().is_some());
+                assert!(self.runtime.authenticated_caller_id().is_some());
             }
         }
     }
