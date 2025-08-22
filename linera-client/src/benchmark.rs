@@ -130,6 +130,7 @@ impl<Env: Environment> Benchmark<Env> {
         delay_between_chains_ms: Option<u64>,
         chain_listener: ChainListener<C>,
         shutdown_notifier: &CancellationToken,
+        single_destination_per_block: bool,
     ) -> Result<(), BenchmarkError> {
         let num_chains = benchmark_params.len();
         let bps_counts = (0..num_chains)
@@ -190,6 +191,7 @@ impl<Env: Environment> Benchmark<Env> {
                         notifier_clone,
                         runtime_control_sender_clone,
                         delay_between_chains_ms,
+                        single_destination_per_block,
                     ))
                     .await?;
 
@@ -572,6 +574,7 @@ impl<Env: Environment> Benchmark<Env> {
         notifier: Arc<Notify>,
         runtime_control_sender: Option<mpsc::Sender<()>>,
         delay_between_chains_ms: Option<u64>,
+        single_destination_per_block: bool,
     ) -> Result<(), BenchmarkError> {
         barrier.wait().await;
         if let Some(delay_between_chains_ms) = delay_between_chains_ms {
@@ -602,6 +605,7 @@ impl<Env: Environment> Benchmark<Env> {
                         transactions_per_block,
                         fungible_application_id,
                         &mut destination_manager,
+                        single_destination_per_block,
                     ),
                     vec![]
                 ) => {
@@ -645,21 +649,37 @@ impl<Env: Environment> Benchmark<Env> {
         transactions_per_block: usize,
         fungible_application_id: Option<ApplicationId>,
         destination_manager: &mut ChainDestinationManager,
+        single_destination_per_block: bool,
     ) -> Vec<Operation> {
-        let mut operations = Vec::with_capacity(transactions_per_block);
         let amount = Amount::from_attos(1);
 
-        for _ in 0..transactions_per_block {
+        if single_destination_per_block {
             let recipient_chain_id = destination_manager.get_next_destination();
-            operations.push(Self::create_operation(
-                fungible_application_id,
-                recipient_chain_id,
-                owner,
-                amount,
-            ));
-        }
 
-        operations
+            (0..transactions_per_block)
+                .map(|_| {
+                    Self::create_operation(
+                        fungible_application_id,
+                        recipient_chain_id,
+                        owner,
+                        amount,
+                    )
+                })
+                .collect()
+        } else {
+            let mut operations = Vec::with_capacity(transactions_per_block);
+            for _ in 0..transactions_per_block {
+                let recipient_chain_id = destination_manager.get_next_destination();
+
+                operations.push(Self::create_operation(
+                    fungible_application_id,
+                    recipient_chain_id,
+                    owner,
+                    amount,
+                ));
+            }
+            operations
+        }
     }
 
     /// Closes the chain that was created for the benchmark.
