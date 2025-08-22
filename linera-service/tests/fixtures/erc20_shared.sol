@@ -12,7 +12,7 @@
 //   over all the chains.
 // * The localSupply() has been introduced to return the supply of one
 //   particular chain.
-// * When tokens are transfered to another chain, they are first burned
+// * When tokens are transferred to another chain, they are first burned
 //   on the sender chain and then minted on the receiving chain.
 // * The token can be transferred to another chain but under the same
 //   user.
@@ -95,7 +95,7 @@ contract ERC20_shared is Context, IERC20, IERC20Errors {
         return summed_total_supply;
     }
 
-    /// The local suppply of the chain
+    /// The local supply of the chain
     function localSupply() public view virtual returns (uint256) {
         return _totalSupply;
     }
