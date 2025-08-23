@@ -22,7 +22,9 @@ use fungible::{FungibleOperation, InitialState, Parameters};
 use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
-    data_types::{Amount, BlockHeight, BlobContent, Bytecode, ChainDescription, Event, OracleResponse},
+    data_types::{
+        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse,
+    },
     identifiers::{ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -990,7 +992,6 @@ where
     Ok(())
 }
 
-
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -1004,7 +1005,8 @@ async fn test_memory_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_service_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_publish_read_data_blob(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
+    run_test_publish_read_data_blob(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+        .await
 }
 
 #[ignore]
@@ -1013,7 +1015,8 @@ async fn test_service_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyho
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_publish_read_data_blob(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
+    run_test_publish_read_data_blob(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+        .await
 }
 
 #[ignore]
@@ -1046,7 +1049,9 @@ where
         .with_policy(ResourceControlPolicy::all_categories());
     let client = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
 
-    let module_id = client.publish_wasm_example("publish-read-data-blob").await?;
+    let module_id = client
+        .publish_wasm_example("publish-read-data-blob")
+        .await?;
     let module_id = module_id.with_abi::<PublishReadDataBlobAbi, (), ()>();
 
     let (application_id, _) = client
