@@ -117,10 +117,7 @@ where
             BlockHeight::from(1)
         );
         assert!(sender.pending_proposal().is_none());
-        assert_eq!(
-            sender.local_balance().await.unwrap(),
-            Amount::from_millis(1000)
-        );
+        assert_eq!(sender.local_balance().await?, Amount::from_millis(1000));
         assert_eq!(
             builder
                 .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
@@ -174,36 +171,33 @@ where
         )
         .await
         .unwrap_ok_committed();
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_millis(900)
-    );
+    assert_eq!(sender.local_balance().await?, Amount::from_millis(900));
     receiver
         .receive_certificate_and_update_validators(cert)
         .await?;
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
-        receiver.local_owner_balance(friend).await.unwrap(),
+        receiver.local_owner_balance(friend).await?,
         Amount::from_millis(100)
     );
     // The received amount is not in the unprotected balance.
-    assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(receiver.local_balance().await?, Amount::ZERO);
     assert_eq!(
-        receiver.local_owner_balance(owner).await.unwrap(),
+        receiver.local_owner_balance(owner).await?,
         Amount::from_tokens(3)
     );
     assert_eq!(
-        receiver.local_balances_with_owner(owner).await.unwrap(),
+        receiver.local_balances_with_owner(owner).await?,
         (Amount::ZERO, Some(Amount::from_tokens(3)))
     );
-    assert_eq!(receiver.query_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(receiver.query_balance().await?, Amount::ZERO);
     assert_eq!(
-        receiver.query_owner_balance(owner).await.unwrap(),
+        receiver.query_owner_balance(owner).await?,
         Amount::from_millis(3000)
     );
     assert_eq!(
-        receiver.query_balances_with_owner(owner).await.unwrap(),
+        receiver.query_balances_with_owner(owner).await?,
         (Amount::ZERO, Some(Amount::from_millis(3000)))
     );
 
@@ -215,8 +209,7 @@ where
             Account::chain(sender.chain_id()),
             Amount::from_tokens(5),
         )
-        .await
-        .unwrap();
+        .await?;
     // Second attempt with a correct amount.
     let cert = sender
         .claim(
@@ -248,10 +241,7 @@ where
         .receive_certificate_and_update_validators(cert)
         .await?;
     sender.process_inbox().await?;
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_millis(2900)
-    );
+    assert_eq!(sender.local_balance().await?, Amount::from_millis(2900));
 
     Ok(())
 }
@@ -291,16 +281,12 @@ where
             .unwrap(),
         certificate
     );
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_millis(4000)
-    );
-    sender.synchronize_from_validators().await.unwrap();
+    assert_eq!(sender.local_balance().await?, Amount::from_millis(4000));
+    sender.synchronize_from_validators().await?;
     // Can still use the chain.
     sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
-        .await
-        .unwrap();
+        .await?;
     Ok(())
 }
 
@@ -321,7 +307,7 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
     let new_owner: AccountOwner = builder.signer.generate_new().into();
-    let certificate = sender.transfer_ownership(new_owner).await.unwrap().unwrap();
+    let certificate = sender.transfer_ownership(new_owner).await?.unwrap();
     assert_eq!(
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
@@ -338,11 +324,8 @@ where
             .unwrap(),
         certificate
     );
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_millis(4000)
-    );
-    sender.synchronize_from_validators().await.unwrap();
+    assert_eq!(sender.local_balance().await?, Amount::from_millis(4000));
+    sender.synchronize_from_validators().await?;
     // Cannot use the chain any more.
     assert_matches!(
         sender
@@ -384,16 +367,12 @@ where
             .unwrap(),
         certificate
     );
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_tokens(4)
-    );
-    sender.synchronize_from_validators().await.unwrap();
+    assert_eq!(sender.local_balance().await?, Amount::from_tokens(4));
+    sender.synchronize_from_validators().await?;
     // Can still use the chain with the old client.
     sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
-        .await
-        .unwrap();
+        .await?;
     let sender_info = sender.chain_info().await?;
     assert_eq!(sender_info.next_block_height, BlockHeight::from(2));
     // Make a client to try the new key.
@@ -411,11 +390,8 @@ where
         client.local_balance().await,
         Err(ChainClientError::WalletSynchronizationError)
     );
-    client.synchronize_from_validators().await.unwrap();
-    assert_eq!(
-        client.local_balance().await.unwrap(),
-        Amount::from_tokens(2)
-    );
+    client.synchronize_from_validators().await?;
+    assert_eq!(client.local_balance().await?, Amount::from_tokens(2));
 
     // We need at least three validators for making an operation.
     builder.set_fault_type([0, 1], FaultType::Offline).await;
@@ -440,24 +416,21 @@ where
     builder
         .set_fault_type([0, 1, 2, 3], FaultType::Honest)
         .await;
-    client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
-    assert_eq!(
-        client.local_balance().await.unwrap(),
-        Amount::from_tokens(2)
-    );
+    client.synchronize_from_validators().await?;
+    client.process_inbox().await?;
+    assert_eq!(client.local_balance().await?, Amount::from_tokens(2));
     client.clear_pending_proposal();
     client
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(client.local_balance().await.unwrap(), Amount::ONE);
+    assert_eq!(client.local_balance().await?, Amount::ONE);
 
     // The other client doesn't know the new round number yet:
-    sender.synchronize_from_validators().await.unwrap();
-    sender.process_inbox().await.unwrap();
+    sender.synchronize_from_validators().await?;
+    sender.process_inbox().await?;
     assert_eq!(client.chain_info().await?, sender.chain_info().await?);
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
+    assert_eq!(sender.local_balance().await?, Amount::ONE);
     sender.clear_pending_proposal();
     sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
@@ -465,10 +438,10 @@ where
         .unwrap_ok_committed();
 
     // That's it, we spent all our money on this test!
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
-    client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
-    assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(sender.local_balance().await?, Amount::ZERO);
+    client.synchronize_from_validators().await?;
+    client.process_inbox().await?;
+    assert_eq!(client.local_balance().await?, Amount::ZERO);
     Ok(())
 }
 
@@ -510,10 +483,9 @@ where
     client.set_preferred_owner(new_public_key.into());
     client
         .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
-    assert_eq!(client.query_balance().await.unwrap(), Amount::ZERO);
-    client.close_chain().await.unwrap();
+        .await?;
+    assert_eq!(client.query_balance().await?, Amount::ZERO);
+    client.close_chain().await?;
     Ok(())
 }
 
@@ -561,8 +533,7 @@ where
             Amount::from_tokens(2),
             Account::chain(new_id),
         )
-        .await
-        .unwrap();
+        .await?;
     // Open the new chain.
     let (new_description2, certificate) = parent
         .open_chain(
@@ -601,8 +572,7 @@ where
     client.set_preferred_owner(new_public_key.into());
     client
         .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
+        .await?;
     // Make another block on top of the one that sent the two tokens, so that the validators
     // process the cross-chain messages.
     let certificate2 = sender
@@ -615,16 +585,11 @@ where
         .unwrap_ok_committed();
     client
         .receive_certificate_and_update_validators(certificate2)
-        .await
-        .unwrap();
-    assert_eq!(
-        client.query_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
+        .await?;
+    assert_eq!(client.query_balance().await?, Amount::from_tokens(3));
     client
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
-        .await
-        .unwrap();
+        .await?;
     Ok(())
 }
 
@@ -673,22 +638,16 @@ where
     // Must process the creation certificate before using the new chain.
     client
         .receive_certificate_and_update_validators(creation_certificate)
-        .await
-        .unwrap();
-    assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
+        .await?;
+    assert_eq!(client.local_balance().await?, Amount::ZERO);
     client
         .receive_certificate_and_update_validators(transfer_certificate)
-        .await
-        .unwrap();
-    assert_eq!(
-        client.query_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
+        .await?;
+    assert_eq!(client.query_balance().await?, Amount::from_tokens(3));
     client
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
-        .await
-        .unwrap();
-    assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
+        .await?;
+    assert_eq!(client.local_balance().await?, Amount::ZERO);
     Ok(())
 }
 
@@ -709,7 +668,7 @@ where
     let client1 = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let client2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
 
-    let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
+    let certificate = client1.close_chain().await?.unwrap().unwrap();
     assert_eq!(
         certificate.block().body.transactions.len(),
         1,
@@ -757,8 +716,8 @@ where
         )
         .await
         .unwrap_ok_committed();
-    client1.synchronize_from_validators().await.unwrap();
-    let (certificates, _) = client1.process_inbox().await.unwrap();
+    client1.synchronize_from_validators().await?;
+    let (certificates, _) = client1.process_inbox().await?;
     let block = certificates[0].block();
     assert_eq!(block.body.transactions.len(), 1);
     assert_matches!(
@@ -788,7 +747,7 @@ where
     );
 
     // Trying to close the chain again returns None.
-    let maybe_certificate = client1.close_chain().await.unwrap().unwrap();
+    let maybe_certificate = client1.close_chain().await?.unwrap();
     assert_matches!(maybe_certificate, None);
     Ok(())
 }
@@ -828,10 +787,7 @@ where
         BlockHeight::ZERO
     );
     assert!(chain_1.pending_proposal().is_some());
-    assert_eq!(
-        chain_1.local_balance().await.unwrap(),
-        Amount::from_tokens(4)
-    );
+    assert_eq!(chain_1.local_balance().await?, Amount::from_tokens(4));
     Ok(())
 }
 
@@ -849,12 +805,9 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
+    assert_eq!(client1.local_balance().await?, Amount::from_tokens(3));
     assert_eq!(
-        client1.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
-    assert_eq!(
-        client1.query_system_application(SystemQuery).await.unwrap(),
+        client1.query_system_application(SystemQuery).await?,
         QueryOutcome {
             response: SystemResponse {
                 chain_id: client1.chain_id(),
@@ -877,9 +830,9 @@ where
         BlockHeight::from(1)
     );
     assert!(client1.pending_proposal().is_none());
-    assert_eq!(client1.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(client1.local_balance().await?, Amount::ZERO);
     assert_eq!(
-        client1.query_system_application(SystemQuery).await.unwrap(),
+        client1.query_system_application(SystemQuery).await?,
         QueryOutcome {
             response: SystemResponse {
                 chain_id: client1.chain_id(),
@@ -897,12 +850,12 @@ where
         certificate
     );
     // Local balance is lagging.
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(client2.local_balance().await?, Amount::ZERO);
     // Obtain the certificate but do not process the inbox yet.
-    client2.synchronize_from_validators().await.unwrap();
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
+    client2.synchronize_from_validators().await?;
+    assert_eq!(client2.local_balance().await?, Amount::ZERO);
     assert_eq!(
-        client2.query_system_application(SystemQuery).await.unwrap(),
+        client2.query_system_application(SystemQuery).await?,
         QueryOutcome {
             response: SystemResponse {
                 chain_id: client2.chain_id(),
@@ -923,23 +876,19 @@ where
             Amount::ONE,
             Account::chain(client1.chain_id),
         )
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(
         client2.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
     assert!(client2.pending_proposal().is_none());
-    assert_eq!(
-        client2.local_balance().await.unwrap(),
-        Amount::from_tokens(2)
-    );
-    client1.synchronize_from_validators().await.unwrap();
-    client1.process_inbox().await.unwrap();
-    assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
+    assert_eq!(client2.local_balance().await?, Amount::from_tokens(2));
+    client1.synchronize_from_validators().await?;
+    client1.process_inbox().await?;
+    assert_eq!(client1.local_balance().await?, Amount::ONE);
     // Local balance from client2 is now consolidated.
     assert_eq!(
-        client2.query_system_application(SystemQuery).await.unwrap(),
+        client2.query_system_application(SystemQuery).await?,
         QueryOutcome {
             response: SystemResponse {
                 chain_id: client2.chain_id(),
@@ -976,27 +925,20 @@ where
         .await
         .unwrap_ok_committed();
     // Transfer was executed locally.
-    assert_eq!(
-        client1.local_balance().await.unwrap(),
-        Amount::from_millis(1000)
-    );
+    assert_eq!(client1.local_balance().await?, Amount::from_millis(1000));
     assert_eq!(
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
     assert!(client1.pending_proposal().is_none());
     // The receiver doesn't know about the transfer.
-    client2.process_inbox().await.unwrap();
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
+    client2.process_inbox().await?;
+    assert_eq!(client2.local_balance().await?, Amount::ZERO);
     // Let the receiver confirm in last resort.
     client2
         .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
-    assert_eq!(
-        client2.query_balance().await.unwrap(),
-        Amount::from_millis(2000)
-    );
+        .await?;
+    assert_eq!(client2.query_balance().await?, Amount::from_millis(2000));
     Ok(())
 }
 
@@ -1026,22 +968,19 @@ where
             Amount::ONE,
             Account::chain(client2.chain_id),
         )
-        .await
-        .unwrap();
+        .await?;
     client1
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(client2.chain_id),
         )
-        .await
-        .unwrap();
+        .await?;
     client1
         .communicate_chain_updates(&builder.initial_committee)
-        .await
-        .unwrap();
+        .await?;
     // Client2 does not know about the money yet.
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(client2.local_balance().await?, Amount::ZERO);
     // Sending money from client2 fails, as a consequence.
     let obtained_error = client2
         .transfer_to_account_unsafe_unconfirmed(
@@ -1058,7 +997,7 @@ where
         .unwrap_ok_committed()
         .is_none());
     // Retrying the whole command works after synchronization.
-    client2.synchronize_from_validators().await.unwrap();
+    client2.synchronize_from_validators().await?;
     let certificate = client2
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -1068,29 +1007,25 @@ where
         .await
         .unwrap_ok_committed();
     // Blocks were executed locally.
-    assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
+    assert_eq!(client1.local_balance().await?, Amount::ONE);
     assert_eq!(
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(2)
     );
     assert!(client1.pending_proposal().is_none());
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(client2.local_balance().await?, Amount::ZERO);
     assert_eq!(
         client2.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
     assert!(client2.pending_proposal().is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(client2.local_balance().await?, Amount::ZERO);
     // Let the receiver confirm in last resort.
     client3
         .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
-    assert_eq!(
-        client3.query_balance().await.unwrap(),
-        Amount::from_tokens(2)
-    );
+        .await?;
+    assert_eq!(client3.query_balance().await?, Amount::from_tokens(2));
     Ok(())
 }
 
@@ -1123,18 +1058,18 @@ where
     let validators = builder.initial_committee.validators().clone();
 
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
-    admin.stage_new_committee(committee).await.unwrap();
+    admin.stage_new_committee(committee).await?;
 
     // Root chain 1 receives the notification about the new epoch.
     // This must happen before the old committee is removed.
-    user.synchronize_from_validators().await.unwrap();
-    user.process_inbox().await.unwrap();
+    user.synchronize_from_validators().await?;
+    user.process_inbox().await?;
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
-    admin.revoke_epochs(Epoch::ZERO).await.unwrap();
+    admin.revoke_epochs(Epoch::ZERO).await?;
 
     // Create a new committee.
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
-    admin.stage_new_committee(committee).await.unwrap();
+    admin.stage_new_committee(committee).await?;
     assert_eq!(
         admin.chain_info().await?.next_block_height,
         BlockHeight::from(5)
@@ -1168,9 +1103,9 @@ where
         Err(ChainClientError::CommitteeSynchronizationError)
     );
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
-    user.synchronize_from_validators().await.unwrap();
+    user.synchronize_from_validators().await?;
 
-    user.process_inbox().await.unwrap();
+    user.process_inbox().await?;
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Revoking the current or an already revoked epoch fails.
@@ -1184,7 +1119,7 @@ where
     );
 
     // Have the admin chain deprecate the previous epoch.
-    admin.revoke_epochs(Epoch::from(1)).await.unwrap();
+    admin.revoke_epochs(Epoch::from(1)).await?;
 
     // Try to make a transfer back to the admin chain.
     let cert = user
@@ -1197,8 +1132,7 @@ where
         .unwrap_ok_committed();
     admin
         .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
 
     // Try again to make a transfer back to the admin chain.
@@ -1212,11 +1146,10 @@ where
         .unwrap_ok_committed();
     admin
         .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    admin.process_inbox().await.unwrap();
+        .await?;
+    admin.process_inbox().await?;
     // Transfer goes through and the previous one as well thanks to block chaining.
-    assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
+    assert_eq!(admin.local_balance().await?, Amount::from_tokens(3));
 
     user.change_application_permissions(ApplicationPermissions::new_single(ApplicationId::new(
         CryptoHash::test_hash("foo"),
@@ -1224,7 +1157,7 @@ where
     .await?;
 
     let committee = Committee::new(validators, ResourceControlPolicy::default());
-    admin.stage_new_committee(committee).await.unwrap();
+    admin.stage_new_committee(committee).await?;
     assert_eq!(admin.chain_info().await?.epoch, Epoch::from(3));
 
     // Despite the restrictive application permissions, some system operations are still allowed,
@@ -1354,7 +1287,7 @@ where
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let client_1a = builder.add_root_chain(1, Amount::ZERO).await?;
-    let owner_1a = client_1a.identity().await.unwrap();
+    let owner_1a = client_1a.identity().await?;
     let chain_1 = client_1a.chain_id();
     let pk_1b = builder.signer.generate_new();
     let owner_1b = pk_1b.into();
@@ -1372,14 +1305,14 @@ where
         .await?;
 
     let client_2a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
-    let owner_2a = client_2a.identity().await.unwrap();
+    let owner_2a = client_2a.identity().await?;
     let chain_2 = client_2a.chain_id();
     let pk_2b = builder.signer.generate_new();
     let owner_2b = pk_2b.into();
 
     let owners = [(owner_2a, 50), (owner_2b, 50)];
     let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
-    client_2a.change_ownership(ownership).await.unwrap();
+    client_2a.change_ownership(ownership).await?;
 
     let mut client_2b = builder
         .make_client(
@@ -1439,7 +1372,7 @@ where
         .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
         .await;
 
-    client_2a.synchronize_from_validators().await.unwrap();
+    client_2a.synchronize_from_validators().await?;
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
@@ -1494,7 +1427,7 @@ where
     }
 
     // Client 2B should be able to synchronize the locking block and the blobs from validator 3.
-    client_2b.synchronize_from_validators().await.unwrap();
+    client_2b.synchronize_from_validators().await?;
     let info2_b = client_2b.chain_info_with_manager_values().await?;
     assert_eq!(
         LockingBlock::Regular(validated),
@@ -1508,8 +1441,7 @@ where
 
     let certificate_values = client_2b
         .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
-        .await
-        .unwrap();
+        .await?;
 
     // Latest block should be the burn
     assert!(certificate_values[0].block().body.operations().any(|op| *op
@@ -1550,7 +1482,7 @@ where
 
     let chain_id2 = client2_a.chain_id();
 
-    let owner2_a = client2_a.identity().await.unwrap();
+    let owner2_a = client2_a.identity().await?;
     let owner2_b = builder.signer.generate_new().into();
 
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
@@ -1560,10 +1492,7 @@ where
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
     });
-    client2_a
-        .execute_operation(owner_change_op.clone())
-        .await
-        .unwrap();
+    client2_a.execute_operation(owner_change_op.clone()).await?;
 
     let mut client2_b = builder
         .make_client(
@@ -1593,7 +1522,7 @@ where
         .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
         .await;
 
-    client2_a.synchronize_from_validators().await.unwrap();
+    client2_a.synchronize_from_validators().await?;
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
@@ -1614,8 +1543,7 @@ where
         let validator_manager = builder
             .node(i)
             .chain_info_with_manager_values(chain_id2)
-            .await
-            .unwrap()
+            .await?
             .manager;
         assert_eq!(
             validator_manager
@@ -1633,7 +1561,7 @@ where
     builder.set_fault_type([2], FaultType::Offline).await;
     builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
 
-    client2_b.prepare_chain().await.unwrap();
+    client2_b.prepare_chain().await?;
     let recipient = Account::burn_address(client2_b.chain_id());
     let bt_certificate = client2_b
         .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
@@ -1642,8 +1570,7 @@ where
 
     let certificate_values = client2_b
         .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
-        .await
-        .unwrap();
+        .await?;
 
     // Latest block should be the burn
     assert!(certificate_values[0].block().body.operations().any(|op| *op
@@ -1685,10 +1612,7 @@ where
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
     });
-    client1
-        .execute_operation(owner_change_op.clone())
-        .await
-        .unwrap();
+    client1.execute_operation(owner_change_op.clone()).await?;
     let mut client2 = builder
         .make_client(
             chain_id,
@@ -1697,7 +1621,7 @@ where
         )
         .await?;
     client2.set_preferred_owner(owner2);
-    client2.synchronize_from_validators().await.unwrap();
+    client2.synchronize_from_validators().await?;
 
     // Client 1 makes a proposal to only validators 0 and 1.
     builder
@@ -1738,7 +1662,7 @@ where
         .set_fault_type([0, 1, 2, 3], FaultType::Honest)
         .await;
 
-    client1.synchronize_from_validators().await.unwrap();
+    client1.synchronize_from_validators().await?;
     client1.publish_data_blob(b"foo".to_vec()).await?;
 
     assert_eq!(
@@ -1767,7 +1691,7 @@ where
 
     let chain_id3 = client3_a.chain_id();
 
-    let owner3_a = client3_a.identity().await.unwrap();
+    let owner3_a = client3_a.identity().await?;
     let owner3_b = builder.signer.generate_new().into();
     let owner3_c = builder.signer.generate_new().into();
 
@@ -1779,10 +1703,7 @@ where
         timeout_config: TimeoutConfig::default(),
     });
 
-    client3_a
-        .execute_operation(owner_change_op.clone())
-        .await
-        .unwrap();
+    client3_a.execute_operation(owner_change_op.clone()).await?;
 
     let block_hash = client3_a.chain_info().await?.block_hash;
     let mut client3_b = builder
@@ -1801,7 +1722,7 @@ where
     let blob0_bytes = b"blob0".to_vec();
     let blob0_id = Blob::new(BlobContent::new_data(blob0_bytes.clone())).id();
 
-    client1.synchronize_from_validators().await.unwrap();
+    client1.synchronize_from_validators().await?;
     // Publish blob0 on chain 1
     let publish_certificate0 = client1
         .publish_data_blob(blob0_bytes)
@@ -1814,7 +1735,7 @@ where
     let blob2_bytes = b"blob2".to_vec();
     let blob2_id = Blob::new(BlobContent::new_data(blob2_bytes.clone())).id();
 
-    client2.synchronize_from_validators().await.unwrap();
+    client2.synchronize_from_validators().await?;
     // Publish blob2 on chain 2
     let publish_certificate2 = client2
         .publish_data_blob(blob2_bytes)
@@ -1831,7 +1752,7 @@ where
         .set_fault_type([2], FaultType::DontSendConfirmVote)
         .await;
 
-    client3_a.synchronize_from_validators().await.unwrap();
+    client3_a.synchronize_from_validators().await?;
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
@@ -1848,11 +1769,7 @@ where
     assert!(b0_result.is_err());
     assert!(client3_a.pending_proposal().is_some());
 
-    let manager = client3_a
-        .chain_info_with_manager_values()
-        .await
-        .unwrap()
-        .manager;
+    let manager = client3_a.chain_info_with_manager_values().await?.manager;
     // Validator 2 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 2 can download and re-propose it later.
@@ -1870,8 +1787,7 @@ where
         let validator_manager = builder
             .node(i)
             .chain_info_with_manager_values(chain_id3)
-            .await
-            .unwrap()
+            .await?
             .manager;
         assert_eq!(
             validator_manager
@@ -1903,7 +1819,7 @@ where
         .set_fault_type([3], FaultType::DontSendConfirmVote)
         .await;
 
-    client3_b.synchronize_from_validators().await.unwrap();
+    client3_b.synchronize_from_validators().await?;
     let blob3 = Blob::new_data(b"blob3".to_vec());
     let blob3_hash = blob3.id().hash;
 
@@ -1918,11 +1834,7 @@ where
         .await;
     assert!(b1_result.is_err());
 
-    let manager = client3_b
-        .chain_info_with_manager_values()
-        .await
-        .unwrap()
-        .manager;
+    let manager = client3_b.chain_info_with_manager_values().await?.manager;
     // Validator 3 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 2 can download and re-propose it later.
@@ -1939,8 +1851,7 @@ where
     let validator_manager = builder
         .node(3)
         .chain_info_with_manager_values(chain_id3)
-        .await
-        .unwrap()
+        .await?
         .manager;
     assert_eq!(
         validator_manager
@@ -1964,7 +1875,7 @@ where
     builder.set_fault_type([1], FaultType::Offline).await;
     builder.set_fault_type([0, 2, 3], FaultType::Honest).await;
 
-    client3_c.synchronize_from_validators().await.unwrap();
+    client3_c.synchronize_from_validators().await?;
     let blob4_data = b"blob4".to_vec();
     let blob4 = Blob::new(BlobContent::new_data(blob4_data.clone()));
     let bt_certificate = client3_c
@@ -1974,8 +1885,7 @@ where
 
     let certificate_values = client3_c
         .read_confirmed_blocks_downward(bt_certificate.hash(), 3)
-        .await
-        .unwrap();
+        .await?;
 
     // Latest block should be the burn
     assert!(certificate_values[0].block().body.operations().any(|op| *op
@@ -2019,17 +1929,17 @@ where
     let observer = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = client.chain_id();
     let observer_id = observer.chain_id();
-    let owner0 = client.identity().await.unwrap();
+    let owner0 = client.identity().await?;
     let owner1 = AccountSecretKey::generate().public().into();
 
     let owners = [(owner0, 100), (owner1, 100)];
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
-    client.change_ownership(ownership.clone()).await.unwrap();
+    client.change_ownership(ownership.clone()).await?;
 
     let info = observer.synchronize_chain_state(chain_id).await?;
     assert_eq!(info.manager.ownership, ownership);
 
-    let manager = client.chain_info().await.unwrap().manager;
+    let manager = client.chain_info().await?.manager;
 
     // The round has not timed out yet, so validators will not sign a timeout certificate.
     // If the malicious and one honest validator happen to be much faster than the other
@@ -2051,7 +1961,7 @@ where
     clock.set(manager.round_timeout.unwrap());
 
     // After the timeout they will.
-    let certificate = client.request_leader_timeout().await.unwrap();
+    let certificate = client.request_leader_timeout().await?;
     assert_eq!(
         *certificate.inner(),
         Timeout::new(chain_id, BlockHeight::from(1), Epoch::ZERO)
@@ -2068,7 +1978,7 @@ where
     assert_eq!(info.manager.current_round, expected_round);
 
     let round = loop {
-        let manager = client.chain_info().await.unwrap().manager;
+        let manager = client.chain_info().await?.manager;
         if manager.leader == Some(owner1) {
             break manager.current_round;
         }
@@ -2087,8 +1997,7 @@ where
             Amount::ONE,
             Account::chain(observer_id),
         )
-        .await
-        .unwrap();
+        .await?;
     let timeout = match result {
         ClientOutcome::Committed(_) => panic!("Committed a block where we aren't the leader."),
         ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -2096,14 +2005,14 @@ where
     client.clear_pending_proposal();
     assert!(client.request_leader_timeout().await.is_err());
     clock.set(timeout.timestamp);
-    client.request_leader_timeout().await.unwrap();
+    client.request_leader_timeout().await?;
     let expected_round = Round::SingleLeader(round_number + 1);
     builder
         .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), expected_round, 3)
         .await;
 
     loop {
-        let manager = client.chain_info().await.unwrap().manager;
+        let manager = client.chain_info().await?.manager;
         if manager.leader == Some(owner0) {
             break;
         }
@@ -2120,10 +2029,7 @@ where
         )
         .await
         .unwrap_ok_committed();
-    assert_eq!(
-        client.local_balance().await.unwrap(),
-        Amount::from_tokens(2)
-    );
+    assert_eq!(client.local_balance().await?, Amount::from_tokens(2));
 
     let expected_round = Round::SingleLeader(0);
     builder
@@ -2160,7 +2066,7 @@ where
         ..TimeoutConfig::default()
     };
     let ownership = ChainOwnership::multiple(owners, 10, timeout_config);
-    client0.change_ownership(ownership).await.unwrap();
+    client0.change_ownership(ownership).await?;
 
     let info = client0.chain_info().await?;
     let mut client1 = builder
@@ -2184,12 +2090,8 @@ where
     builder
         .set_fault_type([2], FaultType::DontSendConfirmVote)
         .await;
-    client1.synchronize_from_validators().await.unwrap();
-    let manager = client1
-        .chain_info_with_manager_values()
-        .await
-        .unwrap()
-        .manager;
+    client1.synchronize_from_validators().await?;
+    let manager = client1.chain_info_with_manager_values().await?.manager;
     assert!(manager.requested_proposed.is_some());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1.publish_data_blob(b"blob1".to_vec()).await;
@@ -2203,12 +2105,8 @@ where
 
     // Finally, the validators are online and honest again.
     builder.set_fault_type([1, 2], FaultType::Honest).await;
-    client0.synchronize_from_validators().await.unwrap();
-    let manager = client0
-        .chain_info_with_manager_values()
-        .await
-        .unwrap()
-        .manager;
+    client0.synchronize_from_validators().await?;
+    let manager = client0.chain_info_with_manager_values().await?.manager;
     assert_eq!(
         manager.requested_locking.unwrap().round(),
         Round::MultiLeader(1)
@@ -2219,28 +2117,20 @@ where
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
     client0
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
-        .await
-        .unwrap();
-    client0.synchronize_from_validators().await.unwrap();
-    client0.process_inbox().await.unwrap();
-    assert_eq!(
-        client0.local_balance().await.unwrap(),
-        Amount::from_tokens(9)
-    );
+        .await?;
+    client0.synchronize_from_validators().await?;
+    client0.process_inbox().await?;
+    assert_eq!(client0.local_balance().await?, Amount::from_tokens(9));
     assert!(client0.pending_proposal().is_none());
 
     // Transfer another token so Client 1 sees that the blob is already published
-    client1.prepare_chain().await.unwrap();
+    client1.prepare_chain().await?;
     client1
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
-        .await
-        .unwrap();
-    client1.synchronize_from_validators().await.unwrap();
-    client1.process_inbox().await.unwrap();
-    assert_eq!(
-        client1.local_balance().await.unwrap(),
-        Amount::from_tokens(8)
-    );
+        .await?;
+    client1.synchronize_from_validators().await?;
+    client1.process_inbox().await?;
+    assert_eq!(client1.local_balance().await?, Amount::from_tokens(8));
     assert!(client1.pending_proposal().is_none());
     Ok(())
 }
@@ -2274,13 +2164,10 @@ where
 
     // The client tries to burn another token. Before that, they automatically finalize the
     // pending block, which transfers 3 tokens, leaving 10 - 3 - 1 = 6.
-    client.burn(AccountOwner::CHAIN, Amount::ONE).await.unwrap();
-    client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
-    assert_eq!(
-        client.local_balance().await.unwrap(),
-        Amount::from_tokens(6)
-    );
+    client.burn(AccountOwner::CHAIN, Amount::ONE).await?;
+    client.synchronize_from_validators().await?;
+    client.process_inbox().await?;
+    assert_eq!(client.local_balance().await?, Amount::from_tokens(6));
     Ok(())
 }
 
@@ -2299,7 +2186,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
-    let owner0 = client0.identity().await.unwrap();
+    let owner0 = client0.identity().await?;
     let owner1 = builder.signer.generate_new().into();
 
     let owners = [(owner0, 100), (owner1, 100)];
@@ -2308,7 +2195,7 @@ where
         ..TimeoutConfig::default()
     };
     let ownership = ChainOwnership::multiple(owners, 10, timeout_config);
-    client0.change_ownership(ownership).await.unwrap();
+    client0.change_ownership(ownership).await?;
     let mut client1 = builder
         .make_client(
             chain_id,
@@ -2329,11 +2216,7 @@ where
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert!(result.is_err());
-    let manager = client0
-        .chain_info_with_manager_values()
-        .await
-        .unwrap()
-        .manager;
+    let manager = client0.chain_info_with_manager_values().await?.manager;
     // Validator 0 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 1 can download and re-propose it later.
@@ -2344,8 +2227,7 @@ where
     builder
         .node(0)
         .handle_validated_certificate(validated_block_certificate)
-        .await
-        .unwrap();
+        .await?;
 
     // Client 1 wants to burn 2 tokens. They learn about the proposal in round 0, but now the
     // validator 0 is offline, so they don't learn about the validated block and make their own
@@ -2354,12 +2236,8 @@ where
     builder
         .set_fault_type([3], FaultType::OfflineWithInfo)
         .await;
-    client1.synchronize_from_validators().await.unwrap();
-    let manager = client1
-        .chain_info_with_manager_values()
-        .await
-        .unwrap()
-        .manager;
+    client1.synchronize_from_validators().await?;
+    let manager = client1.chain_info_with_manager_values().await?.manager;
     assert!(manager.requested_proposed.is_some());
     assert!(manager.requested_locking.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
@@ -2372,12 +2250,8 @@ where
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
     builder.set_fault_type([0, 1, 2], FaultType::Honest).await;
     builder.set_fault_type([3], FaultType::Offline).await;
-    client1.synchronize_from_validators().await.unwrap();
-    let manager = client1
-        .chain_info_with_manager_values()
-        .await
-        .unwrap()
-        .manager;
+    client1.synchronize_from_validators().await?;
+    let manager = client1.chain_info_with_manager_values().await?.manager;
     assert_eq!(
         manager.requested_locking.unwrap().round(),
         Round::MultiLeader(0)
@@ -2386,15 +2260,11 @@ where
     assert!(client1.pending_proposal().is_some());
     client1
         .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
-        .await
-        .unwrap();
+        .await?;
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
-    client0.synchronize_from_validators().await.unwrap();
-    assert_eq!(
-        client0.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
+    client0.synchronize_from_validators().await?;
+    assert_eq!(client0.local_balance().await?, Amount::from_tokens(3));
     Ok(())
 }
 
@@ -2414,7 +2284,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
-    let owner0 = client0.identity().await.unwrap();
+    let owner0 = client0.identity().await?;
     let owner1 = builder.signer.generate_new().into();
 
     let timeout_config = TimeoutConfig {
@@ -2428,7 +2298,7 @@ where
         open_multi_leader_rounds: false,
         timeout_config,
     };
-    client0.change_ownership(ownership).await.unwrap();
+    client0.change_ownership(ownership).await?;
     let mut client1 = builder
         .make_client(
             chain_id,
@@ -2454,11 +2324,7 @@ where
 
     let result = client0.burn(owner0, Amount::from_tokens(3)).await;
     assert!(result.is_err());
-    let manager = client0
-        .chain_info_with_manager_values()
-        .await
-        .unwrap()
-        .manager;
+    let manager = client0.chain_info_with_manager_values().await?.manager;
     // Validator 0 may or may not have processed the proposal before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 1 can download and re-propose it later.
@@ -2466,18 +2332,14 @@ where
     let LockingBlock::Fast(proposal) = locking else {
         panic!("Unexpected locking regular block.");
     };
-    builder
-        .node(0)
-        .handle_block_proposal(proposal)
-        .await
-        .unwrap();
+    builder.node(0).handle_block_proposal(proposal).await?;
 
     // Round 0 times out.
     clock.add(TimeDelta::from_secs(5));
     builder.set_fault_type([0], FaultType::Offline).await;
     builder.set_fault_type([1, 2, 3], FaultType::Honest).await;
-    client1.synchronize_from_validators().await.unwrap();
-    client1.request_leader_timeout().await.unwrap();
+    client1.synchronize_from_validators().await?;
+    client1.request_leader_timeout().await?;
 
     // Client 1 wants to burn 2 tokens. But now validators 0 and 3 is offline, so they don't learn
     // about the proposed fast block and make their own instead.
@@ -2490,24 +2352,20 @@ where
     // Finally, three validators are online and honest again. Client 1 realizes there has been a
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
     builder.set_fault_type([0, 1, 2], FaultType::Honest).await;
-    client1.synchronize_from_validators().await.unwrap();
+    client1.synchronize_from_validators().await?;
     assert!(client1.pending_proposal().is_some());
     client1
         .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
-        .await
-        .unwrap();
+        .await?;
     // Round 0 needs to time out again, so client 1 is actually allowed to propose.
     clock.add(TimeDelta::from_secs(5));
-    client1.process_pending_block().await.unwrap();
+    client1.process_pending_block().await?;
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
-    client0.synchronize_from_validators().await.unwrap();
+    client0.synchronize_from_validators().await?;
+    assert_eq!(client0.local_balance().await?, Amount::from_tokens(1));
     assert_eq!(
-        client0.local_balance().await.unwrap(),
-        Amount::from_tokens(1)
-    );
-    assert_eq!(
-        client0.local_owner_balance(owner0).await.unwrap(),
+        client0.local_owner_balance(owner0).await?,
         Amount::from_tokens(2)
     );
     Ok(())
@@ -2531,10 +2389,7 @@ where
         .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
         .await
         .unwrap_ok_committed();
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
+    assert_eq!(sender.local_balance().await?, Amount::from_tokens(3));
 
     receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Ignore, None);
     receiver
@@ -2542,12 +2397,9 @@ where
         .await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
-    assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(receiver.local_balance().await?, Amount::ZERO);
     assert!(sender.process_inbox().await?.0.is_empty());
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
+    assert_eq!(sender.local_balance().await?, Amount::from_tokens(3));
 
     receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Reject, None);
     let certs = receiver.process_inbox().await?.0;
@@ -2557,11 +2409,8 @@ where
         .await?;
     // The message bounces.
     assert_eq!(sender.process_inbox().await?.0.len(), 1);
-    assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_tokens(4)
-    );
+    assert_eq!(receiver.local_balance().await?, Amount::ZERO);
+    assert_eq!(sender.local_balance().await?, Amount::from_tokens(4));
 
     Ok(())
 }
@@ -2596,7 +2445,7 @@ where
     for client in [&client1, &client2, &client3] {
         let owner = client.identity().await?;
         let ownership = ChainOwnership::single_super(owner);
-        client.change_ownership(ownership).await.unwrap();
+        client.change_ownership(ownership).await?;
     }
 
     // Take one validator down
@@ -2619,7 +2468,7 @@ where
         )
         .await
         .unwrap_ok_committed();
-    client3.synchronize_from_validators().await.unwrap();
+    client3.synchronize_from_validators().await?;
     assert_eq!(certificate.round, Round::Fast);
 
     builder.set_fault_type([2], FaultType::Offline).await;
@@ -2696,10 +2545,10 @@ where
     expected_balance = expected_balance
         - policy.blob_published
         - policy.blob_byte_published * (blob.bytes().len() as u128);
-    assert_eq!(client.local_balance().await.unwrap(), expected_balance);
+    assert_eq!(client.local_balance().await?, expected_balance);
 
-    client.read_data_blob(blob_id.hash).await.unwrap().unwrap();
+    client.read_data_blob(blob_id.hash).await?.unwrap();
     expected_balance = expected_balance - policy.blob_read;
-    assert_eq!(client.local_balance().await.unwrap(), expected_balance);
+    assert_eq!(client.local_balance().await?, expected_balance);
     Ok(())
 }
