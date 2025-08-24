@@ -63,11 +63,11 @@ impl Contract for CounterContract {
 
 #[cfg(test)]
 mod tests {
+    use counter::CounterOperation;
     use futures::FutureExt as _;
     use linera_sdk::{util::BlockingWait, views::View, Contract, ContractRuntime};
 
     use super::{CounterContract, CounterState};
-    use counter::CounterOperation;
 
     #[test]
     fn operation() {

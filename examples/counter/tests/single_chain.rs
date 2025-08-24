@@ -5,8 +5,8 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use linera_sdk::test::{QueryOutcome, TestValidator};
 use counter::CounterOperation;
+use linera_sdk::test::{QueryOutcome, TestValidator};
 
 /// Test setting a counter and testing its coherency across microchains.
 ///
