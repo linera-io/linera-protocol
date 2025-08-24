@@ -1,7 +1,30 @@
 """
-An account
+An account.
 """
-scalar Account
+input Account {
+	"""
+	The chain of the account.
+	"""
+	chainId: ChainId!
+	"""
+	The owner of the account, or `None` for the chain balance.
+	"""
+	owner: AccountOwner!
+}
+
+"""
+An account.
+"""
+type AccountOutput {
+	"""
+	The chain of the account.
+	"""
+	chainId: ChainId!
+	"""
+	The owner of the account, or `None` for the chain balance.
+	"""
+	owner: AccountOwner!
+}
 
 """
 A unique identifier for a user or an application.
@@ -935,7 +958,7 @@ type OutgoingMessage {
 	"""
 	Where to send a refund for the unused part of the grant after execution, if any.
 	"""
-	refundGrantTo: Account
+	refundGrantTo: AccountOutput
 	"""
 	The kind of message being sent.
 	"""
@@ -983,7 +1006,7 @@ type PostedMessage {
 	"""
 	Where to send a refund for the unused part of the grant after execution, if any.
 	"""
-	refundGrantTo: Account
+	refundGrantTo: AccountOutput
 	"""
 	The kind of message being sent.
 	"""

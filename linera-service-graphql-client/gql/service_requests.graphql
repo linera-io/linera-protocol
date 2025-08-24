@@ -44,7 +44,10 @@ query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
               messages {
                 authenticatedSigner
                 grant
-                refundGrantTo
+                refundGrantTo {
+                  chainId
+                  owner
+                }
                 kind
                 index
                 message
@@ -60,7 +63,10 @@ query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
               messages {
                 authenticatedSigner
                 grant
-                refundGrantTo
+                refundGrantTo {
+                  chainId
+                  owner
+                }
                 kind
                 index
                 message
@@ -138,7 +144,10 @@ query Chain(
               messages {
                 authenticatedSigner
                 grant
-                refundGrantTo
+                refundGrantTo {
+                  chainId
+                  owner
+                }
                 kind
                 index
                 message
@@ -154,7 +163,10 @@ query Chain(
               messages {
                 authenticatedSigner
                 grant
-                refundGrantTo
+                refundGrantTo {
+                  chainId
+                  owner
+                }
                 kind
                 index
                 message
@@ -235,7 +247,10 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           destination
           authenticatedSigner
           grant
-          refundGrantTo
+          refundGrantTo {
+            chainId
+            owner
+          }
           kind
           message
         }
@@ -264,7 +279,10 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
               messages {
                 authenticatedSigner
                 grant
-                refundGrantTo
+                refundGrantTo {
+                  chainId
+                  owner
+                }
                 kind
                 index
                 message
@@ -311,7 +329,10 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           destination
           authenticatedSigner
           grant
-          refundGrantTo
+          refundGrantTo {
+            chainId
+            owner
+          }
           kind
           message
         }
@@ -340,7 +361,10 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
               messages {
                 authenticatedSigner
                 grant
-                refundGrantTo
+                refundGrantTo {
+                  chainId
+                  owner
+                }
                 kind
                 index
                 message

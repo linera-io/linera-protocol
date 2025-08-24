@@ -173,7 +173,10 @@ mod from {
                             .map(|msg| linera_chain::data_types::PostedMessage {
                                 authenticated_signer: msg.authenticated_signer,
                                 grant: msg.grant,
-                                refund_grant_to: msg.refund_grant_to,
+                                refund_grant_to: msg.refund_grant_to.map(|rgt| Account {
+                                    chain_id: rgt.chain_id,
+                                    owner: rgt.owner,
+                                }),
                                 kind: msg.kind,
                                 index: msg.index as u32,
                                 message: msg.message,
@@ -278,7 +281,10 @@ mod from {
                 destination,
                 authenticated_signer,
                 grant,
-                refund_grant_to,
+                refund_grant_to: refund_grant_to.map(|rgt| Account {
+                    chain_id: rgt.chain_id,
+                    owner: rgt.owner,
+                }),
                 kind,
                 message,
             }
