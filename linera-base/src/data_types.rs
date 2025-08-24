@@ -1276,7 +1276,6 @@ impl<'de> Deserialize<'de> for BlobContent {
             type Value = BlobContent;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                println!("Passing by expecting");
                 formatter.write_str("struct BlobContent")
             }
 
@@ -1290,14 +1289,16 @@ impl<'de> Deserialize<'de> for BlobContent {
                 let bytes: Vec<u8> = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                Ok(BlobContent { blob_type, bytes: Arc::from(bytes.into_boxed_slice()) })
+                Ok(BlobContent {
+                    blob_type,
+                    bytes: Arc::from(bytes.into_boxed_slice()),
+                })
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<BlobContent, V::Error>
             where
                 V: serde::de::MapAccess<'de>,
             {
-                println!("visit_map, step 1");
                 let mut blob_type = None;
                 let mut bytes = None;
                 while let Some(key) = map.next_key()? {
@@ -1317,7 +1318,8 @@ impl<'de> Deserialize<'de> for BlobContent {
                         }
                     }
                 }
-                let blob_type = blob_type.ok_or_else(|| serde::de::Error::missing_field("blob_type"))?;
+                let blob_type =
+                    blob_type.ok_or_else(|| serde::de::Error::missing_field("blob_type"))?;
                 let bytes = bytes.ok_or_else(|| serde::de::Error::missing_field("bytes"))?;
                 Ok(BlobContent { blob_type, bytes })
             }
@@ -1705,15 +1707,12 @@ mod tests {
     #[test]
     fn blob_content_serialization_deserialization() {
         let test_data = b"Hello, world!".as_slice();
-        println!("blob_content_serialization_deserialization, step 0, |test_data|={} test_data={:?}", test_data.len(), test_data);
         let original_blob = BlobContent::new(BlobType::Data, test_data);
-        println!("blob_content_serialization_deserialization, step 1");
 
         let serialized = bcs::to_bytes(&original_blob).expect("Failed to serialize BlobContent");
-        println!("blob_content_serialization_deserialization, step 2, serialized={serialized:?} |serialized|={}", serialized.len());
 
-        let deserialized: BlobContent = bcs::from_bytes(&serialized).expect("Failed to deserialize BlobContent");
-        println!("blob_content_serialization_deserialization, step 3");
+        let deserialized: BlobContent =
+            bcs::from_bytes(&serialized).expect("Failed to deserialize BlobContent");
 
         assert_eq!(original_blob, deserialized);
         assert_eq!(original_blob.blob_type(), deserialized.blob_type());
