@@ -1325,7 +1325,7 @@ impl<'de> Deserialize<'de> for BlobContent {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["blob_type", "bytes"];
+        const FIELDS: &[&str] = &["blob_type", "bytes"];
         deserializer.deserialize_struct("BlobContent", FIELDS, BlobContentVisitor)
     }
 }

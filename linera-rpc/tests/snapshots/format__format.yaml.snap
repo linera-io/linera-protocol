@@ -114,7 +114,8 @@ BlobContent:
   STRUCT:
     - blob_type:
         TYPENAME: BlobType
-    - bytes: BYTES
+    - bytes:
+        SEQ: U8
 BlobId:
   STRUCT:
     - hash:
