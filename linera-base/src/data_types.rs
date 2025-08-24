@@ -15,6 +15,7 @@ use std::{
     ops::{Bound, RangeBounds},
     path::Path,
     str::FromStr,
+    sync::Arc,
 };
 
 use alloy_primitives::U256;
@@ -1246,26 +1247,49 @@ impl CompressedBytecode {
 
 impl BcsHashable<'_> for BlobContent {}
 
+mod arc_u8_as_bytes {
+    use std::{ops::Deref, sync::Arc};
+
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S>(bytes: &Arc<[u8]>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes: &[u8] = bytes.deref();
+        serializer.serialize_bytes(bytes)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Arc<[u8]>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde_bytes::{ByteBuf, Deserialize};
+        let buf = ByteBuf::deserialize(deserializer)?;
+        Ok(buf.into_vec().into())
+    }
+}
+
 /// A blob of binary data.
 #[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobContent {
     /// The type of data represented by the bytes.
     blob_type: BlobType,
     /// The binary data.
-    #[serde(with = "serde_bytes")]
     #[debug(skip)]
-    bytes: Box<[u8]>,
+    #[serde(with = "arc_u8_as_bytes")]
+    bytes: Arc<[u8]>,
 }
 
 impl BlobContent {
     /// Creates a new [`BlobContent`] from the provided bytes and [`BlobId`].
-    pub fn new(blob_type: BlobType, bytes: impl Into<Box<[u8]>>) -> Self {
+    pub fn new(blob_type: BlobType, bytes: impl Into<Arc<[u8]>>) -> Self {
         let bytes = bytes.into();
         BlobContent { blob_type, bytes }
     }
 
     /// Creates a new data [`BlobContent`] from the provided bytes.
-    pub fn new_data(bytes: impl Into<Box<[u8]>>) -> Self {
+    pub fn new_data(bytes: impl Into<Arc<[u8]>>) -> Self {
         BlobContent::new(BlobType::Data, bytes)
     }
 
@@ -1297,7 +1321,7 @@ impl BlobContent {
     }
 
     /// Creates a new committee [`BlobContent`] from the provided serialized committee.
-    pub fn new_committee(committee: impl Into<Box<[u8]>>) -> Self {
+    pub fn new_committee(committee: impl Into<Arc<[u8]>>) -> Self {
         BlobContent::new(BlobType::Committee, committee)
     }
 
@@ -1314,7 +1338,7 @@ impl BlobContent {
     }
 
     /// Gets the inner blob's bytes, consuming the blob.
-    pub fn into_bytes(self) -> Box<[u8]> {
+    pub fn into_bytes(self) -> Arc<[u8]> {
         self.bytes
     }
 
@@ -1362,7 +1386,7 @@ impl Blob {
     }
 
     /// Creates a blob without checking that the hash actually matches the content.
-    pub fn new_with_id_unchecked(blob_id: BlobId, bytes: impl Into<Box<[u8]>>) -> Self {
+    pub fn new_with_id_unchecked(blob_id: BlobId, bytes: impl Into<Arc<[u8]>>) -> Self {
         Blob {
             hash: blob_id.hash,
             content: BlobContent {
@@ -1373,7 +1397,7 @@ impl Blob {
     }
 
     /// Creates a new data [`Blob`] from the provided bytes.
-    pub fn new_data(bytes: impl Into<Box<[u8]>>) -> Self {
+    pub fn new_data(bytes: impl Into<Arc<[u8]>>) -> Self {
         Blob::new(BlobContent::new_data(bytes))
     }
 
@@ -1400,7 +1424,7 @@ impl Blob {
     }
 
     /// Creates a new committee [`Blob`] from the provided bytes.
-    pub fn new_committee(committee: impl Into<Box<[u8]>>) -> Self {
+    pub fn new_committee(committee: impl Into<Arc<[u8]>>) -> Self {
         Blob::new(BlobContent::new_committee(committee))
     }
 
@@ -1433,7 +1457,7 @@ impl Blob {
     }
 
     /// Gets the inner blob's bytes.
-    pub fn into_bytes(self) -> Box<[u8]> {
+    pub fn into_bytes(self) -> Arc<[u8]> {
         self.content.into_bytes()
     }
 
@@ -1590,7 +1614,8 @@ mod metrics {
 mod tests {
     use std::str::FromStr;
 
-    use super::Amount;
+    use super::{Amount, BlobContent};
+    use crate::identifiers::BlobType;
 
     #[test]
     fn display_amount() {
@@ -1616,5 +1641,22 @@ mod tests {
             "~+12.34~~",
             format!("{:~^+9.1}", Amount::from_str("12.34").unwrap())
         );
+    }
+
+    #[test]
+    fn blob_content_serialization_deserialization() {
+        let test_data = b"Hello, world!".as_slice();
+        let original_blob = BlobContent::new(BlobType::Data, test_data);
+
+        let serialized = bcs::to_bytes(&original_blob).expect("Failed to serialize BlobContent");
+        let deserialized: BlobContent =
+            bcs::from_bytes(&serialized).expect("Failed to deserialize BlobContent");
+        assert_eq!(original_blob, deserialized);
+
+        let serialized =
+            serde_json::to_vec(&original_blob).expect("Failed to serialize BlobContent");
+        let deserialized: BlobContent =
+            serde_json::from_slice(&serialized).expect("Failed to deserialize BlobContent");
+        assert_eq!(original_blob, deserialized);
     }
 }
