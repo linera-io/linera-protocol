@@ -6,6 +6,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use linera_sdk::test::{QueryOutcome, TestValidator};
+use counter::CounterOperation;
 
 /// Test setting a counter and testing its coherency across microchains.
 ///
@@ -23,9 +24,10 @@ async fn single_chain_test() {
         .await;
 
     let increment = 15u64;
+    let operation = CounterOperation::Increment(increment);
     chain
         .add_block(|block| {
-            block.with_operation(application_id, increment);
+            block.with_operation(application_id, operation);
         })
         .await;
 
