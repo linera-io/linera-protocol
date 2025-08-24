@@ -1714,7 +1714,8 @@ mod tests {
             bcs::from_bytes(&serialized).expect("Failed to deserialize BlobContent");
         assert_eq!(original_blob, deserialized);
 
-        let serialized = serde_json::to_vec(&original_blob).expect("Failed to serialize BlobContent");
+        let serialized =
+            serde_json::to_vec(&original_blob).expect("Failed to serialize BlobContent");
         let deserialized: BlobContent =
             serde_json::from_slice(&serialized).expect("Failed to deserialize BlobContent");
         assert_eq!(original_blob, deserialized);
