@@ -77,10 +77,21 @@ impl From<CryptoHash> for AccountOwner {
     }
 }
 
-
 /// An account.
 #[derive(
-    Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize, WitLoad, WitStore, WitType, SimpleObject, InputObject,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Copy,
+    Clone,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    SimpleObject,
+    InputObject,
 )]
 #[graphql(name = "AccountOutput", input_name = "Account")]
 pub struct Account {
