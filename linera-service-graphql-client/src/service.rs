@@ -138,7 +138,7 @@ pub enum ConversionError {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
-    use linera_base::{data_types::Event, identifiers::StreamId};
+    use linera_base::{data_types::Event, identifiers::{Account, StreamId}};
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
         types::ConfirmedBlock,
