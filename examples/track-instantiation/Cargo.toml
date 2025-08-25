@@ -1,0 +1,21 @@
+[package]
+name = "track-instantiation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+linera-sdk = { path = "../../linera-sdk" }
+serde = { version = "1.0", features = ["derive"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+futures = "0.3"
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio.workspace = true
+
+[[bin]]
+name = "track_instantiation_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "track_instantiation_service"
+path = "src/service.rs"
