@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Epilogue:ital,wght@0,500;1,500&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -.02em;
+    background-color: #f3eee2;
+    height: 100%;
+}
+
+.container {
+    width: 100%;
+    height: 100%;
+    padding: 0.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 2rem;
+}
+
+h1 {
+    font-size: 5rem;
+    font-family: 'Epilogue', serif;
+    font-weight: 500;
+    line-height: 1.2;
+    width: 100%;
+}
+
+p {
+    margin: 1rem 0;
+    max-width: 40rem;
+}
+
+em {
+    font-style: normal;
+    font-weight: bold;
+}
+
+button, input[type="submit"] {
+    background-color: rgb(222, 42, 2);
+    color: #f3eee2;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-family: 'Poppins', sans-serif;
+    box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px 0px;
+    width: fit-content;
+    height: fit-content;
+}
+
+button[disabled], input[type="submit"][disabled] {
+    background-color: gray;
+}
+
+input[type="text"] {
+    padding: 0.3rem;
+}
+
+button:hover {
+    background-color: #d62f1a;
+}
+
+.logs {
+    background-color: rgb(222, 42, 2);
+    color: #f3eee2;
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    min-height: 20rem;
+    padding: 1.5rem;
+    overflow: hidden;
+}
+
+.logs>* {
+    white-space: nowrap;
+}
+
+#logs li {
+    font-family: monospace;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+    overflow: hidden;
+}
+
+#logs li .height {
+    min-width: 3em;
+}
+
+.hex {
+    font-family: monospace;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+h1::before {
+    display: block;
+    width: 60px;
+    height: 79px;
+    background-image: url(./arrow.svg);
+    content: '';
+    animation: 1s infinite alternate breathe ease-out;
+    padding-bottom: 0.1em;
+}
+
+input {
+    background-color: #fffef2;
+    border-style: solid;
+}
+
+@keyframes breathe {
+    from {
+        scale: 100%;
+    }
+
+    to {
+        scale: 110%;
+    }
+}
