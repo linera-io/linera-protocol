@@ -427,14 +427,6 @@ where
         &self.storage
     }
 
-    #[instrument(level = "trace", skip(self, key_pair))]
-    #[cfg(test)]
-    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<ValidatorSecretKey>>) -> Self {
-        self.chain_worker_config.key_pair = key_pair;
-        self.chain_workers.lock().unwrap().clear();
-        self
-    }
-
     #[instrument(level = "trace", skip(self, certificate))]
     pub(crate) async fn full_certificate(
         &self,
