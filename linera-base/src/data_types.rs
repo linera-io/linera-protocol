@@ -1245,95 +1245,10 @@ impl CompressedBytecode {
     }
 }
 
-impl Serialize for BlobContent {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("BlobContent", 2)?;
-        state.serialize_field("blob_type", &self.blob_type)?;
-        state.serialize_field("bytes", &*self.bytes)?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for BlobContent {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "snake_case")]
-        enum Field {
-            BlobType,
-            Bytes,
-        }
-
-        struct BlobContentVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for BlobContentVisitor {
-            type Value = BlobContent;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct BlobContent")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<BlobContent, V::Error>
-            where
-                V: serde::de::SeqAccess<'de>,
-            {
-                let blob_type: BlobType = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-                let bytes: Vec<u8> = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                Ok(BlobContent {
-                    blob_type,
-                    bytes: Arc::from(bytes.into_boxed_slice()),
-                })
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<BlobContent, V::Error>
-            where
-                V: serde::de::MapAccess<'de>,
-            {
-                let mut blob_type = None;
-                let mut bytes = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::BlobType => {
-                            if blob_type.is_some() {
-                                return Err(serde::de::Error::duplicate_field("blob_type"));
-                            }
-                            blob_type = Some(map.next_value()?);
-                        }
-                        Field::Bytes => {
-                            if bytes.is_some() {
-                                return Err(serde::de::Error::duplicate_field("bytes"));
-                            }
-                            let vec_bytes: Vec<u8> = map.next_value()?;
-                            bytes = Some(Arc::from(vec_bytes.into_boxed_slice()));
-                        }
-                    }
-                }
-                let blob_type =
-                    blob_type.ok_or_else(|| serde::de::Error::missing_field("blob_type"))?;
-                let bytes = bytes.ok_or_else(|| serde::de::Error::missing_field("bytes"))?;
-                Ok(BlobContent { blob_type, bytes })
-            }
-        }
-
-        const FIELDS: &[&str] = &["blob_type", "bytes"];
-        deserializer.deserialize_struct("BlobContent", FIELDS, BlobContentVisitor)
-    }
-}
-
 impl BcsHashable<'_> for BlobContent {}
 
 /// A blob of binary data.
-#[derive(Hash, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Hash, Clone, Debug, PartialEq, Eq)]
 pub struct BlobContent {
     /// The type of data represented by the bytes.
     blob_type: BlobType,
