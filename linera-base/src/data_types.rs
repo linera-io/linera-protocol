@@ -1247,6 +1247,29 @@ impl CompressedBytecode {
 
 impl BcsHashable<'_> for BlobContent {}
 
+mod arc_u8_as_bytes {
+    use std::{ops::Deref, sync::Arc};
+
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S>(bytes: &Arc<[u8]>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes: &[u8] = bytes.deref();
+        serializer.serialize_bytes(bytes)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Arc<[u8]>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde_bytes::{ByteBuf, Deserialize};
+        let buf = ByteBuf::deserialize(deserializer)?;
+        Ok(buf.into_vec().into())
+    }
+}
+
 /// A blob of binary data.
 #[derive(Serialize, Deserialize, Hash, Clone, Debug, PartialEq, Eq)]
 pub struct BlobContent {
@@ -1254,6 +1277,7 @@ pub struct BlobContent {
     blob_type: BlobType,
     /// The binary data.
     #[debug(skip)]
+    #[serde(with = "arc_u8_as_bytes")]
     bytes: Arc<[u8]>,
 }
 
