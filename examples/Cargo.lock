@@ -700,7 +700,6 @@ name = "amm"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "fungible",
  "linera-sdk",
  "matching-engine",
  "num-bigint",
@@ -2866,7 +2865,6 @@ dependencies = [
  "bcs",
  "candle-core",
  "candle-transformers",
- "fungible",
  "getrandom 0.2.15",
  "linera-sdk",
  "log",
@@ -4467,7 +4465,6 @@ dependencies = [
  "async-graphql",
  "base64 0.22.1",
  "bcs",
- "fungible",
  "linera-sdk",
  "non-fungible",
  "serde",

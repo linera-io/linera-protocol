@@ -13,7 +13,6 @@ base64.workspace = true
 bcs.workspace = true
 candle-core.workspace = true
 candle-transformers.workspace = true
-fungible.workspace = true
 getrandom.workspace = true
 linera-sdk.workspace = true
 log.workspace = true
@@ -23,7 +22,6 @@ sha3.workspace = true
 tokenizers.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-fungible = { workspace = true, features = ["test"] }
 non-fungible = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio.workspace = true
