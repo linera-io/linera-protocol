@@ -31,11 +31,11 @@ use {
 
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
-    resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
-    ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    OutgoingMessage, ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
-    SystemMessage, Timestamp, TransactionTracker,
+    execution_state_actor::ExecutionStateActor, resources::ResourceController,
+    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ContractSyncRuntime,
+    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageContext,
+    MessageKind, Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, Query,
+    QueryContext, QueryOutcome, ServiceSyncRuntime, SystemMessage, Timestamp, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -241,7 +241,8 @@ where
         );
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self.load_contract(application_id, txn_tracker).await?;
+        let mut actor = ExecutionStateActor::new(self);
+        let (code, description) = actor.load_contract(application_id, txn_tracker).await?;
         let txn_tracker_moved = mem::take(txn_tracker);
         let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let runtime = ContractSyncRuntime::new(
@@ -264,7 +265,7 @@ where
         contract_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request, resource_controller).await?;
+            actor.handle_request(request, resource_controller).await?;
         }
 
         let (result, controller, txn_tracker_moved) = contract_runtime_task.join().await?;
@@ -453,7 +454,8 @@ where
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self
+        let mut actor = ExecutionStateActor::new(self);
+        let (code, description) = actor
             .load_service(application_id, &mut TransactionTracker::default())
             .await?;
 
@@ -471,7 +473,8 @@ where
         service_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request, &mut ResourceController::default())
+            actor
+                .handle_request(request, &mut ResourceController::default())
                 .await?;
         }
 
@@ -500,11 +503,13 @@ where
             })
             .expect("Service runtime thread should only stop when `request_sender` is dropped");
 
+        let mut actor = ExecutionStateActor::new(self);
+
         loop {
             futures::select! {
                 maybe_request = incoming_execution_requests.next() => {
                     if let Some(request) = maybe_request {
-                        self.handle_request(request, &mut ResourceController::default()).await?;
+                        actor.handle_request(request, &mut ResourceController::default()).await?;
                     }
                 }
                 outcome = &mut outcome_receiver => {
