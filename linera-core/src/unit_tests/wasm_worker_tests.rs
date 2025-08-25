@@ -28,7 +28,7 @@ use linera_chain::{
     },
     test::{make_child_block, make_first_block, BlockTestExt},
 };
-use linera_execution::{system::SystemOperation, Operation, WasmRuntime};
+use linera_execution::{system::SystemOperation, Operation, OperationInput, WasmRuntime};
 use linera_storage::Storage;
 use test_case::test_case;
 
@@ -233,7 +233,7 @@ where
         .with_timestamp(3)
         .with_operation(Operation::User {
             application_id,
-            bytes: user_operation.clone(),
+            input: OperationInput::Direct(user_operation.clone()),
         });
     let run_certificate = env.execute_proposal(run_block.clone(), vec![]).await?;
 
@@ -408,7 +408,7 @@ where
         .with_timestamp(4)
         .with_operation(Operation::User {
             application_id: meta_app_id,
-            bytes: fail_op_bytes,
+            input: OperationInput::Direct(fail_op_bytes),
         });
     let send_fail_cert = env.execute_proposal(send_fail_block, vec![]).await?;
     env.worker()

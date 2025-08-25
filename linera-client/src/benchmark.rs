@@ -20,7 +20,7 @@ use linera_core::{
     data_types::ClientOutcome,
     Environment,
 };
-use linera_execution::{system::SystemOperation, Operation};
+use linera_execution::{system::SystemOperation, Operation, OperationInput};
 use linera_sdk::abis::fungible::FungibleOperation;
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
@@ -860,6 +860,6 @@ pub fn fungible_transfer(
     .expect("should serialize fungible token operation");
     Operation::User {
         application_id,
-        bytes,
+        input: OperationInput::Direct(bytes),
     }
 }

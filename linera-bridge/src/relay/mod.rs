@@ -29,7 +29,7 @@ use futures::StreamExt as _;
 use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
-use linera_execution::{Operation, WasmRuntime};
+use linera_execution::{Operation, OperationInput, WasmRuntime};
 use linera_storage::{DbStorage, Storage as _};
 use linera_views::{
     backends::{
@@ -520,7 +520,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                                     .expect("failed to BCS-serialize BridgeOperation");
                                 Operation::User {
                                     application_id: bridge_app_id,
-                                    bytes: op_bytes,
+                                    input: OperationInput::Direct(op_bytes),
                                 }
                             }).collect();
 

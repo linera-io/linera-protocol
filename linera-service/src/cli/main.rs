@@ -59,7 +59,7 @@ use linera_core::{
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
 };
-use linera_execution::{committee::Committee, Operation};
+use linera_execution::{committee::Committee, Operation, OperationInput};
 use linera_faucet_server::{FaucetConfig, FaucetService};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -1623,7 +1623,7 @@ impl Runnable for Job {
                     .context("invalid hex for operation bytes")?;
                 let user_operation = Operation::User {
                     application_id,
-                    bytes,
+                    input: OperationInput::Direct(bytes),
                 };
                 let mut context = options
                     .create_client_context(storage, wallet, keystore)

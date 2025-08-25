@@ -19,7 +19,7 @@ use linera_chain::{
 use linera_execution::{
     committee::ValidatorState, system::AdminOperation,
     test_utils::solidity::compile_solidity_contract_with_options, Message, MessageKind, Operation,
-    ResourceControlPolicy, SystemOperation,
+    OperationInput, ResourceControlPolicy, SystemOperation,
 };
 use revm::{
     database::{CacheDB, EmptyDB},
@@ -101,7 +101,7 @@ pub fn create_signed_certificate_for_chain(
 ) -> ConfirmedBlockCertificate {
     let transactions = vec![Transaction::ExecuteOperation(Operation::User {
         application_id: ApplicationId::new(CryptoHash::new(&TestString::new("test_app"))),
-        bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
+        input: OperationInput::Direct(vec![0xDE, 0xAD, 0xBE, 0xEF]),
     })];
     create_certificate_with_transactions(secret, public, chain_id, height, transactions)
 }

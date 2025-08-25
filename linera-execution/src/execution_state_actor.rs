@@ -1080,8 +1080,18 @@ where
             }
             Operation::User {
                 application_id,
-                bytes,
+                input,
             } => {
+                let bytes = match input {
+                    crate::OperationInput::Direct(bytes) => bytes,
+                    crate::OperationInput::Composed => {
+                        let previous_results = self.txn_tracker.previous_operation_results();
+                        if previous_results.is_empty() {
+                            return Err(ExecutionError::ComposedOperationCannotBeFirst);
+                        }
+                        previous_results.last().unwrap().clone()
+                    }
+                };
                 self.run_user_action(
                     application_id,
                     UserAction::Operation(context, bytes),

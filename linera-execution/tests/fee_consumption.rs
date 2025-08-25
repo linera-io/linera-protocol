@@ -18,7 +18,7 @@ use linera_execution::{
         SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionStateActor, Message, MessageContext,
-    ResourceControlPolicy, ResourceController, ResourceTracker, TransactionTracker,
+    OperationInput, ResourceControlPolicy, ResourceController, ResourceTracker, TransactionTracker,
 };
 use test_case::test_case;
 
@@ -554,7 +554,7 @@ async fn test_free_app_operation_still_charged() -> anyhow::Result<()> {
             context,
             linera_execution::Operation::User {
                 application_id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
         )
         .await?;

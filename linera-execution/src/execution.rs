@@ -190,6 +190,7 @@ where
             next_chain_index,
             None,
             &[],
+            vec![], // No previous operation results for testing
         );
         txn_tracker.add_created_blob(blob);
         Box::pin(

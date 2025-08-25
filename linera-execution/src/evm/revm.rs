@@ -78,8 +78,9 @@ use crate::{
         },
     },
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, DataBlobHash, EvmExecutionError,
-    EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
-    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    EvmRuntime, ExecutionError, OperationInput, ServiceRuntime, ServiceSyncRuntimeHandle,
+    UserContract, UserContractInstance, UserContractModule, UserService, UserServiceInstance,
+    UserServiceModule,
 };
 
 /// Fictional selector for internal cross-contract calls to retrieve account information.
@@ -1572,13 +1573,13 @@ where
             EvmQuery::Query(vec) => vec,
             EvmQuery::Operation(operation) => {
                 let mut runtime = self.db.lock_runtime();
-                runtime.schedule_operation(operation)?;
+                runtime.schedule_operation(OperationInput::Direct(operation))?;
                 return Ok(Vec::new());
             }
             EvmQuery::Operations(operations) => {
                 let mut runtime = self.db.lock_runtime();
                 for operation in operations {
-                    runtime.schedule_operation(operation)?;
+                    runtime.schedule_operation(OperationInput::Direct(operation))?;
                 }
                 return Ok(Vec::new());
             }
