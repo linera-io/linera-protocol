@@ -555,6 +555,7 @@ where
                 .update(*round, validated, maybe_blobs)
                 .await?;
             self.save().await?;
+            tracing::debug!(?missing_blob_ids, "blobs missing from block proposal");
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
         }
         let published_blobs = block
