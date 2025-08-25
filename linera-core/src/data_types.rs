@@ -76,6 +76,8 @@ pub struct ChainInfoQuery {
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
     /// Query a range of certificate hashes sent from the chain.
+    //  dev: this field is left and unused to maintain backwards compatibility
+    //  after hotfixing Testnet Conway.
     #[debug(skip_if = Option::is_none)]
     pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
@@ -132,8 +134,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_sent_certificate_hashes_in_range(mut self, range: BlockHeightRange) -> Self {
-        self.request_sent_certificate_hashes_in_range = Some(range);
+    pub fn with_sent_certificate_hashes_by_heights(mut self, heights: Vec<BlockHeight>) -> Self {
+        self.request_sent_certificate_hashes_by_heights = heights;
         self
     }
 
@@ -313,6 +315,13 @@ impl ChainInfoResponse {
 }
 
 impl BcsSignable<'_> for ChainInfo {}
+
+/// Request for downloading certificates by heights.
+#[derive(Debug, Clone)]
+pub struct CertificatesByHeightRequest {
+    pub chain_id: ChainId,
+    pub heights: Vec<BlockHeight>,
+}
 
 /// The outcome of trying to commit a list of operations to the chain.
 #[derive(Debug)]

@@ -17,7 +17,11 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
-use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
+use linera_core::{
+    data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
+    notifier::ChannelNotifier,
+    JoinSetExt as _,
+};
 #[cfg(with_metrics)]
 use linera_metrics::prometheus_server;
 use linera_rpc::{
@@ -29,9 +33,9 @@ use linera_rpc::{
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
-            CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
-            HandlePendingBlobRequest, LiteCertificate, NetworkDescription, Notification,
-            PendingBlobRequest, PendingBlobResult, SubscriptionRequest, VersionInfo,
+            CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
+            LiteCertificate, NetworkDescription, Notification, PendingBlobRequest,
+            PendingBlobResult, SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -430,7 +434,7 @@ where
     #[instrument(skip_all, err(Display))]
     async fn handle_chain_info_query(
         &self,
-        request: Request<ChainInfoQuery>,
+        request: Request<api::ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
@@ -623,6 +627,52 @@ where
         Ok(Response::new(CertificatesBatchResponse::try_from(
             returned_certificates,
         )?))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn download_certificates_by_heights(
+        &self,
+        request: Request<api::DownloadCertificatesByHeightsRequest>,
+    ) -> Result<Response<CertificatesBatchResponse>, Status> {
+        let original_request: CertificatesByHeightRequest = request.into_inner().try_into()?;
+        let chain_info_request = ChainInfoQuery::new(original_request.chain_id)
+            .with_sent_certificate_hashes_by_heights(original_request.heights);
+
+        // Use handle_chain_info_query to get the certificate hashes
+        let chain_info_response = self
+            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
+            .await?;
+
+        // Extract the ChainInfoResult from the response
+        let chain_info_result = chain_info_response.into_inner();
+
+        // Extract the certificate hashes from the ChainInfo
+        let hashes = match chain_info_result.inner {
+            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
+                let chain_info: ChainInfo =
+                    bincode::deserialize(&response.chain_info).map_err(|e| {
+                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
+                    })?;
+                chain_info.requested_sent_certificate_hashes
+            }
+            Some(api::chain_info_result::Inner::Error(error)) => {
+                return Err(Status::internal(format!(
+                    "Chain info query failed: {:?}",
+                    error
+                )));
+            }
+            None => {
+                return Err(Status::internal("Empty chain info result"));
+            }
+        };
+
+        // Use download_certificates to get the actual certificates
+        let certificates_request = CertificatesBatchRequest {
+            hashes: hashes.into_iter().map(|h| h.into()).collect(),
+        };
+
+        self.download_certificates(Request::new(certificates_request))
+            .await
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]

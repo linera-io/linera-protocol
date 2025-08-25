@@ -352,6 +352,41 @@ where
                 };
                 Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))
             }
+            DownloadCertificatesByHeights(chain_id, heights) => {
+                let shard = self.internal_config.get_shard_for(chain_id).clone();
+                let protocol = self.internal_config.protocol;
+
+                let chain_info_query = RpcMessage::ChainInfoQuery(Box::new(
+                    linera_core::data_types::ChainInfoQuery::new(chain_id)
+                        .with_sent_certificate_hashes_by_heights(heights),
+                ));
+
+                let hashes = match Self::try_proxy_message(
+                    chain_info_query,
+                    shard.clone(),
+                    protocol,
+                    self.send_timeout,
+                    self.recv_timeout,
+                )
+                .await
+                {
+                    Ok(Some(RpcMessage::ChainInfoResponse(response))) => {
+                        response.info.requested_sent_certificate_hashes
+                    }
+                    _ => bail!("Failed to retrieve sent certificate hashes"),
+                };
+                let certificates = self.storage.read_certificates(hashes.clone()).await?;
+                let certificates = match ResultReadCertificates::new(certificates, hashes) {
+                    ResultReadCertificates::Certificates(certificates) => certificates,
+                    ResultReadCertificates::InvalidHashes(hashes) => {
+                        bail!("Missing certificates: {hashes:?}")
+                    }
+                };
+
+                Ok(Some(RpcMessage::DownloadCertificatesByHeightsResponse(
+                    certificates,
+                )))
+            }
             BlobLastUsedBy(blob_id) => {
                 let blob_state = self.storage.read_blob_state(*blob_id).await?;
                 let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
@@ -386,7 +421,6 @@ where
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)
             | UploadBlobResponse(_)
-            | DownloadCertificatesByHeights(_, _)
             | DownloadCertificatesByHeightsResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))
             }
