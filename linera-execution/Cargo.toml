@@ -12,6 +12,7 @@ repository.workspace = true
 version.workspace = true
 
 [features]
+smallkeyvaluestoreview = []
 test = ["tokio/macros", "linera-base/test", "linera-views/test", "proptest"]
 revm = [
     "dep:revm",
