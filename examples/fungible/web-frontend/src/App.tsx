@@ -35,7 +35,7 @@ const MAKE_PAYMENT = gql`
   mutation Transfer(
     $owner: AccountOwner!
     $amount: Amount!
-    $targetAccount: FungibleAccount!
+    $targetAccount: Account!
   ) {
     transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)
   }
