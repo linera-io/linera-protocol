@@ -86,11 +86,20 @@ service ValidatorNode {
   // Download a batch of certificates.
   rpc DownloadCertificates(CertificatesBatchRequest) returns (CertificatesBatchResponse);
 
+  /// Download a batch of certificates by height range.
+  rpc DownloadCertificatesByHeights(DownloadCertificatesByHeightsRequest) returns (CertificatesBatchResponse);
+
   // Return the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
   // Return the `BlobId`s that are not contained as `Blob`.
   rpc MissingBlobIds(BlobIds) returns (BlobIds);
+}
+
+// A request for downloading certificates by block heights.
+message DownloadCertificatesByHeightsRequest {
+  ChainId chain_id = 1;
+  repeated BlockHeight heights = 2;
 }
 
 // A request for a batch of certificates.
@@ -173,6 +182,8 @@ message ConfirmUpdatedRecipient {
 
 // Request information on a chain.
 message ChainInfoQuery {
+  // Removed `request_sent_certificate_hashes_in_range`
+  reserved 5;
   // The chain ID
   ChainId chain_id = 1;
 
@@ -184,9 +195,6 @@ message ChainInfoQuery {
 
   // Query the received messages that are waiting to be picked in the next block.
   bool request_pending_message_bundles = 4;
-
-  // Query a range of certificates hashes sent from the chain.
-  optional bytes request_sent_certificate_hashes_in_range = 5;
 
   // Query new certificate removed from the chain.
   optional uint64 request_received_log_excluding_first_n = 6;
@@ -202,6 +210,9 @@ message ChainInfoQuery {
 
   // Request a signed vote for fallback mode.
   bool request_fallback = 10;
+
+  // Query for certificate hashes at block heights sent from the chain.
+  optional bytes request_sent_certificate_hashes_by_heights = 11;
 }
 
 // An authenticated proposal for a new block.

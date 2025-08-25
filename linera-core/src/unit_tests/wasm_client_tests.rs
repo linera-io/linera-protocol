@@ -916,7 +916,7 @@ where
     let owner_a = keys.generate_new().into();
     let owner_b = keys.generate_new().into();
     let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 2, 0, keys).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, keys).await?;
 
     // We use the Hex game example: it uses the validation time-based assert_before oracle.
     let creator = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
@@ -968,7 +968,7 @@ where
     // Client B tries to make a move but fails: the validators go down after signing to validate.
     client_b.synchronize_from_validators().await?;
     builder
-        .set_fault_type([0, 1], FaultType::DontProcessValidated)
+        .set_fault_type([0, 1, 2, 3], FaultType::DontProcessValidated)
         .await;
     let move_op = HexOperation::MakeMove { x: 4, y: 4 };
     let result = client_b
@@ -980,7 +980,9 @@ where
     clock.add(timeouts.start_time * 2);
 
     // Set the validators back to Honest.
-    builder.set_fault_type([0, 1], FaultType::Honest).await;
+    builder
+        .set_fault_type([0, 1, 2, 3], FaultType::Honest)
+        .await;
 
     // Now player A claim victory since B has timed out. This works because it sees the existing
     // block proposal and makes a new proposal in the next round instead.

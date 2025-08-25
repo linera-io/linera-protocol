@@ -7,7 +7,7 @@ use std::future::Future;
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, NetworkDescription},
+    data_types::{BlobContent, BlockHeight, NetworkDescription},
     identifiers::{BlobId, ChainId},
     time::{timer, Duration},
 };
@@ -220,6 +220,25 @@ impl ValidatorNode for SimpleClient {
         } else {
             Ok(certificates)
         }
+    }
+
+    async fn download_certificates_by_heights(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let expected_count = heights.len();
+        let certificates: Vec<ConfirmedBlockCertificate> = self
+            .query(RpcMessage::DownloadCertificatesByHeights(
+                chain_id,
+                heights.clone(),
+            ))
+            .await?;
+
+        if certificates.len() < expected_count {
+            return Err(NodeError::MissingCertificatesByHeights { chain_id, heights });
+        }
+        Ok(certificates)
     }
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {

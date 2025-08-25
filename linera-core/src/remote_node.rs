@@ -1,12 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, time::Duration};
+use std::{
+    collections::{HashSet, VecDeque},
+    time::Duration,
+};
 
 use custom_debug_derive::Debug;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId},
@@ -22,7 +25,7 @@ use rand::seq::SliceRandom as _;
 use tracing::{instrument, warn};
 
 use crate::{
-    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
 };
 
@@ -169,25 +172,11 @@ impl<N: ValidatorNode> RemoteNode<N> {
         limit: u64,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         tracing::debug!(name = ?self.public_key, ?chain_id, ?start, ?limit, "Querying certificates");
-        let range = BlockHeightRange {
-            start,
-            limit: Some(limit),
-        };
-        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
-        let info = self.handle_chain_info_query(query).await?;
-        self.node
-            .download_certificates(info.requested_sent_certificate_hashes)
-            .await?
-            .into_iter()
-            .map(|c| {
-                ensure!(
-                    c.inner().chain_id() == chain_id,
-                    NodeError::UnexpectedCertificateValue
-                );
-                ConfirmedBlockCertificate::try_from(c)
-                    .map_err(|_| NodeError::InvalidChainInfoResponse)
-            })
-            .collect()
+        let heights = (start.0..start.0 + limit)
+            .map(BlockHeight)
+            .collect::<Vec<_>>();
+        self.download_certificates_by_heights(chain_id, heights)
+            .await
     }
 
     #[instrument(level = "trace")]
@@ -246,51 +235,46 @@ impl<N: ValidatorNode> RemoteNode<N> {
         }
     }
 
-    /// Returns the list of certificate hashes on the given chain in the given range of heights.
-    /// Returns an error if the number of hashes does not match the size of the range.
+    /// Downloads a list of certificates from the given chain.
     #[instrument(level = "trace")]
-    pub(crate) async fn fetch_sent_certificate_hashes(
+    pub async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
-        range: BlockHeightRange,
-    ) -> Result<Vec<CryptoHash>, NodeError> {
-        let query =
-            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range.clone());
-        let response = self.handle_chain_info_query(query).await?;
-        let hashes = response.requested_sent_certificate_hashes;
-
-        if range
-            .limit
-            .is_some_and(|limit| hashes.len() as u64 != limit)
-        {
-            warn!(
-                ?range,
-                received_num = hashes.len(),
-                "Validator sent invalid number of certificate hashes."
-            );
-            return Err(NodeError::InvalidChainInfoResponse);
-        }
-        Ok(hashes)
-    }
-
-    #[instrument(level = "trace")]
-    pub async fn download_certificates(
-        &self,
-        hashes: Vec<CryptoHash>,
+        heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        if hashes.is_empty() {
-            return Ok(Vec::new());
+        let mut expected_heights = VecDeque::from(heights.clone());
+        let certificates = self
+            .node
+            .download_certificates_by_heights(chain_id, heights)
+            .await?;
+
+        if certificates.len() > expected_heights.len() {
+            return Err(NodeError::TooManyCertificatesReturned {
+                chain_id,
+                remote_node: Box::new(self.public_key),
+            });
         }
-        let certificates = self.node.download_certificates(hashes.clone()).await?;
-        let returned = certificates
-            .iter()
-            .map(ConfirmedBlockCertificate::hash)
-            .collect();
+
+        for certificate in &certificates {
+            ensure!(
+                certificate.inner().chain_id() == chain_id,
+                NodeError::UnexpectedCertificateValue
+            );
+            if let Some(expected_height) = expected_heights.pop_front() {
+                ensure!(
+                    expected_height == certificate.inner().height(),
+                    NodeError::UnexpectedCertificateValue
+                );
+            } else {
+                return Err(NodeError::UnexpectedCertificateValue);
+            }
+        }
+
         ensure!(
-            returned == hashes,
-            NodeError::UnexpectedCertificates {
-                returned,
-                requested: hashes
+            expected_heights.is_empty(),
+            NodeError::MissingCertificatesByHeights {
+                chain_id,
+                heights: expected_heights.into_iter().collect(),
             }
         );
         Ok(certificates)

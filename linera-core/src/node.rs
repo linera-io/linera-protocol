@@ -145,6 +145,13 @@ pub trait ValidatorNode {
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
 
+    /// Requests a batch of certificates from a specific chain by heights.
+    async fn download_certificates_by_heights(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
+
     /// Returns the hash of the `Certificate` that last used a blob.
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
 

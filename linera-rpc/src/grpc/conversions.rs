@@ -18,7 +18,9 @@ use linera_chain::{
     },
 };
 use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{
+        CertificatesByHeightRequest, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
+    },
     node::NodeError,
     worker::Notification,
 };
@@ -589,10 +591,11 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
     type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: api::ChainInfoQuery) -> Result<Self, Self::Error> {
-        let request_sent_certificate_hashes_in_range = chain_info_query
-            .request_sent_certificate_hashes_in_range
-            .map(|range| bincode::deserialize(&range))
-            .transpose()?;
+        let request_sent_certificate_hashes_by_heights = chain_info_query
+            .request_sent_certificate_hashes_by_heights
+            .map(|heights| bincode::deserialize(&heights))
+            .transpose()?
+            .unwrap_or_default();
         let request_leader_timeout = chain_info_query
             .request_leader_timeout
             .map(|height_and_round| bincode::deserialize(&height_and_round))
@@ -603,14 +606,14 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_owner_balance: try_proto_convert(chain_info_query.request_owner_balance)?,
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
-            request_sent_certificate_hashes_in_range,
             request_received_log_excluding_first_n: chain_info_query
                 .request_received_log_excluding_first_n,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
-            request_sent_certificate_hashes_by_heights: vec![],
+            request_sent_certificate_hashes_by_heights,
+            request_sent_certificate_hashes_in_range: None,
         })
     }
 }
@@ -619,10 +622,8 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
     type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: ChainInfoQuery) -> Result<Self, Self::Error> {
-        let request_sent_certificate_hashes_in_range = chain_info_query
-            .request_sent_certificate_hashes_in_range
-            .map(|range| bincode::serialize(&range))
-            .transpose()?;
+        let request_sent_certificate_hashes_by_heights =
+            bincode::serialize(&chain_info_query.request_sent_certificate_hashes_by_heights)?;
         let request_owner_balance = Some(chain_info_query.request_owner_balance.try_into()?);
         let request_leader_timeout = chain_info_query
             .request_leader_timeout
@@ -635,7 +636,9 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_owner_balance,
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
-            request_sent_certificate_hashes_in_range,
+            request_sent_certificate_hashes_by_heights: Some(
+                request_sent_certificate_hashes_by_heights,
+            ),
             request_received_log_excluding_first_n: chain_info_query
                 .request_received_log_excluding_first_n,
             request_manager_values: chain_info_query.request_manager_values,
@@ -1010,6 +1013,26 @@ impl TryFrom<api::CertificatesBatchResponse> for Vec<Certificate> {
     }
 }
 
+impl From<CertificatesByHeightRequest> for api::DownloadCertificatesByHeightsRequest {
+    fn from(request: CertificatesByHeightRequest) -> Self {
+        Self {
+            chain_id: Some(request.chain_id.into()),
+            heights: request.heights.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl TryFrom<api::DownloadCertificatesByHeightsRequest> for CertificatesByHeightRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::DownloadCertificatesByHeightsRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: try_proto_convert(request.chain_id)?,
+            heights: request.heights.into_iter().map(Into::into).collect(),
+        })
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use std::{borrow::Cow, fmt::Debug};
@@ -1143,17 +1166,12 @@ pub mod tests {
             request_committees: false,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
-            request_sent_certificate_hashes_in_range: Some(
-                linera_core::data_types::BlockHeightRange {
-                    start: BlockHeight::from(3),
-                    limit: Some(5),
-                },
-            ),
             request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: None,
             request_fallback: true,
-            request_sent_certificate_hashes_by_heights: vec![],
+            request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
+            request_sent_certificate_hashes_in_range: None,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
     }
