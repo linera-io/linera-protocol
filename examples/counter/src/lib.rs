@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct CounterAbi;
 
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Serialize, GraphQLMutationRoot)]
 pub enum CounterOperation {
     /// Increment the counter by the given value
     Increment(u64),
@@ -20,7 +20,7 @@ pub enum CounterOperation {
 
 impl ContractAbi for CounterAbi {
     type Operation = CounterOperation;
-    type Response = u64;
+    type Response = CounterOperation;
 }
 
 impl ServiceAbi for CounterAbi {

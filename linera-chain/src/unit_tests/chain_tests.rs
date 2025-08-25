@@ -26,7 +26,8 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation, TestExecutionRuntimeContext,
+    Operation, OperationInput, ResourceControlPolicy, ServiceRuntime, SystemOperation,
+    TestExecutionRuntimeContext,
 };
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
@@ -313,11 +314,11 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     application.expect_call(ExpectedCall::default_finalize());
     let app_operation = Operation::User {
         application_id,
-        bytes: b"foo".to_vec(),
+        input: OperationInput::Direct(b"foo".to_vec()),
     };
     let another_app_operation = Operation::User {
         application_id: another_app_id,
-        bytes: b"bar".to_vec(),
+        input: OperationInput::Direct(b"bar".to_vec()),
     };
 
     let valid_block = make_first_block(chain_id)
@@ -740,7 +741,7 @@ async fn prepare_test_with_dummy_mock_application(
 
     let block = make_first_block(chain_id).with_operation(Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     });
 
     Ok((application, application_id, chain, block, time))

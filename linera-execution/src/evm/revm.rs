@@ -38,8 +38,9 @@ use crate::{
         database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
     },
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, DataBlobHash, EvmExecutionError,
-    EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
-    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    EvmRuntime, ExecutionError, OperationInput, ServiceRuntime, ServiceSyncRuntimeHandle,
+    UserContract, UserContractInstance, UserContractModule, UserService, UserServiceInstance,
+    UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -1449,7 +1450,8 @@ where
             EvmQuery::Query(vec) => vec,
             EvmQuery::Mutation(operation) => {
                 let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-                runtime.schedule_operation(operation)?;
+                let input = OperationInput::Direct(operation);
+                runtime.schedule_operation(input)?;
                 return Ok(Vec::new());
             }
         };

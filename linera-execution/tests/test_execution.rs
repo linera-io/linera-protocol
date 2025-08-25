@@ -24,8 +24,8 @@ use linera_execution::{
         SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeContext, Message, Operation,
-    OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome, QueryResponse,
-    ResourceController, SystemOperation, TransactionTracker,
+    OperationContext, OperationInput, OutgoingMessage, Query, QueryContext, QueryOutcome,
+    QueryResponse, ResourceController, SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use test_case::test_case;
@@ -53,7 +53,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
             context,
             Operation::User {
                 application_id: *app_id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
             &mut TransactionTracker::new_replaying_blobs([
                 app_desc_blob_id,
@@ -145,7 +145,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         context,
         Operation::User {
             application_id: caller_id,
-            bytes: dummy_operation.clone(),
+            input: OperationInput::Direct(dummy_operation.clone()),
         },
         &mut txn_tracker,
         &mut controller,
@@ -179,7 +179,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             context,
             Query::User {
                 application_id: caller_id,
-                bytes: vec![]
+                bytes: vec![],
             },
             Some(&mut service_runtime_endpoint),
         )
@@ -196,7 +196,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             context,
             Query::User {
                 application_id: caller_id,
-                bytes: vec![]
+                bytes: vec![],
             },
             Some(&mut service_runtime_endpoint),
         )
@@ -288,7 +288,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
         context,
         Operation::User {
             application_id: caller_id,
-            bytes: vec![],
+            input: OperationInput::Direct(vec![]),
         },
         &mut txn_tracker,
         &mut controller,
@@ -355,7 +355,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
             context,
             Operation::User {
                 application_id: caller_id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
             &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
             &mut controller,
@@ -391,7 +391,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
             context,
             Operation::User {
                 application_id: id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
             &mut TransactionTracker::new_replaying_blobs(blobs),
             &mut controller,
@@ -453,7 +453,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
             context,
             Operation::User {
                 application_id: first_id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
             &mut TransactionTracker::new_replaying_blobs(
                 first_app_blobs
@@ -591,7 +591,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         context,
         Operation::User {
             application_id: first_id,
-            bytes: vec![],
+            input: OperationInput::Direct(vec![]),
         },
         &mut txn_tracker,
         &mut controller,
@@ -640,7 +640,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
             context,
             Operation::User {
                 application_id: caller_id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
             &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
             &mut controller,
@@ -693,7 +693,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
             context,
             Operation::User {
                 application_id: caller_id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
             &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
             &mut controller,
@@ -745,7 +745,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
             context,
             Operation::User {
                 application_id: caller_id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
             &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
             &mut controller,
@@ -795,7 +795,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
             context,
             Operation::User {
                 application_id: caller_id,
-                bytes: vec![],
+                input: OperationInput::Direct(vec![]),
             },
             &mut TransactionTracker::new_replaying_blobs(
                 caller_blobs.iter().chain(&target_blobs)
@@ -850,7 +850,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         context,
         Operation::User {
             application_id,
-            bytes: vec![],
+            input: OperationInput::Direct(vec![]),
         },
         &mut txn_tracker,
         &mut controller,
@@ -918,7 +918,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         context,
         Operation::User {
             application_id: caller_id,
-            bytes: vec![],
+            input: OperationInput::Direct(vec![]),
         },
         &mut txn_tracker,
         &mut controller,
@@ -1000,7 +1000,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         context,
         Operation::User {
             application_id: caller_id,
-            bytes: vec![],
+            input: OperationInput::Direct(vec![]),
         },
         &mut txn_tracker,
         &mut controller,
@@ -1111,7 +1111,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         context,
         Operation::User {
             application_id: caller_id,
-            bytes: vec![],
+            input: OperationInput::Direct(vec![]),
         },
         &mut txn_tracker,
         &mut controller,
@@ -1219,7 +1219,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
     let mut txn_tracker = TransactionTracker::new(
         Timestamp::from(0),
@@ -1228,6 +1228,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         0,
         Some(blob_oracle_responses(blobs.iter())),
         &[],
+        vec![],
     );
     view.execute_operation(context, operation, &mut txn_tracker, &mut controller)
         .await?;
@@ -1305,7 +1306,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
     view.execute_operation(
         context,
@@ -1337,7 +1338,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
 
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
     view.execute_operation(
         context,

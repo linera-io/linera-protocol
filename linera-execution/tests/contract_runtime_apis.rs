@@ -27,8 +27,8 @@ use linera_execution::{
         RegisterMockApplication, SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, Message, MessageContext, Operation,
-    OperationContext, ResourceController, SystemExecutionStateView, TestExecutionRuntimeContext,
-    TransactionOutcome, TransactionTracker,
+    OperationContext, OperationInput, ResourceController, SystemExecutionStateView,
+    TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
 use test_case::{test_case, test_matrix};
@@ -85,7 +85,7 @@ async fn test_transfer_system_api(
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
     let mut tracker = TransactionTracker::new_replaying_blobs([
         app_desc_blob_id,
@@ -169,7 +169,7 @@ async fn test_unauthorized_transfer_system_api(
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
     let result = view
         .execute_operation(
@@ -258,7 +258,7 @@ async fn test_claim_system_api(
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
     let mut tracker = TransactionTracker::new_replaying_blobs([
         app_desc_blob_id,
@@ -394,7 +394,7 @@ async fn test_unauthorized_claims(
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
     let mut tracker = TransactionTracker::new_replaying_blobs([
         app_desc_blob_id,
@@ -448,7 +448,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     view.execute_operation(
@@ -495,7 +495,7 @@ async fn test_read_owner_balance_system_api(
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     view.execute_operation(
@@ -532,7 +532,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     view.execute_operation(
@@ -576,7 +576,7 @@ async fn test_read_owner_balances_system_api(
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     view.execute_operation(
@@ -620,7 +620,7 @@ async fn test_read_balance_owners_system_api(
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     view.execute_operation(
@@ -854,7 +854,7 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     view.execute_operation(
@@ -926,7 +926,7 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     view.execute_operation(
@@ -978,7 +978,7 @@ async fn test_create_multiple_data_blobs() -> anyhow::Result<()> {
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     let mut tracker = TransactionTracker::new_replaying_blobs(blobs);
@@ -1040,7 +1040,7 @@ async fn test_publish_module_different_bytecode() -> anyhow::Result<()> {
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
-        bytes: vec![],
+        input: OperationInput::Direct(vec![]),
     };
 
     let mut tracker = TransactionTracker::new_replaying_blobs(blobs);
@@ -1114,7 +1114,7 @@ async fn test_callee_api_calls() -> anyhow::Result<()> {
         context,
         Operation::User {
             application_id: caller_id,
-            bytes: dummy_operation.clone(),
+            input: OperationInput::Direct(dummy_operation.clone()),
         },
         &mut txn_tracker,
         &mut controller,

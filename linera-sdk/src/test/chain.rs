@@ -728,9 +728,9 @@ impl ActiveChain {
                     match operation {
                         Operation::User {
                             application_id,
-                            bytes,
+                            input,
                         } => {
-                            block.with_raw_operation(application_id, bytes);
+                            block.with_raw_operation(application_id, input);
                         }
                         Operation::System(system_operation) => {
                             block.with_system_operation(*system_operation);
