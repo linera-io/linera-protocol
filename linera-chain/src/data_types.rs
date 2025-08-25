@@ -624,12 +624,22 @@ impl BlockProposal {
     }
 
     pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
-        self.content.block.published_blob_ids().into_iter().chain(
-            self.content
-                .outcome
-                .iter()
-                .flat_map(|outcome| outcome.oracle_blob_ids()),
-        )
+        self.content
+            .block
+            .published_blob_ids()
+            .into_iter()
+            .chain(
+                self.content
+                    .outcome
+                    .iter()
+                    .flat_map(|outcome| outcome.oracle_blob_ids()),
+            )
+            .chain(self.content.block.operations().filter_map(|op| match op {
+                Operation::User { application_id, .. } => {
+                    Some(application_id.description_blob_id())
+                }
+                Operation::System(_) => None,
+            }))
     }
 
     pub fn expected_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
