@@ -21,9 +21,13 @@ use counter::CounterAbi;
 use fungible::{FungibleOperation, InitialState, Parameters};
 use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
-    crypto::InMemorySigner,
-    data_types::{Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse},
-    identifiers::{Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName},
+    crypto::{CryptoHash, InMemorySigner},
+    data_types::{
+        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse,
+    },
+    identifiers::{
+        Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
