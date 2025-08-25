@@ -88,7 +88,7 @@ query {
 - To increase the value of the counter by 3, perform the `increment` operation.
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID
 mutation Increment {
-  increment(value: 3)
+  increment(field0: 3)
 }
 ```
 - Running the query again would yield `4`.
