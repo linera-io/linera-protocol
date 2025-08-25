@@ -19,7 +19,7 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::worker::WorkerError;
-use linera_execution::{system::SystemOperation, Operation};
+use linera_execution::{system::SystemOperation, Operation, OperationInput};
 
 use super::TestValidator;
 
@@ -142,20 +142,38 @@ impl BlockBuilder {
     {
         let operation = Abi::serialize_operation(&operation)
             .expect("Failed to serialize `Operation` in BlockBuilder");
+        let operation = OperationInput::Direct(operation);
         self.with_raw_operation(application_id.forget_abi(), operation)
+    }
+
+    /// Adds a user composed `operation` to this block.
+    ///
+    /// The composed operation is being inserted and added to the block, marked to be executed
+    /// by `application`.
+    pub fn with_composed_operation<Abi>(&mut self, application_id: ApplicationId<Abi>) -> &mut Self
+    where
+        Abi: ContractAbi,
+    {
+        self.block
+            .transactions
+            .push(Transaction::ExecuteOperation(Operation::User {
+                application_id: application_id.forget_abi(),
+                input: OperationInput::Composed,
+            }));
+        self
     }
 
     /// Adds an already serialized user `operation` to this block.
     pub fn with_raw_operation(
         &mut self,
         application_id: ApplicationId,
-        operation: impl Into<Vec<u8>>,
+        input: OperationInput,
     ) -> &mut Self {
         self.block
             .transactions
             .push(Transaction::ExecuteOperation(Operation::User {
                 application_id,
-                bytes: operation.into(),
+                input,
             }));
         self
     }

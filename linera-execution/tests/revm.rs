@@ -17,8 +17,8 @@ use linera_execution::{
         solidity::{load_solidity_example, read_evm_u64_entry},
         SystemExecutionState,
     },
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
-    QueryContext, QueryResponse, ResourceControlPolicy, ResourceController, ResourceTracker,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, OperationInput,
+    Query, QueryContext, QueryResponse, ResourceControlPolicy, ResourceController, ResourceTracker,
     TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
@@ -115,7 +115,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         let bytes = operation.abi_encode();
         let operation = Operation::User {
             application_id: app_id,
-            bytes,
+            input: OperationInput::Direct(bytes),
         };
         view.execute_operation(
             operation_context,
@@ -233,7 +233,7 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
     let bytes = operation.abi_encode();
     let operation = Operation::User {
         application_id: app_id,
-        bytes,
+        input: OperationInput::Direct(bytes),
     };
     let result = view
         .execute_operation(
@@ -411,7 +411,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
     let bytes = operation.abi_encode();
     let operation = Operation::User {
         application_id: app_id,
-        bytes,
+        input: OperationInput::Direct(bytes),
     };
     let result = view
         .execute_operation(

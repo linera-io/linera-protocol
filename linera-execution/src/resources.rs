@@ -238,8 +238,16 @@ where
         self.update_balance(self.policy.operation)?;
         match operation {
             Operation::System(_) => Ok(()),
-            Operation::User { bytes, .. } => {
-                let size = bytes.len();
+            Operation::User { input, .. } => {
+                let size = match input {
+                    crate::OperationInput::Direct(bytes) => bytes.len(),
+                    crate::OperationInput::Composed => {
+                        // For composed operations, we don't know the size until execution time
+                        // Since the input comes from the previous operation result.
+                        // We'll use 0 for now but this might need to be revisited.
+                        0
+                    }
+                };
                 self.tracker.as_mut().operation_bytes = self
                     .tracker
                     .as_mut()
