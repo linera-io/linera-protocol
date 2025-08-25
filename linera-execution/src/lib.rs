@@ -1196,6 +1196,14 @@ impl Operation {
         }
     }
 
+    /// Returns the user application ID if this operation is for a user application.
+    pub fn user_application_id(&self) -> Option<ApplicationId> {
+        match self {
+            Self::User { application_id, .. } => Some(*application_id),
+            Self::System(_) => None,
+        }
+    }
+
     /// Returns the IDs of all blobs published in this operation.
     pub fn published_blob_ids(&self) -> Vec<BlobId> {
         match self.as_system_operation() {

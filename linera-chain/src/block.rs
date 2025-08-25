@@ -482,6 +482,7 @@ impl Block {
         let mut blob_ids = self.oracle_blob_ids();
         blob_ids.extend(self.published_blob_ids());
         blob_ids.extend(self.created_blob_ids());
+        blob_ids.extend(self.application_ids());
         if self.header.height == BlockHeight(0) {
             // the initial block implicitly depends on the chain description blob
             blob_ids.insert(BlobId::new(
@@ -497,6 +498,7 @@ impl Block {
         self.oracle_blob_ids().contains(blob_id)
             || self.published_blob_ids().contains(blob_id)
             || self.created_blob_ids().contains(blob_id)
+            || self.application_ids().contains(blob_id)
             || (self.header.height == BlockHeight(0)
                 && (blob_id.blob_type == BlobType::ChainDescription
                     && blob_id.hash == self.header.chain_id.0))
@@ -542,6 +544,15 @@ impl Block {
         }
 
         required_blob_ids
+    }
+
+    /// Returns all application IDs involved in this block.
+    pub fn application_ids(&self) -> BTreeSet<BlobId> {
+        self.body
+            .operations()
+            .flat_map(Operation::user_application_id)
+            .map(|app_id| app_id.description_blob_id())
+            .collect()
     }
 
     /// Returns reference to the outgoing messages in the block.
