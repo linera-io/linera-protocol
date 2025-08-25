@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Search for regex matches in `&#38;[u8]` haystacks."><title>regex::bytes - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="regex" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../regex/index.html">regex</a><span class="version">1.11.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module bytes</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example-match-null-terminated-string" title="Example: match null terminated string">Example: match null terminated string</a></li><li><a href="#example-selectively-enable-unicode-support" title="Example: selectively enable Unicode support">Example: selectively enable Unicode support</a></li><li><a href="#syntax" title="Syntax">Syntax</a></li><li><a href="#performance" title="Performance">Performance</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate regex</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">regex</a></div><h1>Module <span>bytes</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/regex/bytes.rs.html#1-91">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Search for regex matches in <code>&amp;[u8]</code> haystacks.</p>
+<p>This module provides a nearly identical API via <a href="struct.Regex.html" title="struct regex::bytes::Regex"><code>Regex</code></a> to the one found in
+the top-level of this crate. There are two important differences:</p>
+<ol>
+<li>Matching is done on <code>&amp;[u8]</code> instead of <code>&amp;str</code>. Additionally, <code>Vec&lt;u8&gt;</code>
+is used where <code>String</code> would have been used in the top-level API.</li>
+<li>Unicode support can be disabled even when disabling it would result in
+matching invalid UTF-8 bytes.</li>
+</ol>
+<h2 id="example-match-null-terminated-string"><a class="doc-anchor" href="#example-match-null-terminated-string">§</a>Example: match null terminated string</h2>
+<p>This shows how to find all null-terminated strings in a slice of bytes. This
+works even if a C string contains invalid UTF-8.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?-u)(?&lt;cstr&gt;[^\x00]+)\x00"</span>).unwrap();
+<span class="kw">let </span>hay = <span class="string">b"foo\x00qu\xFFux\x00baz\x00"</span>;
+
+<span class="comment">// Extract all of the strings without the NUL terminator from each match.
+// The unwrap is OK here since a match requires the `cstr` capture to match.
+</span><span class="kw">let </span>cstrs: Vec&lt;<span class="kw-2">&amp;</span>[u8]&gt; =
+    re.captures_iter(hay)
+      .map(|c| c.name(<span class="string">"cstr"</span>).unwrap().as_bytes())
+      .collect();
+<span class="macro">assert_eq!</span>(cstrs, <span class="macro">vec!</span>[<span class="kw-2">&amp;</span><span class="string">b"foo"</span>[..], <span class="kw-2">&amp;</span><span class="string">b"qu\xFFux"</span>[..], <span class="kw-2">&amp;</span><span class="string">b"baz"</span>[..]]);</code></pre></div>
+<h2 id="example-selectively-enable-unicode-support"><a class="doc-anchor" href="#example-selectively-enable-unicode-support">§</a>Example: selectively enable Unicode support</h2>
+<p>This shows how to match an arbitrary byte pattern followed by a UTF-8 encoded
+string (e.g., to extract a title from a Matroska file):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::Regex;
+
+<span class="kw">let </span>re = Regex::new(
+    <span class="string">r"(?-u)\x7b\xa9(?:[\x80-\xfe]|[\x40-\xff].)(?u:(.*))"
+</span>).unwrap();
+<span class="kw">let </span>hay = <span class="string">b"\x12\xd0\x3b\x5f\x7b\xa9\x85\xe2\x98\x83\x80\x98\x54\x76\x68\x65"</span>;
+
+<span class="comment">// Notice that despite the `.*` at the end, it will only match valid UTF-8
+// because Unicode mode was enabled with the `u` flag. Without the `u` flag,
+// the `.*` would match the rest of the bytes regardless of whether they were
+// valid UTF-8.
+</span><span class="kw">let </span>(<span class="kw">_</span>, [title]) = re.captures(hay).unwrap().extract();
+<span class="macro">assert_eq!</span>(title, <span class="string">b"\xE2\x98\x83"</span>);
+<span class="comment">// We can UTF-8 decode the title now. And the unwrap here
+// is correct because the existence of a match guarantees
+// that `title` is valid UTF-8.
+</span><span class="kw">let </span>title = std::str::from_utf8(title).unwrap();
+<span class="macro">assert_eq!</span>(title, <span class="string">"☃"</span>);</code></pre></div>
+<p>In general, if the Unicode flag is enabled in a capture group and that capture
+is part of the overall match, then the capture is <em>guaranteed</em> to be valid
+UTF-8.</p>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<p>The supported syntax is pretty much the same as the syntax for Unicode
+regular expressions with a few changes that make sense for matching arbitrary
+bytes:</p>
+<ol>
+<li>The <code>u</code> flag can be disabled even when disabling it might cause the regex to
+match invalid UTF-8. When the <code>u</code> flag is disabled, the regex is said to be in
+“ASCII compatible” mode.</li>
+<li>In ASCII compatible mode, Unicode character classes are not allowed. Literal
+Unicode scalar values outside of character classes are allowed.</li>
+<li>In ASCII compatible mode, Perl character classes (<code>\w</code>, <code>\d</code> and <code>\s</code>)
+revert to their typical ASCII definition. <code>\w</code> maps to <code>[[:word:]]</code>, <code>\d</code> maps
+to <code>[[:digit:]]</code> and <code>\s</code> maps to <code>[[:space:]]</code>.</li>
+<li>In ASCII compatible mode, word boundaries use the ASCII compatible <code>\w</code> to
+determine whether a byte is a word byte or not.</li>
+<li>Hexadecimal notation can be used to specify arbitrary bytes instead of
+Unicode codepoints. For example, in ASCII compatible mode, <code>\xFF</code> matches the
+literal byte <code>\xFF</code>, while in Unicode mode, <code>\xFF</code> is the Unicode codepoint
+<code>U+00FF</code> that matches its UTF-8 encoding of <code>\xC3\xBF</code>. Similarly for octal
+notation when enabled.</li>
+<li>In ASCII compatible mode, <code>.</code> matches any <em>byte</em> except for <code>\n</code>. When the
+<code>s</code> flag is additionally enabled, <code>.</code> matches any byte.</li>
+</ol>
+<h2 id="performance"><a class="doc-anchor" href="#performance">§</a>Performance</h2>
+<p>In general, one should expect performance on <code>&amp;[u8]</code> to be roughly similar to
+performance on <code>&amp;str</code>.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.CaptureLocations.html" title="struct regex::bytes::CaptureLocations">Capture<wbr>Locations</a></dt><dd>A low level representation of the byte offsets of each capture group.</dd><dt><a class="struct" href="struct.CaptureMatches.html" title="struct regex::bytes::CaptureMatches">Capture<wbr>Matches</a></dt><dd>An iterator over all non-overlapping capture matches in a haystack.</dd><dt><a class="struct" href="struct.CaptureNames.html" title="struct regex::bytes::CaptureNames">Capture<wbr>Names</a></dt><dd>An iterator over the names of all capture groups in a regex.</dd><dt><a class="struct" href="struct.Captures.html" title="struct regex::bytes::Captures">Captures</a></dt><dd>Represents the capture groups for a single match.</dd><dt><a class="struct" href="struct.Match.html" title="struct regex::bytes::Match">Match</a></dt><dd>Represents a single match of a regex in a haystack.</dd><dt><a class="struct" href="struct.Matches.html" title="struct regex::bytes::Matches">Matches</a></dt><dd>An iterator over all non-overlapping matches in a haystack.</dd><dt><a class="struct" href="struct.NoExpand.html" title="struct regex::bytes::NoExpand">NoExpand</a></dt><dd>A helper type for forcing literal string replacement.</dd><dt><a class="struct" href="struct.Regex.html" title="struct regex::bytes::Regex">Regex</a></dt><dd>A compiled regular expression for searching Unicode haystacks.</dd><dt><a class="struct" href="struct.RegexBuilder.html" title="struct regex::bytes::RegexBuilder">Regex<wbr>Builder</a></dt><dd>A configurable builder for a <a href="struct.Regex.html" title="struct regex::bytes::Regex"><code>Regex</code></a>.</dd><dt><a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">Regex<wbr>Set</a></dt><dd>Match multiple, possibly overlapping, regexes in a single search.</dd><dt><a class="struct" href="struct.RegexSetBuilder.html" title="struct regex::bytes::RegexSetBuilder">Regex<wbr>SetBuilder</a></dt><dd>A configurable builder for a <a href="struct.RegexSet.html" title="struct regex::bytes::RegexSet"><code>RegexSet</code></a>.</dd><dt><a class="struct" href="struct.ReplacerRef.html" title="struct regex::bytes::ReplacerRef">Replacer<wbr>Ref</a></dt><dd>A by-reference adaptor for a <a href="trait.Replacer.html" title="trait regex::bytes::Replacer"><code>Replacer</code></a>.</dd><dt><a class="struct" href="struct.SetMatches.html" title="struct regex::bytes::SetMatches">SetMatches</a></dt><dd>A set of matches returned by a regex set.</dd><dt><a class="struct" href="struct.SetMatchesIntoIter.html" title="struct regex::bytes::SetMatchesIntoIter">SetMatches<wbr>Into<wbr>Iter</a></dt><dd>An owned iterator over the set of matches from a regex set.</dd><dt><a class="struct" href="struct.SetMatchesIter.html" title="struct regex::bytes::SetMatchesIter">SetMatches<wbr>Iter</a></dt><dd>A borrowed iterator over the set of matches from a regex set.</dd><dt><a class="struct" href="struct.Split.html" title="struct regex::bytes::Split">Split</a></dt><dd>An iterator over all substrings delimited by a regex match.</dd><dt><a class="struct" href="struct.SplitN.html" title="struct regex::bytes::SplitN">SplitN</a></dt><dd>An iterator over at most <code>N</code> substrings delimited by a regex match.</dd><dt><a class="struct" href="struct.SubCaptureMatches.html" title="struct regex::bytes::SubCaptureMatches">SubCapture<wbr>Matches</a></dt><dd>An iterator over all group matches in a <a href="struct.Captures.html" title="struct regex::bytes::Captures"><code>Captures</code></a> value.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Replacer.html" title="trait regex::bytes::Replacer">Replacer</a></dt><dd>A trait for types that can be used to replace matches in a haystack.</dd></dl></section></div></main></body></html>

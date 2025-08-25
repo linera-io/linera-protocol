@@ -1,0 +1,144 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/alloy-network-1.0.24/src/transaction/signer.rs`."><title>signer.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="alloy_network" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">alloy_network/transaction/</div>signer.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use crate</span>::{Network, TransactionBuilder};
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>alloy_consensus::SignableTransaction;
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>alloy_primitives::Address;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>alloy_signer::{Signer, SignerSync};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>async_trait::async_trait;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>auto_impl::auto_impl;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>futures_utils_wasm::impl_future;
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a><span class="doccomment">/// A wallet capable of signing any transaction for the given network.
+<a href=#10 id=10 data-nosnippet>10</a>///
+<a href=#11 id=11 data-nosnippet>11</a>/// Network crate authors should implement this trait on a type capable of
+<a href=#12 id=12 data-nosnippet>12</a>/// signing any transaction (regardless of signature type) on a given network.
+<a href=#13 id=13 data-nosnippet>13</a>/// Signer crate authors should instead implement [`TxSigner`] to signify
+<a href=#14 id=14 data-nosnippet>14</a>/// signing capability for specific signature types.
+<a href=#15 id=15 data-nosnippet>15</a>///
+<a href=#16 id=16 data-nosnippet>16</a>/// Network wallets are expected to contain one or more signing credentials,
+<a href=#17 id=17 data-nosnippet>17</a>/// keyed by signing address. The default signer address should be used when
+<a href=#18 id=18 data-nosnippet>18</a>/// no specific signer address is specified.
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="attr">#[auto_impl(<span class="kw-2">&amp;</span>, <span class="kw-2">&amp;mut</span>, Box, Rc, Arc)]
+<a href=#20 id=20 data-nosnippet>20</a></span><span class="kw">pub trait </span>NetworkWallet&lt;N: Network&gt;: std::fmt::Debug + Send + Sync {
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="doccomment">/// Get the default signer address. This address should be used
+<a href=#22 id=22 data-nosnippet>22</a>    /// in [`NetworkWallet::sign_transaction_from`] when no specific signer is
+<a href=#23 id=23 data-nosnippet>23</a>    /// specified.
+<a href=#24 id=24 data-nosnippet>24</a>    </span><span class="kw">fn </span>default_signer_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address;
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a>    <span class="doccomment">/// Return true if the signer contains a credential for the given address.
+<a href=#27 id=27 data-nosnippet>27</a>    </span><span class="kw">fn </span>has_signer_for(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address) -&gt; bool;
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="doccomment">/// Return an iterator of all signer addresses.
+<a href=#30 id=30 data-nosnippet>30</a>    </span><span class="kw">fn </span>signer_addresses(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = Address&gt;;
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="doccomment">/// Asynchronously sign an unsigned transaction, with a specified
+<a href=#33 id=33 data-nosnippet>33</a>    /// credential.
+<a href=#34 id=34 data-nosnippet>34</a>    </span><span class="attr">#[doc(alias = <span class="string">"sign_tx_from"</span>)]
+<a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">fn </span>sign_transaction_from(
+<a href=#36 id=36 data-nosnippet>36</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#37 id=37 data-nosnippet>37</a>        sender: Address,
+<a href=#38 id=38 data-nosnippet>38</a>        tx: N::UnsignedTx,
+<a href=#39 id=39 data-nosnippet>39</a>    ) -&gt; <span class="macro">impl_future!</span>(&lt;Output = alloy_signer::Result&lt;N::TxEnvelope&gt;&gt;);
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// Asynchronously sign an unsigned transaction.
+<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="attr">#[doc(alias = <span class="string">"sign_tx"</span>)]
+<a href=#43 id=43 data-nosnippet>43</a>    </span><span class="kw">fn </span>sign_transaction(
+<a href=#44 id=44 data-nosnippet>44</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#45 id=45 data-nosnippet>45</a>        tx: N::UnsignedTx,
+<a href=#46 id=46 data-nosnippet>46</a>    ) -&gt; <span class="macro">impl_future!</span>(&lt;Output = alloy_signer::Result&lt;N::TxEnvelope&gt;&gt;) {
+<a href=#47 id=47 data-nosnippet>47</a>        <span class="self">self</span>.sign_transaction_from(<span class="self">self</span>.default_signer_address(), tx)
+<a href=#48 id=48 data-nosnippet>48</a>    }
+<a href=#49 id=49 data-nosnippet>49</a>
+<a href=#50 id=50 data-nosnippet>50</a>    <span class="doccomment">/// Asynchronously sign a transaction request, using the sender specified
+<a href=#51 id=51 data-nosnippet>51</a>    /// in the `from` field.
+<a href=#52 id=52 data-nosnippet>52</a>    </span><span class="kw">fn </span>sign_request(
+<a href=#53 id=53 data-nosnippet>53</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#54 id=54 data-nosnippet>54</a>        request: N::TransactionRequest,
+<a href=#55 id=55 data-nosnippet>55</a>    ) -&gt; <span class="macro">impl_future!</span>(&lt;Output = alloy_signer::Result&lt;N::TxEnvelope&gt;&gt;) {
+<a href=#56 id=56 data-nosnippet>56</a>        <span class="kw">async move </span>{
+<a href=#57 id=57 data-nosnippet>57</a>            <span class="kw">let </span>sender = request.from().unwrap_or_else(|| <span class="self">self</span>.default_signer_address());
+<a href=#58 id=58 data-nosnippet>58</a>            <span class="kw">let </span>tx = request.build_unsigned().map_err(alloy_signer::Error::other)<span class="question-mark">?</span>;
+<a href=#59 id=59 data-nosnippet>59</a>            <span class="self">self</span>.sign_transaction_from(sender, tx).<span class="kw">await
+<a href=#60 id=60 data-nosnippet>60</a>        </span>}
+<a href=#61 id=61 data-nosnippet>61</a>    }
+<a href=#62 id=62 data-nosnippet>62</a>}
+<a href=#63 id=63 data-nosnippet>63</a>
+<a href=#64 id=64 data-nosnippet>64</a><span class="doccomment">/// Asynchronous transaction signer, capable of signing any [`SignableTransaction`] for the given
+<a href=#65 id=65 data-nosnippet>65</a>/// `Signature` type.
+<a href=#66 id=66 data-nosnippet>66</a>///
+<a href=#67 id=67 data-nosnippet>67</a>/// A signer should hold an optional [`ChainId`] value, which is used for [EIP-155] replay
+<a href=#68 id=68 data-nosnippet>68</a>/// protection.
+<a href=#69 id=69 data-nosnippet>69</a>///
+<a href=#70 id=70 data-nosnippet>70</a>/// If `chain_id` is Some, [EIP-155] should be applied to the input transaction in
+<a href=#71 id=71 data-nosnippet>71</a>/// [`sign_transaction`](Self::sign_transaction), and to the resulting signature in all the methods.
+<a href=#72 id=72 data-nosnippet>72</a>/// If `chain_id` is None, [EIP-155] should not be applied.
+<a href=#73 id=73 data-nosnippet>73</a>///
+<a href=#74 id=74 data-nosnippet>74</a>/// Synchronous signers should implement both this trait and [`TxSignerSync`].
+<a href=#75 id=75 data-nosnippet>75</a>///
+<a href=#76 id=76 data-nosnippet>76</a>/// [EIP-155]: https://eips.ethereum.org/EIPS/eip-155
+<a href=#77 id=77 data-nosnippet>77</a>/// [`ChainId`]: alloy_primitives::ChainId
+<a href=#78 id=78 data-nosnippet>78</a></span><span class="attr">#[cfg_attr(target_family = <span class="string">"wasm"</span>, async_trait(<span class="question-mark">?</span>Send))]
+<a href=#79 id=79 data-nosnippet>79</a>#[cfg_attr(not(target_family = <span class="string">"wasm"</span>), async_trait)]
+<a href=#80 id=80 data-nosnippet>80</a>#[auto_impl(<span class="kw-2">&amp;</span>, <span class="kw-2">&amp;mut</span>, Box, Rc, Arc)]
+<a href=#81 id=81 data-nosnippet>81</a>#[doc(alias = <span class="string">"TransactionSigner"</span>)]
+<a href=#82 id=82 data-nosnippet>82</a></span><span class="kw">pub trait </span>TxSigner&lt;Signature&gt; {
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="doccomment">/// Get the address of the signer.
+<a href=#84 id=84 data-nosnippet>84</a>    </span><span class="kw">fn </span>address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address;
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="doccomment">/// Asynchronously sign an unsigned transaction.
+<a href=#87 id=87 data-nosnippet>87</a>    </span><span class="attr">#[doc(alias = <span class="string">"sign_tx"</span>)]
+<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">async fn </span>sign_transaction(
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#90 id=90 data-nosnippet>90</a>        tx: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>SignableTransaction&lt;Signature&gt;,
+<a href=#91 id=91 data-nosnippet>91</a>    ) -&gt; alloy_signer::Result&lt;Signature&gt;;
+<a href=#92 id=92 data-nosnippet>92</a>}
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a><span class="doccomment">/// Synchronous transaction signer,  capable of signing any [`SignableTransaction`] for the given
+<a href=#95 id=95 data-nosnippet>95</a>/// `Signature` type.
+<a href=#96 id=96 data-nosnippet>96</a>///
+<a href=#97 id=97 data-nosnippet>97</a>/// A signer should hold an optional [`ChainId`] value, which is used for [EIP-155] replay
+<a href=#98 id=98 data-nosnippet>98</a>/// protection.
+<a href=#99 id=99 data-nosnippet>99</a>///
+<a href=#100 id=100 data-nosnippet>100</a>/// If `chain_id` is Some, [EIP-155] should be applied to the input transaction in
+<a href=#101 id=101 data-nosnippet>101</a>/// [`sign_transaction_sync`](Self::sign_transaction_sync), and to the resulting signature in all
+<a href=#102 id=102 data-nosnippet>102</a>/// the methods. If `chain_id` is None, [EIP-155] should not be applied.
+<a href=#103 id=103 data-nosnippet>103</a>///
+<a href=#104 id=104 data-nosnippet>104</a>/// Synchronous signers should also implement [`TxSigner`], as they are always able to by delegating
+<a href=#105 id=105 data-nosnippet>105</a>/// the asynchronous methods to the synchronous ones.
+<a href=#106 id=106 data-nosnippet>106</a>///
+<a href=#107 id=107 data-nosnippet>107</a>/// [EIP-155]: https://eips.ethereum.org/EIPS/eip-155
+<a href=#108 id=108 data-nosnippet>108</a>/// [`ChainId`]: alloy_primitives::ChainId
+<a href=#109 id=109 data-nosnippet>109</a></span><span class="attr">#[auto_impl(<span class="kw-2">&amp;</span>, <span class="kw-2">&amp;mut</span>, Box, Rc, Arc)]
+<a href=#110 id=110 data-nosnippet>110</a>#[doc(alias = <span class="string">"TransactionSignerSync"</span>)]
+<a href=#111 id=111 data-nosnippet>111</a></span><span class="kw">pub trait </span>TxSignerSync&lt;Signature&gt; {
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="doccomment">/// Get the address of the signer.
+<a href=#113 id=113 data-nosnippet>113</a>    </span><span class="kw">fn </span>address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address;
+<a href=#114 id=114 data-nosnippet>114</a>
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="doccomment">/// Synchronously sign an unsigned transaction.
+<a href=#116 id=116 data-nosnippet>116</a>    </span><span class="attr">#[doc(alias = <span class="string">"sign_tx_sync"</span>)]
+<a href=#117 id=117 data-nosnippet>117</a>    </span><span class="kw">fn </span>sign_transaction_sync(
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#119 id=119 data-nosnippet>119</a>        tx: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>SignableTransaction&lt;Signature&gt;,
+<a href=#120 id=120 data-nosnippet>120</a>    ) -&gt; alloy_signer::Result&lt;Signature&gt;;
+<a href=#121 id=121 data-nosnippet>121</a>}
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a><span class="doccomment">/// A unifying trait for asynchronous Ethereum signers that combine the functionalities of both
+<a href=#124 id=124 data-nosnippet>124</a>/// [`Signer`] and [`TxSigner`].
+<a href=#125 id=125 data-nosnippet>125</a>///
+<a href=#126 id=126 data-nosnippet>126</a>/// This trait enables dynamic dispatch (e.g., using `Box&lt;dyn FullSigner&gt;`) for types that combine
+<a href=#127 id=127 data-nosnippet>127</a>/// both asynchronous Ethereum signing and transaction signing functionalities.
+<a href=#128 id=128 data-nosnippet>128</a></span><span class="kw">pub trait </span>FullSigner&lt;S&gt;: Signer&lt;S&gt; + TxSigner&lt;S&gt; {}
+<a href=#129 id=129 data-nosnippet>129</a><span class="kw">impl</span>&lt;T, S&gt; FullSigner&lt;S&gt; <span class="kw">for </span>T <span class="kw">where </span>T: Signer&lt;S&gt; + TxSigner&lt;S&gt; {}
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a><span class="doccomment">/// A unifying trait for synchronous Ethereum signers that implement both [`SignerSync`] and
+<a href=#132 id=132 data-nosnippet>132</a>/// [`TxSignerSync`].
+<a href=#133 id=133 data-nosnippet>133</a>///
+<a href=#134 id=134 data-nosnippet>134</a>/// This trait enables dynamic dispatch (e.g., using `Box&lt;dyn FullSignerSync&gt;`) for types that
+<a href=#135 id=135 data-nosnippet>135</a>/// combine both synchronous Ethereum signing and transaction signing functionalities.
+<a href=#136 id=136 data-nosnippet>136</a></span><span class="kw">pub trait </span>FullSignerSync&lt;S&gt;: SignerSync&lt;S&gt; + TxSignerSync&lt;S&gt; {}
+<a href=#137 id=137 data-nosnippet>137</a><span class="kw">impl</span>&lt;T, S&gt; FullSignerSync&lt;S&gt; <span class="kw">for </span>T <span class="kw">where </span>T: SignerSync&lt;S&gt; + TxSignerSync&lt;S&gt; {}
+<a href=#138 id=138 data-nosnippet>138</a>
+<a href=#139 id=139 data-nosnippet>139</a><span class="attr">#[cfg(test)]
+<a href=#140 id=140 data-nosnippet>140</a></span><span class="kw">mod </span>tests {
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#142 id=142 data-nosnippet>142</a>
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">struct </span>_ObjectSafe(Box&lt;<span class="kw">dyn </span>FullSigner&lt;()&gt;&gt;, Box&lt;<span class="kw">dyn </span>FullSignerSync&lt;()&gt;&gt;);
+<a href=#144 id=144 data-nosnippet>144</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cranelift-wasm-0.112.3/src/table.rs`."><title>table.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="cranelift_wasm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cranelift_wasm/</div>table.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>cranelift_codegen::cursor::FuncCursor;
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>cranelift_codegen::ir::{<span class="self">self</span>, condcodes::IntCC, immediates::Imm64, InstBuilder};
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>cranelift_frontend::FunctionBuilder;
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="doccomment">/// Size of a WebAssembly table, in elements.
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="attr">#[derive(Clone)]
+<a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub enum </span>TableSize {
+<a href=#8 id=8 data-nosnippet>8</a>    <span class="doccomment">/// Non-resizable table.
+<a href=#9 id=9 data-nosnippet>9</a>    </span>Static {
+<a href=#10 id=10 data-nosnippet>10</a>        <span class="doccomment">/// Non-resizable tables have a constant size known at compile time.
+<a href=#11 id=11 data-nosnippet>11</a>        </span>bound: u32,
+<a href=#12 id=12 data-nosnippet>12</a>    },
+<a href=#13 id=13 data-nosnippet>13</a>    <span class="doccomment">/// Resizable table.
+<a href=#14 id=14 data-nosnippet>14</a>    </span>Dynamic {
+<a href=#15 id=15 data-nosnippet>15</a>        <span class="doccomment">/// Resizable tables declare a Cranelift global value to load the
+<a href=#16 id=16 data-nosnippet>16</a>        /// current size from.
+<a href=#17 id=17 data-nosnippet>17</a>        </span>bound_gv: ir::GlobalValue,
+<a href=#18 id=18 data-nosnippet>18</a>    },
+<a href=#19 id=19 data-nosnippet>19</a>}
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">impl </span>TableSize {
+<a href=#22 id=22 data-nosnippet>22</a>    <span class="doccomment">/// Get a CLIF value representing the current bounds of this table.
+<a href=#23 id=23 data-nosnippet>23</a>    </span><span class="kw">pub fn </span>bound(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>pos: FuncCursor, index_ty: ir::Type) -&gt; ir::Value {
+<a href=#24 id=24 data-nosnippet>24</a>        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+<a href=#25 id=25 data-nosnippet>25</a>            TableSize::Static { bound } =&gt; pos.ins().iconst(index_ty, Imm64::new(i64::from(bound))),
+<a href=#26 id=26 data-nosnippet>26</a>            TableSize::Dynamic { bound_gv } =&gt; pos.ins().global_value(index_ty, bound_gv),
+<a href=#27 id=27 data-nosnippet>27</a>        }
+<a href=#28 id=28 data-nosnippet>28</a>    }
+<a href=#29 id=29 data-nosnippet>29</a>}
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a><span class="doccomment">/// An implementation of a WebAssembly table.
+<a href=#32 id=32 data-nosnippet>32</a></span><span class="attr">#[derive(Clone)]
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">pub struct </span>TableData {
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="doccomment">/// Global value giving the address of the start of the table.
+<a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">pub </span>base_gv: ir::GlobalValue,
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a>    <span class="doccomment">/// The size of the table, in elements.
+<a href=#38 id=38 data-nosnippet>38</a>    </span><span class="kw">pub </span>bound: TableSize,
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="doccomment">/// The size of a table element, in bytes.
+<a href=#41 id=41 data-nosnippet>41</a>    </span><span class="kw">pub </span>element_size: u32,
+<a href=#42 id=42 data-nosnippet>42</a>}
+<a href=#43 id=43 data-nosnippet>43</a>
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">impl </span>TableData {
+<a href=#45 id=45 data-nosnippet>45</a>    <span class="doccomment">/// Return a CLIF value containing a native pointer to the beginning of the
+<a href=#46 id=46 data-nosnippet>46</a>    /// given index within this table.
+<a href=#47 id=47 data-nosnippet>47</a>    </span><span class="kw">pub fn </span>prepare_table_addr(
+<a href=#48 id=48 data-nosnippet>48</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#49 id=49 data-nosnippet>49</a>        pos: <span class="kw-2">&amp;mut </span>FunctionBuilder,
+<a href=#50 id=50 data-nosnippet>50</a>        <span class="kw-2">mut </span>index: ir::Value,
+<a href=#51 id=51 data-nosnippet>51</a>        addr_ty: ir::Type,
+<a href=#52 id=52 data-nosnippet>52</a>        enable_table_access_spectre_mitigation: bool,
+<a href=#53 id=53 data-nosnippet>53</a>    ) -&gt; (ir::Value, ir::MemFlags) {
+<a href=#54 id=54 data-nosnippet>54</a>        <span class="kw">let </span>index_ty = pos.func.dfg.value_type(index);
+<a href=#55 id=55 data-nosnippet>55</a>
+<a href=#56 id=56 data-nosnippet>56</a>        <span class="comment">// Start with the bounds check. Trap if `index + 1 &gt; bound`.
+<a href=#57 id=57 data-nosnippet>57</a>        </span><span class="kw">let </span>bound = <span class="self">self</span>.bound.bound(pos.cursor(), index_ty);
+<a href=#58 id=58 data-nosnippet>58</a>
+<a href=#59 id=59 data-nosnippet>59</a>        <span class="comment">// `index &gt; bound - 1` is the same as `index &gt;= bound`.
+<a href=#60 id=60 data-nosnippet>60</a>        </span><span class="kw">let </span>oob = pos
+<a href=#61 id=61 data-nosnippet>61</a>            .ins()
+<a href=#62 id=62 data-nosnippet>62</a>            .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
+<a href=#63 id=63 data-nosnippet>63</a>
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="kw">if </span>!enable_table_access_spectre_mitigation {
+<a href=#65 id=65 data-nosnippet>65</a>            pos.ins().trapnz(oob, ir::TrapCode::TableOutOfBounds);
+<a href=#66 id=66 data-nosnippet>66</a>        }
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>        <span class="comment">// Convert `index` to `addr_ty`.
+<a href=#69 id=69 data-nosnippet>69</a>        </span><span class="kw">if </span>index_ty != addr_ty {
+<a href=#70 id=70 data-nosnippet>70</a>            index = pos.ins().uextend(addr_ty, index);
+<a href=#71 id=71 data-nosnippet>71</a>        }
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a>        <span class="comment">// Add the table base address base
+<a href=#74 id=74 data-nosnippet>74</a>        </span><span class="kw">let </span>base = pos.ins().global_value(addr_ty, <span class="self">self</span>.base_gv);
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="kw">let </span>element_size = <span class="self">self</span>.element_size;
+<a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">let </span>offset = <span class="kw">if </span>element_size == <span class="number">1 </span>{
+<a href=#78 id=78 data-nosnippet>78</a>            index
+<a href=#79 id=79 data-nosnippet>79</a>        } <span class="kw">else if </span>element_size.is_power_of_two() {
+<a href=#80 id=80 data-nosnippet>80</a>            pos.ins()
+<a href=#81 id=81 data-nosnippet>81</a>                .ishl_imm(index, i64::from(element_size.trailing_zeros()))
+<a href=#82 id=82 data-nosnippet>82</a>        } <span class="kw">else </span>{
+<a href=#83 id=83 data-nosnippet>83</a>            pos.ins().imul_imm(index, element_size <span class="kw">as </span>i64)
+<a href=#84 id=84 data-nosnippet>84</a>        };
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>        <span class="kw">let </span>element_addr = pos.ins().iadd(base, offset);
+<a href=#87 id=87 data-nosnippet>87</a>
+<a href=#88 id=88 data-nosnippet>88</a>        <span class="kw">let </span>base_flags = ir::MemFlags::new()
+<a href=#89 id=89 data-nosnippet>89</a>            .with_aligned()
+<a href=#90 id=90 data-nosnippet>90</a>            .with_alias_region(<span class="prelude-val">Some</span>(ir::AliasRegion::Table));
+<a href=#91 id=91 data-nosnippet>91</a>        <span class="kw">if </span>enable_table_access_spectre_mitigation {
+<a href=#92 id=92 data-nosnippet>92</a>            <span class="comment">// Short-circuit the computed table element address to a null pointer
+<a href=#93 id=93 data-nosnippet>93</a>            // when out-of-bounds. The consumer of this address will trap when
+<a href=#94 id=94 data-nosnippet>94</a>            // trying to access it.
+<a href=#95 id=95 data-nosnippet>95</a>            </span><span class="kw">let </span>zero = pos.ins().iconst(addr_ty, <span class="number">0</span>);
+<a href=#96 id=96 data-nosnippet>96</a>            (
+<a href=#97 id=97 data-nosnippet>97</a>                pos.ins().select_spectre_guard(oob, zero, element_addr),
+<a href=#98 id=98 data-nosnippet>98</a>                base_flags.with_trap_code(<span class="prelude-val">Some</span>(ir::TrapCode::TableOutOfBounds)),
+<a href=#99 id=99 data-nosnippet>99</a>            )
+<a href=#100 id=100 data-nosnippet>100</a>        } <span class="kw">else </span>{
+<a href=#101 id=101 data-nosnippet>101</a>            (element_addr, base_flags.with_trap_code(<span class="prelude-val">None</span>))
+<a href=#102 id=102 data-nosnippet>102</a>        }
+<a href=#103 id=103 data-nosnippet>103</a>    }
+<a href=#104 id=104 data-nosnippet>104</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/ext/async_stream.rs`."><title>async_stream.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sqlx_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">sqlx_core/ext/</div>async_stream.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! A minimalist clone of the `async-stream` crate in 100% safe code, without proc macros.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! This was created initially to get around some weird compiler errors we were getting with
+<a href=#4 id=4 data-nosnippet>4</a>//! `async-stream`, and now it'd just be more work to replace.
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span>std::future::Future;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>std::pin::Pin;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>std::sync::{Arc, Mutex};
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>std::task::{Context, Poll};
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>futures_core::future::BoxFuture;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>futures_core::stream::Stream;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>futures_core::FusedFuture;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>futures_util::future::Fuse;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>futures_util::FutureExt;
+<a href=#16 id=16 data-nosnippet>16</a>
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span><span class="kw">crate</span>::error::Error;
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">pub struct </span>TryAsyncStream&lt;<span class="lifetime">'a</span>, T&gt; {
+<a href=#20 id=20 data-nosnippet>20</a>    yielder: Yielder&lt;T&gt;,
+<a href=#21 id=21 data-nosnippet>21</a>    future: Fuse&lt;BoxFuture&lt;<span class="lifetime">'a</span>, <span class="prelude-ty">Result</span>&lt;(), Error&gt;&gt;&gt;,
+<a href=#22 id=22 data-nosnippet>22</a>}
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; TryAsyncStream&lt;<span class="lifetime">'a</span>, T&gt; {
+<a href=#25 id=25 data-nosnippet>25</a>    <span class="kw">pub fn </span>new&lt;F, Fut&gt;(f: F) -&gt; <span class="self">Self
+<a href=#26 id=26 data-nosnippet>26</a>    </span><span class="kw">where
+<a href=#27 id=27 data-nosnippet>27</a>        </span>F: FnOnce(Yielder&lt;T&gt;) -&gt; Fut + Send,
+<a href=#28 id=28 data-nosnippet>28</a>        Fut: <span class="lifetime">'a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(), Error&gt;&gt; + Send,
+<a href=#29 id=29 data-nosnippet>29</a>        T: <span class="lifetime">'a </span>+ Send,
+<a href=#30 id=30 data-nosnippet>30</a>    {
+<a href=#31 id=31 data-nosnippet>31</a>        <span class="kw">let </span>yielder = Yielder::new();
+<a href=#32 id=32 data-nosnippet>32</a>
+<a href=#33 id=33 data-nosnippet>33</a>        <span class="kw">let </span>future = f(yielder.duplicate()).boxed().fuse();
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a>        <span class="self">Self </span>{ future, yielder }
+<a href=#36 id=36 data-nosnippet>36</a>    }
+<a href=#37 id=37 data-nosnippet>37</a>}
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">pub struct </span>Yielder&lt;T&gt; {
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="comment">// This mutex should never have any contention in normal operation.
+<a href=#41 id=41 data-nosnippet>41</a>    // We're just using it because `Rc&lt;Cell&lt;Option&lt;T&gt;&gt;&gt;` would not be `Send`.
+<a href=#42 id=42 data-nosnippet>42</a>    </span>value: Arc&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt;&gt;,
+<a href=#43 id=43 data-nosnippet>43</a>}
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">impl</span>&lt;T&gt; Yielder&lt;T&gt; {
+<a href=#46 id=46 data-nosnippet>46</a>    <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#47 id=47 data-nosnippet>47</a>        Yielder {
+<a href=#48 id=48 data-nosnippet>48</a>            value: Arc::new(Mutex::new(<span class="prelude-val">None</span>)),
+<a href=#49 id=49 data-nosnippet>49</a>        }
+<a href=#50 id=50 data-nosnippet>50</a>    }
+<a href=#51 id=51 data-nosnippet>51</a>
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="comment">// Don't want to expose a `Clone` impl
+<a href=#53 id=53 data-nosnippet>53</a>    </span><span class="kw">fn </span>duplicate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#54 id=54 data-nosnippet>54</a>        Yielder {
+<a href=#55 id=55 data-nosnippet>55</a>            value: <span class="self">self</span>.value.clone(),
+<a href=#56 id=56 data-nosnippet>56</a>        }
+<a href=#57 id=57 data-nosnippet>57</a>    }
+<a href=#58 id=58 data-nosnippet>58</a>
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="doccomment">/// NOTE: may deadlock the task if called from outside the future passed to `TryAsyncStream`.
+<a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">pub async fn </span>r#yield(<span class="kw-2">&amp;</span><span class="self">self</span>, val: T) {
+<a href=#61 id=61 data-nosnippet>61</a>        <span class="kw">let </span>replaced = <span class="self">self
+<a href=#62 id=62 data-nosnippet>62</a>            </span>.value
+<a href=#63 id=63 data-nosnippet>63</a>            .lock()
+<a href=#64 id=64 data-nosnippet>64</a>            .expect(<span class="string">"BUG: panicked while holding a lock"</span>)
+<a href=#65 id=65 data-nosnippet>65</a>            .replace(val);
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>        <span class="macro">debug_assert!</span>(
+<a href=#68 id=68 data-nosnippet>68</a>            replaced.is_none(),
+<a href=#69 id=69 data-nosnippet>69</a>            <span class="string">"BUG: previously yielded value not taken"
+<a href=#70 id=70 data-nosnippet>70</a>        </span>);
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>        <span class="kw">let </span><span class="kw-2">mut </span>yielded = <span class="bool-val">false</span>;
+<a href=#73 id=73 data-nosnippet>73</a>
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="comment">// Allows the generating future to suspend its execution without changing the task priority,
+<a href=#75 id=75 data-nosnippet>75</a>        // which would happen with `tokio::task::yield_now()`.
+<a href=#76 id=76 data-nosnippet>76</a>        //
+<a href=#77 id=77 data-nosnippet>77</a>        // Note that because this has no way to schedule a wakeup, this could deadlock the task
+<a href=#78 id=78 data-nosnippet>78</a>        // if called in the wrong place.
+<a href=#79 id=79 data-nosnippet>79</a>        </span>futures_util::future::poll_fn(|_cx| {
+<a href=#80 id=80 data-nosnippet>80</a>            <span class="kw">if </span>!yielded {
+<a href=#81 id=81 data-nosnippet>81</a>                yielded = <span class="bool-val">true</span>;
+<a href=#82 id=82 data-nosnippet>82</a>                Poll::Pending
+<a href=#83 id=83 data-nosnippet>83</a>            } <span class="kw">else </span>{
+<a href=#84 id=84 data-nosnippet>84</a>                Poll::Ready(())
+<a href=#85 id=85 data-nosnippet>85</a>            }
+<a href=#86 id=86 data-nosnippet>86</a>        })
+<a href=#87 id=87 data-nosnippet>87</a>        .<span class="kw">await
+<a href=#88 id=88 data-nosnippet>88</a>    </span>}
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">fn </span>take(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt; {
+<a href=#91 id=91 data-nosnippet>91</a>        <span class="self">self</span>.value
+<a href=#92 id=92 data-nosnippet>92</a>            .lock()
+<a href=#93 id=93 data-nosnippet>93</a>            .expect(<span class="string">"BUG: panicked while holding a lock"</span>)
+<a href=#94 id=94 data-nosnippet>94</a>            .take()
+<a href=#95 id=95 data-nosnippet>95</a>    }
+<a href=#96 id=96 data-nosnippet>96</a>}
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; Stream <span class="kw">for </span>TryAsyncStream&lt;<span class="lifetime">'a</span>, T&gt; {
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">type </span>Item = <span class="prelude-ty">Result</span>&lt;T, Error&gt;;
+<a href=#100 id=100 data-nosnippet>100</a>
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">fn </span>poll_next(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;&gt; {
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">if </span><span class="self">self</span>.future.is_terminated() {
+<a href=#103 id=103 data-nosnippet>103</a>            <span class="kw">return </span>Poll::Ready(<span class="prelude-val">None</span>);
+<a href=#104 id=104 data-nosnippet>104</a>        }
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a>        <span class="kw">match </span><span class="self">self</span>.future.poll_unpin(cx) {
+<a href=#107 id=107 data-nosnippet>107</a>            Poll::Ready(<span class="prelude-val">Ok</span>(())) =&gt; {
+<a href=#108 id=108 data-nosnippet>108</a>                <span class="comment">// Future returned without yielding another value,
+<a href=#109 id=109 data-nosnippet>109</a>                // or else it would have returned `Pending` instead.
+<a href=#110 id=110 data-nosnippet>110</a>                </span>Poll::Ready(<span class="prelude-val">None</span>)
+<a href=#111 id=111 data-nosnippet>111</a>            }
+<a href=#112 id=112 data-nosnippet>112</a>            Poll::Ready(<span class="prelude-val">Err</span>(e)) =&gt; Poll::Ready(<span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e))),
+<a href=#113 id=113 data-nosnippet>113</a>            Poll::Pending =&gt; <span class="self">self
+<a href=#114 id=114 data-nosnippet>114</a>                </span>.yielder
+<a href=#115 id=115 data-nosnippet>115</a>                .take()
+<a href=#116 id=116 data-nosnippet>116</a>                .map_or(Poll::Pending, |val| Poll::Ready(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(val)))),
+<a href=#117 id=117 data-nosnippet>117</a>        }
+<a href=#118 id=118 data-nosnippet>118</a>    }
+<a href=#119 id=119 data-nosnippet>119</a>}
+<a href=#120 id=120 data-nosnippet>120</a>
+<a href=#121 id=121 data-nosnippet>121</a><span class="attr">#[macro_export]
+<a href=#122 id=122 data-nosnippet>122</a></span><span class="macro">macro_rules!</span> try_stream {
+<a href=#123 id=123 data-nosnippet>123</a>    ($(<span class="macro-nonterminal">$block</span>:tt)<span class="kw-2">*</span>) =&gt; {
+<a href=#124 id=124 data-nosnippet>124</a>        <span class="macro-nonterminal">$crate::ext::async_stream::TryAsyncStream::new</span>(<span class="kw">move </span>|yielder| ::tracing::Instrument::in_current_span(<span class="kw">async move </span>{
+<a href=#125 id=125 data-nosnippet>125</a>            <span class="comment">// Anti-footgun: effectively pins `yielder` to this future to prevent any accidental
+<a href=#126 id=126 data-nosnippet>126</a>            // move to another task, which could deadlock.
+<a href=#127 id=127 data-nosnippet>127</a>            </span><span class="kw">let </span>yielder = <span class="kw-2">&amp;</span>yielder;
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>            <span class="macro">macro_rules!</span> r#yield {
+<a href=#130 id=130 data-nosnippet>130</a>                (<span class="macro-nonterminal">$v</span>:expr) =&gt; {{
+<a href=#131 id=131 data-nosnippet>131</a>                    yielder.r#yield(<span class="macro-nonterminal">$v</span>).<span class="kw">await</span>;
+<a href=#132 id=132 data-nosnippet>132</a>                }}
+<a href=#133 id=133 data-nosnippet>133</a>            }
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a>            $(<span class="macro-nonterminal">$block</span>)*
+<a href=#136 id=136 data-nosnippet>136</a>        }))
+<a href=#137 id=137 data-nosnippet>137</a>    }
+<a href=#138 id=138 data-nosnippet>138</a>}</code></pre></div></section></main></body></html>

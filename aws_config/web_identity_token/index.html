@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Load Credentials from Web Identity Tokens"><title>aws_config::web_identity_token - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aws_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../aws_config/index.html">aws_<wbr>config</a><span class="version">1.8.5</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module web_<wbr>identity_<wbr>token</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#environment-variable-configuration" title="Environment Variable Configuration">Environment Variable Configuration</a></li><li><a href="#aws-profile-configuration" title="AWS Profile Configuration">AWS Profile Configuration</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate aws_<wbr>config</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">aws_config</a></div><h1>Module <span>web_identity_token</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/aws_config/web_identity_token.rs.html#6-372">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Load Credentials from Web Identity Tokens</p>
+<p>Web identity tokens can be loaded from file. The path may be set in one of three ways:</p>
+<ol>
+<li><a href="#environment-variable-configuration">Environment Variables</a></li>
+<li><a href="#aws-profile-configuration">AWS profile</a> defined in <code>~/.aws/config</code></li>
+<li>Static configuration via <a href="struct.Builder.html#method.static_configuration" title="method aws_config::web_identity_token::Builder::static_configuration"><code>static_configuration</code></a></li>
+</ol>
+<p><em>Note: <a href="struct.WebIdentityTokenCredentialsProvider.html" title="struct aws_config::web_identity_token::WebIdentityTokenCredentialsProvider">WebIdentityTokenCredentialsProvider</a> is part of the <a href="../default_provider/index.html" title="mod aws_config::default_provider">default provider chain</a>.
+Unless you need specific behavior or configuration overrides, it is recommended to use the
+default chain instead of using this provider directly. This client should be considered a “low level”
+client as it does not include caching or profile-file resolution when used in isolation.</em></p>
+<h3 id="environment-variable-configuration"><a class="doc-anchor" href="#environment-variable-configuration">§</a>Environment Variable Configuration</h3>
+<p>WebIdentityTokenCredentialProvider will load the following environment variables:</p>
+<ul>
+<li><code>AWS_WEB_IDENTITY_TOKEN_FILE</code>: <strong>required</strong>, location to find the token file containing a JWT token</li>
+<li><code>AWS_ROLE_ARN</code>: <strong>required</strong>, role ARN to assume</li>
+<li><code>AWS_ROLE_SESSION_NAME</code>: <strong>optional</strong>: Session name to use when assuming the role</li>
+</ul>
+<h3 id="aws-profile-configuration"><a class="doc-anchor" href="#aws-profile-configuration">§</a>AWS Profile Configuration</h3>
+<p><em>Note: Configuration of the web identity token provider via a shared profile is only supported
+when using the <a href="../profile/credentials/index.html" title="mod aws_config::profile::credentials"><code>ProfileFileCredentialsProvider</code></a>.</em></p>
+<p>Web identity token credentials can be loaded from <code>~/.aws/config</code> in two ways:</p>
+<ol>
+<li>Directly:</li>
+</ol>
+<div class="example-wrap"><pre class="language-ini"><code>[profile default]
+role_arn = arn:aws:iam::1234567890123:role/RoleA
+web_identity_token_file = /token.jwt</code></pre></div>
+<ol start="2">
+<li>As a source profile for another role:</li>
+</ol>
+<div class="example-wrap"><pre class="language-ini"><code>[profile default]
+role_arn = arn:aws:iam::123456789:role/RoleA
+source_profile = base
+
+[profile base]
+role_arn = arn:aws:iam::123456789012:role/s3-reader
+web_identity_token_file = /token.jwt</code></pre></div><h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Web Identity Token providers are part of the <a href="../default_provider/credentials/index.html" title="mod aws_config::default_provider::credentials">default chain</a>.
+However, they may be directly constructed if you don’t want to use the default provider chain.
+Unless overridden with <a href="struct.Builder.html#method.static_configuration" title="method aws_config::web_identity_token::Builder::static_configuration"><code>static_configuration</code></a>, the provider will
+load configuration from environment variables.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
+<span class="kw">use </span>aws_config::provider_config::ProviderConfig;
+<span class="kw">let </span>provider = WebIdentityTokenCredentialsProvider::builder()
+    .configure(<span class="kw-2">&amp;</span>ProviderConfig::with_default_region().<span class="kw">await</span>)
+    .build();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Builder.html" title="struct aws_config::web_identity_token::Builder">Builder</a></dt><dd>Builder for <a href="struct.WebIdentityTokenCredentialsProvider.html" title="struct aws_config::web_identity_token::WebIdentityTokenCredentialsProvider"><code>WebIdentityTokenCredentialsProvider</code></a>.</dd><dt><a class="struct" href="struct.StaticConfiguration.html" title="struct aws_config::web_identity_token::StaticConfiguration">Static<wbr>Configuration</a></dt><dd>Statically configured WebIdentityToken configuration</dd><dt><a class="struct" href="struct.WebIdentityTokenCredentialsProvider.html" title="struct aws_config::web_identity_token::WebIdentityTokenCredentialsProvider">WebIdentity<wbr>Token<wbr>Credentials<wbr>Provider</a></dt><dd>Credential provider to load credentials from Web Identity Tokens</dd></dl></section></div></main></body></html>

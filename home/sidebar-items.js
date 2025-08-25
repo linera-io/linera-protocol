@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cargo_home","cargo_home_with_cwd","home_dir","rustup_home","rustup_home_with_cwd"],"mod":["env"]};
