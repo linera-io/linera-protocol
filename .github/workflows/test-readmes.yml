@@ -44,10 +44,12 @@ jobs:
       with:
         version: 10.11.0
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v3
+    - uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - uses: jetli/wasm-bindgen-action@v0.2.0
+      with:
+        version: latest
     - name: Build example applications
       run: |
         cd examples
