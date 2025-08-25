@@ -9,7 +9,8 @@ use futures::{channel::mpsc, StreamExt as _};
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
+        Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -23,14 +24,16 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig},
     util::RespondExt,
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
-    ExecutionStateView, ModuleId, OutgoingMessage, ResourceController, TransactionTracker,
-    UserContractCode, UserServiceCode,
+    ExecutionStateView, ModuleId, ResourceController, TransactionTracker, UserContractCode,
+    UserServiceCode,
 };
 
 /// Actor for handling requests to the execution state.
 pub struct ExecutionStateActor<'a, C> {
     /// The execution state view being operated on.
     state: &'a mut ExecutionStateView<C>,
+    /// The transaction tracker.
+    txn_tracker: &'a mut TransactionTracker,
 }
 
 #[cfg(with_metrics)]
@@ -69,24 +72,26 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     /// Creates a new execution state actor.
-    pub(crate) fn new(state: &'a mut ExecutionStateView<C>) -> Self {
-        Self { state }
+    pub(crate) fn new(
+        state: &'a mut ExecutionStateView<C>,
+        txn_tracker: &'a mut TransactionTracker,
+    ) -> Self {
+        Self { state, txn_tracker }
     }
 
     pub(crate) async fn load_contract(
         &mut self,
         id: ApplicationId,
-        txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserContractCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = metrics::LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
-        let description = match txn_tracker.get_blob_content(&blob_id) {
+        let description = match self.txn_tracker.get_blob_content(&blob_id) {
             Some(blob) => bcs::from_bytes(blob.bytes())?,
             None => {
                 self.state
                     .system
-                    .describe_application(id, txn_tracker)
+                    .describe_application(id, self.txn_tracker)
                     .await?
             }
         };
@@ -94,7 +99,7 @@ where
             .state
             .context()
             .extra()
-            .get_user_contract(&description, txn_tracker)
+            .get_user_contract(&description, self.txn_tracker)
             .await?;
         Ok((code, description))
     }
@@ -102,17 +107,16 @@ where
     pub(crate) async fn load_service(
         &mut self,
         id: ApplicationId,
-        txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserServiceCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = metrics::LOAD_SERVICE_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
-        let description = match txn_tracker.get_blob_content(&blob_id) {
+        let description = match self.txn_tracker.get_blob_content(&blob_id) {
             Some(blob) => bcs::from_bytes(blob.bytes())?,
             None => {
                 self.state
                     .system
-                    .describe_application(id, txn_tracker)
+                    .describe_application(id, self.txn_tracker)
                     .await?
             }
         };
@@ -120,7 +124,7 @@ where
             .state
             .context()
             .extra()
-            .get_user_service(&description, txn_tracker)
+            .get_user_service(&description, self.txn_tracker)
             .await?;
         Ok((code, description))
     }
@@ -134,22 +138,14 @@ where
         use ExecutionRequest::*;
         match request {
             #[cfg(not(web))]
-            LoadContract {
-                id,
-                callback,
-                mut txn_tracker,
-            } => {
-                let (code, description) = self.load_contract(id, &mut txn_tracker).await?;
-                callback.respond((code, description, txn_tracker))
+            LoadContract { id, callback } => {
+                let (code, description) = self.load_contract(id).await?;
+                callback.respond((code, description))
             }
             #[cfg(not(web))]
-            LoadService {
-                id,
-                callback,
-                mut txn_tracker,
-            } => {
-                let (code, description) = self.load_service(id, &mut txn_tracker).await?;
-                callback.respond((code, description, txn_tracker))
+            LoadService { id, callback } => {
+                let (code, description) = self.load_service(id).await?;
+                callback.respond((code, description))
             }
 
             ChainBalance { callback } => {
@@ -185,12 +181,15 @@ where
                 signer,
                 application_id,
                 callback,
-            } => callback.respond(
-                self.state
+            } => {
+                let maybe_message = self
+                    .state
                     .system
                     .transfer(signer, Some(application_id), source, destination, amount)
-                    .await?,
-            ),
+                    .await?;
+                self.txn_tracker.add_outgoing_messages(maybe_message);
+                callback.respond(());
+            }
 
             Claim {
                 source,
@@ -199,8 +198,9 @@ where
                 signer,
                 application_id,
                 callback,
-            } => callback.respond(
-                self.state
+            } => {
+                let maybe_message = self
+                    .state
                     .system
                     .claim(
                         signer,
@@ -210,8 +210,10 @@ where
                         destination,
                         amount,
                     )
-                    .await?,
-            ),
+                    .await?;
+                self.txn_tracker.add_outgoing_messages(maybe_message);
+                callback.respond(());
+            }
 
             SystemTimestamp { callback } => {
                 let timestamp = *self.state.system.timestamp.get();
@@ -303,7 +305,6 @@ where
                 application_permissions,
                 timestamp,
                 callback,
-                mut txn_tracker,
             } => {
                 let config = OpenChainConfig {
                     ownership,
@@ -313,9 +314,9 @@ where
                 let chain_id = self
                     .state
                     .system
-                    .open_chain(config, parent_id, block_height, timestamp, &mut txn_tracker)
+                    .open_chain(config, parent_id, block_height, timestamp, self.txn_tracker)
                     .await?;
-                callback.respond((chain_id, txn_tracker));
+                callback.respond(chain_id);
             }
 
             CloseChain {
@@ -355,7 +356,6 @@ where
                 parameters,
                 required_application_ids,
                 callback,
-                txn_tracker,
             } => {
                 let create_application_result = self
                     .state
@@ -366,7 +366,7 @@ where
                         module_id,
                         parameters,
                         required_application_ids,
-                        txn_tracker,
+                        self.txn_tracker,
                     )
                     .await?;
                 callback.respond(Ok(create_application_result));
@@ -377,70 +377,92 @@ where
                 http_responses_are_oracle_responses,
                 callback,
             } => {
-                let headers = request
-                    .headers
-                    .into_iter()
-                    .map(|http::Header { name, value }| Ok((name.parse()?, value.try_into()?)))
-                    .collect::<Result<HeaderMap, ExecutionError>>()?;
-
-                let url = Url::parse(&request.url)?;
-                let host = url
-                    .host_str()
-                    .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
-
-                let (_epoch, committee) = self
-                    .state
-                    .system
-                    .current_committee()
-                    .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
-                let allowed_hosts = &committee.policy().http_request_allow_list;
-
-                ensure!(
-                    allowed_hosts.contains(host),
-                    ExecutionError::UnauthorizedHttpRequest(url)
-                );
-
-                #[cfg_attr(web, allow(unused_mut))]
-                let mut request = Client::new()
-                    .request(request.method.into(), url)
-                    .body(request.body)
-                    .headers(headers);
-                #[cfg(not(web))]
+                let response = if let Some(response) =
+                    self.txn_tracker.next_replayed_oracle_response()?
                 {
-                    request = request.timeout(linera_base::time::Duration::from_millis(
-                        committee.policy().http_request_timeout_ms,
-                    ));
-                }
+                    match response {
+                        OracleResponse::Http(response) => response,
+                        _ => return Err(ExecutionError::OracleResponseMismatch),
+                    }
+                } else {
+                    let headers = request
+                        .headers
+                        .into_iter()
+                        .map(|http::Header { name, value }| Ok((name.parse()?, value.try_into()?)))
+                        .collect::<Result<HeaderMap, ExecutionError>>()?;
 
-                let response = request.send().await?;
+                    let url = Url::parse(&request.url)?;
+                    let host = url
+                        .host_str()
+                        .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
 
-                let mut response_size_limit = committee.policy().maximum_http_response_bytes;
+                    let (_epoch, committee) = self
+                        .state
+                        .system
+                        .current_committee()
+                        .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
+                    let allowed_hosts = &committee.policy().http_request_allow_list;
 
-                if http_responses_are_oracle_responses {
-                    response_size_limit =
-                        response_size_limit.min(committee.policy().maximum_oracle_response_bytes);
-                }
+                    ensure!(
+                        allowed_hosts.contains(host),
+                        ExecutionError::UnauthorizedHttpRequest(url)
+                    );
 
-                callback.respond(
+                    #[cfg_attr(web, allow(unused_mut))]
+                    let mut request = Client::new()
+                        .request(request.method.into(), url)
+                        .body(request.body)
+                        .headers(headers);
+                    #[cfg(not(web))]
+                    {
+                        request = request.timeout(linera_base::time::Duration::from_millis(
+                            committee.policy().http_request_timeout_ms,
+                        ));
+                    }
+
+                    let response = request.send().await?;
+
+                    let mut response_size_limit = committee.policy().maximum_http_response_bytes;
+
+                    if http_responses_are_oracle_responses {
+                        response_size_limit = response_size_limit
+                            .min(committee.policy().maximum_oracle_response_bytes);
+                    }
+
                     self.receive_http_response(response, response_size_limit)
-                        .await?,
-                );
+                        .await?
+                };
+
+                // Record the oracle response
+                self.txn_tracker
+                    .add_oracle_response(OracleResponse::Http(response.clone()));
+
+                callback.respond(response);
             }
 
             ReadBlobContent { blob_id, callback } => {
-                let content = self.state.system.read_blob_content(blob_id).await?;
-                if blob_id.blob_type == BlobType::Data {
-                    resource_controller
-                        .with_state(&mut self.state.system)
-                        .await?
-                        .track_blob_read(content.bytes().len() as u64)?;
-                }
+                let content = if let Some(content) = self.txn_tracker.get_blob_content(&blob_id) {
+                    content.clone()
+                } else {
+                    let content = self.state.system.read_blob_content(blob_id).await?;
+                    if blob_id.blob_type == BlobType::Data {
+                        resource_controller
+                            .with_state(&mut self.state.system)
+                            .await?
+                            .track_blob_read(content.bytes().len() as u64)?;
+                    }
+                    content
+                };
                 let is_new = self
                     .state
                     .system
-                    .blob_used(&mut TransactionTracker::default(), blob_id)
+                    .blob_used(self.txn_tracker, blob_id)
                     .await?;
-                callback.respond((content, is_new))
+                if is_new {
+                    self.txn_tracker
+                        .replay_oracle_response(OracleResponse::Blob(blob_id))?;
+                }
+                callback.respond(content)
             }
 
             AssertBlobExists { blob_id, callback } => {
@@ -452,16 +474,21 @@ where
                         .await?
                         .track_blob_read(0)?;
                 }
-                callback.respond(
-                    self.state
-                        .system
-                        .blob_used(&mut TransactionTracker::default(), blob_id)
-                        .await?,
-                )
+                let is_new = self
+                    .state
+                    .system
+                    .blob_used(self.txn_tracker, blob_id)
+                    .await?;
+                if is_new {
+                    self.txn_tracker
+                        .replay_oracle_response(OracleResponse::Blob(blob_id))?;
+                }
+                callback.respond(());
             }
 
-            NextEventIndex {
+            Emit {
                 stream_id,
+                value,
                 callback,
             } => {
                 let count = self
@@ -471,18 +498,31 @@ where
                     .await?;
                 let index = *count;
                 *count = count.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                self.txn_tracker.add_event(stream_id, index, value);
                 callback.respond(index)
             }
 
             ReadEvent { event_id, callback } => {
-                let event = self
-                    .state
-                    .context()
-                    .extra()
-                    .get_event(event_id.clone())
-                    .await?;
-                let bytes = event.ok_or(ExecutionError::EventsNotFound(vec![event_id]))?;
-                callback.respond(bytes);
+                let event = match self.txn_tracker.next_replayed_oracle_response()? {
+                    None => {
+                        let event = self
+                            .state
+                            .context()
+                            .extra()
+                            .get_event(event_id.clone())
+                            .await?;
+                        event.ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?
+                    }
+                    Some(OracleResponse::Event(recorded_event_id, event))
+                        if recorded_event_id == event_id =>
+                    {
+                        event
+                    }
+                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                };
+                self.txn_tracker
+                    .add_oracle_response(OracleResponse::Event(event_id, event.clone()));
+                callback.respond(event);
             }
 
             SubscribeToEvents {
@@ -495,14 +535,21 @@ where
                     .state
                     .system
                     .event_subscriptions
-                    .get_mut_or_default(&(chain_id, stream_id))
+                    .get_mut_or_default(&(chain_id, stream_id.clone()))
                     .await?;
                 let next_index = if subscriptions.applications.insert(subscriber_app_id) {
                     subscriptions.next_index
                 } else {
                     0
                 };
-                callback.respond(next_index);
+                self.txn_tracker.add_stream_to_process(
+                    subscriber_app_id,
+                    chain_id,
+                    stream_id,
+                    0,
+                    next_index,
+                );
+                callback.respond(());
             }
 
             UnsubscribeFromEvents {
@@ -511,7 +558,7 @@ where
                 subscriber_app_id,
                 callback,
             } => {
-                let key = (chain_id, stream_id);
+                let key = (chain_id, stream_id.clone());
                 let subscriptions = self
                     .state
                     .system
@@ -522,12 +569,103 @@ where
                 if subscriptions.applications.is_empty() {
                     self.state.system.event_subscriptions.remove(&key)?;
                 }
+                if let crate::GenericApplicationId::User(app_id) = stream_id.application_id {
+                    self.txn_tracker
+                        .remove_stream_to_process(app_id, chain_id, stream_id);
+                }
                 callback.respond(());
             }
 
             GetApplicationPermissions { callback } => {
                 let app_permissions = self.state.system.application_permissions.get();
                 callback.respond(app_permissions.clone());
+            }
+
+            QueryServiceOracle { callback } => {
+                let response = match self.txn_tracker.next_replayed_oracle_response()? {
+                    Some(OracleResponse::Service(bytes)) => Some(bytes),
+                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                    None => None,
+                };
+                callback.respond(response);
+            }
+
+            QueryService { response, callback } => {
+                self.txn_tracker
+                    .add_oracle_response(OracleResponse::Service(response));
+                callback.respond(());
+            }
+
+            AddOutgoingMessage { message, callback } => {
+                self.txn_tracker.add_outgoing_message(message);
+                callback.respond(());
+            }
+
+            SetLocalTime {
+                local_time,
+                callback,
+            } => {
+                self.txn_tracker.set_local_time(local_time);
+                callback.respond(());
+            }
+
+            GetLocalTime { callback } => {
+                let local_time = self.txn_tracker.local_time();
+                callback.respond(local_time);
+            }
+
+            GetCreatedBlobs { callback } => {
+                let blobs = self.txn_tracker.created_blobs().clone();
+                callback.respond(blobs);
+            }
+
+            AssertBefore {
+                timestamp,
+                callback,
+            } => {
+                let result = if !self
+                    .txn_tracker
+                    .replay_oracle_response(OracleResponse::Assert)?
+                {
+                    // There are no recorded oracle responses, so we check the local time.
+                    let local_time = self.txn_tracker.local_time();
+                    if local_time >= timestamp {
+                        Err(ExecutionError::AssertBefore {
+                            timestamp,
+                            local_time,
+                        })
+                    } else {
+                        Ok(())
+                    }
+                } else {
+                    Ok(())
+                };
+                callback.respond(result);
+            }
+
+            AddCreatedBlob { blob, callback } => {
+                self.txn_tracker.add_created_blob(blob);
+                callback.respond(());
+            }
+
+            ValidationRound { round, callback } => {
+                let result_round =
+                    if let Some(response) = self.txn_tracker.next_replayed_oracle_response()? {
+                        match response {
+                            OracleResponse::Round(round) => round,
+                            _ => return Err(ExecutionError::OracleResponseMismatch),
+                        }
+                    } else {
+                        round
+                    };
+                self.txn_tracker
+                    .add_oracle_response(OracleResponse::Round(result_round));
+                callback.respond(result_round);
+            }
+
+            AddOracleResponse { response, callback } => {
+                self.txn_tracker.add_oracle_response(response);
+                callback.respond(());
             }
         }
 
@@ -601,18 +739,14 @@ pub enum ExecutionRequest {
     LoadContract {
         id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(UserContractCode, ApplicationDescription, TransactionTracker)>,
-        #[debug(skip)]
-        txn_tracker: TransactionTracker,
+        callback: Sender<(UserContractCode, ApplicationDescription)>,
     },
 
     #[cfg(not(web))]
     LoadService {
         id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(UserServiceCode, ApplicationDescription, TransactionTracker)>,
-        #[debug(skip)]
-        txn_tracker: TransactionTracker,
+        callback: Sender<(UserServiceCode, ApplicationDescription)>,
     },
 
     ChainBalance {
@@ -644,7 +778,7 @@ pub enum ExecutionRequest {
         signer: Option<AccountOwner>,
         application_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<Option<OutgoingMessage>>,
+        callback: Sender<()>,
     },
 
     Claim {
@@ -655,7 +789,7 @@ pub enum ExecutionRequest {
         signer: Option<AccountOwner>,
         application_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<Option<OutgoingMessage>>,
+        callback: Sender<()>,
     },
 
     SystemTimestamp {
@@ -730,9 +864,7 @@ pub enum ExecutionRequest {
         application_permissions: ApplicationPermissions,
         timestamp: Timestamp,
         #[debug(skip)]
-        txn_tracker: TransactionTracker,
-        #[debug(skip)]
-        callback: Sender<(ChainId, TransactionTracker)>,
+        callback: Sender<ChainId>,
     },
 
     CloseChain {
@@ -755,8 +887,6 @@ pub enum ExecutionRequest {
         parameters: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
         #[debug(skip)]
-        txn_tracker: TransactionTracker,
-        #[debug(skip)]
         callback: Sender<Result<CreateApplicationResult, ExecutionError>>,
     },
 
@@ -770,17 +900,19 @@ pub enum ExecutionRequest {
     ReadBlobContent {
         blob_id: BlobId,
         #[debug(skip)]
-        callback: Sender<(BlobContent, bool)>,
+        callback: Sender<BlobContent>,
     },
 
     AssertBlobExists {
         blob_id: BlobId,
         #[debug(skip)]
-        callback: Sender<bool>,
+        callback: Sender<()>,
     },
 
-    NextEventIndex {
+    Emit {
         stream_id: StreamId,
+        #[debug(with = hex_debug)]
+        value: Vec<u8>,
         #[debug(skip)]
         callback: Sender<u32>,
     },
@@ -795,7 +927,7 @@ pub enum ExecutionRequest {
         stream_id: StreamId,
         subscriber_app_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<u32>,
+        callback: Sender<()>,
     },
 
     UnsubscribeFromEvents {
@@ -809,5 +941,63 @@ pub enum ExecutionRequest {
     GetApplicationPermissions {
         #[debug(skip)]
         callback: Sender<ApplicationPermissions>,
+    },
+
+    QueryServiceOracle {
+        #[debug(skip)]
+        callback: Sender<Option<Vec<u8>>>,
+    },
+
+    QueryService {
+        #[debug(with = hex_debug)]
+        response: Vec<u8>,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    AddOutgoingMessage {
+        message: crate::OutgoingMessage,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    SetLocalTime {
+        local_time: Timestamp,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    GetLocalTime {
+        #[debug(skip)]
+        callback: Sender<Timestamp>,
+    },
+
+    GetCreatedBlobs {
+        #[debug(skip)]
+        callback: Sender<std::collections::BTreeMap<BlobId, BlobContent>>,
+    },
+
+    AssertBefore {
+        timestamp: Timestamp,
+        #[debug(skip)]
+        callback: Sender<Result<(), ExecutionError>>,
+    },
+
+    AddCreatedBlob {
+        blob: crate::Blob,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    ValidationRound {
+        round: Option<u32>,
+        #[debug(skip)]
+        callback: Sender<Option<u32>>,
+    },
+
+    AddOracleResponse {
+        response: OracleResponse,
+        #[debug(skip)]
+        callback: Sender<()>,
     },
 }

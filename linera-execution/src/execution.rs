@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    mem, vec,
+    vec,
 };
 
 use futures::{FutureExt, StreamExt};
@@ -29,7 +29,7 @@ use {
     std::sync::Arc,
 };
 
-use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
+use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequest};
 use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ContractSyncRuntime,
@@ -241,9 +241,10 @@ where
         );
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let mut actor = ExecutionStateActor::new(self);
-        let (code, description) = actor.load_contract(application_id, txn_tracker).await?;
-        let txn_tracker_moved = mem::take(txn_tracker);
+
+        let mut actor = ExecutionStateActor::new(self, txn_tracker);
+        let (code, description) = actor.load_contract(application_id).await?;
+
         let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
@@ -251,7 +252,6 @@ where
                 refund_grant_to,
                 controller,
                 &action,
-                txn_tracker_moved,
             );
 
             async move {
@@ -268,9 +268,8 @@ where
             actor.handle_request(request, resource_controller).await?;
         }
 
-        let (result, controller, txn_tracker_moved) = contract_runtime_task.join().await?;
+        let (result, controller) = contract_runtime_task.join().await?;
 
-        *txn_tracker = txn_tracker_moved;
         txn_tracker.add_operation_result(result);
 
         resource_controller
@@ -454,10 +453,9 @@ where
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let mut actor = ExecutionStateActor::new(self);
-        let (code, description) = actor
-            .load_service(application_id, &mut TransactionTracker::default())
-            .await?;
+        let mut txn_tracker = TransactionTracker::default();
+        let mut actor = ExecutionStateActor::new(self, &mut txn_tracker);
+        let (code, description) = actor.load_service(application_id).await?;
 
         let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
@@ -503,7 +501,8 @@ where
             })
             .expect("Service runtime thread should only stop when `request_sender` is dropped");
 
-        let mut actor = ExecutionStateActor::new(self);
+        let mut txn_tracker = TransactionTracker::default();
+        let mut actor = ExecutionStateActor::new(self, &mut txn_tracker);
 
         loop {
             futures::select! {
