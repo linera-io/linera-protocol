@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["contract-call", "create-and-call", "publish-read-data-blob"]
+
+[workspace.dependencies]
+linera-sdk = { path = "../../../linera-sdk" }
+serde = { version = "1.0.152", features = ["derive"] }
+tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
+
+counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
+contract-call = { path = "./create-and-call" }
+create-and-call = { path = "./create-and-call" }
+publish-read-data-blob = { path = "./publish-read-data-blob" }
+
+[profile.release]
+debug = true
+lto = true
+opt-level = 'z'
+strip = 'debuginfo'
+
+[profile.bench]
+debug = true
