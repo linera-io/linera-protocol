@@ -1271,7 +1271,7 @@ mod arc_u8_as_bytes {
 }
 
 /// A blob of binary data.
-#[derive(Serialize, Deserialize, Hash, Clone, Debug, PartialEq, Eq)]
+#[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobContent {
     /// The type of data represented by the bytes.
     blob_type: BlobType,
