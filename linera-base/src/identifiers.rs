@@ -77,10 +77,23 @@ impl From<CryptoHash> for AccountOwner {
     }
 }
 
-/// A system account.
+/// An account.
 #[derive(
-    Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize, WitLoad, WitStore, WitType,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Copy,
+    Clone,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    SimpleObject,
+    InputObject,
 )]
+#[graphql(name = "AccountOutput", input_name = "Account")]
 pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
@@ -1108,7 +1121,6 @@ doc_scalar!(
     AccountOwner,
     "A unique identifier for a user or an application."
 );
-doc_scalar!(Account, "An account");
 doc_scalar!(
     BlobId,
     "A content-addressed blob ID i.e. the hash of the `BlobContent`"

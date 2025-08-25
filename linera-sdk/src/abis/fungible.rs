@@ -5,11 +5,11 @@
 
 use std::collections::BTreeMap;
 
-use async_graphql::{InputObject, Request, Response, SimpleObject};
+use async_graphql::{Request, Response};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::Amount,
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{Account, AccountOwner},
 };
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
@@ -156,28 +156,6 @@ impl Parameters {
         let ticker_symbol = ticker_symbol.to_string();
         Self { ticker_symbol }
     }
-}
-
-/// An account.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    Eq,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    SimpleObject,
-    InputObject,
-)]
-#[graphql(input_name = "FungibleAccount")]
-pub struct Account {
-    /// Chain ID of the account
-    pub chain_id: ChainId,
-    /// Owner of the account
-    pub owner: AccountOwner,
 }
 
 /// A builder type for constructing the initial state of the application.

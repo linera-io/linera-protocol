@@ -25,7 +25,9 @@ use linera_base::{
     data_types::{
         Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse,
     },
-    identifiers::{ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName},
+    identifiers::{
+        Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -554,7 +556,7 @@ where
     let transfer = FungibleOperation::Transfer {
         owner: sender_owner,
         amount: 100.into(),
-        target_account: fungible::Account {
+        target_account: Account {
             chain_id: receiver.chain_id(),
             owner: receiver_owner,
         },
@@ -591,7 +593,7 @@ where
     let transfer = FungibleOperation::Transfer {
         owner: sender_owner,
         amount: 200.into(),
-        target_account: fungible::Account {
+        target_account: Account {
             chain_id: receiver.chain_id(),
             owner: receiver_owner,
         },
@@ -616,7 +618,7 @@ where
     let transfer = FungibleOperation::Transfer {
         owner: receiver_owner,
         amount: 301.into(),
-        target_account: fungible::Account {
+        target_account: Account {
             chain_id: receiver2.chain_id(),
             owner: receiver2_owner,
         },
@@ -631,7 +633,7 @@ where
     let transfer = FungibleOperation::Transfer {
         owner: receiver_owner,
         amount: 300.into(),
-        target_account: fungible::Account {
+        target_account: Account {
             chain_id: receiver2.chain_id(),
             owner: receiver2_owner,
         },

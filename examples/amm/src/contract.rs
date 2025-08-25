@@ -6,10 +6,9 @@
 mod state;
 
 use amm::{AmmAbi, Message, Operation, Parameters};
-use fungible::Account;
 use linera_sdk::{
     abis::fungible::{FungibleOperation, FungibleResponse, FungibleTokenAbi},
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    linera_base_types::{Account, AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };

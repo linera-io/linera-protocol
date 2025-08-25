@@ -135,7 +135,7 @@ impl NativeFungibleTokenContract {
         }
     }
 
-    fn normalize_account(&self, account: fungible::Account) -> Account {
+    fn normalize_account(&self, account: Account) -> Account {
         Account {
             chain_id: account.chain_id,
             owner: account.owner,

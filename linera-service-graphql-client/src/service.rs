@@ -5,7 +5,7 @@ use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Blob, BlockHeight, ChainDescription, OracleResponse, Round, Timestamp},
-    identifiers::{Account, AccountOwner, BlobId, ChainId, GenericApplicationId, StreamName},
+    identifiers::{AccountOwner, BlobId, ChainId, GenericApplicationId, StreamName},
 };
 use thiserror::Error;
 
@@ -138,7 +138,10 @@ pub enum ConversionError {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
-    use linera_base::{data_types::Event, identifiers::StreamId};
+    use linera_base::{
+        data_types::Event,
+        identifiers::{Account, StreamId},
+    };
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
         types::ConfirmedBlock,
@@ -173,7 +176,10 @@ mod from {
                             .map(|msg| linera_chain::data_types::PostedMessage {
                                 authenticated_signer: msg.authenticated_signer,
                                 grant: msg.grant,
-                                refund_grant_to: msg.refund_grant_to,
+                                refund_grant_to: msg.refund_grant_to.map(|rgt| Account {
+                                    chain_id: rgt.chain_id,
+                                    owner: rgt.owner,
+                                }),
                                 kind: msg.kind,
                                 index: msg.index as u32,
                                 message: msg.message,
@@ -278,7 +284,10 @@ mod from {
                 destination,
                 authenticated_signer,
                 grant,
-                refund_grant_to,
+                refund_grant_to: refund_grant_to.map(|rgt| Account {
+                    chain_id: rgt.chain_id,
+                    owner: rgt.owner,
+                }),
                 kind,
                 message,
             }

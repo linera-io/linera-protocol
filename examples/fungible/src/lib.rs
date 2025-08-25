@@ -5,7 +5,7 @@
 
 use async_graphql::scalar;
 pub use linera_sdk::abis::fungible::*;
-use linera_sdk::linera_base_types::{AccountOwner, Amount};
+use linera_sdk::linera_base_types::{Account, AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {

@@ -30,7 +30,7 @@ export type Entry_AccountOwner_Amount_92cf94e6 = {
 };
 
 /** An account. */
-export type FungibleAccount = {
+export type Account = {
   /** Chain ID of the account */
   chainId: Scalars['ChainId']['input'];
   /** Owner of the account */
@@ -89,15 +89,15 @@ export type OperationMutationRootBalanceArgs = {
 
 export type OperationMutationRootClaimArgs = {
   amount: Scalars['Amount']['input'];
-  sourceAccount: FungibleAccount;
-  targetAccount: FungibleAccount;
+  sourceAccount: Account;
+  targetAccount: Account;
 };
 
 
 export type OperationMutationRootTransferArgs = {
   amount: Scalars['Amount']['input'];
   owner: Scalars['AccountOwner']['input'];
-  targetAccount: FungibleAccount;
+  targetAccount: Account;
 };
 
 export type AccountsQueryVariables = Exact<{
@@ -115,7 +115,7 @@ export type TickerSymbolQuery = { __typename?: 'FungibleTokenService', tickerSym
 export type TransferMutationVariables = Exact<{
   owner: Scalars['AccountOwner']['input'];
   amount: Scalars['Amount']['input'];
-  targetAccount: FungibleAccount;
+  targetAccount: Account;
 }>;
 
 
@@ -124,4 +124,4 @@ export type TransferMutation = { __typename?: 'OperationMutationRoot', transfer:
 
 export const AccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Accounts"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"owner"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountOwner"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entry"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"key"},"value":{"kind":"Variable","name":{"kind":"Name","value":"owner"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}}]}}]} as unknown as DocumentNode<AccountsQuery, AccountsQueryVariables>;
 export const TickerSymbolDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TickerSymbol"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"tickerSymbol"}}]}}]} as unknown as DocumentNode<TickerSymbolQuery, TickerSymbolQueryVariables>;
-export const TransferDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Transfer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"owner"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountOwner"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"amount"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Amount"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"targetAccount"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"FungibleAccount"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transfer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"owner"},"value":{"kind":"Variable","name":{"kind":"Name","value":"owner"}}},{"kind":"Argument","name":{"kind":"Name","value":"amount"},"value":{"kind":"Variable","name":{"kind":"Name","value":"amount"}}},{"kind":"Argument","name":{"kind":"Name","value":"targetAccount"},"value":{"kind":"Variable","name":{"kind":"Name","value":"targetAccount"}}}]}]}}]} as unknown as DocumentNode<TransferMutation, TransferMutationVariables>;
+export const TransferDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Transfer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"owner"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountOwner"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"amount"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Amount"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"targetAccount"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Account"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transfer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"owner"},"value":{"kind":"Variable","name":{"kind":"Name","value":"owner"}}},{"kind":"Argument","name":{"kind":"Name","value":"amount"},"value":{"kind":"Variable","name":{"kind":"Name","value":"amount"}}},{"kind":"Argument","name":{"kind":"Name","value":"targetAccount"},"value":{"kind":"Variable","name":{"kind":"Name","value":"targetAccount"}}}]}]}}]} as unknown as DocumentNode<TransferMutation, TransferMutationVariables>;

@@ -6,11 +6,10 @@
 use std::fmt::{Display, Formatter};
 
 use async_graphql::{InputObject, Request, Response, SimpleObject};
-use fungible::Account;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{
-        AccountOwner, ApplicationId, ChainId, ContractAbi, DataBlobHash, ServiceAbi,
+        Account, AccountOwner, ApplicationId, ChainId, ContractAbi, DataBlobHash, ServiceAbi,
     },
     ToBcsBytes,
 };

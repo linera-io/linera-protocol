@@ -4,9 +4,8 @@
 use std::collections::BTreeSet;
 
 use async_graphql::SimpleObject;
-use fungible::Account;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{Account, AccountOwner, Amount},
     views::{
         linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
         ViewStorageContext,

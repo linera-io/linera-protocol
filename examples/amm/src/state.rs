@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::Account;
 use linera_sdk::{
-    linera_base_types::Amount,
+    linera_base_types::{Account, Amount},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 

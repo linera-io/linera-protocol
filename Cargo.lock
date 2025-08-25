@@ -739,7 +739,6 @@ name = "amm"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "fungible",
  "linera-sdk",
  "matching-engine",
  "num-bigint 0.4.6",
@@ -6493,7 +6492,6 @@ dependencies = [
  "async-graphql",
  "base64 0.22.1",
  "bcs",
- "fungible",
  "linera-sdk",
  "serde",
  "sha3",

@@ -52,7 +52,7 @@ const TRANSFER_NFT = gql`
   mutation Transfer(
     $sourceOwner: AccountOwner!
     $tokenId: String!
-    $targetAccount: FungibleAccount!
+    $targetAccount: Account!
   ) {
     transfer(
       sourceOwner: $sourceOwner

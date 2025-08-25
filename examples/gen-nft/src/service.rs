@@ -15,11 +15,10 @@ use std::{
 
 use async_graphql::{Context, EmptySubscription, Object, Request, Response, Schema};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
-use fungible::Account;
 use gen_nft::{NftOutput, Operation, TokenId};
 use linera_sdk::{
     http,
-    linera_base_types::{AccountOwner, WithServiceAbi},
+    linera_base_types::{Account, AccountOwner, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
 };
