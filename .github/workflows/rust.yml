@@ -130,6 +130,10 @@ jobs:
       run: |
         cd examples
         cargo test --locked
+    - name: Run linera-sdk tests
+      run: |
+        cd linera-sdk-tests
+        cargo test --locked
 
   default-features-and-witty-integration-test:
     needs: changed-files
@@ -447,6 +451,14 @@ jobs:
     - name: Run Wasm application lints
       run: |
         cd examples
+        cargo fmt -- --check
+        cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
+        cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked
+        cd agent
+        cargo fmt -- --check
+    - name: Run linera-sdk tests application lints
+      run: |
+        cd linera-sdk-tests
         cargo fmt -- --check
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
         cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked

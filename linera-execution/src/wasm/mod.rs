@@ -361,17 +361,38 @@ pub mod test {
                 String::from_utf8_lossy(&output.stderr),
             );
         }
+        let output = std::process::Command::new("cargo")
+            .current_dir("../linera-sdk-tests")
+            .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
+            .output()?;
+        if !output.status.success() {
+            panic!(
+                "Failed to build linera-sdk-tests applications.\n\n\
+                stdout:\n-------\n{}\n\n\
+                stderr:\n-------\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
         Ok(())
     }
 
     pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
+        use std::path::Path;
         let name = name.replace('-', "_");
         static INSTANCE: LazyLock<()> = LazyLock::new(|| build_applications().unwrap());
         LazyLock::force(&INSTANCE);
-        Ok((
-            format!("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
-            format!("../examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
-        ))
+        if Path::new("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm").exists() {
+            Ok((
+                format!("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
+                format!("../examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
+            ))
+        } else {
+            Ok((
+                format!("../linera-sdk-tests/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
+                format!("../linera-sdk-tests/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
+            ))
+        }
     }
 
     #[cfg(with_fs)]

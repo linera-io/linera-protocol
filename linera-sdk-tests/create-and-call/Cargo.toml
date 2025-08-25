@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-counter-no-graphql = { path = "../counter-no-graphql" }
+counter-no-graphql.workspace = true
 linera-sdk.workspace = true
 serde.workspace = true
 

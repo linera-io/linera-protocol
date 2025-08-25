@@ -7521,8 +7521,10 @@ dependencies = [
 name = "publish-read-data-blob"
 version = "0.1.0"
 dependencies = [
+ "assert_matches",
  "linera-sdk",
  "serde",
+ "tokio",
 ]
 
 [[package]]

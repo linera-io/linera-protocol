@@ -1,23 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "amm",
-    "call-evm-counter",
-    "counter",
-    "counter-no-graphql",
-    "crowd-funding",
-    "ethereum-tracker",
-    "fungible",
-    "gen-nft",
-    "hex-game",
-    "how-to/perform-http-requests",
-    "llm",
-    "matching-engine",
-    "meta-counter",
-    "native-fungible",
-    "non-fungible",
-    "rfq",
-    "social",
+    "contract-call",
+    "create-and-call",
+    "publish-read-data-blob",
 ]
 
 [workspace.dependencies]
@@ -54,15 +40,8 @@ tokenizers = { git = "https://github.com/christos-h/tokenizers", default-feature
 ] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
-amm = { path = "./amm" }
-counter = { path = "./counter" }
+counter-no-graphql = { path = "../examples/counter-no-graphql" }
 create-and-call = { path = "./create-and-call" }
-crowd-funding = { path = "./crowd-funding" }
-ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
-fungible = { path = "./fungible" }
-matching-engine = { path = "./matching-engine" }
-native-fungible = { path = "./native-fungible" }
-non-fungible = { path = "./non-fungible" }
 
 [profile.release]
 debug = true
