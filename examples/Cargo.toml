@@ -3,10 +3,8 @@ resolver = "2"
 members = [
     "amm",
     "call-evm-counter",
-    "contract-call",
     "counter",
     "counter-no-graphql",
-    "create-and-call",
     "crowd-funding",
     "ethereum-tracker",
     "fungible",
@@ -18,7 +16,6 @@ members = [
     "meta-counter",
     "native-fungible",
     "non-fungible",
-    "publish-read-data-blob",
     "rfq",
     "social",
     "track-instantiation",

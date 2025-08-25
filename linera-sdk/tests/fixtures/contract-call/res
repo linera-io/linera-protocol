@@ -1,0 +1,11 @@
+error: failed to load manifest for workspace member `/Users/mathieudutoursikiric/GITlineraOpen/GITlinera_sdk_tests/linera-protocol_second/linera-sdk-tests/create-and-call`
+referenced by workspace at `/Users/mathieudutoursikiric/GITlineraOpen/GITlinera_sdk_tests/linera-protocol_second/linera-sdk-tests/Cargo.toml`
+
+Caused by:
+  failed to load manifest for dependency `counter-no-graphql`
+
+Caused by:
+  failed to read `/Users/mathieudutoursikiric/GITlineraOpen/GITlinera_sdk_tests/linera-protocol_second/linera-sdk-tests/examples/counter-no-graphql/Cargo.toml`
+
+Caused by:
+  No such file or directory (os error 2)
