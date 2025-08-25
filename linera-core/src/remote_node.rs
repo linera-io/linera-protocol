@@ -235,7 +235,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         }
     }
 
-    /// Downloads a range of certificates from the given chain.
+    /// Downloads a list of certificates from the given chain.
     #[instrument(level = "trace")]
     pub async fn download_certificates_by_heights(
         &self,

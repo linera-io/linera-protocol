@@ -145,7 +145,7 @@ pub trait ValidatorNode {
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
 
-    /// Requests a batch of certificates from a specific chain by height range.
+    /// Requests a batch of certificates from a specific chain by heights.
     async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
