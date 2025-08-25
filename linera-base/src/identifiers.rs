@@ -70,6 +70,14 @@ impl AccountOwner {
     }
 }
 
+#[cfg(with_revm)]
+impl From<Address> for AccountOwner {
+    fn from(address: Address) -> Self {
+        let address = address.into_array();
+        AccountOwner::Address20(address)
+    }
+}
+
 #[cfg(with_testing)]
 impl From<CryptoHash> for AccountOwner {
     fn from(address: CryptoHash) -> Self {
@@ -394,7 +402,12 @@ impl GenericApplicationId {
 
 impl<A> From<ApplicationId<A>> for AccountOwner {
     fn from(app_id: ApplicationId<A>) -> Self {
-        AccountOwner::Address32(app_id.application_description_hash)
+        if app_id.is_evm() {
+            let hash_bytes = app_id.application_description_hash.as_bytes();
+            AccountOwner::Address20(hash_bytes[..20].try_into().unwrap())
+        } else {
+            AccountOwner::Address32(app_id.application_description_hash)
+        }
     }
 }
 
@@ -938,6 +951,14 @@ impl<A> ApplicationId<A> {
     }
 }
 
+impl<A> ApplicationId<A> {
+    /// Returns whether the `ApplicationId` is the one of an EVM application.
+    pub fn is_evm(&self) -> bool {
+        let bytes = self.application_description_hash.as_bytes();
+        bytes.0[20..] == [0; 12]
+    }
+}
+
 #[cfg(with_revm)]
 impl<A> ApplicationId<A> {
     /// Converts the `ApplicationId` into an Ethereum Address.
@@ -950,18 +971,6 @@ impl<A> ApplicationId<A> {
     /// Converts the `ApplicationId` into an Ethereum-compatible 32-byte array.
     pub fn bytes32(&self) -> B256 {
         *self.application_description_hash.as_bytes()
-    }
-
-    /// Returns whether the `ApplicationId` is the one of an EVM application.
-    pub fn is_evm(&self) -> bool {
-        let bytes = self.application_description_hash.as_bytes();
-        let bytes = bytes.0.as_ref();
-        for byte in &bytes[20..] {
-            if byte != &0 {
-                return false;
-            }
-        }
-        true
     }
 }
 
