@@ -33,8 +33,8 @@ use linera_chain::{
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
-        ValidatedBlock,
+        CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, Timeout, ValidatedBlock,
     },
     ChainError, ChainExecutionContext,
 };
@@ -3505,9 +3505,10 @@ where
         .await?;
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
 
-    // The worker updates its locking block even if it's from a past round.
+    // The worker updates its locking block even if it's from a past round and it doesn't sign
+    // to confirm.
     let certificate = env.make_certificate_with_round(value1, Round::SingleLeader(7));
-    let worker = env.worker().clone().with_key_pair(None).await; // Forget validator keys.
+    let worker = env.worker().clone();
     worker
         .handle_validated_certificate(certificate.clone())
         .await?;
@@ -3515,6 +3516,10 @@ where
     assert_eq!(
         response.info.manager.requested_locking,
         Some(Box::new(LockingBlock::Regular(certificate)))
+    );
+    assert_ne!(
+        response.info.manager.pending.unwrap().kind(),
+        CertificateKind::Confirmed
     );
     Ok(())
 }
