@@ -5,7 +5,7 @@ use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Blob, BlockHeight, ChainDescription, OracleResponse, Round, Timestamp},
-    identifiers::{Account, AccountOwner, BlobId, ChainId, GenericApplicationId, StreamName},
+    identifiers::{AccountOwner, BlobId, ChainId, GenericApplicationId, StreamName},
 };
 use thiserror::Error;
 
@@ -138,7 +138,10 @@ pub enum ConversionError {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
-    use linera_base::{data_types::Event, identifiers::{Account, StreamId}};
+    use linera_base::{
+        data_types::Event,
+        identifiers::{Account, StreamId},
+    };
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
         types::ConfirmedBlock,
