@@ -30,6 +30,12 @@ spec:
       labels:
         app: shards
     spec:
+      nodeSelector:
+        workload: shards
+      tolerations:
+      - key: shards
+        value: "true"
+        effect: NoSchedule
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-server-initializer
