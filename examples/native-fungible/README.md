@@ -24,7 +24,7 @@ Next, start the local Linera network and run a faucet:
 
 ```bash
 LINERA_FAUCET_PORT=8079
-LINERA_FAUCET_URL=http://localhost:$FAUCET_PORT
+LINERA_FAUCET_URL=http://localhost:$LINERA_FAUCET_PORT
 linera_spawn linera net up --with-faucet --faucet-port $LINERA_FAUCET_PORT
 
 # If you're using a testnet, run this instead:
