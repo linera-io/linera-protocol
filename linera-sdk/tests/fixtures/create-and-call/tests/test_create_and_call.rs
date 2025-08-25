@@ -19,7 +19,7 @@ async fn test_create_and_call() {
     let mut chain = validator.new_chain().await;
 
     // Step 1: Get the bytecode for "counter-no-graphql" by compiling it from its directory
-    let counter_no_graphql_path = std::path::Path::new("../counter-no-graphql");
+    let counter_no_graphql_path = std::path::Path::new("../../../../examples/counter-no-graphql");
     let counter_no_graphql_path = std::fs::canonicalize(counter_no_graphql_path)
         .expect("Failed to get absolute path to counter-no-graphql");
 
