@@ -21,6 +21,7 @@ members = [
     "publish-read-data-blob",
     "rfq",
     "social",
+    "track-instantiation",
 ]
 
 [workspace.dependencies]
