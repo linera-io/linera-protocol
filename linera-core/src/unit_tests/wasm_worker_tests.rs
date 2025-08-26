@@ -293,6 +293,7 @@ where
         .system
         .used_blobs
         .insert(&application_description_blob_id)?;
+    let result = counter::CounterOperation::Increment(5);
     let run_block_proposal = ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
@@ -302,7 +303,7 @@ where
             blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![vec![]],
-            operation_results: vec![OperationResult(bcs::to_bytes(&15u64)?)],
+            operation_results: vec![OperationResult(bcs::to_bytes(&result)?)],
         }
         .with(run_block),
     );
