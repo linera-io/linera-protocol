@@ -7,8 +7,8 @@ linera-sdk = { path = "../../../linera-sdk" }
 serde = { version = "1.0.152", features = ["derive"] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
-counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
 contract-call = { path = "./create-and-call" }
+counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
 create-and-call = { path = "./create-and-call" }
 publish-read-data-blob = { path = "./publish-read-data-blob" }
 
