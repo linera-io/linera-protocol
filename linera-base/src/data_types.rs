@@ -1320,28 +1320,10 @@ impl BlobContent {
         &self.bytes
     }
 
-    /// Gets the inner blob's bytes, consuming the blob.
-    pub fn into_bytes(self) -> Arc<Box<[u8]>> {
-        self.bytes
-    }
-
-    /// Gets the inner blob's bytes, consuming the blob.
-    /// Returns Some(Vec<u8>) if there's only one reference to the data,
-    /// None if there are multiple references.
-    ///
-    /// Note: Due to Rust's type system limitations with Arc<[u8]> (unsized type),
-    /// this method cannot avoid cloning entirely, but it only succeeds when
-    /// there's a single reference, making the clone unnecessary in most practical cases.
-    pub fn into_vec(self) -> Option<Vec<u8>> {
-        // Check if we're the sole owner (no other strong or weak references)
-        if Arc::strong_count(&self.bytes) == 1 && Arc::weak_count(&self.bytes) == 0 {
-            // We're the only owner, so extract the data
-            // Unfortunately, Arc<[u8]> doesn't support try_unwrap due to being unsized,
-            // so we must use this approach
-            Some((*self.bytes).to_vec())
-        } else {
-            None
-        }
+    /// Convert a BlobContent into `Vec<u8>` without cloning if possible.
+    pub fn into_vec_or_clone(self) -> Vec<u8> {
+        let bytes = Arc::unwrap_or_clone(self.bytes);
+        bytes.into_vec()
     }
 
     /// Returns the type of data represented by this blob's bytes.
@@ -1457,11 +1439,6 @@ impl Blob {
     /// Gets a reference to the inner blob's bytes.
     pub fn bytes(&self) -> &[u8] {
         self.content.bytes()
-    }
-
-    /// Gets the inner blob's bytes.
-    pub fn into_bytes(self) -> Arc<Box<[u8]>> {
-        self.content.into_bytes()
     }
 
     /// Loads data blob from a file.
