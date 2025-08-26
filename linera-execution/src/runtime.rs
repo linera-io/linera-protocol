@@ -946,7 +946,7 @@ where
             this.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
-        Ok(content.into_bytes().into_vec())
+        Ok(content.into_vec_or_clone())
     }
 
     fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError> {
