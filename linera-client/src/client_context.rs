@@ -671,12 +671,11 @@ where
     pub async fn prepare_for_benchmark(
         &mut self,
         num_chains: usize,
-        transactions_per_block: usize,
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
         pub_keys: Vec<AccountPublicKey>,
         chains_config_path: Option<&Path>,
-    ) -> Result<(Vec<ChainClient<Env>>, Vec<Vec<Operation>>), Error> {
+    ) -> Result<(Vec<ChainClient<Env>>, Vec<ChainId>), Error> {
         let start = Instant::now();
         // Below all block proposals are supposed to succeed without retries, we
         // must make sure that all incoming payments have been accepted on-chain
@@ -736,14 +735,7 @@ where
             }
         }
 
-        let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
-            benchmark_chains,
-            transactions_per_block,
-            fungible_application_id,
-            all_chains,
-        )?;
-
-        Ok((chain_clients, blocks_infos))
+        Ok((chain_clients, all_chains))
     }
 
     pub async fn wrap_up_benchmark(
@@ -841,20 +833,19 @@ where
             if chains_found_in_wallet == num_chains {
                 break;
             }
-            // This should never panic, because `owned_chain_ids` only returns the owned chains that
-            // we have a key pair for.
-            let owner = self
-                .wallet
-                .get(chain_id)
-                .and_then(|chain| chain.owner)
-                .unwrap();
             let chain_client = self.make_chain_client(chain_id);
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
             }
             chain_client.process_inbox().await?;
-            benchmark_chains.push((chain_id, owner));
+            benchmark_chains.push((
+                chain_id,
+                *ownership
+                    .super_owners
+                    .first()
+                    .expect("should have a super owner"),
+            ));
             chain_clients.push(chain_client);
             chains_found_in_wallet += 1;
         }
@@ -939,6 +930,12 @@ where
             .context("outgoing messages to create the new chains should be delivered")?;
         info!("Processing default chain inbox");
         default_chain_client.process_inbox().await?;
+
+        assert_eq!(
+            benchmark_chains.len(),
+            chain_clients.len(),
+            "benchmark_chains and chain_clients must have the same size"
+        );
 
         Ok((benchmark_chains, chain_clients))
     }

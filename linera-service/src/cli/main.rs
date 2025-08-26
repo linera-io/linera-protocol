@@ -841,10 +841,9 @@ impl Runnable for Job {
                         wallet,
                         signer.into_value(),
                     );
-                    let (chain_clients, blocks_infos) = context
+                    let (chain_clients, all_chains) = context
                         .prepare_for_benchmark(
                             num_chains,
-                            transactions_per_block,
                             tokens_per_chain,
                             fungible_application_id,
                             pub_keys,
@@ -883,11 +882,11 @@ impl Runnable for Job {
                         shutdown_notifier.clone(),
                     );
                     linera_client::benchmark::Benchmark::run_benchmark(
-                        num_chains,
-                        transactions_per_block,
                         bps,
                         chain_clients.clone(),
-                        blocks_infos,
+                        all_chains,
+                        transactions_per_block,
+                        fungible_application_id,
                         health_check_endpoints.clone(),
                         runtime_in_seconds,
                         delay_between_chains_ms,
