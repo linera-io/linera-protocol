@@ -1,0 +1,42 @@
+{
+    email {$EMAIL}
+}
+
+{$DOMAIN:localhost} {
+    # Automatic HTTPS with Let's Encrypt (or self-signed for localhost)
+
+    # Reverse proxy to the Linera proxy container (gRPC over HTTPS)
+    reverse_proxy https://proxy:443 {
+        # Configure for gRPC with self-signed certificate
+        transport http {
+            versions h2c 2
+            dial_timeout 60s
+            response_header_timeout 60s
+            tls_insecure_skip_verify
+        }
+
+        # Headers for proper proxying
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        -Server
+    }
+
+    # Enable compression
+    encode gzip
+
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+}
