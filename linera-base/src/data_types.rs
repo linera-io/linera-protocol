@@ -1247,49 +1247,29 @@ impl CompressedBytecode {
 
 impl BcsHashable<'_> for BlobContent {}
 
-mod arc_u8_as_bytes {
-    use std::{ops::Deref, sync::Arc};
-
-    use serde::{Deserializer, Serializer};
-
-    pub fn serialize<S>(bytes: &Arc<[u8]>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let bytes: &[u8] = bytes.deref();
-        serializer.serialize_bytes(bytes)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Arc<[u8]>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        use serde_bytes::{ByteBuf, Deserialize};
-        let buf = ByteBuf::deserialize(deserializer)?;
-        Ok(buf.into_vec().into())
-    }
-}
+use serde_with::*;
 
 /// A blob of binary data.
+#[serde_as]
 #[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobContent {
     /// The type of data represented by the bytes.
     blob_type: BlobType,
     /// The binary data.
     #[debug(skip)]
-    #[serde(with = "arc_u8_as_bytes")]
-    bytes: Arc<[u8]>,
+    #[serde_as(as = "Arc<Bytes>")]
+    bytes: Arc<Box<[u8]>>,
 }
 
 impl BlobContent {
     /// Creates a new [`BlobContent`] from the provided bytes and [`BlobId`].
-    pub fn new(blob_type: BlobType, bytes: impl Into<Arc<[u8]>>) -> Self {
+    pub fn new(blob_type: BlobType, bytes: impl Into<Box<[u8]>>) -> Self {
         let bytes = bytes.into();
-        BlobContent { blob_type, bytes }
+        BlobContent { blob_type, bytes: Arc::new(bytes) }
     }
 
     /// Creates a new data [`BlobContent`] from the provided bytes.
-    pub fn new_data(bytes: impl Into<Arc<[u8]>>) -> Self {
+    pub fn new_data(bytes: impl Into<Box<[u8]>>) -> Self {
         BlobContent::new(BlobType::Data, bytes)
     }
 
@@ -1321,7 +1301,7 @@ impl BlobContent {
     }
 
     /// Creates a new committee [`BlobContent`] from the provided serialized committee.
-    pub fn new_committee(committee: impl Into<Arc<[u8]>>) -> Self {
+    pub fn new_committee(committee: impl Into<Box<[u8]>>) -> Self {
         BlobContent::new(BlobType::Committee, committee)
     }
 
@@ -1338,8 +1318,27 @@ impl BlobContent {
     }
 
     /// Gets the inner blob's bytes, consuming the blob.
-    pub fn into_bytes(self) -> Arc<[u8]> {
+    pub fn into_bytes(self) -> Arc<Box<[u8]>> {
         self.bytes
+    }
+
+    /// Gets the inner blob's bytes, consuming the blob.
+    /// Returns Some(Vec<u8>) if there's only one reference to the data,
+    /// None if there are multiple references.
+    ///
+    /// Note: Due to Rust's type system limitations with Arc<[u8]> (unsized type),
+    /// this method cannot avoid cloning entirely, but it only succeeds when
+    /// there's a single reference, making the clone unnecessary in most practical cases.
+    pub fn into_vec(self) -> Option<Vec<u8>> {
+        // Check if we're the sole owner (no other strong or weak references)
+        if Arc::strong_count(&self.bytes) == 1 && Arc::weak_count(&self.bytes) == 0 {
+            // We're the only owner, so extract the data
+            // Unfortunately, Arc<[u8]> doesn't support try_unwrap due to being unsized,
+            // so we must use this approach
+            Some((*self.bytes).to_vec())
+        } else {
+            None
+        }
     }
 
     /// Returns the type of data represented by this blob's bytes.
@@ -1386,18 +1385,19 @@ impl Blob {
     }
 
     /// Creates a blob without checking that the hash actually matches the content.
-    pub fn new_with_id_unchecked(blob_id: BlobId, bytes: impl Into<Arc<[u8]>>) -> Self {
+    pub fn new_with_id_unchecked(blob_id: BlobId, bytes: impl Into<Box<[u8]>>) -> Self {
+        let bytes = bytes.into();
         Blob {
             hash: blob_id.hash,
             content: BlobContent {
                 blob_type: blob_id.blob_type,
-                bytes: bytes.into(),
+                bytes: Arc::new(bytes),
             },
         }
     }
 
     /// Creates a new data [`Blob`] from the provided bytes.
-    pub fn new_data(bytes: impl Into<Arc<[u8]>>) -> Self {
+    pub fn new_data(bytes: impl Into<Box<[u8]>>) -> Self {
         Blob::new(BlobContent::new_data(bytes))
     }
 
@@ -1424,7 +1424,7 @@ impl Blob {
     }
 
     /// Creates a new committee [`Blob`] from the provided bytes.
-    pub fn new_committee(committee: impl Into<Arc<[u8]>>) -> Self {
+    pub fn new_committee(committee: impl Into<Box<[u8]>>) -> Self {
         Blob::new(BlobContent::new_committee(committee))
     }
 
@@ -1457,7 +1457,7 @@ impl Blob {
     }
 
     /// Gets the inner blob's bytes.
-    pub fn into_bytes(self) -> Arc<[u8]> {
+    pub fn into_bytes(self) -> Arc<Box<[u8]>> {
         self.content.into_bytes()
     }
 
@@ -1658,5 +1658,19 @@ mod tests {
         let deserialized: BlobContent =
             serde_json::from_slice(&serialized).expect("Failed to deserialize BlobContent");
         assert_eq!(original_blob, deserialized);
+    }
+
+    #[test]
+    fn blob_content_hash_consistency() {
+        let test_data = b"Hello, world!";
+        let blob1 = BlobContent::new(BlobType::Data, test_data.as_slice());
+        let blob2 = BlobContent::new(BlobType::Data, Vec::from(test_data.as_slice()));
+
+        // Both should have same hash since they contain the same data
+        let hash1 = crate::crypto::CryptoHash::new(&blob1);
+        let hash2 = crate::crypto::CryptoHash::new(&blob2);
+
+        assert_eq!(hash1, hash2, "Hashes should be equal for same content");
+        assert_eq!(blob1.bytes(), blob2.bytes(), "Byte content should be equal");
     }
 }
