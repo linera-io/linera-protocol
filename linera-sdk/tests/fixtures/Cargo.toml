@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["contract-call", "create-and-call", "publish-read-data-blob", "track-instantiation"]
+members = [
+    "contract-call",
+    "create-and-call",
+    "publish-read-data-blob",
+    "track-instantiation",
+]
 
 [workspace.dependencies]
 linera-sdk = { path = "../../../linera-sdk" }
