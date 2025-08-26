@@ -246,6 +246,13 @@ impl ValidatorNode for SimpleClient {
             .await
     }
 
+    async fn blob_last_used_by_certificate(
+        &self,
+        _blob_id: BlobId,
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        unimplemented!()
+    }
+
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         self.query(RpcMessage::MissingBlobIds(blob_ids)).await
     }
