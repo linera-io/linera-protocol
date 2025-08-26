@@ -9,7 +9,7 @@
 pub mod committee;
 pub mod evm;
 mod execution;
-mod execution_state_actor;
+pub mod execution_state_actor;
 #[cfg(with_graphql)]
 mod graphql;
 mod policy;
@@ -55,7 +55,6 @@ use thiserror::Error;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
-use crate::runtime::ContractSyncRuntime;
 #[cfg(with_testing)]
 use crate::test_utils::dummy_chain_description;
 #[cfg(all(with_testing, with_wasm_runtime))]
@@ -68,7 +67,7 @@ pub use crate::wasm::{
 pub use crate::{
     committee::Committee,
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
-    execution_state_actor::ExecutionRequest,
+    execution_state_actor::{ExecutionRequest, ExecutionStateActor},
     policy::ResourceControlPolicy,
     resources::{BalanceHolder, ResourceController, ResourceTracker},
     runtime::{

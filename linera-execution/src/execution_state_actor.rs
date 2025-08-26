@@ -3,6 +3,8 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
@@ -21,11 +23,14 @@ use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
 
 use crate::{
+    execution::UserAction,
+    runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
     util::RespondExt,
-    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
-    ExecutionStateView, ModuleId, ResourceController, TransactionTracker, UserContractCode,
-    UserServiceCode,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, MessageKind, ModuleId,
+    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, ResourceController,
+    SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
 };
 
 /// Actor for handling requests to the execution state.
@@ -71,7 +76,7 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     /// Creates a new execution state actor.
-    pub(crate) fn new(
+    pub fn new(
         state: &'a mut ExecutionStateView<C>,
         txn_tracker: &'a mut TransactionTracker,
         resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
@@ -672,6 +677,240 @@ where
             }
         }
 
+        Ok(())
+    }
+
+    /// Calls `process_streams` for all applications that are subscribed to streams with new
+    /// events or that have new subscriptions.
+    async fn process_subscriptions(
+        &mut self,
+        context: ProcessStreamsContext,
+    ) -> Result<(), ExecutionError> {
+        // Keep track of which streams we have already processed. This is to guard against
+        // applications unsubscribing and subscribing in the process_streams call itself.
+        let mut processed = BTreeSet::new();
+        loop {
+            let to_process = self
+                .txn_tracker
+                .take_streams_to_process()
+                .into_iter()
+                .filter_map(|(app_id, updates)| {
+                    let updates = updates
+                        .into_iter()
+                        .filter_map(|update| {
+                            if !processed.insert((
+                                app_id,
+                                update.chain_id,
+                                update.stream_id.clone(),
+                            )) {
+                                return None;
+                            }
+                            Some(update)
+                        })
+                        .collect::<Vec<_>>();
+                    if updates.is_empty() {
+                        return None;
+                    }
+                    Some((app_id, updates))
+                })
+                .collect::<BTreeMap<_, _>>();
+            if to_process.is_empty() {
+                return Ok(());
+            }
+            for (app_id, updates) in to_process {
+                self.run_user_action(
+                    app_id,
+                    UserAction::ProcessStreams(context, updates),
+                    None,
+                    None,
+                )
+                .await?;
+            }
+        }
+    }
+
+    pub(crate) async fn run_user_action(
+        &mut self,
+        application_id: ApplicationId,
+        action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
+    ) -> Result<(), ExecutionError> {
+        let ExecutionRuntimeConfig {} = self.state.context().extra().execution_runtime_config();
+        self.run_user_action_with_runtime(application_id, action, refund_grant_to, grant)
+            .await
+    }
+
+    async fn run_user_action_with_runtime(
+        &mut self,
+        application_id: ApplicationId,
+        action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
+    ) -> Result<(), ExecutionError> {
+        let chain_id = self.state.context().extra().chain_id();
+        let mut cloned_grant = grant.as_ref().map(|x| **x);
+        let initial_balance = self
+            .resource_controller
+            .with_state_and_grant(&mut self.state.system, cloned_grant.as_mut())
+            .await?
+            .balance()?;
+        let controller = ResourceController::new(
+            self.resource_controller.policy().clone(),
+            self.resource_controller.tracker,
+            initial_balance,
+        );
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+
+        let (code, description) = self.load_contract(application_id).await?;
+
+        let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
+            let runtime = ContractSyncRuntime::new(
+                execution_state_sender,
+                chain_id,
+                refund_grant_to,
+                controller,
+                &action,
+            );
+
+            async move {
+                let code = codes.next().await.expect("we send this immediately below");
+                runtime.preload_contract(application_id, code, description)?;
+                runtime.run_action(application_id, chain_id, action)
+            }
+        })
+        .await;
+
+        contract_runtime_task.send(code)?;
+
+        while let Some(request) = execution_state_receiver.next().await {
+            self.handle_request(request).await?;
+        }
+
+        let (result, controller) = contract_runtime_task.join().await?;
+
+        self.txn_tracker.add_operation_result(result);
+
+        self.resource_controller
+            .with_state_and_grant(&mut self.state.system, grant)
+            .await?
+            .merge_balance(initial_balance, controller.balance()?)?;
+        self.resource_controller.tracker = controller.tracker;
+
+        Ok(())
+    }
+
+    pub async fn execute_operation(
+        &mut self,
+        context: OperationContext,
+        operation: Operation,
+    ) -> Result<(), ExecutionError> {
+        assert_eq!(context.chain_id, self.state.context().extra().chain_id());
+        match operation {
+            Operation::System(op) => {
+                let new_application = self
+                    .state
+                    .system
+                    .execute_operation(context, *op, self.txn_tracker, self.resource_controller)
+                    .await?;
+                if let Some((application_id, argument)) = new_application {
+                    let user_action = UserAction::Instantiate(context, argument);
+                    self.run_user_action(
+                        application_id,
+                        user_action,
+                        context.refund_grant_to(),
+                        None,
+                    )
+                    .await?;
+                }
+            }
+            Operation::User {
+                application_id,
+                bytes,
+            } => {
+                self.run_user_action(
+                    application_id,
+                    UserAction::Operation(context, bytes),
+                    context.refund_grant_to(),
+                    None,
+                )
+                .await?;
+            }
+        }
+        self.process_subscriptions(context.into()).await?;
+        Ok(())
+    }
+
+    pub async fn execute_message(
+        &mut self,
+        context: MessageContext,
+        message: Message,
+        grant: Option<&mut Amount>,
+    ) -> Result<(), ExecutionError> {
+        assert_eq!(context.chain_id, self.state.context().extra().chain_id());
+        match message {
+            Message::System(message) => {
+                let outcome = self.state.system.execute_message(context, message).await?;
+                self.txn_tracker.add_outgoing_messages(outcome);
+            }
+            Message::User {
+                application_id,
+                bytes,
+            } => {
+                self.run_user_action(
+                    application_id,
+                    UserAction::Message(context, bytes),
+                    context.refund_grant_to,
+                    grant,
+                )
+                .await?;
+            }
+        }
+        self.process_subscriptions(context.into()).await?;
+        Ok(())
+    }
+
+    pub async fn bounce_message(
+        &mut self,
+        context: MessageContext,
+        grant: Amount,
+        message: Message,
+    ) -> Result<(), ExecutionError> {
+        assert_eq!(context.chain_id, self.state.context().extra().chain_id());
+        self.txn_tracker.add_outgoing_message(OutgoingMessage {
+            destination: context.origin,
+            authenticated_signer: context.authenticated_signer,
+            refund_grant_to: context.refund_grant_to.filter(|_| !grant.is_zero()),
+            grant,
+            kind: MessageKind::Bouncing,
+            message,
+        });
+        Ok(())
+    }
+
+    pub async fn send_refund(
+        &mut self,
+        context: MessageContext,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        assert_eq!(context.chain_id, self.state.context().extra().chain_id());
+        if amount.is_zero() {
+            return Ok(());
+        }
+        let Some(account) = context.refund_grant_to else {
+            return Err(ExecutionError::InternalError(
+                "Messages with grants should have a non-empty `refund_grant_to`",
+            ));
+        };
+        let message = SystemMessage::Credit {
+            amount,
+            source: context.authenticated_signer.unwrap_or(AccountOwner::CHAIN),
+            target: account.owner,
+        };
+        self.txn_tracker.add_outgoing_message(
+            OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
+        );
         Ok(())
     }
 
