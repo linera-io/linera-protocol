@@ -441,6 +441,7 @@ impl Application {
     // TODO(#14) allow passing bytes here rather than just strings
     // TODO(#15) a lot of this logic is shared with `linera_service::node_service`
     pub async fn query(&self, query: &str) -> JsResult<String> {
+        tracing::debug!("querying application: {query}");
         let chain_client = self.client.default_chain_client().await?;
 
         let linera_execution::QueryOutcome {
