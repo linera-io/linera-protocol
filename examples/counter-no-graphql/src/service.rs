@@ -49,8 +49,8 @@ impl Service for CounterService {
 
         match request {
             CounterRequest::Query => *self.state.value.get(),
-            CounterRequest::Increment(value) => {
-                let operation = CounterOperation::Increment(value);
+            CounterRequest::Increment(increment) => {
+                let operation = CounterOperation { increment };
                 self.runtime.schedule_operation(&operation);
                 0
             }

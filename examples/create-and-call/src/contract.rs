@@ -47,16 +47,9 @@ impl Contract for CreateAndCallContract {
     }
 
     async fn execute_operation(&mut self, operation: CreateAndCallOperation) -> u64 {
-        let CreateAndCallOperation::CreateAndCall(
-            contract_bytes,
-            service_bytes,
-            initialization_value,
-            increment_value,
-        ) = operation;
-
         // Step 1: Convert Vec<u8> to Bytecode and publish module with Wasm runtime
-        let contract_bytecode = Bytecode::new(contract_bytes);
-        let service_bytecode = Bytecode::new(service_bytes);
+        let contract_bytecode = Bytecode::new(operation.contract_bytes);
+        let service_bytecode = Bytecode::new(operation.service_bytes);
         let module_id =
             self.runtime
                 .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm);
@@ -67,7 +60,7 @@ impl Contract for CreateAndCallContract {
             .create_application::<CounterNoGraphQlAbi, (), u64>(
                 module_id,
                 &(),
-                &initialization_value,
+                &operation.initial_value,
                 vec![],
             );
         self.state.value.set(Some(application_id));
@@ -79,7 +72,7 @@ impl Contract for CreateAndCallContract {
         assert_eq!(value, 0);
 
         // Step 4: Call the contract with counter increment operation
-        let counter_operation = CounterOperation::Increment(increment_value);
+        let counter_operation = CounterOperation { increment: operation.increment };
         self.runtime
             .call_application(true, application_id, &counter_operation)
     }

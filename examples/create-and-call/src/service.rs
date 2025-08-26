@@ -45,13 +45,13 @@ impl Service for CreateAndCallService {
                 self.runtime
                     .query_application(application_id, &counter_request)
             }
-            CreateAndCallRequest::CreateAndCall(bytecode, calldata, initial_value, increment) => {
-                let operation = CreateAndCallOperation::CreateAndCall(
-                    bytecode,
-                    calldata,
+            CreateAndCallRequest::CreateAndCall(contract_bytes, service_bytes, initial_value, increment) => {
+                let operation = CreateAndCallOperation {
+                    contract_bytes,
+                    service_bytes,
                     initial_value,
                     increment,
-                );
+                };
                 self.runtime.schedule_operation(&operation);
                 0
             }
