@@ -125,6 +125,7 @@ pub async fn handle_net_up_kubernetes(
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
     dual_store: bool,
+    path: &Option<String>,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -155,6 +156,7 @@ pub async fn handle_net_up_kubernetes(
         build_mode,
         policy_config,
         dual_store,
+        path_provider: PathProvider::from_path_option(path)?,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
