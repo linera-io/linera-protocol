@@ -19,17 +19,11 @@ contract ExampleCallWasmCounter {
     }
 
     struct CounterOperation {
-        uint8 choice;
-        // choice=0 corresponds to Increment
         uint64 increment;
     }
 
     function bcs_serialize_CounterOperation(CounterOperation memory input) internal pure returns (bytes memory) {
-        bytes memory result = abi.encodePacked(input.choice);
-        if (input.choice == 0) {
-            return abi.encodePacked(result, bcs_serialize_uint64(input.increment));
-        }
-        return result;
+        return bcs_serialize_uint64(input.increment);
     }
 
     struct CounterRequest {
@@ -129,7 +123,7 @@ contract ExampleCallWasmCounter {
 
     function nest_increment(uint64 input1) external returns (uint64) {
         address precompile = address(0x0b);
-        CounterOperation memory input2 = CounterOperation({choice: 0, increment: input1});
+        CounterOperation memory input2 = CounterOperation({increment: input1});
         bytes memory input3 = bcs_serialize_CounterOperation(input2);
         bytes memory return1 = Linera.try_call_application(universal_address, input3);
         uint64 return2 = bcs_deserialize_uint64(return1);
