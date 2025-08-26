@@ -8,7 +8,7 @@ mod utils;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use syn::{
-    parse_macro_input, Fields, ItemEnum, ItemStruct, Data, DeriveInput,
+    parse_macro_input, Data, DeriveInput, Fields, ItemEnum, ItemStruct,
     __private::{quote::quote, TokenStream2},
 };
 
@@ -163,10 +163,10 @@ fn generate_mutation_root_code_for_struct(input: ItemStruct, crate_root: &str) -
     let crate_root = Ident::new(crate_root, Span::call_site());
     let struct_name = &input.ident;
     let mutation_root_name = concat(struct_name, "MutationRoot");
-    
+
     // Convert struct name to snake_case for the method name
     let method_name = snakify(struct_name);
-    
+
     let method = match input.fields {
         Fields::Named(named) => {
             let mut fields = vec![];

@@ -72,7 +72,9 @@ impl Contract for CreateAndCallContract {
         assert_eq!(value, 0);
 
         // Step 4: Call the contract with counter increment operation
-        let counter_operation = CounterOperation { increment: operation.increment };
+        let counter_operation = CounterOperation {
+            increment: operation.increment,
+        };
         self.runtime
             .call_application(true, application_id, &counter_operation)
     }

@@ -45,7 +45,12 @@ impl Service for CreateAndCallService {
                 self.runtime
                     .query_application(application_id, &counter_request)
             }
-            CreateAndCallRequest::CreateAndCall(contract_bytes, service_bytes, initial_value, increment) => {
+            CreateAndCallRequest::CreateAndCall(
+                contract_bytes,
+                service_bytes,
+                initial_value,
+                increment,
+            ) => {
                 let operation = CreateAndCallOperation {
                     contract_bytes,
                     service_bytes,
