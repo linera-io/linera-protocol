@@ -1,6 +1,24 @@
 services:
+  web:
+    image: caddy:2.10.2-alpine
+    container_name: web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - EMAIL=${ACME_EMAIL:-admin@example.com}
+    depends_on:
+      - proxy
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
   scylla:
-    image: scylladb/scylla:6.1.3
+    image: scylladb/scylla:6.2.1
     container_name: scylla
     volumes:
       - linera-scylla-data:/var/lib/scylla
@@ -79,3 +97,7 @@ volumes:
   linera-scylla-data:
     driver: local
   grafana-storage:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
