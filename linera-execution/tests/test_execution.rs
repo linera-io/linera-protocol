@@ -1237,8 +1237,8 @@ async fn test_open_chain() -> anyhow::Result<()> {
     let new_blob = &txn_outcome.blobs[0];
     assert_eq!(new_blob.id().hash, child_id.0);
     assert_eq!(new_blob.id().blob_type, BlobType::ChainDescription);
-    let created_description: ChainDescription = bcs::from_bytes(&new_blob.clone().into_bytes())
-        .expect("should deserialize a chain description");
+    let created_description: ChainDescription =
+        bcs::from_bytes(new_blob.bytes()).expect("should deserialize a chain description");
     assert_eq!(created_description.config().balance, Amount::ONE);
     assert_eq!(created_description.config().ownership, child_ownership);
 

@@ -15,6 +15,7 @@ use std::{
     ops::{Bound, RangeBounds},
     path::Path,
     str::FromStr,
+    sync::Arc,
 };
 
 use alloy_primitives::U256;
@@ -1246,22 +1247,28 @@ impl CompressedBytecode {
 
 impl BcsHashable<'_> for BlobContent {}
 
+use serde_with::*;
+
 /// A blob of binary data.
+#[serde_as]
 #[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobContent {
     /// The type of data represented by the bytes.
     blob_type: BlobType,
     /// The binary data.
-    #[serde(with = "serde_bytes")]
     #[debug(skip)]
-    bytes: Box<[u8]>,
+    #[serde_as(as = "Arc<Bytes>")]
+    bytes: Arc<Box<[u8]>>,
 }
 
 impl BlobContent {
     /// Creates a new [`BlobContent`] from the provided bytes and [`BlobId`].
     pub fn new(blob_type: BlobType, bytes: impl Into<Box<[u8]>>) -> Self {
         let bytes = bytes.into();
-        BlobContent { blob_type, bytes }
+        BlobContent {
+            blob_type,
+            bytes: Arc::new(bytes),
+        }
     }
 
     /// Creates a new data [`BlobContent`] from the provided bytes.
@@ -1313,9 +1320,10 @@ impl BlobContent {
         &self.bytes
     }
 
-    /// Gets the inner blob's bytes, consuming the blob.
-    pub fn into_bytes(self) -> Box<[u8]> {
-        self.bytes
+    /// Convert a BlobContent into `Vec<u8>` without cloning if possible.
+    pub fn into_vec_or_clone(self) -> Vec<u8> {
+        let bytes = Arc::unwrap_or_clone(self.bytes);
+        bytes.into_vec()
     }
 
     /// Returns the type of data represented by this blob's bytes.
@@ -1363,11 +1371,12 @@ impl Blob {
 
     /// Creates a blob without checking that the hash actually matches the content.
     pub fn new_with_id_unchecked(blob_id: BlobId, bytes: impl Into<Box<[u8]>>) -> Self {
+        let bytes = bytes.into();
         Blob {
             hash: blob_id.hash,
             content: BlobContent {
                 blob_type: blob_id.blob_type,
-                bytes: bytes.into(),
+                bytes: Arc::new(bytes),
             },
         }
     }
@@ -1430,11 +1439,6 @@ impl Blob {
     /// Gets a reference to the inner blob's bytes.
     pub fn bytes(&self) -> &[u8] {
         self.content.bytes()
-    }
-
-    /// Gets the inner blob's bytes.
-    pub fn into_bytes(self) -> Box<[u8]> {
-        self.content.into_bytes()
     }
 
     /// Loads data blob from a file.
@@ -1590,7 +1594,8 @@ mod metrics {
 mod tests {
     use std::str::FromStr;
 
-    use super::Amount;
+    use super::{Amount, BlobContent};
+    use crate::identifiers::BlobType;
 
     #[test]
     fn display_amount() {
@@ -1616,5 +1621,36 @@ mod tests {
             "~+12.34~~",
             format!("{:~^+9.1}", Amount::from_str("12.34").unwrap())
         );
+    }
+
+    #[test]
+    fn blob_content_serialization_deserialization() {
+        let test_data = b"Hello, world!".as_slice();
+        let original_blob = BlobContent::new(BlobType::Data, test_data);
+
+        let serialized = bcs::to_bytes(&original_blob).expect("Failed to serialize BlobContent");
+        let deserialized: BlobContent =
+            bcs::from_bytes(&serialized).expect("Failed to deserialize BlobContent");
+        assert_eq!(original_blob, deserialized);
+
+        let serialized =
+            serde_json::to_vec(&original_blob).expect("Failed to serialize BlobContent");
+        let deserialized: BlobContent =
+            serde_json::from_slice(&serialized).expect("Failed to deserialize BlobContent");
+        assert_eq!(original_blob, deserialized);
+    }
+
+    #[test]
+    fn blob_content_hash_consistency() {
+        let test_data = b"Hello, world!";
+        let blob1 = BlobContent::new(BlobType::Data, test_data.as_slice());
+        let blob2 = BlobContent::new(BlobType::Data, Vec::from(test_data.as_slice()));
+
+        // Both should have same hash since they contain the same data
+        let hash1 = crate::crypto::CryptoHash::new(&blob1);
+        let hash2 = crate::crypto::CryptoHash::new(&blob2);
+
+        assert_eq!(hash1, hash2, "Hashes should be equal for same content");
+        assert_eq!(blob1.bytes(), blob2.bytes(), "Byte content should be equal");
     }
 }
