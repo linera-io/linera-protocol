@@ -1613,9 +1613,10 @@ mod metrics {
 mod tests {
     use std::str::FromStr;
 
+    use alloy_primitives::U256;
+
     use super::{Amount, BlobContent};
     use crate::identifiers::BlobType;
-    use alloy_primitives::U256;
 
     #[test]
     fn display_amount() {
