@@ -377,10 +377,10 @@ impl<Env: Environment> Client<Env> {
 
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 future::try_join_all(blob_ids.iter().map(|blob_id| async move {
-                    let blob_certificate =
+                    let (certificate, blob) =
                         remote_node.download_certificate_for_blob(*blob_id).await?;
                     self.receive_sender_certificate(
-                        blob_certificate,
+                        certificate,
                         ReceiveCertificateMode::NeedsCheck,
                         None,
                     )
@@ -1112,7 +1112,8 @@ impl<Env: Environment> Client<Env> {
                 .zip(0..)
                 .map(|(remote_node, i)| async move {
                     linera_base::time::timer::sleep(timeout * i * i).await;
-                    let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
+                    let (certificate, blob) =
+                        remote_node.download_certificate_for_blob(blob_id).await?;
                     // This will download all ancestors of the certificate and process all of them locally.
                     self.receive_sender_certificate(
                         certificate,
@@ -1154,8 +1155,8 @@ impl<Env: Environment> Client<Env> {
             let mut certificate_stream = validators
                 .iter()
                 .map(|remote_node| async move {
-                    let cert = remote_node.download_certificate_for_blob(blob_id).await?;
-                    Ok::<_, NodeError>((remote_node.clone(), cert))
+                    let (cert, blob) = remote_node.download_certificate_for_blob(blob_id).await?;
+                    Ok::<_, NodeError>((remote_node.clone(), cert, blob))
                 })
                 .collect::<FuturesUnordered<_>>();
             loop {
@@ -1163,7 +1164,7 @@ impl<Env: Environment> Client<Env> {
                     missing_blobs.push(blob_id);
                     break;
                 };
-                if let Ok((remote_node, cert)) = result {
+                if let Ok((remote_node, cert, blob)) = result {
                     if self
                         .receive_sender_certificate(
                             cert,

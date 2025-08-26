@@ -363,7 +363,7 @@ impl ValidatorNode for DummyValidator {
     async fn blob_last_used_by_certificate(
         &self,
         _request: Request<linera_rpc::grpc::api::BlobId>,
-    ) -> Result<Response<linera_rpc::grpc::api::Certificate>, Status> {
+    ) -> Result<Response<linera_rpc::grpc::api::CertificateWithBlob>, Status> {
         unimplemented!()
     }
 

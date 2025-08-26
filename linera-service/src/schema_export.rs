@@ -146,7 +146,7 @@ impl ValidatorNode for DummyValidatorNode {
     async fn blob_last_used_by_certificate(
         &self,
         _blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+    ) -> Result<(ConfirmedBlockCertificate, BlobContent), NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 

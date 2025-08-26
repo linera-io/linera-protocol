@@ -478,8 +478,11 @@ impl ValidatorNode for GrpcClient {
     async fn blob_last_used_by_certificate(
         &self,
         blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        Ok(client_delegate!(self, blob_last_used_by_certificate, blob_id)?.try_into()?)
+    ) -> Result<(ConfirmedBlockCertificate, BlobContent), NodeError> {
+        let response = client_delegate!(self, blob_last_used_by_certificate, blob_id)?;
+        let certificate = response.certificate.unwrap().try_into()?;
+        let blob = response.blob.unwrap().try_into()?;
+        Ok((certificate, blob))
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]

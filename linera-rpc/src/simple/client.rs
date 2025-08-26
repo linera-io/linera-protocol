@@ -249,7 +249,7 @@ impl ValidatorNode for SimpleClient {
     async fn blob_last_used_by_certificate(
         &self,
         _blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+    ) -> Result<(ConfirmedBlockCertificate, BlobContent), NodeError> {
         unimplemented!()
     }
 

@@ -259,7 +259,7 @@ where
     async fn blob_last_used_by_certificate(
         &self,
         blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+    ) -> Result<(ConfirmedBlockCertificate, BlobContent), NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_blob_last_used_by_certificate(blob_id, sender)
         })
@@ -690,11 +690,12 @@ where
     async fn do_blob_last_used_by_certificate(
         self,
         blob_id: BlobId,
-        sender: oneshot::Sender<Result<ConfirmedBlockCertificate, NodeError>>,
-    ) -> Result<(), Result<ConfirmedBlockCertificate, NodeError>> {
+        sender: oneshot::Sender<Result<(ConfirmedBlockCertificate, BlobContent), NodeError>>,
+    ) -> Result<(), Result<(ConfirmedBlockCertificate, BlobContent), NodeError>> {
         let cert_hash = self.blob_last_used_by(blob_id).await.unwrap();
-        let cert = self.download_certificate(cert_hash).await;
-        sender.send(cert)
+        let cert = self.download_certificate(cert_hash).await.unwrap();
+        let blob = self.download_blob(blob_id).await.unwrap();
+        sender.send(Ok((cert, blob)))
     }
 
     async fn do_missing_blob_ids(

@@ -159,7 +159,7 @@ pub trait ValidatorNode {
     async fn blob_last_used_by_certificate(
         &self,
         blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError>;
+    ) -> Result<(ConfirmedBlockCertificate, BlobContent), NodeError>;
 
     /// Returns the missing `Blob`s by their IDs.
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;

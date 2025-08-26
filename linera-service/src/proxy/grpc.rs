@@ -32,10 +32,10 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
-            CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
-            LiteCertificate, NetworkDescription, Notification, PendingBlobRequest,
-            PendingBlobResult, SubscriptionRequest, VersionInfo,
+            BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificateWithBlob,
+            CertificatesBatchRequest, CertificatesBatchResponse, ChainInfoResult, CryptoHash,
+            HandlePendingBlobRequest, LiteCertificate, NetworkDescription, Notification,
+            PendingBlobRequest, PendingBlobResult, SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -699,10 +699,23 @@ where
     async fn blob_last_used_by_certificate(
         &self,
         request: Request<BlobId>,
-    ) -> Result<Response<Certificate>, Status> {
-        let cert_hash = self.blob_last_used_by(request).await?;
-        let request = Request::new(cert_hash.into_inner());
-        self.download_certificate(request).await
+    ) -> Result<Response<CertificateWithBlob>, Status> {
+        let blob_id = request.into_inner();
+        let cert_hash = self
+            .blob_last_used_by(Request::new(blob_id.clone()))
+            .await?;
+        let certificate = self
+            .download_certificate(Request::new(cert_hash.into_inner()))
+            .await?
+            .into_inner();
+        let blob = self
+            .download_blob(Request::new(blob_id))
+            .await?
+            .into_inner();
+        Ok(Response::new(CertificateWithBlob {
+            certificate: Some(certificate),
+            blob: Some(blob),
+        }))
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]

@@ -279,7 +279,7 @@ impl ValidatorNode for Client {
     async fn blob_last_used_by_certificate(
         &self,
         blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+    ) -> Result<(ConfirmedBlockCertificate, BlobContent), NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.blob_last_used_by_certificate(blob_id).await?,
 

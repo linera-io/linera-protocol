@@ -93,11 +93,16 @@ service ValidatorNode {
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
   // Returns the certificate that last used the blob.
-  rpc BlobLastUsedByCertificate(BlobId) returns (Certificate);
+  rpc BlobLastUsedByCertificate(BlobId) returns (CertificateWithBlob);
 
 
   // Return the `BlobId`s that are not contained as `Blob`.
   rpc MissingBlobIds(BlobIds) returns (BlobIds);
+}
+
+message CertificateWithBlob {
+  Certificate certificate = 1;
+  BlobContent blob = 2;
 }
 
 // A request for downloading certificates by block heights.
