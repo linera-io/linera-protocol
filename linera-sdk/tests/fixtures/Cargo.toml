@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["contract-call", "create-and-call", "publish-read-data-blob"]
+members = ["contract-call", "create-and-call", "publish-read-data-blob", "track-instantiation"]
 
 [workspace.dependencies]
 linera-sdk = { path = "../../../linera-sdk" }
@@ -11,6 +11,7 @@ contract-call = { path = "./create-and-call" }
 counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
 create-and-call = { path = "./create-and-call" }
 publish-read-data-blob = { path = "./publish-read-data-blob" }
+track-instantiation = { path = "./track-instantiation" }
 
 [profile.release]
 debug = true
