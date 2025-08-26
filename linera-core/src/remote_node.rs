@@ -10,7 +10,7 @@ use custom_debug_derive::Debug;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Blob, BlobContent, BlockHeight},
+    data_types::{Blob, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId},
 };
