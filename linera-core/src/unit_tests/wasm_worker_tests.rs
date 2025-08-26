@@ -238,6 +238,7 @@ where
     let run_certificate = env.execute_proposal(run_block.clone(), vec![]).await?;
 
     assert!(run_certificate.value().matches_proposed_block(&run_block));
+    let result = counter::CounterOperation::Increment { value: 5 };
     assert_outcome_matches!(
         run_certificate.block(),
         &[vec![]],
@@ -246,7 +247,7 @@ where
         &[vec![]],
         &[vec![]],
         &[vec![]],
-        &[OperationResult(bcs::to_bytes(&15u64)?)],
+        &[OperationResult(bcs::to_bytes(&result)?)],
     );
 
     let info = env
