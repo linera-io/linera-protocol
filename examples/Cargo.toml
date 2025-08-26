@@ -18,7 +18,6 @@ members = [
     "non-fungible",
     "rfq",
     "social",
-    "track-instantiation",
 ]
 
 [workspace.dependencies]
