@@ -277,6 +277,9 @@ where
     pub previous_event_blocks: MapView<C, StreamId, BlockHeight>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
+    /// The indices of latest events emitted per stream (could be ahead of the last
+    /// executed block in sparse chains).
+    pub last_events: MapView<C, StreamId, u32>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
@@ -913,6 +916,7 @@ where
         let hash = block.inner().hash();
         let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
+        self.process_emitted_events(block).await?;
         let recipients = self.process_outgoing_messages(block).await?;
 
         for recipient in recipients {
@@ -937,16 +941,20 @@ where
     }
 
     /// Adds a block to `preprocessed_blocks`, and updates the outboxes where possible.
-    pub async fn preprocess_block(&mut self, block: &ConfirmedBlock) -> Result<(), ChainError> {
+    pub async fn preprocess_block(
+        &mut self,
+        block: &ConfirmedBlock,
+    ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
         let height = block.header.height;
         if height < self.tip_state.get().next_block_height {
-            return Ok(());
+            return Ok(BTreeSet::new());
         }
         self.process_outgoing_messages(block).await?;
+        let updated_streams = self.process_emitted_events(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
-        Ok(())
+        Ok(updated_streams)
     }
 
     /// Returns whether this is a child chain.
@@ -1132,6 +1140,34 @@ where
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
         Ok(targets)
+    }
+
+    async fn process_emitted_events(
+        &mut self,
+        block: &Block,
+    ) -> Result<BTreeSet<StreamId>, ChainError> {
+        let mut emitted_streams: BTreeMap<StreamId, BTreeSet<u32>> = BTreeMap::new();
+        for event in block.body.events.iter().flatten() {
+            emitted_streams
+                .entry(event.stream_id.clone())
+                .or_default()
+                .insert(event.index);
+        }
+
+        let mut updated_streams = BTreeSet::new();
+        for (stream_id, indices) in emitted_streams {
+            let mut current_max_index = self.last_events.get(&stream_id).await?;
+            for index in indices {
+                if index.checked_sub(1) == current_max_index {
+                    updated_streams.insert(stream_id.clone());
+                    current_max_index = Some(index);
+                }
+            }
+            if let Some(max_index) = current_max_index {
+                self.last_events.insert(&stream_id, max_index)?;
+            }
+        }
+        Ok(updated_streams)
     }
 }
 

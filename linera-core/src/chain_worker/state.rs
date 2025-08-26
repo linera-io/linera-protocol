@@ -718,11 +718,21 @@ where
         // If this block is higher than the next expected block in this chain, we're going
         // to have a gap: do not execute this block, only update the outboxes and return.
         if tip.next_block_height < height {
-            // Update the outboxes.
-            self.chain.preprocess_block(certificate.value()).await?;
+            // Update the outboxes and event streams.
+            let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
             self.save().await?;
-            let actions = self.create_network_actions().await?;
+            let mut actions = self.create_network_actions().await?;
+            if !updated_event_streams.is_empty() {
+                actions.notifications.push(Notification {
+                    chain_id,
+                    reason: Reason::NewEvents {
+                        height,
+                        hash: certificate.hash(),
+                        event_streams: updated_event_streams,
+                    },
+                });
+            }
             trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;

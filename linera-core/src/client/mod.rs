@@ -67,7 +67,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, error, info, instrument, warn, Instrument as _};
+use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
@@ -1851,14 +1851,19 @@ impl<Env: Environment> ChainClient<Env> {
                 let client = self.client.clone();
                 async move {
                     let chain = client.local_node.chain_state_view(chain_id).await?;
-                    if let Some(next_index) = chain
-                        .execution_state
-                        .stream_event_counts
+                    if let Some(highest_available_index) = chain
+                        .last_events
                         .get(&stream_id)
                         .await?
-                        .filter(|next_index| *next_index > subscriptions.next_index)
+                        .filter(|highest_index| *highest_index >= subscriptions.next_index)
                     {
-                        Ok(Some((chain_id, stream_id, next_index)))
+                        Ok(Some((
+                            chain_id,
+                            stream_id,
+                            // This is supposed to be the next expected index, so we need to add 1
+                            // to the available index.
+                            highest_available_index.saturating_add(1),
+                        )))
                     } else {
                         Ok::<_, ChainClientError>(None)
                     }
@@ -3702,8 +3707,19 @@ impl<Env: Environment> ChainClient<Env> {
                         {
                             error!("NewBlock: Fail to synchronize new block after notification");
                         }
+                        trace!(
+                            chain_id = %self.chain_id,
+                            %height,
+                            "NewBlock: processed notification",
+                        );
                     }
-                    ListeningMode::EventsOnly(_) => {}
+                    ListeningMode::EventsOnly(_) => {
+                        debug!(
+                            chain_id = %self.chain_id,
+                            %height,
+                            "NewBlock: ignoring notification due to listening in EventsOnly mode"
+                        );
+                    }
                 }
             }
             Reason::NewEvents {
@@ -3711,6 +3727,17 @@ impl<Env: Environment> ChainClient<Env> {
                 hash,
                 event_streams,
             } => {
+                if self
+                    .local_next_block_height(notification.chain_id, &mut local_node)
+                    .await?
+                    > height
+                {
+                    debug!(
+                        chain_id = %self.chain_id,
+                        "Accepting redundant notification for new block"
+                    );
+                    return Ok(());
+                }
                 let should_process = match listening_mode {
                     ListeningMode::FullChain => true,
                     ListeningMode::EventsOnly(relevant_events) => {
@@ -3719,12 +3746,17 @@ impl<Env: Environment> ChainClient<Env> {
                 };
                 if !should_process {
                     debug!(
-                        chain_id=%notification.chain_id,
+                        chain_id = %self.chain_id,
                         %height,
                         "NewEvents: got a notification, but no relevant event streams in it"
                     );
                     return Ok(());
                 }
+                trace!(
+                    chain_id = %self.chain_id,
+                    %height,
+                    "NewEvents: processing notification"
+                );
                 let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
                 // download_certificates ensure that we will get exactly one
                 // certificate in the result

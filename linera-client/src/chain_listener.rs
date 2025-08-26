@@ -215,7 +215,7 @@ impl<C: ClientContext> ChainListener<C> {
                 .synchronize_from_validators()
                 .await?;
             // TODO: do we want to only listen to events on the admin chain?
-            BTreeSet::from_iter(
+            BTreeMap::from_iter(
                 guard
                     .wallet()
                     .chain_ids()
@@ -244,12 +244,28 @@ impl<C: ClientContext> ChainListener<C> {
     /// Processes a notification, updating local chains and validators as needed.
     async fn process_notification(&mut self, notification: Notification) -> Result<(), Error> {
         Self::sleep(self.config.delay_before_ms).await;
+        let Some(listening_mode) = self
+            .listening
+            .get(&notification.chain_id)
+            .map(|listening_client| &listening_client.listening_mode)
+        else {
+            warn!(
+                ?notification,
+                "ChainListener::process_notification: got a notification without listening to the chain"
+            );
+            return Ok(());
+        };
+
         match &notification.reason {
             Reason::NewIncomingBundle { .. } => {
                 self.maybe_process_inbox(notification.chain_id).await?;
             }
             Reason::NewRound { .. } => self.update_validators(&notification).await?,
             Reason::NewBlock { hash, .. } => {
+                if matches!(listening_mode, ListeningMode::EventsOnly(_)) {
+                    debug!("ChainListener::process_notification: ignoring notification due to listening mode");
+                    return Ok(());
+                }
                 self.update_wallet(notification.chain_id).await?;
                 self.add_new_chains(*hash).await?;
                 let publishers = self
@@ -261,7 +277,21 @@ impl<C: ClientContext> ChainListener<C> {
                 }
                 self.process_new_events(notification.chain_id).await?;
             }
-            Reason::NewEvents { .. } => {
+            Reason::NewEvents { event_streams, .. } => {
+                let should_process = match listening_mode {
+                    ListeningMode::FullChain => true,
+                    ListeningMode::EventsOnly(relevant_events) => {
+                        relevant_events.intersection(event_streams).count() != 0
+                    }
+                };
+                if !should_process {
+                    debug!(
+                        ?notification,
+                        ?listening_mode,
+                        "ChainListener::process_notification: ignoring notification due to no relevant events",
+                    );
+                    return Ok(());
+                }
                 self.process_new_events(notification.chain_id).await?;
             }
         }
