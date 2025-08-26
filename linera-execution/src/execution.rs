@@ -242,7 +242,7 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
 
-        let mut actor = ExecutionStateActor::new(self, txn_tracker);
+        let mut actor = ExecutionStateActor::new(self, txn_tracker, resource_controller);
         let (code, description) = actor.load_contract(application_id).await?;
 
         let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
@@ -265,7 +265,7 @@ where
         contract_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            actor.handle_request(request, resource_controller).await?;
+            actor.handle_request(request).await?;
         }
 
         let (result, controller) = contract_runtime_task.join().await?;
@@ -454,7 +454,8 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let mut txn_tracker = TransactionTracker::default();
-        let mut actor = ExecutionStateActor::new(self, &mut txn_tracker);
+        let mut resource_controller = ResourceController::default();
+        let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
         let (code, description) = actor.load_service(application_id).await?;
 
         let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
@@ -471,9 +472,7 @@ where
         service_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            actor
-                .handle_request(request, &mut ResourceController::default())
-                .await?;
+            actor.handle_request(request).await?;
         }
 
         service_runtime_task.join().await
@@ -502,13 +501,14 @@ where
             .expect("Service runtime thread should only stop when `request_sender` is dropped");
 
         let mut txn_tracker = TransactionTracker::default();
-        let mut actor = ExecutionStateActor::new(self, &mut txn_tracker);
+        let mut resource_controller = ResourceController::default();
+        let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
 
         loop {
             futures::select! {
                 maybe_request = incoming_execution_requests.next() => {
                     if let Some(request) = maybe_request {
-                        actor.handle_request(request, &mut ResourceController::default()).await?;
+                        actor.handle_request(request).await?;
                     }
                 }
                 outcome = &mut outcome_receiver => {

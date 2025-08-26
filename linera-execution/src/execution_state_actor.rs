@@ -30,10 +30,9 @@ use crate::{
 
 /// Actor for handling requests to the execution state.
 pub struct ExecutionStateActor<'a, C> {
-    /// The execution state view being operated on.
     state: &'a mut ExecutionStateView<C>,
-    /// The transaction tracker.
     txn_tracker: &'a mut TransactionTracker,
+    resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
 }
 
 #[cfg(with_metrics)]
@@ -75,8 +74,13 @@ where
     pub(crate) fn new(
         state: &'a mut ExecutionStateView<C>,
         txn_tracker: &'a mut TransactionTracker,
+        resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
     ) -> Self {
-        Self { state, txn_tracker }
+        Self {
+            state,
+            txn_tracker,
+            resource_controller,
+        }
     }
 
     pub(crate) async fn load_contract(
@@ -133,7 +137,6 @@ where
     pub(crate) async fn handle_request(
         &mut self,
         request: ExecutionRequest,
-        resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
@@ -446,7 +449,7 @@ where
                 } else {
                     let content = self.state.system.read_blob_content(blob_id).await?;
                     if blob_id.blob_type == BlobType::Data {
-                        resource_controller
+                        self.resource_controller
                             .with_state(&mut self.state.system)
                             .await?
                             .track_blob_read(content.bytes().len() as u64)?;
@@ -469,7 +472,7 @@ where
                 self.state.system.assert_blob_exists(blob_id).await?;
                 // Treating this as reading a size-0 blob for fee purposes.
                 if blob_id.blob_type == BlobType::Data {
-                    resource_controller
+                    self.resource_controller
                         .with_state(&mut self.state.system)
                         .await?
                         .track_blob_read(0)?;
