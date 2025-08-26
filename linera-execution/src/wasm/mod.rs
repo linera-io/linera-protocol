@@ -346,28 +346,14 @@ pub mod test {
     #[cfg(with_fs)]
     use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
 
-    fn build_applications() -> Result<(), std::io::Error> {
-        tracing::info!("Building example applications with cargo");
+    fn build_applications_in_directory(dir: &str) -> Result<(), std::io::Error> {
         let output = std::process::Command::new("cargo")
-            .current_dir("../examples")
+            .current_dir(dir)
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .output()?;
         if !output.status.success() {
             panic!(
-                "Failed to build example applications.\n\n\
-                stdout:\n-------\n{}\n\n\
-                stderr:\n-------\n{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
-            );
-        }
-        let output = std::process::Command::new("cargo")
-            .current_dir("../linera-sdk-tests")
-            .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
-            .output()?;
-        if !output.status.success() {
-            panic!(
-                "Failed to build linera-sdk-tests applications.\n\n\
+                "Failed to build applications in directory {dir}.\n\n\
                 stdout:\n-------\n{}\n\n\
                 stderr:\n-------\n{}",
                 String::from_utf8_lossy(&output.stdout),
@@ -377,22 +363,27 @@ pub mod test {
         Ok(())
     }
 
+    fn build_applications() -> Result<(), std::io::Error> {
+        for dir in ["../examples", "../linera-sdk/tests/fixtures"] {
+            build_applications_in_directory(dir)?;
+        }
+        Ok(())
+    }
+
     pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
         use std::path::Path;
         let name = name.replace('-', "_");
         static INSTANCE: LazyLock<()> = LazyLock::new(|| build_applications().unwrap());
         LazyLock::force(&INSTANCE);
-        if Path::new("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm").exists() {
-            Ok((
-                format!("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
-                format!("../examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
-            ))
-        } else {
-            Ok((
-                format!("../linera-sdk-tests/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
-                format!("../linera-sdk-tests/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
-            ))
+        for dir in ["../examples", "../linera-sdk/tests/fixtures"] {
+            let prefix = format!("{dir}/target/wasm32-unknown-unknown/release");
+            let file_contract = format!("{prefix}/{name}_contract.wasm");
+            let file_service = format!("{prefix}/{name}_service.wasm");
+            if Path::new(&file_contract).exists() && Path::new(&file_service).exists() {
+                return Ok((file_contract, file_service));
+            }
         }
+        Err(std::io::Error::last_os_error())
     }
 
     #[cfg(with_fs)]
