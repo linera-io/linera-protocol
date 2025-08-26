@@ -83,6 +83,8 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     pub changes: EvmState,
     /// Whether the contract has been instantiated in REVM.
     pub is_revm_instantiated: bool,
+    /// The error that can occur during runtime.
+    pub error: Arc<Mutex<Option<String>>>,
 }
 
 impl<Runtime> Clone for DatabaseRuntime<Runtime> {
@@ -93,6 +95,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
             is_revm_instantiated: self.is_revm_instantiated,
+            error: self.error.clone(),
         }
     }
 }
@@ -138,6 +141,7 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
             is_revm_instantiated: false,
+            error: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -150,6 +154,21 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
         let storage_stats = storage_stats_read.clone();
         *storage_stats_read = StorageStats::default();
         storage_stats
+    }
+
+    /// Insert error into the database
+    pub fn insert_error(&self, exec_error: ExecutionError) {
+        let mut error = self.error.lock().expect("The lock should be possible");
+        *error = Some(format!("Runtime error {:?}", exec_error));
+    }
+
+    /// Process the error.
+    pub fn process_any_error(&self) -> Result<(), EvmExecutionError> {
+        let error = self.error.lock().expect("The lock should be possible");
+        if let Some(error) = error.clone() {
+            return Err(EvmExecutionError::RuntimeError(error.clone()));
+        }
+        Ok(())
     }
 }
 
