@@ -1265,7 +1265,10 @@ impl BlobContent {
     /// Creates a new [`BlobContent`] from the provided bytes and [`BlobId`].
     pub fn new(blob_type: BlobType, bytes: impl Into<Box<[u8]>>) -> Self {
         let bytes = bytes.into();
-        BlobContent { blob_type, bytes: Arc::new(bytes) }
+        BlobContent {
+            blob_type,
+            bytes: Arc::new(bytes),
+        }
     }
 
     /// Creates a new data [`BlobContent`] from the provided bytes.
