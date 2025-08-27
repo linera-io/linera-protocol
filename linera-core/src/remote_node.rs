@@ -183,9 +183,8 @@ impl<N: ValidatorNode> RemoteNode<N> {
     pub(crate) async fn download_certificate_for_blob(
         &self,
         blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        let last_used_hash = self.node.blob_last_used_by(blob_id).await?;
-        let certificate = self.node.download_certificate(last_used_hash).await?;
+    ) -> Result<(ConfirmedBlockCertificate, Blob), NodeError> {
+        let (certificate, blob_content) = self.node.blob_last_used_by_certificate(blob_id).await?;
         if !certificate.block().requires_or_creates_blob(&blob_id) {
             warn!(
                 "Got invalid last used by certificate for blob {} from validator {}",
@@ -193,7 +192,8 @@ impl<N: ValidatorNode> RemoteNode<N> {
             );
             return Err(NodeError::InvalidCertificateForBlob(blob_id));
         }
-        Ok(certificate)
+        let blob = Blob::new(blob_content);
+        Ok((certificate, blob))
     }
 
     /// Sends a pending validated block's blobs to the validator.
