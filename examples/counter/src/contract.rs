@@ -46,8 +46,7 @@ impl Contract for CounterContract {
     }
 
     async fn execute_operation(&mut self, operation: CounterOperation) -> u64 {
-        let CounterOperation::Increment(operation) = operation;
-        let new_value = self.state.value.get() + operation;
+        let new_value = self.state.value.get() + operation.increment;
         self.state.value.set(new_value);
         new_value
     }
@@ -75,7 +74,7 @@ mod tests {
         let mut counter = create_and_instantiate_counter(initial_value);
 
         let increment = 42_308_u64;
-        let operation = CounterOperation::Increment(increment);
+        let operation = CounterOperation { increment };
 
         let response = counter
             .execute_operation(operation)
@@ -106,7 +105,7 @@ mod tests {
         let mut counter = create_and_instantiate_counter(initial_value);
 
         let increment = 8_u64;
-        let operation = CounterOperation::Increment(increment);
+        let operation = CounterOperation { increment };
 
         let response = counter
             .execute_operation(operation)

@@ -25,6 +25,9 @@ pub enum CreateAndCallRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum CreateAndCallOperation {
-    CreateAndCall(Vec<u8>, Vec<u8>, u64, u64),
+pub struct CreateAndCallOperation {
+    pub contract_bytes: Vec<u8>,
+    pub service_bytes: Vec<u8>,
+    pub initial_value: u64,
+    pub increment: u64,
 }

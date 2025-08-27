@@ -92,10 +92,10 @@ impl Contract for MetaCounterContract {
             Message::Fail => {
                 panic!("Message failed intentionally");
             }
-            Message::Increment(value) => {
+            Message::Increment(increment) => {
                 let counter_id = self.counter_id();
-                log::trace!("executing {} via {:?}", value, counter_id);
-                let operation = counter::CounterOperation::Increment(value);
+                log::trace!("executing {} via {:?}", increment, counter_id);
+                let operation = counter::CounterOperation { increment };
                 self.runtime.call_application(true, counter_id, &operation);
             }
         }

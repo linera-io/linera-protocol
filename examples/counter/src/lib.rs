@@ -13,9 +13,9 @@ use serde::{Deserialize, Serialize};
 pub struct CounterAbi;
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
-pub enum CounterOperation {
-    /// Increment the counter by the given value
-    Increment(u64),
+pub struct CounterOperation {
+    /// The value to increment the counter by
+    pub increment: u64,
 }
 
 impl ContractAbi for CounterAbi {

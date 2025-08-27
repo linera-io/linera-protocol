@@ -25,6 +25,6 @@ pub enum CounterRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum CounterOperation {
-    Increment(u64),
+pub struct CounterOperation {
+    pub increment: u64,
 }

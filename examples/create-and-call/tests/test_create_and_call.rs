@@ -39,14 +39,14 @@ async fn test_create_and_call() {
 
     // Step 3: Call the CreateAndCall operation with the counter bytecode,
     // initialization value of 43, and increment of 5
-    let initialization_value = 43;
-    let increment_value = 5;
-    let create_and_call_operation = create_and_call::CreateAndCallOperation::CreateAndCall(
-        counter_contract_bytes,
-        counter_service_bytes,
-        initialization_value,
-        increment_value,
-    );
+    let initial_value = 43;
+    let increment = 5;
+    let create_and_call_operation = create_and_call::CreateAndCallOperation {
+        contract_bytes: counter_contract_bytes,
+        service_bytes: counter_service_bytes,
+        initial_value,
+        increment,
+    };
 
     chain
         .add_block(|block| {
