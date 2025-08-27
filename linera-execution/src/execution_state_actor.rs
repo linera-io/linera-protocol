@@ -659,6 +659,18 @@ where
                     .to_round()?;
                 callback.respond(validation_round);
             }
+
+            HasNonTrivialStorage { application, callback } => {
+                let view = self.users.try_load_entry(&application).await?;
+                let result = match view {
+                   Some(view) => {
+                        let total_size = view.total_size();
+                        (total_size.key, total_size.value)
+                    }
+                    None => (0, 0),
+                };
+                callback.respond(result);
+            }
         }
 
         Ok(())
@@ -1205,5 +1217,11 @@ pub enum ExecutionRequest {
         round: Option<u32>,
         #[debug(skip)]
         callback: Sender<Option<u32>>,
+    },
+
+    HasNonTrivialStorage {
+        application: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<(u32, u32)>,
     },
 }
