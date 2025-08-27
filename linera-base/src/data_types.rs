@@ -943,11 +943,11 @@ pub struct ApplicationPermissions {
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub mandatory_applications: Vec<ApplicationId>,
-    /// These applications are allowed to close the current chain using the system API.
+    /// These applications are allowed to close the current chain.
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub close_chain: Vec<ApplicationId>,
-    /// These applications are allowed to change the application permissions using the system API.
+    /// These applications are allowed to change the application permissions.
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub change_application_permissions: Vec<ApplicationId>,
@@ -1098,7 +1098,7 @@ impl ApplicationDescription {
     }
 }
 
-/// A WebAssembly module's bytecode.
+/// A module bytecode (WebAssembly or EVM)
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, WitType, WitLoad, WitStore)]
 pub struct Bytecode {
     /// Bytes of the bytecode.
@@ -1533,7 +1533,7 @@ impl StreamUpdate {
 
 impl BcsHashable<'_> for Event {}
 
-doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
+doc_scalar!(Bytecode, "A module bytecode (WebAssembly or EVM)");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
 doc_scalar!(
     Epoch,

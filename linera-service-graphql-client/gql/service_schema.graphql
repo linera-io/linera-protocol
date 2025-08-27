@@ -45,11 +45,11 @@ input ApplicationPermissions {
 	"""
 	mandatoryApplications: [ApplicationId!]! = []
 	"""
-	These applications are allowed to close the current chain using the system API.
+	These applications are allowed to close the current chain.
 	"""
 	closeChain: [ApplicationId!]! = []
 	"""
-	These applications are allowed to change the application permissions using the system API.
+	These applications are allowed to change the application permissions.
 	"""
 	changeApplicationPermissions: [ApplicationId!]! = []
 	"""
@@ -228,7 +228,7 @@ type BundleInInbox {
 }
 
 """
-A WebAssembly module's bytecode
+A module bytecode (WebAssembly or EVM)
 """
 scalar Bytecode
 
@@ -755,36 +755,119 @@ type MutationRoot {
 	"""
 	Processes the inbox and returns the lists of certificate hashes that were created, if any.
 	"""
-	processInbox(chainId: ChainId!): [CryptoHash!]!
+	processInbox(
+		"""
+		The chain whose inbox is being processed.
+		"""
+		chainId: ChainId!
+	): [CryptoHash!]!
 	"""
 	Retries the pending block that was unsuccessfully proposed earlier.
 	"""
-	retryPendingBlock(chainId: ChainId!): CryptoHash
+	retryPendingBlock(
+		"""
+		The chain on whose block is being retried.
+		"""
+		chainId: ChainId!
+	): CryptoHash
 	"""
 	Transfers `amount` units of value from the given owner's account to the recipient.
 	If no owner is given, try to take the units out of the chain account.
 	"""
-	transfer(chainId: ChainId!, owner: AccountOwner!, recipient: Account!, amount: Amount!): CryptoHash!
+	transfer(
+		"""
+		The chain which native tokens are being transferred from.
+		"""
+		chainId: ChainId!,
+		"""
+		The account being debited on the chain.
+		"""
+		owner: AccountOwner!,
+		"""
+		The recipient of the transfer.
+		"""
+		recipient: Account!,
+		"""
+		The amount being transferred.
+		"""
+		amount: Amount!
+	): CryptoHash!
 	"""
 	Claims `amount` units of value from the given owner's account in the remote
 	`target` chain. Depending on its configuration, the `target` chain may refuse to
 	process the message.
 	"""
-	claim(chainId: ChainId!, owner: AccountOwner!, targetId: ChainId!, recipient: Account!, amount: Amount!): CryptoHash!
+	claim(
+		"""
+		The chain for whom owner is one of the owner.
+		"""
+		chainId: ChainId!,
+		"""
+		The owner of chain targetId being debited.
+		"""
+		owner: AccountOwner!,
+		"""
+		The chain whose owner is being debited.
+		"""
+		targetId: ChainId!,
+		"""
+		The recipient of the transfer.
+		"""
+		recipient: Account!,
+		"""
+		The amount being transferred.
+		"""
+		amount: Amount!
+	): CryptoHash!
 	"""
 	Test if a data blob is readable from a transaction in the current chain.
 	"""
 	readDataBlob(chainId: ChainId!, hash: CryptoHash!): CryptoHash!
 	"""
-	Creates (or activates) a new chain with the given owner.
-	This will automatically subscribe to the future committees created by `admin_id`.
+	Creates a new single-owner chain.
 	"""
-	openChain(chainId: ChainId!, owner: AccountOwner!, balance: Amount): ChainId!
+	openChain(
+		"""
+		The chain paying for the creation of the new chain.
+		"""
+		chainId: ChainId!,
+		"""
+		The owner of the new chain.
+		"""
+		owner: AccountOwner!,
+		"""
+		The balance of the chain being created. Zero if `None`.
+		"""
+		balance: Amount
+	): ChainId!
 	"""
-	Creates (or activates) a new chain by installing the given authentication keys.
-	This will automatically subscribe to the future committees created by `admin_id`.
+	Creates a new multi-owner chain.
 	"""
-	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		owners: [AccountOwner!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
+	openMultiOwnerChain(
+		"""
+		The chain paying for the creation of the new chain.
+		"""
+		chainId: ChainId!,
+		"""
+		Permissions for applications on the new chain
+		"""
+		applicationPermissions: ApplicationPermissions,
+		"""
+		The owners of the chain
+		"""
+		owners: [AccountOwner!]!,
+		"""
+		The weights of the owners
+		"""
+		weights: [Int!],
+		"""
+		The number of multi-leader rounds
+		"""
+		multiLeaderRounds: Int,
+		"""
+		The balance of the chain. Zero if `None`
+		"""
+		balance: Amount,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -803,17 +886,51 @@ type MutationRoot {
 		fallbackDurationMs: Int! = 86400000
 	): ChainId!
 	"""
-	Closes the chain. Returns `None` if it was already closed.
+	Closes the chain. Returns the new block hash if successful or `None` if it was already closed.
 	"""
-	closeChain(chainId: ChainId!): CryptoHash
+	closeChain(
+		"""
+		The chain being closed.
+		"""
+		chainId: ChainId!
+	): CryptoHash
 	"""
-	Changes the authentication key of the chain.
+	Changes the chain to a single-owner chain
 	"""
-	changeOwner(chainId: ChainId!, newOwner: AccountOwner!): CryptoHash!
+	changeOwner(
+		"""
+		The chain whose ownership changes
+		"""
+		chainId: ChainId!,
+		"""
+		The new single owner of the chain
+		"""
+		newOwner: AccountOwner!
+	): CryptoHash!
 	"""
-	Changes the authentication key of the chain.
+	Changes the ownership of the chain
 	"""
-	changeMultipleOwners(		chainId: ChainId!,		newOwners: [AccountOwner!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,		openMultiLeaderRounds: Boolean!,
+	changeMultipleOwners(
+		"""
+		The chain whose ownership changes
+		"""
+		chainId: ChainId!,
+		"""
+		The new list of owners of the chain
+		"""
+		newOwners: [AccountOwner!]!,
+		"""
+		The new list of weights of the owners
+		"""
+		newWeights: [Int!]!,
+		"""
+		The multi-leader round of the chain
+		"""
+		multiLeaderRounds: Int!,
+		"""
+		Whether multi-leader rounds are unrestricted, that is not limited to chain owners.
+		"""
+		openMultiLeaderRounds: Boolean!,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -834,7 +951,38 @@ type MutationRoot {
 	"""
 	Changes the application permissions configuration on this chain.
 	"""
-	changeApplicationPermissions(chainId: ChainId!, closeChain: [ApplicationId!]!, executeOperations: [ApplicationId!], mandatoryApplications: [ApplicationId!]!, changeApplicationPermissions: [ApplicationId!]!, callServiceAsOracle: [ApplicationId!], makeHttpRequests: [ApplicationId!]): CryptoHash!
+	changeApplicationPermissions(
+		"""
+		The chain whose permissions are being changed
+		"""
+		chainId: ChainId!,
+		"""
+		These applications are allowed to close the current chain.
+		"""
+		closeChain: [ApplicationId!]!,
+		"""
+		If this is `None`, all system operations and application operations are allowed.
+		If it is `Some`, only operations from the specified applications are allowed,
+		and no system operations.
+		"""
+		executeOperations: [ApplicationId!],
+		"""
+		At least one operation or incoming message from each of these applications must occur in every block.
+		"""
+		mandatoryApplications: [ApplicationId!]!,
+		"""
+		These applications are allowed to change the application permissions.
+		"""
+		changeApplicationPermissions: [ApplicationId!]!,
+		"""
+		These applications are allowed to perform calls to services as oracles.
+		"""
+		callServiceAsOracle: [ApplicationId!],
+		"""
+		These applications are allowed to perform HTTP requests.
+		"""
+		makeHttpRequests: [ApplicationId!]
+	): CryptoHash!
 	"""
 	(admin chain only) Registers a new committee. This will notify the subscribers of
 	the admin chain so that they can migrate to the new epoch (by accepting the
@@ -850,15 +998,62 @@ type MutationRoot {
 	"""
 	Publishes a new application module.
 	"""
-	publishModule(chainId: ChainId!, contract: Bytecode!, service: Bytecode!, vmRuntime: VmRuntime!): ModuleId!
+	publishModule(
+		"""
+		The chain publishing the module
+		"""
+		chainId: ChainId!,
+		"""
+		The bytecode of the contract code
+		"""
+		contract: Bytecode!,
+		"""
+		The bytecode of the service code (only relevant for WebAssembly)
+		"""
+		service: Bytecode!,
+		"""
+		The virtual machine being used (either Wasm or Evm)
+		"""
+		vmRuntime: VmRuntime!
+	): ModuleId!
 	"""
 	Publishes a new data blob.
 	"""
-	publishDataBlob(chainId: ChainId!, bytes: [Int!]!): CryptoHash!
+	publishDataBlob(
+		"""
+		The chain paying for the blob publication
+		"""
+		chainId: ChainId!,
+		"""
+		The content of the data blob being created
+		"""
+		bytes: [Int!]!
+	): CryptoHash!
 	"""
 	Creates a new application.
 	"""
-	createApplication(chainId: ChainId!, moduleId: ModuleId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
+	createApplication(
+		"""
+		The chain paying for the creation of the application
+		"""
+		chainId: ChainId!,
+		"""
+		The module ID of the application being created
+		"""
+		moduleId: ModuleId!,
+		"""
+		The JSON serialization of the parameters of the application
+		"""
+		parameters: String!,
+		"""
+		The JSON serialization of the instantiation argument of the application
+		"""
+		instantiationArgument: String!,
+		"""
+		The dependencies of the application being created
+		"""
+		requiredApplicationIds: [ApplicationId!]!
+	): ApplicationId!
 }
 
 """
