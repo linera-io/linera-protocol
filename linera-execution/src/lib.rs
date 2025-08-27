@@ -256,6 +256,8 @@ pub enum ExecutionError {
     BcsError(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
+    #[error("Service oracle query tried to create operations: {0:?}")]
+    ServiceOracleQueryOperations(Vec<Operation>),
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]
     AssertBefore {
         timestamp: Timestamp,

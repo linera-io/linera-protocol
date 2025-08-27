@@ -1,12 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::vec;
+use std::{collections::BTreeMap, vec};
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
-    data_types::{BlockHeight, StreamUpdate},
-    identifiers::{AccountOwner, StreamId},
+    data_types::{BlobContent, BlockHeight, StreamUpdate},
+    identifiers::{AccountOwner, BlobId, StreamId},
+    time::Instant,
 };
 use linera_views::{
     context::Context,
@@ -233,15 +234,34 @@ where
         context: QueryContext,
         query: Vec<u8>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
+        self.query_user_application_with_deadline(
+            application_id,
+            context,
+            query,
+            None,
+            BTreeMap::new(),
+        )
+        .await
+    }
+
+    pub(crate) async fn query_user_application_with_deadline(
+        &mut self,
+        application_id: ApplicationId,
+        context: QueryContext,
+        query: Vec<u8>,
+        deadline: Option<Instant>,
+        created_blobs: BTreeMap<BlobId, BlobContent>,
+    ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let mut txn_tracker = TransactionTracker::default();
+        let mut txn_tracker = TransactionTracker::default().with_blobs(created_blobs);
         let mut resource_controller = ResourceController::default();
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
         let (code, description) = actor.load_service(application_id).await?;
 
         let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
-            let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
+            let mut runtime =
+                ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
 
             async move {
                 let code = codes.next().await.expect("we send this immediately below");

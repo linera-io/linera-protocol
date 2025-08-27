@@ -469,42 +469,27 @@ impl SyncRuntimeInternal<UserContractInstance> {
         application_id: ApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let local_time = self
-            .execution_state_sender
-            .send_request(|callback| ExecutionRequest::GetLocalTime { callback })?
-            .recv_response()?;
-
-        let context = QueryContext {
-            chain_id: self.chain_id,
-            next_block_height: self.height,
-            local_time,
-        };
-        let sender = self.execution_state_sender.clone();
-
         let timeout = self
             .resource_controller
             .remaining_service_oracle_execution_time()?;
         let execution_start = Instant::now();
         let deadline = Some(execution_start + timeout);
+        let response = self
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::QueryServiceOracle {
+                deadline,
+                application_id,
+                next_block_height: self.height,
+                query,
+                callback,
+            })?
+            .recv_response()?;
 
-        let mut service_runtime = ServiceSyncRuntime::new_with_deadline(sender, context, deadline);
-
-        let result = service_runtime.run_query(application_id, query);
-
-        // Always track the execution time, irrespective to whether the service ran successfully or
-        // timed out
         self.resource_controller
             .track_service_oracle_execution(execution_start.elapsed())?;
-
-        let QueryOutcome {
-            response,
-            operations,
-        } = result?;
-
         self.resource_controller
             .track_service_oracle_response(response.len())?;
 
-        self.scheduled_operations.extend(operations);
         Ok(response)
     }
 }
@@ -1405,21 +1390,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
         this.resource_controller.track_service_oracle_call()?;
 
-        let response = match this
-            .execution_state_sender
-            .send_request(|callback| ExecutionRequest::QueryServiceOracle { callback })?
-            .recv_response()?
-        {
-            Some(bytes) => bytes,
-            None => this.run_service_oracle_query(application_id, query)?,
-        };
-        this.execution_state_sender
-            .send_request(|callback| ExecutionRequest::QueryService {
-                response: response.clone(),
-                callback,
-            })?
-            .recv_response()?;
-        Ok(response)
+        this.run_service_oracle_query(application_id, query)
     }
 
     fn open_chain(

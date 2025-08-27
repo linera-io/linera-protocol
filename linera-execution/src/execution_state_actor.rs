@@ -17,6 +17,7 @@ use linera_base::{
     ensure, hex_debug, hex_vec_debug, http,
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
     ownership::ChainOwnership,
+    time::Instant,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
@@ -29,8 +30,9 @@ use crate::{
     util::RespondExt,
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, MessageKind, ModuleId,
-    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, ResourceController,
-    SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
+    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
+    QueryOutcome, ResourceController, SystemMessage, TransactionTracker, UserContractCode,
+    UserServiceCode,
 };
 
 /// Actor for handling requests to the execution state.
@@ -589,12 +591,42 @@ where
                 callback.respond(app_permissions.clone());
             }
 
-            QueryServiceOracle { callback } => {
+            QueryServiceOracle {
+                deadline,
+                application_id,
+                next_block_height,
+                query,
+                callback,
+            } => {
                 let response = match self.txn_tracker.next_replayed_oracle_response()? {
-                    Some(OracleResponse::Service(bytes)) => Some(bytes),
+                    Some(OracleResponse::Service(bytes)) => bytes,
                     Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                    None => None,
+                    None => {
+                        let context = QueryContext {
+                            chain_id: self.state.context().extra().chain_id(),
+                            next_block_height,
+                            local_time: self.txn_tracker.local_time(),
+                        };
+                        let QueryOutcome {
+                            response,
+                            operations,
+                        } = Box::pin(self.state.query_user_application_with_deadline(
+                            application_id,
+                            context,
+                            query,
+                            deadline,
+                            self.txn_tracker.created_blobs().clone(),
+                        ))
+                        .await?;
+                        ensure!(
+                            operations.is_empty(),
+                            ExecutionError::ServiceOracleQueryOperations(operations)
+                        );
+                        response
+                    }
                 };
+                self.txn_tracker
+                    .add_oracle_response(OracleResponse::Service(response.clone()));
                 callback.respond(response);
             }
 
@@ -615,11 +647,6 @@ where
             } => {
                 self.txn_tracker.set_local_time(local_time);
                 callback.respond(());
-            }
-
-            GetLocalTime { callback } => {
-                let local_time = self.txn_tracker.local_time();
-                callback.respond(local_time);
             }
 
             GetCreatedBlobs { callback } => {
@@ -1186,8 +1213,12 @@ pub enum ExecutionRequest {
     },
 
     QueryServiceOracle {
+        deadline: Option<Instant>,
+        application_id: ApplicationId,
+        next_block_height: BlockHeight,
+        query: Vec<u8>,
         #[debug(skip)]
-        callback: Sender<Option<Vec<u8>>>,
+        callback: Sender<Vec<u8>>,
     },
 
     QueryService {
@@ -1207,11 +1238,6 @@ pub enum ExecutionRequest {
         local_time: Timestamp,
         #[debug(skip)]
         callback: Sender<()>,
-    },
-
-    GetLocalTime {
-        #[debug(skip)]
-        callback: Sender<Timestamp>,
     },
 
     GetCreatedBlobs {
