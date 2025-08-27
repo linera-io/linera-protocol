@@ -1970,6 +1970,11 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
             .await?,
     );
 
+    // Synchronization is needed since below, when asserting balances, the client need
+    // to access to the latest block that contains the balances.
+    node_service2.process_inbox(&chain2).await?;
+    node_service3.process_inbox(&chain2).await?;
+
     let expected_balances = [
         (owner1, Amount::from_tokens(9)),
         (owner2, Amount::from_tokens(19)),
