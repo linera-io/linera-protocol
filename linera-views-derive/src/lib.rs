@@ -77,6 +77,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut num_init_keys_quotes = Vec::new();
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
+    let num_fields = input.fields.len();
     for (idx, e) in input.fields.iter().enumerate() {
         let name = e.ident.clone().unwrap();
         let test_flush_ident = format_ident!("deleted{}", idx);
@@ -93,15 +94,27 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
         });
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
+
+        let derive_key_logic = if num_fields < 256 {
+            let idx_byte = idx as u8;
+            quote! {
+                let index_byte = #idx_byte;
+                let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index_byte)?;
+            }
+        } else {
+            quote! {
+                let index = #idx_lit;
+                let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            }
+        };
+
         pre_load_keys_quotes.push(quote! {
-            let index = #idx_lit;
-            let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            #derive_key_logic
             keys.extend(#g :: pre_load(&context.clone_with_base_key(base_key))?);
         });
         post_load_keys_quotes.push(quote! {
-            let index = #idx_lit;
+            #derive_key_logic
             let pos_next = pos + #g :: NUM_INIT_KEYS;
-            let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
             let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
             pos = pos_next;
         });
