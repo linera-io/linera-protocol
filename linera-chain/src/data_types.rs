@@ -181,11 +181,14 @@ impl From<&Operation> for OperationMetadata {
             },
             Operation::User {
                 application_id,
-                bytes,
+                input,
             } => OperationMetadata {
                 operation_type: "User".to_string(),
                 application_id: Some(*application_id),
-                user_bytes_hex: Some(hex::encode(bytes)),
+                user_bytes_hex: Some(match input {
+                    linera_execution::OperationInput::Direct(bytes) => hex::encode(bytes),
+                    linera_execution::OperationInput::Composed => "composed".to_string(),
+                }),
                 system_bytes_hex: None,
             },
         }

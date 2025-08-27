@@ -49,6 +49,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_views::{batch::Batch, ViewError};
+use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
 use thiserror::Error;
@@ -210,7 +211,8 @@ pub enum ExecutionError {
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
-
+    #[error("Composed operation cannot be first")]
+    ComposedOperationCannotBeFirst,
     #[error("Attempted to perform a reentrant call to application {0}")]
     ReentrantCall(ApplicationId),
     #[error(
@@ -679,7 +681,7 @@ pub trait ServiceRuntime: BaseRuntime {
     ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Schedules an operation to be included in the block proposed after execution.
-    fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError>;
+    fn schedule_operation(&mut self, input: OperationInput) -> Result<(), ExecutionError>;
 
     /// Checks if the service has exceeded its execution time limit.
     fn check_execution_time(&mut self) -> Result<(), ExecutionError>;
@@ -817,17 +819,29 @@ pub trait ContractRuntime: BaseRuntime {
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 }
 
+/// Input for an operation, which can be either direct bytes or a composed operation.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, WitType, WitLoad, WitStore)]
+pub enum OperationInput {
+    /// Direct input as bytes.
+    Direct(
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        Vec<u8>,
+    ),
+    /// Composed input that uses the result from the previous operation in the block.
+    /// If operation_results is empty, an error should be raised during execution.
+    Composed,
+}
+
 /// An operation to be executed in a block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
     /// A system operation.
     System(Box<SystemOperation>),
-    /// A user operation (in serialized form).
+    /// A user operation.
     User {
         application_id: ApplicationId,
-        #[serde(with = "serde_bytes")]
-        #[debug(with = "hex_debug")]
-        bytes: Vec<u8>,
+        input: OperationInput,
     },
 }
 
@@ -1176,8 +1190,18 @@ impl Operation {
     ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
             application_id,
-            bytes: bcs::to_bytes(&operation)?,
+            input: OperationInput::Direct(bcs::to_bytes(&operation)?),
         })
+    }
+
+    /// Creates a new composed user application operation that uses the result from the
+    /// previous operation as input.
+    #[cfg(with_testing)]
+    pub fn user_composed(application_id: ApplicationId) -> Self {
+        Operation::User {
+            application_id,
+            input: OperationInput::Composed,
+        }
     }
 
     /// Returns a reference to the [`SystemOperation`] in this [`Operation`], if this [`Operation`]

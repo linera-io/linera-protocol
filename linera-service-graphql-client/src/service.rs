@@ -66,7 +66,7 @@ mod types {
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
-    pub use linera_execution::{Message, MessageKind, Operation, SystemOperation};
+    pub use linera_execution::{Message, MessageKind, Operation, OperationInput, SystemOperation};
 }
 
 pub use types::*;
@@ -237,20 +237,23 @@ mod from {
                             )
                         })?;
 
-                        // Convert hex string to bytes
-                        let bytes = hex::decode(bytes_hex).map_err(|_| {
-                            ConversionError::UnexpectedCertificateType(
-                                "Invalid hex in user_bytes_hex".to_string(),
-                            )
-                        })?;
-
                         Operation::User {
                             application_id: application_id.parse().map_err(|_| {
                                 ConversionError::UnexpectedCertificateType(
                                     "Invalid application_id format".to_string(),
                                 )
                             })?,
-                            bytes,
+                            input: if bytes_hex == "composed" {
+                                OperationInput::Composed
+                            } else {
+                                // Convert hex string to bytes
+                                let bytes = hex::decode(&bytes_hex).map_err(|_| {
+                                    ConversionError::UnexpectedCertificateType(
+                                        "Invalid hex in user_bytes_hex".to_string(),
+                                    )
+                                })?;
+                                OperationInput::Direct(bytes)
+                            },
                         }
                     }
                     _ => {

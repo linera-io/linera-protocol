@@ -33,9 +33,9 @@ use crate::{
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, DataBlobHash,
     ExecutionError, FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation,
-    OutgoingMessage, QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker,
-    UserContractCode, UserContractInstance, UserServiceCode, UserServiceInstance,
-    MAX_STREAM_NAME_LEN,
+    OperationInput, OutgoingMessage, QueryContext, QueryOutcome, ServiceRuntime,
+    TransactionTracker, UserContractCode, UserContractInstance, UserServiceCode,
+    UserServiceInstance, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -1809,13 +1809,13 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
         Ok(response)
     }
 
-    fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError> {
+    fn schedule_operation(&mut self, input: OperationInput) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let application_id = this.current_application().id;
 
         this.scheduled_operations.push(Operation::User {
             application_id,
-            bytes: operation,
+            input,
         });
 
         Ok(())

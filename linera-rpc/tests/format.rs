@@ -17,7 +17,7 @@ use linera_chain::{
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
     system::{AdminOperation, SystemMessage, SystemOperation},
-    Message, MessageKind, Operation,
+    Message, MessageKind, Operation, OperationInput,
 };
 use linera_rpc::RpcMessage;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
@@ -62,6 +62,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<AdminOperation>(&samples)?;
     tracer.trace_type::<SystemMessage>(&samples)?;
     tracer.trace_type::<Operation>(&samples)?;
+    tracer.trace_type::<OperationInput>(&samples)?;
     tracer.trace_type::<Message>(&samples)?;
     tracer.trace_type::<Transaction>(&samples)?;
     tracer.trace_type::<OriginalProposal>(&samples)?;

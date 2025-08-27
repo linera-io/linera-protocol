@@ -826,7 +826,15 @@ Operation:
         STRUCT:
           - application_id:
               TYPENAME: ApplicationId
-          - bytes: BYTES
+          - input:
+              TYPENAME: OperationInput
+OperationInput:
+  ENUM:
+    0:
+      Direct:
+        NEWTYPE: BYTES
+    1:
+      Composed: UNIT
 OperationResult:
   NEWTYPESTRUCT: BYTES
 OracleResponse:
