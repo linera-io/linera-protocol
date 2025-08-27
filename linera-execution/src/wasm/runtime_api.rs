@@ -231,6 +231,18 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Returns true if the corresponding contract uses a non-zero amount of storage.
+    fn has_non_trivial_storage(
+        caller: &mut Caller,
+        application: ApplicationId,
+    ) -> Result<bool, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .has_non_trivial_storage(application)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) {
         match level {
