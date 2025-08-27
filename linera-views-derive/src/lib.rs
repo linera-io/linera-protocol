@@ -77,10 +77,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut num_init_keys_quotes = Vec::new();
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
+    let num_fields = input.fields.len();
     for (idx, e) in input.fields.iter().enumerate() {
         let name = e.ident.clone().unwrap();
         let test_flush_ident = format_ident!("deleted{}", idx);
-        let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let g = get_extended_entry(e.ty.clone());
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
@@ -93,15 +93,29 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
         });
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
+
+        let derive_key_logic = if num_fields < 256 {
+            let idx_byte = idx as u8;
+            quote! {
+                let __linera_reserved_index_byte = #idx_byte;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index_byte)?;
+            }
+        } else {
+            assert!(num_fields < 65536);
+            let idx_u16 = idx as u16;
+            quote! {
+                let __linera_reserved_index = #idx_u16;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+            }
+        };
+
         pre_load_keys_quotes.push(quote! {
-            let __linera_reserved_index = #idx_lit;
-            let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+            #derive_key_logic
             keys.extend(#g :: pre_load(&context.clone_with_base_key(__linera_reserved_base_key))?);
         });
         post_load_keys_quotes.push(quote! {
-            let __linera_reserved_index = #idx_lit;
+            #derive_key_logic
             let __linera_reserved_pos_next = __linera_reserved_pos + #g :: NUM_INIT_KEYS;
-            let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
             let #name = #g :: post_load(context.clone_with_base_key(__linera_reserved_base_key), &values[__linera_reserved_pos..__linera_reserved_pos_next])?;
             __linera_reserved_pos = __linera_reserved_pos_next;
         });
