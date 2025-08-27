@@ -219,7 +219,7 @@ jobs:
         restore-keys: solc-
     - name: Get Solc
       if: ${{ steps.cache-solc.outputs.cache-hit != 'true' }}
-      uses: pontem-network/get-solc@master
+      uses: ./.github/actions/get-solc
       with:
         version: v0.8.25
     - name: Add Solc to PATH
