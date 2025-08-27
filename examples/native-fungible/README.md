@@ -86,17 +86,12 @@ LINERA_APPLICATION_ID=$(linera create-application $MODULE_ID \
 
 ## Connecting with the Web Frontend
 
-Install the dependencies for the Web frontend and export the necessary
-variables:
-
-```bash
-pnpm install
-export LINERA_APPLICATION_ID LINERA_FAUCET_URL
-```
-
-Then you can run a local development server using Vite:
+You can run a local development server by exporting the necessary
+variables and calling Vite:
 
 ```bash,ignore
+export LINERA_APPLICATION_ID LINERA_FAUCET_URL
+pnpm install
 pnpm dev
 ```
 

@@ -66,17 +66,12 @@ We have saved the `LINERA_APPLICATION_ID` as it will be useful later.
 
 ## Connecting with the Web Frontend
 
-Install the dependencies for the Web frontend and export the necessary
-variables:
-
-```bash
-pnpm install
-export LINERA_APPLICATION_ID LINERA_FAUCET_URL
-```
-
-Then you can run a local development server using Vite:
+If you install the dependencies for the Web frontend and export the
+necessary variables you can run a local development server using Vite:
 
 ```bash,ignore
+export LINERA_APPLICATION_ID LINERA_FAUCET_URL
+pnpm install
 pnpm dev
 ```
 
@@ -118,7 +113,7 @@ resulting block, if any.
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
 mutation Increment {
-  increment(value: 3)
+  increment(field0: 3)
 }
 ```
 
