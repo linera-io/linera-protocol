@@ -90,10 +90,10 @@ pub fn create_dummy_user_application_description(
     contract_bytes.push(index as u8);
     service_bytes.push(index as u8);
     let contract_blob = Blob::new_contract_bytecode(CompressedBytecode {
-        compressed_bytes: contract_bytes,
+        compressed_bytes: Arc::new(contract_bytes.into_boxed_slice()),
     });
     let service_blob = Blob::new_service_bytecode(CompressedBytecode {
-        compressed_bytes: service_bytes,
+        compressed_bytes: Arc::new(service_bytes.into_boxed_slice()),
     });
 
     let vm_runtime = VmRuntime::Wasm;

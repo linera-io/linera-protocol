@@ -5,6 +5,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    sync::Arc,
     vec,
 };
 
@@ -672,7 +673,7 @@ impl TransferTestEndpoint {
     /// sender as an application.
     fn sender_application_contract_blob() -> Blob {
         Blob::new_contract_bytecode(CompressedBytecode {
-            compressed_bytes: b"sender contract".to_vec(),
+            compressed_bytes: Arc::new(b"sender contract".to_vec().into_boxed_slice()),
         })
     }
 
@@ -680,7 +681,7 @@ impl TransferTestEndpoint {
     /// as an application.
     fn sender_application_service_blob() -> Blob {
         Blob::new_service_bytecode(CompressedBytecode {
-            compressed_bytes: b"sender service".to_vec(),
+            compressed_bytes: Arc::new(b"sender service".to_vec().into_boxed_slice()),
         })
     }
 
