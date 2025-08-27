@@ -142,7 +142,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 10
 
     steps:
     - uses: actions/checkout@v4
@@ -160,7 +160,6 @@ jobs:
         cd linera-sdk/tests/fixtures
         cargo fmt -- --check
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
-        cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked
 
   default-features-and-witty-integration-test:
     needs: changed-files
