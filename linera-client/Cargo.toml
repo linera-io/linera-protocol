@@ -54,7 +54,7 @@ linera-base.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
-linera-persistent = { version = "0.15.0", path = "../linera-persistent" }
+linera-persistent = { workspace = true, path = "../linera-persistent" }
 linera-rpc.workspace = true
 linera-sdk.workspace = true
 linera-storage.workspace = true
