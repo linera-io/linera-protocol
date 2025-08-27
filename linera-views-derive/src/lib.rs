@@ -6,7 +6,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, parse_quote, ItemStruct, Type, Error};
+use syn::{parse_macro_input, parse_quote, Error, ItemStruct, Type};
 
 #[derive(Debug, deluxe::ParseAttributes)]
 #[deluxe(attributes(view))]
@@ -68,20 +68,18 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
         .map_err(|e| Error::new_spanned(&input, format!("Failed to parse attributes: {}", e)))?;
     let context = match attrs.context {
         Some(ctx) => ctx,
-        None => {
-            match input.generics.type_params().next() {
-                Some(param) => {
-                    let ident = &param.ident;
-                    parse_quote! { #ident }
-                }
-                None => {
-                    return Err(Error::new_spanned(
+        None => match input.generics.type_params().next() {
+            Some(param) => {
+                let ident = &param.ident;
+                parse_quote! { #ident }
+            }
+            None => {
+                return Err(Error::new_spanned(
                         &input,
                         "Missing context: either add a generic type parameter or specify the context with #[view(context = YourContextType)]"
                     ));
-                }
             }
-        }
+        },
     };
 
     let struct_name = &input.ident;
@@ -128,7 +126,12 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
 
     let first_name_quote = match name_quotes.first() {
         Some(name) => name,
-        None => return Err(Error::new_spanned(&input, "Struct must have at least one field")),
+        None => {
+            return Err(Error::new_spanned(
+                &input,
+                "Struct must have at least one field",
+            ))
+        }
     };
 
     let load_metrics = if root && cfg!(feature = "metrics") {
@@ -410,83 +413,83 @@ pub fn derive_view(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(HashableView, attributes(view))]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    
+
     let mut stream = match generate_view_code(input.clone(), false) {
         Ok(tokens) => tokens,
         Err(err) => return err.to_compile_error().into(),
     };
-    
+
     match generate_hash_view_code(input) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     stream.into()
 }
 
 #[proc_macro_derive(RootView, attributes(view))]
 pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    
+
     let mut stream = match generate_view_code(input.clone(), true) {
         Ok(tokens) => tokens,
         Err(err) => return err.to_compile_error().into(),
     };
-    
+
     match generate_root_view_code(input) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     stream.into()
 }
 
 #[proc_macro_derive(CryptoHashView, attributes(view))]
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    
+
     let mut stream = match generate_view_code(input.clone(), false) {
         Ok(tokens) => tokens,
         Err(err) => return err.to_compile_error().into(),
     };
-    
+
     match generate_hash_view_code(input.clone()) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     match generate_crypto_hash_code(input) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     stream.into()
 }
 
 #[proc_macro_derive(CryptoHashRootView, attributes(view))]
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    
+
     let mut stream = match generate_view_code(input.clone(), true) {
         Ok(tokens) => tokens,
         Err(err) => return err.to_compile_error().into(),
     };
-    
+
     match generate_root_view_code(input.clone()) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     match generate_hash_view_code(input.clone()) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     match generate_crypto_hash_code(input) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     stream.into()
 }
 
@@ -494,22 +497,22 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
 #[cfg(test)]
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    
+
     let mut stream = match generate_view_code(input.clone(), true) {
         Ok(tokens) => tokens,
         Err(err) => return err.to_compile_error().into(),
     };
-    
+
     match generate_root_view_code(input.clone()) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     match generate_hash_view_code(input) {
         Ok(tokens) => stream.extend(tokens),
         Err(err) => return err.to_compile_error().into(),
     }
-    
+
     stream.into()
 }
 
