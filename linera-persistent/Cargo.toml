@@ -1,11 +1,15 @@
 [package]
 name = "linera-persistent"
-version.workspace = true
+description = "A library for persisting data types to disk with a variety of backends."
+readme = "README.md"
+documentation = "https://docs.rs/linera-persistent/latest/linera_persistent/"
+
 authors.workspace = true
-repository.workspace = true
+edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-edition.workspace = true
+repository.workspace = true
+version.workspace = true
 
 [features]
 fs = ["fs-err", "fs4"]
