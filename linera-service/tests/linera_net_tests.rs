@@ -601,12 +601,10 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 
     // Creating the applications
 
-    let application0: ApplicationId = address0.into();
-    let application0: ApplicationId<EvmAbi> = application0.with_abi();
+    let application0 = ApplicationId::from(address0).with_abi::<EvmAbi>();
     let application0 = node_service.make_application(&chain, &application0).await?;
 
-    let application1: ApplicationId = address1.into();
-    let application1: ApplicationId<EvmAbi> = application1.with_abi();
+    let application1 = ApplicationId::from(address1).with_abi::<EvmAbi>();
     let application1 = node_service.make_application(&chain, &application1).await?;
 
     let query = get_valueCall {};
