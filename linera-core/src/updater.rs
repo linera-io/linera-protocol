@@ -228,8 +228,27 @@ where
 
         Ok(match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                self.remote_node
-                    .check_blobs_not_found(&certificate, blob_ids)?;
+                match self
+                    .remote_node
+                    .check_blobs_not_found(&certificate, blob_ids)
+                {
+                    Err(NodeError::UnexpectedEntriesInBlobsNotFound(blob_id)) => {
+                        let public_key = self.remote_node.public_key;
+                        tracing::warn!(validator=?public_key, blob_id=?blob_id, "validator requested blob but it is not required");
+                        if let Some(local_blobs) =
+                            self.local_node.read_blobs_from_storage(&[*blob_id]).await?
+                        {
+                            tracing::debug!(validator=?public_key, blob_id=?blob_id, "uploading unexpected blob to validator");
+                            self.remote_node.node.upload_blobs(local_blobs).await?;
+                            self.remote_node
+                                .check_blobs_not_found(&certificate, blob_ids)?;
+                        } else {
+                            return Err(NodeError::UnexpectedEntriesInBlobsNotFound(blob_id).into());
+                        }
+                    }
+                    Err(err) => return Err(err.into()),
+                    _ => {}
+                }
                 // The certificate is confirmed, so the blobs must be in storage.
                 let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
                 let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
@@ -254,8 +273,27 @@ where
 
         Ok(match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                self.remote_node
-                    .check_blobs_not_found(&certificate, blob_ids)?;
+                match self
+                    .remote_node
+                    .check_blobs_not_found(&certificate, blob_ids)
+                {
+                    Err(NodeError::UnexpectedEntriesInBlobsNotFound(blob_id)) => {
+                        let public_key = self.remote_node.public_key;
+                        tracing::warn!(validator=?public_key, blob_id=?blob_id, "validator requested blob but it is not required");
+                        if let Some(local_blobs) =
+                            self.local_node.read_blobs_from_storage(&[*blob_id]).await?
+                        {
+                            tracing::debug!(validator=?public_key, blob_id=?blob_id, "uploading unexpected blob to validator");
+                            self.remote_node.node.upload_blobs(local_blobs).await?;
+                            self.remote_node
+                                .check_blobs_not_found(&certificate, blob_ids)?;
+                        } else {
+                            return Err(NodeError::UnexpectedEntriesInBlobsNotFound(blob_id).into());
+                        }
+                    }
+                    Err(err) => return Err(err.into()),
+                    _ => {}
+                }
                 let chain_id = certificate.inner().chain_id();
                 // The certificate is for a validated block, i.e. for our locking block.
                 // Take the missing blobs from our local chain manager.

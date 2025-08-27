@@ -776,7 +776,9 @@ NodeError:
     24:
       DuplicatesInBlobsNotFound: UNIT
     25:
-      UnexpectedEntriesInBlobsNotFound: UNIT
+      UnexpectedEntriesInBlobsNotFound:
+        NEWTYPE:
+          TYPENAME: BlobId
     26:
       UnexpectedCertificates:
         STRUCT:

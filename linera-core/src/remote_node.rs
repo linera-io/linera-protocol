@@ -340,7 +340,9 @@ impl<N: ValidatorNode> RemoteNode<N> {
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
                 warn!("validator {public_key} requested blob {blob_id:?} but it is not required");
-                return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
+                return Err(NodeError::UnexpectedEntriesInBlobsNotFound(Box::new(
+                    *blob_id,
+                )));
             }
         }
         let unique_missing_blob_ids = blob_ids.iter().cloned().collect::<HashSet<_>>();
