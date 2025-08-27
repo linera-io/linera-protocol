@@ -988,7 +988,7 @@ where
         .set_fault_type([0, 1, 2, 3], FaultType::Honest)
         .await;
 
-    // Now player A claim victory since B has timed out. This works because it sees the existing
+    // Now player A claims victory since B has timed out. This works because it sees the existing
     // block proposal and makes a new proposal in the next round instead.
     let claim_victory_operation = HexOperation::ClaimVictory;
     client_a.synchronize_from_validators().await?;

@@ -997,8 +997,8 @@ impl<Env: Environment> Client<Env> {
                     let hash = cert.hash();
                     if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
                         debug!(
-                            "Skipping certificate {hash} from validator {}: {err}",
-                            remote_node.public_key
+                            "Skipping certificate {hash} from validator {} at height {}: {err}",
+                            remote_node.public_key, local_info.next_block_height,
                         );
                     }
                 }
@@ -1023,8 +1023,11 @@ impl<Env: Environment> Client<Env> {
                             {
                                 Ok(content) => content,
                                 Err(err) => {
-                                    let public_key = &remote_node.public_key;
-                                    warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
+                                    warn!(
+                                        "Skipping proposal from {owner} and validator {} at \
+                                        height {}; failed to download {blob_id}: {err}",
+                                        remote_node.public_key, local_info.next_block_height
+                                    );
                                     continue;
                                 }
                             };
@@ -1063,8 +1066,10 @@ impl<Env: Environment> Client<Env> {
                     }
                 }
 
-                let public_key = &remote_node.public_key;
-                debug!("Skipping proposal from {owner} and validator {public_key}: {err}");
+                debug!(
+                    "Skipping proposal from {owner} and validator {} at height {}: {err}",
+                    remote_node.public_key, local_info.next_block_height
+                );
             }
         }
         Ok(())
