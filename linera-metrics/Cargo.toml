@@ -1,11 +1,15 @@
 [package]
 name = "linera-metrics"
-version.workspace = true
+description = "A library for Linera server metrics."
+readme = "README.md"
+documentation = "https://docs.rs/linera-metrics/latest/linera_metrics/"
+
 authors.workspace = true
-repository.workspace = true
+edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-edition.workspace = true
+repository.workspace = true
+version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
