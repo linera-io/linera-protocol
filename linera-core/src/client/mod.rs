@@ -975,6 +975,10 @@ impl<Env: Environment> Client<Env> {
 
         // If we are at the same height as the remote node, we also update our chain manager.
         if local_info.next_block_height != remote_info.next_block_height {
+            debug!(
+                "Synced from validator {}; but remote height is {} and local height is {}",
+                remote_node.public_key, remote_info.next_block_height, local_info.next_block_height
+            );
             return Ok(());
         };
 
@@ -997,7 +1001,7 @@ impl<Env: Environment> Client<Env> {
                     let hash = cert.hash();
                     if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
                         debug!(
-                            "Skipping certificate {hash} from validator {} at height {}: {err}",
+                            "Skipping locked block {hash} from validator {} at height {}: {err}",
                             remote_node.public_key, local_info.next_block_height,
                         );
                     }
