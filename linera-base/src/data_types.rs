@@ -23,6 +23,7 @@ use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_with::{serde_as, Bytes};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
@@ -1124,10 +1125,12 @@ impl Bytecode {
     pub fn compress(&self) -> CompressedBytecode {
         #[cfg(with_metrics)]
         let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
-        let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
+        let compressed_bytes_vec = zstd::stream::encode_all(&*self.bytes, 19)
             .expect("Compressing bytes in memory should not fail");
 
-        CompressedBytecode { compressed_bytes }
+        CompressedBytecode {
+            compressed_bytes: Arc::new(compressed_bytes_vec.into_boxed_slice()),
+        }
     }
 
     /// Compresses the [`Bytecode`] into a [`CompressedBytecode`].
@@ -1138,13 +1141,15 @@ impl Bytecode {
         #[cfg(with_metrics)]
         let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
 
-        let mut compressed_bytes = Vec::new();
+        let mut compressed_bytes_vec = Vec::new();
         let mut compressor = FrameCompressor::new(CompressionLevel::Fastest);
         compressor.set_source(&*self.bytes);
-        compressor.set_drain(&mut compressed_bytes);
+        compressor.set_drain(&mut compressed_bytes_vec);
         compressor.compress();
 
-        CompressedBytecode { compressed_bytes }
+        CompressedBytecode {
+            compressed_bytes: Arc::new(compressed_bytes_vec.into_boxed_slice()),
+        }
     }
 }
 
@@ -1163,13 +1168,14 @@ pub enum DecompressionError {
 }
 
 /// A compressed module bytecode (WebAssembly or EVM).
+#[serde_as]
 #[derive(Clone, Debug, Deserialize, Hash, Serialize, WitType, WitStore)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct CompressedBytecode {
     /// Compressed bytes of the bytecode.
-    #[serde(with = "serde_bytes")]
-    #[debug(with = "hex_debug")]
-    pub compressed_bytes: Vec<u8>,
+    #[serde_as(as = "Arc<Bytes>")]
+    #[debug(skip)]
+    pub compressed_bytes: Arc<Box<[u8]>>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1195,7 +1201,7 @@ impl CompressedBytecode {
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
         #[cfg(with_metrics)]
         let _decompression_latency = metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
-        let bytes = zstd::stream::decode_all(&*self.compressed_bytes)?;
+        let bytes = zstd::stream::decode_all(&**self.compressed_bytes)?;
 
         Ok(Bytecode { bytes })
     }
@@ -1232,7 +1238,7 @@ impl CompressedBytecode {
 
         let compressed_bytes = &*self.compressed_bytes;
         let mut bytes = Vec::new();
-        let mut decoder = StreamingDecoder::new(compressed_bytes).map_err(io::Error::other)?;
+        let mut decoder = StreamingDecoder::new(&**compressed_bytes).map_err(io::Error::other)?;
 
         // TODO(#2710): Decode multiple frames, if present
         while !decoder.get_ref().is_empty() {
@@ -1246,8 +1252,6 @@ impl CompressedBytecode {
 }
 
 impl BcsHashable<'_> for BlobContent {}
-
-use serde_with::*;
 
 /// A blob of binary data.
 #[serde_as]
@@ -1278,23 +1282,26 @@ impl BlobContent {
 
     /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
     pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
-        BlobContent::new(
-            BlobType::ContractBytecode,
-            compressed_bytecode.compressed_bytes,
-        )
+        BlobContent {
+            blob_type: BlobType::ContractBytecode,
+            bytes: compressed_bytecode.compressed_bytes,
+        }
     }
 
     /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
     pub fn new_evm_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
-        BlobContent::new(BlobType::EvmBytecode, compressed_bytecode.compressed_bytes)
+        BlobContent {
+            blob_type: BlobType::EvmBytecode,
+            bytes: compressed_bytecode.compressed_bytes,
+        }
     }
 
     /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
     pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
-        BlobContent::new(
-            BlobType::ServiceBytecode,
-            compressed_bytecode.compressed_bytes,
-        )
+        BlobContent {
+            blob_type: BlobType::ServiceBytecode,
+            bytes: compressed_bytecode.compressed_bytes,
+        }
     }
 
     /// Creates a new application description [`BlobContent`] from a [`ApplicationDescription`].
@@ -1324,6 +1331,11 @@ impl BlobContent {
     pub fn into_vec_or_clone(self) -> Vec<u8> {
         let bytes = Arc::unwrap_or_clone(self.bytes);
         bytes.into_vec()
+    }
+
+    /// Get the Arc<Box<[u8]>> directly without cloning.
+    pub fn into_arc_bytes(self) -> Arc<Box<[u8]>> {
+        self.bytes
     }
 
     /// Returns the type of data represented by this blob's bytes.
