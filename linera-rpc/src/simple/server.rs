@@ -379,6 +379,8 @@ where
             | RpcMessage::DownloadConfirmedBlockResponse(_)
             | RpcMessage::BlobLastUsedBy(_)
             | RpcMessage::BlobLastUsedByResponse(_)
+            | RpcMessage::BlobLastUsedByCertificate(_)
+            | RpcMessage::BlobLastUsedByCertificateResponse(_)
             | RpcMessage::MissingBlobIds(_)
             | RpcMessage::MissingBlobIdsResponse(_)
             | RpcMessage::DownloadCertificates(_)

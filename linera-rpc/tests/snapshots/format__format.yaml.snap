@@ -1133,6 +1133,14 @@ RpcMessage:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
+    31:
+      BlobLastUsedByCertificate:
+        NEWTYPE:
+          TYPENAME: BlobId
+    32:
+      BlobLastUsedByCertificateResponse:
+        NEWTYPE:
+          TYPENAME: ConfirmedBlockCertificate
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

@@ -696,6 +696,16 @@ where
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]
+    async fn blob_last_used_by_certificate(
+        &self,
+        request: Request<BlobId>,
+    ) -> Result<Response<Certificate>, Status> {
+        let cert_hash = self.blob_last_used_by(request).await?;
+        let request = Request::new(cert_hash.into_inner());
+        self.download_certificate(request).await
+    }
+
+    #[instrument(skip_all, err(level = Level::WARN))]
     async fn missing_blob_ids(
         &self,
         request: Request<BlobIds>,
