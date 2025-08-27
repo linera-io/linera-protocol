@@ -1004,7 +1004,7 @@ impl<Env: Environment> Client<Env> {
                 }
             }
         }
-        for proposal in proposals {
+        'proposal_loop: for proposal in proposals {
             let owner: AccountOwner = proposal.owner();
             if let Err(mut err) = self
                 .local_node
@@ -1028,7 +1028,7 @@ impl<Env: Environment> Client<Env> {
                                         height {}; failed to download {blob_id}: {err}",
                                         remote_node.public_key, local_info.next_block_height
                                     );
-                                    continue;
+                                    continue 'proposal_loop;
                                 }
                             };
                             blobs.push(Blob::new(blob_content));
