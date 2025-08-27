@@ -34,20 +34,20 @@ where
     ) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut keys = Vec::new();
-        let index = 0;
+        let index_byte = 0u8;
         let base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index_byte)?;
         keys.extend(
             RegisterView::<
                 custom::GenericContext<T>,
                 usize,
             >::pre_load(&context.clone_with_base_key(base_key))?,
         );
-        let index = 1;
+        let index_byte = 1u8;
         let base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index_byte)?;
         keys.extend(
             CollectionView::<
                 custom::GenericContext<T>,
@@ -63,27 +63,27 @@ where
     ) -> Result<Self, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut pos = 0;
-        let index = 0;
-        let pos_next = pos
-            + RegisterView::<custom::GenericContext<T>, usize>::NUM_INIT_KEYS;
+        let index_byte = 0u8;
         let base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index_byte)?;
+        let pos_next = pos
+            + RegisterView::<custom::GenericContext<T>, usize>::NUM_INIT_KEYS;
         let register = RegisterView::<
             custom::GenericContext<T>,
             usize,
         >::post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
         pos = pos_next;
-        let index = 1;
+        let index_byte = 1u8;
+        let base_key = context
+            .base_key()
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index_byte)?;
         let pos_next = pos
             + CollectionView::<
                 custom::GenericContext<T>,
                 usize,
                 RegisterView<custom::GenericContext<T>, usize>,
             >::NUM_INIT_KEYS;
-        let base_key = context
-            .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let collection = CollectionView::<
             custom::GenericContext<T>,
             usize,
