@@ -25,7 +25,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, error, info, instrument, warn, Level};
+use tracing::{debug, info, instrument, warn, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
@@ -75,11 +75,11 @@ impl GrpcClient {
                 true
             }
             Code::Ok | Code::Cancelled | Code::ResourceExhausted => {
-                error!("Unexpected gRPC status: {}; retrying", status);
+                info!("Unexpected gRPC status: {}; retrying", status);
                 true
             }
+            Code::NotFound => false,
             Code::InvalidArgument
-            | Code::NotFound
             | Code::AlreadyExists
             | Code::PermissionDenied
             | Code::FailedPrecondition
@@ -88,7 +88,7 @@ impl GrpcClient {
             | Code::Internal
             | Code::DataLoss
             | Code::Unauthenticated => {
-                error!("Unexpected gRPC status: {}", status);
+                info!("Unexpected gRPC status: {}", status);
                 false
             }
         }
