@@ -4,6 +4,9 @@
 # ---------------------------------------------------------------------------------*
 node_modules
 npm-debug.log
+# Ignore dangling symlinks to node_modules in web examples
+examples/*/public/js/@linera/client
+examples/*/*/public/js/@linera/client
 # ignore .git and .cache folders
 .git
 .cache
