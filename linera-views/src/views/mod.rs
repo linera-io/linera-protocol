@@ -42,6 +42,9 @@ pub mod reentrant_collection_view;
 /// The implementation of a key-value store view.
 pub mod key_value_store_view;
 
+/// The implementation of a key-value store view using a single BTreeMap.
+pub mod small_key_value_store_view;
+
 /// Wrapping a view to compute a hash.
 pub mod hashable_wrapper;
 

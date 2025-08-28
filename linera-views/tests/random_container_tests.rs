@@ -166,7 +166,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
         let read_state = view.store.index_values().await?;
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
         assert!(read_state.iter().map(|kv| (&kv.0, &kv.1)).eq(&state_map));
-        assert_eq!(total_size(&state_vec), view.store.total_size());
+        assert_eq!(total_size(&state_vec), view.store.total_size()?);
 
         let count_oper = rng.gen_range(0..15);
         let mut new_state_map = state_map.clone();
@@ -191,7 +191,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
                     new_state_vec = new_state_map.clone().into_iter().collect();
                     let new_key_values = view.store.index_values().await?;
                     assert_eq!(new_state_vec, new_key_values);
-                    assert_eq!(total_size(&new_state_vec), view.store.total_size());
+                    assert_eq!(total_size(&new_state_vec), view.store.total_size()?);
                 }
             }
             if choice == 1 && entry_count > 0 {
@@ -225,7 +225,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
             new_state_vec = new_state_map.clone().into_iter().collect();
             let new_key_values = view.store.index_values().await?;
             assert_eq!(new_state_vec, new_key_values);
-            assert_eq!(total_size(&new_state_vec), view.store.total_size());
+            assert_eq!(total_size(&new_state_vec), view.store.total_size()?);
             let all_keys_vec = all_keys.clone().into_iter().collect::<Vec<_>>();
             let tests_multi_get = view.store.multi_get(all_keys_vec).await?;
             for (i, key) in all_keys.clone().into_iter().enumerate() {
