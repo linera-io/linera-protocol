@@ -1922,10 +1922,6 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     client2.assign(owner2, chain2).await?;
     client3.assign(owner3, chain2).await?;
 
-    // Synchronizing the chains that need be.
-    client2.sync(chain2).await?;
-    client3.sync(chain2).await?;
-
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
         (owner1, Amount::from_tokens(9)),
@@ -1946,6 +1942,10 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
             Some(chain2),
         )
         .await?;
+
+    // Synchronize the chain in clients 2 and 3, so they see the initialized application state.
+    client2.sync(chain2).await?;
+    client3.sync(chain2).await?;
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
