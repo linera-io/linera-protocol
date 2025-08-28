@@ -19,7 +19,7 @@ use chrono::Utc;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    crypto::{InMemorySigner, Signer},
+    crypto::{AccountSecretKey, InMemorySigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
@@ -1610,6 +1610,43 @@ impl Runnable for Job {
                 );
             }
 
+            Wallet(WalletCommand::Init { faucet, .. }) => {
+                let Some(faucet_url) = faucet else {
+                    return Ok(());
+                };
+                let Some(network_description) = storage.read_network_description().await? else {
+                    anyhow::bail!("Missing network description");
+                };
+                let context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+                let faucet = cli_wrappers::Faucet::new(faucet_url);
+                let validators = faucet.current_validators().await?;
+                let chain_client = context.make_chain_client(network_description.admin_chain_id);
+                // TODO(#4434): This is a quick workaround with an equal-weight committee. Instead,
+                // the faucet should provide the full committee including weights.
+                let committee = Committee::new(
+                    validators
+                        .into_iter()
+                        .map(|(pub_key, network_address)| {
+                            let state = ValidatorState {
+                                network_address,
+                                votes: 100,
+                                account_public_key: AccountSecretKey::generate().public(),
+                            };
+                            (pub_key, state)
+                        })
+                        .collect(),
+                    Default::default(), // unused
+                );
+                chain_client
+                    .synchronize_chain_state_from_committee(committee)
+                    .await?;
+            }
+
             Wallet(WalletCommand::FollowChain {
                 chain_id,
                 sync: true,
@@ -2431,6 +2468,7 @@ Make sure to use a Linera client compatible with this network.
                 keystore.persist().await?;
                 options.create_wallet(genesis_config)?.persist().await?;
                 options.initialize_storage().boxed().await?;
+                options.run_with_storage(Job(options.clone())).await??;
                 info!(
                     "Wallet initialized in {} ms",
                     start_time.elapsed().as_millis()
