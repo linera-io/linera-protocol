@@ -156,11 +156,11 @@
           parent.insertBefore(entry, parent.firstChild);
       }
 
-      async function updateBalance(application) {
-          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entries { key value } } }`)));
+      async function updateBalance(application, owner) {
+          const response = JSON.parse(await application.query(gql(`query { tickerSymbol, accounts { entry(key: "${owner}") { value } } }`)));
           console.debug('application response:', response);
           document.querySelector('#ticker-symbol').textContent = response.data.tickerSymbol;
-          document.querySelector('#balance').textContent = (+(response?.data?.accounts?.entries?.[0]?.value || 0)).toFixed(2);
+          document.querySelector('#balance').textContent = (+( response.data.accounts.entry?.value || 0)).toFixed(2);
       }
 
       async function transfer(application, donor, amount, recipient) {
@@ -229,13 +229,13 @@
 
           const application = await client.frontend().application(import.meta.env.LINERA_APPLICATION_ID);
 
-          await updateBalance(application);
+          await updateBalance(application, owner);
 
           client.onNotification(notification => {
               let newBlock = notification.reason.NewBlock;
               if (!newBlock) return;
               prependEntry(document.querySelector('#logs'), newBlock);
-              updateBalance(application);
+              updateBalance(application, owner);
           });
 
           submitButton.disabled = false;
