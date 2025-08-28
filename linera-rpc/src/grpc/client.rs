@@ -78,7 +78,7 @@ impl GrpcClient {
                 info!("Unexpected gRPC status: {}; retrying", status);
                 true
             }
-            Code::NotFound => false,
+            Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
             Code::InvalidArgument
             | Code::AlreadyExists
             | Code::PermissionDenied
