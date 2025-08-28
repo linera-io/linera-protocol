@@ -2302,7 +2302,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.client.synchronize_chain_state(chain_id).await
     }
 
-    /// Downloads and processes any certificates we are missing for the given chain, from the given
+    /// Downloads and processes any certificates we are missing for this chain, from the given
     /// committee.
     #[instrument(level = "trace", skip_all)]
     pub async fn synchronize_chain_state_from_committee(
