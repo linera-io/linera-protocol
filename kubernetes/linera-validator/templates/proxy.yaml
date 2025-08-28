@@ -50,6 +50,14 @@ spec:
       labels:
         app: proxy
     spec:
+      {{- if eq .Values.environment "GCP" }}
+      nodeSelector:
+        workload: proxies
+      tolerations:
+      - key: proxies
+        value: "true"
+        effect: NoSchedule
+      {{- end }}
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-proxy-initializer

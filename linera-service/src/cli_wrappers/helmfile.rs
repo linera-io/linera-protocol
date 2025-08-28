@@ -42,9 +42,12 @@ impl HelmFile {
             )
             .env("LINERA_HELMFILE_SET_NUM_SHARDS", num_shards.to_string())
             .env("LINERA_HELMFILE_LINERA_IMAGE", docker_image_name)
+            .env(
+                "LINERA_HELMFILE_SET_KUBE_CONTEXT",
+                format!("kind-{}", cluster_id),
+            )
             .arg("sync")
             .arg("--wait")
-            .args(["--kube-context", &format!("kind-{}", cluster_id)])
             .spawn_and_wait()
             .await
     }
