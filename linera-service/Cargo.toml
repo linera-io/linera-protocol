@@ -91,7 +91,7 @@ linera-execution = { workspace = true, features = ["fs"] }
 linera-faucet-client.workspace = true
 linera-faucet-server.workspace = true
 linera-metrics = { workspace = true, optional = true }
-linera-persistent = { workspace = true, path = "../linera-persistent" }
+linera-persistent.workspace = true
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 linera-sdk = { workspace = true }
 linera-storage.workspace = true
