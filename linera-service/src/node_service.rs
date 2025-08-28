@@ -861,7 +861,9 @@ where
         let storage = self.context.lock().await.storage().clone();
 
         let chain_listener =
-            ChainListener::new(self.config, self.context, storage, cancellation_token).run();
+            ChainListener::new(self.config, self.context, storage, cancellation_token)
+                .run()
+                .await?;
         let mut chain_listener = Box::pin(chain_listener).fuse();
         let tcp_listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;

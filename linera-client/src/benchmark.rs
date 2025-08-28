@@ -126,14 +126,10 @@ impl<Env: Environment> Benchmark<Env> {
         let notifier = Arc::new(Notify::new());
         let barrier = Arc::new(Barrier::new(num_chains + 1));
 
-        let chain_listener_handle = tokio::spawn(
-            async move {
-                if let Err(e) = chain_listener.run().await {
-                    warn!("Chain listener error: {}", e);
-                }
-            }
-            .instrument(tracing::info_span!("chain_listener")),
-        );
+        let chain_listener_result = chain_listener.run().await;
+
+        let chain_listener_handle =
+            tokio::spawn(async move { chain_listener_result?.await }.in_current_span());
 
         let bps_control_task = Self::bps_control_task(
             &barrier,
@@ -212,7 +208,10 @@ impl<Env: Environment> Benchmark<Env> {
         if let Some(runtime_control_task) = runtime_control_task {
             runtime_control_task.await?;
         }
-        chain_listener_handle.await?;
+
+        if let Err(e) = chain_listener_handle.await? {
+            tracing::error!("chain listener error: {e}");
+        }
 
         Ok(())
     }
