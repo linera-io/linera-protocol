@@ -205,10 +205,20 @@ impl<C: ClientContext> ChainListener<C> {
     pub async fn run(mut self) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
-            let mut chain_ids = BTreeSet::from_iter(guard.wallet().chain_ids());
-            chain_ids.insert(guard.wallet().genesis_admin_chain());
-            chain_ids
+            let admin_chain_id = guard.wallet().genesis_admin_chain();
+            guard
+                .make_chain_client(admin_chain_id)
+                .synchronize_from_validators()
+                .await?;
+            BTreeSet::from_iter(
+                guard
+                    .wallet()
+                    .chain_ids()
+                    .into_iter()
+                    .chain([admin_chain_id]),
+            )
         };
+
         Ok(async {
             self.listen_recursively(chain_ids).await?;
             loop {
@@ -319,6 +329,7 @@ impl<C: ClientContext> ChainListener<C> {
         while let Some(chain_id) = chain_ids.pop_first() {
             chain_ids.extend(self.listen(chain_id).await?);
         }
+
         Ok(())
     }
 
