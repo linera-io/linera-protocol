@@ -211,17 +211,16 @@ impl Client {
             signer,
         )));
         let client_context_clone = client_context.clone();
+        let chain_listener = ChainListener::new(
+            ChainListenerConfig::default(),
+            client_context_clone,
+            storage,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .run()
+        .await?;
         wasm_bindgen_futures::spawn_local(async move {
-            if let Err(error) = ChainListener::new(
-                ChainListenerConfig::default(),
-                client_context_clone,
-                storage,
-                tokio_util::sync::CancellationToken::new(),
-            )
-            .run()
-            .boxed_local()
-            .await
-            {
+            if let Err(error) = chain_listener.boxed_local().await {
                 tracing::error!("ChainListener error: {error:?}");
             }
         });
