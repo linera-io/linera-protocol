@@ -1610,12 +1610,13 @@ impl ServiceSyncRuntime {
                 callback,
             } = request;
 
-            if let Err(error) = self.prepare_for_query(context) {
-                let _ = callback.send(Err(error));
-                return;
-            }
+            let result = self
+                .prepare_for_query(context)
+                .and_then(|()| self.run_query(application_id, query));
 
-            let _ = callback.send(self.run_query(application_id, query));
+            if let Err(err) = callback.send(result) {
+                tracing::debug!(%err, "Receiver for query result has been dropped");
+            }
         }
     }
 
