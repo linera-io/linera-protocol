@@ -19,7 +19,7 @@ use chrono::Utc;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    crypto::{AccountSecretKey, InMemorySigner, Signer},
+    crypto::{AccountPublicKey, InMemorySigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
@@ -1635,7 +1635,7 @@ impl Runnable for Job {
                             let state = ValidatorState {
                                 network_address,
                                 votes: 100,
-                                account_public_key: AccountSecretKey::generate().public(),
+                                account_public_key: AccountPublicKey::from_slice(&[0; 33]).unwrap(),
                             };
                             (pub_key, state)
                         })
