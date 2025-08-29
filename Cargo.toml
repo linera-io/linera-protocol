@@ -239,10 +239,10 @@ tokio-test = "0.4.3"
 tokio-util = "0.7.10"
 toml = "0.8.10"
 tonic = { version = "0.14", default-features = false }
-tonic-prost = "0.14"
-tonic-prost-build = "0.14"
 tonic-build = { version = "0.14", default-features = false }
 tonic-health = "0.14"
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
 tonic-reflection = "0.14"
 tonic-web = "0.14"
 tonic-web-wasm-client = "0.7.1"
