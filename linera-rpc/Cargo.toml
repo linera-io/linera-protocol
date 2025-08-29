@@ -81,6 +81,7 @@ tonic = { workspace = true, features = [
     "tls-webpki-roots",
     "codegen",
     "transport",
+    "router",
 ] }
 tonic-prost.workspace = true
 
