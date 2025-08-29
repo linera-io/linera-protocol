@@ -25,14 +25,20 @@ pub enum EvmExecutionError {
     CommitError(String),
     #[error("It is illegal to call {0} from an operation")]
     IllegalOperationCall(String),
+    #[error("runtime error")]
+    RuntimeError(String),
     #[error("The function {0} is being called but is missing from the bytecode API")]
     MissingFunction(String),
     #[error("Incorrect contract creation: {0}")]
     IncorrectContractCreation(String),
     #[error("The operation should contain the evm selector and so have length 4 or more")]
     OperationIsTooShort,
+    #[error("Missing bytecode")]
+    MissingBytecode,
     #[error("Transact error {0}")]
     TransactError(String),
+    #[error("Impossible to create contracts in services")]
+    NoContractCreationInService,
     #[error("Transact commit error {0}")]
     TransactCommitError(String),
     #[error("Precompile error: {0}")]

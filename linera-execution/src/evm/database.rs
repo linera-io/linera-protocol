@@ -18,7 +18,10 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
+use crate::{
+    ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError,
+    ServiceRuntime,
+};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -78,6 +81,10 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     pub runtime: Arc<Mutex<Runtime>>,
     /// The uncommitted changes to the contract.
     pub changes: EvmState,
+    /// Whether the contract has been instantiated in REVM.
+    pub is_revm_instantiated: bool,
+    /// The error that can occur during runtime.
+    pub error: Arc<Mutex<Option<String>>>,
 }
 
 impl<Runtime> Clone for DatabaseRuntime<Runtime> {
@@ -87,6 +94,8 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
             contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
+            is_revm_instantiated: self.is_revm_instantiated,
+            error: self.error.clone(),
         }
     }
 }
@@ -131,6 +140,8 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
             contract_address: Address::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
+            is_revm_instantiated: false,
+            error: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -143,6 +154,21 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
         let storage_stats = storage_stats_read.clone();
         *storage_stats_read = StorageStats::default();
         storage_stats
+    }
+
+    /// Insert error into the database
+    pub fn insert_error(&self, exec_error: ExecutionError) {
+        let mut error = self.error.lock().expect("The lock should be possible");
+        *error = Some(format!("Runtime error {:?}", exec_error));
+    }
+
+    /// Process the error.
+    pub fn process_any_error(&self) -> Result<(), EvmExecutionError> {
+        let error = self.error.lock().expect("The lock should be possible");
+        if let Some(error) = error.clone() {
+            return Err(EvmExecutionError::RuntimeError(error.clone()));
+        }
+        Ok(())
     }
 }
 
@@ -305,10 +331,23 @@ where
 {
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
-        let account_info = self.basic_ref(*address)?;
+        let account_info: Option<AccountInfo> = self.basic_ref(*address)?;
         Ok(match account_info {
             None => 0,
             Some(account_info) => account_info.nonce,
+        })
+    }
+
+    pub fn get_deployed_bytecode(&self) -> Result<Vec<u8>, ExecutionError> {
+        let account_info = self.basic_ref(self.contract_address)?;
+        Ok(match account_info {
+            None => Vec::new(),
+            Some(account_info) => {
+                let bytecode = account_info
+                    .code
+                    .ok_or(EvmExecutionError::MissingBytecode)?;
+                bytecode.bytes_ref().to_vec()
+            }
         })
     }
 
@@ -323,12 +362,13 @@ where
 
     /// Checks if the contract is already initialized. It is possible
     /// that the constructor has not yet been called.
-    pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
+    pub fn is_initialized(&mut self) -> Result<bool, ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let evm_address = runtime.application_id()?.evm_address();
         let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, evm_address);
         let promise = runtime.contains_key_new(key_info)?;
         let result = runtime.contains_key_wait(&promise)?;
+        self.is_revm_instantiated = result;
         Ok(result)
     }
 

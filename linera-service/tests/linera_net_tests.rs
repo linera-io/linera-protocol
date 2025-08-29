@@ -515,6 +515,118 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
+async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_primitives::U256;
+    use alloy_sol_types::{sol, SolCall};
+    use linera_base::vm::EvmQuery;
+    use linera_execution::test_utils::solidity::{
+        load_solidity_example_by_name, read_evm_address_entry, read_evm_u256_entry,
+        temporary_write_evm_module,
+    };
+    use linera_sdk::abis::evm::EvmAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    sol! {
+        function createCounter(uint256 initialValue);
+        function get_address(uint256 index);
+        function get_value();
+        function increment();
+    }
+
+    let constructor_argument = Vec::new();
+
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    let module = load_solidity_example_by_name(
+        "tests/fixtures/evm_child_subcontract.sol",
+        "CounterFactory",
+    )?;
+    let (evm_contract, _dir) = temporary_write_evm_module(module)?;
+
+    let instantiation_argument = Vec::new();
+    let application_id = client
+        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+            evm_contract.clone(),
+            evm_contract,
+            VmRuntime::Evm,
+            &constructor_argument,
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await?;
+
+    // Creating the subcontracts
+
+    let mutation0 = createCounterCall {
+        initialValue: U256::from(42),
+    };
+    let mutation0 = EvmQuery::Mutation(mutation0.abi_encode());
+    application.run_json_query(mutation0).await?;
+
+    let mutation1 = createCounterCall {
+        initialValue: U256::from(149),
+    };
+    let mutation1 = EvmQuery::Mutation(mutation1.abi_encode());
+    application.run_json_query(mutation1).await?;
+
+    let query0 = get_addressCall {
+        index: U256::from(0),
+    };
+    let query0 = EvmQuery::Query(query0.abi_encode());
+    let address0 = application.run_json_query(query0).await?;
+    let address0 = read_evm_address_entry(address0);
+
+    let query1 = get_addressCall {
+        index: U256::from(1),
+    };
+    let query1 = EvmQuery::Query(query1.abi_encode());
+    let address1 = application.run_json_query(query1).await?;
+    let address1 = read_evm_address_entry(address1);
+    assert_ne!(address0, address1);
+
+    // Creating the applications
+
+    let application0 = ApplicationId::from(address0).with_abi::<EvmAbi>();
+    let application0 = node_service.make_application(&chain, &application0).await?;
+
+    let application1 = ApplicationId::from(address1).with_abi::<EvmAbi>();
+    let application1 = node_service.make_application(&chain, &application1).await?;
+
+    let query = get_valueCall {};
+    let query = EvmQuery::Query(query.abi_encode());
+    let result = application0.run_json_query(query.clone()).await?;
+    assert_eq!(read_evm_u256_entry(result), U256::from(42));
+
+    let result = application1.run_json_query(query).await?;
+    assert_eq!(read_evm_u256_entry(result), U256::from(149));
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
 async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{Bytes, Log, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};

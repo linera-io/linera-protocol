@@ -54,6 +54,17 @@ const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 /// only when creating a new instance of a shared contract
 const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
+/// The selector when calling for `InterpreterResult`. This is a fictional
+/// selector that does not correspond to a real function.
+const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
+
+/// The selector when accessing for the deployed bytecode. This is a fictional
+/// selector that does not correspond to a real function.
+const GET_DEPLOYED_BYTECODE_SELECTOR: &[u8] = &[21, 34, 55, 89];
+
+/// The serde serialization of a trivial vector.
+const SERDE_EMPTY_VECTOR: &[u8] = &[91, 93];
+
 fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
     if vec == EXECUTE_MESSAGE_SELECTOR {
         return Err(EvmExecutionError::IllegalOperationCall(
@@ -91,10 +102,6 @@ fn ensure_selector_presence(
     }
     Ok(())
 }
-
-/// The selector when calling for `InterpreterResult`. This is a fictional
-/// selector that does not correspond to a real function.
-const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
 
 #[cfg(test)]
 mod tests {
@@ -886,14 +893,39 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
     }
 }
 
-fn map_result_call_outcome(
+fn map_result_create_outcome<Runtime: BaseRuntime>(
+    database: &DatabaseRuntime<Runtime>,
+    result: Result<Option<CreateOutcome>, ExecutionError>,
+) -> Option<CreateOutcome> {
+    match result {
+        Err(error) => {
+            database.insert_error(error);
+            // The use of Revert immediately stops the execution.
+            let result = InstructionResult::Revert;
+            let output = Bytes::default();
+            let gas = Gas::default();
+            let result = InterpreterResult {
+                result,
+                output,
+                gas,
+            };
+            Some(CreateOutcome {
+                result,
+                address: None,
+            })
+        }
+        Ok(result) => result,
+    }
+}
+
+fn map_result_call_outcome<Runtime: BaseRuntime>(
+    database: &DatabaseRuntime<Runtime>,
     result: Result<Option<CallOutcome>, ExecutionError>,
 ) -> Option<CallOutcome> {
     match result {
-        Err(_error) => {
-            // An alternative way would be to return None, which would induce
-            // Revm to call the smart contract in its database, where it is
-            // non-existent.
+        Err(error) => {
+            database.insert_error(error);
+            // The use of Revert immediately stops the execution.
             let result = InstructionResult::Revert;
             let output = Bytes::default();
             let gas = Gas::default();
@@ -964,13 +996,11 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
 {
     fn create(
         &mut self,
-        _context: &mut Ctx<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
-        inputs.scheme = CreateScheme::Custom {
-            address: self.contract_address,
-        };
-        None
+        let result = self.create_or_fail(context, inputs);
+        map_result_create_outcome(&self.db, result)
     }
 
     fn call(
@@ -979,11 +1009,58 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
-        map_result_call_outcome(result)
+        map_result_call_outcome(&self.db, result)
     }
 }
 
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
+    fn create_or_fail(
+        &mut self,
+        context: &mut Ctx<'_, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Result<Option<CreateOutcome>, ExecutionError> {
+        if !self.db.is_revm_instantiated {
+            self.db.is_revm_instantiated = true;
+            inputs.scheme = CreateScheme::Custom {
+                address: self.contract_address,
+            };
+            Ok(None)
+        } else {
+            let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
+            let service = linera_base::data_types::Bytecode::new(vec![]);
+            let mut runtime = context
+                .db()
+                .0
+                .runtime
+                .lock()
+                .expect("The lock should be possible");
+            let module_id = runtime.publish_module(contract, service, VmRuntime::Evm)?;
+            let parameters = SERDE_EMPTY_VECTOR.to_vec(); // No constructor
+            let argument = SERDE_EMPTY_VECTOR.to_vec(); // No call to "fn instantiate"
+            let required_application_ids = Vec::new();
+            let application_id = runtime.create_application(
+                module_id,
+                parameters,
+                argument,
+                required_application_ids,
+            )?;
+            let argument = GET_DEPLOYED_BYTECODE_SELECTOR.to_vec();
+            let deployed_bytecode: Vec<u8> =
+                runtime.try_call_application(false, application_id, argument)?;
+            let result = InterpreterResult {
+                result: InstructionResult::Return, // Only possibility if no error occured.
+                output: Bytes::from(deployed_bytecode),
+                gas: Gas::new(inputs.gas_limit),
+            };
+            let address = application_id.evm_address();
+            let creation_outcome = CreateOutcome {
+                result,
+                address: Some(address),
+            };
+            Ok(Some(creation_outcome))
+        }
+    }
+
     fn call_or_fail(
         &mut self,
         context: &mut Ctx<'_, Runtime>,
@@ -1037,13 +1114,11 @@ impl<Runtime> Clone for CallInterceptorService<Runtime> {
 impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
     fn create(
         &mut self,
-        _context: &mut Ctx<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Option<CreateOutcome> {
-        inputs.scheme = CreateScheme::Custom {
-            address: self.contract_address,
-        };
-        None
+        let result = self.create_or_fail(context, inputs);
+        map_result_create_outcome(&self.db, result)
     }
 
     fn call(
@@ -1052,11 +1127,29 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
-        map_result_call_outcome(result)
+        map_result_call_outcome(&self.db, result)
     }
 }
 
 impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
+    fn create_or_fail(
+        &mut self,
+        _context: &mut Ctx<'_, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Result<Option<CreateOutcome>, ExecutionError> {
+        if !self.db.is_revm_instantiated {
+            self.db.is_revm_instantiated = true;
+            inputs.scheme = CreateScheme::Custom {
+                address: self.contract_address,
+            };
+            Ok(None)
+        } else {
+            Err(ExecutionError::EvmError(
+                EvmExecutionError::NoContractCreationInService,
+            ))
+        }
+    }
+
     fn call_or_fail(
         &mut self,
         context: &mut Ctx<'_, Runtime>,
@@ -1171,6 +1264,9 @@ where
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
+        if operation == GET_DEPLOYED_BYTECODE_SELECTOR {
+            return self.db.get_deployed_bytecode();
+        }
         let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
@@ -1396,6 +1492,7 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
+        self.db.process_any_error()?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
         let result = process_execution_result(storage_stats, result)?;
@@ -1549,6 +1646,7 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
+        self.db.process_any_error()?;
         let storage_stats = self.db.take_storage_stats();
         Ok((
             process_execution_result(storage_stats, result_state.result)?,
