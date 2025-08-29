@@ -211,7 +211,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     #[instrument(level = "trace")]
-    async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
+    pub async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
         match self.node.download_blob(blob_id).await {
             Ok(blob) => {
                 let blob = Blob::new(blob);
