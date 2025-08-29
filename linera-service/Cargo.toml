@@ -116,9 +116,14 @@ tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tokio-util.workspace = true
 toml.workspace = true
-tonic = { workspace = true, features = ["transport", "tls-native-roots", "tls-ring", "tls-webpki-roots"] }
-tonic-prost.workspace = true
+tonic = { workspace = true, features = [
+    "transport",
+    "tls-native-roots",
+    "tls-ring",
+    "tls-webpki-roots",
+] }
 tonic-health.workspace = true
+tonic-prost.workspace = true
 tonic-reflection.workspace = true
 tonic-web.workspace = true
 tower.workspace = true
