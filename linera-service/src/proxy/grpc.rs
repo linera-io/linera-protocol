@@ -52,6 +52,7 @@ use tonic::{
     transport::{Channel, Identity, Server, ServerTlsConfig},
     Request, Response, Status,
 };
+use tonic_web::GrpcWebLayer;
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
 
@@ -248,7 +249,7 @@ where
         #[cfg(with_metrics)]
         prometheus_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
 
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        let (health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter
             .set_serving::<ValidatorNodeServer<GrpcProxy<S>>>()
             .await;
@@ -271,10 +272,11 @@ where
                         .layer(PrometheusMetricsMiddlewareLayer)
                         .into_inner(),
                 )
+                .layer(GrpcWebLayer::new())
                 .accept_http1(true)
                 .add_service(health_service)
-                .add_service(tonic_web::enable(self.as_validator_node()))
-                .add_service(tonic_web::enable(reflection_service))
+                .add_service(self.as_validator_node())
+                .add_service(reflection_service)
                 .serve_with_shutdown(self.public_address(), shutdown_signal.cancelled_owned())
                 .in_current_span(),
         );

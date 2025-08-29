@@ -78,15 +78,15 @@ test-strategy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tonic = { workspace = true, features = [
-    "tls",
     "tls-webpki-roots",
-    "prost",
     "codegen",
     "transport",
 ] }
+tonic-prost.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tonic = { workspace = true, features = ["codegen", "prost"] }
+tonic = { workspace = true, features = ["codegen"] }
+tonic-prost.workspace = true
 tonic-web-wasm-client.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
@@ -95,7 +95,8 @@ wasm-bindgen-test.workspace = true
 [build-dependencies]
 cfg_aliases.workspace = true
 rcgen.workspace = true
-tonic-build = { workspace = true, features = ["prost"] }
+tonic-prost-build.workspace = true
+tonic-prost.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["prost"]

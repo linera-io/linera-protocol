@@ -164,7 +164,7 @@ proc-macro2 = "1.0"
 prometheus = "0.13.3"
 prometheus-parse = "0.2.5"
 proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
-prost = "0.13.2"
+prost = "0.14"
 quick_cache = "0.6.13"
 quote = "1.0"
 rand = { version = "0.8.5", default-features = false }
@@ -238,12 +238,14 @@ tokio-stream = "0.1.14"
 tokio-test = "0.4.3"
 tokio-util = "0.7.10"
 toml = "0.8.10"
-tonic = { version = "0.12.3", default-features = false }
-tonic-build = { version = "0.12.3", default-features = false }
-tonic-health = "0.12"
-tonic-reflection = "0.12"
-tonic-web = "0.12"
-tonic-web-wasm-client = "0.6.0"
+tonic = { version = "0.14", default-features = false }
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
+tonic-build = { version = "0.14", default-features = false }
+tonic-health = "0.14"
+tonic-reflection = "0.14"
+tonic-web = "0.14"
+tonic-web-wasm-client = "0.7.1"
 tower = "0.4.13"
 tower-http = "0.6.6"
 tracing = { version = "0.1.40", features = ["release_max_level_debug"] }

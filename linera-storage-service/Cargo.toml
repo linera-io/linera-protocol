@@ -34,7 +34,8 @@ prost.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tonic = { workspace = true, features = ["codegen", "prost", "transport"] }
+tonic = { workspace = true, features = ["codegen", "transport", "router"] }
+tonic-prost.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
@@ -50,7 +51,8 @@ test-strategy.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
-tonic-build = { workspace = true, features = ["prost", "transport"] }
+tonic-prost-build.workspace = true
+tonic-prost.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["proptest", "prost"]

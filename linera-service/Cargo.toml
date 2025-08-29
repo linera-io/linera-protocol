@@ -116,7 +116,8 @@ tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tokio-util.workspace = true
 toml.workspace = true
-tonic = { workspace = true, features = ["transport", "tls", "tls-roots"] }
+tonic = { workspace = true, features = ["transport"] }
+tonic-prost.workspace = true
 tonic-health.workspace = true
 tonic-reflection.workspace = true
 tonic-web.workspace = true
@@ -126,7 +127,8 @@ tracing.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
-tonic-build = { workspace = true, features = ["prost", "transport"] }
+tonic-prost.workspace = true
+tonic-prost-build = { workspace = true, features = ["transport"] }
 
 [dev-dependencies]
 amm.workspace = true

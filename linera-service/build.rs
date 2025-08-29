@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
     };
 
-    tonic_build::compile_protos("src/exporter/proto/indexer.proto")?;
+    tonic_prost_build::compile_protos("src/exporter/proto/indexer.proto")?;
 
     Ok(())
 }
