@@ -23,13 +23,11 @@ cfg_if::cfg_if! {
         pub use tonic_web_wasm_client::{Client as Channel, Error, options::FetchOptions};
 
         pub fn create_channel(address: String, options: &Options) -> Result<Channel, Error> {
+            let mut client = tonic_web_wasm_client::Client::new(address);
             if let Some(timeout) = options.timeout {
-                let mut options = FetchOptions::new();
-                options.timeout(timeout);
-                Ok(tonic_web_wasm_client::Client::new_with_options(address, options))
-            } else {
-                Ok(tonic_web_wasm_client::Client::new(address))
+                client.with_options(FetchOptions::new().timeout(timeout));
             }
+            Ok(client)
         }
     } else {
         pub use tonic::transport::{Channel, Error};
