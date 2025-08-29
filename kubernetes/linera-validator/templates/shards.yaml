@@ -30,6 +30,14 @@ spec:
       labels:
         app: shards
     spec:
+      {{- if eq .Values.environment "GCP" }}
+      nodeSelector:
+        workload: shards
+      tolerations:
+      - key: shards
+        value: "true"
+        effect: NoSchedule
+      {{- end }}
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-server-initializer
