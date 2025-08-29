@@ -9,7 +9,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_prost_build::configure()
         .file_descriptor_set_path(out_dir.join("file_descriptor_set.bin"))
         .protoc_arg("--experimental_allow_proto3_optional")
-        .build_transport(!cfg!(target_arch = "wasm32"))
         .compile_protos(&["proto/rpc.proto"], no_includes)?;
 
     let subject_alt_names = vec!["localhost".to_string()];
