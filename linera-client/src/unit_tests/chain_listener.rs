@@ -148,12 +148,12 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let context = Arc::new(Mutex::new(context));
     let cancellation_token = CancellationToken::new();
     let child_token = cancellation_token.child_token();
-    let handle = linera_base::task::spawn(async move {
-        ChainListener::new(config, context, storage, child_token)
-            .run()
-            .await
-            .unwrap()
-    });
+    let chain_listener = ChainListener::new(config, context, storage, child_token)
+        .run()
+        .await
+        .unwrap();
+
+    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
     // Transfer one token to chain 0. The listener should eventually become leader and receive
     // the message.
     let recipient0 = Account::chain(chain_id0);
@@ -209,15 +209,12 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let context = Arc::new(Mutex::new(context));
     let cancellation_token = CancellationToken::new();
     let child_token = cancellation_token.child_token();
-    let handle = linera_base::task::spawn({
-        let storage = storage.clone();
-        async move {
-            ChainListener::new(config, context, storage, child_token)
-                .run()
-                .await
-                .unwrap()
-        }
-    });
+    let chain_listener = ChainListener::new(config, context, storage.clone(), child_token)
+        .run()
+        .await
+        .unwrap();
+
+    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
     // Burn one token.
     let certificate = client0
         .burn(AccountOwner::CHAIN, Amount::ONE)

@@ -8,6 +8,7 @@ This module defines the client API for the Web extension.
 // We sometimes need functions in this module to be async in order to
 // ensure the generated code will return a `Promise`.
 #![allow(clippy::unused_async)]
+#![recursion_limit = "256"]
 
 pub mod signer;
 
@@ -211,20 +212,24 @@ impl Client {
             signer,
         )));
         let client_context_clone = client_context.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            if let Err(error) = ChainListener::new(
-                ChainListenerConfig::default(),
-                client_context_clone,
-                storage,
-                tokio_util::sync::CancellationToken::new(),
-            )
-            .run()
-            .boxed_local()
-            .await
-            {
-                tracing::error!("ChainListener error: {error:?}");
+        let chain_listener = ChainListener::new(
+            ChainListenerConfig::default(),
+            client_context_clone,
+            storage,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .run()
+        .boxed_local()
+        .await?
+        .boxed_local();
+        wasm_bindgen_futures::spawn_local(
+            async move {
+                if let Err(error) = chain_listener.await {
+                    tracing::error!("ChainListener error: {error:?}");
+                }
             }
-        });
+            .boxed_local(),
+        );
         log::info!("Linera Web client successfully initialized");
         Ok(Self { client_context })
     }
