@@ -75,6 +75,8 @@ pub enum BenchmarkError {
     NotEnoughChainsInWallet(usize, usize),
     #[error("Random number generator error: {0}")]
     RandError(#[from] rand::Error),
+    #[error("Chain listener startup error")]
+    ChainListenerStartupError,
 }
 
 #[derive(Debug)]
@@ -130,10 +132,11 @@ impl<Env: Environment> Benchmark<Env> {
         let notifier = Arc::new(Notify::new());
         let barrier = Arc::new(Barrier::new(num_chains + 1));
 
-        let chain_listener_result = chain_listener.run().await;
-
-        let chain_listener_handle =
-            tokio::spawn(async move { chain_listener_result?.await }.in_current_span());
+        let chain_listener_future = chain_listener
+            .run()
+            .await
+            .map_err(|_| BenchmarkError::ChainListenerStartupError)?;
+        let chain_listener_handle = tokio::spawn(chain_listener_future.in_current_span());
 
         let bps_control_task = Self::bps_control_task(
             &barrier,
