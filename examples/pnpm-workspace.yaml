@@ -1,0 +1,6 @@
+packages:
+- ../linera-web
+- ../linera-web/signer
+- counter
+- counter/metamask
+- fungible
