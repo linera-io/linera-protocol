@@ -16,6 +16,12 @@ spec:
     spec:
       nodeSelector:
         cloud.google.com/gke-local-nvme-ssd: "true"
+      # Add tolerations for all node types that might have local SSDs.
+      # Scylla nodes are managed by the Scylla NodeConfig, so no need to add tolerations for them.
+      tolerations:
+      - key: shards
+        value: "true"
+        effect: NoSchedule
       hostPID: true
       containers:
         - name: startup-script
