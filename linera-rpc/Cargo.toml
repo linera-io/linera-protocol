@@ -32,6 +32,8 @@ metrics = [
 server = ["tokio-util", "tonic-health", "tonic-reflection"]
 simple-network = ["tokio-util/net"]
 
+transport = ["tonic-prost-build/transport"]
+
 web = [
     "linera-base/web",
     "linera-chain/web",
@@ -78,15 +80,16 @@ test-strategy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tonic = { workspace = true, features = [
-    "tls",
     "tls-webpki-roots",
-    "prost",
     "codegen",
     "transport",
+    "router",
 ] }
+tonic-prost.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tonic = { workspace = true, features = ["codegen", "prost"] }
+tonic = { workspace = true, features = ["codegen"] }
+tonic-prost.workspace = true
 tonic-web-wasm-client.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
@@ -95,7 +98,8 @@ wasm-bindgen-test.workspace = true
 [build-dependencies]
 cfg_aliases.workspace = true
 rcgen.workspace = true
-tonic-build = { workspace = true, features = ["prost"] }
+tonic-prost.workspace = true
+tonic-prost-build.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["prost"]

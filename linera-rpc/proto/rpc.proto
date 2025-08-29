@@ -13,8 +13,7 @@ service NotifierService {
 // Interface provided by each physical shard (aka "worker") of a validator or a local node.
 // * All commands return either the current chain info or an error.
 // * Repeating commands produces no changes and returns no error.
-// * Some handlers may return cross-chain requests, that is, messages
-//   to be communicated to other workers of the same validator.
+// * Some handlers may return cross-chain requests, that is, messages to be communicated to other workers of the same validator.
 service ValidatorWorker {
   // Propose a new block.
   rpc HandleBlockProposal(BlockProposal) returns (ChainInfoResult);
