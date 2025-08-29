@@ -682,7 +682,8 @@ where
             self.storage,
             cancellation_token.clone(),
         )
-        .run();
+        .run()
+        .await?;
         let batch_processor_task = batch_processor.run(cancellation_token.clone());
         let tcp_listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
