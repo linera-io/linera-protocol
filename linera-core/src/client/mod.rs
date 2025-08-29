@@ -376,18 +376,11 @@ impl<Env: Environment> Client<Env> {
             let mut result = self.handle_certificate(certificate.clone()).await;
 
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                future::try_join_all(blob_ids.iter().map(|blob_id| async move {
-                    let blob_certificate =
-                        remote_node.download_certificate_for_blob(*blob_id).await?;
-                    self.receive_sender_certificate(
-                        blob_certificate,
-                        ReceiveCertificateMode::NeedsCheck,
-                        None,
-                    )
-                    .await?;
-                    Result::<(), ChainClientError>::Ok(())
+                let blobs = future::join_all(blob_ids.iter().map(|blob_id| async move {
+                    remote_node.try_download_blob(*blob_id).await.unwrap()
                 }))
-                .await?;
+                .await;
+                self.local_node.store_blobs(&blobs).await?;
                 result = self.handle_certificate(certificate.clone()).await;
             }
 
@@ -931,10 +924,22 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
+        let (_, committee) = self.admin_committee().await?;
+        self.synchronize_chain_state_from_committee(chain_id, committee)
+            .await
+    }
+
+    /// Downloads and processes any certificates we are missing for the given chain, from the given
+    /// committee.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn synchronize_chain_state_from_committee(
+        &self,
+        chain_id: ChainId,
+        committee: Committee,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let (_, committee) = self.admin_committee().await?;
         let validators = self.make_nodes(&committee)?;
         Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
         communicate_with_quorum(
@@ -2295,6 +2300,18 @@ impl<Env: Environment> ChainClient<Env> {
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         self.client.synchronize_chain_state(chain_id).await
+    }
+
+    /// Downloads and processes any certificates we are missing for this chain, from the given
+    /// committee.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn synchronize_chain_state_from_committee(
+        &self,
+        committee: Committee,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        self.client
+            .synchronize_chain_state_from_committee(self.chain_id, committee)
+            .await
     }
 
     /// Executes a list of operations.

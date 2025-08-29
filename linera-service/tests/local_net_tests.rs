@@ -237,6 +237,19 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         );
     }
 
+    if matches!(network, Network::Grpc) {
+        let client = net.make_client().await;
+        client.wallet_init(Some(&faucet)).await?;
+        let (chain_id, _owner) = client.request_chain(&faucet, true).await?;
+        let port = get_node_port().await;
+        let service = client
+            .run_node_service(port, ProcessInbox::Automatic)
+            .await?;
+        service
+            .publish_data_blob(&chain_id, b"blob bytes".to_vec())
+            .await?;
+    }
+
     net.ensure_is_running().await?;
     net.terminate().await?;
 
