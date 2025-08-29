@@ -9,6 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_prost_build::configure()
         .file_descriptor_set_path(out_dir.join("file_descriptor_set.bin"))
         .protoc_arg("--experimental_allow_proto3_optional")
+        .build_transport(!cfg!(feature = "web"))
         .compile_protos(&["proto/rpc.proto"], no_includes)?;
 
     let subject_alt_names = vec!["localhost".to_string()];
@@ -30,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     cfg_aliases::cfg_aliases! {
         with_testing: { any(test, feature = "test") },
-        web: { all(target_arch = "wasm32", target_os = "unknown") },
+        web: { all(target_arch = "wasm32", target_os = "unknown", feature = "web") },
         with_metrics: { all(not(web), feature = "metrics") },
         with_server: { all(not(web), feature = "server") },
         with_simple_network: { all(not(web), feature = "simple-network") },
