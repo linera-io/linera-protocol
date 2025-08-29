@@ -10,9 +10,10 @@ use linera_execution::{
     test_utils::{
         create_dummy_user_application_description, dummy_chain_description, SystemExecutionState,
     },
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
-    QueryContext, QueryOutcome, QueryResponse, ResourceControlPolicy, ResourceController,
-    ResourceTracker, TransactionTracker, WasmContractModule, WasmRuntime, WasmServiceModule,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateActor, Operation,
+    OperationContext, Query, QueryContext, QueryOutcome, QueryResponse, ResourceControlPolicy,
+    ResourceController, ResourceTracker, TransactionTracker, WasmContractModule, WasmRuntime,
+    WasmServiceModule,
 };
 use linera_views::{context::Context as _, views::View};
 use serde_json::json;
@@ -90,13 +91,12 @@ async fn test_fuel_for_counter_wasm_application(
         } else {
             vec![]
         });
-        view.execute_operation(
-            context,
-            Operation::user_without_abi(app_id, increment).unwrap(),
-            &mut txn_tracker,
-            &mut controller,
-        )
-        .await?;
+        ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+            .execute_operation(
+                context,
+                Operation::user_without_abi(app_id, increment).unwrap(),
+            )
+            .await?;
         let txn_outcome = txn_tracker.into_outcome().unwrap();
         assert!(txn_outcome.outgoing_messages.is_empty());
     }

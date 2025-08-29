@@ -73,14 +73,10 @@ async fn application_message_index() -> anyhow::Result<()> {
         .extra()
         .add_blobs([contract_blob, service_blob])
         .await?;
+    let mut controller = ResourceController::default();
     let new_application = view
         .system
-        .execute_operation(
-            context,
-            operation,
-            &mut txn_tracker,
-            &mut ResourceController::default(),
-        )
+        .execute_operation(context, operation, &mut txn_tracker, &mut controller)
         .await?;
     let id = expected_application_id(&context, &module_id, vec![], vec![], 0);
     assert_eq!(new_application, Some((id, vec![])));
@@ -100,14 +96,10 @@ async fn open_chain_message_index() {
     };
     let mut txn_tracker = TransactionTracker::default();
     let operation = SystemOperation::OpenChain(config.clone());
+    let mut controller = ResourceController::default();
     let new_application = view
         .system
-        .execute_operation(
-            context,
-            operation,
-            &mut txn_tracker,
-            &mut ResourceController::default(),
-        )
+        .execute_operation(context, operation, &mut txn_tracker, &mut controller)
         .await
         .unwrap();
     assert_eq!(new_application, None);

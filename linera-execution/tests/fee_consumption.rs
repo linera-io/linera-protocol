@@ -19,8 +19,8 @@ use linera_execution::{
         blob_oracle_responses, dummy_chain_description, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
-    ContractRuntime, ExecutionError, Message, MessageContext, ResourceControlPolicy,
-    ResourceController, ResourceTracker, TransactionTracker,
+    ContractRuntime, ExecutionError, ExecutionStateActor, Message, MessageContext,
+    ResourceControlPolicy, ResourceController, ResourceTracker, TransactionTracker,
 };
 use test_case::test_case;
 
@@ -288,21 +288,20 @@ async fn test_fee_consumption(
     };
     let mut grant = initial_grant.unwrap_or_default();
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
-    view.execute_message(
-        context,
-        Message::User {
-            application_id,
-            bytes: vec![],
-        },
-        if initial_grant.is_some() {
-            Some(&mut grant)
-        } else {
-            None
-        },
-        &mut txn_tracker,
-        &mut controller,
-    )
-    .await?;
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_message(
+            context,
+            Message::User {
+                application_id,
+                bytes: vec![],
+            },
+            if initial_grant.is_some() {
+                Some(&mut grant)
+            } else {
+                None
+            },
+        )
+        .await?;
 
     let txn_outcome = txn_tracker.into_outcome()?;
     assert!(txn_outcome.outgoing_messages.is_empty());
