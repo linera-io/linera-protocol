@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["missing_meta_item","parse_meta_item","parse_meta_item_flag","parse_meta_item_inline","parse_meta_item_named"]};
