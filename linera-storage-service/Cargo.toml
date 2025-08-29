@@ -55,7 +55,7 @@ tonic-prost-build.workspace = true
 tonic-prost.workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["proptest", "prost"]
+ignored = ["proptest", "prost", "tonic-prost"]
 
 [[bench]]
 name = "store"

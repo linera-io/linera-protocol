@@ -166,6 +166,9 @@ test-strategy.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
+[package.metadata.cargo-machete]
+ignored = ["tonic-prost"]
+
 [[bin]]
 name = "linera"
 path = "src/cli/main.rs"
