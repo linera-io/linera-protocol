@@ -85,7 +85,7 @@ tonic = { workspace = true, features = [
 tonic-prost.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tonic = { workspace = true, features = ["codegen"] }
+tonic = { workspace = true, features = ["codegen", "server"] }
 tonic-prost.workspace = true
 tonic-web-wasm-client.workspace = true
 
