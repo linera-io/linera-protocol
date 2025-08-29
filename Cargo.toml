@@ -245,7 +245,7 @@ tonic-prost = "0.14"
 tonic-prost-build = "0.14"
 tonic-reflection = "0.14"
 tonic-web = "0.14"
-tonic-web-wasm-client = "0.7.1"
+tonic-web-wasm-client = "0.8.0"
 tower = "0.4.13"
 tower-http = "0.6.6"
 tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
