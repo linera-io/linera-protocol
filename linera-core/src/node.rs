@@ -285,7 +285,7 @@ pub enum NodeError {
     #[error("Node returned a BlobsNotFound error with duplicates")]
     DuplicatesInBlobsNotFound,
     #[error("Node returned a BlobsNotFound error with unexpected blob IDs")]
-    UnexpectedEntriesInBlobsNotFound,
+    UnexpectedEntriesInBlobsNotFound(Box<BlobId>),
     #[error("Node returned certificates {returned:?}, but we requested {requested:?}")]
     UnexpectedCertificates {
         returned: Vec<CryptoHash>,

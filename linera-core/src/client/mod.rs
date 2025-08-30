@@ -975,6 +975,10 @@ impl<Env: Environment> Client<Env> {
 
         // If we are at the same height as the remote node, we also update our chain manager.
         if local_info.next_block_height != remote_info.next_block_height {
+            debug!(
+                "Synced from validator {}; but remote height is {} and local height is {}",
+                remote_node.public_key, remote_info.next_block_height, local_info.next_block_height
+            );
             return Ok(());
         };
 
@@ -997,14 +1001,14 @@ impl<Env: Environment> Client<Env> {
                     let hash = cert.hash();
                     if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
                         debug!(
-                            "Skipping certificate {hash} from validator {}: {err}",
-                            remote_node.public_key
+                            "Skipping locked block {hash} from validator {} at height {}: {err}",
+                            remote_node.public_key, local_info.next_block_height,
                         );
                     }
                 }
             }
         }
-        for proposal in proposals {
+        'proposal_loop: for proposal in proposals {
             let owner: AccountOwner = proposal.owner();
             if let Err(mut err) = self
                 .local_node
@@ -1023,9 +1027,12 @@ impl<Env: Environment> Client<Env> {
                             {
                                 Ok(content) => content,
                                 Err(err) => {
-                                    let public_key = &remote_node.public_key;
-                                    warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
-                                    continue;
+                                    warn!(
+                                        "Skipping proposal from {owner} and validator {} at \
+                                        height {}; failed to download {blob_id}: {err}",
+                                        remote_node.public_key, local_info.next_block_height
+                                    );
+                                    continue 'proposal_loop;
                                 }
                             };
                             blobs.push(Blob::new(blob_content));
@@ -1063,8 +1070,10 @@ impl<Env: Environment> Client<Env> {
                     }
                 }
 
-                let public_key = &remote_node.public_key;
-                debug!("Skipping proposal from {owner} and validator {public_key}: {err}");
+                debug!(
+                    "Skipping proposal from {owner} and validator {} at height {}: {err}",
+                    remote_node.public_key, local_info.next_block_height
+                );
             }
         }
         Ok(())
