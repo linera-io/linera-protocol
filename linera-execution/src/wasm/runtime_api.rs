@@ -17,7 +17,10 @@ use linera_witty::{wit_export, Instance, RuntimeError};
 use tracing::log;
 
 use super::WasmExecutionError;
-use crate::{BaseRuntime, ContractRuntime, DataBlobHash, ExecutionError, ModuleId, ServiceRuntime};
+use crate::{
+    BaseRuntime, ContractRuntime, DataBlobHash, ExecutionError, ModuleId, OperationInput,
+    ServiceRuntime,
+};
 
 /// Common host data used as the `UserData` of the system API implementations.
 pub struct RuntimeApiData<Runtime> {
@@ -687,7 +690,16 @@ where
         caller
             .user_data_mut()
             .runtime
-            .schedule_operation(operation)
+            .schedule_operation(OperationInput::Direct(operation))
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Schedules a composed operation to be included in the block being built by this query.
+    fn schedule_composed_operation(caller: &mut Caller) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .schedule_operation(OperationInput::Composed)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

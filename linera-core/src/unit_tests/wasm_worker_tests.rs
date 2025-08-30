@@ -28,7 +28,8 @@ use linera_chain::{
 };
 use linera_execution::{
     system::SystemOperation, test_utils::SystemExecutionState, ExecutionRuntimeContext, Operation,
-    OperationContext, ResourceController, TransactionTracker, WasmContractModule, WasmRuntime,
+    OperationContext, OperationInput, ResourceController, TransactionTracker, WasmContractModule,
+    WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -258,7 +259,7 @@ where
         .with_timestamp(3)
         .with_operation(Operation::User {
             application_id,
-            bytes: user_operation.clone(),
+            input: OperationInput::Direct(user_operation.clone()),
         });
     let operation_context = OperationContext {
         chain_id: creator_chain.id(),
@@ -273,7 +274,7 @@ where
             operation_context,
             Operation::User {
                 application_id,
-                bytes: user_operation,
+                input: OperationInput::Direct(user_operation),
             },
             &mut TransactionTracker::new(
                 Timestamp::from(3),
@@ -282,6 +283,7 @@ where
                 0,
                 Some(vec![OracleResponse::Blob(application_description_blob_id)]),
                 &[],
+                vec![],
             ),
             &mut controller,
         )
@@ -291,6 +293,7 @@ where
         .system
         .used_blobs
         .insert(&application_description_blob_id)?;
+    let result = counter::CounterOperation::Increment(5);
     let run_block_proposal = ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
@@ -300,7 +303,7 @@ where
             blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![vec![]],
-            operation_results: vec![OperationResult(bcs::to_bytes(&15u64)?)],
+            operation_results: vec![OperationResult(bcs::to_bytes(&result)?)],
         }
         .with(run_block),
     );

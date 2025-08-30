@@ -19,7 +19,7 @@ use linera_core::{
     client::{ChainClient, ChainClientError},
     Environment,
 };
-use linera_execution::{system::SystemOperation, Operation};
+use linera_execution::{system::SystemOperation, Operation, OperationInput};
 use linera_sdk::abis::fungible::FungibleOperation;
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
@@ -741,7 +741,7 @@ impl<Env: Environment> Benchmark<Env> {
         .expect("should serialize fungible token operation");
         Operation::User {
             application_id,
-            bytes,
+            input: OperationInput::Direct(bytes),
         }
     }
 }

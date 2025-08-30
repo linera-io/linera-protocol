@@ -132,6 +132,7 @@ where
             next_chain_index,
             None,
             &[],
+            vec![], // No previous operation results for testing
         );
         txn_tracker.add_created_blob(blob);
         self.run_user_action(
@@ -310,8 +311,22 @@ where
             }
             Operation::User {
                 application_id,
-                bytes,
+                input,
             } => {
+                // Get the bytes for the operation based on the input type
+                let bytes = match input {
+                    crate::OperationInput::Direct(bytes) => bytes.clone(),
+                    crate::OperationInput::Composed => {
+                        // For composed operations, use the result from the last operation
+                        let previous_results = txn_tracker.previous_operation_results();
+                        if previous_results.is_empty() {
+                            return Err(ExecutionError::ComposedOperationCannotBeFirst);
+                        }
+                        // Get the last operation result as input
+                        previous_results.last().unwrap().clone()
+                    }
+                };
+
                 self.run_user_action(
                     application_id,
                     UserAction::Operation(context, bytes),

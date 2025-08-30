@@ -49,6 +49,8 @@ pub struct TransactionTracker {
     previously_created_blobs: BTreeMap<BlobId, BlobContent>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
+    /// Results from previous operations in the current block.
+    previous_operation_results: Vec<Vec<u8>>,
     /// Streams that have been updated but not yet processed during this transaction.
     streams_to_process: BTreeMap<ApplicationId, AppStreamUpdates>,
     /// Published blobs this transaction refers to by [`BlobId`].
@@ -82,6 +84,7 @@ impl TransactionTracker {
         next_chain_index: u32,
         oracle_responses: Option<Vec<OracleResponse>>,
         blobs: &[Vec<Blob>],
+        previous_operation_results: Vec<Vec<u8>>,
     ) -> Self {
         let mut previously_created_blobs = BTreeMap::new();
         for tx_blobs in blobs {
@@ -96,6 +99,7 @@ impl TransactionTracker {
             next_chain_index,
             replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
             previously_created_blobs,
+            previous_operation_results,
             ..Self::default()
         }
     }
@@ -172,6 +176,11 @@ impl TransactionTracker {
 
     pub fn add_operation_result(&mut self, result: Option<Vec<u8>>) {
         self.operation_result = result
+    }
+
+    /// Returns the previous operation results in the current block.
+    pub fn previous_operation_results(&self) -> &[Vec<u8>] {
+        &self.previous_operation_results
     }
 
     pub fn add_stream_to_process(
@@ -281,6 +290,7 @@ impl TransactionTracker {
             blobs,
             previously_created_blobs: _,
             operation_result,
+            previous_operation_results: _,
             streams_to_process,
             blobs_published,
         } = self;
@@ -316,7 +326,15 @@ impl TransactionTracker {
     /// Creates a new [`TransactionTracker`] for testing, with default values and the given
     /// oracle responses.
     pub fn new_replaying(oracle_responses: Vec<OracleResponse>) -> Self {
-        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses), &[])
+        TransactionTracker::new(
+            Timestamp::from(0),
+            0,
+            0,
+            0,
+            Some(oracle_responses),
+            &[],
+            vec![],
+        )
     }
 
     /// Creates a new [`TransactionTracker`] for testing, with default values and oracle responses
