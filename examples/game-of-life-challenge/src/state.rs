@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 #[graphql(complex)]
 #[view(context = ViewStorageContext)]
 pub struct GolChallengeState {
+    /// The local solutions previously submitted by an owner of the chain.
     pub solutions: MapView<DataBlobHash, Solution>,
 }
 

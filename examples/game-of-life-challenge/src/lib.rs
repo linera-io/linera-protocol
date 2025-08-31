@@ -23,7 +23,7 @@ pub struct GolChallengeAbi;
 /// Type for on-chain operations of the Game-of-Life challenge.
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
-    /// Submit a solution for verification.
+    /// Submit a solution locally for verification.
     SubmitSolution {
         /// The ID of the puzzle in blob storage.
         puzzle_id: DataBlobHash,
