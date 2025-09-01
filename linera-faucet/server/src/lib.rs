@@ -39,7 +39,7 @@ use linera_core::{
 };
 use linera_execution::{
     system::{OpenChainConfig, SystemOperation},
-    ExecutionError, Operation,
+    Committee, ExecutionError, Operation,
 };
 #[cfg(feature = "metrics")]
 use linera_metrics::prometheus_server;
@@ -194,6 +194,11 @@ where
                 network_address: validator.network_address.clone(),
             })
             .collect())
+    }
+
+    /// Returns the current committee, including weights and resource policy.
+    async fn current_committee(&self) -> Result<Committee, Error> {
+        Ok(self.client.local_committee().await?)
     }
 }
 

@@ -14,6 +14,7 @@ edition.workspace = true
 [dependencies]
 linera-base.workspace = true
 linera-client.workspace = true
+linera-execution.workspace = true
 linera-version.workspace = true
 reqwest.workspace = true
 serde.workspace = true

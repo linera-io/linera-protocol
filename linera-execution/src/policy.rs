@@ -11,7 +11,7 @@
 
 use std::{collections::BTreeSet, fmt};
 
-use async_graphql::InputObject;
+use async_graphql::{InputObject, SimpleObject};
 use linera_base::{
     data_types::{Amount, ArithmeticError, BlobContent, CompressedBytecode, Resources},
     ensure,
@@ -23,7 +23,8 @@ use serde::{Deserialize, Serialize};
 use crate::ExecutionError;
 
 /// A collection of prices and limits associated with block execution.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject, SimpleObject)]
+#[graphql(name = "ResourceControlPolicyOutput")]
 pub struct ResourceControlPolicy {
     /// The price per unit of fuel (aka gas) for Wasm execution.
     pub wasm_fuel_unit: Amount,
