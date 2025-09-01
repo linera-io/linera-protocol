@@ -5,8 +5,11 @@
 
 // TODO(#3362): generate this code
 
+use std::collections::BTreeMap;
+
 use linera_base::{crypto::ValidatorPublicKey, data_types::ChainDescription};
 use linera_client::config::GenesisConfig;
+use linera_execution::{committee::ValidatorState, Committee, ResourceControlPolicy};
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 
@@ -136,5 +139,35 @@ impl Faucet {
             .into_iter()
             .map(|validator| (validator.public_key, validator.network_address))
             .collect())
+    }
+
+    pub async fn current_committee(&self) -> Result<Committee, Error> {
+        #[derive(serde::Deserialize)]
+        struct CommitteeResponse {
+            validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
+            policy: ResourceControlPolicy,
+        }
+
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Response {
+            current_committee: CommitteeResponse,
+        }
+
+        let response = self
+            .query::<Response>(
+                "query { currentCommittee { \
+                    validators \
+                    policy \
+                } }",
+            )
+            .await?;
+
+        let committee_response = response.current_committee;
+
+        Ok(Committee::new(
+            committee_response.validators,
+            committee_response.policy,
+        ))
     }
 }
