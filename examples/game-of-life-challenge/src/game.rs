@@ -234,6 +234,12 @@ pub struct RectangleConstraintInfo {
 /// Each cell can be unconstrained (absent from map) or have multiple constraint types.
 #[derive(Debug, Clone)]
 pub struct DirectPuzzle {
+    /// The title of the puzzle.
+    pub title: String,
+    /// A brief summary of the puzzle.
+    pub summary: String,
+    /// The difficulty level of the puzzle.
+    pub difficulty: Difficulty,
     /// The width and height of the puzzle, in cells.
     pub size: u16,
     /// The constraints for initial conditions, indexed along the `x` then `y` axis.
@@ -341,6 +347,12 @@ impl DirectPuzzle {
     fn to_pretty_string(&self) -> String {
         let mut result = String::new();
 
+        // Add puzzle metadata
+        result.push_str(&format!("Title: {}\n", self.title));
+        result.push_str(&format!("Summary: {}\n", self.summary));
+        result.push_str(&format!("Difficulty: {:?}\n", self.difficulty));
+        result.push('\n');
+
         result.push_str("Initial Conditions:\n");
         result.push_str(
             &self.format_constraints_pretty(&self.initial_constraints, &self.initial_rectangles),
@@ -394,6 +406,12 @@ impl DirectPuzzle {
     /// Print the puzzle constraints as compact ASCII art showing both initial and final conditions.
     fn to_compact_string(&self) -> String {
         let mut result = String::new();
+
+        // Add puzzle metadata
+        result.push_str(&format!("Title: {}\n", self.title));
+        result.push_str(&format!("Summary: {}\n", self.summary));
+        result.push_str(&format!("Difficulty: {:?}\n", self.difficulty));
+        result.push('\n');
 
         result.push_str("Initial:\n");
         result.push_str(
@@ -815,6 +833,9 @@ impl Puzzle {
         }
 
         DirectPuzzle {
+            title: self.title.clone(),
+            summary: self.summary.clone(),
+            difficulty: self.difficulty,
             size: self.size,
             initial_constraints,
             final_constraints,
@@ -1646,6 +1667,10 @@ mod tests {
         assert_eq!(
             String::from("\n") + &compact_display,
             r#"
+Title: Display Test
+Summary: Test display formatting
+Difficulty: Easy
+
 Initial:
 ●··
 ··✕
@@ -1661,6 +1686,10 @@ Final:
         assert_eq!(
             String::from("\n") + &pretty_display,
             r#"
+Title: Display Test
+Summary: Test display formatting
+Difficulty: Easy
+
 Initial Conditions:
     0 1 2
  0  ● · ·
@@ -1725,6 +1754,10 @@ Final Conditions:
         assert_eq!(
             String::from("\n") + &display,
             r#"
+Title: Empty
+Summary: No conditions
+Difficulty: Easy
+
 Initial:
 ··
 ··
@@ -1784,6 +1817,10 @@ Final:
         assert_eq!(
             String::from("\n") + &compact_display,
             r#"
+Title: Rectangle Constraints Test
+Summary: Test rectangle constraint visualization
+Difficulty: Medium
+
 Initial:
 ●·▤▤
 ·▣▣▤
@@ -1861,6 +1898,10 @@ Final:
         assert_eq!(
             String::from("\n") + &compact_display,
             r#"
+Title: Multiple Constraints Test
+Summary: Test cell with both position and rectangle constraints
+Difficulty: Hard
+
 Initial:
 ▣▣▣
 ▣●▣
@@ -1923,6 +1964,10 @@ Final:
         assert_eq!(
             String::from("\n") + &display,
             r#"
+Title: Conflicting Constraints Test
+Summary: Test cell with conflicting constraints
+Difficulty: Hard
+
 Initial:
 ···
 ·●·
