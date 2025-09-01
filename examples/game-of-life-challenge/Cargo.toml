@@ -12,6 +12,9 @@ log.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+clap.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true, features = ["rt", "sync"] }
@@ -28,3 +31,7 @@ path = "src/contract.rs"
 [[bin]]
 name = "gol_challenge_service"
 path = "src/service.rs"
+
+[[bin]]
+name = "gol-puzzle"
+path = "src/bin/gol-puzzle.rs"
