@@ -240,6 +240,10 @@ pub struct DirectPuzzle {
     pub summary: String,
     /// The difficulty level of the puzzle.
     pub difficulty: Difficulty,
+    /// The minimum number of steps required to solve the puzzle.
+    pub minimal_steps: u16,
+    /// The maximum number of steps allowed to solve the puzzle.
+    pub maximal_steps: u16,
     /// The width and height of the puzzle, in cells.
     pub size: u16,
     /// The constraints for initial conditions, indexed along the `x` then `y` axis.
@@ -461,6 +465,17 @@ impl DirectPuzzle {
         result.push_str(&format!("Title: {}\n", self.title));
         result.push_str(&format!("Summary: {}\n", self.summary));
         result.push_str(&format!("Difficulty: {:?}\n", self.difficulty));
+
+        // Add step range information
+        if self.minimal_steps == self.maximal_steps {
+            result.push_str(&format!("Steps: exactly {}\n", self.minimal_steps));
+        } else {
+            result.push_str(&format!(
+                "Steps: {}-{}\n",
+                self.minimal_steps, self.maximal_steps
+            ));
+        }
+
         result.push('\n');
         result
     }
@@ -829,6 +844,8 @@ impl Puzzle {
             title: self.title.clone(),
             summary: self.summary.clone(),
             difficulty: self.difficulty,
+            minimal_steps: self.minimal_steps,
+            maximal_steps: self.maximal_steps,
             size: self.size,
             initial_constraints,
             final_constraints,
@@ -1663,6 +1680,7 @@ mod tests {
 Title: Display Test
 Summary: Test display formatting
 Difficulty: Easy
+Steps: exactly 1
 
 Initial:
 ●··
@@ -1682,6 +1700,7 @@ Final:
 Title: Display Test
 Summary: Test display formatting
 Difficulty: Easy
+Steps: exactly 1
 
 Initial Conditions:
     0 1 2
@@ -1750,6 +1769,7 @@ Final Conditions:
 Title: Empty
 Summary: No conditions
 Difficulty: Easy
+Steps: 0-1
 
 Initial:
 ··
@@ -1813,6 +1833,7 @@ Final:
 Title: Rectangle Constraints Test
 Summary: Test rectangle constraint visualization
 Difficulty: Medium
+Steps: exactly 1
 
 Initial:
 ●·▤▤
@@ -1894,6 +1915,7 @@ Final:
 Title: Multiple Constraints Test
 Summary: Test cell with both position and rectangle constraints
 Difficulty: Hard
+Steps: exactly 1
 
 Initial:
 ▣▣▣
@@ -1960,6 +1982,7 @@ Final:
 Title: Conflicting Constraints Test
 Summary: Test cell with conflicting constraints
 Difficulty: Hard
+Steps: exactly 1
 
 Initial:
 ···
