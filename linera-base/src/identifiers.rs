@@ -38,8 +38,7 @@ pub enum AccountOwner {
     /// 32-byte account address.
     Address32(CryptoHash),
     /// 20-byte account EVM-compatible address.
-    #[debug(with = "hex_debug")]
-    Address20([u8; 20]),
+    Address20(#[debug(with = "hex_debug")] [u8; 20]),
 }
 
 impl AccountOwner {
