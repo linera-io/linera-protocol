@@ -359,6 +359,35 @@ impl DirectPuzzle {
             result.push_str(&self.format_rectangle_legend(&self.final_rectangles));
         }
 
+        // Add conflict warnings
+        let initial_conflicts = self.find_conflicting_constraints(&self.initial_constraints);
+        let final_conflicts = self.find_conflicting_constraints(&self.final_constraints);
+
+        if !initial_conflicts.is_empty() || !final_conflicts.is_empty() {
+            result.push('\n');
+            result.push_str("Warnings:\n");
+
+            if !initial_conflicts.is_empty() {
+                result.push_str("  Initial conditions have conflicting constraints at:\n");
+                for pos in &initial_conflicts {
+                    result.push_str(&format!(
+                        "    ({}, {}) - cell cannot be both alive and dead\n",
+                        pos.x, pos.y
+                    ));
+                }
+            }
+
+            if !final_conflicts.is_empty() {
+                result.push_str("  Final conditions have conflicting constraints at:\n");
+                for pos in &final_conflicts {
+                    result.push_str(&format!(
+                        "    ({}, {}) - cell cannot be both alive and dead\n",
+                        pos.x, pos.y
+                    ));
+                }
+            }
+        }
+
         result
     }
 
@@ -379,6 +408,34 @@ impl DirectPuzzle {
         );
         if !self.final_rectangles.is_empty() {
             result.push_str(&self.format_rectangle_legend(&self.final_rectangles));
+        }
+
+        // Add conflict warnings
+        let initial_conflicts = self.find_conflicting_constraints(&self.initial_constraints);
+        let final_conflicts = self.find_conflicting_constraints(&self.final_constraints);
+
+        if !initial_conflicts.is_empty() || !final_conflicts.is_empty() {
+            result.push_str("Warnings:\n");
+
+            if !initial_conflicts.is_empty() {
+                result.push_str("  Initial conditions have conflicting constraints at:\n");
+                for pos in &initial_conflicts {
+                    result.push_str(&format!(
+                        "    ({}, {}) - cell cannot be both alive and dead\n",
+                        pos.x, pos.y
+                    ));
+                }
+            }
+
+            if !final_conflicts.is_empty() {
+                result.push_str("  Final conditions have conflicting constraints at:\n");
+                for pos in &final_conflicts {
+                    result.push_str(&format!(
+                        "    ({}, {}) - cell cannot be both alive and dead\n",
+                        pos.x, pos.y
+                    ));
+                }
+            }
         }
 
         result
@@ -459,6 +516,25 @@ impl DirectPuzzle {
         }
 
         result
+    }
+
+    fn find_conflicting_constraints(
+        &self,
+        constraints: &BTreeMap<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>,
+    ) -> Vec<Position> {
+        let mut conflicts = Vec::new();
+
+        for (&x, y_map) in constraints {
+            for (&y, constraint_set) in y_map {
+                if constraint_set.contains(&CellConstraint::MustBeAlive)
+                    && constraint_set.contains(&CellConstraint::MustBeDead)
+                {
+                    conflicts.push(Position { x, y });
+                }
+            }
+        }
+
+        conflicts
     }
 
     fn get_constraint_from_map<'a>(
@@ -1795,6 +1871,71 @@ Final:
 ···
 ···
 ···
+"#
+        );
+    }
+
+    #[test]
+    fn test_conflicting_constraints_warning() {
+        let puzzle = Puzzle {
+            title: "Conflicting Constraints Test".to_string(),
+            summary: "Test cell with conflicting constraints".to_string(),
+            difficulty: Difficulty::Hard,
+            size: 3,
+            minimal_steps: 1,
+            maximal_steps: 1,
+            initial_conditions: vec![
+                Condition::TestPosition {
+                    position: Position { x: 1, y: 1 },
+                    is_live: true,
+                },
+                Condition::TestPosition {
+                    position: Position { x: 1, y: 1 },
+                    is_live: false,
+                },
+                Condition::TestPosition {
+                    position: Position { x: 0, y: 2 },
+                    is_live: true,
+                },
+            ],
+            final_conditions: vec![
+                Condition::TestPosition {
+                    position: Position { x: 2, y: 0 },
+                    is_live: true,
+                },
+                Condition::TestPosition {
+                    position: Position { x: 2, y: 0 },
+                    is_live: false,
+                },
+            ],
+        };
+
+        let display = puzzle.to_string();
+
+        // Should contain warnings about conflicting constraints
+        assert!(display.contains("Warnings:"));
+        assert!(display.contains("Initial conditions have conflicting constraints at:"));
+        assert!(display.contains("(1, 1) - cell cannot be both alive and dead"));
+        assert!(display.contains("Final conditions have conflicting constraints at:"));
+        assert!(display.contains("(2, 0) - cell cannot be both alive and dead"));
+
+        // Check the actual display format
+        assert_eq!(
+            String::from("\n") + &display,
+            r#"
+Initial:
+···
+·●·
+●··
+Final:
+··●
+···
+···
+Warnings:
+  Initial conditions have conflicting constraints at:
+    (1, 1) - cell cannot be both alive and dead
+  Final conditions have conflicting constraints at:
+    (2, 0) - cell cannot be both alive and dead
 "#
         );
     }
