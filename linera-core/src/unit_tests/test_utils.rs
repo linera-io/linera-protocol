@@ -55,7 +55,7 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
+    worker::{Notification, ProcessableCertificate, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -80,7 +80,6 @@ where
     S: Storage,
 {
     state: WorkerState<S>,
-    fault_type: FaultType,
     notifier: Arc<ChannelNotifier<Notification>>,
 }
 
@@ -91,6 +90,7 @@ where
 {
     public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
+    fault_type: FaultType,
 }
 
 impl<S> ValidatorNode for LocalValidatorClient<S>
@@ -270,13 +270,13 @@ where
 {
     fn new(public_key: ValidatorPublicKey, state: WorkerState<S>) -> Self {
         let client = LocalValidator {
-            fault_type: FaultType::Honest,
             state,
             notifier: Arc::new(ChannelNotifier::default()),
         };
         Self {
             public_key,
             client: Arc::new(Mutex::new(client)),
+            fault_type: FaultType::Honest,
         }
     }
 
@@ -284,12 +284,12 @@ where
         self.public_key
     }
 
-    async fn set_fault_type(&self, fault_type: FaultType) {
-        self.client.lock().await.fault_type = fault_type;
+    fn set_fault_type(&mut self, fault_type: FaultType) {
+        self.fault_type = fault_type;
     }
 
     async fn fault_type(&self) -> FaultType {
-        self.client.lock().await.fault_type
+        self.fault_type
     }
 
     /// Obtains the basic `ChainInfo` data for the local validator chain, with chain manager values.
@@ -325,69 +325,34 @@ where
         proposal: BlockProposal,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.client.lock().await;
-        let handle_block_proposal_result =
-            Self::handle_block_proposal(proposal, &mut validator).await;
-        let result = match handle_block_proposal_result {
-            Some(Err(NodeError::BlobsNotFound(_))) => {
-                handle_block_proposal_result.expect("handle_block_proposal_result should be Some")
-            }
-            _ => match validator.fault_type {
-                FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
-                    error: "offline".to_string(),
-                }),
-                FaultType::Malicious => Err(ArithmeticError::Overflow.into()),
-                FaultType::DontSendValidateVote => Err(NodeError::ClientIoError {
-                    error: "refusing to validate".to_string(),
-                }),
-                FaultType::Honest
-                | FaultType::DontSendConfirmVote
-                | FaultType::DontProcessValidated => handle_block_proposal_result
-                    .expect("handle_block_proposal_result should be Some"),
-            },
-        };
-        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
-        sender.send(result.map(|(info, _actions)| info))
-    }
-
-    async fn handle_block_proposal(
-        proposal: BlockProposal,
-        validator: &mut MutexGuard<'_, LocalValidator<S>>,
-    ) -> Option<Result<(ChainInfoResponse, NetworkActions), NodeError>> {
-        match validator.fault_type {
-            FaultType::Offline | FaultType::OfflineWithInfo | FaultType::Malicious => None,
-            FaultType::Honest
+        let result = match self.fault_type {
+            FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
+                error: "offline".to_string(),
+            }),
+            FaultType::Malicious => Err(ArithmeticError::Overflow.into()),
+            FaultType::DontSendValidateVote
+            | FaultType::Honest
             | FaultType::DontSendConfirmVote
-            | FaultType::DontProcessValidated
-            | FaultType::DontSendValidateVote => Some(
-                validator
+            | FaultType::DontProcessValidated => {
+                let result = self
+                    .client
+                    .lock()
+                    .await
                     .state
                     .handle_block_proposal(proposal)
                     .await
-                    .map_err(Into::into),
-            ),
-        }
-    }
-
-    async fn handle_certificate<T: ProcessableCertificate>(
-        certificate: GenericCertificate<T>,
-        validator: &mut MutexGuard<'_, LocalValidator<S>>,
-    ) -> Option<Result<ChainInfoResponse, NodeError>> {
-        match validator.fault_type {
-            FaultType::DontProcessValidated if T::KIND == CertificateKind::Validated => None,
-            FaultType::Honest
-            | FaultType::DontSendConfirmVote
-            | FaultType::Malicious
-            | FaultType::DontProcessValidated
-            | FaultType::DontSendValidateVote => Some(
-                validator
-                    .state
-                    .fully_handle_certificate_with_notifications(certificate, &validator.notifier)
-                    .await
-                    .map_err(Into::into),
-            ),
-            FaultType::Offline | FaultType::OfflineWithInfo => None,
-        }
+                    .map_err(Into::into);
+                if self.fault_type == FaultType::DontSendValidateVote {
+                    Err(NodeError::ClientIoError {
+                        error: "refusing to validate".to_string(),
+                    })
+                } else {
+                    result
+                }
+            }
+        };
+        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
+        sender.send(result.map(|(info, _actions)| info))
     }
 
     async fn do_handle_lite_certificate(
@@ -418,30 +383,35 @@ where
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let handle_certificate_result = Self::handle_certificate(certificate, validator).await;
-        match handle_certificate_result {
-            Some(Err(NodeError::BlobsNotFound(_))) => {
-                handle_certificate_result.expect("handle_certificate_result should be Some")
+        match self.fault_type {
+            FaultType::DontProcessValidated if T::KIND == CertificateKind::Validated => {
+                Err(NodeError::ClientIoError {
+                    error: "refusing to process validated block".to_string(),
+                })
             }
-            _ => match validator.fault_type {
-                FaultType::DontSendConfirmVote | FaultType::DontProcessValidated
-                    if T::KIND == CertificateKind::Validated =>
+            FaultType::Honest
+            | FaultType::DontSendConfirmVote
+            | FaultType::Malicious
+            | FaultType::DontProcessValidated
+            | FaultType::DontSendValidateVote => {
+                let result = validator
+                    .state
+                    .fully_handle_certificate_with_notifications(certificate, &validator.notifier)
+                    .await
+                    .map_err(Into::into);
+                if T::KIND == CertificateKind::Validated
+                    && self.fault_type == FaultType::DontSendConfirmVote
                 {
                     Err(NodeError::ClientIoError {
                         error: "refusing to confirm".to_string(),
                     })
+                } else {
+                    result
                 }
-                FaultType::Honest
-                | FaultType::DontSendConfirmVote
-                | FaultType::DontProcessValidated
-                | FaultType::Malicious
-                | FaultType::DontSendValidateVote => {
-                    handle_certificate_result.expect("handle_certificate_result should be Some")
-                }
-                FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
-                    error: "offline".to_string(),
-                }),
-            },
+            }
+            FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
+                error: "offline".to_string(),
+            }),
         }
     }
 
@@ -463,7 +433,7 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let validator = self.client.lock().await;
-        let result = if validator.fault_type == FaultType::Offline {
+        let result = if self.fault_type == FaultType::Offline {
             Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
             })
@@ -694,9 +664,18 @@ where
 }
 
 #[derive(Clone)]
-pub struct NodeProvider<S>(BTreeMap<ValidatorPublicKey, Arc<Mutex<LocalValidator<S>>>>)
+pub struct NodeProvider<S>(Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>)
 where
     S: Storage;
+
+impl<S> NodeProvider<S>
+where
+    S: Storage + Clone,
+{
+    fn all_nodes(&self) -> Vec<LocalValidatorClient<S>> {
+        self.0.lock().unwrap().clone()
+    }
+}
 
 impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
@@ -715,16 +694,16 @@ where
     where
         A: AsRef<str>,
     {
+        let list = self.0.lock().unwrap();
         Ok(validators
             .into_iter()
             .map(|(public_key, address)| {
-                self.0
-                    .get(&public_key)
+                list.iter()
+                    .find(|client| client.public_key == public_key)
                     .ok_or_else(|| NodeError::CannotResolveValidatorAddress {
                         address: address.as_ref().to_string(),
                     })
-                    .cloned()
-                    .map(|client| (public_key, LocalValidatorClient { public_key, client }))
+                    .map(|client| (public_key, client.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter())
@@ -739,9 +718,7 @@ where
     where
         T: IntoIterator<Item = LocalValidatorClient<S>>,
     {
-        let destructure =
-            |validator: LocalValidatorClient<S>| (validator.public_key, validator.client);
-        Self(iter.into_iter().map(destructure).collect())
+        Self(Arc::new(std::sync::Mutex::new(iter.into_iter().collect())))
     }
 }
 
@@ -757,7 +734,7 @@ pub struct TestBuilder<B: StorageBuilder> {
     admin_description: Option<ChainDescription>,
     network_description: Option<NetworkDescription>,
     genesis_storage_builder: GenesisStorageBuilder,
-    validator_clients: Vec<LocalValidatorClient<B::Storage>>,
+    node_provider: NodeProvider<B::Storage>,
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
     pub chain_owners: BTreeMap<ChainId, AccountOwner>,
@@ -863,10 +840,10 @@ where
             )
             .with_allow_inactive_chains(false)
             .with_allow_messages_from_deprecated_epochs(false);
-            let validator = LocalValidatorClient::new(validator_public_key, state);
+            let mut validator = LocalValidatorClient::new(validator_public_key, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(validator_public_key);
-                validator.set_fault_type(FaultType::Malicious).await;
+                validator.set_fault_type(FaultType::Malicious);
             }
             validator_clients.push(validator);
             validator_storages.insert(validator_public_key, storage);
@@ -881,7 +858,7 @@ where
             admin_description: None,
             network_description: None,
             genesis_storage_builder: GenesisStorageBuilder::default(),
-            validator_clients,
+            node_provider: NodeProvider::from_iter(validator_clients),
             validator_storages,
             chain_client_storages: Vec::new(),
             chain_owners: BTreeMap::new(),
@@ -895,11 +872,12 @@ where
         self
     }
 
-    pub async fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
+    pub fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
         let mut faulty_validators = vec![];
+        let mut validator_clients = self.node_provider.0.lock().unwrap();
         for index in indexes.as_ref() {
-            let validator = &mut self.validator_clients[*index];
-            validator.set_fault_type(fault_type).await;
+            let validator = &mut validator_clients[*index];
+            validator.set_fault_type(fault_type);
             faulty_validators.push(validator.public_key);
         }
         tracing::info!(
@@ -951,7 +929,7 @@ where
 
         let network_description = self.network_description.as_ref().unwrap();
 
-        for validator in &self.validator_clients {
+        for validator in self.node_provider.all_nodes() {
             let storage = self
                 .validator_storages
                 .get_mut(&validator.public_key)
@@ -1013,11 +991,11 @@ where
     }
 
     pub fn make_node_provider(&self) -> NodeProvider<B::Storage> {
-        self.validator_clients.iter().cloned().collect()
+        self.node_provider.clone()
     }
 
-    pub fn node(&mut self, index: usize) -> &mut LocalValidatorClient<B::Storage> {
-        &mut self.validator_clients[index]
+    pub fn node(&mut self, index: usize) -> LocalValidatorClient<B::Storage> {
+        self.node_provider.0.lock().unwrap()[index].clone()
     }
 
     pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
@@ -1079,7 +1057,7 @@ where
             .with_sent_certificate_hashes_by_heights(vec![block_height]);
         let mut count = 0;
         let mut certificate = None;
-        for validator in self.validator_clients.clone() {
+        for validator in self.node_provider.all_nodes() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.check(validator.public_key).is_ok() {
                     let ChainInfo {
@@ -1116,7 +1094,7 @@ where
     ) {
         let query = ChainInfoQuery::new(chain_id);
         let mut count = 0;
-        for validator in self.validator_clients.clone() {
+        for validator in self.node_provider.all_nodes() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.info.manager.current_round == round
                     && response.info.next_block_height == block_height
@@ -1131,7 +1109,7 @@ where
 
     /// Panics if any validator has a nonempty outbox for the given chain.
     pub async fn check_that_validators_have_empty_outboxes(&self, chain_id: ChainId) {
-        for validator in &self.validator_clients {
+        for validator in self.node_provider.all_nodes() {
             let guard = validator.client.lock().await;
             let chain = guard.state.chain_state_view(chain_id).await.unwrap();
             assert_eq!(chain.outboxes.indices().await.unwrap(), []);

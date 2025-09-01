@@ -697,7 +697,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    builder.set_fault_type([3], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Offline);
 
     let sender = builder.add_root_chain(0, Amount::ONE).await?;
     let receiver = builder.add_root_chain(1, Amount::ONE).await?;
@@ -735,8 +735,8 @@ where
         .await
         .unwrap();
 
-    builder.set_fault_type([3], FaultType::Honest).await;
-    builder.set_fault_type([2], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Honest);
+    builder.set_fault_type([2], FaultType::Offline);
 
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
@@ -965,9 +965,7 @@ where
 
     // Client B tries to make a move but fails: the validators go down after signing to validate.
     client_b.synchronize_from_validators().await?;
-    builder
-        .set_fault_type([0, 1, 2, 3], FaultType::DontProcessValidated)
-        .await;
+    builder.set_fault_type([0, 1, 2, 3], FaultType::DontProcessValidated);
     let move_op = HexOperation::MakeMove { x: 4, y: 4 };
     let result = client_b
         .execute_operation(Operation::user(app_id, &move_op)?)
@@ -978,9 +976,7 @@ where
     clock.add(timeouts.start_time * 2);
 
     // Set the validators back to Honest.
-    builder
-        .set_fault_type([0, 1, 2, 3], FaultType::Honest)
-        .await;
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
 
     // Now player A claims victory since B has timed out. This works because it sees the existing
     // block proposal and makes a new proposal in the next round instead.
