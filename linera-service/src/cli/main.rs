@@ -19,7 +19,7 @@ use chrono::Utc;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    crypto::{AccountPublicKey, InMemorySigner, Signer},
+    crypto::{InMemorySigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
@@ -1623,24 +1623,8 @@ impl Runnable for Job {
                     signer.into_value(),
                 );
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
-                let validators = faucet.current_validators().await?;
+                let committee = faucet.current_committee().await?;
                 let chain_client = context.make_chain_client(network_description.admin_chain_id);
-                // TODO(#4434): This is a quick workaround with an equal-weight committee. Instead,
-                // the faucet should provide the full committee including weights.
-                let committee = Committee::new(
-                    validators
-                        .into_iter()
-                        .map(|(pub_key, network_address)| {
-                            let state = ValidatorState {
-                                network_address,
-                                votes: 100,
-                                account_public_key: AccountPublicKey::from_slice(&[0; 33]).unwrap(),
-                            };
-                            (pub_key, state)
-                        })
-                        .collect(),
-                    Default::default(), // unused
-                );
                 chain_client
                     .synchronize_chain_state_from_committee(committee)
                     .await?;
