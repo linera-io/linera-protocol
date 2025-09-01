@@ -427,7 +427,7 @@ input Committee {
 	"""
 	The policy agreed on for this epoch.
 	"""
-	policy: ResourceControlPolicy!
+	policy: ResourceControlPolicyScalar!
 }
 
 type ConfirmedBlock {
@@ -1034,139 +1034,9 @@ type ReentrantCollectionView_ChainId_OutboxStateView_06c2376d {
 }
 
 """
-A collection of prices and limits associated with block execution.
+A collection of prices and limits associated with block execution
 """
-input ResourceControlPolicy {
-	"""
-	The price per unit of fuel (aka gas) for Wasm execution.
-	"""
-	wasmFuelUnit: Amount!
-	"""
-	The price per unit of fuel (aka gas) for EVM execution.
-	"""
-	evmFuelUnit: Amount!
-	"""
-	The price of one read operation.
-	"""
-	readOperation: Amount!
-	"""
-	The price of one write operation.
-	"""
-	writeOperation: Amount!
-	"""
-	The price of accessing one byte from the runtime.
-	"""
-	byteRuntime: Amount!
-	"""
-	The price of reading a byte.
-	"""
-	byteRead: Amount!
-	"""
-	The price of writing a byte
-	"""
-	byteWritten: Amount!
-	"""
-	The base price to read a blob.
-	"""
-	blobRead: Amount!
-	"""
-	The base price to publish a blob.
-	"""
-	blobPublished: Amount!
-	"""
-	The price to read a blob, per byte.
-	"""
-	blobByteRead: Amount!
-	"""
-	The price to publish a blob, per byte.
-	"""
-	blobBytePublished: Amount!
-	"""
-	The price of increasing storage by a byte.
-	"""
-	byteStored: Amount!
-	"""
-	The base price of adding an operation to a block.
-	"""
-	operation: Amount!
-	"""
-	The additional price for each byte in the argument of a user operation.
-	"""
-	operationByte: Amount!
-	"""
-	The base price of sending a message from a block.
-	"""
-	message: Amount!
-	"""
-	The additional price for each byte in the argument of a user message.
-	"""
-	messageByte: Amount!
-	"""
-	The price per query to a service as an oracle.
-	"""
-	serviceAsOracleQuery: Amount!
-	"""
-	The price for a performing an HTTP request.
-	"""
-	httpRequest: Amount!
-	"""
-	The maximum amount of Wasm fuel a block can consume.
-	"""
-	maximumWasmFuelPerBlock: Int!
-	"""
-	The maximum amount of EVM fuel a block can consume.
-	"""
-	maximumEvmFuelPerBlock: Int!
-	"""
-	The maximum time in milliseconds that a block can spend executing services as oracles.
-	"""
-	maximumServiceOracleExecutionMs: Int!
-	"""
-	The maximum size of a block. This includes the block proposal itself as well as
-	the execution outcome.
-	"""
-	maximumBlockSize: Int!
-	"""
-	The maximum size of decompressed contract or service bytecode, in bytes.
-	"""
-	maximumBytecodeSize: Int!
-	"""
-	The maximum size of a blob.
-	"""
-	maximumBlobSize: Int!
-	"""
-	The maximum number of published blobs per block.
-	"""
-	maximumPublishedBlobs: Int!
-	"""
-	The maximum size of a block proposal.
-	"""
-	maximumBlockProposalSize: Int!
-	"""
-	The maximum data to read per block
-	"""
-	maximumBytesReadPerBlock: Int!
-	"""
-	The maximum data to write per block
-	"""
-	maximumBytesWrittenPerBlock: Int!
-	"""
-	The maximum size in bytes of an oracle response.
-	"""
-	maximumOracleResponseBytes: Int!
-	"""
-	The maximum size in bytes of a received HTTP response.
-	"""
-	maximumHttpResponseBytes: Int!
-	"""
-	The maximum amount of time allowed to wait for an HTTP response.
-	"""
-	httpRequestTimeoutMs: Int!
-	"""
-	The list of hosts that contracts and services can send HTTP requests to.
-	"""
-	httpRequestAllowList: [String!]!
-}
+scalar ResourceControlPolicyScalar
 
 """
 A number to identify successive attempts to decide a value in a consensus protocol.

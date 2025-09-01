@@ -5404,6 +5404,7 @@ version = "0.15.0"
 dependencies = [
  "linera-base",
  "linera-client",
+ "linera-execution",
  "linera-version",
  "reqwest 0.11.27",
  "serde",

@@ -4,7 +4,6 @@
 
 use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
-use async_graphql::InputObject;
 use linera_base::crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey};
 use serde::{Deserialize, Serialize};
 
@@ -59,7 +58,8 @@ pub struct ValidatorState {
 }
 
 /// A set of validators (identified by their public keys) and their voting rights.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, InputObject)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Default)]
+#[cfg_attr(with_graphql, derive(async_graphql::InputObject))]
 pub struct Committee {
     /// The validators in the committee.
     pub validators: BTreeMap<ValidatorPublicKey, ValidatorState>,

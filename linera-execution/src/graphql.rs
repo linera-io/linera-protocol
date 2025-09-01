@@ -14,11 +14,18 @@ use linera_views::{context::Context, map_view::MapView};
 
 use crate::{
     committee::{Committee, ValidatorState},
+    policy::ResourceControlPolicy,
     system::UserData,
     ExecutionStateView, SystemExecutionStateView,
 };
 
 doc_scalar!(UserData, "Optional user message attached to a transfer");
+
+async_graphql::scalar!(
+    ResourceControlPolicy,
+    "ResourceControlPolicyScalar",
+    "A collection of prices and limits associated with block execution"
+);
 
 #[async_graphql::Object(cache_control(no_cache))]
 impl Committee {
@@ -40,6 +47,11 @@ impl Committee {
     #[graphql(derived(name = "validity_threshold"))]
     async fn _validity_threshold(&self) -> u64 {
         self.validity_threshold()
+    }
+
+    #[graphql(derived(name = "policy"))]
+    async fn _policy(&self) -> &ResourceControlPolicy {
+        self.policy()
     }
 }
 
