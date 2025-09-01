@@ -116,6 +116,30 @@ impl GolChallengeState {
         let puzzle_bytes = runtime.read_data_blob(puzzle_id);
         bcs::from_bytes::<Puzzle>(&puzzle_bytes).ok()
     }
+
+    /// Print the ASCII representation of a puzzle given by its ID.
+    async fn print_puzzle(
+        &self,
+        ctx: &Context<'_>,
+        puzzle_id: DataBlobHash,
+    ) -> Result<Option<String>, async_graphql::Error> {
+        let Some(puzzle) = self.puzzle(ctx, puzzle_id).await? else {
+            return Ok(None);
+        };
+        Ok(Some(format!("{}", puzzle)))
+    }
+
+    /// Print the pretty ASCII representation of a puzzle given by its ID.
+    async fn pretty_print_puzzle(
+        &self,
+        ctx: &Context<'_>,
+        puzzle_id: DataBlobHash,
+    ) -> Result<Option<String>, async_graphql::Error> {
+        let Some(puzzle) = self.puzzle(ctx, puzzle_id).await? else {
+            return Ok(None);
+        };
+        Ok(Some(format!("{:#}", puzzle)))
+    }
 }
 
 #[cfg(test)]
@@ -535,5 +559,83 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                 }
             })
         );
+    }
+
+    #[test]
+    fn query_print_puzzle() {
+        use gol_challenge::game::{Condition, Difficulty, Position, Puzzle};
+
+        let runtime = ServiceRuntime::<GolChallengeService>::new();
+        let state = GolChallengeState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = GolChallengeService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        // Create a test puzzle with both position and rectangle constraints.
+        let puzzle = Puzzle {
+            title: "Print Test Puzzle".to_string(),
+            summary: "A puzzle for testing print functionality".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 3,
+            minimal_steps: 1,
+            maximal_steps: 1,
+            initial_conditions: vec![
+                Condition::TestPosition {
+                    position: Position { x: 1, y: 1 },
+                    is_live: true,
+                },
+                Condition::TestRectangle {
+                    x_range: 0..2,
+                    y_range: 0..2,
+                    min_live_count: 1,
+                    max_live_count: 3,
+                },
+            ],
+            final_conditions: vec![Condition::TestPosition {
+                position: Position { x: 2, y: 2 },
+                is_live: false,
+            }],
+        };
+
+        // Serialize the puzzle and store it as a data blob.
+        let puzzle_bytes = bcs::to_bytes(&puzzle).expect("Failed to serialize puzzle");
+        let puzzle_id = DataBlobHash(CryptoHash::new(&BlobContent::new_data(
+            puzzle_bytes.clone(),
+        )));
+        service.runtime.set_blob(puzzle_id, puzzle_bytes);
+
+        // Test retrieving and printing the puzzle.
+        let response = service
+            .handle_query(Request::new(format!(
+                r#"{{
+                    printPuzzle(puzzleId: "{}")
+                }}"#,
+                puzzle_id.0
+            )))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        // The response should contain the printed puzzle string representation.
+        let puzzle_string = response["printPuzzle"].as_str().unwrap();
+
+        // Should contain the main sections
+        assert!(puzzle_string.contains("Initial:"));
+        assert!(puzzle_string.contains("Final:"));
+        assert!(puzzle_string.contains("Legend:"));
+
+        // Should contain the position constraint (●) and rectangle constraint (▣)
+        assert!(puzzle_string.contains("●"));
+        assert!(puzzle_string.contains("▣"));
+        assert!(puzzle_string.contains("✕"));
+
+        // Should contain the legend information
+        assert!(puzzle_string.contains("▣ [0-1, 0-1] 1-3 live cells"));
     }
 }
