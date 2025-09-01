@@ -168,7 +168,7 @@ impl fmt::Display for CryptoHash {
 
 impl fmt::Debug for CryptoHash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, f)
+        write!(f, "{}", hex::encode(&self.0[..8]))
     }
 }
 
