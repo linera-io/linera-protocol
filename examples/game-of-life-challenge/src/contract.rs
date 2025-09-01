@@ -46,23 +46,12 @@ impl Contract for GolChallengeContract {
 
     async fn execute_operation(&mut self, operation: Operation) {
         log::trace!("Handling operation {:?}", operation);
-        let Operation::SubmitSolution {
-            puzzle_id,
-            board,
-            steps,
-        } = operation;
+        let Operation::SubmitSolution { puzzle_id, board } = operation;
         let puzzle_bytes = self.runtime.read_data_blob(puzzle_id);
         let puzzle = bcs::from_bytes(&puzzle_bytes).expect("Deserialize puzzle");
-        board
-            .check_puzzle(&puzzle, steps)
-            .expect("Invalid solution");
+        board.check_puzzle(&puzzle).expect("Invalid solution");
         let timestamp = self.runtime.system_time();
-        let solution = Solution {
-            puzzle_id,
-            board,
-            steps,
-            timestamp,
-        };
+        let solution = Solution { board, timestamp };
         self.state
             .solutions
             .insert(&puzzle_id, solution)

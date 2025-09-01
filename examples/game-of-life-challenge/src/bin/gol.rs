@@ -7,7 +7,6 @@ use std::{fs, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use gol_challenge::game::{Board, Condition, Difficulty, Position, Puzzle};
-use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 #[command(name = "gol")]
@@ -17,38 +16,32 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Solution {
-    board: Board,
-    steps: u16,
-}
-
 #[derive(Subcommand)]
 enum Commands {
     /// Create a new puzzle file and optionally a solution
     CreatePuzzle {
         /// Path to the output puzzle file
         puzzle_path: PathBuf,
-        /// Optional path to output a solution file
+        /// Optional path to output a board file
         #[arg(long)]
-        solution: Option<PathBuf>,
+        board: Option<PathBuf>,
     },
     /// Print the contents of a puzzle file
     PrintPuzzle {
         /// Path to the puzzle file to print
         path: PathBuf,
     },
-    /// Print the contents of a solution file
-    PrintSolution {
-        /// Path to the solution file to print
+    /// Print the contents of a board file
+    PrintBoard {
+        /// Path to the board file to print
         path: PathBuf,
     },
-    /// Check if a solution solves a puzzle
-    CheckSolution {
+    /// Check if a board solves a puzzle
+    CheckBoard {
         /// Path to the puzzle file
         puzzle: PathBuf,
-        /// Path to the solution file
-        solution: PathBuf,
+        /// Path to the board file
+        board: PathBuf,
     },
 }
 
@@ -56,26 +49,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::CreatePuzzle {
-            puzzle_path,
-            solution,
-        } => {
+        Commands::CreatePuzzle { puzzle_path, board } => {
             let puzzle = create_puzzle(&puzzle_path)?;
             println!("Created puzzle file: {}", puzzle_path.display());
 
-            if let Some(solution_path) = solution {
-                create_solution(&puzzle, &solution_path)?;
-                println!("Created solution file: {}", solution_path.display());
+            if let Some(board_path) = board {
+                create_solution(&puzzle, &board_path)?;
+                println!("Created board file: {}", board_path.display());
             }
         }
         Commands::PrintPuzzle { path } => {
             print_puzzle(&path)?;
         }
-        Commands::PrintSolution { path } => {
-            print_solution(&path)?;
+        Commands::PrintBoard { path } => {
+            print_board(&path)?;
         }
-        Commands::CheckSolution { puzzle, solution } => {
-            check_solution(&puzzle, &solution)?;
+        Commands::CheckBoard { puzzle, board } => {
+            check_board(&puzzle, &board)?;
         }
     }
 
@@ -135,7 +125,7 @@ fn print_puzzle(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn create_solution(puzzle: &Puzzle, path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    // Create a simple solution: a board with the minimal required live cells
+    // Create a simple board: a board with the minimal required live cells
     // For demonstration, we'll create a board that satisfies the initial conditions
     let mut live_cells = Vec::new();
 
@@ -174,14 +164,8 @@ fn create_solution(puzzle: &Puzzle, path: &PathBuf) -> Result<(), Box<dyn std::e
     // TODO: Need a way to create board with live cells
     println!("Warning: Created empty board for solution (live cells not set yet)");
 
-    // Create a solution with minimal steps
-    let solution = Solution {
-        board,
-        steps: puzzle.minimal_steps,
-    };
-
     // Serialize to BCS format
-    let solution_bytes = bcs::to_bytes(&solution)?;
+    let solution_bytes = bcs::to_bytes(&board)?;
 
     // Write to file
     fs::write(path, solution_bytes)?;
@@ -189,36 +173,34 @@ fn create_solution(puzzle: &Puzzle, path: &PathBuf) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-fn print_solution(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    let solution_bytes = fs::read(path)?;
-    let solution: Solution = bcs::from_bytes(&solution_bytes)?;
-    println!("Solution:");
-    println!("  Steps: {}", solution.steps);
-    println!("  Initial Board:");
-    println!("{:#}", solution.board);
+fn print_board(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    let board_bytes = fs::read(path)?;
+    let board: Board = bcs::from_bytes(&board_bytes)?;
+    println!("Board:");
+    println!("{:#}", board);
     Ok(())
 }
 
-fn check_solution(
+fn check_board(
     puzzle_path: &PathBuf,
-    solution_path: &PathBuf,
+    board_path: &PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Read puzzle file
     let puzzle_bytes = fs::read(puzzle_path)?;
     let puzzle: Puzzle = bcs::from_bytes(&puzzle_bytes)?;
 
-    // Read solution file
-    let solution_bytes = fs::read(solution_path)?;
-    let solution: Solution = bcs::from_bytes(&solution_bytes)?;
+    // Read board file
+    let board_bytes = fs::read(board_path)?;
+    let board: Board = bcs::from_bytes(&board_bytes)?;
 
-    // Check if solution solves the puzzle
-    match solution.board.check_puzzle(&puzzle, solution.steps) {
-        Ok(()) => {
+    // Check if board solves the puzzle
+    match board.check_puzzle(&puzzle) {
+        Ok(steps) => {
             println!("✅ Solution is VALID!");
             println!("   Initial board passes all initial conditions");
             println!(
                 "   After {} steps, board passes all final conditions",
-                solution.steps
+                steps
             );
         }
         Err(error) => {

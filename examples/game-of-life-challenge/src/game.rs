@@ -79,11 +79,9 @@ pub enum InvalidSolution {
         puzzle_size: u16,
     },
 
-    /// The number of steps is outside the allowed range.
-    #[error("Steps {steps} is outside the allowed range [{min_steps}, {max_steps}]")]
-    StepsOutOfRange {
-        /// The number of steps attempted.
-        steps: u16,
+    /// The allowed step range is empty.
+    #[error("The allowed step range is empty: [{min_steps}, {max_steps}]")]
+    EmptyStepRange {
         /// The minimum allowed steps.
         min_steps: u16,
         /// The maximum allowed steps.
@@ -164,8 +162,8 @@ async_graphql::scalar!(ConditionFailureReason);
 /// Result of validating a puzzle solution.
 #[derive(Debug, Clone, SimpleObject)]
 pub struct ValidationResult {
-    /// Whether the solution is valid.
-    pub is_valid: bool,
+    /// Whether the solution is valid and in how many steps.
+    pub is_valid_after_steps: Option<u16>,
     /// Error message if validation failed.
     pub error_message: Option<String>,
     /// Detailed error information if validation failed.
@@ -776,18 +774,17 @@ impl Board {
     }
 
     /// Check that the board satisfies the given puzzle.
-    pub fn check_puzzle(&self, puzzle: &Puzzle, steps: u16) -> Result<(), InvalidSolution> {
+    pub fn check_puzzle(&self, puzzle: &Puzzle) -> Result<u16, InvalidSolution> {
+        if puzzle.minimal_steps > puzzle.maximal_steps {
+            return Err(InvalidSolution::EmptyStepRange {
+                min_steps: puzzle.minimal_steps,
+                max_steps: puzzle.maximal_steps,
+            });
+        }
         if self.size != puzzle.size {
             return Err(InvalidSolution::SizeMismatch {
                 board_size: self.size,
                 puzzle_size: puzzle.size,
-            });
-        }
-        if steps < puzzle.minimal_steps || steps > puzzle.maximal_steps {
-            return Err(InvalidSolution::StepsOutOfRange {
-                steps,
-                min_steps: puzzle.minimal_steps,
-                max_steps: puzzle.maximal_steps,
             });
         }
         if let Err((condition_index, reason)) = self.check_conditions(&puzzle.initial_conditions) {
@@ -796,17 +793,17 @@ impl Board {
                 reason,
             });
         }
-        let final_board = self.advance(steps);
-        if let Err((condition_index, reason)) =
-            final_board.check_conditions(&puzzle.final_conditions)
-        {
-            Err(InvalidSolution::FinalConditionFailed {
+        let board = self.advance(puzzle.minimal_steps);
+        match board.advance_until(
+            &puzzle.final_conditions,
+            puzzle.maximal_steps - puzzle.minimal_steps,
+        ) {
+            Ok((steps, _)) => Ok(puzzle.minimal_steps + steps),
+            Err((condition_index, reason)) => Err(InvalidSolution::FinalConditionFailed {
                 condition_index,
-                steps,
+                steps: puzzle.maximal_steps,
                 reason,
-            })
-        } else {
-            Ok(())
+            }),
         }
     }
 }
@@ -1183,7 +1180,7 @@ mod tests {
         };
 
         assert_eq!(
-            board.check_puzzle(&puzzle, 3),
+            board.check_puzzle(&puzzle),
             Err(InvalidSolution::SizeMismatch {
                 board_size: 5,
                 puzzle_size: 10
@@ -1192,36 +1189,26 @@ mod tests {
     }
 
     #[test]
-    fn test_check_puzzle_steps_out_of_range() {
+    fn test_check_puzzle_invalid_steps() {
         let board = Board::new(5);
         let puzzle = Puzzle {
             title: "Test".to_string(),
             summary: "Test puzzle".to_string(),
             difficulty: Difficulty::Easy,
             size: 5,
-            minimal_steps: 2,
+            minimal_steps: 6,
             maximal_steps: 4,
             initial_conditions: vec![],
             final_conditions: vec![],
         };
 
         assert_eq!(
-            board.check_puzzle(&puzzle, 1),
-            Err(InvalidSolution::StepsOutOfRange {
-                steps: 1,
-                min_steps: 2,
+            board.check_puzzle(&puzzle),
+            Err(InvalidSolution::EmptyStepRange {
+                min_steps: 6,
                 max_steps: 4
             })
-        ); // Too few steps.
-        assert_eq!(
-            board.check_puzzle(&puzzle, 5),
-            Err(InvalidSolution::StepsOutOfRange {
-                steps: 5,
-                min_steps: 2,
-                max_steps: 4
-            })
-        ); // Too many steps.
-        assert_eq!(board.check_puzzle(&puzzle, 3), Ok(())); // Valid steps.
+        );
     }
 
     #[test]
@@ -1242,7 +1229,7 @@ mod tests {
         };
 
         assert_eq!(
-            board.check_puzzle(&puzzle, 3),
+            board.check_puzzle(&puzzle),
             Err(InvalidSolution::InitialConditionFailed {
                 condition_index: 0,
                 reason: ConditionFailureReason::PositionMismatch {
@@ -1303,7 +1290,7 @@ mod tests {
         };
 
         // Test that after 2 steps (full blinker cycle), we get back to the initial pattern.
-        assert_eq!(board.check_puzzle(&puzzle, 2), Ok(()));
+        assert_eq!(board.check_puzzle(&puzzle), Ok(2));
     }
 
     #[test]
@@ -1374,12 +1361,7 @@ mod tests {
             ],
         };
 
-        assert!(board.advance_until(&puzzle.final_conditions, 30).is_err());
-        assert_eq!(
-            board.advance_until(&puzzle.final_conditions, 40).unwrap().0,
-            31
-        );
-        assert_eq!(board.check_puzzle(&puzzle, 31), Ok(()));
+        assert_eq!(board.check_puzzle(&puzzle), Ok(31));
     }
 
     #[test]
@@ -1450,7 +1432,7 @@ mod tests {
         };
 
         assert_eq!(
-            board.check_puzzle(&puzzle, 1),
+            board.check_puzzle(&puzzle),
             Err(InvalidSolution::FinalConditionFailed {
                 condition_index: 0,
                 steps: 1,
@@ -1480,7 +1462,7 @@ mod tests {
             difficulty: Difficulty::Easy,
             size: 8,
             minimal_steps: 1,
-            maximal_steps: 2,
+            maximal_steps: 1,
             initial_conditions: vec![
                 // This should pass.
                 Condition::TestPosition {
@@ -1504,7 +1486,7 @@ mod tests {
         };
 
         // Test initial condition failure with detailed information.
-        match board.check_puzzle(&puzzle, 1) {
+        match board.check_puzzle(&puzzle) {
             Err(InvalidSolution::InitialConditionFailed {
                 condition_index,
                 reason,
@@ -1554,7 +1536,7 @@ mod tests {
             final_conditions: vec![],
         };
 
-        match board2.check_puzzle(&puzzle2, 1) {
+        match board2.check_puzzle(&puzzle2) {
             Err(InvalidSolution::InitialConditionFailed {
                 condition_index,
                 reason,

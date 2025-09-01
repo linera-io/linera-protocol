@@ -29,8 +29,6 @@ pub enum Operation {
         puzzle_id: DataBlobHash,
         /// The board of the solution.
         board: Board,
-        /// The number of steps of the solution.
-        steps: u16,
     },
 }
 

@@ -21,12 +21,8 @@ pub struct GolChallengeState {
 /// A verified solution to a GoL puzzle.
 #[derive(Debug, Clone, Serialize, Deserialize, InputObject, SimpleObject)]
 pub struct Solution {
-    /// The ID of the puzzle.
-    pub puzzle_id: DataBlobHash,
     /// The initial state of the board solving the puzzle.
     pub board: Board,
-    /// The number of steps.
-    pub steps: u16,
     /// Timestamp of the submission.
     pub timestamp: Timestamp,
 }

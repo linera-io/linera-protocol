@@ -76,7 +76,6 @@ impl GolChallengeState {
         ctx: &Context<'_>,
         board: Board,
         puzzle_id: DataBlobHash,
-        steps: u16,
     ) -> ValidationResult {
         let runtime = ctx
             .data::<Arc<ServiceRuntime<GolChallengeService>>>()
@@ -84,14 +83,14 @@ impl GolChallengeState {
         let puzzle_bytes = runtime.read_data_blob(puzzle_id);
         let puzzle = bcs::from_bytes(&puzzle_bytes).expect("Failed to deserialize puzzle");
 
-        match board.check_puzzle(&puzzle, steps) {
-            Ok(()) => ValidationResult {
-                is_valid: true,
+        match board.check_puzzle(&puzzle) {
+            Ok(steps) => ValidationResult {
+                is_valid_after_steps: Some(steps),
                 error_message: None,
                 error_details: None,
             },
             Err(error) => ValidationResult {
-                is_valid: false,
+                is_valid_after_steps: None,
                 error_message: Some(error.to_string()),
                 error_details: Some(error),
             },
@@ -294,10 +293,9 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                 r#"{{
                     validateSolution(
                         board: {{size: 3, liveCells: [{{x: 1, y: 1}}]}},
-                        puzzleId: "{}",
-                        steps: 1
+                        puzzleId: "{}"
                     ) {{
-                        isValid
+                        isValidAfterSteps
                         errorMessage
                         errorDetails
                     }}
@@ -314,7 +312,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             response,
             json!({
                 "validateSolution": {
-                    "isValid": true,
+                    "isValidAfterSteps": 1,
                     "errorMessage": null,
                     "errorDetails": null
                 }
@@ -327,10 +325,9 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
                 r#"{{
                     validateSolution(
                         board: {{size: 3, liveCells: [{{x: 0, y: 0}}]}},
-                        puzzleId: "{}",
-                        steps: 1
+                        puzzleId: "{}"
                     ) {{
-                        isValid
+                        isValidAfterSteps
                         errorMessage
                         errorDetails
                     }}
@@ -345,42 +342,11 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
 
         // Check that it's invalid and has an error message.
         let result = &response["validateSolution"];
-        assert_eq!(result["isValid"], false);
+        assert_eq!(result["isValidAfterSteps"], json!(null));
         assert!(result["errorMessage"]
             .as_str()
             .unwrap()
             .contains("Initial condition 0 failed"));
-        assert!(result["errorDetails"].is_object());
-
-        // Test with invalid steps (too many).
-        let response = service
-            .handle_query(Request::new(format!(
-                r#"{{
-                    validateSolution(
-                        board: {{size: 3, liveCells: [{{x: 1, y: 1}}]}},
-                        puzzleId: "{}",
-                        steps: 2
-                    ) {{
-                        isValid
-                        errorMessage
-                        errorDetails
-                    }}
-                }}"#,
-                puzzle_id.0
-            )))
-            .now_or_never()
-            .expect("Query should not await anything")
-            .data
-            .into_json()
-            .expect("Response should be JSON");
-
-        // Check that it's invalid and has an error message about steps.
-        let result = &response["validateSolution"];
-        assert_eq!(result["isValid"], false);
-        assert!(result["errorMessage"]
-            .as_str()
-            .unwrap()
-            .contains("Steps 2 is outside the allowed range"));
         assert!(result["errorDetails"].is_object());
     }
 
