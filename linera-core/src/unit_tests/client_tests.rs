@@ -418,7 +418,7 @@ where
     );
 
     // We need at least three validators for making an operation.
-    builder.set_fault_type([0, 1], FaultType::Offline).await;
+    builder.set_fault_type([0, 1], FaultType::Offline);
     let result = client.burn(AccountOwner::CHAIN, Amount::ONE).await;
     assert_matches!(
         result,
@@ -426,8 +426,8 @@ where
             CommunicationError::Trusted(ClientIoError { .. }),
         ))
     );
-    builder.set_fault_type([0, 1], FaultType::Honest).await;
-    builder.set_fault_type([2, 3], FaultType::Offline).await;
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    builder.set_fault_type([2, 3], FaultType::Offline);
     assert_matches!(
         sender.burn(AccountOwner::CHAIN, Amount::ONE).await,
         Err(ChainClientError::CommunicationError(
@@ -437,9 +437,7 @@ where
 
     // Half the validators voted for one block, half for the other. We need to make a proposal in
     // the next round to succeed.
-    builder
-        .set_fault_type([0, 1, 2, 3], FaultType::Honest)
-        .await;
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
     client.synchronize_from_validators().await.unwrap();
     client.process_inbox().await.unwrap();
     assert_eq!(
@@ -805,7 +803,7 @@ where
 {
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    builder.set_fault_type([0, 1], FaultType::Malicious).await;
+    builder.set_fault_type([0, 1], FaultType::Malicious);
     let chain_1 = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let chain_2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
     let result = chain_1
@@ -1404,7 +1402,7 @@ where
     );
 
     // Take one validator down
-    builder.set_fault_type([2], FaultType::Offline).await;
+    builder.set_fault_type([2], FaultType::Offline);
 
     // Publish blob on chain 1
     let publish_certificate = client_1a
@@ -1416,9 +1414,9 @@ where
         .requires_or_creates_blob(&blob0_id));
 
     // Validators goes back up
-    builder.set_fault_type([2], FaultType::Honest).await;
+    builder.set_fault_type([2], FaultType::Honest);
     // But another one goes down
-    builder.set_fault_type([3], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Offline);
 
     // Try to read the blob. This is a different client but on the same chain, so when we
     // synchronize this with the validators before executing the block, we'll actually download
@@ -1435,9 +1433,7 @@ where
     // Validators 0, 1, 2 now don't process validated block certificates. Client 2A tries to
     // commit a block that reads blob 0 and publishes blob 1. Client 2A will have that block
     // locked now, but the validators won't.
-    builder
-        .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
-        .await;
+    builder.set_fault_type([0, 1, 2], FaultType::DontProcessValidated);
 
     client_2a.synchronize_from_validators().await.unwrap();
     let blob1 = Blob::new_data(b"blob1".to_vec());
@@ -1465,8 +1461,8 @@ where
     }
 
     // Now 2 goes offline and the other validators are working again.
-    builder.set_fault_type([2], FaultType::Offline).await;
-    builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
+    builder.set_fault_type([2], FaultType::Offline);
+    builder.set_fault_type([0, 1, 3], FaultType::Honest);
 
     // We make validator 3 (who does not have the block proposal) process the validated block.
     let info2_a = client_2a.chain_info_with_manager_values().await?;
@@ -1575,7 +1571,7 @@ where
     client2_b.set_preferred_owner(owner2_b);
 
     // Take one validator down
-    builder.set_fault_type([3], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Offline);
 
     let blob0_bytes = b"blob0".to_vec();
     let blob0_id = Blob::new(BlobContent::new_data(blob0_bytes.clone())).id();
@@ -1589,9 +1585,7 @@ where
         .block()
         .requires_or_creates_blob(&blob0_id));
 
-    builder
-        .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
-        .await;
+    builder.set_fault_type([0, 1, 2], FaultType::DontProcessValidated);
 
     client2_a.synchronize_from_validators().await.unwrap();
     let blob1 = Blob::new_data(b"blob1".to_vec());
@@ -1630,8 +1624,8 @@ where
         assert!(validator_manager.requested_locking.is_none());
     }
 
-    builder.set_fault_type([2], FaultType::Offline).await;
-    builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
+    builder.set_fault_type([2], FaultType::Offline);
+    builder.set_fault_type([0, 1, 3], FaultType::Honest);
 
     client2_b.prepare_chain().await.unwrap();
     let recipient = Account::burn_address(client2_b.chain_id());
@@ -1700,19 +1694,15 @@ where
     client2.synchronize_from_validators().await.unwrap();
 
     // Client 1 makes a proposal to only validators 0 and 1.
-    builder
-        .set_fault_type([2, 3], FaultType::OfflineWithInfo)
-        .await;
+    builder.set_fault_type([2, 3], FaultType::OfflineWithInfo);
     assert!(client1
         .burn(AccountOwner::CHAIN, Amount::from_millis(1))
         .await
         .is_err());
 
     // Client 2's proposal reaches only 2 and 3.
-    builder
-        .set_fault_type([0, 1], FaultType::OfflineWithInfo)
-        .await;
-    builder.set_fault_type([2, 3], FaultType::Honest).await;
+    builder.set_fault_type([0, 1], FaultType::OfflineWithInfo);
+    builder.set_fault_type([2, 3], FaultType::Honest);
     assert!(client2
         .burn(AccountOwner::CHAIN, Amount::from_millis(2))
         .await
@@ -1734,9 +1724,7 @@ where
     // }
 
     // Once all validators are functional again, a new proposal should succeed.
-    builder
-        .set_fault_type([0, 1, 2, 3], FaultType::Honest)
-        .await;
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
 
     client1.synchronize_from_validators().await.unwrap();
     client1.publish_data_blob(b"foo".to_vec()).await?;
@@ -1796,7 +1784,7 @@ where
     client3_c.set_preferred_owner(owner3_c);
 
     // Take one validator down
-    builder.set_fault_type([3], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Offline);
 
     let blob0_bytes = b"blob0".to_vec();
     let blob0_id = Blob::new(BlobContent::new_data(blob0_bytes.clone())).id();
@@ -1824,12 +1812,8 @@ where
         .block()
         .requires_or_creates_blob(&blob2_id));
 
-    builder
-        .set_fault_type([0, 1], FaultType::DontProcessValidated)
-        .await;
-    builder
-        .set_fault_type([2], FaultType::DontSendConfirmVote)
-        .await;
+    builder.set_fault_type([0, 1], FaultType::DontProcessValidated);
+    builder.set_fault_type([2], FaultType::DontSendConfirmVote);
 
     client3_a.synchronize_from_validators().await.unwrap();
     let blob1 = Blob::new_data(b"blob1".to_vec());
@@ -1898,10 +1882,8 @@ where
         }
     }
 
-    builder.set_fault_type([2], FaultType::Offline).await;
-    builder
-        .set_fault_type([3], FaultType::DontSendConfirmVote)
-        .await;
+    builder.set_fault_type([2], FaultType::Offline);
+    builder.set_fault_type([3], FaultType::DontSendConfirmVote);
 
     client3_b.synchronize_from_validators().await.unwrap();
     let blob3 = Blob::new_data(b"blob3".to_vec());
@@ -1961,8 +1943,8 @@ where
         blob_2_3_operations.iter().collect::<Vec<_>>()
     );
 
-    builder.set_fault_type([1], FaultType::Offline).await;
-    builder.set_fault_type([0, 2, 3], FaultType::Honest).await;
+    builder.set_fault_type([1], FaultType::Offline);
+    builder.set_fault_type([0, 2, 3], FaultType::Honest);
 
     client3_c.synchronize_from_validators().await.unwrap();
     let blob4_data = b"blob4".to_vec();
@@ -2171,9 +2153,7 @@ where
 
     // Client 0 tries to burn 3 tokens. Two validators are offline, so nothing will get
     // validated or confirmed. However, client 0 now has a pending block.
-    builder
-        .set_fault_type([2], FaultType::OfflineWithInfo)
-        .await;
+    builder.set_fault_type([2], FaultType::OfflineWithInfo);
     let result = client0
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
@@ -2181,9 +2161,7 @@ where
 
     // Client 1 thinks it is madness to burn 3 tokens! They want to publish a blob instead.
     // The validators are still faulty: They validate blocks but don't confirm them.
-    builder
-        .set_fault_type([2], FaultType::DontSendConfirmVote)
-        .await;
+    builder.set_fault_type([2], FaultType::DontSendConfirmVote);
     client1.synchronize_from_validators().await.unwrap();
     let manager = client1
         .chain_info_with_manager_values()
@@ -2202,7 +2180,7 @@ where
         .is_empty());
 
     // Finally, the validators are online and honest again.
-    builder.set_fault_type([1, 2], FaultType::Honest).await;
+    builder.set_fault_type([1, 2], FaultType::Honest);
     client0.synchronize_from_validators().await.unwrap();
     let manager = client0
         .chain_info_with_manager_values()
@@ -2261,16 +2239,14 @@ where
 
     // The client tries to burn 3 tokens. Two validators are offline, so nothing will get
     // validated or confirmed. However, the client now has a pending block.
-    builder
-        .set_fault_type([2], FaultType::OfflineWithInfo)
-        .await;
+    builder.set_fault_type([2], FaultType::OfflineWithInfo);
     let result = client
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert!(result.is_err());
 
     // Now three validators are online again.
-    builder.set_fault_type([2], FaultType::Honest).await;
+    builder.set_fault_type([2], FaultType::Honest);
 
     // The client tries to burn another token. Before that, they automatically finalize the
     // pending block, which transfers 3 tokens, leaving 10 - 3 - 1 = 6.
@@ -2320,10 +2296,8 @@ where
 
     // Client 0 tries to burn 3 tokens. Three validators are faulty: 1 and 2 will validate the
     // block but not receive it for confirmation. Validator 3 is offline.
-    builder
-        .set_fault_type([1, 2], FaultType::DontProcessValidated)
-        .await;
-    builder.set_fault_type([3], FaultType::Offline).await;
+    builder.set_fault_type([1, 2], FaultType::DontProcessValidated);
+    builder.set_fault_type([3], FaultType::Offline);
 
     let result = client0
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
@@ -2350,10 +2324,8 @@ where
     // Client 1 wants to burn 2 tokens. They learn about the proposal in round 0, but now the
     // validator 0 is offline, so they don't learn about the validated block and make their own
     // proposal in round 1.
-    builder.set_fault_type([0], FaultType::Offline).await;
-    builder
-        .set_fault_type([3], FaultType::OfflineWithInfo)
-        .await;
+    builder.set_fault_type([0], FaultType::Offline);
+    builder.set_fault_type([3], FaultType::OfflineWithInfo);
     client1.synchronize_from_validators().await.unwrap();
     let manager = client1
         .chain_info_with_manager_values()
@@ -2370,8 +2342,8 @@ where
 
     // Finally, three validators are online and honest again. Client 1 realizes there has been a
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
-    builder.set_fault_type([0, 1, 2], FaultType::Honest).await;
-    builder.set_fault_type([3], FaultType::Offline).await;
+    builder.set_fault_type([0, 1, 2], FaultType::Honest);
+    builder.set_fault_type([3], FaultType::Offline);
     client1.synchronize_from_validators().await.unwrap();
     let manager = client1
         .chain_info_with_manager_values()
@@ -2448,9 +2420,7 @@ where
         .await?;
 
     // Client 0 tries to burn 3 of their own tokens, but three validators are faulty.
-    builder
-        .set_fault_type([1, 2, 3], FaultType::OfflineWithInfo)
-        .await;
+    builder.set_fault_type([1, 2, 3], FaultType::OfflineWithInfo);
 
     let result = client0.burn(owner0, Amount::from_tokens(3)).await;
     assert!(result.is_err());
@@ -2474,14 +2444,14 @@ where
 
     // Round 0 times out.
     clock.add(TimeDelta::from_secs(5));
-    builder.set_fault_type([0], FaultType::Offline).await;
-    builder.set_fault_type([1, 2, 3], FaultType::Honest).await;
+    builder.set_fault_type([0], FaultType::Offline);
+    builder.set_fault_type([1, 2, 3], FaultType::Honest);
     client1.synchronize_from_validators().await.unwrap();
     client1.request_leader_timeout().await.unwrap();
 
     // Client 1 wants to burn 2 tokens. But now validators 0 and 3 is offline, so they don't learn
     // about the proposed fast block and make their own instead.
-    builder.set_fault_type([3], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Offline);
     let result = client1
         .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
         .await;
@@ -2489,7 +2459,7 @@ where
 
     // Finally, three validators are online and honest again. Client 1 realizes there has been a
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
-    builder.set_fault_type([0, 1, 2], FaultType::Honest).await;
+    builder.set_fault_type([0, 1, 2], FaultType::Honest);
     client1.synchronize_from_validators().await.unwrap();
     assert!(client1.pending_proposal().is_some());
     client1
@@ -2600,7 +2570,7 @@ where
     }
 
     // Take one validator down
-    builder.set_fault_type([3], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Offline);
 
     // Publish a blob on chain 1.
     let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
@@ -2622,8 +2592,8 @@ where
     client3.synchronize_from_validators().await.unwrap();
     assert_eq!(certificate.round, Round::Fast);
 
-    builder.set_fault_type([2], FaultType::Offline).await;
-    builder.set_fault_type([3], FaultType::Honest).await;
+    builder.set_fault_type([2], FaultType::Offline);
+    builder.set_fault_type([3], FaultType::Honest);
 
     // Client 3 should be able to update validator 3 about the blob and the message.
     let certificate = client3
