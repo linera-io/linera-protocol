@@ -23,10 +23,12 @@ pub struct Puzzle {
     pub difficulty: Difficulty,
     /// The grid size.
     pub size: u16,
-    /// A minimal number of steps.
+    /// A minimal number of steps for the final conditions to succeed.
     pub minimal_steps: u16,
-    /// A maximal number of steps.
+    /// A maximal number of steps for the final conditions to succeed.
     pub maximal_steps: u16,
+    /// If true, the final conditions must not succeeed after `minimal_steps - 1` steps.
+    pub is_strict: bool,
     /// The initial conditions.
     pub initial_conditions: Vec<Condition>,
     /// The final conditions.
@@ -79,9 +81,9 @@ pub enum InvalidSolution {
         puzzle_size: u16,
     },
 
-    /// The allowed step range is empty.
-    #[error("The allowed step range is empty: [{min_steps}, {max_steps}]")]
-    EmptyStepRange {
+    /// The step range of the puzzle is invalid.
+    #[error("The step range of the puzzle is invalid: [{min_steps}, {max_steps}]")]
+    InvalidStepRange {
         /// The minimum allowed steps.
         min_steps: u16,
         /// The maximum allowed steps.
@@ -95,6 +97,13 @@ pub enum InvalidSolution {
         condition_index: usize,
         /// The specific reason why the condition failed.
         reason: ConditionFailureReason,
+    },
+
+    /// This puzzle requires final conditions to fail at the given number of steps.
+    #[error("The board obtained after {steps} steps is passing the final conditions too early.")]
+    FinalConditionsMustFailAt {
+        /// The number of steps that were executed.
+        steps: u16,
     },
 
     /// One or more final conditions are not satisfied after running the simulation.
@@ -242,6 +251,8 @@ pub struct DirectPuzzle {
     pub minimal_steps: u16,
     /// The maximum number of steps allowed to solve the puzzle.
     pub maximal_steps: u16,
+    /// If true, the final conditions must not succeed after `minimal_steps - 1` steps.
+    pub is_strict: bool,
     /// The width and height of the puzzle, in cells.
     pub size: u16,
     /// The constraints for initial conditions, indexed along the `x` then `y` axis.
@@ -472,6 +483,11 @@ impl DirectPuzzle {
                 "Steps: {}-{}\n",
                 self.minimal_steps, self.maximal_steps
             ));
+        }
+
+        // Add strict mode information
+        if self.is_strict {
+            result.push_str("Mode: Strict\n");
         }
 
         result.push('\n');
@@ -776,7 +792,7 @@ impl Board {
     /// Check that the board satisfies the given puzzle.
     pub fn check_puzzle(&self, puzzle: &Puzzle) -> Result<u16, InvalidSolution> {
         if puzzle.minimal_steps > puzzle.maximal_steps {
-            return Err(InvalidSolution::EmptyStepRange {
+            return Err(InvalidSolution::InvalidStepRange {
                 min_steps: puzzle.minimal_steps,
                 max_steps: puzzle.maximal_steps,
             });
@@ -793,17 +809,45 @@ impl Board {
                 reason,
             });
         }
-        let board = self.advance(puzzle.minimal_steps);
-        match board.advance_until(
-            &puzzle.final_conditions,
-            puzzle.maximal_steps - puzzle.minimal_steps,
-        ) {
-            Ok((steps, _)) => Ok(puzzle.minimal_steps + steps),
-            Err((condition_index, reason)) => Err(InvalidSolution::FinalConditionFailed {
-                condition_index,
-                steps: puzzle.maximal_steps,
-                reason,
-            }),
+        if puzzle.is_strict {
+            if puzzle.minimal_steps == 0 {
+                return Err(InvalidSolution::InvalidStepRange {
+                    min_steps: puzzle.minimal_steps,
+                    max_steps: puzzle.maximal_steps,
+                });
+            }
+            let board = self.advance(puzzle.minimal_steps - 1);
+            match board.advance_until(
+                &puzzle.final_conditions,
+                puzzle.maximal_steps - puzzle.minimal_steps + 1,
+            ) {
+                Ok((steps, _)) => {
+                    if steps == 0 {
+                        return Err(InvalidSolution::FinalConditionsMustFailAt {
+                            steps: puzzle.minimal_steps - 1,
+                        });
+                    }
+                    Ok(puzzle.minimal_steps - 1 + steps)
+                }
+                Err((condition_index, reason)) => Err(InvalidSolution::FinalConditionFailed {
+                    condition_index,
+                    steps: puzzle.maximal_steps,
+                    reason,
+                }),
+            }
+        } else {
+            let board = self.advance(puzzle.minimal_steps);
+            match board.advance_until(
+                &puzzle.final_conditions,
+                puzzle.maximal_steps - puzzle.minimal_steps,
+            ) {
+                Ok((steps, _)) => Ok(puzzle.minimal_steps + steps),
+                Err((condition_index, reason)) => Err(InvalidSolution::FinalConditionFailed {
+                    condition_index,
+                    steps: puzzle.maximal_steps,
+                    reason,
+                }),
+            }
         }
     }
 }
@@ -843,6 +887,7 @@ impl Puzzle {
             difficulty: self.difficulty,
             minimal_steps: self.minimal_steps,
             maximal_steps: self.maximal_steps,
+            is_strict: self.is_strict,
             size: self.size,
             initial_constraints,
             final_constraints,
@@ -1175,6 +1220,7 @@ mod tests {
             size: 10,
             minimal_steps: 1,
             maximal_steps: 5,
+            is_strict: false,
             initial_conditions: vec![],
             final_conditions: vec![],
         };
@@ -1198,13 +1244,14 @@ mod tests {
             size: 5,
             minimal_steps: 6,
             maximal_steps: 4,
+            is_strict: false,
             initial_conditions: vec![],
             final_conditions: vec![],
         };
 
         assert_eq!(
             board.check_puzzle(&puzzle),
-            Err(InvalidSolution::EmptyStepRange {
+            Err(InvalidSolution::InvalidStepRange {
                 min_steps: 6,
                 max_steps: 4
             })
@@ -1221,6 +1268,7 @@ mod tests {
             size: 5,
             minimal_steps: 1,
             maximal_steps: 5,
+            is_strict: false,
             initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 0, y: 0 },
                 is_live: true,
@@ -1259,6 +1307,7 @@ mod tests {
             size: 5,
             minimal_steps: 1,
             maximal_steps: 3,
+            is_strict: false,
             initial_conditions: vec![
                 Condition::TestPosition {
                     position: Position { x: 2, y: 1 },
@@ -1313,8 +1362,9 @@ mod tests {
             summary: "Glider travels from top-left to bottom-right square".to_string(),
             difficulty: Difficulty::Hard,
             size: 16,
-            minimal_steps: 0,
+            minimal_steps: 20,
             maximal_steps: 40,
+            is_strict: true,
             initial_conditions: vec![
                 // All 5 cells should be in top-left square (0-7, 0-7).
                 Condition::TestRectangle {
@@ -1421,6 +1471,7 @@ mod tests {
             size: 5,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 2, y: 2 },
                 is_live: true,
@@ -1463,6 +1514,7 @@ mod tests {
             size: 8,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![
                 // This should pass.
                 Condition::TestPosition {
@@ -1521,6 +1573,7 @@ mod tests {
             size: 8,
             minimal_steps: 1,
             maximal_steps: 2,
+            is_strict: false,
             initial_conditions: vec![
                 Condition::TestPosition {
                     position: Position { x: 0, y: 0 },
@@ -1576,6 +1629,7 @@ mod tests {
             size: 5,
             minimal_steps: 1,
             maximal_steps: 2,
+            is_strict: false,
             initial_conditions: vec![
                 Condition::TestPosition {
                     position: Position { x: 1, y: 1 },
@@ -1639,6 +1693,7 @@ mod tests {
             size: 3,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![
                 Condition::TestPosition {
                     position: Position { x: 0, y: 0 },
@@ -1709,6 +1764,7 @@ Final Conditions:
             size: 3,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 1, y: 1 },
                 is_live: true,
@@ -1740,6 +1796,7 @@ Final Conditions:
             size: 2,
             minimal_steps: 0,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![],
             final_conditions: vec![],
         };
@@ -1772,6 +1829,7 @@ Final:
             size: 4,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: true,
             initial_conditions: vec![
                 Condition::TestPosition {
                     position: Position { x: 0, y: 0 },
@@ -1816,6 +1874,7 @@ Title: Rectangle Constraints Test
 Summary: Test rectangle constraint visualization
 Difficulty: Medium
 Steps: exactly 1
+Mode: Strict
 
 Initial:
 ●·▤▤
@@ -1843,6 +1902,7 @@ Final:
             size: 3,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![
                 Condition::TestPosition {
                     position: Position { x: 1, y: 1 },
@@ -1922,6 +1982,7 @@ Final:
             size: 3,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![
                 Condition::TestPosition {
                     position: Position { x: 1, y: 1 },

@@ -269,6 +269,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             size: 3,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 1, y: 1 },
                 is_live: true,
@@ -449,6 +450,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             size: 3,
             minimal_steps: 1,
             maximal_steps: 2,
+            is_strict: false,
             initial_conditions: vec![Condition::TestPosition {
                 position: Position { x: 1, y: 1 },
                 is_live: true,
@@ -549,6 +551,7 @@ advanceBoardOnce(board: {size: 3, liveCells: [ {x: 1, y: 1}, {x: 1, y: 0}, {x: 1
             size: 3,
             minimal_steps: 1,
             maximal_steps: 1,
+            is_strict: false,
             initial_conditions: vec![
                 Condition::TestPosition {
                     position: Position { x: 1, y: 1 },

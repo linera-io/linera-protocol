@@ -81,6 +81,7 @@ fn create_puzzle(path: &PathBuf) -> Result<Puzzle, Box<dyn std::error::Error>> {
         size: 5,
         minimal_steps: 1,
         maximal_steps: 3,
+        is_strict: true,
         initial_conditions: vec![
             Condition::TestPosition {
                 position: Position { x: 2, y: 2 },
