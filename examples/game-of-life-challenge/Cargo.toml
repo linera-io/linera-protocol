@@ -33,5 +33,5 @@ name = "gol_challenge_service"
 path = "src/service.rs"
 
 [[bin]]
-name = "gol-puzzle"
-path = "src/bin/gol-puzzle.rs"
+name = "gol"
+path = "src/bin/gol.rs"
