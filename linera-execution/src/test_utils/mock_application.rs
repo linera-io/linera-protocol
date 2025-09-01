@@ -3,8 +3,6 @@
 
 //! Mocking of user applications to help with execution scenario tests.
 
-#![allow(dead_code)]
-
 use std::{
     collections::VecDeque,
     fmt::{self, Debug, Display, Formatter},
