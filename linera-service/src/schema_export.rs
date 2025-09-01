@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, BlockHeight, NetworkDescription, Timestamp},
+    data_types::{BlobContent, BlockHeight, Epoch, NetworkDescription, Timestamp},
     identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_chain::{
@@ -212,6 +212,7 @@ impl ClientContext for DummyContext {
         _: ChainId,
         _: Option<AccountOwner>,
         _: Timestamp,
+        _: Epoch,
     ) -> Result<(), Error> {
         Ok(())
     }

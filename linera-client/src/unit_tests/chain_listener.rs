@@ -8,7 +8,7 @@ use std::{sync::Arc, time::Duration};
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
-    data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
+    data_types::{Amount, BlockHeight, Epoch, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -58,6 +58,7 @@ impl chain_listener::ClientContext for ClientContext {
         chain_id: ChainId,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
+        epoch: Epoch,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.wallet.insert(UserChain {
@@ -67,6 +68,7 @@ impl chain_listener::ClientContext for ClientContext {
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
                 pending_proposal: None,
+                epoch: Some(epoch),
             });
         }
 
@@ -105,6 +107,8 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let genesis_config = make_genesis_config(&builder);
     let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
+    let epoch0 = client0.chain_info().await?.epoch;
+    let epoch1 = client1.chain_info().await?.epoch;
 
     let mut context = ClientContext {
         wallet: Wallet::new(genesis_config),
@@ -123,13 +127,14 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         )),
     };
     context
-        .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time())
+        .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time(), epoch0)
         .await?;
     context
         .update_wallet_for_new_chain(
             client1.chain_id(),
             client1.preferred_owner(),
             clock.current_time(),
+            epoch1,
         )
         .await?;
 

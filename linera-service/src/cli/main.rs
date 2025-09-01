@@ -19,7 +19,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{ApplicationPermissions, Epoch, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
@@ -171,9 +171,10 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let timestamp = certificate.block().header.timestamp;
+                let epoch = certificate.block().header.epoch;
                 let id = description.id();
                 context
-                    .update_wallet_for_new_chain(id, Some(new_owner), timestamp)
+                    .update_wallet_for_new_chain(id, Some(new_owner), timestamp, epoch)
                     .await?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -225,8 +226,9 @@ impl Runnable for Job {
                 // No owner. This chain can be assigned explicitly using the assign command.
                 let owner = None;
                 let timestamp = certificate.block().header.timestamp;
+                let epoch = certificate.block().header.epoch;
                 context
-                    .update_wallet_for_new_chain(id, owner, timestamp)
+                    .update_wallet_for_new_chain(id, owner, timestamp, epoch)
                     .await?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -2147,22 +2149,25 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 ),
             )?;
             let admin_chain_description = genesis_config.admin_chain_description();
+            let epoch = Epoch::ZERO; // By definition, genesis is the first.
             let mut chains = vec![UserChain::make_initial(
                 admin_public_key.into(),
                 admin_chain_description.clone(),
                 timestamp,
+                epoch,
             )];
             for _ in 0..*num_other_initial_chains {
                 // Create keys.
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let description = genesis_config.add_root_chain(public_key, *initial_funding);
-                let chain = UserChain::make_initial(public_key.into(), description, timestamp);
+                let chain =
+                    UserChain::make_initial(public_key.into(), description, timestamp, epoch);
                 chains.push(chain);
             }
             genesis_config.persist().await?;
             options
                 .create_wallet(genesis_config.into_value())?
-                .mutate(|wallet| wallet.extend(chains))
+                .mutate(|w| w.extend(chains))
                 .await?;
             options.initialize_storage().boxed().await?;
             info!(
@@ -2323,20 +2328,21 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 owned,
             } => {
                 let start_time = Instant::now();
+                let wallet = options.wallet().await?;
                 let chain_ids = if let Some(chain_id) = chain_id {
                     ensure!(!owned, "Cannot specify both --owned and a chain ID");
                     vec![*chain_id]
                 } else if *owned {
-                    options.wallet().await?.owned_chain_ids()
+                    wallet.owned_chain_ids()
                 } else {
-                    options.wallet().await?.chain_ids()
+                    wallet.chain_ids()
                 };
                 if *short {
                     for chain_id in chain_ids {
                         println!("{chain_id}");
                     }
                 } else {
-                    wallet::pretty_print(&*options.wallet().await?, chain_ids).await;
+                    wallet::pretty_print(&wallet, chain_ids).await;
                 }
                 info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
                 Ok(0)
@@ -2384,9 +2390,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 options
                     .wallet()
                     .await?
-                    .mutate(|wallet| {
-                        wallet.extend([UserChain::make_other(*chain_id, Timestamp::now())])
-                    })
+                    .mutate(|w| w.extend([UserChain::make_other(*chain_id, Timestamp::now())]))
                     .await?;
                 if *sync {
                     options.run_with_storage(Job(options.clone())).await??;

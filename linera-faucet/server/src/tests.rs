@@ -8,7 +8,7 @@ use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, InMemorySigner, TestString},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, Epoch, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
 use linera_client::{chain_listener, wallet::Wallet};
@@ -58,6 +58,7 @@ impl chain_listener::ClientContext for ClientContext {
         _: ChainId,
         _: Option<AccountOwner>,
         _: Timestamp,
+        _: Epoch,
     ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
         Ok(())
