@@ -201,6 +201,53 @@ struct DirectBoard {
     index: BTreeMap<u16, BTreeSet<u16>>,
 }
 
+/// A constraint type for puzzle cells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CellConstraint {
+    /// Cell must be alive.
+    MustBeAlive,
+    /// Cell must be dead.
+    MustBeDead,
+    /// Cell is part of a rectangle constraint area.
+    RectangleArea {
+        /// The index of the rectangle constraint (0-15 for color coding).
+        index: usize,
+    },
+}
+
+/// Metadata for a rectangle constraint, used for display legends.
+#[derive(Debug, Clone)]
+pub struct RectangleConstraintInfo {
+    /// The index of the rectangle constraint (0-15 for color coding).
+    pub index: usize,
+    /// The range of `x`-coordinates being constrained.
+    pub x_range: Range<u16>,
+    /// The range of `y`-coordinates being constrained.
+    pub y_range: Range<u16>,
+    /// The minimum number of live cells in the rectangle.
+    pub min_live_count: u32,
+    /// The maximum number of live cells in the rectangle.
+    pub max_live_count: u32,
+}
+
+/// A representation of a puzzle's constraints, allowing direct access to cell constraints.
+/// Each cell can be unconstrained (absent from map) or have multiple constraint types.
+#[derive(Debug, Clone)]
+pub struct DirectPuzzle {
+    /// The width and height of the puzzle, in cells.
+    pub size: u16,
+    /// The constraints for initial conditions, indexed along the `x` then `y` axis.
+    /// Missing positions are unconstrained.
+    pub initial_constraints: BTreeMap<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>,
+    /// The constraints for final conditions, indexed along the `x` then `y` axis.
+    /// Missing positions are unconstrained.
+    pub final_constraints: BTreeMap<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>,
+    /// Rectangle constraint metadata for initial conditions.
+    pub initial_rectangles: Vec<RectangleConstraintInfo>,
+    /// Rectangle constraint metadata for final conditions.
+    pub final_rectangles: Vec<RectangleConstraintInfo>,
+}
+
 impl Display for DirectBoard {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if formatter.alternate() {
@@ -275,6 +322,237 @@ impl DirectBoard {
             condition.check(self).map_err(|reason| (index, reason))?;
         }
         Ok(())
+    }
+}
+
+impl Display for DirectPuzzle {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if formatter.alternate() {
+            write!(formatter, "{}", self.to_pretty_string())?;
+        } else {
+            write!(formatter, "{}", self.to_compact_string())?;
+        }
+        Ok(())
+    }
+}
+
+impl DirectPuzzle {
+    /// Print the puzzle constraints as ASCII art showing both initial and final conditions.
+    fn to_pretty_string(&self) -> String {
+        let mut result = String::new();
+
+        result.push_str("Initial Conditions:\n");
+        result.push_str(
+            &self.format_constraints_pretty(&self.initial_constraints, &self.initial_rectangles),
+        );
+        if !self.initial_rectangles.is_empty() {
+            result.push('\n');
+            result.push_str(&self.format_rectangle_legend(&self.initial_rectangles));
+        }
+        result.push('\n');
+        result.push_str("Final Conditions:\n");
+        result.push_str(
+            &self.format_constraints_pretty(&self.final_constraints, &self.final_rectangles),
+        );
+        if !self.final_rectangles.is_empty() {
+            result.push('\n');
+            result.push_str(&self.format_rectangle_legend(&self.final_rectangles));
+        }
+
+        result
+    }
+
+    /// Print the puzzle constraints as compact ASCII art showing both initial and final conditions.
+    fn to_compact_string(&self) -> String {
+        let mut result = String::new();
+
+        result.push_str("Initial:\n");
+        result.push_str(
+            &self.format_constraints_compact(&self.initial_constraints, &self.initial_rectangles),
+        );
+        if !self.initial_rectangles.is_empty() {
+            result.push_str(&self.format_rectangle_legend(&self.initial_rectangles));
+        }
+        result.push_str("Final:\n");
+        result.push_str(
+            &self.format_constraints_compact(&self.final_constraints, &self.final_rectangles),
+        );
+        if !self.final_rectangles.is_empty() {
+            result.push_str(&self.format_rectangle_legend(&self.final_rectangles));
+        }
+
+        result
+    }
+
+    fn format_constraints_pretty(
+        &self,
+        constraints: &BTreeMap<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>,
+        _rectangles: &[RectangleConstraintInfo],
+    ) -> String {
+        let mut result = String::new();
+
+        // Add top border with column numbers for reference.
+        result.push_str("   ");
+        for x in 0..self.size {
+            result.push_str(&format!("{:2}", x % 10));
+        }
+        result.push('\n');
+
+        for y in 0..self.size {
+            // Add row number for reference.
+            result.push_str(&format!("{:2} ", y));
+
+            for x in 0..self.size {
+                result.push(' ');
+                let char_to_display = self.get_display_char(Position { x, y }, constraints);
+                result.push(char_to_display);
+            }
+            result.push('\n');
+        }
+
+        result
+    }
+
+    fn format_constraints_compact(
+        &self,
+        constraints: &BTreeMap<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>,
+        _rectangles: &[RectangleConstraintInfo],
+    ) -> String {
+        let mut result = String::new();
+
+        for y in 0..self.size {
+            for x in 0..self.size {
+                let char_to_display = self.get_display_char(Position { x, y }, constraints);
+                result.push(char_to_display);
+            }
+            result.push('\n');
+        }
+
+        result
+    }
+
+    fn format_rectangle_legend(&self, rectangles: &[RectangleConstraintInfo]) -> String {
+        let mut result = String::new();
+        result.push_str("Legend:\n");
+
+        for rect in rectangles {
+            let symbol = self.get_rectangle_char(rect.index);
+            let range_desc = format!(
+                "[{}-{}, {}-{}]",
+                rect.x_range.start,
+                rect.x_range.end - 1, // Convert from exclusive end to inclusive
+                rect.y_range.start,
+                rect.y_range.end - 1
+            );
+
+            if rect.min_live_count == rect.max_live_count {
+                result.push_str(&format!(
+                    "  {} {} exactly {} live cells\n",
+                    symbol, range_desc, rect.min_live_count
+                ));
+            } else {
+                result.push_str(&format!(
+                    "  {} {} {}-{} live cells\n",
+                    symbol, range_desc, rect.min_live_count, rect.max_live_count
+                ));
+            }
+        }
+
+        result
+    }
+
+    fn get_constraint_from_map<'a>(
+        &self,
+        position: Position,
+        constraints: &'a BTreeMap<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>,
+    ) -> Option<&'a BTreeSet<CellConstraint>> {
+        let Position { x, y } = position;
+        constraints.get(&x)?.get(&y)
+    }
+
+    fn get_display_char(
+        &self,
+        position: Position,
+        constraints: &BTreeMap<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>,
+    ) -> char {
+        if let Some(constraint_set) = self.get_constraint_from_map(position, constraints) {
+            // Position constraints take precedence
+            if constraint_set.contains(&CellConstraint::MustBeAlive) {
+                return '●'; // Must be alive
+            }
+            if constraint_set.contains(&CellConstraint::MustBeDead) {
+                return '✕'; // Must be dead
+            }
+
+            // Find rectangle area constraints and use the first one for display
+            for constraint in constraint_set {
+                if let CellConstraint::RectangleArea { index } = constraint {
+                    return self.get_rectangle_char(*index);
+                }
+            }
+        }
+        '·' // Unconstrained
+    }
+
+    fn get_rectangle_char(&self, index: usize) -> char {
+        // Use different colored/styled characters for different rectangles (0-15)
+        match index % 16 {
+            0 => '▢',  // White square
+            1 => '▣',  // Black square with white border
+            2 => '▤',  // Square with horizontal stripes
+            3 => '▥',  // Square with vertical stripes
+            4 => '▦',  // Square with orthogonal crosshatch
+            5 => '▧',  // Square with upper-left to lower-right diagonal
+            6 => '▨',  // Square with upper-right to lower-left diagonal
+            7 => '▩',  // Square with diagonal crosshatch
+            8 => '◢',  // Black lower-right triangle
+            9 => '◣',  // Black lower-left triangle
+            10 => '◤', // Black upper-left triangle
+            11 => '◥', // Black upper-right triangle
+            12 => '◦', // White bullet
+            13 => '◯', // Large circle
+            14 => '◊', // White diamond
+            15 => '◈', // White diamond containing small black diamond
+            _ => '?',  // Fallback (shouldn't happen due to modulo)
+        }
+    }
+
+    /// Get the initial constraint for a specific position.
+    /// Returns None if unconstrained, Some(true) if must be alive, Some(false) if must be dead.
+    /// If there are multiple constraints, position constraints take precedence.
+    pub fn get_initial_constraint(&self, position: Position) -> Option<bool> {
+        if let Some(constraint_set) =
+            self.get_constraint_from_map(position, &self.initial_constraints)
+        {
+            if constraint_set.contains(&CellConstraint::MustBeAlive) {
+                Some(true)
+            } else if constraint_set.contains(&CellConstraint::MustBeDead) {
+                Some(false)
+            } else {
+                None // Only rectangle constraints, return None for backward compatibility
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get the final constraint for a specific position.
+    /// Returns None if unconstrained, Some(true) if must be alive, Some(false) if must be dead.
+    /// If there are multiple constraints, position constraints take precedence.
+    pub fn get_final_constraint(&self, position: Position) -> Option<bool> {
+        if let Some(constraint_set) =
+            self.get_constraint_from_map(position, &self.final_constraints)
+        {
+            if constraint_set.contains(&CellConstraint::MustBeAlive) {
+                Some(true)
+            } else if constraint_set.contains(&CellConstraint::MustBeDead) {
+                Some(false)
+            } else {
+                None // Only rectangle constraints, return None for backward compatibility
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -428,6 +706,102 @@ impl Board {
         } else {
             Ok(())
         }
+    }
+}
+
+impl Puzzle {
+    /// Convert this puzzle to a DirectPuzzle representation for display.
+    pub fn to_direct_puzzle(&self) -> DirectPuzzle {
+        let mut initial_constraints =
+            BTreeMap::<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>::new();
+        let mut final_constraints = BTreeMap::<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>::new();
+        let mut initial_rectangles = Vec::new();
+        let mut final_rectangles = Vec::new();
+
+        // Process initial conditions
+        for (index, condition) in self.initial_conditions.iter().enumerate() {
+            self.apply_condition_to_constraints(
+                &mut initial_constraints,
+                &mut initial_rectangles,
+                condition,
+                index,
+            );
+        }
+
+        // Process final conditions
+        for (index, condition) in self.final_conditions.iter().enumerate() {
+            self.apply_condition_to_constraints(
+                &mut final_constraints,
+                &mut final_rectangles,
+                condition,
+                index,
+            );
+        }
+
+        DirectPuzzle {
+            size: self.size,
+            initial_constraints,
+            final_constraints,
+            initial_rectangles,
+            final_rectangles,
+        }
+    }
+
+    fn apply_condition_to_constraints(
+        &self,
+        constraints: &mut BTreeMap<u16, BTreeMap<u16, BTreeSet<CellConstraint>>>,
+        rectangles: &mut Vec<RectangleConstraintInfo>,
+        condition: &Condition,
+        index: usize,
+    ) {
+        match condition {
+            Condition::TestPosition { position, is_live } => {
+                let constraint = if *is_live {
+                    CellConstraint::MustBeAlive
+                } else {
+                    CellConstraint::MustBeDead
+                };
+                constraints
+                    .entry(position.x)
+                    .or_default()
+                    .entry(position.y)
+                    .or_default()
+                    .insert(constraint);
+            }
+            Condition::TestRectangle {
+                x_range,
+                y_range,
+                min_live_count,
+                max_live_count,
+            } => {
+                // Store rectangle metadata for legend
+                rectangles.push(RectangleConstraintInfo {
+                    index,
+                    x_range: x_range.clone(),
+                    y_range: y_range.clone(),
+                    min_live_count: *min_live_count,
+                    max_live_count: *max_live_count,
+                });
+
+                // Mark all cells in the rectangle area
+                for x in x_range.clone() {
+                    for y in y_range.clone() {
+                        constraints
+                            .entry(x)
+                            .or_default()
+                            .entry(y)
+                            .or_default()
+                            .insert(CellConstraint::RectangleArea { index });
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Display for Puzzle {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_direct_puzzle().fmt(formatter)
     }
 }
 
@@ -1102,5 +1476,326 @@ mod tests {
             }
             other => panic!("Expected InitialConditionFailed, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_puzzle_to_direct_puzzle() {
+        let puzzle = Puzzle {
+            title: "Test Puzzle Display".to_string(),
+            summary: "Test puzzle for display functionality".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 5,
+            minimal_steps: 1,
+            maximal_steps: 2,
+            initial_conditions: vec![
+                Condition::TestPosition {
+                    position: Position { x: 1, y: 1 },
+                    is_live: true,
+                },
+                Condition::TestPosition {
+                    position: Position { x: 3, y: 2 },
+                    is_live: false,
+                },
+            ],
+            final_conditions: vec![
+                Condition::TestPosition {
+                    position: Position { x: 2, y: 2 },
+                    is_live: true,
+                },
+                Condition::TestPosition {
+                    position: Position { x: 4, y: 4 },
+                    is_live: false,
+                },
+            ],
+        };
+
+        let direct_puzzle = puzzle.to_direct_puzzle();
+        assert_eq!(direct_puzzle.size, 5);
+
+        // Check initial constraints
+        assert_eq!(
+            direct_puzzle.get_initial_constraint(Position { x: 1, y: 1 }),
+            Some(true)
+        );
+        assert_eq!(
+            direct_puzzle.get_initial_constraint(Position { x: 3, y: 2 }),
+            Some(false)
+        );
+        assert_eq!(
+            direct_puzzle.get_initial_constraint(Position { x: 0, y: 0 }),
+            None
+        ); // Unconstrained
+
+        // Check final constraints
+        assert_eq!(
+            direct_puzzle.get_final_constraint(Position { x: 2, y: 2 }),
+            Some(true)
+        );
+        assert_eq!(
+            direct_puzzle.get_final_constraint(Position { x: 4, y: 4 }),
+            Some(false)
+        );
+        assert_eq!(
+            direct_puzzle.get_final_constraint(Position { x: 0, y: 0 }),
+            None
+        ); // Unconstrained
+    }
+
+    #[test]
+    fn test_direct_puzzle_display() {
+        let puzzle = Puzzle {
+            title: "Display Test".to_string(),
+            summary: "Test display formatting".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 3,
+            minimal_steps: 1,
+            maximal_steps: 1,
+            initial_conditions: vec![
+                Condition::TestPosition {
+                    position: Position { x: 0, y: 0 },
+                    is_live: true,
+                },
+                Condition::TestPosition {
+                    position: Position { x: 2, y: 1 },
+                    is_live: false,
+                },
+            ],
+            final_conditions: vec![Condition::TestPosition {
+                position: Position { x: 1, y: 2 },
+                is_live: true,
+            }],
+        };
+
+        let compact_display = puzzle.to_string();
+        assert_eq!(
+            String::from("\n") + &compact_display,
+            r#"
+Initial:
+●··
+··✕
+···
+Final:
+···
+···
+·●·
+"#
+        );
+
+        let pretty_display = format!("{:#}", puzzle);
+        assert_eq!(
+            String::from("\n") + &pretty_display,
+            r#"
+Initial Conditions:
+    0 1 2
+ 0  ● · ·
+ 1  · · ✕
+ 2  · · ·
+
+Final Conditions:
+    0 1 2
+ 0  · · ·
+ 1  · · ·
+ 2  · ● ·
+"#
+        );
+    }
+
+    #[test]
+    fn test_direct_puzzle_separate_constraints() {
+        // Test that initial and final conditions are stored separately
+        let puzzle = Puzzle {
+            title: "Separate Constraints Test".to_string(),
+            summary: "Test separate initial and final constraints".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 3,
+            minimal_steps: 1,
+            maximal_steps: 1,
+            initial_conditions: vec![Condition::TestPosition {
+                position: Position { x: 1, y: 1 },
+                is_live: true,
+            }],
+            final_conditions: vec![Condition::TestPosition {
+                position: Position { x: 1, y: 1 },
+                is_live: false, // Different constraint for same position
+            }],
+        };
+
+        let direct_puzzle = puzzle.to_direct_puzzle();
+        // Initial and final constraints should be separate
+        assert_eq!(
+            direct_puzzle.get_initial_constraint(Position { x: 1, y: 1 }),
+            Some(true)
+        );
+        assert_eq!(
+            direct_puzzle.get_final_constraint(Position { x: 1, y: 1 }),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn test_empty_puzzle_display() {
+        let puzzle = Puzzle {
+            title: "Empty".to_string(),
+            summary: "No conditions".to_string(),
+            difficulty: Difficulty::Easy,
+            size: 2,
+            minimal_steps: 0,
+            maximal_steps: 1,
+            initial_conditions: vec![],
+            final_conditions: vec![],
+        };
+
+        let display = puzzle.to_string();
+        assert_eq!(
+            String::from("\n") + &display,
+            r#"
+Initial:
+··
+··
+Final:
+··
+··
+"#
+        );
+    }
+
+    #[test]
+    fn test_rectangle_constraint_display() {
+        let puzzle = Puzzle {
+            title: "Rectangle Constraints Test".to_string(),
+            summary: "Test rectangle constraint visualization".to_string(),
+            difficulty: Difficulty::Medium,
+            size: 4,
+            minimal_steps: 1,
+            maximal_steps: 1,
+            initial_conditions: vec![
+                Condition::TestPosition {
+                    position: Position { x: 0, y: 0 },
+                    is_live: true,
+                },
+                Condition::TestRectangle {
+                    x_range: 1..3,
+                    y_range: 1..3,
+                    min_live_count: 2,
+                    max_live_count: 4,
+                },
+                Condition::TestRectangle {
+                    x_range: 2..4,
+                    y_range: 0..2,
+                    min_live_count: 1,
+                    max_live_count: 2,
+                },
+            ],
+            final_conditions: vec![Condition::TestPosition {
+                position: Position { x: 3, y: 3 },
+                is_live: false,
+            }],
+        };
+
+        let compact_display = puzzle.to_string();
+
+        // Actual behavior analysis:
+        // ● at (0,0) - position constraint (takes precedence)
+        // Rectangle 1 (index=1): positions (1,1), (1,2), (2,1), (2,2) -> uses ▣
+        // Rectangle 2 (index=2): positions (2,0), (2,1), (3,0), (3,1) -> uses ▤
+        // When rectangles overlap at (2,1), the first one in the BTreeSet takes precedence
+        // Position (2,1) is in both rectangles, but since we iterate the set,
+        // the first constraint found determines display
+
+        // Update the test to match actual behavior - at overlapping positions,
+        // the constraint that appears first in the BTreeSet iteration takes precedence
+        // Since BTreeSet is ordered, RectangleArea { index: 1 } comes before RectangleArea { index: 2 }
+        assert_eq!(
+            String::from("\n") + &compact_display,
+            r#"
+Initial:
+●·▤▤
+·▣▣▤
+·▣▣·
+····
+Legend:
+  ▣ [1-2, 1-2] 2-4 live cells
+  ▤ [2-3, 0-1] 1-2 live cells
+Final:
+····
+····
+····
+···✕
+"#
+        );
+    }
+
+    #[test]
+    fn test_multiple_constraints_same_cell() {
+        let puzzle = Puzzle {
+            title: "Multiple Constraints Test".to_string(),
+            summary: "Test cell with both position and rectangle constraints".to_string(),
+            difficulty: Difficulty::Hard,
+            size: 3,
+            minimal_steps: 1,
+            maximal_steps: 1,
+            initial_conditions: vec![
+                Condition::TestPosition {
+                    position: Position { x: 1, y: 1 },
+                    is_live: true,
+                },
+                Condition::TestRectangle {
+                    x_range: 0..3,
+                    y_range: 0..3,
+                    min_live_count: 3,
+                    max_live_count: 5,
+                },
+            ],
+            final_conditions: vec![],
+        };
+
+        let direct_puzzle = puzzle.to_direct_puzzle();
+
+        // Cell (1,1) should have both MustBeAlive and RectangleArea constraints
+        let constraints = direct_puzzle
+            .get_constraint_from_map(Position { x: 1, y: 1 }, &direct_puzzle.initial_constraints);
+        assert!(constraints.is_some());
+        let constraint_set = constraints.unwrap();
+        assert!(constraint_set.contains(&CellConstraint::MustBeAlive));
+        assert!(constraint_set.contains(&CellConstraint::RectangleArea { index: 1 }));
+
+        // Position constraint should take precedence in display (should show ●, not rectangle symbol)
+        assert_eq!(
+            direct_puzzle.get_initial_constraint(Position { x: 1, y: 1 }),
+            Some(true)
+        );
+
+        // Cell (0,0) should only have rectangle constraint
+        let constraints = direct_puzzle
+            .get_constraint_from_map(Position { x: 0, y: 0 }, &direct_puzzle.initial_constraints);
+        assert!(constraints.is_some());
+        let constraint_set = constraints.unwrap();
+        assert!(!constraint_set.contains(&CellConstraint::MustBeAlive));
+        assert!(!constraint_set.contains(&CellConstraint::MustBeDead));
+        assert!(constraint_set.contains(&CellConstraint::RectangleArea { index: 1 }));
+
+        // Should return None for backward compatibility (no position constraint)
+        assert_eq!(
+            direct_puzzle.get_initial_constraint(Position { x: 0, y: 0 }),
+            None
+        );
+
+        // Display should show position constraint at (1,1) and rectangle constraint at (0,0)
+        let compact_display = puzzle.to_string();
+        assert_eq!(
+            String::from("\n") + &compact_display,
+            r#"
+Initial:
+▣▣▣
+▣●▣
+▣▣▣
+Legend:
+  ▣ [0-2, 0-2] 3-5 live cells
+Final:
+···
+···
+···
+"#
+        );
     }
 }
