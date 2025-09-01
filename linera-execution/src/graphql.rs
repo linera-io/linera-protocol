@@ -21,6 +21,12 @@ use crate::{
 
 doc_scalar!(UserData, "Optional user message attached to a transfer");
 
+async_graphql::scalar!(
+    ResourceControlPolicy,
+    "ResourceControlPolicyScalar",
+    "A collection of prices and limits associated with block execution"
+);
+
 #[async_graphql::Object(cache_control(no_cache))]
 impl Committee {
     #[graphql(derived(name = "validators"))]
