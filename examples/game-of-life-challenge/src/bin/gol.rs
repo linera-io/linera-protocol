@@ -121,25 +121,16 @@ fn create_puzzle(path: &PathBuf) -> Result<Puzzle, Box<dyn std::error::Error>> {
         ],
     };
 
-    // Serialize to BCS format
     let puzzle_bytes = bcs::to_bytes(&puzzle)?;
-
-    // Write to file
     fs::write(path, puzzle_bytes)?;
 
     Ok(puzzle)
 }
 
 fn print_puzzle(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    // Read the file
     let puzzle_bytes = fs::read(path)?;
-
-    // Deserialize from BCS format
     let puzzle: Puzzle = bcs::from_bytes(&puzzle_bytes)?;
-
-    // Pretty print the puzzle
     println!("{:#}", puzzle);
-
     Ok(())
 }
 
@@ -199,18 +190,12 @@ fn create_solution(puzzle: &Puzzle, path: &PathBuf) -> Result<(), Box<dyn std::e
 }
 
 fn print_solution(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    // Read the file
     let solution_bytes = fs::read(path)?;
-
-    // Deserialize from BCS format
     let solution: Solution = bcs::from_bytes(&solution_bytes)?;
-
-    // Print the solution
     println!("Solution:");
     println!("  Steps: {}", solution.steps);
     println!("  Initial Board:");
     println!("{:#}", solution.board);
-
     Ok(())
 }
 
