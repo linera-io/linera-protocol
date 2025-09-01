@@ -348,10 +348,7 @@ impl DirectPuzzle {
         let mut result = String::new();
 
         // Add puzzle metadata
-        result.push_str(&format!("Title: {}\n", self.title));
-        result.push_str(&format!("Summary: {}\n", self.summary));
-        result.push_str(&format!("Difficulty: {:?}\n", self.difficulty));
-        result.push('\n');
+        result.push_str(&self.format_puzzle_header());
 
         result.push_str("Initial Conditions:\n");
         result.push_str(
@@ -372,32 +369,10 @@ impl DirectPuzzle {
         }
 
         // Add conflict warnings
-        let initial_conflicts = self.find_conflicting_constraints(&self.initial_constraints);
-        let final_conflicts = self.find_conflicting_constraints(&self.final_constraints);
-
-        if !initial_conflicts.is_empty() || !final_conflicts.is_empty() {
+        let warnings = self.format_conflict_warnings();
+        if !warnings.is_empty() {
             result.push('\n');
-            result.push_str("Warnings:\n");
-
-            if !initial_conflicts.is_empty() {
-                result.push_str("  Initial conditions have conflicting constraints at:\n");
-                for pos in &initial_conflicts {
-                    result.push_str(&format!(
-                        "    ({}, {}) - cell cannot be both alive and dead\n",
-                        pos.x, pos.y
-                    ));
-                }
-            }
-
-            if !final_conflicts.is_empty() {
-                result.push_str("  Final conditions have conflicting constraints at:\n");
-                for pos in &final_conflicts {
-                    result.push_str(&format!(
-                        "    ({}, {}) - cell cannot be both alive and dead\n",
-                        pos.x, pos.y
-                    ));
-                }
-            }
+            result.push_str(&warnings);
         }
 
         result
@@ -408,10 +383,7 @@ impl DirectPuzzle {
         let mut result = String::new();
 
         // Add puzzle metadata
-        result.push_str(&format!("Title: {}\n", self.title));
-        result.push_str(&format!("Summary: {}\n", self.summary));
-        result.push_str(&format!("Difficulty: {:?}\n", self.difficulty));
-        result.push('\n');
+        result.push_str(&self.format_puzzle_header());
 
         result.push_str("Initial:\n");
         result.push_str(
@@ -429,31 +401,9 @@ impl DirectPuzzle {
         }
 
         // Add conflict warnings
-        let initial_conflicts = self.find_conflicting_constraints(&self.initial_constraints);
-        let final_conflicts = self.find_conflicting_constraints(&self.final_constraints);
-
-        if !initial_conflicts.is_empty() || !final_conflicts.is_empty() {
-            result.push_str("Warnings:\n");
-
-            if !initial_conflicts.is_empty() {
-                result.push_str("  Initial conditions have conflicting constraints at:\n");
-                for pos in &initial_conflicts {
-                    result.push_str(&format!(
-                        "    ({}, {}) - cell cannot be both alive and dead\n",
-                        pos.x, pos.y
-                    ));
-                }
-            }
-
-            if !final_conflicts.is_empty() {
-                result.push_str("  Final conditions have conflicting constraints at:\n");
-                for pos in &final_conflicts {
-                    result.push_str(&format!(
-                        "    ({}, {}) - cell cannot be both alive and dead\n",
-                        pos.x, pos.y
-                    ));
-                }
-            }
+        let warnings = self.format_conflict_warnings();
+        if !warnings.is_empty() {
+            result.push_str(&warnings);
         }
 
         result
@@ -501,6 +451,49 @@ impl DirectPuzzle {
                 result.push(char_to_display);
             }
             result.push('\n');
+        }
+
+        result
+    }
+
+    fn format_puzzle_header(&self) -> String {
+        let mut result = String::new();
+        result.push_str(&format!("Title: {}\n", self.title));
+        result.push_str(&format!("Summary: {}\n", self.summary));
+        result.push_str(&format!("Difficulty: {:?}\n", self.difficulty));
+        result.push('\n');
+        result
+    }
+
+    fn format_conflict_warnings(&self) -> String {
+        let initial_conflicts = self.find_conflicting_constraints(&self.initial_constraints);
+        let final_conflicts = self.find_conflicting_constraints(&self.final_constraints);
+
+        if initial_conflicts.is_empty() && final_conflicts.is_empty() {
+            return String::new();
+        }
+
+        let mut result = String::new();
+        result.push_str("Warnings:\n");
+
+        if !initial_conflicts.is_empty() {
+            result.push_str("  Initial conditions have conflicting constraints at:\n");
+            for pos in &initial_conflicts {
+                result.push_str(&format!(
+                    "    ({}, {}) - cell cannot be both alive and dead\n",
+                    pos.x, pos.y
+                ));
+            }
+        }
+
+        if !final_conflicts.is_empty() {
+            result.push_str("  Final conditions have conflicting constraints at:\n");
+            for pos in &final_conflicts {
+                result.push_str(&format!(
+                    "    ({}, {}) - cell cannot be both alive and dead\n",
+                    pos.x, pos.y
+                ));
+            }
         }
 
         result
