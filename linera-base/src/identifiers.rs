@@ -30,7 +30,7 @@ use crate::{
 };
 
 /// An account owner.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// Short addresses reserved for the protocol.
@@ -38,8 +38,17 @@ pub enum AccountOwner {
     /// 32-byte account address.
     Address32(CryptoHash),
     /// 20-byte account EVM-compatible address.
-    #[debug(with = "hex_debug")]
     Address20([u8; 20]),
+}
+
+impl fmt::Debug for AccountOwner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Reserved(byte) => f.debug_tuple("Reserved").field(byte).finish(),
+            Self::Address32(hash) => write!(f, "Address32({:?}..)", hash),
+            Self::Address20(bytes) => write!(f, "Address20({}..)", hex::encode(&bytes[..8])),
+        }
+    }
 }
 
 impl AccountOwner {
