@@ -458,7 +458,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     }
 
     /// Cleans up the runtime after the execution of a call to a different contract.
-    fn finish_call(&mut self)  {
+    fn finish_call(&mut self) {
         self.pop_application();
     }
 
