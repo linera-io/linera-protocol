@@ -39,10 +39,15 @@ RUN apt-get update && \
         linux-perf bpftrace libbpf-tools linux-base man-db manpages manpages-dev locales tcpdump \
         sysstat htop lsof strace net-tools iproute2 iputils-ping dnsutils \
         traceroute nmap curl wget git vim nano less grep sed gawk \
+        ethtool numactl jq bpftool dwarves psmisc zstd perl \
         procps util-linux python3 python3-pip sudo file coreutils && \
     apt-get install -y --no-install-recommends -t sid \
         python3-bpfcc libbpfcc libbpfcc-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth=1 https://github.com/brendangregg/FlameGraph /opt/FlameGraph && \
+    ln -s /opt/FlameGraph/stackcollapse-perf.pl /usr/local/bin/stackcollapse-perf && \
+    ln -s /opt/FlameGraph/flamegraph.pl /usr/local/bin/flamegraph
 
 COPY scripts/memleak_translate.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/memleak_translate.sh
