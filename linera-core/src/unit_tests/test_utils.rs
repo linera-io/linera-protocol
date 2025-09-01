@@ -751,7 +751,6 @@ where
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stop.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
-#[allow(dead_code)]
 pub struct TestBuilder<B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
@@ -1177,7 +1176,6 @@ impl StorageBuilder for MemoryStorageBuilder {
 impl MemoryStorageBuilder {
     /// Creates a [`MemoryStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
-    #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         MemoryStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
@@ -1302,7 +1300,6 @@ pub struct DynamoDbStorageBuilder {
 impl DynamoDbStorageBuilder {
     /// Creates a [`DynamoDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
-    #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         DynamoDbStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
@@ -1347,7 +1344,6 @@ pub struct ScyllaDbStorageBuilder {
 impl ScyllaDbStorageBuilder {
     /// Creates a [`ScyllaDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
-    #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         ScyllaDbStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
