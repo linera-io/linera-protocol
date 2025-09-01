@@ -143,19 +143,21 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
 
             fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
+                use linera_views::context::Context as _;
                 let mut keys = Vec::new();
                 #(#pre_load_keys_quotes)*
                 Ok(keys)
             }
 
             fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::ViewError> {
+                use linera_views::context::Context as _;
                 let mut __linera_reserved_pos = 0;
                 #(#post_load_keys_quotes)*
                 Ok(Self {#(#name_quotes),*})
             }
 
             async fn load(context: #context) -> Result<Self, linera_views::ViewError> {
-                use linera_views::store::{ReadableKeyValueStore as _};
+                use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
                 #load_metrics
                 if Self::NUM_INIT_KEYS == 0 {
                     Self::post_load(context, &[])

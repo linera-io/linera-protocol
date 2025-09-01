@@ -27,6 +27,7 @@ where
         self.register.context()
     }
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
+        use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let __linera_reserved_index = 0;
         let __linera_reserved_base_key = context
@@ -61,6 +62,7 @@ where
         context: C,
         values: &[Option<Vec<u8>>],
     ) -> Result<Self, linera_views::ViewError> {
+        use linera_views::context::Context as _;
         let mut __linera_reserved_pos = 0;
         let __linera_reserved_index = 0;
         let __linera_reserved_pos_next = __linera_reserved_pos
@@ -100,7 +102,7 @@ where
         Ok(Self { register, collection })
     }
     async fn load(context: C) -> Result<Self, linera_views::ViewError> {
-        use linera_views::store::ReadableKeyValueStore as _;
+        use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
         #[cfg(not(target_arch = "wasm32"))]
         linera_views::metrics::increment_counter(
             &linera_views::metrics::LOAD_VIEW_COUNTER,
