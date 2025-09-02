@@ -2035,12 +2035,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.communicate_chain_updates(&new_committee).await?;
             }
         }
-        if let Some(sender) = &self.timing_sender {
-            let _ = sender.send((
-                update_validators_start.elapsed().as_millis() as u64,
-                TimingType::UpdateValidators,
-            ));
-        }
+        self.send_timing(update_validators_start, TimingType::UpdateValidators);
         Ok(())
     }
 
@@ -2328,12 +2323,7 @@ impl<Env: Environment> ChainClient<Env> {
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate)) => {
-                    if let Some(sender) = &self.timing_sender {
-                        let _ = sender.send((
-                            execute_block_start.elapsed().as_millis() as u64,
-                            TimingType::ExecuteBlock,
-                        ));
-                    }
+                    self.send_timing(execute_block_start, TimingType::ExecuteBlock);
                     break Ok(ClientOutcome::Committed(certificate));
                 }
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
@@ -2361,12 +2351,7 @@ impl<Env: Environment> ChainClient<Env> {
             };
         };
 
-        if let Some(sender) = &self.timing_sender {
-            let _ = sender.send((
-                timing_start.elapsed().as_millis() as u64,
-                TimingType::ExecuteOperations,
-            ));
-        }
+        self.send_timing(timing_start, TimingType::ExecuteOperations);
 
         result
     }
@@ -2903,16 +2888,19 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?;
             self.client.finalize_block(&committee, certificate).await?
         };
-        if let Some(sender) = &self.timing_sender {
-            let _ = sender.send((
-                submit_block_proposal_start.elapsed().as_millis() as u64,
-                TimingType::SubmitBlockProposal,
-            ));
-        }
-
+        self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         debug!(round = %certificate.round, "Sending confirmed block to validators");
         self.update_validators(Some(&committee)).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
+    }
+
+    fn send_timing(&self, start: Instant, timing_type: TimingType) {
+        let Some(sender) = &self.timing_sender else {
+            return;
+        };
+        if let Err(err) = sender.send((start.elapsed().as_millis() as u64, timing_type)) {
+            tracing::warn!(%err, "Failed to send timing info");
+        }
     }
 
     /// Requests a leader timeout certificate if the current round has timed out. Returns the
