@@ -31,7 +31,7 @@ jobs:
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Filter paths
         uses: dorny/paths-filter@v3
         id: files-changed
@@ -51,7 +51,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: actions/setup-node@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Check toolchain symlinks
