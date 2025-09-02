@@ -37,7 +37,7 @@ enum Commands {
         path: PathBuf,
     },
     /// Check if a board solves a puzzle
-    CheckBoard {
+    CheckSolution {
         /// Path to the puzzle file
         puzzle: PathBuf,
         /// Path to the board file
@@ -64,8 +64,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::PrintBoard { path } => {
             print_board(&path)?;
         }
-        Commands::CheckBoard { puzzle, board } => {
-            check_board(&puzzle, &board)?;
+        Commands::CheckSolution { puzzle, board } => {
+            check_solution(&puzzle, &board)?;
         }
     }
 
@@ -182,7 +182,7 @@ fn print_board(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn check_board(
+fn check_solution(
     puzzle_path: &PathBuf,
     board_path: &PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
