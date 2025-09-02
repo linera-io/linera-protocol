@@ -803,7 +803,7 @@ where
 {
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    builder.set_fault_type([0, 1], FaultType::Malicious);
+    builder.set_fault_type([0, 1], FaultType::NoChains);
     let chain_1 = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let chain_2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
     let result = chain_1
@@ -817,7 +817,7 @@ where
     assert_matches!(
         result,
         Err(ChainClientError::CommunicationError(
-            CommunicationError::Trusted(NodeError::ArithmeticError { .. })
+            CommunicationError::Trusted(NodeError::InactiveChain(_))
         )),
         "unexpected result"
     );
