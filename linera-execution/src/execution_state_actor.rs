@@ -387,13 +387,8 @@ where
                 http_responses_are_oracle_responses,
                 callback,
             } => {
-                let response = if let Some(response) =
-                    self.txn_tracker.next_replayed_oracle_response()?
-                {
-                    match response {
-                        OracleResponse::Http(response) => response,
-                        _ => return Err(ExecutionError::OracleResponseMismatch),
-                    }
+                let maybe_response = if self.txn_tracker.is_replaying() {
+                    None
                 } else {
                     let headers = request
                         .headers
@@ -439,13 +434,17 @@ where
                             .min(committee.policy().maximum_oracle_response_bytes);
                     }
 
-                    self.receive_http_response(response, response_size_limit)
-                        .await?
+                    Some(OracleResponse::Http(
+                        self.receive_http_response(response, response_size_limit)
+                            .await?,
+                    ))
                 };
 
                 // Record the oracle response
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Http(response.clone()));
+                let response = match self.txn_tracker.add_oracle_response(maybe_response)? {
+                    OracleResponse::Http(response) => response.clone(),
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                };
 
                 callback.respond(response);
             }
@@ -513,25 +512,26 @@ where
             }
 
             ReadEvent { event_id, callback } => {
-                let event = match self.txn_tracker.next_replayed_oracle_response()? {
-                    None => {
-                        let event = self
-                            .state
-                            .context()
-                            .extra()
-                            .get_event(event_id.clone())
-                            .await?;
-                        event.ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?
-                    }
-                    Some(OracleResponse::Event(recorded_event_id, event))
-                        if recorded_event_id == event_id =>
-                    {
-                        event
-                    }
-                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                let maybe_response = if self.txn_tracker.is_replaying() {
+                    None
+                } else {
+                    let event = self
+                        .state
+                        .context()
+                        .extra()
+                        .get_event(event_id.clone())
+                        .await?
+                        .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id.clone()]))?;
+                    Some(OracleResponse::Event(event_id.clone(), event))
                 };
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Event(event_id, event.clone()));
+                let event = match self.txn_tracker.add_oracle_response(maybe_response)? {
+                    OracleResponse::Event(recorded_event_id, event)
+                        if *recorded_event_id == event_id =>
+                    {
+                        event.clone()
+                    }
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                };
                 callback.respond(event);
             }
 
@@ -598,42 +598,36 @@ where
                 query,
                 callback,
             } => {
-                let response = match self.txn_tracker.next_replayed_oracle_response()? {
-                    Some(OracleResponse::Service(bytes)) => bytes,
-                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                    None => {
-                        let context = QueryContext {
-                            chain_id: self.state.context().extra().chain_id(),
-                            next_block_height,
-                            local_time: self.txn_tracker.local_time(),
-                        };
-                        let QueryOutcome {
-                            response,
-                            operations,
-                        } = Box::pin(self.state.query_user_application_with_deadline(
-                            application_id,
-                            context,
-                            query,
-                            deadline,
-                            self.txn_tracker.created_blobs().clone(),
-                        ))
-                        .await?;
-                        ensure!(
-                            operations.is_empty(),
-                            ExecutionError::ServiceOracleQueryOperations(operations)
-                        );
-                        response
-                    }
+                let maybe_response = if self.txn_tracker.is_replaying() {
+                    None
+                } else {
+                    let context = QueryContext {
+                        chain_id: self.state.context().extra().chain_id(),
+                        next_block_height,
+                        local_time: self.txn_tracker.local_time(),
+                    };
+                    let QueryOutcome {
+                        response,
+                        operations,
+                    } = Box::pin(self.state.query_user_application_with_deadline(
+                        application_id,
+                        context,
+                        query,
+                        deadline,
+                        self.txn_tracker.created_blobs().clone(),
+                    ))
+                    .await?;
+                    ensure!(
+                        operations.is_empty(),
+                        ExecutionError::ServiceOracleQueryOperations(operations)
+                    );
+                    Some(OracleResponse::Service(response))
                 };
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Service(response.clone()));
+                let response = match self.txn_tracker.add_oracle_response(maybe_response)? {
+                    OracleResponse::Service(bytes) => bytes.clone(),
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                };
                 callback.respond(response);
-            }
-
-            QueryService { response, callback } => {
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Service(response));
-                callback.respond(());
             }
 
             AddOutgoingMessage { message, callback } => {
@@ -647,11 +641,6 @@ where
             } => {
                 self.txn_tracker.set_local_time(local_time);
                 callback.respond(());
-            }
-
-            GetCreatedBlobs { callback } => {
-                let blobs = self.txn_tracker.created_blobs().clone();
-                callback.respond(blobs);
             }
 
             AssertBefore {
@@ -684,23 +673,16 @@ where
             }
 
             ValidationRound { round, callback } => {
-                let result_round =
-                    if let Some(response) = self.txn_tracker.next_replayed_oracle_response()? {
-                        match response {
-                            OracleResponse::Round(round) => round,
-                            _ => return Err(ExecutionError::OracleResponseMismatch),
-                        }
-                    } else {
-                        round
-                    };
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Round(result_round));
+                let maybe_response = if self.txn_tracker.is_replaying() {
+                    None
+                } else {
+                    Some(OracleResponse::Round(round))
+                };
+                let result_round = match self.txn_tracker.add_oracle_response(maybe_response)? {
+                    OracleResponse::Round(round) => *round,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                };
                 callback.respond(result_round);
-            }
-
-            AddOracleResponse { response, callback } => {
-                self.txn_tracker.add_oracle_response(response);
-                callback.respond(());
             }
         }
 
@@ -1221,13 +1203,6 @@ pub enum ExecutionRequest {
         callback: Sender<Vec<u8>>,
     },
 
-    QueryService {
-        #[debug(with = hex_debug)]
-        response: Vec<u8>,
-        #[debug(skip)]
-        callback: Sender<()>,
-    },
-
     AddOutgoingMessage {
         message: crate::OutgoingMessage,
         #[debug(skip)]
@@ -1238,11 +1213,6 @@ pub enum ExecutionRequest {
         local_time: Timestamp,
         #[debug(skip)]
         callback: Sender<()>,
-    },
-
-    GetCreatedBlobs {
-        #[debug(skip)]
-        callback: Sender<std::collections::BTreeMap<BlobId, BlobContent>>,
     },
 
     AssertBefore {
@@ -1261,11 +1231,5 @@ pub enum ExecutionRequest {
         round: Option<u32>,
         #[debug(skip)]
         callback: Sender<Option<u32>>,
-    },
-
-    AddOracleResponse {
-        response: OracleResponse,
-        #[debug(skip)]
-        callback: Sender<()>,
     },
 }

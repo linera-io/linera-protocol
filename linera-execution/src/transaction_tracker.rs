@@ -166,8 +166,27 @@ impl TransactionTracker {
         &self.blobs
     }
 
-    pub fn add_oracle_response(&mut self, oracle_response: OracleResponse) {
-        self.oracle_responses.push(oracle_response);
+    /// Add an oracle response to the execution results, or take it from the replayed ones and
+    /// add it. The argument must be `None` if and only if `is_replaying`.
+    ///
+    /// In either case, a reference to the oracle response is returned.
+    pub fn add_oracle_response(
+        &mut self,
+        oracle_response: Option<OracleResponse>,
+    ) -> Result<&OracleResponse, ExecutionError> {
+        let response = if let Some(recorded_response) = self.next_replayed_oracle_response()? {
+            assert!(
+                oracle_response.is_none(),
+                "Trying to record oracle response in replay mode; this is a bug"
+            );
+            recorded_response
+        } else {
+            oracle_response.expect(
+                "Passed None into add_oracle_response, but not in replay mode; this is a bug",
+            )
+        };
+        self.oracle_responses.push(response);
+        Ok(self.oracle_responses.last().unwrap())
     }
 
     pub fn add_operation_result(&mut self, result: Option<Vec<u8>>) {
@@ -230,6 +249,11 @@ impl TransactionTracker {
             .collect()
     }
 
+    /// Returns whether we are executing in replay mode, with recorded oracle responses.
+    pub fn is_replaying(&self) -> bool {
+        self.replaying_oracle_responses.is_some()
+    }
+
     /// Adds the oracle response to the record.
     /// If replaying, it also checks that it matches the next replayed one and returns `true`.
     pub fn replay_oracle_response(
@@ -241,11 +265,12 @@ impl TransactionTracker {
                 recorded_response == oracle_response,
                 ExecutionError::OracleResponseMismatch
             );
+            self.oracle_responses.push(recorded_response);
             true
         } else {
+            self.oracle_responses.push(oracle_response);
             false
         };
-        self.add_oracle_response(oracle_response);
         Ok(replaying)
     }
 
@@ -256,9 +281,7 @@ impl TransactionTracker {
     ///
     /// In both cases, the value (returned or obtained from the oracle) must be recorded using
     /// `add_oracle_response`.
-    pub fn next_replayed_oracle_response(
-        &mut self,
-    ) -> Result<Option<OracleResponse>, ExecutionError> {
+    fn next_replayed_oracle_response(&mut self) -> Result<Option<OracleResponse>, ExecutionError> {
         let Some(responses) = &mut self.replaying_oracle_responses else {
             return Ok(None); // Not in replay mode.
         };

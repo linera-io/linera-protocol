@@ -492,17 +492,21 @@ where
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: epoch.0,
                 };
-                let bytes = match txn_tracker.next_replayed_oracle_response()? {
-                    None => self.get_event(event_id.clone()).await?,
-                    Some(OracleResponse::Event(recorded_event_id, bytes))
-                        if recorded_event_id == event_id =>
+                let maybe_response = if txn_tracker.is_replaying() {
+                    None
+                } else {
+                    let event = self.get_event(event_id.clone()).await?;
+                    Some(OracleResponse::Event(event_id.clone(), event))
+                };
+                let bytes = match txn_tracker.add_oracle_response(maybe_response)? {
+                    OracleResponse::Event(recorded_event_id, bytes)
+                        if *recorded_event_id == event_id =>
                     {
-                        bytes
+                        bytes.clone()
                     }
-                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
                 };
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
-                txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                 self.blob_used(txn_tracker, blob_id).await?;
                 self.committees.get_mut().insert(epoch, committee);
@@ -522,16 +526,17 @@ where
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
                     index: epoch.0,
                 };
-                let bytes = match txn_tracker.next_replayed_oracle_response()? {
-                    None => self.get_event(event_id.clone()).await?,
-                    Some(OracleResponse::Event(recorded_event_id, bytes))
-                        if recorded_event_id == event_id =>
-                    {
-                        bytes
-                    }
-                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                let maybe_response = if txn_tracker.is_replaying() {
+                    None
+                } else {
+                    let event = self.get_event(event_id.clone()).await?;
+                    Some(OracleResponse::Event(event_id.clone(), event))
                 };
-                txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
+                match txn_tracker.add_oracle_response(maybe_response)? {
+                    OracleResponse::Event(recorded_event_id, _)
+                        if *recorded_event_id == event_id => {}
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
             }
             UpdateStreams(streams) => {
                 let mut missing_events = Vec::new();
@@ -562,23 +567,16 @@ where
                         stream_id,
                         index,
                     };
-                    match txn_tracker.next_replayed_oracle_response()? {
-                        None => {
-                            if !self
-                                .context()
-                                .extra()
-                                .contains_event(event_id.clone())
-                                .await?
-                            {
-                                missing_events.push(event_id);
-                                continue;
-                            }
-                        }
-                        Some(OracleResponse::EventExists(recorded_event_id))
-                            if recorded_event_id == event_id => {}
-                        Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                    if !txn_tracker
+                        .replay_oracle_response(OracleResponse::EventExists(event_id.clone()))?
+                        && !self
+                            .context()
+                            .extra()
+                            .contains_event(event_id.clone())
+                            .await?
+                    {
+                        missing_events.push(event_id);
                     }
-                    txn_tracker.add_oracle_response(OracleResponse::EventExists(event_id));
                 }
                 ensure!(
                     missing_events.is_empty(),
