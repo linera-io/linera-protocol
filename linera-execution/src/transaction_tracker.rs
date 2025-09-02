@@ -265,12 +265,11 @@ impl TransactionTracker {
                 recorded_response == oracle_response,
                 ExecutionError::OracleResponseMismatch
             );
-            self.oracle_responses.push(recorded_response);
             true
         } else {
-            self.oracle_responses.push(oracle_response);
             false
         };
+        self.oracle_responses.push(oracle_response);
         Ok(replaying)
     }
 
