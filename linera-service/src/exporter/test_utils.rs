@@ -349,7 +349,7 @@ impl ValidatorNode for DummyValidator {
     async fn download_certificates_by_heights(
         &self,
         _request: Request<linera_rpc::grpc::api::DownloadCertificatesByHeightsRequest>,
-    ) -> Result<Response<linera_rpc::grpc::api::CertificatesBatchResponse>, Status> {
+    ) -> Result<Response<linera_rpc::grpc::api::CertificatesBatch>, Status> {
         unimplemented!()
     }
 

@@ -32,10 +32,11 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
-            CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
-            LiteCertificate, NetworkDescription, Notification, PendingBlobRequest,
-            PendingBlobResult, SubscriptionRequest, VersionInfo,
+            BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificateRaw,
+            CertificatesBatch, CertificatesBatchRequest, CertificatesBatchResponse,
+            ChainInfoResult, CryptoHash, HandlePendingBlobRequest, LiteCertificate,
+            NetworkDescription, Notification, PendingBlobRequest, PendingBlobResult,
+            SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -633,7 +634,7 @@ where
     async fn download_certificates_by_heights(
         &self,
         request: Request<api::DownloadCertificatesByHeightsRequest>,
-    ) -> Result<Response<CertificatesBatchResponse>, Status> {
+    ) -> Result<Response<CertificatesBatch>, Status> {
         let original_request: CertificatesByHeightRequest = request.into_inner().try_into()?;
         let chain_info_request = ChainInfoQuery::new(original_request.chain_id)
             .with_sent_certificate_hashes_by_heights(original_request.heights);
@@ -666,13 +667,38 @@ where
             }
         };
 
-        // Use download_certificates to get the actual certificates
-        let certificates_request = CertificatesBatchRequest {
-            hashes: hashes.into_iter().map(|h| h.into()).collect(),
-        };
+        // Use 70% of the max message size as a buffer capacity.
+        // Leave 30% as overhead.
+        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
-        self.download_certificates(Request::new(certificates_request))
-            .await
+        let mut returned_certificates = vec![];
+
+        'outer: for batch in hashes.chunks(100) {
+            let certificates: Vec<(Vec<u8>, Vec<u8>)> = self
+                .0
+                .storage
+                .read_certificates_raw(batch.to_vec())
+                .await
+                .map_err(Self::view_error_to_status)?
+                .into_iter()
+                .collect();
+            for (lite_cert_bytes, confirmed_block_bytes) in certificates {
+                if grpc_message_limiter.add(lite_cert_bytes.len() + confirmed_block_bytes.len()) > 0
+                {
+                    returned_certificates.push(CertificateRaw {
+                        lite_cert: lite_cert_bytes,
+                        block: confirmed_block_bytes,
+                    });
+                } else {
+                    break 'outer;
+                }
+            }
+        }
+
+        Ok(Response::new(CertificatesBatch {
+            certificates: returned_certificates,
+        }))
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]
@@ -769,6 +795,11 @@ impl<T> GrpcMessageLimiter<T> {
         }
         self.remaining -= required;
         Ok(true)
+    }
+
+    fn add(&mut self, bytes_len: usize) -> usize {
+        self.remaining = self.remaining.saturating_sub(bytes_len);
+        self.remaining
     }
 }
 
