@@ -687,6 +687,14 @@ impl Board {
         }
     }
 
+    /// Creates a new board with the given size and specified live cells.
+    pub fn with_live_cells(size: u16, live_cells: Vec<Position>) -> Self {
+        Board {
+            size,
+            live_cells: live_cells.into_iter().collect(),
+        }
+    }
+
     /// Returns all neighbors of cell `(x, y)`.
     fn neighbors(&self, position: Position) -> impl Iterator<Item = (u16, u16)> {
         let Position { x, y } = position;

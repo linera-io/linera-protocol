@@ -18,13 +18,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Create a new puzzle file and optionally a solution
-    CreatePuzzle {
-        /// Path to the output puzzle file
-        puzzle_path: PathBuf,
-        /// Optional path to output a board file
-        #[arg(long)]
-        board: Option<PathBuf>,
+    /// Generate multiple puzzle files with their solutions
+    CreatePuzzles {
+        /// Optional output directory (defaults to current directory)
+        #[arg(short, long)]
+        output_dir: Option<PathBuf>,
     },
     /// Print the contents of a puzzle file
     PrintPuzzle {
@@ -49,14 +47,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::CreatePuzzle { puzzle_path, board } => {
-            let puzzle = create_puzzle(&puzzle_path)?;
-            println!("Created puzzle file: {}", puzzle_path.display());
-
-            if let Some(board_path) = board {
-                create_solution(&puzzle, &board_path)?;
-                println!("Created board file: {}", board_path.display());
-            }
+        Commands::CreatePuzzles { output_dir } => {
+            let output_path = output_dir.unwrap_or_else(|| PathBuf::from("."));
+            create_puzzles(&output_path)?;
         }
         Commands::PrintPuzzle { path } => {
             print_puzzle(&path)?;
@@ -72,105 +65,101 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn create_puzzle(path: &PathBuf) -> Result<Puzzle, Box<dyn std::error::Error>> {
-    // Create a fixed test puzzle for now
+fn create_puzzles(output_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    // Create output directory if it doesn't exist
+    fs::create_dir_all(output_dir)?;
+
+    // Puzzle 1: Create a Block Pattern
+    let block_puzzle = create_block_puzzle()?;
+    let block_solution = create_block_solution(&block_puzzle)?;
+
+    let puzzle_path = output_dir.join("01_block_pattern.bcs");
+    let solution_path = output_dir.join("01_block_pattern_solution.bcs");
+
+    let puzzle_bytes = bcs::to_bytes(&block_puzzle)?;
+    let solution_bytes = bcs::to_bytes(&block_solution)?;
+
+    fs::write(&puzzle_path, puzzle_bytes)?;
+    fs::write(&solution_path, solution_bytes)?;
+
+    println!("Created puzzle: {}", puzzle_path.display());
+    println!("{block_puzzle:#}");
+    println!("Created solution: {}", solution_path.display());
+    println!("{block_solution:#}");
+    let steps = block_solution.check_puzzle(&block_puzzle)?;
+    println!("Verified solution: {steps} steps");
+
+    Ok(())
+}
+
+fn create_block_puzzle() -> Result<Puzzle, Box<dyn std::error::Error>> {
+    // Create a puzzle where the goal is to form a 2x2 block in the center
     let puzzle = Puzzle {
-        title: "Sample Puzzle".to_string(),
-        summary: "A simple test puzzle with mixed constraints".to_string(),
-        difficulty: Difficulty::Medium,
-        size: 5,
+        title: "Block Formation".to_string(),
+        summary: "Create a stable 2x2 block pattern in the center of the board".to_string(),
+        difficulty: Difficulty::Easy,
+        size: 6,
         minimal_steps: 1,
-        maximal_steps: 3,
-        is_strict: true,
+        maximal_steps: 5,
+        is_strict: false,
         initial_conditions: vec![
+            // Allow any initial configuration with 4-8 live cells
+            Condition::TestRectangle {
+                x_range: 0..6,
+                y_range: 0..6,
+                min_live_count: 4,
+                max_live_count: 8,
+            },
+        ],
+        final_conditions: vec![
+            // Must have exactly 4 cells in the center 2x2 block
             Condition::TestPosition {
                 position: Position { x: 2, y: 2 },
                 is_live: true,
             },
-            Condition::TestRectangle {
-                x_range: 1..4,
-                y_range: 1..4,
-                min_live_count: 2,
-                max_live_count: 5,
-            },
             Condition::TestPosition {
-                position: Position { x: 0, y: 0 },
+                position: Position { x: 2, y: 3 },
                 is_live: true,
             },
-        ],
-        final_conditions: vec![
             Condition::TestPosition {
-                position: Position { x: 4, y: 4 },
-                is_live: false,
+                position: Position { x: 3, y: 2 },
+                is_live: true,
             },
+            Condition::TestPosition {
+                position: Position { x: 3, y: 3 },
+                is_live: true,
+            },
+            // Ensure no other cells are alive (the block should be stable)
             Condition::TestRectangle {
-                x_range: 0..2,
-                y_range: 3..5,
-                min_live_count: 1,
-                max_live_count: 2,
+                x_range: 0..6,
+                y_range: 0..6,
+                min_live_count: 4,
+                max_live_count: 4,
             },
         ],
     };
 
-    let puzzle_bytes = bcs::to_bytes(&puzzle)?;
-    fs::write(path, puzzle_bytes)?;
-
     Ok(puzzle)
+}
+
+fn create_block_solution(puzzle: &Puzzle) -> Result<Board, Box<dyn std::error::Error>> {
+    // Create a solution: start with a block pattern that's already stable
+    let live_cells = vec![
+        Position { x: 2, y: 2 },
+        Position { x: 2, y: 3 },
+        Position { x: 3, y: 2 },
+        Position { x: 3, y: 3 },
+    ];
+
+    let board = Board::with_live_cells(puzzle.size, live_cells);
+
+    Ok(board)
 }
 
 fn print_puzzle(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let puzzle_bytes = fs::read(path)?;
     let puzzle: Puzzle = bcs::from_bytes(&puzzle_bytes)?;
     println!("{:#}", puzzle);
-    Ok(())
-}
-
-fn create_solution(puzzle: &Puzzle, path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    // Create a simple board: a board with the minimal required live cells
-    // For demonstration, we'll create a board that satisfies the initial conditions
-    let mut live_cells = Vec::new();
-
-    // Add cells required by initial conditions
-    for condition in &puzzle.initial_conditions {
-        match condition {
-            Condition::TestPosition {
-                position,
-                is_live: true,
-            } => {
-                live_cells.push(*position);
-            }
-            Condition::TestRectangle {
-                x_range,
-                y_range,
-                min_live_count,
-                ..
-            } => {
-                // Add minimum required live cells in the rectangle area
-                let mut count = 0;
-                for y in y_range.clone() {
-                    for x in x_range.clone() {
-                        if count < *min_live_count {
-                            live_cells.push(Position { x, y });
-                            count += 1;
-                        }
-                    }
-                }
-            }
-            _ => {} // Skip other condition types for now
-        }
-    }
-
-    // For now, create an empty board - we'll improve this later
-    let board = Board::new(puzzle.size);
-    // TODO: Need a way to create board with live cells
-    println!("Warning: Created empty board for solution (live cells not set yet)");
-
-    // Serialize to BCS format
-    let solution_bytes = bcs::to_bytes(&board)?;
-
-    // Write to file
-    fs::write(path, solution_bytes)?;
-
     Ok(())
 }
 
