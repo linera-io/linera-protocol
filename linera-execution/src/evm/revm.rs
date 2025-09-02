@@ -606,12 +606,7 @@ fn base_runtime_call<Runtime: BaseRuntime>(
     request: BaseRuntimePrecompile,
     context: &mut Ctx<'_, Runtime>,
 ) -> Result<Vec<u8>, ExecutionError> {
-    let mut runtime = context
-        .db()
-        .0
-        .runtime
-        .lock()
-        .unwrap();
+    let mut runtime = context.db().0.runtime.lock().unwrap();
     match request {
         BaseRuntimePrecompile::ChainId => {
             let chain_id = runtime.chain_id()?;
@@ -718,12 +713,7 @@ impl<'a> ContractPrecompile {
         request: ContractRuntimePrecompile,
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let mut runtime = context
-            .db()
-            .0
-            .runtime
-            .lock()
-            .unwrap();
+        let mut runtime = context.db().0.runtime.lock().unwrap();
         match request {
             ContractRuntimePrecompile::AuthenticatedSigner => {
                 let account_owner = runtime.authenticated_signer()?;
@@ -825,12 +815,7 @@ impl<'a> ServicePrecompile {
         request: ServiceRuntimePrecompile,
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let mut runtime = context
-            .db()
-            .0
-            .runtime
-            .lock()
-            .unwrap();
+        let mut runtime = context.db().0.runtime.lock().unwrap();
         match request {
             ServiceRuntimePrecompile::TryQueryApplication { target, argument } => {
                 runtime.try_query_application(target, argument)
@@ -1103,12 +1088,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         } else {
             let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
             let service = linera_base::data_types::Bytecode::new(vec![]);
-            let mut runtime = context
-                .db()
-                .0
-                .runtime
-                .lock()
-                .unwrap();
+            let mut runtime = context.db().0.runtime.lock().unwrap();
             let module_id = runtime.publish_module(contract, service, VmRuntime::Evm)?;
             let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
             let argument = JSON_EMPTY_VECTOR.to_vec(); // No call to "fn instantiate"
