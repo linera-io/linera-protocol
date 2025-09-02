@@ -360,9 +360,13 @@ where
         Ok(())
     }
 
-    /// Checks if the contract is already initialized. It is possible
-    /// that the constructor has not yet been called.
-    pub fn is_initialized(&mut self) -> Result<bool, ExecutionError> {
+    /// A contract is called initialized if the execution of the constructor
+    /// with the constructor argument yield the storage and the deployed
+    /// bytecode. The deployed bytecode is stored in the storage of the
+    /// bytecode address.
+    /// We determine whether the contract is already initialized, sets the
+    /// `is_revm_initialized` and then returns the result.
+    pub fn set_is_initialized(&mut self) -> Result<bool, ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let evm_address = runtime.application_id()?.evm_address();
         let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, evm_address);
