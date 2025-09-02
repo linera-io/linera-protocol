@@ -18,7 +18,10 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
+use crate::{
+    ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError,
+    ServiceRuntime,
+};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -78,6 +81,10 @@ pub(crate) struct DatabaseRuntime<Runtime> {
     pub runtime: Arc<Mutex<Runtime>>,
     /// The uncommitted changes to the contract.
     pub changes: EvmState,
+    /// Whether the contract has been instantiated in REVM.
+    pub is_revm_instantiated: bool,
+    /// The error that can occur during runtime.
+    pub error: Arc<Mutex<Option<String>>>,
 }
 
 impl<Runtime> Clone for DatabaseRuntime<Runtime> {
@@ -87,6 +94,8 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
             contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
+            is_revm_instantiated: self.is_revm_instantiated,
+            error: self.error.clone(),
         }
     }
 }
@@ -131,18 +140,32 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
             contract_address: Address::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
+            is_revm_instantiated: false,
+            error: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Returns the current storage states and clears it to default.
     pub fn take_storage_stats(&self) -> StorageStats {
-        let mut storage_stats_read = self
-            .storage_stats
-            .lock()
-            .expect("The lock should be possible");
+        let mut storage_stats_read = self.storage_stats.lock().unwrap();
         let storage_stats = storage_stats_read.clone();
         *storage_stats_read = StorageStats::default();
         storage_stats
+    }
+
+    /// Insert error into the database
+    pub fn insert_error(&self, exec_error: ExecutionError) {
+        let mut error = self.error.lock().unwrap();
+        *error = Some(format!("Runtime error {:?}", exec_error));
+    }
+
+    /// Process the error.
+    pub fn process_any_error(&self) -> Result<(), EvmExecutionError> {
+        let error = self.error.lock().unwrap();
+        if let Some(error) = error.clone() {
+            return Err(EvmExecutionError::RuntimeError(error.clone()));
+        }
+        Ok(())
     }
 }
 
@@ -191,7 +214,7 @@ where
             let account = self.changes.get(&address).unwrap();
             return Ok(Some(account.info.clone()));
         }
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let mut runtime = self.runtime.lock().unwrap();
         let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, address);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
@@ -214,14 +237,11 @@ where
         let key_prefix = self.get_address_key(KeyCategory::Storage as u8, address);
         let key = Self::get_linera_key(&key_prefix, index)?;
         {
-            let mut storage_stats = self
-                .storage_stats
-                .lock()
-                .expect("The lock should be possible");
+            let mut storage_stats = self.storage_stats.lock().unwrap();
             storage_stats.key_read += 1;
         }
         let result = {
-            let mut runtime = self.runtime.lock().expect("The lock should be possible");
+            let mut runtime = self.runtime.lock().unwrap();
             let promise = runtime.read_value_bytes_new(key)?;
             runtime.read_value_bytes_wait(&promise)
         }?;
@@ -239,11 +259,8 @@ where
 {
     /// Effectively commits changes to storage.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
-        let mut storage_stats = self
-            .storage_stats
-            .lock()
-            .expect("The lock should be possible");
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let mut storage_stats = self.storage_stats.lock().unwrap();
+        let mut runtime = self.runtime.lock().unwrap();
         let mut batch = Batch::new();
         for (address, account) in &self.changes {
             if !account.is_touched() {
@@ -305,35 +322,53 @@ where
 {
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
-        let account_info = self.basic_ref(*address)?;
+        let account_info: Option<AccountInfo> = self.basic_ref(*address)?;
         Ok(match account_info {
             None => 0,
             Some(account_info) => account_info.nonce,
         })
     }
 
+    pub fn get_deployed_bytecode(&self) -> Result<Vec<u8>, ExecutionError> {
+        let account_info = self.basic_ref(self.contract_address)?;
+        Ok(match account_info {
+            None => Vec::new(),
+            Some(account_info) => {
+                let bytecode = account_info
+                    .code
+                    .ok_or(EvmExecutionError::MissingBytecode)?;
+                bytecode.bytes_ref().to_vec()
+            }
+        })
+    }
+
     /// Sets the EVM contract address from the value Address::ZERO.
     /// The value is set from the `ApplicationId`.
     pub fn set_contract_address(&mut self) -> Result<(), ExecutionError> {
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let mut runtime = self.runtime.lock().unwrap();
         let application_id = runtime.application_id()?;
         self.contract_address = application_id_to_address(application_id);
         Ok(())
     }
 
-    /// Checks if the contract is already initialized. It is possible
-    /// that the constructor has not yet been called.
-    pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+    /// A contract is called initialized if the execution of the constructor
+    /// with the constructor argument yield the storage and the deployed
+    /// bytecode. The deployed bytecode is stored in the storage of the
+    /// bytecode address.
+    /// We determine whether the contract is already initialized, sets the
+    /// `is_revm_initialized` and then returns the result.
+    pub fn set_is_initialized(&mut self) -> Result<bool, ExecutionError> {
+        let mut runtime = self.runtime.lock().unwrap();
         let evm_address = runtime.application_id()?.evm_address();
         let key_info = self.get_address_key(KeyCategory::AccountInfo as u8, evm_address);
         let promise = runtime.contains_key_new(key_info)?;
         let result = runtime.contains_key_wait(&promise)?;
+        self.is_revm_instantiated = result;
         Ok(result)
     }
 
     pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let mut runtime = self.runtime.lock().unwrap();
         // The block height being used
         let block_height_linera = runtime.block_height()?;
         let block_height_evm = block_height_linera.0;
@@ -376,7 +411,7 @@ where
     }
 
     pub fn constructor_argument(&self) -> Result<Vec<u8>, ExecutionError> {
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let mut runtime = self.runtime.lock().unwrap();
         let constructor_argument = runtime.application_parameters()?;
         Ok(serde_json::from_slice::<Vec<u8>>(&constructor_argument)?)
     }
@@ -388,7 +423,7 @@ where
 {
     pub fn get_contract_block_env(&self) -> Result<BlockEnv, ExecutionError> {
         let mut block_env = self.get_block_env()?;
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let mut runtime = self.runtime.lock().unwrap();
         // We use the gas_limit from the runtime
         let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
         block_env.gas_limit = gas_limit;
