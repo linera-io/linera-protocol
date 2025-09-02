@@ -94,16 +94,16 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         });
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
         pre_load_keys_quotes.push(quote! {
-            let index = #idx_lit;
-            let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
-            keys.extend(#g :: pre_load(&context.clone_with_base_key(base_key))?);
+            let __linera_reserved_index = #idx_lit;
+            let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+            keys.extend(#g :: pre_load(&context.clone_with_base_key(__linera_reserved_base_key))?);
         });
         post_load_keys_quotes.push(quote! {
-            let index = #idx_lit;
-            let pos_next = pos + #g :: NUM_INIT_KEYS;
-            let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
-            let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
-            pos = pos_next;
+            let __linera_reserved_index = #idx_lit;
+            let __linera_reserved_pos_next = __linera_reserved_pos + #g :: NUM_INIT_KEYS;
+            let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+            let #name = #g :: post_load(context.clone_with_base_key(__linera_reserved_base_key), &values[__linera_reserved_pos..__linera_reserved_pos_next])?;
+            __linera_reserved_pos = __linera_reserved_pos_next;
         });
     }
 
@@ -139,7 +139,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             type Context = #context;
 
             fn context(&self) -> &#context {
-                use linera_views::views::View;
                 self.#first_name_quote.context()
             }
 
@@ -152,7 +151,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
 
             fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::ViewError> {
                 use linera_views::context::Context as _;
-                let mut pos = 0;
+                let mut __linera_reserved_pos = 0;
                 #(#post_load_keys_quotes)*
                 Ok(Self {#(#name_quotes),*})
             }
@@ -180,7 +179,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
 
             fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
-                use linera_views::views::View;
                 #(#flush_quotes)*
                 Ok( #(#test_flush_quotes)&&* )
             }
@@ -220,7 +218,7 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
             Self: linera_views::views::View,
         {
             async fn save(&mut self) -> Result<(), linera_views::ViewError> {
-                use linera_views::{context::Context, batch::Batch, store::WritableKeyValueStore as _, views::View};
+                use linera_views::{context::Context as _, batch::Batch, store::WritableKeyValueStore as _, views::View as _};
                 #increment_counter
                 let mut batch = Batch::new();
                 self.flush(&mut batch)?;
@@ -260,16 +258,16 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
             type Hasher = linera_views::sha3::Sha3_256;
 
             async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::ViewError> {
-                use linera_views::views::{Hasher, HashableView};
-                use std::io::Write;
+                use linera_views::views::Hasher as _;
+                use std::io::Write as _;
                 let mut hasher = Self::Hasher::default();
                 #(#field_hashes_mut)*
                 Ok(hasher.finalize())
             }
 
             async fn hash(&self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::ViewError> {
-                use linera_views::views::{Hasher, HashableView};
-                use std::io::Write;
+                use linera_views::views::Hasher as _;
+                use std::io::Write as _;
                 let mut hasher = Self::Hasher::default();
                 #(#field_hashes)*
                 Ok(hasher.finalize())
@@ -298,13 +296,11 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
             async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::{
-                    batch::Batch,
                     generic_array::GenericArray,
                     sha3::{digest::OutputSizeUser, Sha3_256},
-                    views::HashableView,
+                    views::HashableView as _,
                 };
-                use serde::{Serialize, Deserialize};
-                #[derive(Serialize, Deserialize)]
+                #[derive(serde::Serialize, serde::Deserialize)]
                 struct #hash_type(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
                 impl<'de> BcsHashable<'de> for #hash_type {}
                 let hash = self.hash().await?;
@@ -314,13 +310,11 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
             async fn crypto_hash_mut(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::{
-                    batch::Batch,
                     generic_array::GenericArray,
                     sha3::{digest::OutputSizeUser, Sha3_256},
-                    views::HashableView,
+                    views::HashableView as _,
                 };
-                use serde::{Serialize, Deserialize};
-                #[derive(Serialize, Deserialize)]
+                #[derive(serde::Serialize, serde::Deserialize)]
                 struct #hash_type(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
                 impl<'de> BcsHashable<'de> for #hash_type {}
                 let hash = self.hash_mut().await?;

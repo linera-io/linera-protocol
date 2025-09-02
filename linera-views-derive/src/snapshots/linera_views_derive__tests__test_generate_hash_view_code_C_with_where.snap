@@ -16,8 +16,8 @@ where
         <Self::Hasher as linera_views::views::Hasher>::Output,
         linera_views::ViewError,
     > {
-        use linera_views::views::{Hasher, HashableView};
-        use std::io::Write;
+        use linera_views::views::Hasher as _;
+        use std::io::Write as _;
         let mut hasher = Self::Hasher::default();
         hasher.write_all(self.register.hash_mut().await?.as_ref())?;
         hasher.write_all(self.collection.hash_mut().await?.as_ref())?;
@@ -29,8 +29,8 @@ where
         <Self::Hasher as linera_views::views::Hasher>::Output,
         linera_views::ViewError,
     > {
-        use linera_views::views::{Hasher, HashableView};
-        use std::io::Write;
+        use linera_views::views::Hasher as _;
+        use std::io::Write as _;
         let mut hasher = Self::Hasher::default();
         hasher.write_all(self.register.hash().await?.as_ref())?;
         hasher.write_all(self.collection.hash().await?.as_ref())?;

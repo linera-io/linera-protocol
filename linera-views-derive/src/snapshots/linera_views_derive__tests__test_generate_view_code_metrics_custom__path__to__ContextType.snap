@@ -26,7 +26,6 @@ where
         > as linera_views::views::View>::NUM_INIT_KEYS;
     type Context = custom::path::to::ContextType;
     fn context(&self) -> &custom::path::to::ContextType {
-        use linera_views::views::View;
         self.register.context()
     }
     fn pre_load(
@@ -34,26 +33,32 @@ where
     ) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut keys = Vec::new();
-        let index = 0;
-        let base_key = context
+        let __linera_reserved_index = 0;
+        let __linera_reserved_base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(
+                linera_views::views::MIN_VIEW_TAG,
+                &__linera_reserved_index,
+            )?;
         keys.extend(
             RegisterView::<
                 custom::path::to::ContextType,
                 usize,
-            >::pre_load(&context.clone_with_base_key(base_key))?,
+            >::pre_load(&context.clone_with_base_key(__linera_reserved_base_key))?,
         );
-        let index = 1;
-        let base_key = context
+        let __linera_reserved_index = 1;
+        let __linera_reserved_base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(
+                linera_views::views::MIN_VIEW_TAG,
+                &__linera_reserved_index,
+            )?;
         keys.extend(
             CollectionView::<
                 custom::path::to::ContextType,
                 usize,
                 RegisterView<custom::path::to::ContextType, usize>,
-            >::pre_load(&context.clone_with_base_key(base_key))?,
+            >::pre_load(&context.clone_with_base_key(__linera_reserved_base_key))?,
         );
         Ok(keys)
     }
@@ -62,34 +67,46 @@ where
         values: &[Option<Vec<u8>>],
     ) -> Result<Self, linera_views::ViewError> {
         use linera_views::context::Context as _;
-        let mut pos = 0;
-        let index = 0;
-        let pos_next = pos
+        let mut __linera_reserved_pos = 0;
+        let __linera_reserved_index = 0;
+        let __linera_reserved_pos_next = __linera_reserved_pos
             + RegisterView::<custom::path::to::ContextType, usize>::NUM_INIT_KEYS;
-        let base_key = context
+        let __linera_reserved_base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(
+                linera_views::views::MIN_VIEW_TAG,
+                &__linera_reserved_index,
+            )?;
         let register = RegisterView::<
             custom::path::to::ContextType,
             usize,
-        >::post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
-        pos = pos_next;
-        let index = 1;
-        let pos_next = pos
+        >::post_load(
+            context.clone_with_base_key(__linera_reserved_base_key),
+            &values[__linera_reserved_pos..__linera_reserved_pos_next],
+        )?;
+        __linera_reserved_pos = __linera_reserved_pos_next;
+        let __linera_reserved_index = 1;
+        let __linera_reserved_pos_next = __linera_reserved_pos
             + CollectionView::<
                 custom::path::to::ContextType,
                 usize,
                 RegisterView<custom::path::to::ContextType, usize>,
             >::NUM_INIT_KEYS;
-        let base_key = context
+        let __linera_reserved_base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(
+                linera_views::views::MIN_VIEW_TAG,
+                &__linera_reserved_index,
+            )?;
         let collection = CollectionView::<
             custom::path::to::ContextType,
             usize,
             RegisterView<custom::path::to::ContextType, usize>,
-        >::post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
-        pos = pos_next;
+        >::post_load(
+            context.clone_with_base_key(__linera_reserved_base_key),
+            &values[__linera_reserved_pos..__linera_reserved_pos_next],
+        )?;
+        __linera_reserved_pos = __linera_reserved_pos_next;
         Ok(Self { register, collection })
     }
     async fn load(
@@ -130,7 +147,6 @@ where
         &mut self,
         batch: &mut linera_views::batch::Batch,
     ) -> Result<bool, linera_views::ViewError> {
-        use linera_views::views::View;
         let deleted0 = self.register.flush(batch)?;
         let deleted1 = self.collection.flush(batch)?;
         Ok(deleted0 && deleted1)
