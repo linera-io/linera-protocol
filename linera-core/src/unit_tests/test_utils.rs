@@ -63,7 +63,7 @@ pub enum FaultType {
     Honest,
     Offline,
     OfflineWithInfo,
-    Malicious,
+    NoChains,
     DontSendConfirmVote,
     DontProcessValidated,
     DontSendValidateVote,
@@ -288,10 +288,6 @@ where
         self.fault_type = fault_type;
     }
 
-    async fn fault_type(&self) -> FaultType {
-        self.fault_type
-    }
-
     /// Obtains the basic `ChainInfo` data for the local validator chain, with chain manager values.
     pub async fn chain_info_with_manager_values(
         &mut self,
@@ -329,7 +325,7 @@ where
             FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
             }),
-            FaultType::Malicious => Err(ArithmeticError::Overflow.into()),
+            FaultType::NoChains => Err(NodeError::InactiveChain(proposal.content.block.chain_id)),
             FaultType::DontSendValidateVote
             | FaultType::Honest
             | FaultType::DontSendConfirmVote
@@ -389,9 +385,9 @@ where
                     error: "refusing to process validated block".to_string(),
                 })
             }
+            FaultType::NoChains => Err(NodeError::InactiveChain(certificate.value().chain_id())),
             FaultType::Honest
             | FaultType::DontSendConfirmVote
-            | FaultType::Malicious
             | FaultType::DontProcessValidated
             | FaultType::DontSendValidateVote => {
                 let result = validator
@@ -433,16 +429,20 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let validator = self.client.lock().await;
-        let result = if self.fault_type == FaultType::Offline {
-            Err(NodeError::ClientIoError {
+        let result = match self.fault_type {
+            FaultType::Offline => Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
-            })
-        } else {
-            validator
+            }),
+            FaultType::NoChains => Err(NodeError::InactiveChain(query.chain_id)),
+            FaultType::Honest
+            | FaultType::DontSendConfirmVote
+            | FaultType::DontProcessValidated
+            | FaultType::DontSendValidateVote
+            | FaultType::OfflineWithInfo => validator
                 .state
                 .handle_chain_info_query(query)
                 .await
-                .map_err(Into::into)
+                .map_err(Into::into),
         };
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
         sender.send(result.map(|(info, _actions)| info))
@@ -843,7 +843,7 @@ where
             let mut validator = LocalValidatorClient::new(validator_public_key, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(validator_public_key);
-                validator.set_fault_type(FaultType::Malicious);
+                validator.set_fault_type(FaultType::NoChains);
             }
             validator_clients.push(validator);
             validator_storages.insert(validator_public_key, storage);
@@ -942,19 +942,7 @@ where
                 .write_blob(&committee_blob)
                 .await
                 .expect("writing a blob should succeed");
-            if validator.fault_type().await == FaultType::Malicious {
-                let origin = description.origin();
-                let config = InitialChainConfig {
-                    balance: Amount::ZERO,
-                    ..description.config().clone()
-                };
-                storage
-                    .create_chain(ChainDescription::new(origin, config, Timestamp::from(0)))
-                    .await
-                    .unwrap();
-            } else {
-                storage.create_chain(description.clone()).await.unwrap();
-            }
+            storage.create_chain(description.clone()).await.unwrap();
         }
         for storage in self.chain_client_storages.iter_mut() {
             storage.create_chain(description.clone()).await.unwrap();
