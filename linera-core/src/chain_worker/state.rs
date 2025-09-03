@@ -498,22 +498,11 @@ where
             return Ok((self.chain_info_response(), actions));
         }
         let old_round = self.chain.manager.current_round();
-        let timeout_chain_id = certificate.inner().chain_id();
-        let timeout_height = certificate.inner().height();
         self.chain
             .manager
             .handle_timeout_certificate(certificate, self.storage.clock().current_time());
-        let round = self.chain.manager.current_round();
-        if round > old_round {
-            actions.notifications.push(Notification {
-                chain_id: timeout_chain_id,
-                reason: Reason::NewRound {
-                    height: timeout_height,
-                    round,
-                },
-            })
-        }
         self.save().await?;
+        self.add_new_round_notification(old_round, &mut actions);
         Ok((self.chain_info_response(), actions))
     }
 
@@ -620,13 +609,7 @@ where
             blobs,
         )?;
         self.save().await?;
-        let round = self.chain.manager.current_round();
-        if round > old_round {
-            actions.notifications.push(Notification {
-                chain_id: self.chain_id(),
-                reason: Reason::NewRound { height, round },
-            })
-        }
+        self.add_new_round_notification(old_round, &mut actions);
         Ok((self.chain_info_response(), actions, false))
     }
 
@@ -1130,6 +1113,7 @@ where
             chain.manager.verify_owner(&owner, proposal.content.round)?,
             WorkerError::InvalidOwner
         );
+        let old_round = self.chain.manager.current_round();
         match original_proposal {
             None => {
                 if let Some(signer) = block.authenticated_signer {
@@ -1240,7 +1224,8 @@ where
             None => (),
         }
         self.save().await?;
-        let actions = self.create_network_actions().await?;
+        let mut actions = self.create_network_actions().await?;
+        self.add_new_round_notification(old_round, &mut actions);
         Ok((self.chain_info_response(), actions))
     }
 
@@ -1355,6 +1340,18 @@ where
         self.clear_shared_chain_view().await;
         self.chain.save().await?;
         Ok(())
+    }
+
+    /// Adds a `NewRound` notification to the network actions if the round has changed.
+    fn add_new_round_notification(&self, old_round: Round, actions: &mut NetworkActions) {
+        let round = self.chain.manager.current_round();
+        let height = self.chain.tip_state.get().next_block_height;
+        if round > old_round {
+            actions.notifications.push(Notification {
+                chain_id: self.chain_id(),
+                reason: Reason::NewRound { height, round },
+            })
+        }
     }
 }
 
