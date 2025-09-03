@@ -1269,7 +1269,7 @@ impl NodeService {
         );
         let data = self.query_node(query).await?;
         serde_json::from_value(data["transfer"].clone())
-            .context("missing publishDataBlob field in response")
+            .context("missing transfer field in response")
     }
 
     pub async fn balance(&self, account: &Account) -> Result<Amount> {
