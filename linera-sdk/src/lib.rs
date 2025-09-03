@@ -24,8 +24,6 @@
 //! The [`examples`](https://github.com/linera-io/linera-protocol/tree/main/examples)
 //! directory contains some example applications.
 
-#![deny(missing_docs)]
-
 #[macro_use]
 pub mod util;
 

@@ -58,8 +58,6 @@ The following views implement the `View` trait:
 The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analog of `BTreeMap`.
 */
 
-#![deny(missing_docs)]
-#![deny(clippy::large_futures)]
 // These traits have `Send` variants where possible.
 #![allow(async_fn_in_trait)]
 

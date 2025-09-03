@@ -9,8 +9,6 @@
 //!
 //! [WIT]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md
 
-#![deny(missing_docs)]
-
 #[macro_use]
 mod macro_utils;
 

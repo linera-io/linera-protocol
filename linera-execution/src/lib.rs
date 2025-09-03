@@ -4,8 +4,6 @@
 //! This module manages the execution of the system application and the user applications in a
 //! Linera chain.
 
-#![deny(clippy::large_futures)]
-
 pub mod committee;
 pub mod evm;
 mod execution;
