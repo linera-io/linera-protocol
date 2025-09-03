@@ -19,9 +19,9 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
-    OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController, ResourceTracker,
-    ServiceRuntimeEndpoint, TransactionTracker,
+    committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
+    Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
+    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     bucket_queue_view::BucketQueueView,
@@ -1161,11 +1161,17 @@ where
 
         let mut updated_streams = BTreeSet::new();
         for (stream_id, indices) in emitted_streams {
+            let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
+                // we don't expect the epoch stream to contain event 0
+                1
+            } else {
+                0
+            };
             let mut current_expected_index = self
                 .next_expected_events
                 .get(&stream_id)
                 .await?
-                .unwrap_or(0);
+                .unwrap_or(initial_index);
             for index in indices {
                 if index == current_expected_index {
                     updated_streams.insert(stream_id.clone());
