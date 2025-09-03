@@ -15,7 +15,7 @@ use futures::{
 use linera_base::{
     crypto::{CryptoHash, Signer},
     data_types::{ChainDescription, Timestamp},
-    identifiers::{AccountOwner, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
 };
 use linera_core::{
@@ -24,7 +24,6 @@ use linera_core::{
     worker::{Notification, Reason},
     Environment,
 };
-use linera_execution::system::{EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME};
 use linera_storage::{Clock as _, Storage as _};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
@@ -220,14 +219,8 @@ impl<C: ClientContext> ChainListener<C> {
                     .wallet()
                     .chain_ids()
                     .into_iter()
-                    .map(|chain_id| (chain_id, ListeningMode::FullChain))
-                    .chain([(
-                        admin_chain_id,
-                        ListeningMode::EventsOnly(BTreeSet::from_iter(vec![
-                            StreamId::system(EPOCH_STREAM_NAME),
-                            StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                        ])),
-                    )]),
+                    .chain([admin_chain_id])
+                    .map(|chain_id| (chain_id, ListeningMode::FullChain)),
             )
         };
 
