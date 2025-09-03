@@ -199,7 +199,7 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
             Query::System(query) => {
-                let outcome = self.system.handle_query(context, query).await?;
+                let outcome = self.system.handle_query(context, query);
                 Ok(outcome.into())
             }
             Query::User {

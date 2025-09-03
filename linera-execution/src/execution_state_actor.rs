@@ -27,7 +27,7 @@ use crate::{
     execution::UserAction,
     runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
-    util::RespondExt,
+    util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, MessageKind, ModuleId,
     Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
@@ -337,7 +337,7 @@ where
                 if !app_permissions.can_close_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
-                    self.state.system.close_chain().await?;
+                    self.state.system.close_chain();
                     callback.respond(Ok(()));
                 }
             }
@@ -387,66 +387,60 @@ where
                 http_responses_are_oracle_responses,
                 callback,
             } => {
-                let response = if let Some(response) =
-                    self.txn_tracker.next_replayed_oracle_response()?
-                {
-                    match response {
-                        OracleResponse::Http(response) => response,
-                        _ => return Err(ExecutionError::OracleResponseMismatch),
-                    }
-                } else {
-                    let headers = request
-                        .headers
-                        .into_iter()
-                        .map(|http::Header { name, value }| Ok((name.parse()?, value.try_into()?)))
-                        .collect::<Result<HeaderMap, ExecutionError>>()?;
+                let system = &mut self.state.system;
+                let response = self
+                    .txn_tracker
+                    .oracle(|| async {
+                        let headers = request
+                            .headers
+                            .into_iter()
+                            .map(|http::Header { name, value }| {
+                                Ok((name.parse()?, value.try_into()?))
+                            })
+                            .collect::<Result<HeaderMap, ExecutionError>>()?;
 
-                    let url = Url::parse(&request.url)?;
-                    let host = url
-                        .host_str()
-                        .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
+                        let url = Url::parse(&request.url)?;
+                        let host = url
+                            .host_str()
+                            .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
 
-                    let (_epoch, committee) = self
-                        .state
-                        .system
-                        .current_committee()
-                        .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
-                    let allowed_hosts = &committee.policy().http_request_allow_list;
+                        let (_epoch, committee) = system
+                            .current_committee()
+                            .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
+                        let allowed_hosts = &committee.policy().http_request_allow_list;
 
-                    ensure!(
-                        allowed_hosts.contains(host),
-                        ExecutionError::UnauthorizedHttpRequest(url)
-                    );
+                        ensure!(
+                            allowed_hosts.contains(host),
+                            ExecutionError::UnauthorizedHttpRequest(url)
+                        );
 
-                    #[cfg_attr(web, allow(unused_mut))]
-                    let mut request = Client::new()
-                        .request(request.method.into(), url)
-                        .body(request.body)
-                        .headers(headers);
-                    #[cfg(not(web))]
-                    {
-                        request = request.timeout(linera_base::time::Duration::from_millis(
-                            committee.policy().http_request_timeout_ms,
-                        ));
-                    }
+                        #[cfg_attr(web, allow(unused_mut))]
+                        let mut request = Client::new()
+                            .request(request.method.into(), url)
+                            .body(request.body)
+                            .headers(headers);
+                        #[cfg(not(web))]
+                        {
+                            request = request.timeout(linera_base::time::Duration::from_millis(
+                                committee.policy().http_request_timeout_ms,
+                            ));
+                        }
 
-                    let response = request.send().await?;
+                        let response = request.send().await?;
 
-                    let mut response_size_limit = committee.policy().maximum_http_response_bytes;
+                        let mut response_size_limit =
+                            committee.policy().maximum_http_response_bytes;
 
-                    if http_responses_are_oracle_responses {
-                        response_size_limit = response_size_limit
-                            .min(committee.policy().maximum_oracle_response_bytes);
-                    }
-
-                    self.receive_http_response(response, response_size_limit)
-                        .await?
-                };
-
-                // Record the oracle response
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Http(response.clone()));
-
+                        if http_responses_are_oracle_responses {
+                            response_size_limit = response_size_limit
+                                .min(committee.policy().maximum_oracle_response_bytes);
+                        }
+                        Ok(OracleResponse::Http(
+                            Self::receive_http_response(response, response_size_limit).await?,
+                        ))
+                    })
+                    .await?
+                    .to_http_response()?;
                 callback.respond(response);
             }
 
@@ -513,25 +507,18 @@ where
             }
 
             ReadEvent { event_id, callback } => {
-                let event = match self.txn_tracker.next_replayed_oracle_response()? {
-                    None => {
-                        let event = self
-                            .state
-                            .context()
-                            .extra()
+                let extra = self.state.context().extra();
+                let event = self
+                    .txn_tracker
+                    .oracle(|| async {
+                        let event = extra
                             .get_event(event_id.clone())
-                            .await?;
-                        event.ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?
-                    }
-                    Some(OracleResponse::Event(recorded_event_id, event))
-                        if recorded_event_id == event_id =>
-                    {
-                        event
-                    }
-                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                };
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Event(event_id, event.clone()));
+                            .await?
+                            .ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?;
+                        Ok(OracleResponse::Event(event_id.clone(), event))
+                    })
+                    .await?
+                    .to_event(&event_id)?;
                 callback.respond(event);
             }
 
@@ -598,42 +585,37 @@ where
                 query,
                 callback,
             } => {
-                let response = match self.txn_tracker.next_replayed_oracle_response()? {
-                    Some(OracleResponse::Service(bytes)) => bytes,
-                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
-                    None => {
+                let state = &mut self.state;
+                let local_time = self.txn_tracker.local_time();
+                let created_blobs = self.txn_tracker.created_blobs().clone();
+                let bytes = self
+                    .txn_tracker
+                    .oracle(|| async {
                         let context = QueryContext {
-                            chain_id: self.state.context().extra().chain_id(),
+                            chain_id: state.context().extra().chain_id(),
                             next_block_height,
-                            local_time: self.txn_tracker.local_time(),
+                            local_time,
                         };
                         let QueryOutcome {
                             response,
                             operations,
-                        } = Box::pin(self.state.query_user_application_with_deadline(
+                        } = Box::pin(state.query_user_application_with_deadline(
                             application_id,
                             context,
                             query,
                             deadline,
-                            self.txn_tracker.created_blobs().clone(),
+                            created_blobs,
                         ))
                         .await?;
                         ensure!(
                             operations.is_empty(),
                             ExecutionError::ServiceOracleQueryOperations(operations)
                         );
-                        response
-                    }
-                };
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Service(response.clone()));
-                callback.respond(response);
-            }
-
-            QueryService { response, callback } => {
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Service(response));
-                callback.respond(());
+                        Ok(OracleResponse::Service(response))
+                    })
+                    .await?
+                    .to_service_response()?;
+                callback.respond(bytes);
             }
 
             AddOutgoingMessage { message, callback } => {
@@ -647,11 +629,6 @@ where
             } => {
                 self.txn_tracker.set_local_time(local_time);
                 callback.respond(());
-            }
-
-            GetCreatedBlobs { callback } => {
-                let blobs = self.txn_tracker.created_blobs().clone();
-                callback.respond(blobs);
             }
 
             AssertBefore {
@@ -684,23 +661,12 @@ where
             }
 
             ValidationRound { round, callback } => {
-                let result_round =
-                    if let Some(response) = self.txn_tracker.next_replayed_oracle_response()? {
-                        match response {
-                            OracleResponse::Round(round) => round,
-                            _ => return Err(ExecutionError::OracleResponseMismatch),
-                        }
-                    } else {
-                        round
-                    };
-                self.txn_tracker
-                    .add_oracle_response(OracleResponse::Round(result_round));
-                callback.respond(result_round);
-            }
-
-            AddOracleResponse { response, callback } => {
-                self.txn_tracker.add_oracle_response(response);
-                callback.respond(());
+                let validation_round = self
+                    .txn_tracker
+                    .oracle(|| async { Ok(OracleResponse::Round(round)) })
+                    .await?
+                    .to_round()?;
+                callback.respond(validation_round);
             }
         }
 
@@ -945,7 +911,6 @@ where
     ///
     /// Ensures that the response does not exceed the provided `size_limit`.
     async fn receive_http_response(
-        &mut self,
         response: reqwest::Response,
         size_limit: u64,
     ) -> Result<http::Response, ExecutionError> {
@@ -1221,13 +1186,6 @@ pub enum ExecutionRequest {
         callback: Sender<Vec<u8>>,
     },
 
-    QueryService {
-        #[debug(with = hex_debug)]
-        response: Vec<u8>,
-        #[debug(skip)]
-        callback: Sender<()>,
-    },
-
     AddOutgoingMessage {
         message: crate::OutgoingMessage,
         #[debug(skip)]
@@ -1238,11 +1196,6 @@ pub enum ExecutionRequest {
         local_time: Timestamp,
         #[debug(skip)]
         callback: Sender<()>,
-    },
-
-    GetCreatedBlobs {
-        #[debug(skip)]
-        callback: Sender<std::collections::BTreeMap<BlobId, BlobContent>>,
     },
 
     AssertBefore {
@@ -1261,11 +1214,5 @@ pub enum ExecutionRequest {
         round: Option<u32>,
         #[debug(skip)]
         callback: Sender<Option<u32>>,
-    },
-
-    AddOracleResponse {
-        response: OracleResponse,
-        #[debug(skip)]
-        callback: Sender<()>,
     },
 }

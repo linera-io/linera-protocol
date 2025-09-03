@@ -3621,7 +3621,8 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let _ = env.worker().handle_block_proposal(proposal1).await?;
+    let (_, actions) = env.worker().handle_block_proposal(proposal1).await?;
+    assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));

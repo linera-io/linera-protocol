@@ -1272,7 +1272,7 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let mut builder = TestBuilder::new(storage_builder, 2, 0, signer).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
@@ -2116,9 +2116,6 @@ where
     Ok(())
 }
 
-// TODO(#3860): this test is currently intermittently failing if the faulty validators respond to
-// client0 before the correct ones. Un-ignore when this issue is fixed.
-#[ignore]
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
@@ -2159,6 +2156,10 @@ where
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert!(result.is_err());
+    // Make sure at least one validator has added the proposal to its state.
+    let info = client0.chain_info_with_manager_values().await?;
+    let proposal = info.manager.requested_proposed.unwrap();
+    builder.node(1).handle_block_proposal(*proposal).await?;
 
     // Client 1 thinks it is madness to burn 3 tokens! They want to publish a blob instead.
     // The validators are still faulty: They validate blocks but don't confirm them.
@@ -2180,8 +2181,8 @@ where
         .blobs
         .is_empty());
 
-    // Finally, the validators are online and honest again.
-    builder.set_fault_type([1, 2], FaultType::Honest);
+    // Finally, enough validators are online and honest again.
+    builder.set_fault_type([2], FaultType::Honest);
     client0.synchronize_from_validators().await.unwrap();
     let manager = client0
         .chain_info_with_manager_values()
