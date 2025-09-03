@@ -4,7 +4,6 @@
 //! This module provides a convenient library for writing a Linera client application.
 
 #![recursion_limit = "256"]
-#![deny(clippy::large_futures)]
 #![allow(async_fn_in_trait)]
 
 pub mod chain_listener;

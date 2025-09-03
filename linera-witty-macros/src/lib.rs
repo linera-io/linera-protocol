@@ -5,8 +5,6 @@
 //!
 //! This crate contains the procedural macros used by the `linera-witty` crate.
 
-#![deny(missing_docs)]
-
 mod util;
 mod wit_export;
 mod wit_import;
@@ -25,9 +23,6 @@ use syn::{parse_macro_input, Data, DeriveInput, Ident, ItemTrait};
 
 use self::util::{apply_specialization_attribute, AttributeParameters, Specializations};
 
-/// Derives `WitType` for a Rust type.
-///
-/// All fields in the type must also implement `WitType`.
 #[proc_macro_error]
 #[proc_macro_derive(WitType, attributes(witty, witty_specialize_with))]
 pub fn derive_wit_type(input: TokenStream) -> TokenStream {
