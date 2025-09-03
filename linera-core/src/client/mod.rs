@@ -1851,19 +1851,13 @@ impl<Env: Environment> ChainClient<Env> {
                 let client = self.client.clone();
                 async move {
                     let chain = client.local_node.chain_state_view(chain_id).await?;
-                    if let Some(highest_available_index) = chain
-                        .last_events
+                    if let Some(next_expected_index) = chain
+                        .next_expected_events
                         .get(&stream_id)
                         .await?
-                        .filter(|highest_index| *highest_index >= subscriptions.next_index)
+                        .filter(|next_index| *next_index > subscriptions.next_index)
                     {
-                        Ok(Some((
-                            chain_id,
-                            stream_id,
-                            // This is supposed to be the next expected index, so we need to add 1
-                            // to the available index.
-                            highest_available_index.saturating_add(1),
-                        )))
+                        Ok(Some((chain_id, stream_id, next_expected_index)))
                     } else {
                         Ok::<_, ChainClientError>(None)
                     }
@@ -3740,9 +3734,10 @@ impl<Env: Environment> ChainClient<Env> {
                 }
                 let should_process = match listening_mode {
                     ListeningMode::FullChain => true,
-                    ListeningMode::EventsOnly(relevant_events) => {
-                        relevant_events.intersection(&event_streams).count() != 0
-                    }
+                    ListeningMode::EventsOnly(relevant_events) => relevant_events
+                        .intersection(&event_streams)
+                        .next()
+                        .is_some(),
                 };
                 if !should_process {
                     debug!(
@@ -3758,7 +3753,7 @@ impl<Env: Environment> ChainClient<Env> {
                     "NewEvents: processing notification"
                 );
                 let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
-                // download_certificates ensure that we will get exactly one
+                // download_certificates ensures that we will get exactly one
                 // certificate in the result
                 let certificate = certificates
                     .pop()
@@ -3772,6 +3767,10 @@ impl<Env: Environment> ChainClient<Env> {
                     .await?;
             }
             Reason::NewRound { height, round } => {
+                if matches!(listening_mode, ListeningMode::EventsOnly(_)) {
+                    debug!("NewRound: ignoring a notification due to listening mode");
+                    return Ok(());
+                }
                 let chain_id = notification.chain_id;
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {

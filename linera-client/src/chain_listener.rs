@@ -15,7 +15,7 @@ use futures::{
 use linera_base::{
     crypto::{CryptoHash, Signer},
     data_types::{ChainDescription, Timestamp},
-    identifiers::{AccountOwner, BlobType, ChainId},
+    identifiers::{AccountOwner, BlobType, ChainId, StreamId},
     task::NonBlockingFuture,
 };
 use linera_core::{
@@ -24,6 +24,7 @@ use linera_core::{
     worker::{Notification, Reason},
     Environment,
 };
+use linera_execution::system::{EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME};
 use linera_storage::{Clock as _, Storage as _};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
@@ -214,14 +215,19 @@ impl<C: ClientContext> ChainListener<C> {
                 .make_chain_client(admin_chain_id)
                 .synchronize_from_validators()
                 .await?;
-            // TODO: do we want to only listen to events on the admin chain?
             BTreeMap::from_iter(
                 guard
                     .wallet()
                     .chain_ids()
                     .into_iter()
-                    .chain([admin_chain_id])
-                    .map(|chain_id| (chain_id, ListeningMode::FullChain)),
+                    .map(|chain_id| (chain_id, ListeningMode::FullChain))
+                    .chain([(
+                        admin_chain_id,
+                        ListeningMode::EventsOnly(BTreeSet::from_iter(vec![
+                            StreamId::system(EPOCH_STREAM_NAME),
+                            StreamId::system(REMOVED_EPOCH_STREAM_NAME),
+                        ])),
+                    )]),
             )
         };
 

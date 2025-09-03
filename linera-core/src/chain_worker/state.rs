@@ -809,7 +809,7 @@ where
             }
         );
         // Update the rest of the chain state.
-        chain
+        let updated_streams = chain
             .apply_confirmed_block(certificate.value(), local_time)
             .await?;
         self.track_newly_created_chains(&proposed_block, &outcome);
@@ -820,22 +820,13 @@ where
             chain_id,
             reason: Reason::NewBlock { height, hash },
         });
-        let event_streams: BTreeSet<_> = certificate
-            .value()
-            .block()
-            .body
-            .events
-            .iter()
-            .flatten()
-            .map(|event| event.stream_id.clone())
-            .collect();
-        if !event_streams.is_empty() {
+        if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewEvents {
                     height,
                     hash,
-                    event_streams,
+                    event_streams: updated_streams,
                 },
             });
         }

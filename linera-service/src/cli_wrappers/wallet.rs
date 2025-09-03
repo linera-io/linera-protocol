@@ -1256,23 +1256,20 @@ impl NodeService {
         owner: AccountOwner,
         recipient: Account,
         amount: Amount,
-    ) -> Result<()> {
+    ) -> Result<CryptoHash> {
         let json_owner = owner.to_value();
         let json_recipient = recipient.to_value();
         let query = format!(
             "mutation {{ transfer(\
-                 chainId: \"{chain_id}\",
+                 chainId: \"{chain_id}\", \
                  owner: {json_owner}, \
                  recipient: {json_recipient}, \
-                 amount: \"{amount}\")\
+                 amount: \"{amount}\") \
              }}"
         );
         let data = self.query_node(query).await?;
-        let _transfer = data["transfer"]
-            .as_str()
-            .context("missing transfer string in response")?
-            .trim();
-        Ok(())
+        serde_json::from_value(data["transfer"].clone())
+            .context("missing publishDataBlob field in response")
     }
 
     pub async fn balance(&self, account: &Account) -> Result<Amount> {
