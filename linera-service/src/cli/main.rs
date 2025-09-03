@@ -4,6 +4,18 @@
 
 #![recursion_limit = "256"]
 
+#[cfg(feature = "jemalloc")]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+// jemalloc configuration for memory profiling with jemalloc_pprof
+// prof:true,prof_active:true - Enable profiling from start
+// lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
+#[cfg(feature = "memory-profiling")]
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
@@ -42,6 +54,8 @@ use linera_execution::{
     WasmRuntime, WithWasmDefault as _,
 };
 use linera_faucet_server::{FaucetConfig, FaucetService};
+#[cfg(with_metrics)]
+use linera_metrics::monitoring_server;
 use linera_persistent::{self as persistent, Persist, PersistExt as _};
 use linera_service::{
     cli::{
@@ -877,6 +891,16 @@ impl Runnable for Job {
                     let shutdown_notifier = CancellationToken::new();
                     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
+                    // Start metrics server for benchmark monitoring
+                    #[cfg(with_metrics)]
+                    {
+                        let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
+                        monitoring_server::start_metrics(
+                            metrics_address,
+                            shutdown_notifier.clone(),
+                        );
+                    }
+
                     let shared_context = std::sync::Arc::new(futures::lock::Mutex::new(context));
                     let chain_listener = ChainListener::new(
                         listener_config,
@@ -1128,6 +1152,16 @@ impl Runnable for Job {
 
                     let shutdown_notifier = CancellationToken::new();
                     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+                    // Start metrics server for multi-process benchmark monitoring
+                    #[cfg(with_metrics)]
+                    {
+                        let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
+                        monitoring_server::start_metrics(
+                            metrics_address,
+                            shutdown_notifier.clone(),
+                        );
+                    }
 
                     let mut join_set = JoinSet::new();
                     let children_pids: Vec<u32> = children.iter().filter_map(|c| c.id()).collect();
