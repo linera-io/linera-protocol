@@ -382,10 +382,10 @@ type ChainStateExtendedView {
 	"""
 	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_06c2376d!
 	"""
-	The indices of latest events emitted per stream (could be ahead of the last
+	The indices of next events we expect to see per stream (could be ahead of the last
 	executed block in sparse chains).
 	"""
-	lastEvents: MapView_StreamId_Int_3d7f5335!
+	nextExpectedEvents: MapView_StreamId_Int_3d7f5335!
 	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
