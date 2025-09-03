@@ -1922,7 +1922,11 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
 
-    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    // We use a newly opened chain for the publisher, so that client2 will not be listening to that
+    // chain by default.
+    let chain1 = client1
+        .open_and_assign(&client1, Amount::from_tokens(100))
+        .await?;
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
     client2.sync(chain2).await?;
     let (contract, service) = client1.build_example("social").await?;
@@ -1977,6 +1981,49 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         }
         tracing::warn!("Waiting to confirm post: {}", response);
     }
+
+    let tip_hash_after_first_post = node_service2.chain_tip_hash(chain1).await?;
+
+    // Perform an operation that does not emit events, or messages that client 2 listens to - to be
+    // safe, we just transfer from chain1 to itself.
+    node_service1
+        .transfer(
+            chain1,
+            AccountOwner::CHAIN,
+            Account::chain(chain1),
+            Amount::ONE,
+        )
+        .await?;
+
+    app1.mutate("post(text: \"Second post!\")").await?;
+
+    let query = "receivedPosts { keys { author, index } }";
+    let expected_response = json!({
+        "receivedPosts": {
+            "keys": [
+                { "author": chain1, "index": 1 },
+                { "author": chain1, "index": 0 }
+            ]
+        }
+    });
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let result =
+            linera_base::time::timer::timeout(deadline - Instant::now(), notifications.next())
+                .await?;
+        anyhow::ensure!(result.transpose()?.is_some(), "Failed to confirm post");
+        let response = app2.query(query).await?;
+        if response == expected_response {
+            tracing::info!("Confirmed post");
+            break;
+        }
+        tracing::warn!("Waiting to confirm post: {}", response);
+    }
+
+    let tip_hash_after_second_post = node_service2.chain_tip_hash(chain1).await?;
+    // The second post should not have moved the tip hash - client 2 should have only preprocessed
+    // that block, without downloading the transfer block in between.
+    assert_eq!(tip_hash_after_first_post, tip_hash_after_second_post);
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
@@ -4706,13 +4753,8 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                         message_duration += start_time.elapsed();
                     }
                 }
-                Reason::NewBlock {
-                    height,
-                    hash,
-                    event_streams,
-                } => {
+                Reason::NewBlock { height, hash } => {
                     assert_eq!(height, next_height2);
-                    assert!(event_streams.is_empty());
                     assert!(
                         got_message,
                         "Missing message notification about transfer #{i}"
@@ -4723,7 +4765,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                     }
                     break hash;
                 }
-                reason @ Reason::NewRound { .. } => {
+                reason @ Reason::NewRound { .. } | reason @ Reason::NewEvents { .. } => {
                     panic!("Unexpected notification about transfer #{i} {reason:?}")
                 }
             }

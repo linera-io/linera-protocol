@@ -35,7 +35,8 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    data_types::ClientOutcome, node::ValidatorNodeProvider, worker::Reason, JoinSetExt as _,
+    client::ListeningMode, data_types::ClientOutcome, node::ValidatorNodeProvider, worker::Reason,
+    JoinSetExt as _,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
@@ -1191,7 +1192,8 @@ impl Runnable for Job {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
                 info!("Watching for notifications for chain {:?}", chain_id);
-                let (listener, _listen_handle, mut notifications) = chain_client.listen().await?;
+                let (listener, _listen_handle, mut notifications) =
+                    chain_client.listen(ListeningMode::FullChain).await?;
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {

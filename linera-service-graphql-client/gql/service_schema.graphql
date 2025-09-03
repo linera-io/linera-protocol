@@ -382,6 +382,11 @@ type ChainStateExtendedView {
 	"""
 	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_06c2376d!
 	"""
+	The indices of next events we expect to see per stream (could be ahead of the last
+	executed block in sparse chains).
+	"""
+	nextExpectedEvents: MapView_StreamId_Int_3d7f5335!
+	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
 	"""
@@ -539,6 +544,14 @@ A GraphQL-visible map item, complete with key.
 type Entry_StreamId_BlockHeight_50cd702e {
 	key: StreamId!
 	value: BlockHeight
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_StreamId_Int_459c4ec3 {
+	key: StreamId!
+	value: Int
 }
 
 """
@@ -726,6 +739,12 @@ type MapView_StreamId_BlockHeight_e6657ad9 {
 	keys(count: Int): [StreamId!]!
 	entry(key: StreamIdInput!): Entry_StreamId_BlockHeight_50cd702e!
 	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_BlockHeight_50cd702e!]!
+}
+
+type MapView_StreamId_Int_3d7f5335 {
+	keys(count: Int): [StreamId!]!
+	entry(key: StreamIdInput!): Entry_StreamId_Int_459c4ec3!
+	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_Int_459c4ec3!]!
 }
 
 """

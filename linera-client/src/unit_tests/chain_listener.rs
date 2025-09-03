@@ -215,11 +215,9 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
         .unwrap();
 
     let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
-    // Burn one token.
-    let certificate = client0
-        .burn(AccountOwner::CHAIN, Amount::ONE)
-        .await?
-        .unwrap();
+    let committee = builder.initial_committee.clone();
+    // Stage a committee (this will emit events that the listener should be listening to).
+    let certificate = client0.stage_new_committee(committee).await?.unwrap();
     for i in 0.. {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         let result = storage.read_certificate(certificate.hash()).await?;

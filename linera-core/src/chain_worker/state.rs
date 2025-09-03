@@ -719,11 +719,21 @@ where
         // If this block is higher than the next expected block in this chain, we're going
         // to have a gap: do not execute this block, only update the outboxes and return.
         if tip.next_block_height < height {
-            // Update the outboxes.
-            self.chain.preprocess_block(certificate.value()).await?;
+            // Update the outboxes and event streams.
+            let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
             self.save().await?;
-            let actions = self.create_network_actions(None).await?;
+            let mut actions = self.create_network_actions(None).await?;
+            if !updated_event_streams.is_empty() {
+                actions.notifications.push(Notification {
+                    chain_id,
+                    reason: Reason::NewEvents {
+                        height,
+                        hash: certificate.hash(),
+                        event_streams: updated_event_streams,
+                    },
+                });
+            }
             trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
@@ -800,30 +810,27 @@ where
             }
         );
         // Update the rest of the chain state.
-        chain
+        let updated_streams = chain
             .apply_confirmed_block(certificate.value(), local_time)
             .await?;
         self.track_newly_created_chains(&proposed_block, &outcome);
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         let hash = certificate.hash();
-        let event_streams = certificate
-            .value()
-            .block()
-            .body
-            .events
-            .iter()
-            .flatten()
-            .map(|event| event.stream_id.clone())
-            .collect();
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock {
-                height,
-                hash,
-                event_streams,
-            },
+            reason: Reason::NewBlock { height, hash },
         });
+        if !updated_streams.is_empty() {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewEvents {
+                    height,
+                    hash,
+                    event_streams: updated_streams,
+                },
+            });
+        }
         // Persist chain.
         self.save().await?;
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::{Ordering, PartialOrd},
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
@@ -66,7 +67,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, error, info, instrument, warn, Instrument as _};
+use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
@@ -139,6 +140,54 @@ mod metrics {
             exponential_bucket_latencies(500.0),
         )
     });
+}
+
+/// Defines how we listen to a chain:
+/// - do we care about every block notification?
+/// - or do we only care about blocks containing events from some particular streams?
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ListeningMode {
+    /// Listen to everything.
+    FullChain,
+    /// Only listen to blocks which contain events from those streams.
+    EventsOnly(BTreeSet<StreamId>),
+}
+
+impl PartialOrd for ListeningMode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (ListeningMode::FullChain, ListeningMode::FullChain) => Some(Ordering::Equal),
+            (ListeningMode::FullChain, _) => Some(Ordering::Greater),
+            (_, ListeningMode::FullChain) => Some(Ordering::Less),
+            (ListeningMode::EventsOnly(events_a), ListeningMode::EventsOnly(events_b)) => {
+                if events_a.is_superset(events_b) {
+                    Some(Ordering::Greater)
+                } else if events_b.is_superset(events_a) {
+                    Some(Ordering::Less)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+impl ListeningMode {
+    pub fn extend(&mut self, other: Option<ListeningMode>) {
+        match (self, other) {
+            (_, None) => (),
+            (ListeningMode::FullChain, _) => (),
+            (mode, Some(ListeningMode::FullChain)) => {
+                *mode = ListeningMode::FullChain;
+            }
+            (
+                ListeningMode::EventsOnly(self_events),
+                Some(ListeningMode::EventsOnly(other_events)),
+            ) => {
+                self_events.extend(other_events);
+            }
+        }
+    }
 }
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
@@ -1660,7 +1709,9 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Returns chain IDs that this chain subscribes to.
     #[instrument(level = "trace", skip(self))]
-    pub async fn event_stream_publishers(&self) -> Result<BTreeSet<ChainId>, LocalNodeError> {
+    pub async fn event_stream_publishers(
+        &self,
+    ) -> Result<BTreeMap<ChainId, BTreeSet<StreamId>>, LocalNodeError> {
         let mut publishers = self
             .chain_state_view()
             .await?
@@ -1670,10 +1721,23 @@ impl<Env: Environment> ChainClient<Env> {
             .indices()
             .await?
             .into_iter()
-            .map(|(chain_id, _)| chain_id)
-            .collect::<BTreeSet<_>>();
+            .fold(
+                BTreeMap::<ChainId, BTreeSet<StreamId>>::new(),
+                |mut map, (chain_id, stream_id)| {
+                    map.entry(chain_id).or_default().insert(stream_id);
+                    map
+                },
+            );
         if self.chain_id != self.client.admin_id {
-            publishers.insert(self.client.admin_id);
+            publishers.insert(
+                self.client.admin_id,
+                vec![
+                    StreamId::system(EPOCH_STREAM_NAME),
+                    StreamId::system(REMOVED_EPOCH_STREAM_NAME),
+                ]
+                .into_iter()
+                .collect(),
+            );
         }
         Ok(publishers)
     }
@@ -1787,14 +1851,13 @@ impl<Env: Environment> ChainClient<Env> {
                 let client = self.client.clone();
                 async move {
                     let chain = client.local_node.chain_state_view(chain_id).await?;
-                    if let Some(next_index) = chain
-                        .execution_state
-                        .stream_event_counts
+                    if let Some(next_expected_index) = chain
+                        .next_expected_events
                         .get(&stream_id)
                         .await?
                         .filter(|next_index| *next_index > subscriptions.next_index)
                     {
-                        Ok(Some((chain_id, stream_id, next_index)))
+                        Ok(Some((chain_id, stream_id, next_expected_index)))
                     } else {
                         Ok::<_, ChainClientError>(None)
                     }
@@ -3581,6 +3644,7 @@ impl<Env: Environment> ChainClient<Env> {
         remote_node: RemoteNode<Env::ValidatorNode>,
         mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
+        listening_mode: &ListeningMode,
     ) -> Result<(), ChainClientError> {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
@@ -3613,18 +3677,88 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                self.client
-                    .synchronize_chain_state_from(&remote_node, chain_id)
-                    .await?;
-                if self
-                    .local_next_block_height(chain_id, &mut local_node)
-                    .await?
-                    <= height
-                {
-                    error!("NewBlock: Fail to synchronize new block after notification");
+                match listening_mode {
+                    ListeningMode::FullChain => {
+                        self.client
+                            .synchronize_chain_state_from(&remote_node, chain_id)
+                            .await?;
+                        if self
+                            .local_next_block_height(chain_id, &mut local_node)
+                            .await?
+                            <= height
+                        {
+                            error!("NewBlock: Fail to synchronize new block after notification");
+                        }
+                        trace!(
+                            chain_id = %self.chain_id,
+                            %height,
+                            "NewBlock: processed notification",
+                        );
+                    }
+                    ListeningMode::EventsOnly(_) => {
+                        debug!(
+                            chain_id = %self.chain_id,
+                            %height,
+                            "NewBlock: ignoring notification due to listening in EventsOnly mode"
+                        );
+                    }
                 }
             }
+            Reason::NewEvents {
+                height,
+                hash,
+                event_streams,
+            } => {
+                if self
+                    .local_next_block_height(notification.chain_id, &mut local_node)
+                    .await?
+                    > height
+                {
+                    debug!(
+                        chain_id = %self.chain_id,
+                        "Accepting redundant notification for new block"
+                    );
+                    return Ok(());
+                }
+                let should_process = match listening_mode {
+                    ListeningMode::FullChain => true,
+                    ListeningMode::EventsOnly(relevant_events) => relevant_events
+                        .intersection(&event_streams)
+                        .next()
+                        .is_some(),
+                };
+                if !should_process {
+                    debug!(
+                        chain_id = %self.chain_id,
+                        %height,
+                        "NewEvents: got a notification, but no relevant event streams in it"
+                    );
+                    return Ok(());
+                }
+                trace!(
+                    chain_id = %self.chain_id,
+                    %height,
+                    "NewEvents: processing notification"
+                );
+                let mut certificates = remote_node.node.download_certificates(vec![hash]).await?;
+                // download_certificates ensures that we will get exactly one
+                // certificate in the result
+                let certificate = certificates
+                    .pop()
+                    .expect("download_certificates should have returned one certificate");
+                self.client
+                    .receive_sender_certificate(
+                        certificate,
+                        ReceiveCertificateMode::NeedsCheck,
+                        None,
+                    )
+                    .await?;
+            }
             Reason::NewRound { height, round } => {
+                if matches!(listening_mode, ListeningMode::EventsOnly(_)) {
+                    debug!("NewRound: ignoring a notification due to listening mode");
+                    return Ok(());
+                }
                 let chain_id = notification.chain_id;
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
@@ -3670,6 +3804,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", fields(chain_id = ?self.chain_id))]
     pub async fn listen(
         &self,
+        listening_mode: ListeningMode,
     ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), ChainClientError> {
         use future::FutureExt as _;
 
@@ -3699,7 +3834,10 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut process_notifications = FuturesUnordered::new();
 
-        match self.update_notification_streams(&mut senders).await {
+        match self
+            .update_notification_streams(&mut senders, &listening_mode)
+            .await
+        {
             Ok(handler) => process_notifications.push(handler),
             Err(error) => error!("Failed to update committee: {error}"),
         };
@@ -3714,7 +3852,8 @@ impl<Env: Environment> ChainClient<Env> {
             {
                 if let Reason::NewBlock { .. } = notification.reason {
                     match Box::pin(await_while_polling(
-                        this.update_notification_streams(&mut senders).fuse(),
+                        this.update_notification_streams(&mut senders, &listening_mode)
+                            .fuse(),
                         &mut process_notifications,
                     ))
                     .await
@@ -3740,6 +3879,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn update_notification_streams(
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
+        listening_mode: &ListeningMode,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (nodes, local_node) = {
             let committee = self.local_committee().await?;
@@ -3791,6 +3931,7 @@ impl<Env: Environment> ChainClient<Env> {
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { public_key, node };
+            let listening_mode_cloned = listening_mode.clone();
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
                     if let Err(err) = this
@@ -3798,6 +3939,7 @@ impl<Env: Environment> ChainClient<Env> {
                             remote_node.clone(),
                             local_node.clone(),
                             notification.clone(),
+                            &listening_mode_cloned,
                         )
                         .await
                     {
@@ -3944,9 +4086,14 @@ impl<Env: Environment> ChainClient<Env> {
         let (public_key, node) = node_list.next().unwrap();
         let remote_node = RemoteNode { node, public_key };
         let local_node = self.client.local_node.clone();
-        self.process_notification(remote_node, local_node, notification)
-            .await
-            .unwrap();
+        self.process_notification(
+            remote_node,
+            local_node,
+            notification,
+            &ListeningMode::FullChain,
+        )
+        .await
+        .unwrap();
     }
 }
 

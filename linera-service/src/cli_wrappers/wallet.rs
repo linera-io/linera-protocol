@@ -1250,6 +1250,28 @@ impl NodeService {
         Ok(serde_json::from_value(data["processInbox"].take())?)
     }
 
+    pub async fn transfer(
+        &self,
+        chain_id: ChainId,
+        owner: AccountOwner,
+        recipient: Account,
+        amount: Amount,
+    ) -> Result<CryptoHash> {
+        let json_owner = owner.to_value();
+        let json_recipient = recipient.to_value();
+        let query = format!(
+            "mutation {{ transfer(\
+                 chainId: \"{chain_id}\", \
+                 owner: {json_owner}, \
+                 recipient: {json_recipient}, \
+                 amount: \"{amount}\") \
+             }}"
+        );
+        let data = self.query_node(query).await?;
+        serde_json::from_value(data["transfer"].clone())
+            .context("missing transfer field in response")
+    }
+
     pub async fn balance(&self, account: &Account) -> Result<Amount> {
         let chain = account.chain_id;
         let owner = account.owner;
