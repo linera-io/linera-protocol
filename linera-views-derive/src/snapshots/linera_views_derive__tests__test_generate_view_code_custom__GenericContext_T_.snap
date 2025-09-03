@@ -33,12 +33,12 @@ where
     ) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut keys = Vec::new();
-        let __linera_reserved_index_byte = 0u8;
+        let __linera_reserved_index = 0u8;
         let __linera_reserved_base_key = context
             .base_key()
             .derive_tag_key(
                 linera_views::views::MIN_VIEW_TAG,
-                &__linera_reserved_index_byte,
+                &__linera_reserved_index,
             )?;
         keys.extend(
             RegisterView::<
@@ -46,12 +46,12 @@ where
                 usize,
             >::pre_load(&context.clone_with_base_key(__linera_reserved_base_key))?,
         );
-        let __linera_reserved_index_byte = 1u8;
+        let __linera_reserved_index = 1u8;
         let __linera_reserved_base_key = context
             .base_key()
             .derive_tag_key(
                 linera_views::views::MIN_VIEW_TAG,
-                &__linera_reserved_index_byte,
+                &__linera_reserved_index,
             )?;
         keys.extend(
             CollectionView::<
@@ -68,12 +68,12 @@ where
     ) -> Result<Self, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut __linera_reserved_pos = 0;
-        let __linera_reserved_index_byte = 0u8;
+        let __linera_reserved_index = 0u8;
         let __linera_reserved_base_key = context
             .base_key()
             .derive_tag_key(
                 linera_views::views::MIN_VIEW_TAG,
-                &__linera_reserved_index_byte,
+                &__linera_reserved_index,
             )?;
         let __linera_reserved_pos_next = __linera_reserved_pos
             + RegisterView::<custom::GenericContext<T>, usize>::NUM_INIT_KEYS;
@@ -85,12 +85,12 @@ where
             &values[__linera_reserved_pos..__linera_reserved_pos_next],
         )?;
         __linera_reserved_pos = __linera_reserved_pos_next;
-        let __linera_reserved_index_byte = 1u8;
+        let __linera_reserved_index = 1u8;
         let __linera_reserved_base_key = context
             .base_key()
             .derive_tag_key(
                 linera_views::views::MIN_VIEW_TAG,
-                &__linera_reserved_index_byte,
+                &__linera_reserved_index,
             )?;
         let __linera_reserved_pos_next = __linera_reserved_pos
             + CollectionView::<

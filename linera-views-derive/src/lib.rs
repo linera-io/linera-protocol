@@ -95,10 +95,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
 
         let derive_key_logic = if num_fields < 256 {
-            let idx_byte = idx as u8;
+            let idx_u8 = idx as u8;
             quote! {
-                let __linera_reserved_index_byte = #idx_byte;
-                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index_byte)?;
+                let __linera_reserved_index = #idx_u8;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
             }
         } else {
             assert!(num_fields < 65536);
