@@ -1450,9 +1450,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let index = self
             .inner()
             .execution_state_sender
-            .send_request(move |callback| ExecutionRequest::ApplicationIndex {
-                callback,
-            })?
+            .send_request(move |callback| ExecutionRequest::ApplicationIndex { callback })?
             .recv_response()?;
         Ok(index)
     }

@@ -359,9 +359,7 @@ where
                 }
             }
 
-            ApplicationIndex {
-                callback,
-            } => {
+            ApplicationIndex { callback } => {
                 let index = self.txn_tracker.application_index();
                 callback.respond(index)
             }
