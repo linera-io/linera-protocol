@@ -2270,7 +2270,7 @@ where
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
     let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
-    let (response, _actions) = env.worker().handle_chain_info_query(query).await?;
+    let response = env.worker().handle_chain_info_query(query).await?;
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
         response.info.requested_received_log[0],
@@ -3349,7 +3349,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
+    let response = env.worker().handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_1, BlockHeight::from(1), Epoch::from(0));
 
@@ -3429,7 +3429,7 @@ where
         .handle_validated_certificate(certificate)
         .await?;
     let query_values = ChainInfoQuery::new(chain_1).with_manager_values();
-    let (response, _) = env
+    let response = env
         .worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
@@ -3464,7 +3464,7 @@ where
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
-    let (response, _) = env
+    let response = env
         .worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
@@ -3512,7 +3512,7 @@ where
     worker
         .handle_validated_certificate(certificate.clone())
         .await?;
-    let (response, _) = worker.handle_chain_info_query(query_values).await?;
+    let response = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locking,
         Some(Box::new(LockingBlock::Regular(certificate)))
@@ -3599,7 +3599,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env.worker().handle_chain_info_query(query).await?;
+    let response = env.worker().handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout = Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0));
 
@@ -3625,7 +3625,7 @@ where
         .unwrap();
     let _ = env.worker().handle_block_proposal(proposal1).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
+    let response = env.worker().handle_chain_info_query(query_values).await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
     Ok(())
 }
@@ -3841,7 +3841,7 @@ where
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
+    let response = env.worker().handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locking,
         Some(Box::new(LockingBlock::Regular(certificate2)))
@@ -3887,7 +3887,7 @@ where
     let query = ChainInfoQuery::new(chain_1)
         .with_fallback()
         .with_committees();
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let response = env.worker().handle_chain_info_query(query.clone()).await?;
     let manager = response.info.manager;
     assert!(manager.fallback_vote.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
@@ -3896,7 +3896,7 @@ where
 
     // Even if a long time passes: Without an incoming message there's no fallback mode.
     clock.add(fallback_duration);
-    let (response, _) = env.worker().handle_chain_info_query(query.clone()).await?;
+    let response = env.worker().handle_chain_info_query(query.clone()).await?;
     assert!(response.info.manager.fallback_vote.is_none());
 
     // Make a tracked message between chains. This will create a cross-chain message.
@@ -3919,7 +3919,7 @@ where
         .with_committees();
 
     // The message only just arrived: No fallback mode.
-    let (response, _) = env
+    let response = env
         .worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
@@ -3927,7 +3927,7 @@ where
 
     // If for a long time the message isn't handled, we vote for fallback mode.
     clock.add(fallback_duration);
-    let (response, _) = env
+    let response = env
         .worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;
@@ -3940,7 +3940,7 @@ where
     env.worker().handle_timeout_certificate(certificate).await?;
 
     // Now we are in fallback mode, and the validator is the leader.
-    let (response, _) = env
+    let response = env
         .worker()
         .handle_chain_info_query(query_chain_2.clone())
         .await?;

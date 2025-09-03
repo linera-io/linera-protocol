@@ -2,10 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
@@ -115,9 +112,7 @@ where
         &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
-        let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
-        Ok(response)
+        Ok(self.node.state.handle_chain_info_query(query).await?)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -254,16 +249,7 @@ where
         &self,
         sender_chain: ChainId,
     ) -> Result<(), LocalNodeError> {
-        let (_response, actions) = self
-            .node
-            .state
-            .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
-            .await?;
-        let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
-        while let Some(request) = requests.pop_front() {
-            let new_actions = self.node.state.handle_cross_chain_request(request).await?;
-            requests.extend(new_actions.cross_chain_requests);
-        }
+        tracing::warn!("retry_pending_cross_chain_requests not implemented...");
         Ok(())
     }
 

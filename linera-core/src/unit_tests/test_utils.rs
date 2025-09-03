@@ -454,8 +454,7 @@ where
                 .await
                 .map_err(Into::into),
         };
-        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
-        sender.send(result.map(|(info, _actions)| info))
+        sender.send(result)
     }
 
     async fn do_subscribe(

@@ -245,7 +245,7 @@ where
     pub(super) async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         if let Some((height, round)) = query.request_leader_timeout {
             self.vote_for_leader_timeout(height, round).await?;
         }
@@ -253,9 +253,7 @@ where
             self.vote_for_fallback().await?;
         }
         let response = self.prepare_chain_info_response(query).await?;
-        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = self.create_network_actions().await?;
-        Ok((response, actions))
+        Ok(response)
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.

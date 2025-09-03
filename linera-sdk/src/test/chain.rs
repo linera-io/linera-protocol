@@ -296,7 +296,7 @@ impl ActiveChain {
     /// inboxes.
     pub async fn handle_received_messages(&self) {
         let chain_id = self.id();
-        let (information, _) = self
+        let information = self
             .validator
             .worker()
             .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_message_bundles())

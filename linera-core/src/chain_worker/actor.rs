@@ -132,7 +132,7 @@ where
     HandleChainInfoQuery {
         query: ChainInfoQuery,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
+        callback: oneshot::Sender<Result<ChainInfoResponse, WorkerError>>,
     },
 
     /// Get a blob if it belongs to the current locking block or pending proposal.

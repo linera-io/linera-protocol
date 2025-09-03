@@ -657,9 +657,8 @@ where
         let query = request.into_inner().try_into()?;
         trace!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
-            Ok((info, actions)) => {
+            Ok(info) => {
                 Self::log_request_outcome_and_latency(start, true, "handle_chain_info_query");
-                self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
