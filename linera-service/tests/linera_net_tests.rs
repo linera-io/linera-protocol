@@ -1925,7 +1925,7 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     // We use a newly opened chain for the publisher, so that client2 will not be listening to that
     // chain by default.
     let chain1 = client1
-        .open_and_assign(&client1, Amount::from_tokens(1000))
+        .open_and_assign(&client1, Amount::from_tokens(100))
         .await?;
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
     client2.sync(chain2).await?;
