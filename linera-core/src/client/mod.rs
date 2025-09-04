@@ -277,9 +277,13 @@ impl<Env: Environment> Client<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
         let pinned = self.chains.pin();
-        if pinned.get(&chain_id).is_none() {
-            pinned.insert(chain_id, ChainClientState::new(pending_proposal));
-        }
+        pinned.compute(chain_id, |state| {
+            if state.is_none() {
+                papaya::Operation::Insert(ChainClientState::new(pending_proposal.clone()))
+            } else {
+                papaya::Operation::Abort(())
+            }
+        });
 
         ChainClient {
             client: self.clone(),
@@ -524,9 +528,9 @@ impl<Env: Environment> Client<Env> {
             if let Some((_key, state)) = state {
                 let mut state = state.clone_for_update();
                 state.update_from_info(info);
-                papaya::Operation::Insert::<ChainClientState, ()>(state)
+                papaya::Operation::Insert(state)
             } else {
-                papaya::Operation::Abort::<ChainClientState, ()>(())
+                papaya::Operation::Abort(())
             }
         });
     }
@@ -1597,9 +1601,9 @@ impl<Env: Environment> ChainClient<Env> {
             .client_mutex()
     }
 
-    /// Gets the pending proposal from the chain's state.
+    /// Gets the next pending block.
     #[instrument(level = "trace", skip(self))]
-    fn pending_proposal_internal(&self) -> Option<PendingProposal> {
+    pub fn pending_proposal(&self) -> Option<PendingProposal> {
         self.client
             .chains
             .pin()
@@ -1620,7 +1624,7 @@ impl<Env: Environment> ChainClient<Env> {
             let (_key, state) = state.expect("Chain client constructed for invalid chain");
             let mut state = state.clone_for_update();
             f(&mut state);
-            papaya::Operation::Insert::<ChainClientState, ()>(state)
+            papaya::Operation::Insert::<_, ()>(state)
         });
     }
 
@@ -1657,12 +1661,6 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip(self))]
     pub fn admin_id(&self) -> ChainId {
         self.client.admin_id
-    }
-
-    /// Gets the next pending block.
-    #[instrument(level = "trace", skip(self))]
-    pub fn pending_proposal(&self) -> Option<PendingProposal> {
-        self.pending_proposal_internal()
     }
 
     /// Gets the currently preferred owner for signing the blocks.
@@ -2474,10 +2472,10 @@ impl<Env: Environment> ChainClient<Env> {
         identity: AccountOwner,
     ) -> Result<ConfirmedBlock, ChainClientError> {
         ensure!(
-            self.pending_proposal_internal().is_none(),
+            self.pending_proposal().is_none(),
             ChainClientError::BlockProposalError(
                 "Client state already has a pending block; \
-                    use the `linera retry-pending-block` command to commit that first"
+                use the `linera retry-pending-block` command to commit that first"
             )
         );
         let info = self.chain_info().await?;
@@ -2823,7 +2821,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let pending_proposal = self.pending_proposal_internal();
+        let pending_proposal = self.pending_proposal();
         let (block, blobs) = if let Some(locking) = &info.manager.requested_locking {
             match &**locking {
                 LockingBlock::Regular(certificate) => {
