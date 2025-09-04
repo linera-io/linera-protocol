@@ -720,12 +720,6 @@ services:
       SCYLLA_DIRECT_IO_MODE: "true"
       # Set appropriate cache size (adjust based on available RAM)
       SCYLLA_CACHE_SIZE: "4G"
-
-# Remove the default local volume since we're using bind mount
-volumes:
-  linera-scylla-data:
-    external: true
-    name: unused-scylla-volume
 EOF
 
 	log INFO "Docker Compose override generated at: ${compose_override}"
