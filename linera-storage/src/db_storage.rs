@@ -840,14 +840,12 @@ where
         }
         let keys = Self::get_keys_for_certificates(&hashes)?;
         let store = self.database.open_shared(&[])?;
-        let values = store.read_multi_values_bytes(keys).await;
-        if values.is_ok() {
-            #[cfg(with_metrics)]
-            metrics::READ_CERTIFICATES_COUNTER
-                .with_label_values(&[])
-                .inc_by(hashes.len() as u64);
-        }
-        Ok(values?
+        let values = store.read_multi_values_bytes(keys).await?;
+        #[cfg(with_metrics)]
+        metrics::READ_CERTIFICATES_COUNTER
+            .with_label_values(&[])
+            .inc_by(hashes.len() as u64);
+        Ok(values
             .chunks_exact(2)
             .filter_map(|chunk| {
                 let lite_cert_bytes = chunk[0].as_ref()?;
