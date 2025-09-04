@@ -149,13 +149,11 @@ where
         match request {
             #[cfg(not(web))]
             LoadContract { id, callback } => {
-                let (code, description) = self.load_contract(id).await?;
-                callback.respond((code, description))
+                callback.respond(self.load_contract(id).await);
             }
             #[cfg(not(web))]
             LoadService { id, callback } => {
-                let (code, description) = self.load_service(id).await?;
-                callback.respond((code, description))
+                callback.respond(self.load_service(id).await);
             }
 
             ChainBalance { callback } => {
@@ -164,24 +162,21 @@ where
             }
 
             OwnerBalance { owner, callback } => {
-                let balance = self
+                callback.respond(Ok(self
                     .state
                     .system
                     .balances
                     .get(&owner)
                     .await?
-                    .unwrap_or_default();
-                callback.respond(balance);
+                    .unwrap_or_default()));
             }
 
             OwnerBalances { callback } => {
-                let balances = self.state.system.balances.index_values().await?;
-                callback.respond(balances.into_iter().collect());
+                callback.respond(Ok(self.state.system.balances.index_values().await?));
             }
 
             BalanceOwners { callback } => {
-                let owners = self.state.system.balances.indices().await?;
-                callback.respond(owners);
+                callback.respond(Ok(self.state.system.balances.indices().await?));
             }
 
             Transfer {
@@ -192,13 +187,18 @@ where
                 application_id,
                 callback,
             } => {
-                let maybe_message = self
-                    .state
-                    .system
-                    .transfer(signer, Some(application_id), source, destination, amount)
-                    .await?;
-                self.txn_tracker.add_outgoing_messages(maybe_message);
-                callback.respond(());
+                callback.respond(
+                    async {
+                        let maybe_message = self
+                            .state
+                            .system
+                            .transfer(signer, Some(application_id), source, destination, amount)
+                            .await?;
+                        self.txn_tracker.add_outgoing_messages(maybe_message);
+                        Ok(())
+                    }
+                    .await,
+                );
             }
 
             Claim {
@@ -209,20 +209,25 @@ where
                 application_id,
                 callback,
             } => {
-                let maybe_message = self
-                    .state
-                    .system
-                    .claim(
-                        signer,
-                        Some(application_id),
-                        source.owner,
-                        source.chain_id,
-                        destination,
-                        amount,
-                    )
-                    .await?;
-                self.txn_tracker.add_outgoing_messages(maybe_message);
-                callback.respond(());
+                callback.respond(
+                    async {
+                        let maybe_message = self
+                            .state
+                            .system
+                            .claim(
+                                signer,
+                                Some(application_id),
+                                source.owner,
+                                source.chain_id,
+                                destination,
+                                amount,
+                            )
+                            .await?;
+                        self.txn_tracker.add_outgoing_messages(maybe_message);
+                        Ok(())
+                    }
+                    .await,
+                );
             }
 
             SystemTimestamp { callback } => {
@@ -236,39 +241,55 @@ where
             }
 
             ContainsKey { id, key, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.contains_key(&key).await?,
-                    None => false,
-                };
-                callback.respond(result);
+                callback.respond(
+                    async {
+                        let view = self.state.users.try_load_entry(&id).await?;
+                        Ok(match view {
+                            Some(view) => view.contains_key(&key).await?,
+                            None => false,
+                        })
+                    }
+                    .await,
+                );
             }
 
             ContainsKeys { id, keys, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.contains_keys(keys).await?,
-                    None => vec![false; keys.len()],
-                };
-                callback.respond(result);
+                callback.respond(
+                    async {
+                        let view = self.state.users.try_load_entry(&id).await?;
+                        Ok(match view {
+                            Some(view) => view.contains_keys(keys).await?,
+                            None => vec![false; keys.len()],
+                        })
+                    }
+                    .await,
+                );
             }
 
             ReadMultiValuesBytes { id, keys, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let values = match view {
-                    Some(view) => view.multi_get(keys).await?,
-                    None => vec![None; keys.len()],
-                };
-                callback.respond(values);
+                callback.respond(
+                    async {
+                        let view = self.state.users.try_load_entry(&id).await?;
+                        Ok(match view {
+                            Some(view) => view.multi_get(keys).await?,
+                            None => vec![None; keys.len()],
+                        })
+                    }
+                    .await,
+                );
             }
 
             ReadValueBytes { id, key, callback } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.get(&key).await?,
-                    None => None,
-                };
-                callback.respond(result);
+                callback.respond(
+                    async {
+                        let view = self.state.users.try_load_entry(&id).await?;
+                        Ok(match view {
+                            Some(view) => view.get(&key).await?,
+                            None => None,
+                        })
+                    }
+                    .await,
+                );
             }
 
             FindKeysByPrefix {
@@ -276,12 +297,16 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.find_keys_by_prefix(&key_prefix).await?,
-                    None => Vec::new(),
-                };
-                callback.respond(result);
+                callback.respond(
+                    async {
+                        let view = self.state.users.try_load_entry(&id).await?;
+                        Ok(match view {
+                            Some(view) => view.find_keys_by_prefix(&key_prefix).await?,
+                            None => Vec::new(),
+                        })
+                    }
+                    .await,
+                );
             }
 
             FindKeyValuesByPrefix {
@@ -289,12 +314,16 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.state.users.try_load_entry(&id).await?;
-                let result = match view {
-                    Some(view) => view.find_key_values_by_prefix(&key_prefix).await?,
-                    None => Vec::new(),
-                };
-                callback.respond(result);
+                callback.respond(
+                    async {
+                        let view = self.state.users.try_load_entry(&id).await?;
+                        Ok(match view {
+                            Some(view) => view.find_key_values_by_prefix(&key_prefix).await?,
+                            None => Vec::new(),
+                        })
+                    }
+                    .await,
+                );
             }
 
             WriteBatch {
@@ -302,9 +331,14 @@ where
                 batch,
                 callback,
             } => {
-                let mut view = self.state.users.try_load_entry_mut(&id).await?;
-                view.write_batch(batch).await?;
-                callback.respond(());
+                callback.respond(
+                    async {
+                        let mut view = self.state.users.try_load_entry_mut(&id).await?;
+                        view.write_batch(batch).await?;
+                        Ok(())
+                    }
+                    .await,
+                );
             }
 
             OpenChain {
@@ -321,12 +355,12 @@ where
                     balance,
                     application_permissions,
                 };
-                let chain_id = self
-                    .state
-                    .system
-                    .open_chain(config, parent_id, block_height, timestamp, self.txn_tracker)
-                    .await?;
-                callback.respond(chain_id);
+                callback.respond(
+                    self.state
+                        .system
+                        .open_chain(config, parent_id, block_height, timestamp, self.txn_tracker)
+                        .await,
+                );
             }
 
             CloseChain {
@@ -367,19 +401,19 @@ where
                 required_application_ids,
                 callback,
             } => {
-                let create_application_result = self
-                    .state
-                    .system
-                    .create_application(
-                        chain_id,
-                        block_height,
-                        module_id,
-                        parameters,
-                        required_application_ids,
-                        self.txn_tracker,
-                    )
-                    .await?;
-                callback.respond(Ok(create_application_result));
+                callback.respond(
+                    self.state
+                        .system
+                        .create_application(
+                            chain_id,
+                            block_height,
+                            module_id,
+                            parameters,
+                            required_application_ids,
+                            self.txn_tracker,
+                        )
+                        .await,
+                );
             }
 
             PerformHttpRequest {
@@ -388,103 +422,115 @@ where
                 callback,
             } => {
                 let system = &mut self.state.system;
-                let response = self
-                    .txn_tracker
-                    .oracle(|| async {
-                        let headers = request
-                            .headers
-                            .into_iter()
-                            .map(|http::Header { name, value }| {
-                                Ok((name.parse()?, value.try_into()?))
-                            })
-                            .collect::<Result<HeaderMap, ExecutionError>>()?;
+                callback.respond(
+                    self.txn_tracker
+                        .oracle(|| async {
+                            let headers = request
+                                .headers
+                                .into_iter()
+                                .map(|http::Header { name, value }| {
+                                    Ok((name.parse()?, value.try_into()?))
+                                })
+                                .collect::<Result<HeaderMap, ExecutionError>>()?;
 
-                        let url = Url::parse(&request.url)?;
-                        let host = url
-                            .host_str()
-                            .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
+                            let url = Url::parse(&request.url)?;
+                            let host = url.host_str().ok_or_else(|| {
+                                ExecutionError::UnauthorizedHttpRequest(url.clone())
+                            })?;
 
-                        let (_epoch, committee) = system
-                            .current_committee()
-                            .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
-                        let allowed_hosts = &committee.policy().http_request_allow_list;
+                            let (_epoch, committee) =
+                                system.current_committee().ok_or_else(|| {
+                                    ExecutionError::UnauthorizedHttpRequest(url.clone())
+                                })?;
+                            let allowed_hosts = &committee.policy().http_request_allow_list;
 
-                        ensure!(
-                            allowed_hosts.contains(host),
-                            ExecutionError::UnauthorizedHttpRequest(url)
-                        );
+                            ensure!(
+                                allowed_hosts.contains(host),
+                                ExecutionError::UnauthorizedHttpRequest(url)
+                            );
 
-                        let request = Client::new()
-                            .request(request.method.into(), url)
-                            .body(request.body)
-                            .headers(headers);
-                        #[cfg(not(web))]
-                        let request = request.timeout(linera_base::time::Duration::from_millis(
-                            committee.policy().http_request_timeout_ms,
-                        ));
+                            let request = Client::new()
+                                .request(request.method.into(), url)
+                                .body(request.body)
+                                .headers(headers);
+                            #[cfg(not(web))]
+                            let request = request.timeout(linera_base::time::Duration::from_millis(
+                                committee.policy().http_request_timeout_ms,
+                            ));
 
-                        let response = request.send().await?;
+                            let response = request.send().await?;
 
-                        let mut response_size_limit =
-                            committee.policy().maximum_http_response_bytes;
+                            let mut response_size_limit =
+                                committee.policy().maximum_http_response_bytes;
 
-                        if http_responses_are_oracle_responses {
-                            response_size_limit = response_size_limit
-                                .min(committee.policy().maximum_oracle_response_bytes);
-                        }
-                        Ok(OracleResponse::Http(
-                            Self::receive_http_response(response, response_size_limit).await?,
-                        ))
-                    })
-                    .await?
-                    .to_http_response()?;
-                callback.respond(response);
+                            if http_responses_are_oracle_responses {
+                                response_size_limit = response_size_limit
+                                    .min(committee.policy().maximum_oracle_response_bytes);
+                            }
+                            Ok(OracleResponse::Http(
+                                Self::receive_http_response(response, response_size_limit).await?,
+                            ))
+                        })
+                        .await?
+                        .to_http_response(),
+                );
             }
 
             ReadBlobContent { blob_id, callback } => {
-                let content = if let Some(content) = self.txn_tracker.get_blob_content(&blob_id) {
-                    content.clone()
-                } else {
-                    let content = self.state.system.read_blob_content(blob_id).await?;
-                    if blob_id.blob_type == BlobType::Data {
-                        self.resource_controller
-                            .with_state(&mut self.state.system)
-                            .await?
-                            .track_blob_read(content.bytes().len() as u64)?;
+                callback.respond(
+                    async {
+                        let content =
+                            if let Some(content) = self.txn_tracker.get_blob_content(&blob_id) {
+                                content.clone()
+                            } else {
+                                let content = self.state.system.read_blob_content(blob_id).await?;
+                                if blob_id.blob_type == BlobType::Data {
+                                    self.resource_controller
+                                        .with_state(&mut self.state.system)
+                                        .await?
+                                        .track_blob_read(content.bytes().len() as u64)?;
+                                }
+                                content
+                            };
+                        let is_new = self
+                            .state
+                            .system
+                            .blob_used(self.txn_tracker, blob_id)
+                            .await?;
+                        if is_new {
+                            self.txn_tracker
+                                .replay_oracle_response(OracleResponse::Blob(blob_id))?;
+                        }
+                        Ok(content)
                     }
-                    content
-                };
-                let is_new = self
-                    .state
-                    .system
-                    .blob_used(self.txn_tracker, blob_id)
-                    .await?;
-                if is_new {
-                    self.txn_tracker
-                        .replay_oracle_response(OracleResponse::Blob(blob_id))?;
-                }
-                callback.respond(content)
+                    .await,
+                );
             }
 
             AssertBlobExists { blob_id, callback } => {
-                self.state.system.assert_blob_exists(blob_id).await?;
-                // Treating this as reading a size-0 blob for fee purposes.
-                if blob_id.blob_type == BlobType::Data {
-                    self.resource_controller
-                        .with_state(&mut self.state.system)
-                        .await?
-                        .track_blob_read(0)?;
-                }
-                let is_new = self
-                    .state
-                    .system
-                    .blob_used(self.txn_tracker, blob_id)
-                    .await?;
-                if is_new {
-                    self.txn_tracker
-                        .replay_oracle_response(OracleResponse::Blob(blob_id))?;
-                }
-                callback.respond(());
+                callback.respond(
+                    async {
+                        self.state.system.assert_blob_exists(blob_id).await?;
+                        // Treating this as reading a size-0 blob for fee purposes.
+                        if blob_id.blob_type == BlobType::Data {
+                            self.resource_controller
+                                .with_state(&mut self.state.system)
+                                .await?
+                                .track_blob_read(0)?;
+                        }
+                        let is_new = self
+                            .state
+                            .system
+                            .blob_used(self.txn_tracker, blob_id)
+                            .await?;
+                        if is_new {
+                            self.txn_tracker
+                                .replay_oracle_response(OracleResponse::Blob(blob_id))?;
+                        }
+                        Ok(())
+                    }
+                    .await,
+                );
             }
 
             Emit {
@@ -492,31 +538,36 @@ where
                 value,
                 callback,
             } => {
-                let count = self
-                    .state
-                    .stream_event_counts
-                    .get_mut_or_default(&stream_id)
-                    .await?;
-                let index = *count;
-                *count = count.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-                self.txn_tracker.add_event(stream_id, index, value);
-                callback.respond(index)
+                callback.respond(
+                    async {
+                        let count = self
+                            .state
+                            .stream_event_counts
+                            .get_mut_or_default(&stream_id)
+                            .await?;
+                        let index = *count;
+                        *count = count.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                        self.txn_tracker.add_event(stream_id, index, value);
+                        Ok(index)
+                    }
+                    .await,
+                );
             }
 
             ReadEvent { event_id, callback } => {
                 let extra = self.state.context().extra();
-                let event = self
-                    .txn_tracker
-                    .oracle(|| async {
-                        let event = extra
-                            .get_event(event_id.clone())
-                            .await?
-                            .ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?;
-                        Ok(OracleResponse::Event(event_id.clone(), event))
-                    })
-                    .await?
-                    .to_event(&event_id)?;
-                callback.respond(event);
+                let _ = callback.send(
+                    self.txn_tracker
+                        .oracle(|| async {
+                            let event = extra
+                                .get_event(event_id.clone())
+                                .await?
+                                .ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?;
+                            Ok(OracleResponse::Event(event_id.clone(), event))
+                        })
+                        .await?
+                        .to_event(&event_id),
+                );
             }
 
             SubscribeToEvents {
@@ -525,25 +576,30 @@ where
                 subscriber_app_id,
                 callback,
             } => {
-                let subscriptions = self
-                    .state
-                    .system
-                    .event_subscriptions
-                    .get_mut_or_default(&(chain_id, stream_id.clone()))
-                    .await?;
-                let next_index = if subscriptions.applications.insert(subscriber_app_id) {
-                    subscriptions.next_index
-                } else {
-                    0
-                };
-                self.txn_tracker.add_stream_to_process(
-                    subscriber_app_id,
-                    chain_id,
-                    stream_id,
-                    0,
-                    next_index,
+                callback.respond(
+                    async {
+                        let subscriptions = self
+                            .state
+                            .system
+                            .event_subscriptions
+                            .get_mut_or_default(&(chain_id, stream_id.clone()))
+                            .await?;
+                        let next_index = if subscriptions.applications.insert(subscriber_app_id) {
+                            subscriptions.next_index
+                        } else {
+                            0
+                        };
+                        self.txn_tracker.add_stream_to_process(
+                            subscriber_app_id,
+                            chain_id,
+                            stream_id,
+                            0,
+                            next_index,
+                        );
+                        Ok(())
+                    }
+                    .await,
                 );
-                callback.respond(());
             }
 
             UnsubscribeFromEvents {
@@ -552,22 +608,28 @@ where
                 subscriber_app_id,
                 callback,
             } => {
-                let key = (chain_id, stream_id.clone());
-                let subscriptions = self
-                    .state
-                    .system
-                    .event_subscriptions
-                    .get_mut_or_default(&key)
-                    .await?;
-                subscriptions.applications.remove(&subscriber_app_id);
-                if subscriptions.applications.is_empty() {
-                    self.state.system.event_subscriptions.remove(&key)?;
-                }
-                if let crate::GenericApplicationId::User(app_id) = stream_id.application_id {
-                    self.txn_tracker
-                        .remove_stream_to_process(app_id, chain_id, stream_id);
-                }
-                callback.respond(());
+                callback.respond(
+                    async {
+                        let key = (chain_id, stream_id.clone());
+                        let subscriptions = self
+                            .state
+                            .system
+                            .event_subscriptions
+                            .get_mut_or_default(&key)
+                            .await?;
+                        subscriptions.applications.remove(&subscriber_app_id);
+                        if subscriptions.applications.is_empty() {
+                            self.state.system.event_subscriptions.remove(&key)?;
+                        }
+                        if let crate::GenericApplicationId::User(app_id) = stream_id.application_id
+                        {
+                            self.txn_tracker
+                                .remove_stream_to_process(app_id, chain_id, stream_id);
+                        }
+                        Ok(())
+                    }
+                    .await,
+                );
             }
 
             GetApplicationPermissions { callback } => {
@@ -585,34 +647,34 @@ where
                 let state = &mut self.state;
                 let local_time = self.txn_tracker.local_time();
                 let created_blobs = self.txn_tracker.created_blobs().clone();
-                let bytes = self
-                    .txn_tracker
-                    .oracle(|| async {
-                        let context = QueryContext {
-                            chain_id: state.context().extra().chain_id(),
-                            next_block_height,
-                            local_time,
-                        };
-                        let QueryOutcome {
-                            response,
-                            operations,
-                        } = Box::pin(state.query_user_application_with_deadline(
-                            application_id,
-                            context,
-                            query,
-                            deadline,
-                            created_blobs,
-                        ))
-                        .await?;
-                        ensure!(
-                            operations.is_empty(),
-                            ExecutionError::ServiceOracleQueryOperations(operations)
-                        );
-                        Ok(OracleResponse::Service(response))
-                    })
-                    .await?
-                    .to_service_response()?;
-                callback.respond(bytes);
+                callback.respond(
+                    self.txn_tracker
+                        .oracle(|| async {
+                            let context = QueryContext {
+                                chain_id: state.context().extra().chain_id(),
+                                next_block_height,
+                                local_time,
+                            };
+                            let QueryOutcome {
+                                response,
+                                operations,
+                            } = Box::pin(state.query_user_application_with_deadline(
+                                application_id,
+                                context,
+                                query,
+                                deadline,
+                                created_blobs,
+                            ))
+                            .await?;
+                            ensure!(
+                                operations.is_empty(),
+                                ExecutionError::ServiceOracleQueryOperations(operations)
+                            );
+                            Ok(OracleResponse::Service(response))
+                        })
+                        .await?
+                        .to_service_response(),
+                );
             }
 
             AddOutgoingMessage { message, callback } => {
@@ -632,24 +694,28 @@ where
                 timestamp,
                 callback,
             } => {
-                let result = if !self
-                    .txn_tracker
-                    .replay_oracle_response(OracleResponse::Assert)?
-                {
-                    // There are no recorded oracle responses, so we check the local time.
-                    let local_time = self.txn_tracker.local_time();
-                    if local_time >= timestamp {
-                        Err(ExecutionError::AssertBefore {
-                            timestamp,
-                            local_time,
-                        })
-                    } else {
-                        Ok(())
+                callback.respond(
+                    async {
+                        if !self
+                            .txn_tracker
+                            .replay_oracle_response(OracleResponse::Assert)?
+                        {
+                            // There are no recorded oracle responses, so we check the local time.
+                            let local_time = self.txn_tracker.local_time();
+                            if local_time >= timestamp {
+                                Err(ExecutionError::AssertBefore {
+                                    timestamp,
+                                    local_time,
+                                })
+                            } else {
+                                Ok(())
+                            }
+                        } else {
+                            Ok(())
+                        }
                     }
-                } else {
-                    Ok(())
-                };
-                callback.respond(result);
+                    .await,
+                );
             }
 
             AddCreatedBlob { blob, callback } => {
@@ -658,12 +724,12 @@ where
             }
 
             ValidationRound { round, callback } => {
-                let validation_round = self
-                    .txn_tracker
-                    .oracle(|| async { Ok(OracleResponse::Round(round)) })
-                    .await?
-                    .to_round()?;
-                callback.respond(validation_round);
+                callback.respond(
+                    self.txn_tracker
+                        .oracle(|| async { Ok(OracleResponse::Round(round)) })
+                        .await?
+                        .to_round(),
+                );
             }
         }
 
@@ -970,14 +1036,14 @@ pub enum ExecutionRequest {
     LoadContract {
         id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(UserContractCode, ApplicationDescription)>,
+        callback: Sender<Result<(UserContractCode, ApplicationDescription), ExecutionError>>,
     },
 
     #[cfg(not(web))]
     LoadService {
         id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(UserServiceCode, ApplicationDescription)>,
+        callback: Sender<Result<(UserServiceCode, ApplicationDescription), ExecutionError>>,
     },
 
     ChainBalance {
@@ -988,17 +1054,17 @@ pub enum ExecutionRequest {
     OwnerBalance {
         owner: AccountOwner,
         #[debug(skip)]
-        callback: Sender<Amount>,
+        callback: Sender<Result<Amount, ExecutionError>>,
     },
 
     OwnerBalances {
         #[debug(skip)]
-        callback: Sender<Vec<(AccountOwner, Amount)>>,
+        callback: Sender<Result<Vec<(AccountOwner, Amount)>, ExecutionError>>,
     },
 
     BalanceOwners {
         #[debug(skip)]
-        callback: Sender<Vec<AccountOwner>>,
+        callback: Sender<Result<Vec<AccountOwner>, ExecutionError>>,
     },
 
     Transfer {
@@ -1009,7 +1075,7 @@ pub enum ExecutionRequest {
         signer: Option<AccountOwner>,
         application_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<Result<(), ExecutionError>>,
     },
 
     Claim {
@@ -1020,7 +1086,7 @@ pub enum ExecutionRequest {
         signer: Option<AccountOwner>,
         application_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<Result<(), ExecutionError>>,
     },
 
     SystemTimestamp {
@@ -1038,21 +1104,21 @@ pub enum ExecutionRequest {
         #[debug(with = hex_debug)]
         key: Vec<u8>,
         #[debug(skip)]
-        callback: Sender<Option<Vec<u8>>>,
+        callback: Sender<Result<Option<Vec<u8>>, ExecutionError>>,
     },
 
     ContainsKey {
         id: ApplicationId,
         key: Vec<u8>,
         #[debug(skip)]
-        callback: Sender<bool>,
+        callback: Sender<Result<bool, ExecutionError>>,
     },
 
     ContainsKeys {
         id: ApplicationId,
         #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
-        callback: Sender<Vec<bool>>,
+        callback: Sender<Result<Vec<bool>, ExecutionError>>,
     },
 
     ReadMultiValuesBytes {
@@ -1060,7 +1126,7 @@ pub enum ExecutionRequest {
         #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
         #[debug(skip)]
-        callback: Sender<Vec<Option<Vec<u8>>>>,
+        callback: Sender<Result<Vec<Option<Vec<u8>>>, ExecutionError>>,
     },
 
     FindKeysByPrefix {
@@ -1068,7 +1134,7 @@ pub enum ExecutionRequest {
         #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
         #[debug(skip)]
-        callback: Sender<Vec<Vec<u8>>>,
+        callback: Sender<Result<Vec<Vec<u8>>, ExecutionError>>,
     },
 
     FindKeyValuesByPrefix {
@@ -1076,14 +1142,15 @@ pub enum ExecutionRequest {
         #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
         #[debug(skip)]
-        callback: Sender<Vec<(Vec<u8>, Vec<u8>)>>,
+        #[allow(clippy::type_complexity)]
+        callback: Sender<Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>,
     },
 
     WriteBatch {
         id: ApplicationId,
         batch: Batch,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<Result<(), ExecutionError>>,
     },
 
     OpenChain {
@@ -1095,7 +1162,7 @@ pub enum ExecutionRequest {
         application_permissions: ApplicationPermissions,
         timestamp: Timestamp,
         #[debug(skip)]
-        callback: Sender<ChainId>,
+        callback: Sender<Result<ChainId, ExecutionError>>,
     },
 
     CloseChain {
@@ -1125,19 +1192,19 @@ pub enum ExecutionRequest {
         request: http::Request,
         http_responses_are_oracle_responses: bool,
         #[debug(skip)]
-        callback: Sender<http::Response>,
+        callback: Sender<Result<http::Response, ExecutionError>>,
     },
 
     ReadBlobContent {
         blob_id: BlobId,
         #[debug(skip)]
-        callback: Sender<BlobContent>,
+        callback: Sender<Result<BlobContent, ExecutionError>>,
     },
 
     AssertBlobExists {
         blob_id: BlobId,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<Result<(), ExecutionError>>,
     },
 
     Emit {
@@ -1145,12 +1212,12 @@ pub enum ExecutionRequest {
         #[debug(with = hex_debug)]
         value: Vec<u8>,
         #[debug(skip)]
-        callback: Sender<u32>,
+        callback: Sender<Result<u32, ExecutionError>>,
     },
 
     ReadEvent {
         event_id: EventId,
-        callback: oneshot::Sender<Vec<u8>>,
+        callback: oneshot::Sender<Result<Vec<u8>, ExecutionError>>,
     },
 
     SubscribeToEvents {
@@ -1158,7 +1225,7 @@ pub enum ExecutionRequest {
         stream_id: StreamId,
         subscriber_app_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<Result<(), ExecutionError>>,
     },
 
     UnsubscribeFromEvents {
@@ -1166,7 +1233,7 @@ pub enum ExecutionRequest {
         stream_id: StreamId,
         subscriber_app_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<Result<(), ExecutionError>>,
     },
 
     GetApplicationPermissions {
@@ -1180,7 +1247,7 @@ pub enum ExecutionRequest {
         next_block_height: BlockHeight,
         query: Vec<u8>,
         #[debug(skip)]
-        callback: Sender<Vec<u8>>,
+        callback: Sender<Result<Vec<u8>, ExecutionError>>,
     },
 
     AddOutgoingMessage {
@@ -1210,6 +1277,6 @@ pub enum ExecutionRequest {
     ValidationRound {
         round: Option<u32>,
         #[debug(skip)]
-        callback: Sender<Option<u32>>,
+        callback: Sender<Result<Option<u32>, ExecutionError>>,
     },
 }

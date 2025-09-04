@@ -196,7 +196,7 @@ impl<T> Promise<T> {
 }
 
 /// Manages a set of pending queries returning values of type `T`.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct QueryManager<T> {
     /// The queries in progress.
     pending_queries: BTreeMap<u32, Promise<T>>,
@@ -204,6 +204,16 @@ struct QueryManager<T> {
     query_count: u32,
     /// The number of active queries.
     active_query_count: u32,
+}
+
+impl<T> Default for QueryManager<T> {
+    fn default() -> Self {
+        Self {
+            pending_queries: BTreeMap::new(),
+            query_count: 0,
+            active_query_count: 0,
+        }
+    }
 }
 
 impl<T> QueryManager<T> {
@@ -246,17 +256,17 @@ type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 #[derive(Debug, Default)]
 struct ViewUserState {
     /// The contains-key queries in progress.
-    contains_key_queries: QueryManager<bool>,
+    contains_key_queries: QueryManager<Result<bool, ExecutionError>>,
     /// The contains-keys queries in progress.
-    contains_keys_queries: QueryManager<Vec<bool>>,
+    contains_keys_queries: QueryManager<Result<Vec<bool>, ExecutionError>>,
     /// The read-value queries in progress.
-    read_value_queries: QueryManager<Option<Value>>,
+    read_value_queries: QueryManager<Result<Option<Value>, ExecutionError>>,
     /// The read-multi-values queries in progress.
-    read_multi_values_queries: QueryManager<Vec<Option<Value>>>,
+    read_multi_values_queries: QueryManager<Result<Vec<Option<Value>>, ExecutionError>>,
     /// The find-keys queries in progress.
-    find_keys_queries: QueryManager<Keys>,
+    find_keys_queries: QueryManager<Result<Keys, ExecutionError>>,
     /// The find-key-values queries in progress.
-    find_key_values_queries: QueryManager<KeyValues>,
+    find_key_values_queries: QueryManager<Result<KeyValues, ExecutionError>>,
 }
 
 impl ViewUserState {
@@ -405,7 +415,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
                 let (code, description) = self
                     .execution_state_sender
                     .send_request(move |callback| ExecutionRequest::LoadContract { id, callback })?
-                    .recv_response()?;
+                    .recv_response()??;
 
                 let instance = code.instantiate(this)?;
 
@@ -482,7 +492,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
                 query,
                 callback,
             })?
-            .recv_response()?;
+            .recv_response()??;
 
         self.resource_controller
             .track_service_oracle_execution(execution_start.elapsed())?;
@@ -514,7 +524,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
                 let (code, description) = self
                     .execution_state_sender
                     .send_request(move |callback| ExecutionRequest::LoadService { id, callback })?
-                    .recv_response()?;
+                    .recv_response()??;
 
                 let instance = code.instantiate(this)?;
                 Ok(entry
@@ -627,7 +637,7 @@ where
         let balance = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
-            .recv_response()?;
+            .recv_response()??;
         this.resource_controller.track_runtime_balance()?;
         Ok(balance)
     }
@@ -637,7 +647,7 @@ where
         let owner_balances = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
-            .recv_response()?;
+            .recv_response()??;
         this.resource_controller
             .track_runtime_owner_balances(&owner_balances)?;
         Ok(owner_balances)
@@ -648,7 +658,7 @@ where
         let owners = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
-            .recv_response()?;
+            .recv_response()??;
         this.resource_controller.track_runtime_owners(&owners)?;
         Ok(owners)
     }
@@ -679,7 +689,7 @@ where
         let mut this = self.inner();
         let id = this.current_application().id;
         let state = this.view_user_states.entry(id).or_default();
-        let value = state.contains_key_queries.wait(*promise)?;
+        let value = state.contains_key_queries.wait(*promise)??;
         Ok(value)
     }
 
@@ -704,7 +714,7 @@ where
         let mut this = self.inner();
         let id = this.current_application().id;
         let state = this.view_user_states.entry(id).or_default();
-        let value = state.contains_keys_queries.wait(*promise)?;
+        let value = state.contains_keys_queries.wait(*promise)??;
         Ok(value)
     }
 
@@ -729,7 +739,7 @@ where
         let mut this = self.inner();
         let id = this.current_application().id;
         let state = this.view_user_states.entry(id).or_default();
-        let values = state.read_multi_values_queries.wait(*promise)?;
+        let values = state.read_multi_values_queries.wait(*promise)??;
         for value in &values {
             if let Some(value) = &value {
                 this.resource_controller
@@ -761,7 +771,7 @@ where
         let id = this.current_application().id;
         let value = {
             let state = this.view_user_states.entry(id).or_default();
-            state.read_value_queries.wait(*promise)?
+            state.read_value_queries.wait(*promise)??
         };
         if let Some(value) = &value {
             this.resource_controller
@@ -796,7 +806,7 @@ where
         let id = this.current_application().id;
         let keys = {
             let state = this.view_user_states.entry(id).or_default();
-            state.find_keys_queries.wait(*promise)?
+            state.find_keys_queries.wait(*promise)??
         };
         let mut read_size = 0;
         for key in &keys {
@@ -832,7 +842,7 @@ where
         let mut this = self.inner();
         let id = this.current_application().id;
         let state = this.view_user_states.entry(id).or_default();
-        let key_values = state.find_key_values_queries.wait(*promise)?;
+        let key_values = state.find_key_values_queries.wait(*promise)??;
         let mut read_size = 0;
         for (key, value) in &key_values {
             read_size += key.len() + value.len();
@@ -860,16 +870,14 @@ where
 
         this.resource_controller.track_http_request()?;
 
-        let response = this
-            .execution_state_sender
+        this.execution_state_sender
             .send_request(|callback| ExecutionRequest::PerformHttpRequest {
                 request,
                 http_responses_are_oracle_responses:
                     Self::LIMIT_HTTP_RESPONSE_SIZE_TO_ORACLE_RESPONSE_SIZE,
                 callback,
             })?
-            .recv_response()?;
-        Ok(response)
+            .recv_response()?
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
@@ -888,7 +896,7 @@ where
         let content = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
-            .recv_response()?;
+            .recv_response()??;
         Ok(content.into_vec_or_clone())
     }
 
@@ -897,7 +905,7 @@ where
         let blob_id = hash.into();
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
-            .recv_response()?;
+            .recv_response()??;
         Ok(())
     }
 }
@@ -1211,8 +1219,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 application_id,
                 callback,
             })?
-            .recv_response()?;
-        Ok(())
+            .recv_response()?
     }
 
     fn claim(
@@ -1235,8 +1242,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 application_id,
                 callback,
             })?
-            .recv_response()?;
-        Ok(())
+            .recv_response()?
     }
 
     fn try_call_application(
@@ -1278,7 +1284,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 value,
                 callback,
             })?
-            .recv_response()?;
+            .recv_response()??;
         // TODO(#365): Consider separate event fee categories.
         this.resource_controller.track_bytes_written(value_len)?;
         Ok(index)
@@ -1308,7 +1314,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let event = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadEvent { event_id, callback })?
-            .recv_response()?;
+            .recv_response()??;
         // TODO(#365): Consider separate event fee categories.
         this.resource_controller
             .track_bytes_read(event.len() as u64)?;
@@ -1338,8 +1344,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 subscriber_app_id,
                 callback,
             })?
-            .recv_response()?;
-        Ok(())
+            .recv_response()?
     }
 
     fn unsubscribe_from_events(
@@ -1365,8 +1370,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 subscriber_app_id,
                 callback,
             })?
-            .recv_response()?;
-        Ok(())
+            .recv_response()?
     }
 
     fn query_service(
@@ -1403,8 +1407,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
         let timestamp = self.inner().user_context;
 
-        let chain_id = self
-            .inner()
+        self.inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OpenChain {
                 ownership,
@@ -1415,9 +1418,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 application_permissions,
                 callback,
             })?
-            .recv_response()?;
-
-        Ok(chain_id)
+            .recv_response()?
     }
 
     fn close_chain(&mut self) -> Result<(), ExecutionError> {
@@ -1513,7 +1514,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let round = this.round;
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::ValidationRound { round, callback })?
-            .recv_response()
+            .recv_response()?
     }
 
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
@@ -1535,8 +1536,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 batch,
                 callback,
             })?
-            .recv_response()?;
-        Ok(())
+            .recv_response()?
     }
 }
 

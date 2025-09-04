@@ -128,7 +128,7 @@ async fn test_write_batch() {
         assert_eq!(batch, expected_batch);
 
         callback
-            .send(())
+            .send(Ok(()))
             .expect("Failed to notify that writing the batch finished");
     });
 
