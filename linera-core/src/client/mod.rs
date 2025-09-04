@@ -276,7 +276,7 @@ impl<Env: Environment> Client<Env> {
     ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
-        let pinned = self.chains.pin_owned();
+        let pinned = self.chains.pin();
         if pinned.get(&chain_id).is_none() {
             pinned.insert(chain_id, ChainClientState::new(pending_proposal));
         }
@@ -519,7 +519,7 @@ impl<Env: Environment> Client<Env> {
     /// Updates the latest block and next block height and round information from the chain info.
     #[instrument(level = "trace", skip_all, fields(chain_id = format!("{:.8}", info.chain_id)))]
     fn update_from_info(&self, info: &ChainInfo) {
-        let pinned = self.chains.pin_owned();
+        let pinned = self.chains.pin();
         pinned.compute(info.chain_id, |state| {
             if let Some((_key, state)) = state {
                 let mut state = state.clone();
@@ -1591,7 +1591,7 @@ impl<Env: Environment> ChainClient<Env> {
     fn client_mutex(&self) -> Arc<tokio::sync::Mutex<()>> {
         self.client
             .chains
-            .pin_owned()
+            .pin()
             .get(&self.chain_id)
             .expect("Chain client constructed for invalid chain")
             .client_mutex()
@@ -1602,7 +1602,7 @@ impl<Env: Environment> ChainClient<Env> {
     fn pending_proposal_internal(&self) -> Option<PendingProposal> {
         self.client
             .chains
-            .pin_owned()
+            .pin()
             .get(&self.chain_id)
             .expect("Chain client constructed for invalid chain")
             .pending_proposal()
@@ -1615,7 +1615,7 @@ impl<Env: Environment> ChainClient<Env> {
     where
         F: FnOnce(&mut ChainClientState) -> R,
     {
-        let chains = self.client.chains.pin_owned();
+        let chains = self.client.chains.pin();
         let mut result = None;
         let mut closure = Some(f);
         chains.compute(self.chain_id, |state| {

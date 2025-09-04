@@ -1043,7 +1043,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError> {
         let application_id: ApplicationId = description.into();
-        let pinned = self.user_contracts().pin_owned();
+        let pinned = self.user_contracts().pin();
         Ok(pinned
             .get(&application_id)
             .ok_or_else(|| {
@@ -1058,7 +1058,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError> {
         let application_id: ApplicationId = description.into();
-        let pinned = self.user_services().pin_owned();
+        let pinned = self.user_services().pin();
         Ok(pinned
             .get(&application_id)
             .ok_or_else(|| {
@@ -1068,7 +1068,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        let pinned = self.blobs.pin_owned();
+        let pinned = self.blobs.pin();
         match pinned.get(&blob_id) {
             None => Ok(None),
             Some(blob) => Ok(Some(blob.clone())),
@@ -1076,7 +1076,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        let pinned = self.events.pin_owned();
+        let pinned = self.events.pin();
         match pinned.get(&event_id) {
             None => Ok(None),
             Some(event) => Ok(Some(event.clone())),
@@ -1129,7 +1129,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
     ) -> Result<(), ViewError> {
-        let pinned = self.blobs.pin_owned();
+        let pinned = self.blobs.pin();
         for blob in blobs {
             pinned.insert(blob.id(), blob);
         }
@@ -1142,7 +1142,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError> {
-        let pinned = self.events.pin_owned();
+        let pinned = self.events.pin();
         for (event_id, bytes) in events {
             pinned.insert(event_id, bytes);
         }

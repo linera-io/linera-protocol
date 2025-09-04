@@ -28,7 +28,7 @@ impl<N> Default for ChannelNotifier<N> {
 
 impl<N> ChannelNotifier<N> {
     fn add_sender(&self, chain_ids: Vec<ChainId>, sender: &UnboundedSender<N>) {
-        let pinned = self.inner.pin_owned();
+        let pinned = self.inner.pin();
         for id in chain_ids {
             pinned.compute(id, |senders| {
                 let mut senders = if let Some((_key, senders)) = senders {
@@ -66,7 +66,7 @@ where
 {
     /// Notifies all the clients waiting for a notification from a given chain.
     pub fn notify_chain(&self, chain_id: &ChainId, notification: &N) {
-        let pinned = self.inner.pin_owned();
+        let pinned = self.inner.pin();
         let should_remove_entry = if let Some(senders) = pinned.get(chain_id) {
             let mut dead_senders = vec![];
 
