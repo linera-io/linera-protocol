@@ -37,7 +37,7 @@ impl<N> ChannelNotifier<N> {
                     Vec::new()
                 };
                 senders.push(sender.clone());
-                papaya::Operation::Insert::<Vec<_>, ()>(senders)
+                papaya::Operation::Insert::<_, ()>(senders)
             });
         }
     }
@@ -67,50 +67,22 @@ where
     /// Notifies all the clients waiting for a notification from a given chain.
     pub fn notify_chain(&self, chain_id: &ChainId, notification: &N) {
         let pinned = self.inner.pin();
-        let should_remove_entry = if let Some(senders) = pinned.get(chain_id) {
-            let mut dead_senders = vec![];
-
-            // First pass: identify dead senders and send notifications
-            for (index, sender) in senders.iter().enumerate() {
-                if sender.send(notification.clone()).is_err() {
-                    dead_senders.push(index);
-                }
+        pinned.compute(*chain_id, |senders| {
+            let Some((_key, senders)) = senders else {
+                trace!("Chain {chain_id:?} has no subscribers.");
+                return papaya::Operation::Abort(());
+            };
+            let live_senders = senders
+                .iter()
+                .filter(|sender| sender.send(notification.clone()).is_ok())
+                .cloned()
+                .collect::<Vec<_>>();
+            if live_senders.is_empty() {
+                trace!("No more subscribers for chain {chain_id:?}. Removing entry.");
+                return papaya::Operation::Remove;
             }
-
-            if !dead_senders.is_empty() {
-                // Second pass: atomically update the vector by removing dead senders
-                let mut is_empty = false;
-                pinned.compute(*chain_id, |senders| {
-                    if let Some((_key, senders)) = senders {
-                        let mut senders = senders.clone();
-                        for index in dead_senders.clone().into_iter().rev() {
-                            trace!("Removed dead subscriber for chain {chain_id:?}.");
-                            senders.remove(index);
-                        }
-                        if senders.is_empty() {
-                            is_empty = true;
-                            papaya::Operation::Remove
-                        } else {
-                            papaya::Operation::Insert::<Vec<_>, ()>(senders)
-                        }
-                    } else {
-                        papaya::Operation::Abort::<Vec<_>, ()>(())
-                    }
-                });
-
-                is_empty
-            } else {
-                false // No dead senders, keep the entry
-            }
-        } else {
-            trace!("Chain {chain_id:?} has no subscribers.");
-            return;
-        };
-
-        if should_remove_entry {
-            trace!("No more subscribers for chain {chain_id:?}. Removing entry.");
-            // Entry was already removed in the compute operation above
-        }
+            papaya::Operation::Insert(live_senders)
+        });
     }
 }
 
