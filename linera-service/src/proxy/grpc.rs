@@ -35,7 +35,8 @@ use linera_rpc::{
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
             LiteCertificate, NetworkDescription, Notification, PendingBlobRequest,
-            PendingBlobResult, SubscriptionRequest, VersionInfo,
+            PendingBlobResult, RawCertificate, RawCertificatesBatch, SubscriptionRequest,
+            VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -675,6 +676,74 @@ where
             .await
     }
 
+    #[instrument(skip_all, err(Display))]
+    async fn download_raw_certificates_by_heights(
+        &self,
+        request: Request<api::DownloadCertificatesByHeightsRequest>,
+    ) -> Result<Response<api::RawCertificatesBatch>, Status> {
+        let original_request: CertificatesByHeightRequest = request.into_inner().try_into()?;
+        let chain_info_request = ChainInfoQuery::new(original_request.chain_id)
+            .with_sent_certificate_hashes_by_heights(original_request.heights);
+        // Use handle_chain_info_query to get the certificate hashes
+        let chain_info_response = self
+            .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
+            .await?;
+        // Extract the ChainInfoResult from the response
+        let chain_info_result = chain_info_response.into_inner();
+        // Extract the certificate hashes from the ChainInfo
+        let hashes = match chain_info_result.inner {
+            Some(api::chain_info_result::Inner::ChainInfoResponse(response)) => {
+                let chain_info: ChainInfo =
+                    bincode::deserialize(&response.chain_info).map_err(|e| {
+                        Status::internal(format!("Failed to deserialize ChainInfo: {}", e))
+                    })?;
+                chain_info.requested_sent_certificate_hashes
+            }
+            Some(api::chain_info_result::Inner::Error(error)) => {
+                return Err(Status::internal(format!(
+                    "Chain info query failed: {:?}",
+                    error
+                )));
+            }
+            None => {
+                return Err(Status::internal("Empty chain info result"));
+            }
+        };
+
+        // Use 70% of the max message size as a buffer capacity.
+        // Leave 30% as overhead.
+        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
+            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+
+        let mut returned_certificates = vec![];
+
+        'outer: for batch in hashes.chunks(100) {
+            let certificates: Vec<(Vec<u8>, Vec<u8>)> = self
+                .0
+                .storage
+                .read_certificates_raw(batch.to_vec())
+                .await
+                .map_err(Self::view_error_to_status)?
+                .into_iter()
+                .collect();
+            for (lite_cert_bytes, confirmed_block_bytes) in certificates {
+                if grpc_message_limiter.add(lite_cert_bytes.len() + confirmed_block_bytes.len()) > 0
+                {
+                    returned_certificates.push(RawCertificate {
+                        lite_certificate: lite_cert_bytes,
+                        confirmed_block: confirmed_block_bytes,
+                    });
+                } else {
+                    break 'outer;
+                }
+            }
+        }
+
+        Ok(Response::new(RawCertificatesBatch {
+            certificates: returned_certificates,
+        }))
+    }
+
     #[instrument(skip_all, err(level = Level::WARN))]
     async fn blob_last_used_by(
         &self,
@@ -769,6 +838,14 @@ impl<T> GrpcMessageLimiter<T> {
         }
         self.remaining -= required;
         Ok(true)
+    }
+
+    /// Adds the given number of bytes to the remaining capacity.
+    ///
+    /// Returns the new remaining capacity.
+    fn add(&mut self, bytes_len: usize) -> usize {
+        self.remaining = self.remaining.saturating_sub(bytes_len);
+        self.remaining
     }
 }
 

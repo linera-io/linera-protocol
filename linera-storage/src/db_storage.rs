@@ -824,6 +824,39 @@ where
         Ok(certificates)
     }
 
+    /// Reads certificates by hashes.
+    ///
+    /// Returns a vector of tuples where the first element is a lite certificate
+    /// and the second element is confirmed block.
+    ///
+    /// It does not check if all hashes all returned.
+    async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
+        &self,
+        hashes: I,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+        let hashes = hashes.into_iter().collect::<Vec<_>>();
+        if hashes.is_empty() {
+            return Ok(Vec::new());
+        }
+        let keys = Self::get_keys_for_certificates(&hashes)?;
+        let store = self.database.open_shared(&[])?;
+        let values = store.read_multi_values_bytes(keys).await;
+        if values.is_ok() {
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATES_COUNTER
+                .with_label_values(&[])
+                .inc_by(hashes.len() as u64);
+        }
+        Ok(values?
+            .chunks_exact(2)
+            .filter_map(|chunk| {
+                let lite_cert_bytes = chunk[0].as_ref()?;
+                let confirmed_block_bytes = chunk[1].as_ref()?;
+                Some((lite_cert_bytes.clone(), confirmed_block_bytes.clone()))
+            })
+            .collect())
+    }
+
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         let store = self.database.open_shared(&[])?;
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
