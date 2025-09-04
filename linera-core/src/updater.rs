@@ -473,7 +473,7 @@ where
                 }) =>
             {
                 // The chain is missing epoch events. Send all blocks.
-                let query = ChainInfoQuery::new(chain_id);
+                let query = ChainInfoQuery::new(chain_id).no_network_actions();
                 self.remote_node.handle_chain_info_query(query).await?
             }
             Err(err) => return Err(err),
@@ -582,7 +582,9 @@ where
                 })?
             }
             CommunicateAction::RequestTimeout { round, height, .. } => {
-                let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
+                let query = ChainInfoQuery::new(chain_id)
+                    .with_timeout(height, round)
+                    .no_network_actions();
                 let info = self.remote_node.handle_chain_info_query(query).await?;
                 info.manager.timeout_vote.ok_or_else(|| {
                     NodeError::MissingVoteInValidatorResponse("request a timeout".into())
