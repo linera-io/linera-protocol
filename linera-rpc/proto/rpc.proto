@@ -86,14 +86,30 @@ service ValidatorNode {
   // Download a batch of certificates.
   rpc DownloadCertificates(CertificatesBatchRequest) returns (CertificatesBatchResponse);
 
-  /// Download a batch of certificates by height range.
+  /// Download a batch of certificates by heights.
   rpc DownloadCertificatesByHeights(DownloadCertificatesByHeightsRequest) returns (CertificatesBatchResponse);
+
+  // Download a batch of certificates, in serialized form, by their heights.
+  rpc DownloadRawCertificatesByHeights(DownloadCertificatesByHeightsRequest) returns (RawCertificatesBatch);
 
   // Return the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
   // Return the `BlobId`s that are not contained as `Blob`.
   rpc MissingBlobIds(BlobIds) returns (BlobIds);
+}
+
+// Batch of raw certificates.
+message RawCertificatesBatch {
+  repeated RawCertificate certificates = 1;
+}
+
+// A confirmed block certificate in a serialized form.
+message RawCertificate {
+  // BCS-serialized bytes of lite certificate part.
+  bytes lite_certificate = 1;
+  // BCS-serialized bytes of confirmed block part.
+  bytes confirmed_block = 2;
 }
 
 // A request for downloading certificates by block heights.
