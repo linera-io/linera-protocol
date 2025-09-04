@@ -6,7 +6,6 @@
 use std::{
     collections::VecDeque,
     fmt::{self, Debug, Display, Formatter},
-    mem,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
@@ -15,10 +14,7 @@ use std::{
 
 #[cfg(web)]
 use js_sys::wasm_bindgen;
-use linera_base::{
-    data_types::StreamUpdate,
-    identifiers::{ChainId, StreamId},
-};
+use linera_base::data_types::StreamUpdate;
 
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContract,
