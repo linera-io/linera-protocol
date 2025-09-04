@@ -204,8 +204,8 @@ impl UserChain {
         }
     }
 
-    /// Creates an entry for a chain that we don't own. The timestamp is the genesis
-    /// timestamp or earlier. The Epoch is 0.
+    /// Creates an entry for a chain that we don't own. The timestamp must be the genesis
+    /// timestamp or earlier. The Epoch is unknwon.
     pub fn make_other(chain_id: ChainId, timestamp: Timestamp) -> Self {
         Self {
             chain_id,
