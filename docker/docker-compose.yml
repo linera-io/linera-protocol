@@ -17,8 +17,19 @@ services:
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
+  scylla-setup:
+    image: ubuntu:24.04
+    container_name: scylla-setup
+    privileged: true
+    volumes:
+      - /proc:/host/proc
+      - /sys:/host/sys
+      - ./compose-scylla-setup.sh:/setup.sh:ro
+    command: ["/bin/bash", "/setup.sh"]
+    restart: "no"
+
   scylla:
-    image: scylladb/scylla:6.2.1
+    image: scylladb/scylla:6.2.3
     container_name: scylla
     volumes:
       - linera-scylla-data:/var/lib/scylla
@@ -29,13 +40,16 @@ services:
       - "0"
       - "--overprovisioned"
       - "1"
+    depends_on:
+      scylla-setup:
+        condition: service_completed_successfully
 
   proxy:
     image: "${LINERA_IMAGE:-linera}"
     container_name: proxy
     ports:
       - "19100:19100"
-    command: [ "./compose-proxy-entrypoint.sh", "1" ]
+    command: ["./compose-proxy-entrypoint.sh", "1"]
     volumes:
       - .:/config
     labels:
@@ -48,7 +62,7 @@ services:
     image: "${LINERA_IMAGE:-linera}"
     deploy:
       replicas: 4
-    command: [ "./compose-server-entrypoint.sh", "scylladb:tcp:scylla:9042", "1" ]
+    command: ["./compose-server-entrypoint.sh", "scylladb:tcp:scylla:9042", "1"]
     volumes:
       - .:/config
     labels:
@@ -60,11 +74,14 @@ services:
   shard-init:
     image: "${LINERA_IMAGE:-linera}"
     container_name: shard-init
-    command: [ "./compose-server-init.sh", "scylladb:tcp:scylla:9042", "1" ]
+    command: ["./compose-server-init.sh", "scylladb:tcp:scylla:9042", "1"]
     volumes:
       - .:/config
     depends_on:
-      - scylla
+      scylla-setup:
+        condition: service_completed_successfully
+      scylla:
+        condition: service_started
 
   prometheus:
     image: prom/prometheus:latest
@@ -91,7 +108,7 @@ services:
     container_name: watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: [ "--interval", "30"]
+    command: ["--interval", "30"]
 
 volumes:
   linera-scylla-data:

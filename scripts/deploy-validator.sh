@@ -15,8 +15,7 @@
 #   --skip-genesis      - Skip downloading genesis configuration
 #   --force-genesis     - Force re-download of genesis configuration
 #   --custom-tag TAG    - Use custom image tag (for testing, no _release suffix)
-#   --xfs-path PATH     - XFS partition mount path for ScyllaDB (required)
-#   --skip-xfs-check    - Skip XFS validation (not recommended for production)
+#   --xfs-path PATH     - (Optional) XFS partition path for optimal ScyllaDB performance
 #   --help, -h          - Show help message
 #   --dry-run           - Show what would be done without executing
 #   --verbose, -v       - Enable verbose output
@@ -123,8 +122,7 @@ OPTIONS:
     --skip-genesis      Skip downloading genesis configuration
     --force-genesis     Force re-download of genesis configuration even if it exists
     --custom-tag TAG    Use custom image tag (for testing, no _release suffix)
-    --xfs-path PATH     XFS partition mount path for ScyllaDB (required)
-    --skip-xfs-check    Skip XFS validation (not recommended for production)
+    --xfs-path PATH     (Optional) XFS partition path for optimal ScyllaDB I/O performance
     --help, -h          Show this help message
     --dry-run           Show what would be done without executing
     --verbose, -v       Enable verbose output
@@ -163,8 +161,8 @@ ENVIRONMENT VARIABLES:
     NUM_SHARDS          Number of validator shards
                         Default: ${DEFAULT_NUM_SHARDS}
 
-    SCYLLA_XFS_PATH     XFS partition mount path for ScyllaDB data
-                        Default: None (must be provided via --xfs-path or env var)
+    SCYLLA_XFS_PATH     (Optional) XFS partition path for ScyllaDB performance optimization
+                        Default: None (uses Docker volumes, which is fine for most deployments)
 
 EXAMPLES:
     # Deploy using local build
@@ -593,46 +591,51 @@ validate_email() {
 	return 0
 }
 
-# Validate XFS partition
+# Check AIO configuration
+check_aio_configuration() {
+	local current_aio
+	local required_aio=1048576
+
+	log INFO "Checking AIO (Asynchronous I/O) configuration..."
+
+	if [ -r /proc/sys/fs/aio-max-nr ]; then
+		current_aio=$(cat /proc/sys/fs/aio-max-nr)
+
+		if [ "${current_aio}" -lt "${required_aio}" ]; then
+			log WARNING "AIO max-nr is ${current_aio}, ScyllaDB requires at least ${required_aio}"
+			log INFO "The scylla-setup container will attempt to configure this automatically"
+			log INFO "If it fails, you may need to run manually:"
+			log INFO "  echo ${required_aio} | sudo tee /proc/sys/fs/aio-max-nr"
+			log INFO "  echo 'fs.aio-max-nr = ${required_aio}' | sudo tee -a /etc/sysctl.conf"
+		else
+			log INFO "AIO configuration OK: ${current_aio} (minimum: ${required_aio})"
+		fi
+	else
+		log WARNING "Cannot check AIO configuration (may be running in container)"
+		log INFO "The scylla-setup container will configure the host system"
+	fi
+}
+
+# Check XFS partition (optional - informational only)
 validate_xfs_partition() {
 	local xfs_path="$1"
-	local skip_check="${2:-0}"
-
-	if [[ "${skip_check}" == "1" ]]; then
-		log WARNING "Skipping XFS validation (--skip-xfs-check specified)"
-		log WARNING "This is NOT recommended for production deployments"
-		return 0
-	fi
 
 	if [ -z "${xfs_path}" ]; then
-		log ERROR "XFS partition path not provided"
-		log ERROR "ScyllaDB requires an XFS formatted partition for optimal performance"
-		log ERROR "Please provide the path using --xfs-path or SCYLLA_XFS_PATH environment variable"
-		log ERROR ""
-		log ERROR "To prepare an XFS partition:"
-		log ERROR "  1. Create a partition: sudo fdisk /dev/sdX"
-		log ERROR "  2. Format as XFS: sudo mkfs.xfs /dev/sdX1"
-		log ERROR "  3. Create mount point: sudo mkdir -p /mnt/scylla-xfs"
-		log ERROR "  4. Mount partition: sudo mount /dev/sdX1 /mnt/scylla-xfs"
-		log ERROR "  5. Add to /etc/fstab for persistence"
-		log ERROR "  6. Run script with: --xfs-path /mnt/scylla-xfs"
-		return 1
+		# This shouldn't happen as we only call this when xfs_path is provided
+		return 0
 	fi
 
 	# Check if path exists
 	if [ ! -d "${xfs_path}" ]; then
-		log ERROR "XFS path does not exist: ${xfs_path}"
-		log ERROR "Please create and mount the XFS partition first"
-		return 1
+		log WARNING "Specified XFS path does not exist: ${xfs_path}"
+		log INFO "Ignoring XFS configuration, will use standard Docker volumes"
+		return 0
 	fi
 
 	# Check if path is mounted
 	if ! mountpoint -q "${xfs_path}" 2>/dev/null; then
-		log WARNING "Path ${xfs_path} does not appear to be a mount point"
-		log WARNING "ScyllaDB performs best with a dedicated XFS partition"
-		if ! confirm "Continue anyway?"; then
-			return 1
-		fi
+		log INFO "Path ${xfs_path} does not appear to be a mount point"
+		log INFO "For best results, use a dedicated XFS partition"
 	fi
 
 	# Check filesystem type
@@ -640,12 +643,11 @@ validate_xfs_partition() {
 	fs_type=$(df -T "${xfs_path}" 2>/dev/null | tail -1 | awk '{print $2}')
 
 	if [ "${fs_type}" != "xfs" ]; then
-		log WARNING "Filesystem at ${xfs_path} is ${fs_type}, not XFS"
-		log WARNING "ScyllaDB strongly recommends XFS for production deployments"
-		log WARNING "Performance may be significantly degraded with other filesystems"
-		if ! confirm "Continue with non-XFS filesystem?"; then
-			return 1
-		fi
+		log INFO "Filesystem at ${xfs_path} is ${fs_type}, not XFS"
+		log INFO "ScyllaDB performs best with XFS"
+		log INFO "It should still work with ${fs_type} if the disk(s) is fast enough"
+	else
+		log INFO "✓ XFS filesystem detected at ${xfs_path}"
 	fi
 
 	# Check available space (minimum 100GB recommended)
@@ -653,26 +655,28 @@ validate_xfs_partition() {
 	available_space=$(df -BG "${xfs_path}" 2>/dev/null | tail -1 | awk '{print $4}' | sed 's/G//')
 
 	if [ "${available_space}" -lt 100 ]; then
-		log WARNING "Only ${available_space}GB available at ${xfs_path}"
-		log WARNING "ScyllaDB recommends at least 100GB for production deployments"
-		if ! confirm "Continue with limited disk space?"; then
-			return 1
-		fi
+		log INFO "Available space at ${xfs_path}: ${available_space}GB"
+		log INFO "Note: ScyllaDB recommends at least 100GB for production deployments"
+	else
+		log INFO "✓ Available space: ${available_space}GB"
 	fi
 
 	# Check write permissions
-	local test_file="${xfs_path}/.scylla_write_test_$"
+	local test_file="${xfs_path}/.scylla_write_test_$$"
 	if ! touch "${test_file}" 2>/dev/null; then
-		log ERROR "Cannot write to ${xfs_path}"
-		log ERROR "Please ensure Docker has write permissions to this path"
-		log ERROR "You may need to adjust ownership: sudo chown -R $(id -u):$(id -g) ${xfs_path}"
-		return 1
+		log WARNING "Cannot write to ${xfs_path}"
+		log INFO "Docker may need write permissions to this path"
+		log INFO "You may need to run: sudo chown -R $(id -u):$(id -g) ${xfs_path}"
+		log INFO "Continuing with standard Docker volumes instead"
+		return 0
 	fi
 	rm -f "${test_file}"
 
-	log INFO "XFS partition validated successfully at: ${xfs_path}"
+	log INFO "Path configuration summary:"
+	log INFO "  Path: ${xfs_path}"
 	log INFO "  Filesystem: ${fs_type}"
 	log INFO "  Available space: ${available_space}GB"
+	log INFO "  Write permissions: OK"
 
 	return 0
 }
@@ -703,7 +707,7 @@ generate_xfs_volume_config() {
 	fi
 
 	# Generate docker-compose.override.yml
-	cat > "${compose_override}" <<EOF
+	cat >"${compose_override}" <<EOF
 # Docker Compose Override for XFS Volume
 # Generated by deploy-validator.sh on $(date -Iseconds)
 # XFS Path: ${xfs_path}
@@ -743,7 +747,6 @@ main() {
 	local verbose=0
 	local custom_tag=""
 	local xfs_path=""
-	local skip_xfs_check=0
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -778,10 +781,6 @@ main() {
 			fi
 			xfs_path="$2"
 			shift 2
-			;;
-		--skip-xfs-check)
-			skip_xfs_check=1
-			shift
 			;;
 		--dry-run)
 			dry_run=1
@@ -877,11 +876,17 @@ main() {
 		xfs_path="${SCYLLA_XFS_PATH:-}"
 	fi
 
-	# Validate XFS partition for ScyllaDB
-	if ! validate_xfs_partition "${xfs_path}" "${skip_xfs_check}"; then
-		log ERROR "XFS partition validation failed"
-		log ERROR "Use --skip-xfs-check to bypass (not recommended for production)"
-		exit 1
+	# Check AIO configuration for ScyllaDB
+	check_aio_configuration
+
+	# Check if XFS is configured (optional - just for information)
+	if [ -n "${xfs_path}" ]; then
+		log INFO "XFS path provided: ${xfs_path}"
+		validate_xfs_partition "${xfs_path}"
+	else
+		log INFO "No XFS path configured - ScyllaDB will use standard Docker volumes"
+		log INFO "This is perfectly fine for most deployments"
+		log INFO "For maximum I/O performance in production, consider using XFS (optional)"
 	fi
 
 	# Get Git information
@@ -957,7 +962,7 @@ main() {
 	fi
 
 	# Generate XFS volume configuration for Docker Compose
-	if [ -n "${xfs_path}" ] && [[ "${skip_xfs_check}" != "1" ]]; then
+	if [ -n "${xfs_path}" ]; then
 		if ! generate_xfs_volume_config "${xfs_path}"; then
 			log ERROR "Failed to generate XFS volume configuration"
 			exit 1
@@ -1034,7 +1039,6 @@ GENESIS_PATH_PREFIX=${genesis_path_prefix}
 GENESIS_URL=${genesis_url}
 SHARDS=${num_shards}
 XFS_PATH=${xfs_path:-N/A}
-XFS_CHECK_SKIPPED=${skip_xfs_check}
 EOF
 	log DEBUG "Deployment info saved to: ${deployment_info}"
 }
