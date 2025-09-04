@@ -15,6 +15,8 @@
 #   --skip-genesis      - Skip downloading genesis configuration
 #   --force-genesis     - Force re-download of genesis configuration
 #   --custom-tag TAG    - Use custom image tag (for testing, no _release suffix)
+#   --xfs-path PATH     - XFS partition mount path for ScyllaDB (required)
+#   --skip-xfs-check    - Skip XFS validation (not recommended for production)
 #   --help, -h          - Show help message
 #   --dry-run           - Show what would be done without executing
 #   --verbose, -v       - Enable verbose output
@@ -31,12 +33,14 @@
 #   PORT                - Internal validator port (default: 19100)
 #   METRICS_PORT        - Metrics collection port (default: 21100)
 #   NUM_SHARDS          - Number of validator shards (default: 4)
+#   SCYLLA_XFS_PATH     - XFS partition mount path for ScyllaDB data (required)
 #
 # Requirements:
 #   - Docker
 #   - Docker Compose (as plugin)
 #   - Git (for branch detection)
 #   - wget (for genesis download)
+#   - XFS formatted partition for ScyllaDB (production deployments)
 #
 # Author: Linera Team
 # Date: $(date +%Y-%m-%d)
@@ -64,6 +68,7 @@ readonly DEFAULT_NUM_SHARDS="4"
 readonly DEFAULT_DOCKER_REGISTRY="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
 readonly DEFAULT_IMAGE_NAME="linera"
 readonly DEFAULT_GENESIS_BUCKET="https://storage.googleapis.com/linera-io-dev-public"
+readonly DEFAULT_SCYLLA_DATA_DIR="/var/lib/scylla"
 
 # Configuration paths
 readonly VALIDATOR_CONFIG_PATH="docker/validator-config.toml"
@@ -118,6 +123,8 @@ OPTIONS:
     --skip-genesis      Skip downloading genesis configuration
     --force-genesis     Force re-download of genesis configuration even if it exists
     --custom-tag TAG    Use custom image tag (for testing, no _release suffix)
+    --xfs-path PATH     XFS partition mount path for ScyllaDB (required)
+    --skip-xfs-check    Skip XFS validation (not recommended for production)
     --help, -h          Show this help message
     --dry-run           Show what would be done without executing
     --verbose, -v       Enable verbose output
@@ -155,6 +162,9 @@ ENVIRONMENT VARIABLES:
 
     NUM_SHARDS          Number of validator shards
                         Default: ${DEFAULT_NUM_SHARDS}
+
+    SCYLLA_XFS_PATH     XFS partition mount path for ScyllaDB data
+                        Default: None (must be provided via --xfs-path or env var)
 
 EXAMPLES:
     # Deploy using local build
@@ -378,7 +388,7 @@ download_genesis_config() {
 	# Check if we should skip genesis download
 	if [[ "${skip_genesis}" == "1" ]]; then
 		log INFO "Skipping genesis configuration download (--skip-genesis specified)"
-		
+
 		# Validate that genesis.json exists when skipping download
 		if [ ! -f "${config_path}" ]; then
 			log ERROR "Genesis configuration file not found at: ${config_path}"
@@ -388,17 +398,17 @@ download_genesis_config() {
 			log ERROR "  2. Place a valid genesis.json file at: ${config_path}"
 			return 1
 		fi
-		
+
 		# Validate that the file is not empty
 		if [ ! -s "${config_path}" ]; then
 			log ERROR "Genesis configuration file is empty at: ${config_path}"
 			log ERROR "Please provide a valid genesis.json file or remove --skip-genesis to download it"
 			return 1
 		fi
-		
+
 		# Try to validate it's valid JSON (basic check)
 		if command_exists python3; then
-			if ! python3 -m json.tool "${config_path}" > /dev/null 2>&1; then
+			if ! python3 -m json.tool "${config_path}" >/dev/null 2>&1; then
 				log ERROR "Genesis configuration file is not valid JSON: ${config_path}"
 				log ERROR "Please provide a valid genesis.json file or remove --skip-genesis to download it"
 				return 1
@@ -407,7 +417,7 @@ download_genesis_config() {
 		else
 			log WARNING "Cannot validate JSON format (python3 not available), assuming file is valid"
 		fi
-		
+
 		log INFO "Using existing genesis configuration at: ${config_path}"
 		return 0
 	fi
@@ -583,6 +593,147 @@ validate_email() {
 	return 0
 }
 
+# Validate XFS partition
+validate_xfs_partition() {
+	local xfs_path="$1"
+	local skip_check="${2:-0}"
+
+	if [[ "${skip_check}" == "1" ]]; then
+		log WARNING "Skipping XFS validation (--skip-xfs-check specified)"
+		log WARNING "This is NOT recommended for production deployments"
+		return 0
+	fi
+
+	if [ -z "${xfs_path}" ]; then
+		log ERROR "XFS partition path not provided"
+		log ERROR "ScyllaDB requires an XFS formatted partition for optimal performance"
+		log ERROR "Please provide the path using --xfs-path or SCYLLA_XFS_PATH environment variable"
+		log ERROR ""
+		log ERROR "To prepare an XFS partition:"
+		log ERROR "  1. Create a partition: sudo fdisk /dev/sdX"
+		log ERROR "  2. Format as XFS: sudo mkfs.xfs /dev/sdX1"
+		log ERROR "  3. Create mount point: sudo mkdir -p /mnt/scylla-xfs"
+		log ERROR "  4. Mount partition: sudo mount /dev/sdX1 /mnt/scylla-xfs"
+		log ERROR "  5. Add to /etc/fstab for persistence"
+		log ERROR "  6. Run script with: --xfs-path /mnt/scylla-xfs"
+		return 1
+	fi
+
+	# Check if path exists
+	if [ ! -d "${xfs_path}" ]; then
+		log ERROR "XFS path does not exist: ${xfs_path}"
+		log ERROR "Please create and mount the XFS partition first"
+		return 1
+	fi
+
+	# Check if path is mounted
+	if ! mountpoint -q "${xfs_path}" 2>/dev/null; then
+		log WARNING "Path ${xfs_path} does not appear to be a mount point"
+		log WARNING "ScyllaDB performs best with a dedicated XFS partition"
+		if ! confirm "Continue anyway?"; then
+			return 1
+		fi
+	fi
+
+	# Check filesystem type
+	local fs_type
+	fs_type=$(df -T "${xfs_path}" 2>/dev/null | tail -1 | awk '{print $2}')
+
+	if [ "${fs_type}" != "xfs" ]; then
+		log WARNING "Filesystem at ${xfs_path} is ${fs_type}, not XFS"
+		log WARNING "ScyllaDB strongly recommends XFS for production deployments"
+		log WARNING "Performance may be significantly degraded with other filesystems"
+		if ! confirm "Continue with non-XFS filesystem?"; then
+			return 1
+		fi
+	fi
+
+	# Check available space (minimum 100GB recommended)
+	local available_space
+	available_space=$(df -BG "${xfs_path}" 2>/dev/null | tail -1 | awk '{print $4}' | sed 's/G//')
+
+	if [ "${available_space}" -lt 100 ]; then
+		log WARNING "Only ${available_space}GB available at ${xfs_path}"
+		log WARNING "ScyllaDB recommends at least 100GB for production deployments"
+		if ! confirm "Continue with limited disk space?"; then
+			return 1
+		fi
+	fi
+
+	# Check write permissions
+	local test_file="${xfs_path}/.scylla_write_test_$"
+	if ! touch "${test_file}" 2>/dev/null; then
+		log ERROR "Cannot write to ${xfs_path}"
+		log ERROR "Please ensure Docker has write permissions to this path"
+		log ERROR "You may need to adjust ownership: sudo chown -R $(id -u):$(id -g) ${xfs_path}"
+		return 1
+	fi
+	rm -f "${test_file}"
+
+	log INFO "XFS partition validated successfully at: ${xfs_path}"
+	log INFO "  Filesystem: ${fs_type}"
+	log INFO "  Available space: ${available_space}GB"
+
+	return 0
+}
+
+# Generate docker-compose override for XFS volume
+generate_xfs_volume_config() {
+	local xfs_path="$1"
+	local compose_override="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/docker-compose.override.yml"
+
+	log INFO "Generating Docker Compose override for XFS volume..."
+
+	if [[ "${DRY_RUN:-0}" == "1" ]]; then
+		log INFO "[DRY RUN] Would create override at: ${compose_override}"
+		log INFO "[DRY RUN] Would mount ${xfs_path} to ScyllaDB container"
+		return 0
+	fi
+
+	# Create ScyllaDB data directory
+	local scylla_data_dir="${xfs_path}/scylla-data"
+	if [ ! -d "${scylla_data_dir}" ]; then
+		log INFO "Creating ScyllaDB data directory: ${scylla_data_dir}"
+		mkdir -p "${scylla_data_dir}"
+		# Set proper permissions for ScyllaDB container (UID 999)
+		chown -R 999:999 "${scylla_data_dir}" 2>/dev/null || {
+			log WARNING "Could not set ownership to ScyllaDB user (999:999)"
+			log WARNING "You may need to run: sudo chown -R 999:999 ${scylla_data_dir}"
+		}
+	fi
+
+	# Generate docker-compose.override.yml
+	cat > "${compose_override}" <<EOF
+# Docker Compose Override for XFS Volume
+# Generated by deploy-validator.sh on $(date -Iseconds)
+# XFS Path: ${xfs_path}
+
+services:
+  scylla:
+    volumes:
+      # Override default volume with XFS bind mount
+      - ${scylla_data_dir}:/var/lib/scylla
+    # Additional ScyllaDB optimizations for XFS
+    environment:
+      SCYLLA_AUTO_CONF: 1
+      # Enable direct I/O on XFS
+      SCYLLA_DIRECT_IO_MODE: "true"
+      # Set appropriate cache size (adjust based on available RAM)
+      SCYLLA_CACHE_SIZE: "4G"
+
+# Remove the default local volume since we're using bind mount
+volumes:
+  linera-scylla-data:
+    external: true
+    name: unused-scylla-volume
+EOF
+
+	log INFO "Docker Compose override generated at: ${compose_override}"
+	log INFO "ScyllaDB will use XFS partition at: ${scylla_data_dir}"
+
+	return 0
+}
+
 # -----------------------------------------------------------------------------
 # Main Script Logic
 # -----------------------------------------------------------------------------
@@ -597,6 +748,8 @@ main() {
 	local dry_run=0
 	local verbose=0
 	local custom_tag=""
+	local xfs_path=""
+	local skip_xfs_check=0
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -623,6 +776,18 @@ main() {
 			fi
 			custom_tag="$2"
 			shift 2
+			;;
+		--xfs-path)
+			if [[ $# -lt 2 ]]; then
+				log ERROR "--xfs-path requires an argument"
+				exit 1
+			fi
+			xfs_path="$2"
+			shift 2
+			;;
+		--skip-xfs-check)
+			skip_xfs_check=1
+			shift
 			;;
 		--dry-run)
 			dry_run=1
@@ -713,6 +878,18 @@ main() {
 	# Verify dependencies
 	verify_dependencies
 
+	# Get XFS path from environment if not provided via CLI
+	if [ -z "${xfs_path}" ]; then
+		xfs_path="${SCYLLA_XFS_PATH:-}"
+	fi
+
+	# Validate XFS partition for ScyllaDB
+	if ! validate_xfs_partition "${xfs_path}" "${skip_xfs_check}"; then
+		log ERROR "XFS partition validation failed"
+		log ERROR "Use --skip-xfs-check to bypass (not recommended for production)"
+		exit 1
+	fi
+
 	# Get Git information
 	IFS='|' read -r branch_name formatted_branch git_commit <<<"$(get_git_info)"
 
@@ -771,7 +948,7 @@ main() {
 
 	# Generate genesis URL if not provided
 	local genesis_bucket="${GENESIS_BUCKET:-$DEFAULT_GENESIS_BUCKET}"
-	local genesis_path_prefix="${GENESIS_PATH_PREFIX:-${branch_name}}"
+	local genesis_path_prefix="${GENESIS_PATH_PREFIX:-${formatted_branch}}"
 	local genesis_url="${GENESIS_URL:-${genesis_bucket}/${genesis_path_prefix}/genesis.json}"
 
 	log INFO "Genesis configuration:"
@@ -783,6 +960,14 @@ main() {
 	if ! generate_validator_config "${host}" "${port}" "${metrics_port}" "${num_shards}"; then
 		log ERROR "Failed to generate validator configuration"
 		exit 1
+	fi
+
+	# Generate XFS volume configuration for Docker Compose
+	if [ -n "${xfs_path}" ] && [[ "${skip_xfs_check}" != "1" ]]; then
+		if ! generate_xfs_volume_config "${xfs_path}"; then
+			log ERROR "Failed to generate XFS volume configuration"
+			exit 1
+		fi
 	fi
 
 	# Download genesis configuration
@@ -815,6 +1000,9 @@ main() {
 	log INFO "Public Key: ${public_key}"
 	log INFO "Validator URL: https://${host}"
 	log INFO "ACME Email: ${ACME_EMAIL}"
+	if [ -n "${xfs_path}" ]; then
+		log INFO "ScyllaDB XFS Path: ${xfs_path}"
+	fi
 	echo ""
 	log WARNING "=== IMPORTANT: Next Steps for External Validators ==="
 	log WARNING "1. Save your public key securely - you'll need it for registration"
@@ -851,6 +1039,8 @@ GENESIS_BUCKET=${genesis_bucket}
 GENESIS_PATH_PREFIX=${genesis_path_prefix}
 GENESIS_URL=${genesis_url}
 SHARDS=${num_shards}
+XFS_PATH=${xfs_path:-N/A}
+XFS_CHECK_SKIPPED=${skip_xfs_check}
 EOF
 	log DEBUG "Deployment info saved to: ${deployment_info}"
 }
