@@ -427,7 +427,8 @@ impl AmmApp {
 
 #[cfg(with_revm)]
 fn get_zero_operation(operation: impl alloy_sol_types::SolCall) -> Result<Vec<u8>, bcs::Error> {
-    linera_base::vm::get_evm_operation(Amount::ZERO, operation.abi_encode())
+    let operation = linera_base::vm::EvmOperation::new(Amount::ZERO, operation.abi_encode());
+    operation.to_bytes()
 }
 
 #[cfg(with_revm)]
@@ -819,8 +820,8 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     // Doing an operation with a non-zero amount
     let operation = null_operationCall {};
     let amount_operation = Amount::from(2);
-    let operation = linera_base::vm::get_evm_operation(amount_operation, operation.abi_encode())?;
-    let operation = EvmQuery::Operation(operation);
+    let operation = linera_base::vm::EvmOperation::new(amount_operation, operation.abi_encode());
+    let operation = EvmQuery::Operation(operation.to_bytes()?);
     app_a.run_json_query(operation).await?;
 
     let balance_a_app_after2 = node_service_a.balance(&account_a_app).await?;

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
-    vm::{get_evm_operation, EvmInstantiation, EvmQuery},
+    vm::{EvmInstantiation, EvmOperation, EvmQuery},
 };
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
@@ -24,7 +24,8 @@ use linera_execution::{
 use linera_views::{context::Context as _, views::View};
 
 fn get_operation(operation: impl alloy_sol_types::SolCall) -> Result<Vec<u8>, bcs::Error> {
-    get_evm_operation(Amount::ZERO, operation.abi_encode())
+    let operation = EvmOperation::new(Amount::ZERO, operation.abi_encode());
+    operation.to_bytes()
 }
 
 #[tokio::test]
