@@ -454,9 +454,10 @@ where
                                 .body(request.body)
                                 .headers(headers);
                             #[cfg(not(web))]
-                            let request = request.timeout(linera_base::time::Duration::from_millis(
-                                committee.policy().http_request_timeout_ms,
-                            ));
+                            let request =
+                                request.timeout(linera_base::time::Duration::from_millis(
+                                    committee.policy().http_request_timeout_ms,
+                                ));
 
                             let response = request.send().await?;
 
