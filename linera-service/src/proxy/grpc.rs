@@ -727,7 +727,8 @@ where
                 .into_iter()
                 .collect();
             for (lite_cert_bytes, confirmed_block_bytes) in certificates {
-                if grpc_message_limiter.add(lite_cert_bytes.len() + confirmed_block_bytes.len()) > 0
+                if grpc_message_limiter
+                    .fits_raw(lite_cert_bytes.len() + confirmed_block_bytes.len())
                 {
                     returned_certificates.push(RawCertificate {
                         lite_certificate: lite_cert_bytes,
@@ -833,19 +834,18 @@ impl<T> GrpcMessageLimiter<T> {
         U: TryFrom<T, Error = GrpcProtoConversionError> + Message,
     {
         let required = U::try_from(el).map(|proto| proto.encoded_len())?;
-        if required > self.remaining {
-            return Ok(false);
-        }
-        self.remaining -= required;
-        Ok(true)
+        Ok(self.fits_raw(required))
     }
 
     /// Adds the given number of bytes to the remaining capacity.
     ///
-    /// Returns the new remaining capacity.
-    fn add(&mut self, bytes_len: usize) -> usize {
+    /// Returns whether we managed to fit the element.
+    fn fits_raw(&mut self, bytes_len: usize) -> bool {
+        if self.remaining < bytes_len {
+            return false;
+        }
         self.remaining = self.remaining.saturating_sub(bytes_len);
-        self.remaining
+        true
     }
 }
 
