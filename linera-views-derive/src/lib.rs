@@ -138,15 +138,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
         });
     }
 
-    let first_name_quote = match name_quotes.first() {
-        Some(name) => name,
-        None => {
-            return Err(Error::new_spanned(
-                &input,
-                "Struct must have at least one field",
-            ))
-        }
-    };
+    let first_name_quote = name_quotes.first().ok_or(Error::new_spanned(
+        &input,
+        "Struct must have at least one field",
+    ))?;
 
     let load_metrics = if root && cfg!(feature = "metrics") {
         quote! {
@@ -409,96 +404,85 @@ fn generate_clonable_view_code(input: ItemStruct) -> Result<TokenStream2, Error>
     })
 }
 
-#[proc_macro_derive(View, attributes(view))]
-pub fn derive_view(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ItemStruct);
-    match generate_view_code(input, false) {
+fn to_token_stream(input: Result<TokenStream2, Error>) -> TokenStream {
+    match input {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),
     }
+}
+
+#[proc_macro_derive(View, attributes(view))]
+pub fn derive_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    let input = generate_view_code(input, false);
+    to_token_stream(input)
+}
+
+fn derive_hash_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
+    let mut stream = generate_view_code(input.clone(), false)?;
+    stream.extend(generate_hash_view_code(input)?);
+    Ok(stream)
 }
 
 #[proc_macro_derive(HashableView, attributes(view))]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
 
-    let mut stream = match generate_view_code(input.clone(), false) {
-        Ok(tokens) => tokens,
-        Err(err) => return err.to_compile_error().into(),
-    };
+    let stream = derive_hash_view_token_stream2(input);
+    to_token_stream(stream)
+}
 
-    match generate_hash_view_code(input) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    stream.into()
+fn derive_root_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
+    let mut stream = generate_view_code(input.clone(), true)?;
+    stream.extend(generate_root_view_code(input)?);
+    Ok(stream)
 }
 
 #[proc_macro_derive(RootView, attributes(view))]
 pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
 
-    let mut stream = match generate_view_code(input.clone(), true) {
-        Ok(tokens) => tokens,
-        Err(err) => return err.to_compile_error().into(),
-    };
+    let stream = derive_root_view_token_stream2(input);
+    to_token_stream(stream)
+}
 
-    match generate_root_view_code(input) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    stream.into()
+fn derive_crypto_hash_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
+    let mut stream = generate_view_code(input.clone(), false)?;
+    stream.extend(generate_hash_view_code(input.clone())?);
+    stream.extend(generate_crypto_hash_code(input)?);
+    Ok(stream)
 }
 
 #[proc_macro_derive(CryptoHashView, attributes(view))]
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
 
-    let mut stream = match generate_view_code(input.clone(), false) {
-        Ok(tokens) => tokens,
-        Err(err) => return err.to_compile_error().into(),
-    };
+    let stream = derive_crypto_hash_view_token_stream2(input);
+    to_token_stream(stream)
+}
 
-    match generate_hash_view_code(input.clone()) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    match generate_crypto_hash_code(input) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    stream.into()
+fn derive_crypto_hash_root_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
+    let mut stream = generate_view_code(input.clone(), true)?;
+    stream.extend(generate_root_view_code(input.clone())?);
+    stream.extend(generate_hash_view_code(input.clone())?);
+    stream.extend(generate_crypto_hash_code(input)?);
+    Ok(stream)
 }
 
 #[proc_macro_derive(CryptoHashRootView, attributes(view))]
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
 
-    let mut stream = match generate_view_code(input.clone(), true) {
-        Ok(tokens) => tokens,
-        Err(err) => return err.to_compile_error().into(),
-    };
+    let stream = derive_crypto_hash_root_view_token_stream2(input);
+    to_token_stream(stream)
+}
 
-    match generate_root_view_code(input.clone()) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    match generate_hash_view_code(input.clone()) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    match generate_crypto_hash_code(input) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    stream.into()
+#[cfg(test)]
+fn derive_hashable_root_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
+    let mut stream = generate_view_code(input.clone(), true)?;
+    stream.extend(generate_root_view_code(input.clone())?);
+    stream.extend(generate_hash_view_code(input)?);
+    Ok(stream)
 }
 
 #[proc_macro_derive(HashableRootView, attributes(view))]
@@ -506,22 +490,8 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
 
-    let mut stream = match generate_view_code(input.clone(), true) {
-        Ok(tokens) => tokens,
-        Err(err) => return err.to_compile_error().into(),
-    };
-
-    match generate_root_view_code(input.clone()) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    match generate_hash_view_code(input) {
-        Ok(tokens) => stream.extend(tokens),
-        Err(err) => return err.to_compile_error().into(),
-    }
-
-    stream.into()
+    let stream = derive_hashable_root_view_token_stream2(input);
+    to_token_stream(stream)
 }
 
 #[proc_macro_derive(ClonableView, attributes(view))]
