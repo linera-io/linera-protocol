@@ -66,21 +66,17 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
 
     let attrs: StructAttrs = deluxe::parse_attributes(&input)
         .map_err(|e| Error::new_spanned(&input, format!("Failed to parse attributes: {}", e)))?;
-    let context = match attrs.context {
-        Some(ctx) => ctx,
-        None => match input.generics.type_params().next() {
-            Some(param) => {
-                let ident = &param.ident;
-                parse_quote! { #ident }
-            }
-            None => {
-                return Err(Error::new_spanned(
-                        &input,
-                        "Missing context: either add a generic type parameter or specify the context with #[view(context = YourContextType)]"
-                    ));
-            }
-        },
-    };
+    let context = attrs.context.or_else(|| {
+        input.generics.type_params().next().map(|param| {
+            let ident = &param.ident;
+            parse_quote! { #ident }
+        })
+    }).ok_or_else(|| {
+        Error::new_spanned(
+            &input,
+            "Missing context: either add a generic type parameter or specify the context with #[view(context = YourContextType)]"
+        )
+    })?;
 
     let struct_name = &input.ident;
     let field_types: Vec<_> = input.fields.iter().map(|field| &field.ty).collect();
