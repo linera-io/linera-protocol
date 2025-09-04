@@ -10,7 +10,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use dashmap::{DashMap, DashSet};
 use futures::{stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
@@ -56,8 +55,8 @@ use crate::{
 #[derive(Clone, Default)]
 pub(crate) struct DummyIndexer {
     pub(crate) fault_guard: Arc<AtomicBool>,
-    pub(crate) blobs: Arc<DashSet<BlobId>>,
-    pub(crate) state: Arc<DashSet<CryptoHash>>,
+    pub(crate) blobs: Arc<papaya::HashSet<BlobId>>,
+    pub(crate) state: Arc<papaya::HashSet<CryptoHash>>,
 }
 
 impl DummyIndexer {
@@ -109,7 +108,8 @@ impl Indexer for DummyIndexer {
                             payload: Some(Payload::Block(indexer_block)),
                         }) => match TryInto::<ConfirmedBlockCertificate>::try_into(indexer_block) {
                             Ok(block) => {
-                                moved_state.insert(block.hash());
+                                let pinned = moved_state.pin();
+                                pinned.insert(block.hash());
                                 return Some((Ok(()), stream));
                             }
                             Err(e) => return Some((Err(Status::from_error(e)), stream)),
@@ -118,7 +118,8 @@ impl Indexer for DummyIndexer {
                             payload: Some(Payload::Blob(indexer_blob)),
                         }) => {
                             let blob = Blob::try_from(indexer_blob).unwrap();
-                            moved_blobs_state.insert(blob.id());
+                            let pinned = moved_blobs_state.pin();
+                            pinned.insert(blob.id());
                         }
                         Ok(_) => continue,
                         Err(e) => return Some((Err(e), stream)),
@@ -136,10 +137,10 @@ impl Indexer for DummyIndexer {
 pub(crate) struct DummyValidator {
     pub(crate) validator_port: u16,
     pub(crate) fault_guard: Arc<AtomicBool>,
-    pub(crate) blobs: Arc<DashSet<BlobId>>,
-    pub(crate) state: Arc<DashSet<CryptoHash>>,
+    pub(crate) blobs: Arc<papaya::HashSet<BlobId>>,
+    pub(crate) state: Arc<papaya::HashSet<CryptoHash>>,
     // Tracks whether a block has been received multiple times.
-    pub(crate) duplicate_blocks: Arc<DashMap<CryptoHash, u64>>,
+    pub(crate) duplicate_blocks: Arc<papaya::HashMap<CryptoHash, u64>>,
 }
 
 impl DummyValidator {
@@ -147,9 +148,9 @@ impl DummyValidator {
         Self {
             validator_port: port,
             fault_guard: Arc::new(AtomicBool::new(false)),
-            blobs: Arc::new(DashSet::new()),
-            state: Arc::new(DashSet::new()),
-            duplicate_blocks: Arc::new(DashMap::new()),
+            blobs: Arc::new(papaya::HashSet::new()),
+            state: Arc::new(papaya::HashSet::new()),
+            duplicate_blocks: Arc::new(papaya::HashMap::new()),
         }
     }
 
@@ -194,7 +195,8 @@ impl ValidatorNode for DummyValidator {
         let mut missing_blobs = Vec::new();
         let created_blobs = req.certificate.inner().block().created_blob_ids();
         for blob in req.certificate.inner().required_blob_ids() {
-            if !self.blobs.contains(&blob) && !created_blobs.contains(&blob) {
+            let pinned = self.blobs.pin();
+            if !pinned.contains(&blob) && !created_blobs.contains(&blob) {
                 missing_blobs.push(blob);
             }
         }
@@ -220,15 +222,21 @@ impl ValidatorNode for DummyValidator {
         let response = if missing_blobs.is_empty() {
             let response = ChainInfoResponse::new(chain_info, None).try_into()?;
             for blob in created_blobs {
-                self.blobs.insert(blob);
+                let pinned = self.blobs.pin();
+                pinned.insert(blob);
             }
 
-            if !self.state.insert(req.certificate.hash()) {
+            let pinned = self.state.pin();
+            if !pinned.insert(req.certificate.hash()) {
                 tracing::warn!(validator=?self.validator_port, certificate=?req.certificate.hash(), "duplicate block received");
-                self.duplicate_blocks
-                    .entry(req.certificate.hash())
-                    .and_modify(|count| *count += 1)
-                    .or_insert(2);
+                let pinned = self.duplicate_blocks.pin();
+                pinned.compute(req.certificate.hash(), |existing| {
+                    if let Some((_key, count)) = existing {
+                        papaya::Operation::Insert::<u64, ()>(count + 1)
+                    } else {
+                        papaya::Operation::Insert::<u64, ()>(2)
+                    }
+                });
             }
 
             response
@@ -251,7 +259,8 @@ impl ValidatorNode for DummyValidator {
             request.into_inner().try_into()?;
         let blob = Blob::new(content);
         let id = blob.id();
-        self.blobs.insert(id);
+        let pinned = self.blobs.pin();
+        pinned.insert(id);
         Ok(Response::new(id.try_into()?))
     }
 
@@ -378,10 +387,10 @@ impl ValidatorNode for DummyValidator {
 #[async_trait]
 pub trait TestDestination {
     fn kind(&self) -> DestinationKind;
-    fn blobs(&self) -> &DashSet<BlobId>;
+    fn blobs(&self) -> &papaya::HashSet<BlobId>;
     fn set_faulty(&self);
     fn unset_faulty(&self);
-    fn state(&self) -> &DashSet<CryptoHash>;
+    fn state(&self) -> &papaya::HashSet<CryptoHash>;
     async fn start(
         self,
         port: u16,
@@ -395,7 +404,7 @@ impl TestDestination for DummyIndexer {
         DestinationKind::Indexer
     }
 
-    fn blobs(&self) -> &DashSet<BlobId> {
+    fn blobs(&self) -> &papaya::HashSet<BlobId> {
         self.blobs.as_ref()
     }
 
@@ -407,7 +416,7 @@ impl TestDestination for DummyIndexer {
         self.fault_guard.store(false, Ordering::Release);
     }
 
-    fn state(&self) -> &DashSet<CryptoHash> {
+    fn state(&self) -> &papaya::HashSet<CryptoHash> {
         self.state.as_ref()
     }
 
@@ -426,7 +435,7 @@ impl TestDestination for DummyValidator {
         DestinationKind::Validator
     }
 
-    fn blobs(&self) -> &DashSet<BlobId> {
+    fn blobs(&self) -> &papaya::HashSet<BlobId> {
         self.blobs.as_ref()
     }
 
@@ -438,7 +447,7 @@ impl TestDestination for DummyValidator {
         self.fault_guard.store(false, Ordering::Release);
     }
 
-    fn state(&self) -> &DashSet<CryptoHash> {
+    fn state(&self) -> &papaya::HashSet<CryptoHash> {
         self.state.as_ref()
     }
 

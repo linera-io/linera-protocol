@@ -13,6 +13,7 @@ use crate::data_types::ChainInfo;
 
 /// The state of our interaction with a particular chain: how far we have synchronized it and
 /// whether we are currently attempting to propose a new block.
+#[derive(Clone)]
 pub struct ChainClientState {
     /// The block we are currently trying to propose for the next height, if any.
     ///

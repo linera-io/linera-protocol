@@ -9,7 +9,6 @@ use std::{
     },
 };
 
-use dashmap::DashMap;
 use linera_base::{
     data_types::BlockHeight,
     identifiers::{BlobId, ChainId},
@@ -129,13 +128,13 @@ where
 
 #[derive(Debug, Clone)]
 pub(super) struct DestinationStates {
-    states: Arc<DashMap<DestinationId, Arc<AtomicU64>>>,
+    states: Arc<papaya::HashMap<DestinationId, Arc<AtomicU64>>>,
 }
 
 impl Default for DestinationStates {
     fn default() -> Self {
         Self {
-            states: Arc::new(DashMap::new()),
+            states: Arc::new(papaya::HashMap::new()),
         }
     }
 }
@@ -151,11 +150,13 @@ impl Serialize for DestinationStates {
     where
         S: serde::Serializer,
     {
-        let states = self
-            .states
-            .iter()
-            .map(|entry| (entry.key().clone(), entry.value().load(Ordering::Acquire)))
-            .collect::<HashMap<_, _>>();
+        let states = {
+            let pinned = self.states.pin();
+            pinned
+                .iter()
+                .map(|(key, value)| (key.clone(), value.load(Ordering::Acquire)))
+                .collect::<HashMap<_, _>>()
+        };
 
         SerializableDestinationStates::serialize(
             &SerializableDestinationStates { states },
@@ -171,9 +172,12 @@ impl<'de> Deserialize<'de> for DestinationStates {
     {
         let SerializableDestinationStates { states } =
             SerializableDestinationStates::deserialize(deserializer)?;
-        let map = DashMap::new();
-        for (id, state) in states {
-            map.insert(id, Arc::new(AtomicU64::new(state)));
+        let map = papaya::HashMap::new();
+        {
+            let pinned = map.pin();
+            for (id, state) in states {
+                pinned.insert(id, Arc::new(AtomicU64::new(state)));
+            }
         }
         Ok(Self {
             states: Arc::from(map),
@@ -186,24 +190,26 @@ impl DestinationStates {
         let states = destinations
             .into_iter()
             .map(|id| (id, Arc::new(AtomicU64::new(0))))
-            .collect::<DashMap<_, _>>();
+            .collect::<papaya::HashMap<_, _>>();
         Self {
             states: Arc::from(states),
         }
     }
 
     pub fn load_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
-        self.states
+        let pinned = self.states.pin();
+        pinned
             .get(id)
             .unwrap_or_else(|| panic!("{:?} not found in DestinationStates", id))
             .clone()
     }
 
     pub fn get(&self, id: &DestinationId) -> Option<Arc<AtomicU64>> {
-        self.states.get(id).map(|state| state.clone())
+        let pinned = self.states.pin();
+        pinned.get(id).cloned()
     }
 
     pub fn insert(&mut self, id: DestinationId, state: Arc<AtomicU64>) {
-        self.states.insert(id, state);
+        self.states.pin().insert(id, state);
     }
 }

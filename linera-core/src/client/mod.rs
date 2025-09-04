@@ -7,16 +7,11 @@ use std::{
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
-    ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
 };
 
 use chain_client_state::ChainClientState;
 use custom_debug_derive::Debug;
-use dashmap::{
-    mapref::one::{MappedRef as DashMapMappedRef, Ref as DashMapRef, RefMut as DashMapRefMut},
-    DashMap,
-};
 use futures::{
     future::{self, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
@@ -204,7 +199,7 @@ pub struct Client<Env: Environment> {
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
     /// Chain state for the managed chains.
-    chains: DashMap<ChainId, ChainClientState>,
+    chains: papaya::HashMap<ChainId, ChainClientState>,
     /// Configuration options.
     options: ChainClientOptions,
 }
@@ -236,7 +231,7 @@ impl<Env: Environment> Client<Env> {
         Self {
             environment,
             local_node,
-            chains: DashMap::new(),
+            chains: papaya::HashMap::new(),
             admin_id,
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
@@ -281,8 +276,9 @@ impl<Env: Environment> Client<Env> {
     ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
-        if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
-            e.insert(ChainClientState::new(pending_proposal));
+        let pinned = self.chains.pin_owned();
+        if pinned.get(&chain_id).is_none() {
+            pinned.insert(chain_id, ChainClientState::new(pending_proposal));
         }
 
         ChainClient {
@@ -523,9 +519,16 @@ impl<Env: Environment> Client<Env> {
     /// Updates the latest block and next block height and round information from the chain info.
     #[instrument(level = "trace", skip_all, fields(chain_id = format!("{:.8}", info.chain_id)))]
     fn update_from_info(&self, info: &ChainInfo) {
-        if let Some(mut state) = self.chains.get_mut(&info.chain_id) {
-            state.value_mut().update_from_info(info);
-        }
+        let pinned = self.chains.pin_owned();
+        pinned.compute(info.chain_id, |state| {
+            if let Some((_key, state)) = state {
+                let mut state = state.clone();
+                state.update_from_info(info);
+                papaya::Operation::Insert::<ChainClientState, ()>(state)
+            } else {
+                papaya::Operation::Abort::<ChainClientState, ()>(())
+            }
+        });
     }
 
     /// Handles the certificate in the local node and the resulting notifications.
@@ -1582,62 +1585,51 @@ impl ChainClientError {
     }
 }
 
-// We never want to pass the DashMap references over an `await` point, for fear of
-// deadlocks. The following construct will cause a (relatively) helpful error if we do.
-
-pub struct Unsend<T> {
-    inner: T,
-    _phantom: std::marker::PhantomData<*mut u8>,
-}
-
-impl<T> Unsend<T> {
-    fn new(inner: T) -> Self {
-        Self {
-            inner,
-            _phantom: Default::default(),
-        }
-    }
-}
-
-impl<T: Deref> Deref for Unsend<T> {
-    type Target = T::Target;
-    fn deref(&self) -> &T::Target {
-        self.inner.deref()
-    }
-}
-
-impl<T: DerefMut> DerefMut for Unsend<T> {
-    fn deref_mut(&mut self) -> &mut T::Target {
-        self.inner.deref_mut()
-    }
-}
-
-pub type ChainGuard<'a, T> = Unsend<DashMapRef<'a, ChainId, T>>;
-pub type ChainGuardMut<'a, T> = Unsend<DashMapRefMut<'a, ChainId, T>>;
-pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainClientState, T>>;
-
 impl<Env: Environment> ChainClient<Env> {
-    /// Gets a shared reference to the chain's state.
+    /// Gets the client mutex from the chain's state.
     #[instrument(level = "trace", skip(self))]
-    pub fn state(&self) -> ChainGuard<ChainClientState> {
-        Unsend::new(
-            self.client
-                .chains
-                .get(&self.chain_id)
-                .expect("Chain client constructed for invalid chain"),
-        )
+    fn client_mutex(&self) -> Arc<tokio::sync::Mutex<()>> {
+        self.client
+            .chains
+            .pin_owned()
+            .get(&self.chain_id)
+            .expect("Chain client constructed for invalid chain")
+            .client_mutex()
     }
 
-    /// Gets a mutable reference to the state.
-    /// Beware: this will block any other reference to any chain's state!
+    /// Gets the pending proposal from the chain's state.
     #[instrument(level = "trace", skip(self))]
-    fn state_mut(&self) -> ChainGuardMut<ChainClientState> {
-        Unsend::new(
-            self.client
-                .chains
-                .get_mut(&self.chain_id)
-                .expect("Chain client constructed for invalid chain"),
-        )
+    fn pending_proposal_internal(&self) -> Option<PendingProposal> {
+        self.client
+            .chains
+            .pin_owned()
+            .get(&self.chain_id)
+            .expect("Chain client constructed for invalid chain")
+            .pending_proposal()
+            .clone()
+    }
+
+    /// Updates the chain's state using a closure.
+    #[instrument(level = "trace", skip(self, f))]
+    fn update_state<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut ChainClientState) -> R,
+    {
+        let chains = self.client.chains.pin_owned();
+        let mut result = None;
+        let mut closure = Some(f);
+        chains.compute(self.chain_id, |state| {
+            if let Some((_key, state)) = state {
+                let mut state = state.clone();
+                if let Some(f) = closure.take() {
+                    result = Some(f(&mut state));
+                }
+                papaya::Operation::Insert::<ChainClientState, ()>(state)
+            } else {
+                panic!("Chain client constructed for invalid chain")
+            }
+        });
+        result.expect("Chain client constructed for invalid chain")
     }
 
     /// Gets a reference to the client's signer instance.
@@ -1675,10 +1667,10 @@ impl<Env: Environment> ChainClient<Env> {
         self.client.admin_id
     }
 
-    /// Gets a guarded reference to the next pending block.
+    /// Gets the next pending block.
     #[instrument(level = "trace", skip(self))]
-    pub fn pending_proposal(&self) -> ChainGuardMapped<Option<PendingProposal>> {
-        Unsend::new(self.state().inner.map(|state| state.pending_proposal()))
+    pub fn pending_proposal(&self) -> Option<PendingProposal> {
+        self.pending_proposal_internal()
     }
 
     /// Gets the currently preferred owner for signing the blocks.
@@ -2440,7 +2432,7 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
-        let mutex = self.state().client_mutex();
+        let mutex = self.client_mutex();
         let _guard = mutex.lock_owned().await;
         // TOOD: We shouldn't need to call this explicitly.
         match self.process_pending_block_without_prepare().await? {
@@ -2490,7 +2482,7 @@ impl<Env: Environment> ChainClient<Env> {
         identity: AccountOwner,
     ) -> Result<ConfirmedBlock, ChainClientError> {
         ensure!(
-            self.state().pending_proposal().is_none(),
+            self.pending_proposal_internal().is_none(),
             ChainClientError::BlockProposalError(
                 "Client state already has a pending block; \
                     use the `linera retry-pending-block` command to commit that first"
@@ -2532,7 +2524,7 @@ impl<Env: Environment> ChainClient<Env> {
             )
             .await?;
         let (proposed_block, _) = block.clone().into_proposal();
-        self.state_mut().set_pending_proposal(proposed_block, blobs);
+        self.update_state(move |state| state.set_pending_proposal(proposed_block, blobs));
         Ok(ConfirmedBlock::new(block))
     }
 
@@ -2837,7 +2829,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let pending_proposal = self.state().pending_proposal().clone();
+        let pending_proposal = self.pending_proposal_internal();
         let (block, blobs) = if let Some(locking) = &info.manager.requested_locking {
             match &**locking {
                 LockingBlock::Regular(certificate) => {
@@ -3069,7 +3061,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Clears the information on any operation that previously failed.
     #[instrument(level = "trace")]
     pub fn clear_pending_proposal(&self) {
-        self.state_mut().clear_pending_proposal();
+        self.update_state(|state| state.clear_pending_proposal());
     }
 
     /// Processes a confirmed block for which this chain is a recipient and updates validators.

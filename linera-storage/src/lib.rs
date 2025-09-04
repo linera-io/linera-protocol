@@ -8,7 +8,6 @@ mod db_storage;
 use std::{collections::BTreeMap, ops::RangeInclusive, sync::Arc};
 
 use async_trait::async_trait;
-use dashmap::DashMap;
 use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
@@ -427,8 +426,8 @@ pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
-    user_services: Arc<DashMap<ApplicationId, UserServiceCode>>,
+    user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
+    user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -445,11 +444,11 @@ where
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<DashMap<ApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<DashMap<ApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
     }
 
@@ -459,11 +458,12 @@ where
         txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError> {
         let application_id = description.into();
-        if let Some(contract) = self.user_contracts.get(&application_id) {
+        let pinned = self.user_contracts.pin_owned();
+        if let Some(contract) = pinned.get(&application_id) {
             return Ok(contract.clone());
         }
         let contract = self.storage.load_contract(description, txn_tracker).await?;
-        self.user_contracts.insert(application_id, contract.clone());
+        pinned.insert(application_id, contract.clone());
         Ok(contract)
     }
 
@@ -473,11 +473,12 @@ where
         txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError> {
         let application_id = description.into();
-        if let Some(service) = self.user_services.get(&application_id) {
+        let pinned = self.user_services.pin_owned();
+        if let Some(service) = pinned.get(&application_id) {
             return Ok(service.clone());
         }
         let service = self.storage.load_service(description, txn_tracker).await?;
-        self.user_services.insert(application_id, service.clone());
+        pinned.insert(application_id, service.clone());
         Ok(service)
     }
 

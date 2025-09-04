@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use dashmap::DashMap;
 use linera_base::time::Duration;
 
 use super::{transport, GrpcError};
@@ -10,14 +9,14 @@ use super::{transport, GrpcError};
 #[derive(Clone, Default)]
 pub struct GrpcConnectionPool {
     options: transport::Options,
-    channels: DashMap<String, transport::Channel>,
+    channels: papaya::HashMap<String, transport::Channel>,
 }
 
 impl GrpcConnectionPool {
     pub fn new(options: transport::Options) -> Self {
         Self {
             options,
-            channels: DashMap::default(),
+            channels: papaya::HashMap::default(),
         }
     }
 
@@ -35,10 +34,14 @@ impl GrpcConnectionPool {
     /// reusing the connection), or creates one if needed. New channels do not create a
     /// connection immediately.
     pub fn channel(&self, address: String) -> Result<transport::Channel, GrpcError> {
-        Ok(self
-            .channels
-            .entry(address.clone())
-            .or_try_insert_with(|| transport::create_channel(address, &self.options))?
-            .clone())
+        let pinned = self.channels.pin();
+        match pinned.get(&address) {
+            Some(channel) => Ok(channel.clone()),
+            None => {
+                let channel = transport::create_channel(address.clone(), &self.options)?;
+                pinned.insert(address, channel.clone());
+                Ok(channel)
+            }
+        }
     }
 }

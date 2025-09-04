@@ -230,9 +230,11 @@ mod test {
         sleep(Duration::from_secs(4)).await;
 
         for CanonicalBlock { blobs, block_hash } in state {
-            assert!(destination.state().contains(&block_hash));
+            let pinned = destination.state().pin();
+            assert!(pinned.contains(&block_hash));
             for blob in blobs {
-                assert!(destination.blobs().contains(&blob));
+                let pinned = destination.blobs().pin();
+                assert!(pinned.contains(&blob));
             }
         }
 
@@ -405,12 +407,15 @@ mod test {
         notifier.send(first_notification)?;
         sleep(Duration::from_secs(4)).await;
 
-        assert!(dummy_validator.state.contains(&first_notification.hash));
+        {
+            let pinned = dummy_validator.state.pin();
+            assert!(pinned.contains(&first_notification.hash));
+        }
         // We expect the validator to receive the confired certificate only once.
-        assert!(dummy_validator
-            .duplicate_blocks
-            .get(&first_notification.hash)
-            .is_none());
+        {
+            let pinned = dummy_validator.duplicate_blocks.pin();
+            assert!(pinned.get(&first_notification.hash).is_none());
+        }
 
         ///////////
         // Add new validator to the committee.
@@ -432,25 +437,31 @@ mod test {
         notifier.send(second_notification)?;
         sleep(Duration::from_secs(4)).await;
 
-        assert!(second_dummy.state.contains(&second_notification.hash));
+        {
+            let pinned = second_dummy.state.pin();
+            assert!(pinned.contains(&second_notification.hash));
+        }
         // We expect the new validator to receive the new confirmed certificate only once.
-        assert!(second_dummy
-            .duplicate_blocks
-            .get(&second_notification.hash)
-            .is_none());
+        {
+            let pinned = second_dummy.duplicate_blocks.pin();
+            assert!(pinned.get(&second_notification.hash).is_none());
+        }
         // The first certificate should not be duplicated.
-        assert!(second_dummy
-            .duplicate_blocks
-            .get(&first_notification.hash)
-            .is_none());
+        {
+            let pinned = second_dummy.duplicate_blocks.pin();
+            assert!(pinned.get(&first_notification.hash).is_none());
+        }
 
         // The first validator should receive the new committee as well.
-        assert!(dummy_validator.state.contains(&second_notification.hash));
+        {
+            let pinned = dummy_validator.state.pin();
+            assert!(pinned.contains(&second_notification.hash));
+        }
         // We expect the first validator to receive the new confirmed certificate only once.
-        assert!(dummy_validator
-            .duplicate_blocks
-            .get(&second_notification.hash)
-            .is_none());
+        {
+            let pinned = dummy_validator.duplicate_blocks.pin();
+            assert!(pinned.get(&second_notification.hash).is_none());
+        }
 
         ///////////
         // Remove the validator from the committee.
@@ -472,19 +483,25 @@ mod test {
         notifier.send(third_notification)?;
         sleep(Duration::from_secs(4)).await;
         // The first validator should not receive the new confirmed certificate.
-        assert!(!dummy_validator.state.contains(&third_notification.hash));
+        {
+            let pinned = dummy_validator.state.pin();
+            assert!(!pinned.contains(&third_notification.hash));
+        }
         // We expect the first validator to receive the new confirmed certificate only once.
-        assert!(dummy_validator
-            .duplicate_blocks
-            .get(&third_notification.hash)
-            .is_none());
+        {
+            let pinned = dummy_validator.duplicate_blocks.pin();
+            assert!(pinned.get(&third_notification.hash).is_none());
+        }
         // The second validator should receive the new confirmed certificate.
-        assert!(second_dummy.state.contains(&third_notification.hash));
+        {
+            let pinned = second_dummy.state.pin();
+            assert!(pinned.contains(&third_notification.hash));
+        }
         // We expect the second validator to receive the new confirmed certificate only once.
-        assert!(second_dummy
-            .duplicate_blocks
-            .get(&third_notification.hash)
-            .is_none());
+        {
+            let pinned = second_dummy.duplicate_blocks.pin();
+            assert!(pinned.get(&third_notification.hash).is_none());
+        }
 
         cancellation_token.cancel();
         block_processor_handle.join().unwrap()?;
