@@ -52,7 +52,6 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         new_pubkey.into(),
         builder.admin_description().unwrap().clone(),
         clock.current_time(),
-        Epoch::ZERO,
     ));
     wallet.chains_mut().next().unwrap().pending_proposal = Some(PendingProposal {
         block: ProposedBlock {

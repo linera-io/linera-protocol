@@ -191,8 +191,8 @@ impl UserChain {
         owner: AccountOwner,
         description: ChainDescription,
         timestamp: Timestamp,
-        epoch: Epoch,
     ) -> Self {
+        let epoch = description.config().epoch;
         Self {
             chain_id: description.into(),
             owner: Some(owner),
@@ -205,7 +205,7 @@ impl UserChain {
     }
 
     /// Creates an entry for a chain that we don't own. The timestamp must be the genesis
-    /// timestamp or earlier. The Epoch is unknwon.
+    /// timestamp or earlier. The Epoch is `None`.
     pub fn make_other(chain_id: ChainId, timestamp: Timestamp) -> Self {
         Self {
             chain_id,

@@ -19,7 +19,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
-    data_types::{ApplicationPermissions, Epoch, Timestamp},
+    data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
@@ -2149,19 +2149,16 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 ),
             )?;
             let admin_chain_description = genesis_config.admin_chain_description();
-            let epoch = Epoch::ZERO; // By definition, genesis is the first.
             let mut chains = vec![UserChain::make_initial(
                 admin_public_key.into(),
                 admin_chain_description.clone(),
                 timestamp,
-                epoch,
             )];
             for _ in 0..*num_other_initial_chains {
                 // Create keys.
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let description = genesis_config.add_root_chain(public_key, *initial_funding);
-                let chain =
-                    UserChain::make_initial(public_key.into(), description, timestamp, epoch);
+                let chain = UserChain::make_initial(public_key.into(), description, timestamp);
                 chains.push(chain);
             }
             genesis_config.persist().await?;
