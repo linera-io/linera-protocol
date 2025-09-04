@@ -419,7 +419,7 @@ where
                     }) =>
                     {
                         // The chain is missing epoch events. Send all blocks.
-                        let query = ChainInfoQuery::new(chain_id);
+                        let query = ChainInfoQuery::new(chain_id).no_network_actions();
                         self.remote_node.handle_chain_info_query(query).await?
                     }
                     Err(err) => return Err(err),
@@ -431,11 +431,11 @@ where
                     "send_chain_information called with height {target_block_height},
                     but {chain_id:.8} does not have that block"
                 );
-                let query = ChainInfoQuery::new(chain_id);
+                let query = ChainInfoQuery::new(chain_id).no_network_actions();
                 self.remote_node.handle_chain_info_query(query).await?
             }
         } else {
-            let query = ChainInfoQuery::new(chain_id);
+            let query = ChainInfoQuery::new(chain_id).no_network_actions();
             self.remote_node.handle_chain_info_query(query).await?
         };
         let initial_block_height = remote_info.next_block_height;
@@ -546,7 +546,9 @@ where
                 })?
             }
             CommunicateAction::RequestTimeout { round, height, .. } => {
-                let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
+                let query = ChainInfoQuery::new(chain_id)
+                    .with_timeout(height, round)
+                    .no_network_actions();
                 let info = self.remote_node.handle_chain_info_query(query).await?;
                 info.manager.timeout_vote.ok_or_else(|| {
                     NodeError::MissingVoteInValidatorResponse("request a timeout".into())

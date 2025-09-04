@@ -365,6 +365,7 @@ ChainInfoQuery:
     - request_sent_certificate_hashes_by_heights:
         SEQ:
           TYPENAME: BlockHeight
+    - create_network_actions: BOOL
 ChainInfoResponse:
   STRUCT:
     - info:
