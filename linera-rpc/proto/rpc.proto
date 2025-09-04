@@ -213,6 +213,9 @@ message ChainInfoQuery {
 
   // Query for certificate hashes at block heights sent from the chain.
   optional bytes request_sent_certificate_hashes_by_heights = 11;
+
+  // Whether to create network actions as part of the query.
+  optional bool create_network_actions = 12;
 }
 
 // An authenticated proposal for a new block.

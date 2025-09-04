@@ -95,6 +95,14 @@ pub struct ChainInfoQuery {
     /// Query for certificate hashes at block heights.
     #[debug(skip_if = Vec::is_empty)]
     pub request_sent_certificate_hashes_by_heights: Vec<BlockHeight>,
+    #[serde(default = "default_true")]
+    pub create_network_actions: bool,
+}
+
+// Default value for create_network_actions.
+// Default for bool returns false.
+fn default_true() -> bool {
+    true
 }
 
 impl ChainInfoQuery {
@@ -111,6 +119,7 @@ impl ChainInfoQuery {
             request_leader_timeout: None,
             request_fallback: false,
             request_sent_certificate_hashes_by_heights: Vec::new(),
+            create_network_actions: true,
         }
     }
 
@@ -156,6 +165,11 @@ impl ChainInfoQuery {
 
     pub fn with_fallback(mut self) -> Self {
         self.request_fallback = true;
+        self
+    }
+
+    pub fn no_network_actions(mut self) -> Self {
+        self.create_network_actions = false;
         self
     }
 }
