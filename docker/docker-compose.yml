@@ -24,8 +24,9 @@ services:
     volumes:
       - /proc:/host/proc
       - /sys:/host/sys
+      - /etc/sysctl.d:/host/sysctl.d
       - ./compose-scylla-setup.sh:/setup.sh:ro
-    command: ["/bin/bash", "/setup.sh"]
+    command: ["/bin/bash", "/setup.sh", "--persist"]
     restart: "no"
 
   scylla:
