@@ -142,6 +142,17 @@ pub trait Storage: Sized {
         hashes: I,
     ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
 
+    /// Reads certificates by hashes.
+    ///
+    /// Returns a vector of tuples where the first element is a lite certificate
+    /// and the second element is confirmed block.
+    ///
+    /// It does not check if all hashes all returned.
+    async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
+        &self,
+        hashes: I,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>;
+
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
