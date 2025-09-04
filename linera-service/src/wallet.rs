@@ -18,6 +18,7 @@ pub async fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = C
             Cell::new("Chain ID").add_attribute(Attribute::Bold),
             Cell::new("Latest Block").add_attribute(Attribute::Bold),
         ]);
+
     for chain_id in chain_ids {
         let Some(user_chain) = wallet.chains.get(&chain_id) else {
             panic!("Chain {} not found.", chain_id);
@@ -39,10 +40,15 @@ async fn update_table_with_chain(
     user_chain: &UserChain,
     is_default_chain: bool,
 ) {
+    let epoch = user_chain.epoch;
     let chain_id_cell = if is_default_chain {
         Cell::new(format!("{}", chain_id)).fg(Color::Green)
     } else {
         Cell::new(format!("{}", chain_id))
+    };
+    let epoch_str = match epoch {
+        None => "-".to_string(),
+        Some(epoch) => format!("{}", epoch),
     };
     let account_owner = user_chain.owner;
     table.add_row(vec![
@@ -51,7 +57,8 @@ async fn update_table_with_chain(
             r#"AccountOwner:       {}
 Block Hash:         {}
 Timestamp:          {}
-Next Block Height:  {}"#,
+Next Block Height:  {}
+Epoch:              {}"#,
             account_owner
                 .as_ref()
                 .map(|o| o.to_string())
@@ -61,7 +68,8 @@ Next Block Height:  {}"#,
                 .map(|bh| bh.to_string())
                 .unwrap_or_else(|| "-".to_string()),
             user_chain.timestamp,
-            user_chain.next_block_height
+            user_chain.next_block_height,
+            epoch_str
         )),
     ]);
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use futures::Future;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{BlockHeight, Timestamp},
+    data_types::{BlockHeight, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -107,8 +107,9 @@ where
         chain_id: ChainId,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
+        epoch: Epoch,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain(chain_id, owner, timestamp)
+        self.update_wallet_for_new_chain(chain_id, owner, timestamp, epoch)
             .await
     }
 
@@ -306,6 +307,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         chain_id: ChainId,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
+        epoch: Epoch,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.mutate_wallet(|w| {
@@ -316,6 +318,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
                     timestamp,
                     next_block_height: BlockHeight::ZERO,
                     pending_proposal: None,
+                    epoch: Some(epoch),
                 })
             })
             .await?;
@@ -388,7 +391,14 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         }
 
         self.wallet_mut()
-            .mutate(|w| w.assign_new_chain_to_owner(owner, chain_id, chain_description.timestamp()))
+            .mutate(|w| {
+                w.assign_new_chain_to_owner(
+                    owner,
+                    chain_id,
+                    chain_description.timestamp(),
+                    chain_description.config().epoch,
+                )
+            })
             .await
             .map_err(|e| error::Inner::Persistence(Box::new(e)))?
             .context("assigning new chain")?;

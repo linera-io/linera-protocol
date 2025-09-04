@@ -14,7 +14,7 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoHash, Signer},
-    data_types::{ChainDescription, Timestamp},
+    data_types::{ChainDescription, Epoch, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
     task::NonBlockingFuture,
 };
@@ -107,6 +107,7 @@ pub trait ClientContext {
         chain_id: ChainId,
         owner: Option<AccountOwner>,
         timestamp: Timestamp,
+        epoch: Epoch,
     ) -> Result<(), Error>;
 
     async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
@@ -339,6 +340,7 @@ impl<C: ClientContext> ChainListener<C> {
                             new_chain_id,
                             Some(chain_owner),
                             block.header.timestamp,
+                            block.header.epoch,
                         )
                         .await?;
                     new_ids.insert(new_chain_id, ListeningMode::FullChain);
