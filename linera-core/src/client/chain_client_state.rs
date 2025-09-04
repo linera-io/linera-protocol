@@ -13,7 +13,6 @@ use crate::data_types::ChainInfo;
 
 /// The state of our interaction with a particular chain: how far we have synchronized it and
 /// whether we are currently attempting to propose a new block.
-#[derive(Clone)]
 pub struct ChainClientState {
     /// The block we are currently trying to propose for the next height, if any.
     ///
@@ -30,6 +29,15 @@ impl ChainClientState {
         ChainClientState {
             pending_proposal,
             client_mutex: Arc::default(),
+        }
+    }
+
+    /// Clone the state. This must only be used to update the state, and one of the two clones
+    /// must be dropped.
+    pub fn clone_for_update(&self) -> ChainClientState {
+        ChainClientState {
+            pending_proposal: self.pending_proposal.clone(),
+            client_mutex: Arc::clone(&self.client_mutex),
         }
     }
 

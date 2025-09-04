@@ -522,7 +522,7 @@ impl<Env: Environment> Client<Env> {
         let pinned = self.chains.pin();
         pinned.compute(info.chain_id, |state| {
             if let Some((_key, state)) = state {
-                let mut state = state.clone();
+                let mut state = state.clone_for_update();
                 state.update_from_info(info);
                 papaya::Operation::Insert::<ChainClientState, ()>(state)
             } else {
@@ -1611,25 +1611,17 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Updates the chain's state using a closure.
     #[instrument(level = "trace", skip(self, f))]
-    fn update_state<F, R>(&self, f: F) -> R
+    fn update_state<F>(&self, f: F)
     where
-        F: FnOnce(&mut ChainClientState) -> R,
+        F: Fn(&mut ChainClientState),
     {
         let chains = self.client.chains.pin();
-        let mut result = None;
-        let mut closure = Some(f);
         chains.compute(self.chain_id, |state| {
-            if let Some((_key, state)) = state {
-                let mut state = state.clone();
-                if let Some(f) = closure.take() {
-                    result = Some(f(&mut state));
-                }
-                papaya::Operation::Insert::<ChainClientState, ()>(state)
-            } else {
-                panic!("Chain client constructed for invalid chain")
-            }
+            let (_key, state) = state.expect("Chain client constructed for invalid chain");
+            let mut state = state.clone_for_update();
+            f(&mut state);
+            papaya::Operation::Insert::<ChainClientState, ()>(state)
         });
-        result.expect("Chain client constructed for invalid chain")
     }
 
     /// Gets a reference to the client's signer instance.
@@ -2524,7 +2516,9 @@ impl<Env: Environment> ChainClient<Env> {
             )
             .await?;
         let (proposed_block, _) = block.clone().into_proposal();
-        self.update_state(move |state| state.set_pending_proposal(proposed_block, blobs));
+        self.update_state(|state| {
+            state.set_pending_proposal(proposed_block.clone(), blobs.clone())
+        });
         Ok(ConfirmedBlock::new(block))
     }
 
