@@ -1068,19 +1068,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        let pinned = self.blobs.pin();
-        match pinned.get(&blob_id) {
-            None => Ok(None),
-            Some(blob) => Ok(Some(blob.clone())),
-        }
+        Ok(self.blobs.pin().get(&blob_id).cloned())
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        let pinned = self.events.pin();
-        match pinned.get(&event_id) {
-            None => Ok(None),
-            Some(event) => Ok(Some(event.clone())),
-        }
+        Ok(self.events.pin().get(&event_id).cloned())
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
@@ -1099,10 +1091,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
         let pinned = self.blobs.pin();
         let committee_blob_bytes = pinned
-            .iter()
-            .find(|(_, blob)| blob.content().blob_type() == BlobType::Committee)
+            .values()
+            .find(|blob| blob.content().blob_type() == BlobType::Committee)
             .ok_or_else(|| ViewError::NotFound("committee not found".to_owned()))?
-            .1
             .bytes()
             .to_vec();
         let committee: Committee = bcs::from_bytes(&committee_blob_bytes)?;
@@ -1115,13 +1106,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let pinned = self.blobs.pin();
-        Ok(pinned.contains_key(&blob_id))
+        Ok(self.blobs.pin().contains_key(&blob_id))
     }
 
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
-        let pinned = self.events.pin();
-        Ok(pinned.contains_key(&event_id))
+        Ok(self.events.pin().contains_key(&event_id))
     }
 
     #[cfg(with_testing)]

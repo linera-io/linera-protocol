@@ -32,7 +32,7 @@ impl ChainClientState {
         }
     }
 
-    /// Clone the state. This must only be used to update the state, and one of the two clones
+    /// Clones the state. This must only be used to update the state, and one of the two clones
     /// must be dropped.
     pub fn clone_for_update(&self) -> ChainClientState {
         ChainClientState {

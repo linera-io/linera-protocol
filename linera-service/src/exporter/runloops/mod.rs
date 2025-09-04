@@ -230,11 +230,9 @@ mod test {
         sleep(Duration::from_secs(4)).await;
 
         for CanonicalBlock { blobs, block_hash } in state {
-            let pinned = destination.state().pin();
-            assert!(pinned.contains(&block_hash));
+            assert!(destination.state().pin().contains(&block_hash));
             for blob in blobs {
-                let pinned = destination.blobs().pin();
-                assert!(pinned.contains(&blob));
+                assert!(destination.blobs().pin().contains(&blob));
             }
         }
 

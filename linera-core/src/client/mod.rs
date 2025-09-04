@@ -276,14 +276,9 @@ impl<Env: Environment> Client<Env> {
     ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
-        let pinned = self.chains.pin();
-        pinned.compute(chain_id, |state| {
-            if state.is_none() {
-                papaya::Operation::Insert(ChainClientState::new(pending_proposal.clone()))
-            } else {
-                papaya::Operation::Abort(())
-            }
-        });
+        self.chains
+            .pin()
+            .get_or_insert_with(chain_id, || ChainClientState::new(pending_proposal.clone()));
 
         ChainClient {
             client: self.clone(),
@@ -523,15 +518,10 @@ impl<Env: Environment> Client<Env> {
     /// Updates the latest block and next block height and round information from the chain info.
     #[instrument(level = "trace", skip_all, fields(chain_id = format!("{:.8}", info.chain_id)))]
     fn update_from_info(&self, info: &ChainInfo) {
-        let pinned = self.chains.pin();
-        pinned.compute(info.chain_id, |state| {
-            if let Some((_key, state)) = state {
-                let mut state = state.clone_for_update();
-                state.update_from_info(info);
-                papaya::Operation::Insert(state)
-            } else {
-                papaya::Operation::Abort(())
-            }
+        self.chains.pin().update(info.chain_id, |state| {
+            let mut state = state.clone_for_update();
+            state.update_from_info(info);
+            state
         });
     }
 
@@ -1620,12 +1610,13 @@ impl<Env: Environment> ChainClient<Env> {
         F: Fn(&mut ChainClientState),
     {
         let chains = self.client.chains.pin();
-        chains.compute(self.chain_id, |state| {
-            let (_key, state) = state.expect("Chain client constructed for invalid chain");
-            let mut state = state.clone_for_update();
-            f(&mut state);
-            papaya::Operation::Insert::<_, ()>(state)
-        });
+        chains
+            .update(self.chain_id, |state| {
+                let mut state = state.clone_for_update();
+                f(&mut state);
+                state
+            })
+            .expect("Chain client constructed for invalid chain");
     }
 
     /// Gets a reference to the client's signer instance.

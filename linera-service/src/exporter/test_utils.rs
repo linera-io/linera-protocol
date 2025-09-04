@@ -108,8 +108,7 @@ impl Indexer for DummyIndexer {
                             payload: Some(Payload::Block(indexer_block)),
                         }) => match TryInto::<ConfirmedBlockCertificate>::try_into(indexer_block) {
                             Ok(block) => {
-                                let pinned = moved_state.pin();
-                                pinned.insert(block.hash());
+                                moved_state.pin().insert(block.hash());
                                 return Some((Ok(()), stream));
                             }
                             Err(e) => return Some((Err(Status::from_error(e)), stream)),
@@ -118,8 +117,7 @@ impl Indexer for DummyIndexer {
                             payload: Some(Payload::Blob(indexer_blob)),
                         }) => {
                             let blob = Blob::try_from(indexer_blob).unwrap();
-                            let pinned = moved_blobs_state.pin();
-                            pinned.insert(blob.id());
+                            moved_blobs_state.pin().insert(blob.id());
                         }
                         Ok(_) => continue,
                         Err(e) => return Some((Err(e), stream)),
@@ -195,8 +193,7 @@ impl ValidatorNode for DummyValidator {
         let mut missing_blobs = Vec::new();
         let created_blobs = req.certificate.inner().block().created_blob_ids();
         for blob in req.certificate.inner().required_blob_ids() {
-            let pinned = self.blobs.pin();
-            if !pinned.contains(&blob) && !created_blobs.contains(&blob) {
+            if !self.blobs.pin().contains(&blob) && !created_blobs.contains(&blob) {
                 missing_blobs.push(blob);
             }
         }
@@ -222,21 +219,13 @@ impl ValidatorNode for DummyValidator {
         let response = if missing_blobs.is_empty() {
             let response = ChainInfoResponse::new(chain_info, None).try_into()?;
             for blob in created_blobs {
-                let pinned = self.blobs.pin();
-                pinned.insert(blob);
+                self.blobs.pin().insert(blob);
             }
 
-            let pinned = self.state.pin();
-            if !pinned.insert(req.certificate.hash()) {
+            if !self.state.pin().insert(req.certificate.hash()) {
                 tracing::warn!(validator=?self.validator_port, certificate=?req.certificate.hash(), "duplicate block received");
                 let pinned = self.duplicate_blocks.pin();
-                pinned.compute(req.certificate.hash(), |existing| {
-                    if let Some((_key, count)) = existing {
-                        papaya::Operation::Insert::<u64, ()>(count + 1)
-                    } else {
-                        papaya::Operation::Insert::<u64, ()>(2)
-                    }
-                });
+                pinned.update_or_insert(req.certificate.hash(), |count| count + 1, 2);
             }
 
             response
@@ -259,8 +248,7 @@ impl ValidatorNode for DummyValidator {
             request.into_inner().try_into()?;
         let blob = Blob::new(content);
         let id = blob.id();
-        let pinned = self.blobs.pin();
-        pinned.insert(id);
+        self.blobs.pin().insert(id);
         Ok(Response::new(id.try_into()?))
     }
 

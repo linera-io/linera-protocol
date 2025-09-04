@@ -205,8 +205,7 @@ impl DestinationStates {
     }
 
     pub fn get(&self, id: &DestinationId) -> Option<Arc<AtomicU64>> {
-        let pinned = self.states.pin();
-        pinned.get(id).cloned()
+        self.states.pin().get(id).cloned()
     }
 
     pub fn insert(&mut self, id: DestinationId, state: Arc<AtomicU64>) {

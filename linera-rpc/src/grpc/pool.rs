@@ -35,13 +35,10 @@ impl GrpcConnectionPool {
     /// connection immediately.
     pub fn channel(&self, address: String) -> Result<transport::Channel, GrpcError> {
         let pinned = self.channels.pin();
-        match pinned.get(&address) {
-            Some(channel) => Ok(channel.clone()),
-            None => {
-                let channel = transport::create_channel(address.clone(), &self.options)?;
-                pinned.insert(address, channel.clone());
-                Ok(channel)
-            }
+        if let Some(channel) = pinned.get(&address) {
+            return Ok(channel.clone());
         }
+        let channel = transport::create_channel(address.clone(), &self.options)?;
+        Ok(pinned.get_or_insert(address, channel).clone())
     }
 }

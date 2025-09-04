@@ -268,7 +268,7 @@ impl TestValidator {
             .await;
 
         let pinned = self.chains.pin();
-        for (_chain_id, chain) in pinned.iter() {
+        for chain in pinned.values() {
             if chain.id() != self.admin_chain_id {
                 chain
                     .add_block(|block| {

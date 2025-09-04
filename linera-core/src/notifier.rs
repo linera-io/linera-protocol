@@ -30,15 +30,11 @@ impl<N> ChannelNotifier<N> {
     fn add_sender(&self, chain_ids: Vec<ChainId>, sender: &UnboundedSender<N>) {
         let pinned = self.inner.pin();
         for id in chain_ids {
-            pinned.compute(id, |senders| {
-                let mut senders = if let Some((_key, senders)) = senders {
-                    senders.clone()
-                } else {
-                    Vec::new()
-                };
-                senders.push(sender.clone());
-                papaya::Operation::Insert::<_, ()>(senders)
-            });
+            pinned.update_or_insert_with(
+                id,
+                |senders| senders.iter().cloned().chain([sender.clone()]).collect(),
+                || vec![sender.clone()],
+            );
         }
     }
 
@@ -66,8 +62,7 @@ where
 {
     /// Notifies all the clients waiting for a notification from a given chain.
     pub fn notify_chain(&self, chain_id: &ChainId, notification: &N) {
-        let pinned = self.inner.pin();
-        pinned.compute(*chain_id, |senders| {
+        self.inner.pin().compute(*chain_id, |senders| {
             let Some((_key, senders)) = senders else {
                 trace!("Chain {chain_id:?} has no subscribers.");
                 return papaya::Operation::Abort(());
