@@ -67,7 +67,7 @@ impl DummyIndexer {
         cancellation_token: CancellationToken,
     ) -> Result<(), anyhow::Error> {
         let endpoint = get_address(port);
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        let (health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter.set_serving::<IndexerServer<Self>>().await;
 
         Server::builder()
@@ -159,7 +159,7 @@ impl DummyValidator {
         cancellation_token: CancellationToken,
     ) -> Result<(), anyhow::Error> {
         let endpoint = get_address(port);
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        let (health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter
             .set_serving::<ValidatorNodeServer<Self>>()
             .await;
