@@ -22,6 +22,8 @@ use futures::{
     SinkExt, StreamExt,
 };
 use guard::INTEGRATION_TEST_GUARD;
+#[cfg(with_revm)]
+use linera_base::vm::{EvmInstantiation, EvmOperation, EvmQuery};
 use linera_base::{
     crypto::{CryptoHash, Secp256k1SecretKey},
     data_types::Amount,
@@ -34,9 +36,6 @@ use linera_sdk::{
     abis::fungible::NativeFungibleTokenAbi,
     linera_base_types::{AccountSecretKey, BlobContent, BlockHeight, DataBlobHash},
 };
-#[cfg(with_revm)]
-use linera_base::vm::{EvmOperation, EvmInstantiation, EvmQuery};
-
 #[cfg(any(
     feature = "dynamodb",
     feature = "scylladb",

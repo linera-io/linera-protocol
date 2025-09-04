@@ -10,6 +10,7 @@ use derive_more::Display;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
 use crate::data_types::Amount;
 
 #[derive(
@@ -78,7 +79,10 @@ pub struct EvmOperation {
 
 impl EvmOperation {
     pub fn new(amount: Amount, argument: Vec<u8>) -> Self {
-        Self { value: amount.into(), argument }
+        Self {
+            value: amount.into(),
+            argument,
+        }
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, bcs::Error> {
