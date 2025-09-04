@@ -90,18 +90,6 @@ impl EvmOperation {
     }
 }
 
-
-/*
-pub fn get_evm_operation(
-    amount: crate::data_types::Amount,
-    argument: Vec<u8>,
-) -> Result<Vec<u8>, bcs::Error> {
-    let value = amount.into();
-    let evm_operation = EvmOperation { value, argument };
-    bcs::to_bytes(&evm_operation)
-}
-*/
-
 /// The instantiation argument to EVM smart contracts.
 /// `value` is the amount being transferred.
 #[derive(Default, Serialize, Deserialize)]

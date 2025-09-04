@@ -34,6 +34,9 @@ use linera_sdk::{
     abis::fungible::NativeFungibleTokenAbi,
     linera_base_types::{AccountSecretKey, BlobContent, BlockHeight, DataBlobHash},
 };
+#[cfg(with_revm)]
+use linera_base::vm::{EvmOperation, EvmInstantiation, EvmQuery};
+
 #[cfg(any(
     feature = "dynamodb",
     feature = "scylladb",
@@ -426,9 +429,9 @@ impl AmmApp {
 }
 
 #[cfg(with_revm)]
-fn get_zero_operation(operation: impl alloy_sol_types::SolCall) -> Result<Vec<u8>, bcs::Error> {
-    let operation = linera_base::vm::EvmOperation::new(Amount::ZERO, operation.abi_encode());
-    operation.to_bytes()
+fn get_zero_operation(operation: impl alloy_sol_types::SolCall) -> Result<EvmQuery, bcs::Error> {
+    let operation = EvmOperation::new(Amount::ZERO, operation.abi_encode());
+    operation.to_evm_query()
 }
 
 #[cfg(with_revm)]
@@ -440,7 +443,6 @@ fn get_zero_operation(operation: impl alloy_sol_types::SolCall) -> Result<Vec<u8
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -499,7 +501,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     let operation = incrementCall { input: increment };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application.run_json_query(operation).await?;
 
     let result = application.run_json_query(query).await?;
@@ -524,7 +525,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::U256;
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{
         load_solidity_example_by_name, read_evm_address_entry, read_evm_u256_entry,
         temporary_write_evm_module,
@@ -592,14 +592,12 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
         initialValue: U256::from(42),
     };
     let operation0 = get_zero_operation(operation0)?;
-    let operation0 = EvmQuery::Operation(operation0);
     application.run_json_query(operation0).await?;
 
     let operation1 = createCounterCall {
         initialValue: U256::from(149),
     };
     let operation1 = get_zero_operation(operation1)?;
-    let operation1 = EvmQuery::Operation(operation1);
     application.run_json_query(operation1).await?;
 
     let query0 = get_addressCall {
@@ -667,7 +665,6 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
 async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{Address, U256};
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -801,7 +798,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
         amount: amount.into(),
     };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     app_a.run_json_query(operation).await?;
 
     // Checking the balances of app_a
@@ -820,7 +816,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
     // Doing an operation with a non-zero amount
     let operation = null_operationCall {};
     let amount_operation = Amount::from(2);
-    let operation = linera_base::vm::EvmOperation::new(amount_operation, operation.abi_encode());
+    let operation = EvmOperation::new(amount_operation, operation.abi_encode());
     let operation = EvmQuery::Operation(operation.to_bytes()?);
     app_a.run_json_query(operation).await?;
 
@@ -843,7 +839,6 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
 
     let operation = null_operationCall {};
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     app_b.run_json_query(operation).await?;
 
     assert_eq!(node_service_b.balance(&account_b_1).await?, Amount::ZERO);
@@ -880,10 +875,7 @@ async fn test_evm_end_to_end_balance_and_transfer(config: impl LineraNetConfig) 
 async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{Bytes, Log, U256};
     use alloy_sol_types::{sol, SolValue};
-    use linera_base::{
-        identifiers::{GenericApplicationId, StreamId, StreamName},
-        vm::{EvmInstantiation, EvmQuery},
-    };
+    use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -955,7 +947,6 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
 
     let operation = incrementCall { input: increment };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application.run_json_query(operation).await?;
 
     let indices_and_events = node_service
@@ -995,7 +986,6 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
 async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolValue};
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};
-    use linera_base::vm::EvmInstantiation;
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1096,7 +1086,6 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 #[test_log::test(tokio::test)]
 async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1183,7 +1172,6 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
 
     let operation = nest_incrementCall { input: increment };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     nest_application.run_json_query(operation).await?;
 
     let result = nest_application.run_json_query(query).await?;
@@ -1208,7 +1196,6 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
 async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
     use counter_no_graphql::CounterNoGraphQlAbi;
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1280,7 +1267,6 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
 
     let operation = nest_incrementCall { input: increment };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     nest_application.run_json_query(operation).await?;
 
     let result = nest_application.run_json_query(query).await?;
@@ -1305,7 +1291,6 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
 async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1395,7 +1380,6 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
         moved_value,
     };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application1.run_json_query(operation).await?;
 
     node_service2.process_inbox(&chain2).await?;
@@ -1428,7 +1412,6 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 #[test_log::test(tokio::test)]
 async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1509,7 +1492,6 @@ async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> 
 async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1590,7 +1572,6 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
         application_id,
     };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application2.run_json_query(operation).await?;
 
     let result = application2.run_json_query(query.clone()).await?;
@@ -1601,7 +1582,6 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 
     let operation = increment_valueCall { increment };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application1.run_json_query(operation).await?;
 
     // Third: process the inbox on chain2
@@ -1634,7 +1614,6 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 #[test_log::test(tokio::test)]
 async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::sol;
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1701,14 +1680,12 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
         remote_address: owner,
     };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application_inner.run_json_query(operation).await?;
 
     let operation = remote_checkCall {
         remote_address: evm_contract_inner,
     };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application_outer.run_json_query(operation).await?;
 
     node_service.ensure_is_running()?;
@@ -1729,7 +1706,6 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
 
@@ -1810,7 +1786,6 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     let operation = test_authenticated_signer_caller_idCall {};
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application.run_json_query(operation).await?;
 
     // Testing the chain balance
@@ -1910,7 +1885,6 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     use alloy_primitives::{B256, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::{EvmInstantiation, EvmQuery};
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1990,7 +1964,6 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         value: transfer1,
     };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application1.run_json_query(operation).await?;
 
     let query = balanceOfCall { account: address1 };
@@ -2014,7 +1987,6 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         value: transfer2,
     };
     let operation = get_zero_operation(operation)?;
-    let operation = EvmQuery::Operation(operation);
     application1.run_json_query(operation).await?;
 
     node_service2.process_inbox(&chain2).await?;
