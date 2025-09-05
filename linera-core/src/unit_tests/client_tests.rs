@@ -2722,7 +2722,7 @@ where
     let client1 = builder.add_root_chain(1, Amount::from_tokens(1000)).await?;
 
     // Take one validator down - they will miss committee changes.
-    builder.set_fault_type([3], FaultType::Offline);
+    builder.set_fault_type([3], FaultType::Offline).await;
 
     // Start by creating a block in epoch 0.
     let certificate0 = client1
@@ -2773,8 +2773,8 @@ where
     // Let's deactivate another validator and reactivate the one that was offline.
     // Now the client will have to update validator 3 on the admin chain in order for the
     // next blocks to be correctly processed.
-    builder.set_fault_type([2], FaultType::Offline);
-    builder.set_fault_type([3], FaultType::Honest);
+    builder.set_fault_type([2], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Honest).await;
 
     let admin_tip = builder
         .node(3)
