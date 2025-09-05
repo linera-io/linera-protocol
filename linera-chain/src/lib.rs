@@ -3,6 +3,8 @@
 
 //! This module manages the state of a Linera chain, including cross-chain communication.
 
+#![deny(clippy::large_futures)]
+
 pub mod block;
 mod certificate;
 
