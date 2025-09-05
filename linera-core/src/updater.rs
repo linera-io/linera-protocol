@@ -17,7 +17,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round},
     ensure,
-    identifiers::{BlobId, ChainId, GenericApplicationId},
+    identifiers::{BlobId, BlobType, ChainId, GenericApplicationId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::{
@@ -31,9 +31,10 @@ use thiserror::Error;
 use crate::{
     client::ChainClientError,
     data_types::{ChainInfo, ChainInfoQuery},
-    local_node::LocalNodeClient,
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
+    worker::WorkerError,
 };
 
 /// The default amount of time we wait for additional validators to contribute
@@ -230,6 +231,12 @@ where
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
+                if blob_ids
+                    .iter()
+                    .any(|blob_id| blob_id.blob_type == BlobType::Committee)
+                {
+                    self.update_admin_chain().await?;
+                }
                 // The certificate is confirmed, so the blobs must be in storage.
                 let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
                 let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
@@ -388,6 +395,31 @@ where
                 Err(err) => return Err(err.into()),
             }
         }
+    }
+
+    async fn update_admin_chain(&mut self) -> Result<(), ChainClientError> {
+        let admin_chain_id = self
+            .local_node
+            .storage_client()
+            .read_network_description()
+            .await?
+            .ok_or(ChainClientError::LocalNodeError(
+                LocalNodeError::WorkerError(WorkerError::MissingNetworkDescription),
+            ))?
+            .admin_chain_id;
+        let local_tip = self
+            .local_node
+            .chain_state_view(admin_chain_id)
+            .await?
+            .tip_state
+            .get()
+            .next_block_height;
+        Box::pin(self.send_chain_information(
+            admin_chain_id,
+            local_tip,
+            CrossChainMessageDelivery::NonBlocking,
+        ))
+        .await
     }
 
     pub async fn send_chain_information(

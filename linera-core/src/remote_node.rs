@@ -12,7 +12,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight},
     ensure,
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, BlobType, ChainId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -337,7 +337,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let required = certificate.inner().required_blob_ids();
         let public_key = &self.public_key;
         for blob_id in blob_ids {
-            if !required.contains(blob_id) {
+            if !required.contains(blob_id) && blob_id.blob_type != BlobType::Committee {
                 warn!("validator {public_key} requested blob {blob_id:?} but it is not required");
                 return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
             }
