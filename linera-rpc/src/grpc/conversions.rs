@@ -614,6 +614,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_fallback: chain_info_query.request_fallback,
             request_sent_certificate_hashes_by_heights,
             request_sent_certificate_hashes_in_range: None,
+            create_network_actions: chain_info_query.create_network_actions.unwrap_or(true),
         })
     }
 }
@@ -644,6 +645,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
+            create_network_actions: Some(chain_info_query.create_network_actions),
         })
     }
 }
@@ -1172,6 +1174,7 @@ pub mod tests {
             request_fallback: true,
             request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
             request_sent_certificate_hashes_in_range: None,
+            create_network_actions: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
     }

@@ -906,7 +906,7 @@ async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
     let lagging_validator = net.validator_client(LAGGING_VALIDATOR_INDEX).await?;
 
     let state_before_sync = lagging_validator
-        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain).no_network_actions())
         .await?;
     assert_eq!(state_before_sync.info.next_block_height, BlockHeight::ZERO);
 
@@ -918,7 +918,7 @@ async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
         .expect("Missing lagging validator name");
 
     let state_after_sync = lagging_validator
-        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain).no_network_actions())
         .await?;
     assert_eq!(
         state_after_sync.info.next_block_height,
@@ -989,7 +989,7 @@ async fn test_sync_child_chain(config: LocalNetConfig) -> Result<()> {
     let lagging_validator = net.validator_client(LAGGING_VALIDATOR_INDEX).await?;
 
     let state_before_sync = lagging_validator
-        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain).no_network_actions())
         .await?;
     assert_eq!(state_before_sync.info.next_block_height, BlockHeight::ZERO);
 
@@ -1002,13 +1002,13 @@ async fn test_sync_child_chain(config: LocalNetConfig) -> Result<()> {
 
     // The parent chain should remain out of sync.
     let state_after_sync = lagging_validator
-        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain).no_network_actions())
         .await?;
     assert_eq!(state_after_sync.info.next_block_height, BlockHeight::ZERO);
 
     // But the second child chain should be synchronized properly.
     let second_chain_state_after_sync = lagging_validator
-        .handle_chain_info_query(ChainInfoQuery::new(second_child_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(second_child_chain).no_network_actions())
         .await?;
     assert_eq!(
         second_chain_state_after_sync.info.next_block_height,
@@ -1070,7 +1070,7 @@ async fn test_update_validator_sender_gaps(config: LocalNetConfig) -> Result<()>
     let unaware_validator = net.validator_client(UNAWARE_VALIDATOR_INDEX).await?;
 
     let sender_state_before_sync = unaware_validator
-        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain).no_network_actions())
         .await?;
     assert_eq!(
         sender_state_before_sync.info.next_block_height,
@@ -1078,7 +1078,7 @@ async fn test_update_validator_sender_gaps(config: LocalNetConfig) -> Result<()>
     );
 
     let receiver_state_before_sync = unaware_validator
-        .handle_chain_info_query(ChainInfoQuery::new(receiver_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(receiver_chain).no_network_actions())
         .await?;
     assert_eq!(
         receiver_state_before_sync.info.next_block_height,
@@ -1099,7 +1099,7 @@ async fn test_update_validator_sender_gaps(config: LocalNetConfig) -> Result<()>
         .expect("Missing lagging validator name");
 
     let sender_state_after_sync = unaware_validator
-        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain).no_network_actions())
         .await?;
     // The next block height should be 1 - only block 0 has been processed fully, block 2
     // has only been preprocessed.
@@ -1109,7 +1109,7 @@ async fn test_update_validator_sender_gaps(config: LocalNetConfig) -> Result<()>
     );
 
     let receiver_state_after_sync = unaware_validator
-        .handle_chain_info_query(ChainInfoQuery::new(receiver_chain))
+        .handle_chain_info_query(ChainInfoQuery::new(receiver_chain).no_network_actions())
         .await?;
     // On the receiver side, block 0 received the transfers from sender and block 1 made a
     // transfer.

@@ -303,7 +303,9 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let query = ChainInfoQuery::new(chain_id)
+            .with_manager_values()
+            .no_network_actions();
         let response = self.handle_chain_info_query(query).await?;
         Ok(response.info)
     }
@@ -1066,7 +1068,8 @@ where
         target_count: usize,
     ) -> Option<ConfirmedBlockCertificate> {
         let query = ChainInfoQuery::new(chain_id)
-            .with_sent_certificate_hashes_by_heights(vec![block_height]);
+            .with_sent_certificate_hashes_by_heights(vec![block_height])
+            .no_network_actions();
         let mut count = 0;
         let mut certificate = None;
         for validator in self.node_provider.all_nodes() {
@@ -1104,7 +1107,7 @@ where
         round: Round,
         target_count: usize,
     ) {
-        let query = ChainInfoQuery::new(chain_id);
+        let query = ChainInfoQuery::new(chain_id).no_network_actions();
         let mut count = 0;
         for validator in self.node_provider.all_nodes() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
