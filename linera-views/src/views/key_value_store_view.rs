@@ -396,12 +396,12 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// let total_size = view.total_size();
+    /// let total_size = view.total_size().unwrap();
     /// assert_eq!(total_size, SizeData::default());
     /// # })
     /// ```
-    pub fn total_size(&self) -> SizeData {
-        self.total_size
+    pub fn total_size(&self) -> Result<SizeData, ViewError> {
+        Ok(self.total_size)
     }
 
     /// Applies the function f over all indices. If the function f returns
