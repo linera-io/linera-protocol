@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>quote - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="quote" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../quote/index.html">quote</a><span class="version">1.0.40</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li><li><a href="#non-macro-code-generators" title="Non-macro code generators">Non-macro code generators</a></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>quote</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/quote/lib.rs.html#1-1454">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/quote"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/quote"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/quote"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>This crate provides the <a href="macro.quote.html" title="macro quote::quote"><code>quote!</code></a> macro for turning Rust syntax tree data
+structures into tokens of source code.</p>
+<p>Procedural macros in Rust receive a stream of tokens as input, execute
+arbitrary Rust code to determine how to manipulate those tokens, and produce
+a stream of tokens to hand back to the compiler to compile into the caller’s
+crate. Quasi-quoting is a solution to one piece of that — producing
+tokens to return to the compiler.</p>
+<p>The idea of quasi-quoting is that we write <em>code</em> that we treat as <em>data</em>.
+Within the <code>quote!</code> macro, we can write what looks like code to our text
+editor or IDE. We get all the benefits of the editor’s brace matching,
+syntax highlighting, indentation, and maybe autocompletion. But rather than
+compiling that as code into the current crate, we can treat it as data, pass
+it around, mutate it, and eventually hand it back to the compiler as tokens
+to compile into the macro caller’s crate.</p>
+<p>This crate is motivated by the procedural macro use case, but is a
+general-purpose Rust quasi-quoting library and is not specific to procedural
+macros.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+quote = &quot;1.0&quot;</code></pre></div><br>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>The following quasi-quoted block of code is something you might find in <a href="https://serde.rs/">a</a>
+procedural macro having to do with data structure serialization. The <code>#var</code>
+syntax performs interpolation of runtime variables into the quoted tokens.
+Check out the documentation of the <a href="macro.quote.html" title="macro quote::quote"><code>quote!</code></a> macro for more detail about
+the syntax. See also the <a href="macro.quote_spanned.html" title="macro quote::quote_spanned"><code>quote_spanned!</code></a> macro which is important for
+implementing hygienic procedural macros.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>tokens = <span class="macro">quote!</span> {
+    <span class="kw">struct </span>SerializeWith #generics #where_clause {
+        value: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>#field_ty,
+        phantom: core::marker::PhantomData&lt;#item_ty&gt;,
+    }
+
+    <span class="kw">impl </span>#generics serde::Serialize <span class="kw">for </span>SerializeWith #generics #where_clause {
+        <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+        <span class="kw">where
+            </span>S: serde::Serializer,
+        {
+            #path(<span class="self">self</span>.value, serializer)
+        }
+    }
+
+    SerializeWith {
+        value: #value,
+        phantom: core::marker::PhantomData::&lt;#item_ty&gt;,
+    }
+};</code></pre></div>
+<br>
+<h2 id="non-macro-code-generators"><a class="doc-anchor" href="#non-macro-code-generators">§</a>Non-macro code generators</h2>
+<p>When using <code>quote</code> in a build.rs or main.rs and writing the output out to a
+file, consider having the code generator pass the tokens through
+<a href="https://github.com/dtolnay/prettyplease">prettyplease</a> before writing. This way if an error occurs in the generated
+code it is convenient for a human to read and debug.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.format_ident.html" title="macro quote::format_ident">format_<wbr>ident</a></dt><dd>Formatting macro for constructing <code>Ident</code>s.</dd><dt><a class="macro" href="macro.quote.html" title="macro quote::quote">quote</a></dt><dd>The whole point.</dd><dt><a class="macro" href="macro.quote_spanned.html" title="macro quote::quote_spanned">quote_<wbr>spanned</a></dt><dd>Same as <code>quote!</code>, but applies a given span to all tokens originating within
+the macro invocation.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.IdentFragment.html" title="trait quote::IdentFragment">Ident<wbr>Fragment</a></dt><dd>Specialized formatting trait used by <code>format_ident!</code>.</dd><dt><a class="trait" href="trait.ToTokens.html" title="trait quote::ToTokens">ToTokens</a></dt><dd>Types that can be interpolated inside a <code>quote!</code> invocation.</dd><dt><a class="trait" href="trait.TokenStreamExt.html" title="trait quote::TokenStreamExt">Token<wbr>Stream<wbr>Ext</a></dt><dd>TokenStream extension trait with methods for appending tokens.</dd></dl></section></div></main></body></html>

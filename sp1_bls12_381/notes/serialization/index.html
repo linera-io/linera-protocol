@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="BLS12-381 serialization"><title>sp1_bls12_381::notes::serialization - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sp1_bls12_381" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../sp1_bls12_381/index.html">sp1_<wbr>bls12_<wbr>381</a><span class="version">0.8.0-sp1-5.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module serialization</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#bls12-381-serialization" title="BLS12-381 serialization">BLS12-381 serialization</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In sp1_<wbr>bls12_<wbr>381::<wbr>notes</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">sp1_bls12_381</a>::<wbr><a href="../index.html">notes</a></div><h1>Module <span>serialization</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/sp1_bls12_381/notes/serialization.rs.html#1-29">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="bls12-381-serialization"><a class="doc-anchor" href="#bls12-381-serialization">§</a>BLS12-381 serialization</h2>
+<ul>
+<li>$\mathbb{F}_p$ elements are encoded in big-endian form. They occupy 48
+bytes in this form.</li>
+<li>$\mathbb{F}_{p^2}$ elements are encoded in big-endian form, meaning that
+the $\mathbb{F}_{p^2}$ element $c_0 + c_1 \cdot u$ is represented by the
+$\mathbb{F}_p$ element $c_1$ followed by the $\mathbb{F}_p$ element $c_0$.
+This means $\mathbb{F}_{p^2}$ elements occupy 96 bytes in this form.</li>
+<li>The group $\mathbb{G}_1$ uses $\mathbb{F}_p$ elements for coordinates. The
+group $\mathbb{G}_2$ uses $\mathbb{F}_{p^2}$ elements for coordinates.</li>
+<li>$\mathbb{G}_1$ and $\mathbb{G}_2$ elements can be encoded in uncompressed
+form (the x-coordinate followed by the y-coordinate) or in compressed form
+(just the x-coordinate). $\mathbb{G}_1$ elements occupy 96 bytes in
+uncompressed form, and 48 bytes in compressed form. $\mathbb{G}_2$
+elements occupy 192 bytes in uncompressed form, and 96 bytes in compressed
+form.</li>
+</ul>
+<p>The most-significant three bits of a $\mathbb{G}_1$ or $\mathbb{G}_2$
+encoding should be masked away before the coordinate(s) are interpreted.
+These bits are used to unambiguously represent the underlying element:</p>
+<ul>
+<li>The most significant bit, when set, indicates that the point is in
+compressed form. Otherwise, the point is in uncompressed form.</li>
+<li>The second-most significant bit indicates that the point is at infinity.
+If this bit is set, the remaining bits of the group element’s encoding
+should be set to zero.</li>
+<li>The third-most significant bit is set if (and only if) this point is in
+compressed form <em>and</em> it is not the point at infinity <em>and</em> its
+y-coordinate is the lexicographically largest of the two associated with
+the encoded x-coordinate.</li>
+</ul>
+</div></details></section></div></main></body></html>

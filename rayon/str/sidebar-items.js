@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Bytes","CharIndices","Chars","EncodeUtf16","Lines","MatchIndices","Matches","Split","SplitAsciiWhitespace","SplitInclusive","SplitTerminator","SplitWhitespace"],"trait":["ParallelString"]};
