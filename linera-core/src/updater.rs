@@ -338,11 +338,11 @@ where
                     .await?;
                 }
                 Err(NodeError::MissingCrossChainUpdate { .. }) if !sent_cross_chain_updates => {
-                    sent_cross_chain_updates = true;
                     // Some received certificates may be missing for this validator
                     // (e.g. to create the chain or make the balance sufficient) so we are going to
                     // synchronize them now and retry.
                     self.send_chain_information_for_senders(chain_id).await?;
+                    sent_cross_chain_updates = true;
                 }
                 Err(NodeError::EventsNotFound(event_ids)) => {
                     let mut publisher_heights = BTreeMap::new();
@@ -482,20 +482,26 @@ where
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         // Obtain the missing blocks and the manager state from the local node.
         let range = remote_height..target_block_height;
-        let keys = {
-            let chain = self.local_node.chain_state_view(chain_id).await?;
-            chain.block_hashes(range).await?
-        };
-        if !keys.is_empty() {
+        let validator_missing_hashes = self
+            .local_node
+            .chain_state_view(chain_id)
+            .await?
+            .block_hashes(range)
+            .await?;
+        if !validator_missing_hashes.is_empty() {
             // Send the requested certificates in order.
-            let storage = self.local_node.storage_client();
-            let certificates = storage.read_certificates(keys.clone()).await?;
-            let certificates = match ResultReadCertificates::new(certificates, keys) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(ChainClientError::ReadCertificatesError(hashes))
-                }
-            };
+            let certificates = self
+                .local_node
+                .storage_client()
+                .read_certificates(validator_missing_hashes.clone())
+                .await?;
+            let certificates =
+                match ResultReadCertificates::new(certificates, validator_missing_hashes) {
+                    ResultReadCertificates::Certificates(certificates) => certificates,
+                    ResultReadCertificates::InvalidHashes(hashes) => {
+                        return Err(ChainClientError::ReadCertificatesError(hashes))
+                    }
+                };
             for certificate in certificates {
                 self.send_confirmed_certificate(certificate, delivery)
                     .await?;
@@ -513,38 +519,36 @@ where
 
     async fn send_chain_info_up_to_heights(
         &mut self,
-        chain_heights: BTreeMap<ChainId, BlockHeight>,
+        chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let stream =
-            FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, height)| {
-                let mut updater = self.clone();
-                async move {
-                    updater
-                        .send_chain_information(chain_id, height, delivery)
-                        .await
-                }
-            }));
-        stream.try_collect::<Vec<_>>().await?;
+        FuturesUnordered::from_iter(chain_heights.into_iter().map(|(chain_id, height)| {
+            let mut updater = self.clone();
+            async move {
+                updater
+                    .send_chain_information(chain_id, height, delivery)
+                    .await
+            }
+        }))
+        .try_collect::<Vec<_>>()
+        .await?;
         Ok(())
     }
 
+    /// Updates validator with certificates for all chains that have sent messages to `chain_id`.
     async fn send_chain_information_for_senders(
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
-        let mut sender_heights = BTreeMap::new();
-        {
-            let chain = self.local_node.chain_state_view(chain_id).await?;
-            let pairs = chain.inboxes.try_load_all_entries().await?;
-            for (origin, inbox) in pairs {
-                let inbox_next_height = inbox.next_block_height_to_receive()?;
-                sender_heights
-                    .entry(origin)
-                    .and_modify(|h| *h = inbox_next_height.max(*h))
-                    .or_insert(inbox_next_height);
-            }
-        }
+        let chain = self.local_node.chain_state_view(chain_id).await?;
+        let pairs = chain.inboxes.try_load_all_entries().await?;
+        let sender_heights = pairs
+            .iter()
+            .map(|(origin, inbox)| {
+                let next_height = inbox.next_block_height_to_receive()?;
+                Ok((*origin, next_height))
+            })
+            .collect::<Result<Vec<(ChainId, BlockHeight)>, ChainClientError>>()?;
 
         self.send_chain_info_up_to_heights(sender_heights, CrossChainMessageDelivery::Blocking)
             .await?;
