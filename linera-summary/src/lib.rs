@@ -3,6 +3,7 @@
 
 //! This crate provides the internal tool to summarize performance changes in PRs.
 
+#![deny(clippy::large_futures)]
 #![allow(missing_docs)]
 
 pub mod ci_runtime_comparison;

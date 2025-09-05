@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![recursion_limit = "256"]
+#![deny(clippy::large_futures)]
 
 use std::{
     collections::{BTreeMap, BTreeSet},

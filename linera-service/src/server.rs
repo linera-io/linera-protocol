@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(clippy::large_futures)]
+
 use std::{
     borrow::Cow,
     num::NonZeroU16,
