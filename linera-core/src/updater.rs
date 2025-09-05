@@ -17,14 +17,14 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round},
     ensure,
-    identifiers::{BlobId, BlobType, ChainId, GenericApplicationId},
+    identifiers::{BlobId, BlobType, ChainId, GenericApplicationId, StreamId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{ResultReadCertificates, Storage};
 use thiserror::Error;
 
@@ -222,31 +222,45 @@ where
         certificate: GenericCertificate<ConfirmedBlock>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let result = self
+        let mut result = self
             .remote_node
             .handle_optimized_confirmed_certificate(&certificate, delivery)
             .await;
 
-        Ok(match &result {
-            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                self.remote_node
-                    .check_blobs_not_found(&certificate, blob_ids)?;
-                if blob_ids
-                    .iter()
-                    .any(|blob_id| blob_id.blob_type == BlobType::Committee)
+        for _ in [0, 1] {
+            result = match result {
+                Err(NodeError::EventsNotFound(event_ids))
+                    if event_ids.iter().all(|event_id| {
+                        event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
+                    }) =>
                 {
                     self.update_admin_chain().await?;
+                    self.remote_node
+                        .handle_confirmed_certificate(certificate.clone(), delivery)
+                        .await
                 }
-                // The certificate is confirmed, so the blobs must be in storage.
-                let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
-                let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
-                self.remote_node.node.upload_blobs(blobs.clone()).await?;
-                self.remote_node
-                    .handle_confirmed_certificate(certificate, delivery)
-                    .await
-            }
-            _ => result,
-        }?)
+                Err(NodeError::BlobsNotFound(blob_ids)) => {
+                    self.remote_node
+                        .check_blobs_not_found(&certificate, &blob_ids)?;
+                    if blob_ids
+                        .iter()
+                        .any(|blob_id| blob_id.blob_type == BlobType::Committee)
+                    {
+                        self.update_admin_chain().await?;
+                    }
+                    // The certificate is confirmed, so the blobs must be in storage.
+                    let maybe_blobs = self.local_node.read_blobs_from_storage(&blob_ids).await?;
+                    let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
+                    self.remote_node.node.upload_blobs(blobs).await?;
+                    self.remote_node
+                        .handle_confirmed_certificate(certificate.clone(), delivery)
+                        .await
+                }
+                _ => result,
+            };
+        }
+
+        Ok(result?)
     }
 
     async fn send_validated_certificate(
@@ -488,8 +502,7 @@ where
                     )
                     .await?;
                     for certificate in certificates.into_iter().flatten() {
-                        self.remote_node
-                            .handle_confirmed_certificate(certificate, delivery)
+                        self.send_confirmed_certificate(certificate, delivery)
                             .await?;
                     }
                     let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
