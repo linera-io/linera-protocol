@@ -436,7 +436,37 @@ where
             }
         } else {
             let query = ChainInfoQuery::new(chain_id);
-            self.remote_node.handle_chain_info_query(query).await?
+            match self
+                .remote_node
+                .handle_chain_info_query(query.clone())
+                .await
+            {
+                Ok(info) => info,
+                Err(ref original_err @ NodeError::BlobsNotFound(ref blob_ids)) => {
+                    let blob_states = self
+                        .local_node
+                        .read_blob_states_from_storage(blob_ids)
+                        .await?;
+                    let storage_client = self.local_node.storage_client();
+                    let certificates = futures::future::try_join_all(
+                        blob_states
+                            .into_iter()
+                            .filter_map(|state| state.last_used_by)
+                            .map(|hash| storage_client.read_certificate(hash)),
+                    )
+                    .await?;
+                    for certificate in certificates.into_iter().flatten() {
+                        self.remote_node
+                            .handle_confirmed_certificate(certificate, delivery)
+                            .await?;
+                    }
+                    let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
+                    let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
+                    self.remote_node.node.upload_blobs(blobs.clone()).await?;
+                    self.remote_node.handle_chain_info_query(query).await?
+                }
+                Err(err) => return Err(err.into()),
+            }
         };
         let initial_block_height = remote_info.next_block_height;
         // Obtain the missing blocks and the manager state from the local node.
