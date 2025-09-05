@@ -4577,7 +4577,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
             vec![100, 100],
             0,
             Amount::from_tokens(9),
-            u64::MAX,
+            10_000,
         )
         .await?;
     client1.assign(owner1, chain2).await?;
