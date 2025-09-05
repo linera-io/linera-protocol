@@ -46,8 +46,8 @@ use linera_persistent::{self as persistent, Persist, PersistExt as _};
 use linera_service::{
     cli::{
         command::{
-            BenchmarkCommand, BenchmarkOptions, ClientCommand, DatabaseToolCommand, NetCommand,
-            ProjectCommand, WalletCommand,
+            BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
+            NetCommand, ProjectCommand, WalletCommand,
         },
         net_up_utils,
     },
@@ -329,6 +329,11 @@ impl Runnable for Job {
                     time_total.as_millis()
                 );
                 debug!("{:?}", certificate);
+            }
+
+            ShowNetworkDescription => {
+                let network_description = storage.read_network_description().await?;
+                println!("Network description: \n{:#?}", network_description);
             }
 
             LocalBalance { account } => {
@@ -1652,6 +1657,33 @@ impl Runnable for Job {
                     "Chain followed and added in {} ms",
                     start_time.elapsed().as_millis()
                 );
+            }
+
+            Chain(ChainCommand::ShowBlock { chain_id, height }) => {
+                let context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_state_view = context.storage().load_chain(chain_id).await?;
+                let block_hash = chain_state_view.block_hashes(height..=height).await?[0];
+                let block = context.storage().read_confirmed_block(block_hash).await?;
+                println!("{:#?}", block);
+            }
+
+            Chain(ChainCommand::ShowChainDescription { chain_id }) => {
+                let context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_client = context.make_chain_client(chain_id);
+                let description = chain_client.get_chain_description().await?;
+                println!("{:#?}", description);
             }
 
             CreateGenesisConfig { .. }
