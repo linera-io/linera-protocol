@@ -14,8 +14,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{self},
     types::{
-        self, Certificate, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate, Timeout, ValidatedBlock,
+        self, Certificate, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
+        ValidatedBlock,
     },
 };
 use linera_core::{
@@ -32,8 +32,8 @@ use super::{
     transport, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
-    grpc::api::RawCertificate, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
-    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
+    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
+    HandleValidatedCertificateRequest,
 };
 
 #[derive(Clone)]
@@ -447,26 +447,15 @@ impl ValidatorNode for GrpcClient {
                 chain_id,
                 heights: missing.clone(),
             };
-            let mut received: Vec<ConfirmedBlockCertificate> =
-                client_delegate!(self, download_raw_certificates_by_heights, request)?
-                    .certificates
-                    .into_iter()
-                    .map(
-                        |RawCertificate {
-                             lite_certificate,
-                             confirmed_block,
-                         }| {
-                            let cert = bcs::from_bytes::<LiteCertificate>(&lite_certificate)
-                                .map_err(|_| NodeError::UnexpectedCertificateValue)?;
-
-                            let block = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block)
-                                .map_err(|_| NodeError::UnexpectedCertificateValue)?;
-
-                            cert.with_value(block)
-                                .ok_or(NodeError::UnexpectedCertificateValue)
-                        },
-                    )
-                    .collect::<Result<_, _>>()?;
+            let mut received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
+                client_delegate!(self, download_certificates_by_heights, request)?,
+            )?
+            .into_iter()
+            .map(|cert| {
+                ConfirmedBlockCertificate::try_from(cert)
+                    .map_err(|_| NodeError::UnexpectedCertificateValue)
+            })
+            .collect::<Result<_, _>>()?;
 
             if received.is_empty() {
                 break;
