@@ -435,6 +435,10 @@ where
                         return Ok(()); // Don't return an error, so we retry.
                     }
                     chain_err => {
+                        let error_msg = format!("{}", chain_err);
+                        for request in valid_requests {
+                            let _ = request.responder.send(Err(Error::new(error_msg.clone())));
+                        }
                         return Err(
                             ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                                 WorkerError::ChainError(chain_err.into()),
@@ -444,7 +448,13 @@ where
                     }
                 }
             }
-            Err(err) => return Err(err.into()),
+            Err(err) => {
+                let error_msg = format!("{}", err);
+                for request in valid_requests {
+                    let _ = request.responder.send(Err(Error::new(error_msg.clone())));
+                }
+                return Err(err.into());
+            }
             Ok(ClientOutcome::Committed(certificate)) => certificate,
             Ok(ClientOutcome::WaitForTimeout(timeout)) => {
                 let error_msg = format!(
