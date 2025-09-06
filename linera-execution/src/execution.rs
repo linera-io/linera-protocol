@@ -1,13 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, vec};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    mem, vec,
+};
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
-    data_types::{BlobContent, BlockHeight, StreamUpdate},
-    identifiers::{AccountOwner, BlobId, StreamId},
-    time::Instant,
+    data_types::{Amount, BlockHeight, StreamUpdate},
+    identifiers::{Account, AccountOwner, StreamId},
 };
 use linera_views::{
     context::Context,
@@ -27,13 +29,13 @@ use {
     std::sync::Arc,
 };
 
-use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequest};
+use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
-    execution_state_actor::ExecutionStateActor, resources::ResourceController,
-    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, MessageContext, OperationContext,
-    ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp,
-    TransactionTracker,
+    resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
+    ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
+    OutgoingMessage, ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
+    SystemMessage, Timestamp, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -132,9 +134,15 @@ where
             &[],
         );
         txn_tracker.add_created_blob(blob);
-        ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller)
-            .run_user_action(application_id, action, context.refund_grant_to(), None)
-            .await?;
+        self.run_user_action(
+            application_id,
+            action,
+            context.refund_grant_to(),
+            None,
+            &mut txn_tracker,
+            &mut resource_controller,
+        )
+        .await?;
 
         Ok(())
     }
@@ -190,6 +198,215 @@ where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    async fn run_user_action(
+        &mut self,
+        application_id: ApplicationId,
+        action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+    ) -> Result<(), ExecutionError> {
+        let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
+        self.run_user_action_with_runtime(
+            application_id,
+            action,
+            refund_grant_to,
+            grant,
+            txn_tracker,
+            resource_controller,
+        )
+        .await
+    }
+
+    async fn run_user_action_with_runtime(
+        &mut self,
+        application_id: ApplicationId,
+        action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+    ) -> Result<(), ExecutionError> {
+        let chain_id = self.context().extra().chain_id();
+        let mut cloned_grant = grant.as_ref().map(|x| **x);
+        let initial_balance = resource_controller
+            .with_state_and_grant(&mut self.system, cloned_grant.as_mut())
+            .await?
+            .balance()?;
+        let controller = ResourceController::new(
+            resource_controller.policy().clone(),
+            resource_controller.tracker,
+            initial_balance,
+        );
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+        let (code, description) = self.load_contract(application_id, txn_tracker).await?;
+        let txn_tracker_moved = mem::take(txn_tracker);
+        let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
+            let runtime = ContractSyncRuntime::new(
+                execution_state_sender,
+                chain_id,
+                refund_grant_to,
+                controller,
+                &action,
+                txn_tracker_moved,
+            );
+
+            async move {
+                let code = codes.next().await.expect("we send this immediately below");
+                runtime.preload_contract(application_id, code, description)?;
+                runtime.run_action(application_id, chain_id, action)
+            }
+        })
+        .await;
+
+        contract_runtime_task.send(code)?;
+
+        while let Some(request) = execution_state_receiver.next().await {
+            self.handle_request(request, resource_controller).await?;
+        }
+
+        let (result, controller, txn_tracker_moved) = contract_runtime_task.join().await?;
+
+        *txn_tracker = txn_tracker_moved;
+        txn_tracker.add_operation_result(result);
+
+        resource_controller
+            .with_state_and_grant(&mut self.system, grant)
+            .await?
+            .merge_balance(initial_balance, controller.balance()?)?;
+        resource_controller.tracker = controller.tracker;
+
+        Ok(())
+    }
+
+    pub async fn execute_operation(
+        &mut self,
+        context: OperationContext,
+        operation: Operation,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+    ) -> Result<(), ExecutionError> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
+        match operation {
+            Operation::System(op) => {
+                let new_application = self
+                    .system
+                    .execute_operation(context, *op, txn_tracker, resource_controller)
+                    .await?;
+                if let Some((application_id, argument)) = new_application {
+                    let user_action = UserAction::Instantiate(context, argument);
+                    self.run_user_action(
+                        application_id,
+                        user_action,
+                        context.refund_grant_to(),
+                        None,
+                        txn_tracker,
+                        resource_controller,
+                    )
+                    .await?;
+                }
+            }
+            Operation::User {
+                application_id,
+                bytes,
+            } => {
+                self.run_user_action(
+                    application_id,
+                    UserAction::Operation(context, bytes),
+                    context.refund_grant_to(),
+                    None,
+                    txn_tracker,
+                    resource_controller,
+                )
+                .await?;
+            }
+        }
+        self.process_subscriptions(txn_tracker, resource_controller, context.into())
+            .await?;
+        Ok(())
+    }
+
+    pub async fn execute_message(
+        &mut self,
+        context: MessageContext,
+        message: Message,
+        grant: Option<&mut Amount>,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+    ) -> Result<(), ExecutionError> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
+        match message {
+            Message::System(message) => {
+                let outcome = self.system.execute_message(context, message).await?;
+                txn_tracker.add_outgoing_messages(outcome);
+            }
+            Message::User {
+                application_id,
+                bytes,
+            } => {
+                self.run_user_action(
+                    application_id,
+                    UserAction::Message(context, bytes),
+                    context.refund_grant_to,
+                    grant,
+                    txn_tracker,
+                    resource_controller,
+                )
+                .await?;
+            }
+        }
+        self.process_subscriptions(txn_tracker, resource_controller, context.into())
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bounce_message(
+        &self,
+        context: MessageContext,
+        grant: Amount,
+        message: Message,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
+        txn_tracker.add_outgoing_message(OutgoingMessage {
+            destination: context.origin,
+            authenticated_signer: context.authenticated_signer,
+            refund_grant_to: context.refund_grant_to.filter(|_| !grant.is_zero()),
+            grant,
+            kind: MessageKind::Bouncing,
+            message,
+        });
+        Ok(())
+    }
+
+    pub async fn send_refund(
+        &self,
+        context: MessageContext,
+        amount: Amount,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
+        if amount.is_zero() {
+            return Ok(());
+        }
+        let Some(account) = context.refund_grant_to else {
+            return Err(ExecutionError::InternalError(
+                "Messages with grants should have a non-empty `refund_grant_to`",
+            ));
+        };
+        let message = SystemMessage::Credit {
+            amount,
+            source: context.authenticated_signer.unwrap_or(AccountOwner::CHAIN),
+            target: account.owner,
+        };
+        txn_tracker.add_outgoing_message(
+            OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
+        );
+        Ok(())
+    }
+
     pub async fn query_application(
         &mut self,
         context: QueryContext,
@@ -234,34 +451,14 @@ where
         context: QueryContext,
         query: Vec<u8>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
-        self.query_user_application_with_deadline(
-            application_id,
-            context,
-            query,
-            None,
-            BTreeMap::new(),
-        )
-        .await
-    }
-
-    pub(crate) async fn query_user_application_with_deadline(
-        &mut self,
-        application_id: ApplicationId,
-        context: QueryContext,
-        query: Vec<u8>,
-        deadline: Option<Instant>,
-        created_blobs: BTreeMap<BlobId, BlobContent>,
-    ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let mut txn_tracker = TransactionTracker::default().with_blobs(created_blobs);
-        let mut resource_controller = ResourceController::default();
-        let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
-        let (code, description) = actor.load_service(application_id).await?;
+        let (code, description) = self
+            .load_service(application_id, &mut TransactionTracker::default())
+            .await?;
 
         let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
-            let mut runtime =
-                ServiceSyncRuntime::new_with_deadline(execution_state_sender, context, deadline);
+            let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
 
             async move {
                 let code = codes.next().await.expect("we send this immediately below");
@@ -274,7 +471,8 @@ where
         service_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            actor.handle_request(request).await?;
+            self.handle_request(request, &mut ResourceController::default())
+                .await?;
         }
 
         service_runtime_task.join().await
@@ -302,15 +500,11 @@ where
             })
             .expect("Service runtime thread should only stop when `request_sender` is dropped");
 
-        let mut txn_tracker = TransactionTracker::default();
-        let mut resource_controller = ResourceController::default();
-        let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
-
         loop {
             futures::select! {
                 maybe_request = incoming_execution_requests.next() => {
                     if let Some(request) = maybe_request {
-                        actor.handle_request(request).await?;
+                        self.handle_request(request, &mut ResourceController::default()).await?;
                     }
                 }
                 outcome = &mut outcome_receiver => {
@@ -331,5 +525,57 @@ where
             applications.push((app_id, application_description));
         }
         Ok(applications)
+    }
+
+    /// Calls `process_streams` for all applications that are subscribed to streams with new
+    /// events or that have new subscriptions.
+    async fn process_subscriptions(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+        context: ProcessStreamsContext,
+    ) -> Result<(), ExecutionError> {
+        // Keep track of which streams we have already processed. This is to guard against
+        // applications unsubscribing and subscribing in the process_streams call itself.
+        let mut processed = BTreeSet::new();
+        loop {
+            let to_process = txn_tracker
+                .take_streams_to_process()
+                .into_iter()
+                .filter_map(|(app_id, updates)| {
+                    let updates = updates
+                        .into_iter()
+                        .filter_map(|update| {
+                            if !processed.insert((
+                                app_id,
+                                update.chain_id,
+                                update.stream_id.clone(),
+                            )) {
+                                return None;
+                            }
+                            Some(update)
+                        })
+                        .collect::<Vec<_>>();
+                    if updates.is_empty() {
+                        return None;
+                    }
+                    Some((app_id, updates))
+                })
+                .collect::<BTreeMap<_, _>>();
+            if to_process.is_empty() {
+                return Ok(());
+            }
+            for (app_id, updates) in to_process {
+                self.run_user_action(
+                    app_id,
+                    UserAction::ProcessStreams(context, updates),
+                    None,
+                    None,
+                    txn_tracker,
+                    resource_controller,
+                )
+                .await?;
+            }
+        }
     }
 }

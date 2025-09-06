@@ -12,9 +12,9 @@ use linera_base::{
     identifiers::{AccountOwner, BlobId, ChainId, StreamId},
 };
 use linera_execution::{
-    execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
-    SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    ExecutionRuntimeContext, ExecutionStateView, MessageContext, OperationContext, OutgoingMessage,
+    ResourceController, ResourceTracker, SystemExecutionStateView, TransactionOutcome,
+    TransactionTracker,
 };
 use linera_views::context::Context;
 
@@ -144,11 +144,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     authenticated_signer: self.authenticated_signer,
                     timestamp: self.timestamp,
                 };
-                let mut actor =
-                    ExecutionStateActor::new(chain, &mut txn_tracker, self.resource_controller);
-                Box::pin(actor.execute_operation(context, operation.clone()))
-                    .await
-                    .with_execution_context(chain_execution_context)?;
+                Box::pin(chain.execute_operation(
+                    context,
+                    operation.clone(),
+                    &mut txn_tracker,
+                    self.resource_controller_mut(),
+                ))
+                .await
+                .with_execution_context(chain_execution_context)?;
                 self.resource_controller_mut()
                     .with_state(&mut chain.system)
                     .await?
@@ -210,17 +213,17 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 // Once a chain is closed, accepting incoming messages is not allowed.
                 ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
 
-                let mut actor =
-                    ExecutionStateActor::new(chain, txn_tracker, self.resource_controller);
-                Box::pin(actor.execute_message(
+                Box::pin(chain.execute_message(
                     context,
                     posted_message.message.clone(),
                     (grant > Amount::ZERO).then_some(&mut grant),
+                    txn_tracker,
+                    self.resource_controller_mut(),
                 ))
                 .await
                 .with_execution_context(chain_execution_context)?;
-                actor
-                    .send_refund(context, grant)
+                chain
+                    .send_refund(context, grant, txn_tracker)
                     .await
                     .with_execution_context(chain_execution_context)?;
             }
@@ -235,18 +238,16 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                         posted_message: Box::new(posted_message.clone()),
                     }
                 );
-                let mut actor =
-                    ExecutionStateActor::new(chain, txn_tracker, self.resource_controller);
                 if posted_message.is_tracked() {
                     // Bounce the message.
-                    actor
-                        .bounce_message(context, grant, posted_message.message.clone())
+                    chain
+                        .bounce_message(context, grant, posted_message.message.clone(), txn_tracker)
                         .await
                         .with_execution_context(ChainExecutionContext::Block)?;
                 } else {
                     // Nothing to do except maybe refund the grant.
-                    actor
-                        .send_refund(context, grant)
+                    chain
+                        .send_refund(context, grant, txn_tracker)
                         .await
                         .with_execution_context(ChainExecutionContext::Block)?;
                 }

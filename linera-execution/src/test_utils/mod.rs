@@ -31,9 +31,9 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    committee::Committee, execution_state_actor::ExecutionRequest, ApplicationDescription,
-    ExecutionRuntimeContext, ExecutionStateView, MessageContext, OperationContext, QueryContext,
-    ServiceRuntimeEndpoint, ServiceRuntimeRequest, ServiceSyncRuntime, SystemExecutionStateView,
+    committee::Committee, ApplicationDescription, ExecutionRequest, ExecutionRuntimeContext,
+    ExecutionStateView, MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint,
+    ServiceRuntimeRequest, ServiceSyncRuntime, SystemExecutionStateView,
     TestExecutionRuntimeContext,
 };
 

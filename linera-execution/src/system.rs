@@ -6,7 +6,10 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    mem,
+};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -307,6 +310,7 @@ impl UserData {
 #[derive(Debug)]
 pub struct CreateApplicationResult {
     pub app_id: ApplicationId,
+    pub txn_tracker: TransactionTracker,
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -458,16 +462,21 @@ where
                 instantiation_argument,
                 required_application_ids,
             } => {
-                let CreateApplicationResult { app_id } = self
+                let txn_tracker_moved = mem::take(txn_tracker);
+                let CreateApplicationResult {
+                    app_id,
+                    txn_tracker: txn_tracker_moved,
+                } = self
                     .create_application(
                         context.chain_id,
                         context.height,
                         module_id,
                         parameters,
                         required_application_ids,
-                        txn_tracker,
+                        txn_tracker_moved,
                     )
                     .await?;
+                *txn_tracker = txn_tracker_moved;
                 new_application = Some((app_id, instantiation_argument));
             }
             PublishDataBlob { blob_hash } => {
@@ -877,15 +886,15 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
-        txn_tracker: &mut TransactionTracker,
+        mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
 
-        let blob_ids = self.check_bytecode_blobs(&module_id, txn_tracker).await?;
+        let blob_ids = self.check_bytecode_blobs(&module_id, &txn_tracker).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
-            self.blob_used(txn_tracker, blob_id).await?;
+            self.blob_used(&mut txn_tracker, blob_id).await?;
         }
 
         let application_description = ApplicationDescription {
@@ -896,7 +905,7 @@ where
             parameters,
             required_application_ids,
         };
-        self.check_required_applications(&application_description, txn_tracker)
+        self.check_required_applications(&application_description, &mut txn_tracker)
             .await?;
 
         let blob = Blob::new_application_description(&application_description);
@@ -905,6 +914,7 @@ where
 
         Ok(CreateApplicationResult {
             app_id: ApplicationId::from(&application_description),
+            txn_tracker,
         })
     }
 

@@ -19,7 +19,7 @@ use crate::{
     execution_state_actor::ExecutionRequest,
     runtime::{LoadedApplication, ResourceController, SyncRuntime},
     test_utils::{create_dummy_user_application_description, dummy_chain_description},
-    ContractRuntime, UserContractInstance,
+    ContractRuntime, TransactionTracker, UserContractInstance,
 };
 
 /// Test if dropping [`SyncRuntime`] does not leak memory.
@@ -184,6 +184,7 @@ where
         None,
         None,
         resource_controller,
+        TransactionTracker::new_replaying(Vec::new()),
         Default::default(),
     );
 
