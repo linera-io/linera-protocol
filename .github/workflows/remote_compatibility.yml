@@ -27,29 +27,7 @@ permissions:
   contents: read
 
 jobs:
-  # paths-ignore within a pull_request doesn't work well with merge_group, so we need to use a custom filter.
-  changed-files:
-    runs-on: ubuntu-latest
-    outputs:
-      should-run: ${{ steps.files-changed.outputs.paths }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Filter paths
-        uses: dorny/paths-filter@v3
-        id: files-changed
-        with:
-          predicate-quantifier: 'every'
-          filters: |
-            paths:
-              - '!docker/**'
-              - '!docker_scylla/**'
-              - '!configuration/**'
-              - '!kubernetes/**'
-              - '!CONTRIBUTING.md'
-              - '!INSTALL.md'
   remote-net-test:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest-8-cores
     timeout-minutes: 40
 
