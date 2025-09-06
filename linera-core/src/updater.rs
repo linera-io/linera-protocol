@@ -17,7 +17,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round},
     ensure,
-    identifiers::{BlobId, BlobType, ChainId, GenericApplicationId, StreamId},
+    identifiers::{BlobId, ChainId, GenericApplicationId, StreamId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::{
@@ -232,7 +232,7 @@ where
                 Err(NodeError::EventsNotFound(event_ids))
                     if event_ids.iter().all(|event_id| {
                         event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                    }) =>
+                    }) && certificate.inner().chain_id() != self.admin_chain_id().await? =>
                 {
                     self.update_admin_chain().await?;
                     self.remote_node
@@ -242,12 +242,6 @@ where
                 Err(NodeError::BlobsNotFound(blob_ids)) => {
                     self.remote_node
                         .check_blobs_not_found(&certificate, &blob_ids)?;
-                    if blob_ids
-                        .iter()
-                        .any(|blob_id| blob_id.blob_type == BlobType::Committee)
-                    {
-                        self.update_admin_chain().await?;
-                    }
                     // The certificate is confirmed, so the blobs must be in storage.
                     let maybe_blobs = self.local_node.read_blobs_from_storage(&blob_ids).await?;
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
@@ -412,15 +406,7 @@ where
     }
 
     async fn update_admin_chain(&mut self) -> Result<(), ChainClientError> {
-        let admin_chain_id = self
-            .local_node
-            .storage_client()
-            .read_network_description()
-            .await?
-            .ok_or(ChainClientError::LocalNodeError(
-                LocalNodeError::WorkerError(WorkerError::MissingNetworkDescription),
-            ))?
-            .admin_chain_id;
+        let admin_chain_id = self.admin_chain_id().await?;
         let local_tip = self
             .local_node
             .chain_state_view(admin_chain_id)
@@ -434,6 +420,18 @@ where
             CrossChainMessageDelivery::NonBlocking,
         ))
         .await
+    }
+
+    async fn admin_chain_id(&self) -> Result<ChainId, ChainClientError> {
+        Ok(self
+            .local_node
+            .storage_client()
+            .read_network_description()
+            .await?
+            .ok_or(ChainClientError::LocalNodeError(
+                LocalNodeError::WorkerError(WorkerError::MissingNetworkDescription),
+            ))?
+            .admin_chain_id)
     }
 
     pub async fn send_chain_information(
