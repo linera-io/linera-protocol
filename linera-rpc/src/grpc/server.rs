@@ -417,7 +417,7 @@ where
     }
 
     fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {
-        #![cfg_attr(not(with_metrics), allow(unused_variables))]
+        #![allow(unused_variables)]
         #[cfg(with_metrics)]
         {
             metrics::SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE

@@ -414,14 +414,17 @@ where
                             ExecutionError::UnauthorizedHttpRequest(url)
                         );
 
-                        let request = Client::new()
+                        #[cfg_attr(web, allow(unused_mut))]
+                        let mut request = Client::new()
                             .request(request.method.into(), url)
                             .body(request.body)
                             .headers(headers);
                         #[cfg(not(web))]
-                        let request = request.timeout(linera_base::time::Duration::from_millis(
-                            committee.policy().http_request_timeout_ms,
-                        ));
+                        {
+                            request = request.timeout(linera_base::time::Duration::from_millis(
+                                committee.policy().http_request_timeout_ms,
+                            ));
+                        }
 
                         let response = request.send().await?;
 
