@@ -2675,3 +2675,109 @@ where
     assert_eq!(client.local_balance().await.unwrap(), expected_balance);
     Ok(())
 }
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_validator_outdated_admin_chain<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let new_public_key = signer.generate_new();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    let admin_client = builder.add_root_chain(0, Amount::from_tokens(1000)).await?;
+    let client1 = builder.add_root_chain(1, Amount::from_tokens(1000)).await?;
+
+    // Take one validator down - they will miss committee changes.
+    builder.set_fault_type([3], FaultType::Offline);
+
+    // Start by creating a block in epoch 0.
+    let certificate0 = client1
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(admin_client.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    assert_eq!(certificate0.block().header.epoch, Epoch::from(0));
+
+    // Advance the epoch.
+    admin_client
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+
+    // Process the inbox to migrate the client's chain.
+    client1.synchronize_from_validators().await.unwrap();
+    client1.process_inbox().await.unwrap();
+
+    // Open a chain
+    let (new_chain_desc, certificate1) = client1
+        .open_chain(
+            ChainOwnership::single(new_public_key.into()),
+            ApplicationPermissions::default(),
+            Amount::from_tokens(10),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Check that the epoch has been migrated.
+    assert_eq!(certificate1.block().header.epoch, Epoch::from(1));
+
+    // Make a client to try the new chain.
+    let mut client2 = builder
+        .make_client(new_chain_desc.id(), None, BlockHeight::ZERO)
+        .await?;
+    client2.set_preferred_owner(new_public_key.into());
+    client2.synchronize_from_validators().await.unwrap();
+    client2
+        .receive_certificate_and_update_validators(certificate1)
+        .await
+        .unwrap();
+
+    // Let's deactivate another validator and reactivate the one that was offline.
+    // Now the client will have to update validator 3 on the admin chain in order for the
+    // next blocks to be correctly processed.
+    builder.set_fault_type([2], FaultType::Offline);
+    builder.set_fault_type([3], FaultType::Honest);
+
+    let admin_tip = builder
+        .node(3)
+        .chain_info_with_manager_values(admin_client.chain_id())
+        .await
+        .unwrap()
+        .next_block_height;
+    // At this point, validator 3 should have zero blocks on the admin chain.
+    assert_eq!(admin_tip, 0.into());
+
+    // Update the validators on the chain.
+    // If it works, it means the validator has been correctly updated.
+    client2.update_validators(None).await.unwrap();
+
+    client2
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(admin_client.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    let admin_tip = builder
+        .node(3)
+        .chain_info_with_manager_values(admin_client.chain_id())
+        .await
+        .unwrap()
+        .next_block_height;
+    // Validator 3 should be up to date on the admin chain.
+    assert_eq!(admin_tip, 2.into());
+
+    Ok(())
+}

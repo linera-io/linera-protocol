@@ -17,23 +17,24 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round},
     ensure,
-    identifiers::{BlobId, ChainId, GenericApplicationId},
+    identifiers::{BlobId, ChainId, GenericApplicationId, StreamId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{ResultReadCertificates, Storage};
 use thiserror::Error;
 
 use crate::{
     client::ChainClientError,
     data_types::{ChainInfo, ChainInfoQuery},
-    local_node::LocalNodeClient,
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
+    worker::WorkerError,
 };
 
 /// The default amount of time we wait for additional validators to contribute
@@ -221,25 +222,39 @@ where
         certificate: GenericCertificate<ConfirmedBlock>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let result = self
+        let mut result = self
             .remote_node
             .handle_optimized_confirmed_certificate(&certificate, delivery)
             .await;
 
-        Ok(match &result {
-            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                self.remote_node
-                    .check_blobs_not_found(&certificate, blob_ids)?;
-                // The certificate is confirmed, so the blobs must be in storage.
-                let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
-                let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
-                self.remote_node.node.upload_blobs(blobs.clone()).await?;
-                self.remote_node
-                    .handle_confirmed_certificate(certificate, delivery)
-                    .await
-            }
-            _ => result,
-        }?)
+        for _ in [0, 1] {
+            result = match result {
+                Err(NodeError::EventsNotFound(event_ids))
+                    if event_ids.iter().all(|event_id| {
+                        event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
+                    }) && certificate.inner().chain_id() != self.admin_chain_id().await? =>
+                {
+                    self.update_admin_chain().await?;
+                    self.remote_node
+                        .handle_confirmed_certificate(certificate.clone(), delivery)
+                        .await
+                }
+                Err(NodeError::BlobsNotFound(blob_ids)) => {
+                    self.remote_node
+                        .check_blobs_not_found(&certificate, &blob_ids)?;
+                    // The certificate is confirmed, so the blobs must be in storage.
+                    let maybe_blobs = self.local_node.read_blobs_from_storage(&blob_ids).await?;
+                    let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
+                    self.remote_node.node.upload_blobs(blobs).await?;
+                    self.remote_node
+                        .handle_confirmed_certificate(certificate.clone(), delivery)
+                        .await
+                }
+                _ => result,
+            };
+        }
+
+        Ok(result?)
     }
 
     async fn send_validated_certificate(
@@ -390,6 +405,35 @@ where
         }
     }
 
+    async fn update_admin_chain(&mut self) -> Result<(), ChainClientError> {
+        let admin_chain_id = self.admin_chain_id().await?;
+        let local_tip = self
+            .local_node
+            .chain_state_view(admin_chain_id)
+            .await?
+            .tip_state
+            .get()
+            .next_block_height;
+        Box::pin(self.send_chain_information(
+            admin_chain_id,
+            local_tip,
+            CrossChainMessageDelivery::NonBlocking,
+        ))
+        .await
+    }
+
+    async fn admin_chain_id(&self) -> Result<ChainId, ChainClientError> {
+        Ok(self
+            .local_node
+            .storage_client()
+            .read_network_description()
+            .await?
+            .ok_or(ChainClientError::LocalNodeError(
+                LocalNodeError::WorkerError(WorkerError::MissingNetworkDescription),
+            ))?
+            .admin_chain_id)
+    }
+
     pub async fn send_chain_information(
         &mut self,
         chain_id: ChainId,
@@ -436,7 +480,36 @@ where
             }
         } else {
             let query = ChainInfoQuery::new(chain_id);
-            self.remote_node.handle_chain_info_query(query).await?
+            match self
+                .remote_node
+                .handle_chain_info_query(query.clone())
+                .await
+            {
+                Ok(info) => info,
+                Err(ref original_err @ NodeError::BlobsNotFound(ref blob_ids)) => {
+                    let blob_states = self
+                        .local_node
+                        .read_blob_states_from_storage(blob_ids)
+                        .await?;
+                    let storage_client = self.local_node.storage_client();
+                    let certificates = futures::future::try_join_all(
+                        blob_states
+                            .into_iter()
+                            .filter_map(|state| state.last_used_by)
+                            .map(|hash| storage_client.read_certificate(hash)),
+                    )
+                    .await?;
+                    for certificate in certificates.into_iter().flatten() {
+                        self.send_confirmed_certificate(certificate, delivery)
+                            .await?;
+                    }
+                    let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
+                    let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
+                    self.remote_node.node.upload_blobs(blobs.clone()).await?;
+                    self.remote_node.handle_chain_info_query(query).await?
+                }
+                Err(err) => return Err(err.into()),
+            }
         };
         let initial_block_height = remote_info.next_block_height;
         // Obtain the missing blocks and the manager state from the local node.
