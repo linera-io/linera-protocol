@@ -630,6 +630,12 @@ where
                 callback.respond(response);
             }
 
+            QueryService { response, callback } => {
+                self.txn_tracker
+                    .add_oracle_response(OracleResponse::Service(response));
+                callback.respond(());
+            }
+
             AddOutgoingMessage { message, callback } => {
                 self.txn_tracker.add_outgoing_message(message);
                 callback.respond(());
@@ -641,6 +647,11 @@ where
             } => {
                 self.txn_tracker.set_local_time(local_time);
                 callback.respond(());
+            }
+
+            GetCreatedBlobs { callback } => {
+                let blobs = self.txn_tracker.created_blobs().clone();
+                callback.respond(blobs);
             }
 
             AssertBefore {
@@ -685,6 +696,11 @@ where
                 self.txn_tracker
                     .add_oracle_response(OracleResponse::Round(result_round));
                 callback.respond(result_round);
+            }
+
+            AddOracleResponse { response, callback } => {
+                self.txn_tracker.add_oracle_response(response);
+                callback.respond(());
             }
         }
 
@@ -1205,6 +1221,13 @@ pub enum ExecutionRequest {
         callback: Sender<Vec<u8>>,
     },
 
+    QueryService {
+        #[debug(with = hex_debug)]
+        response: Vec<u8>,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
     AddOutgoingMessage {
         message: crate::OutgoingMessage,
         #[debug(skip)]
@@ -1215,6 +1238,11 @@ pub enum ExecutionRequest {
         local_time: Timestamp,
         #[debug(skip)]
         callback: Sender<()>,
+    },
+
+    GetCreatedBlobs {
+        #[debug(skip)]
+        callback: Sender<std::collections::BTreeMap<BlobId, BlobContent>>,
     },
 
     AssertBefore {
@@ -1233,5 +1261,11 @@ pub enum ExecutionRequest {
         round: Option<u32>,
         #[debug(skip)]
         callback: Sender<Option<u32>>,
+    },
+
+    AddOracleResponse {
+        response: OracleResponse,
+        #[debug(skip)]
+        callback: Sender<()>,
     },
 }
