@@ -32,3 +32,7 @@ dependencies:
   - name: loki-stack
     version: "2.8.9"
     repository: "https://grafana.github.io/helm-charts"
+
+  - name: pyroscope
+    version: "1.14.2"
+    repository: "https://grafana.github.io/helm-charts"

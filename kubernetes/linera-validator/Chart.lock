@@ -5,5 +5,8 @@ dependencies:
 - name: loki-stack
   repository: https://grafana.github.io/helm-charts
   version: 2.8.9
-digest: sha256:da3a8808fb9479bdd183b307e70d7855794739cafc1796047bde8febc78d539c
-generated: "2023-11-30T17:19:14.544457977Z"
+- name: pyroscope
+  repository: https://grafana.github.io/helm-charts
+  version: 1.14.2
+digest: sha256:7fe611b57ddb6d72aa31bac87568fdb8e531e988e2ce4067b931d3026332f027
+generated: "2025-09-01T16:56:59.19795-03:00"
