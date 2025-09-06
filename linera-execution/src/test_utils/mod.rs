@@ -1,10 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Some of these items are only used by some tests, but Rust will complain about unused
-// items for the tests where they aren't used
-#![allow(unused_imports)]
-
 mod mock_application;
 #[cfg(with_revm)]
 pub mod solidity;
@@ -13,28 +9,26 @@ mod system_execution_state;
 use std::{collections::BTreeMap, sync::Arc, thread, vec};
 
 use linera_base::{
-    crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey},
+    crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
         Amount, Blob, BlockHeight, ChainDescription, ChainOrigin, CompressedBytecode, Epoch,
         InitialChainConfig, OracleResponse, Timestamp,
     },
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
-use linera_views::{context::Context, views::View, ViewError};
+use linera_views::{context::Context, views::View};
 use proptest::{prelude::any, strategy::Strategy};
-use serde::{Deserialize, Serialize};
 
 pub use self::{
     mock_application::{ExpectedCall, MockApplication, MockApplicationInstance},
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    committee::Committee, ApplicationDescription, ExecutionRequest, ExecutionRuntimeContext,
-    ExecutionStateView, MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint,
-    ServiceRuntimeRequest, ServiceSyncRuntime, SystemExecutionStateView,
-    TestExecutionRuntimeContext,
+    committee::Committee, ApplicationDescription, ExecutionRuntimeContext, ExecutionStateView,
+    MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    SystemExecutionStateView,
 };
 
 pub fn dummy_committee() -> Committee {
