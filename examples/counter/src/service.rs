@@ -7,7 +7,7 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{EmptySubscription, Request, Response, Schema, Object};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use counter::CounterOperation;
 use linera_sdk::{
     graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service,

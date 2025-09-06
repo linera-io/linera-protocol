@@ -93,7 +93,6 @@ impl Contract for FungibleTokenContract {
                 FungibleResponse::Ok
             }
             // ANCHOR_END: execute_operation_transfer
-
             FungibleOperation::TransferFrom {
                 owner,
                 spender,
