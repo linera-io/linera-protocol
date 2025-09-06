@@ -14,7 +14,6 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use dashmap::DashMap;
 use futures::{future::join_all, StreamExt as _};
 use linera_base::ensure;
 use scylla::{
@@ -115,8 +114,8 @@ struct ScyllaDbClient {
     find_keys_by_prefix_bounded: PreparedStatement,
     find_key_values_by_prefix_unbounded: PreparedStatement,
     find_key_values_by_prefix_bounded: PreparedStatement,
-    multi_key_values: DashMap<usize, PreparedStatement>,
-    multi_keys: DashMap<usize, PreparedStatement>,
+    multi_key_values: papaya::HashMap<usize, PreparedStatement>,
+    multi_keys: papaya::HashMap<usize, PreparedStatement>,
 }
 
 impl ScyllaDbClient {
@@ -205,8 +204,8 @@ impl ScyllaDbClient {
             find_keys_by_prefix_bounded,
             find_key_values_by_prefix_unbounded,
             find_key_values_by_prefix_bounded,
-            multi_key_values: DashMap::new(),
-            multi_keys: DashMap::new(),
+            multi_key_values: papaya::HashMap::new(),
+            multi_keys: papaya::HashMap::new(),
         })
     }
 
@@ -243,7 +242,7 @@ impl ScyllaDbClient {
         &self,
         num_markers: usize,
     ) -> Result<PreparedStatement, ScyllaDbStoreInternalError> {
-        if let Some(prepared_statement) = self.multi_key_values.get(&num_markers) {
+        if let Some(prepared_statement) = self.multi_key_values.pin().get(&num_markers) {
             return Ok(prepared_statement.clone());
         }
         let markers = std::iter::repeat_n("?", num_markers)
@@ -257,6 +256,7 @@ impl ScyllaDbClient {
             ))
             .await?;
         self.multi_key_values
+            .pin()
             .insert(num_markers, prepared_statement.clone());
         Ok(prepared_statement)
     }
@@ -265,7 +265,7 @@ impl ScyllaDbClient {
         &self,
         num_markers: usize,
     ) -> Result<PreparedStatement, ScyllaDbStoreInternalError> {
-        if let Some(prepared_statement) = self.multi_keys.get(&num_markers) {
+        if let Some(prepared_statement) = self.multi_keys.pin().get(&num_markers) {
             return Ok(prepared_statement.clone());
         };
         let markers = std::iter::repeat_n("?", num_markers)
@@ -279,6 +279,7 @@ impl ScyllaDbClient {
             ))
             .await?;
         self.multi_keys
+            .pin()
             .insert(num_markers, prepared_statement.clone());
         Ok(prepared_statement)
     }

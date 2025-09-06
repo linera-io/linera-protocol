@@ -406,7 +406,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "auto_impl",
- "dashmap 6.1.0",
+ "dashmap",
  "either",
  "futures",
  "futures-utils-wasm",
@@ -1993,19 +1993,6 @@ dependencies = [
  "darling_core 0.20.10",
  "quote",
  "syn 2.0.100",
-]
-
-[[package]]
-name = "dashmap"
-version = "5.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
-dependencies = [
- "cfg-if",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core",
 ]
 
 [[package]]
@@ -3753,7 +3740,6 @@ dependencies = [
  "cfg_aliases",
  "clap",
  "custom_debug_derive",
- "dashmap 5.5.3",
  "futures",
  "linera-base",
  "linera-chain",
@@ -3763,6 +3749,7 @@ dependencies = [
  "linera-version",
  "linera-views",
  "lru 0.12.4",
+ "papaya",
  "prometheus",
  "proptest",
  "rand 0.8.5",
@@ -3811,7 +3798,6 @@ dependencies = [
  "cfg_aliases",
  "clap",
  "custom_debug_derive",
- "dashmap 5.5.3",
  "derive_more 1.0.0",
  "dyn-clone",
  "futures",
@@ -3824,6 +3810,7 @@ dependencies = [
  "linera-witty",
  "lru 0.12.4",
  "oneshot",
+ "papaya",
  "prometheus",
  "proptest",
  "reqwest 0.11.27",
@@ -3853,7 +3840,6 @@ dependencies = [
  "bcs",
  "cargo_toml",
  "cfg_aliases",
- "dashmap 5.5.3",
  "futures",
  "linera-base",
  "linera-chain",
@@ -3864,6 +3850,7 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "log",
+ "papaya",
  "serde",
  "serde_json",
  "thiserror 1.0.65",
@@ -3888,13 +3875,13 @@ dependencies = [
  "bcs",
  "cfg-if",
  "cfg_aliases",
- "dashmap 5.5.3",
  "futures",
  "itertools 0.14.0",
  "linera-base",
  "linera-chain",
  "linera-execution",
  "linera-views",
+ "papaya",
  "prometheus",
  "serde",
 ]
@@ -3952,7 +3939,6 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "convert_case",
- "dashmap 5.5.3",
  "derive_more 1.0.0",
  "futures",
  "generic-array",
@@ -3961,6 +3947,7 @@ dependencies = [
  "linera-views-derive",
  "linera-witty",
  "linked-hash-map",
+ "papaya",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -4106,7 +4093,7 @@ dependencies = [
  "cfg-if",
  "corosensei",
  "crossbeam-queue",
- "dashmap 6.1.0",
+ "dashmap",
  "derivative",
  "enum-iterator",
  "fnv",
@@ -4606,6 +4593,16 @@ name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
+
+[[package]]
+name = "papaya"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeb8b9616002a83f9779ea70a2a44364fe804f8b532b96989d0790a34ad76479"
+dependencies = [
+ "equivalent",
+ "seize",
+]
 
 [[package]]
 name = "parity-scale-codec"
@@ -5656,6 +5653,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4387882333d3aa8cb20530a17c69a3752e97837832f34f6dccc760e715001d9"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "seize"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d84b0c858bdd30cb56f5597f8b3bf702ec23829e652cc636a1e5a7b9de46ae93"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

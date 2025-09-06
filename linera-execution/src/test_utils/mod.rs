@@ -225,9 +225,11 @@ where
 
         extra
             .user_contracts()
+            .pin()
             .insert(id, mock_application.clone().into());
         extra
             .user_services()
+            .pin()
             .insert(id, mock_application.clone().into());
         extra
             .add_blobs([

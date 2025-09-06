@@ -49,7 +49,6 @@ bincode.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
-dashmap.workspace = true
 ed25519-dalek.workspace = true
 futures.workspace = true
 linera-base.workspace = true
@@ -58,6 +57,7 @@ linera-core.workspace = true
 linera-execution.workspace = true
 linera-storage.workspace = true
 linera-version.workspace = true
+papaya.workspace = true
 prometheus = { workspace = true, optional = true }
 prost.workspace = true
 rand.workspace = true

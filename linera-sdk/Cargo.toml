@@ -63,7 +63,7 @@ wit-bindgen.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
 cargo_toml.workspace = true
-dashmap.workspace = true
+papaya.workspace = true
 linera-base = { workspace = true, features = ["metrics"] }
 linera-chain = { workspace = true, features = ["metrics"] }
 linera-core = { workspace = true, features = ["metrics", "wasmer"] }

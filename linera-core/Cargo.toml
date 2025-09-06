@@ -56,7 +56,6 @@ bcs.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true
-dashmap.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
@@ -65,6 +64,7 @@ linera-storage.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 lru.workspace = true
+papaya.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 rand = { workspace = true, features = ["std_rng"] }

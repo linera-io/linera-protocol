@@ -268,12 +268,11 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let mut chain = ChainStateView::new(chain_id).await;
 
     let extra = &chain.context().extra();
-    extra
-        .user_contracts()
-        .insert(application_id, application.clone().into());
-    extra
-        .user_contracts()
-        .insert(another_app_id, application.clone().into());
+    {
+        let pinned = extra.user_contracts().pin();
+        pinned.insert(application_id, application.clone().into());
+        pinned.insert(another_app_id, application.clone().into());
+    }
 
     extra
         .add_blobs([committee_blob(Default::default())])
@@ -723,12 +722,14 @@ async fn prepare_test_with_dummy_mock_application(
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
-    extra
-        .user_contracts()
-        .insert(application_id, application.clone().into());
-    extra
-        .user_services()
-        .insert(application_id, application.clone().into());
+    {
+        let pinned = extra.user_contracts().pin();
+        pinned.insert(application_id, application.clone().into());
+    }
+    {
+        let pinned = extra.user_services().pin();
+        pinned.insert(application_id, application.clone().into());
+    }
     extra
         .add_blobs([
             committee_blob,
