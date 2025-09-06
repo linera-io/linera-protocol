@@ -6,7 +6,6 @@
 mod sync_response;
 
 use futures::channel::mpsc;
-use linera_base::{data_types::OracleResponse, http::Response, identifiers::EventId};
 
 pub use self::sync_response::SyncSender;
 use crate::ExecutionError;
@@ -123,48 +122,6 @@ impl<Response> RespondExt for SyncSender<Response> {
     fn respond(self, response: Self::Response) {
         if self.send(response).is_err() {
             tracing::debug!("Request sent to `RuntimeActor` was canceled");
-        }
-    }
-}
-
-pub(crate) trait OracleResponseExt {
-    fn to_round(&self) -> Result<Option<u32>, ExecutionError>;
-
-    fn to_service_response(&self) -> Result<Vec<u8>, ExecutionError>;
-
-    fn to_http_response(&self) -> Result<Response, ExecutionError>;
-
-    fn to_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError>;
-}
-
-impl OracleResponseExt for OracleResponse {
-    fn to_round(&self) -> Result<Option<u32>, ExecutionError> {
-        match self {
-            OracleResponse::Round(round) => Ok(*round),
-            _ => Err(ExecutionError::OracleResponseMismatch),
-        }
-    }
-
-    fn to_service_response(&self) -> Result<Vec<u8>, ExecutionError> {
-        match self {
-            OracleResponse::Service(bytes) => Ok(bytes.clone()),
-            _ => Err(ExecutionError::OracleResponseMismatch),
-        }
-    }
-
-    fn to_http_response(&self) -> Result<Response, ExecutionError> {
-        match self {
-            OracleResponse::Http(response) => Ok(response.clone()),
-            _ => Err(ExecutionError::OracleResponseMismatch),
-        }
-    }
-
-    fn to_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError> {
-        match self {
-            OracleResponse::Event(recorded_event_id, event) if recorded_event_id == event_id => {
-                Ok(event.clone())
-            }
-            _ => Err(ExecutionError::OracleResponseMismatch),
         }
     }
 }
