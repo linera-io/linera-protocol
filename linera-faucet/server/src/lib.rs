@@ -444,7 +444,7 @@ where
                                 WorkerError::ChainError(chain_err.into()),
                             ))
                             .into(),
-                        )
+                        );
                     }
                 }
             }

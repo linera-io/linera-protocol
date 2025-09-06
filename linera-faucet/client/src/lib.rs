@@ -87,7 +87,10 @@ impl Faucet {
             if messages.is_empty() {
                 Err(ErrorInner::GraphQl(errors).into())
             } else {
-                Err(ErrorInner::GraphQl(vec![serde_json::Value::String(messages.join("; "))]).into())
+                Err(
+                    ErrorInner::GraphQl(vec![serde_json::Value::String(messages.join("; "))])
+                        .into(),
+                )
             }
         } else {
             Ok(response
