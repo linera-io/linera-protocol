@@ -5577,6 +5577,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bcs",
  "bincode",
  "bytes",
  "cfg-if",

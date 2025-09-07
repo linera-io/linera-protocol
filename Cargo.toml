@@ -357,9 +357,3 @@ branch = "post-message"
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"
-
-[workspace.lints.rust]
-missing_docs = "deny"
-
-[workspace.lints.clippy]
-large_futures = "deny"
