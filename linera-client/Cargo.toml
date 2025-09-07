@@ -49,16 +49,16 @@ anyhow.workspace = true
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
-hdrhistogram = { workspace = true }
+hdrhistogram.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
-linera-persistent = { version = "0.15.0", path = "../linera-persistent" }
+linera-persistent.workspace = true
 linera-rpc.workspace = true
 linera-sdk.workspace = true
 linera-storage.workspace = true
-linera-version = { workspace = true }
+linera-version.workspace = true
 linera-views.workspace = true
 num-format.workspace = true
 prometheus-parse.workspace = true
