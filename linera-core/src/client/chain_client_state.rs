@@ -34,7 +34,7 @@ impl ChainClientState {
 
     /// Clones the state. This must only be used to update the state, and one of the two clones
     /// must be dropped.
-    pub fn clone_for_update(&self) -> ChainClientState {
+    pub(super) fn clone_for_update_unchecked(&self) -> ChainClientState {
         ChainClientState {
             pending_proposal: self.pending_proposal.clone(),
             client_mutex: Arc::clone(&self.client_mutex),

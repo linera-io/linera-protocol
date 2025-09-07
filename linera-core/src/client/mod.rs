@@ -519,7 +519,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all, fields(chain_id = format!("{:.8}", info.chain_id)))]
     fn update_from_info(&self, info: &ChainInfo) {
         self.chains.pin().update(info.chain_id, |state| {
-            let mut state = state.clone_for_update();
+            let mut state = state.clone_for_update_unchecked();
             state.update_from_info(info);
             state
         });
@@ -1612,7 +1612,7 @@ impl<Env: Environment> ChainClient<Env> {
         let chains = self.client.chains.pin();
         chains
             .update(self.chain_id, |state| {
-                let mut state = state.clone_for_update();
+                let mut state = state.clone_for_update_unchecked();
                 f(&mut state);
                 state
             })
