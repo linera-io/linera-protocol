@@ -3,7 +3,6 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    future::Future,
     mem, vec,
 };
 
@@ -167,24 +166,12 @@ impl TransactionTracker {
         &self.blobs
     }
 
-    pub fn add_operation_result(&mut self, result: Option<Vec<u8>>) {
-        self.operation_result = result
+    pub fn add_oracle_response(&mut self, oracle_response: OracleResponse) {
+        self.oracle_responses.push(oracle_response);
     }
 
-    /// In replay mode, returns the next recorded oracle response. Otherwise executes `f` and
-    /// records and returns the result. `f` is the implementation of the actual oracle and is
-    /// only called in validation mode, so it does not have to be fully deterministic.
-    pub async fn oracle<F, G>(&mut self, f: F) -> Result<&OracleResponse, ExecutionError>
-    where
-        F: FnOnce() -> G,
-        G: Future<Output = Result<OracleResponse, ExecutionError>>,
-    {
-        let response = match self.next_replayed_oracle_response()? {
-            Some(response) => response,
-            None => f().await?,
-        };
-        self.oracle_responses.push(response);
-        Ok(self.oracle_responses.last().unwrap())
+    pub fn add_operation_result(&mut self, result: Option<Vec<u8>>) {
+        self.operation_result = result
     }
 
     pub fn add_stream_to_process(
@@ -258,7 +245,7 @@ impl TransactionTracker {
         } else {
             false
         };
-        self.oracle_responses.push(oracle_response);
+        self.add_oracle_response(oracle_response);
         Ok(replaying)
     }
 
@@ -269,7 +256,9 @@ impl TransactionTracker {
     ///
     /// In both cases, the value (returned or obtained from the oracle) must be recorded using
     /// `add_oracle_response`.
-    fn next_replayed_oracle_response(&mut self) -> Result<Option<OracleResponse>, ExecutionError> {
+    pub fn next_replayed_oracle_response(
+        &mut self,
+    ) -> Result<Option<OracleResponse>, ExecutionError> {
         let Some(responses) = &mut self.replaying_oracle_responses else {
             return Ok(None); // Not in replay mode.
         };

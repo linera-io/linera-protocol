@@ -27,9 +27,8 @@ use linera_chain::{
     types::ConfirmedBlock,
 };
 use linera_execution::{
-    system::SystemOperation, test_utils::SystemExecutionState, ExecutionRuntimeContext,
-    ExecutionStateActor, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
+    system::SystemOperation, test_utils::SystemExecutionState, ExecutionRuntimeContext, Operation,
+    OperationContext, ResourceController, TransactionTracker, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -268,21 +267,22 @@ where
         timestamp: Timestamp::from(3),
     };
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(3),
-        0,
-        0,
-        0,
-        Some(vec![OracleResponse::Blob(application_description_blob_id)]),
-        &[],
-    );
-    ExecutionStateActor::new(&mut creator_state, &mut txn_tracker, &mut controller)
+    creator_state
         .execute_operation(
             operation_context,
             Operation::User {
                 application_id,
                 bytes: user_operation,
             },
+            &mut TransactionTracker::new(
+                Timestamp::from(3),
+                0,
+                0,
+                0,
+                Some(vec![OracleResponse::Blob(application_description_blob_id)]),
+                &[],
+            ),
+            &mut controller,
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(3));

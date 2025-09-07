@@ -9,7 +9,7 @@
 pub mod committee;
 pub mod evm;
 mod execution;
-pub mod execution_state_actor;
+mod execution_state_actor;
 #[cfg(with_graphql)]
 mod graphql;
 mod policy;
@@ -55,6 +55,7 @@ use thiserror::Error;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
+use crate::runtime::ContractSyncRuntime;
 #[cfg(with_testing)]
 use crate::test_utils::dummy_chain_description;
 #[cfg(all(with_testing, with_wasm_runtime))]
@@ -67,7 +68,7 @@ pub use crate::wasm::{
 pub use crate::{
     committee::Committee,
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
-    execution_state_actor::{ExecutionRequest, ExecutionStateActor},
+    execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
     resources::{BalanceHolder, ResourceController, ResourceTracker},
     runtime::{
@@ -256,8 +257,6 @@ pub enum ExecutionError {
     BcsError(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
-    #[error("Service oracle query tried to create operations: {0:?}")]
-    ServiceOracleQueryOperations(Vec<Operation>),
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]
     AssertBefore {
         timestamp: Timestamp,

@@ -23,9 +23,9 @@ use linera_execution::{
         dummy_chain_description_with_ownership_and_balance, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeContext, ExecutionStateActor,
-    Message, Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
-    QueryResponse, ResourceController, SystemOperation, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeContext, Message, Operation,
+    OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome, QueryResponse,
+    ResourceController, SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use test_case::test_case;
@@ -48,18 +48,19 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new_replaying_blobs([
-        app_desc_blob_id,
-        contract_blob_id,
-        service_blob_id,
-    ]);
-    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+    let result = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: *app_id,
                 bytes: vec![],
             },
+            &mut TransactionTracker::new_replaying_blobs([
+                app_desc_blob_id,
+                contract_blob_id,
+                service_blob_id,
+            ]),
+            &mut controller,
         )
         .await;
 
@@ -140,16 +141,17 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut controller = ResourceController::default();
     let mut txn_tracker =
         TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            context,
-            Operation::User {
-                application_id: caller_id,
-                bytes: dummy_operation.clone(),
-            },
-        )
-        .await
-        .unwrap();
+    view.execute_operation(
+        context,
+        Operation::User {
+            application_id: caller_id,
+            bytes: dummy_operation.clone(),
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await
+    .unwrap();
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert!(txn_outcome.outgoing_messages.is_empty());
 
@@ -282,15 +284,16 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     let mut controller = ResourceController::default();
     let mut txn_tracker =
         TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            context,
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-        )
-        .await?;
+    view.execute_operation(
+        context,
+        Operation::User {
+            application_id: caller_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert!(txn_outcome.outgoing_messages.is_empty());
     Ok(())
@@ -347,15 +350,15 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
-    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+    let result = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
+            &mut controller,
         )
         .await;
 
@@ -383,14 +386,15 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
-    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+    let result = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: id,
                 bytes: vec![],
             },
+            &mut TransactionTracker::new_replaying_blobs(blobs),
+            &mut controller,
         )
         .await;
 
@@ -444,20 +448,21 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new_replaying_blobs(
-        first_app_blobs
-            .iter()
-            .chain(&second_app_blobs)
-            .chain(&third_app_blobs)
-            .chain(&fourth_app_blobs),
-    );
-    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+    let result = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: first_id,
                 bytes: vec![],
             },
+            &mut TransactionTracker::new_replaying_blobs(
+                first_app_blobs
+                    .iter()
+                    .chain(&second_app_blobs)
+                    .chain(&third_app_blobs)
+                    .chain(&fourth_app_blobs),
+            ),
+            &mut controller,
         )
         .await;
 
@@ -582,15 +587,16 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
             .chain(&third_app_blobs)
             .chain(&fourth_app_blobs),
     );
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            context,
-            Operation::User {
-                application_id: first_id,
-                bytes: vec![],
-            },
-        )
-        .await?;
+    view.execute_operation(
+        context,
+        Operation::User {
+            application_id: first_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
@@ -629,15 +635,15 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
-    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+    let result = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
+            &mut controller,
         )
         .await;
 
@@ -682,15 +688,15 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
-    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+    let result = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
+            &mut controller,
         )
         .await;
 
@@ -734,15 +740,15 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
-    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+    let result = view
         .execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
+            &mut controller,
         )
         .await;
 
@@ -784,18 +790,21 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
-    let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
+    assert_matches!(
+        view.execute_operation(
             context,
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
+            &mut TransactionTracker::new_replaying_blobs(
+                caller_blobs.iter().chain(&target_blobs)
+            ),
+            &mut controller,
         )
-        .await;
-    assert_matches!(result, Err(ExecutionError::UserError(message)) if message == error_message);
+        .await,
+        Err(ExecutionError::UserError(message)) if message == error_message
+    );
 
     Ok(())
 }
@@ -837,15 +846,16 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            context,
-            Operation::User {
-                application_id,
-                bytes: vec![],
-            },
-        )
-        .await?;
+    view.execute_operation(
+        context,
+        Operation::User {
+            application_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
@@ -904,15 +914,16 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let mut controller = ResourceController::default();
     let mut txn_tracker =
         TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            context,
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-        )
-        .await?;
+    view.execute_operation(
+        context,
+        Operation::User {
+            application_id: caller_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
@@ -985,15 +996,16 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
             .chain(&middle_blobs)
             .chain(&target_blobs),
     );
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            context,
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-        )
-        .await?;
+    view.execute_operation(
+        context,
+        Operation::User {
+            application_id: caller_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
@@ -1095,15 +1107,16 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
             .chain(&silent_blobs)
             .chain(&sending_blobs),
     );
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            context,
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-        )
-        .await?;
+    view.execute_operation(
+        context,
+        Operation::User {
+            application_id: caller_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
 
     // Return to checking the user application outcomes
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -1216,8 +1229,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         Some(blob_oracle_responses(blobs.iter())),
         &[],
     );
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(context, operation)
+    view.execute_operation(context, operation, &mut txn_tracker, &mut controller)
         .await?;
 
     assert_eq!(*view.system.balance.get(), Amount::from_tokens(3));
@@ -1295,19 +1307,25 @@ async fn test_close_chain() -> anyhow::Result<()> {
         application_id,
         bytes: vec![],
     };
-    let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(context, operation)
-        .await?;
+    view.execute_operation(
+        context,
+        operation,
+        &mut TransactionTracker::new_replaying_blobs(blobs),
+        &mut controller,
+    )
+    .await?;
     assert!(!view.system.closed.get());
 
     // Now we authorize the application and it can close the chain.
     let permissions = ApplicationPermissions::new_single(application_id);
     let operation = SystemOperation::ChangeApplicationPermissions(permissions);
-    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(context, operation.into())
-        .await?;
+    view.execute_operation(
+        context,
+        operation.into(),
+        &mut TransactionTracker::new_replaying(Vec::new()),
+        &mut controller,
+    )
+    .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _operation| {
@@ -1321,10 +1339,13 @@ async fn test_close_chain() -> anyhow::Result<()> {
         application_id,
         bytes: vec![],
     };
-    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(context, operation)
-        .await?;
+    view.execute_operation(
+        context,
+        operation,
+        &mut TransactionTracker::new_replaying(Vec::new()),
+        &mut controller,
+    )
+    .await?;
     assert!(view.system.closed.get());
 
     Ok(())
@@ -1396,7 +1417,7 @@ async fn test_message_receipt_spending_chain_balance(
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
 
-    let execution_result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+    let execution_result = view
         .execute_message(
             context,
             Message::User {
@@ -1404,6 +1425,8 @@ async fn test_message_receipt_spending_chain_balance(
                 bytes: vec![],
             },
             None,
+            &mut txn_tracker,
+            &mut controller,
         )
         .await;
 

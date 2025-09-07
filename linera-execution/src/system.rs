@@ -6,7 +6,10 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    mem,
+};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -31,9 +34,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
 use crate::{
-    committee::Committee, util::OracleResponseExt as _, ApplicationDescription, ApplicationId,
-    ExecutionError, ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext,
-    OutgoingMessage, QueryContext, QueryOutcome, ResourceController, TransactionTracker,
+    committee::Committee, ApplicationDescription, ApplicationId, ExecutionError,
+    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, OutgoingMessage,
+    QueryContext, QueryOutcome, ResourceController, TransactionTracker,
 };
 
 /// The event stream name for new epochs and committees.
@@ -307,6 +310,7 @@ impl UserData {
 #[derive(Debug)]
 pub struct CreateApplicationResult {
     pub app_id: ApplicationId,
+    pub txn_tracker: TransactionTracker,
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -458,16 +462,21 @@ where
                 instantiation_argument,
                 required_application_ids,
             } => {
-                let CreateApplicationResult { app_id } = self
+                let txn_tracker_moved = mem::take(txn_tracker);
+                let CreateApplicationResult {
+                    app_id,
+                    txn_tracker: txn_tracker_moved,
+                } = self
                     .create_application(
                         context.chain_id,
                         context.height,
                         module_id,
                         parameters,
                         required_application_ids,
-                        txn_tracker,
+                        txn_tracker_moved,
                     )
                     .await?;
+                *txn_tracker = txn_tracker_moved;
                 new_application = Some((app_id, instantiation_argument));
             }
             PublishDataBlob { blob_hash } => {
@@ -492,14 +501,17 @@ where
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: epoch.0,
                 };
-                let bytes = txn_tracker
-                    .oracle(|| async {
-                        let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id.clone(), bytes))
-                    })
-                    .await?
-                    .to_event(&event_id)?;
+                let bytes = match txn_tracker.next_replayed_oracle_response()? {
+                    None => self.get_event(event_id.clone()).await?,
+                    Some(OracleResponse::Event(recorded_event_id, bytes))
+                        if recorded_event_id == event_id =>
+                    {
+                        bytes
+                    }
+                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                };
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
+                txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                 self.blob_used(txn_tracker, blob_id).await?;
                 self.committees.get_mut().insert(epoch, committee);
@@ -519,12 +531,16 @@ where
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
                     index: epoch.0,
                 };
-                txn_tracker
-                    .oracle(|| async {
-                        let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id, bytes))
-                    })
-                    .await?;
+                let bytes = match txn_tracker.next_replayed_oracle_response()? {
+                    None => self.get_event(event_id.clone()).await?,
+                    Some(OracleResponse::Event(recorded_event_id, bytes))
+                        if recorded_event_id == event_id =>
+                    {
+                        bytes
+                    }
+                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                };
+                txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
             }
             UpdateStreams(streams) => {
                 let mut missing_events = Vec::new();
@@ -555,15 +571,23 @@ where
                         stream_id,
                         index,
                     };
-                    let extra = self.context().extra();
-                    txn_tracker
-                        .oracle(|| async {
-                            if !extra.contains_event(event_id.clone()).await? {
-                                missing_events.push(event_id.clone());
+                    match txn_tracker.next_replayed_oracle_response()? {
+                        None => {
+                            if !self
+                                .context()
+                                .extra()
+                                .contains_event(event_id.clone())
+                                .await?
+                            {
+                                missing_events.push(event_id);
+                                continue;
                             }
-                            Ok(OracleResponse::EventExists(event_id))
-                        })
-                        .await?;
+                        }
+                        Some(OracleResponse::EventExists(recorded_event_id))
+                            if recorded_event_id == event_id => {}
+                        Some(_) => return Err(ExecutionError::OracleResponseMismatch),
+                    }
+                    txn_tracker.add_oracle_response(OracleResponse::EventExists(event_id));
                 }
                 ensure!(
                     missing_events.is_empty(),
@@ -862,15 +886,15 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
-        txn_tracker: &mut TransactionTracker,
+        mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
 
-        let blob_ids = self.check_bytecode_blobs(&module_id, txn_tracker).await?;
+        let blob_ids = self.check_bytecode_blobs(&module_id, &txn_tracker).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
-            self.blob_used(txn_tracker, blob_id).await?;
+            self.blob_used(&mut txn_tracker, blob_id).await?;
         }
 
         let application_description = ApplicationDescription {
@@ -881,7 +905,7 @@ where
             parameters,
             required_application_ids,
         };
-        self.check_required_applications(&application_description, txn_tracker)
+        self.check_required_applications(&application_description, &mut txn_tracker)
             .await?;
 
         let blob = Blob::new_application_description(&application_description);
@@ -890,6 +914,7 @@ where
 
         Ok(CreateApplicationResult {
             app_id: ApplicationId::from(&application_description),
+            txn_tracker,
         })
     }
 
