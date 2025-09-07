@@ -62,7 +62,7 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use linera_views::ViewError;
-use rand::prelude::SliceRandom as _;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
@@ -317,6 +317,48 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
+    fn get_validator_number(weights: &[Option<u64>], target: u64) -> (usize, u64) {
+        let mut position = 0;
+        for (index, weight) in weights.iter().enumerate() {
+            if let Some(weight) = weight {
+                position += weight;
+                if position >= target {
+                    return (index, *weight);
+                }
+            }
+        }
+        panic!("target could not be reached");
+    }
+
+    /// Shuffles validators using their voting weights for better randomness distribution.
+    fn weighted_shuffle_validators(
+        &self,
+        validators: &[RemoteNode<Env::ValidatorNode>],
+        committee: &Committee,
+    ) -> Vec<RemoteNode<Env::ValidatorNode>> {
+        let mut rng = rand::thread_rng();
+
+        let number_validator = validators.len();
+        let mut weights: Vec<Option<u64>> = validators
+            .iter()
+            .map(|validator| {
+                let validator_state = committee.validators.get(&validator.public_key).unwrap();
+                Some(validator_state.votes)
+            })
+            .collect::<Vec<_>>();
+        let mut remaining_weight = weights.iter().map(|s| s.unwrap()).sum();
+        let mut weighted_validators = Vec::new();
+        for _ in 0..number_validator {
+            let target = rng.gen_range(0..remaining_weight);
+            let (index, weight) = Self::get_validator_number(&weights, target);
+            remaining_weight -= weight;
+            weights[index] = None;
+            weighted_validators.push(validators[index].clone());
+        }
+
+        weighted_validators
+    }
+
     /// Downloads and processes all certificates up to (excluding) the specified height.
     #[instrument(level = "trace", skip(self))]
     async fn download_certificates(
@@ -324,11 +366,14 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let mut validators = self.validator_nodes().await?;
-        // Sequentially try each validator in random order.
-        validators.shuffle(&mut rand::thread_rng());
-        let mut info = self.fetch_chain_info(chain_id, &validators).await?;
-        for remote_node in validators {
+        let (_, committee) = self.admin_committee().await?;
+        let validators = self.make_nodes(&committee)?;
+        // Shuffle validators using their weights
+        let weighted_validators = self.weighted_shuffle_validators(&validators, &committee);
+        let mut info = self
+            .fetch_chain_info(chain_id, &weighted_validators)
+            .await?;
+        for remote_node in weighted_validators {
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
