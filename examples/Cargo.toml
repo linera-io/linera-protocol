@@ -42,7 +42,6 @@ getrandom = { version = "0.2.12", default-features = false, features = [
 ] }
 hex = "0.4.3"
 linera-sdk = { path = "../linera-sdk" }
-linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
 num-bigint = "0.4.3"
 num-traits = "0.2.16"
