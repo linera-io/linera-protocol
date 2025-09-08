@@ -1081,6 +1081,8 @@ where
         .execute_operation(Operation::user(application_id, &read_op)?)
         .await
         .unwrap_ok_committed();
+    // None of the following blocks should have oracle responses: all read blobs were created
+    // on the same chain, so no oracle is needed.
     assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
 
     // Method 2: Publishing and reading in the same transaction
