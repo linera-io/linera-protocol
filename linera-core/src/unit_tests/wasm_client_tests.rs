@@ -1066,7 +1066,7 @@ where
 
     // publishing the data.
     let publish_op = publish_read_data_blob::Operation::CreateDataBlob(test_data.clone());
-    client
+    let certificate = client
         .execute_operation(Operation::user(application_id, &publish_op)?)
         .await
         .unwrap_ok_committed();
@@ -1081,14 +1081,18 @@ where
         .execute_operation(Operation::user(application_id, &read_op)?)
         .await
         .unwrap_ok_committed();
+    // None of the following blocks should have oracle responses: all read blobs were created
+    // on the same chain, so no oracle is needed.
+    assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
 
     // Method 2: Publishing and reading in the same transaction
     let test_data = b"This is test data for method 2.".to_vec();
     let combined_op = publish_read_data_blob::Operation::CreateAndReadDataBlob(test_data);
-    client
+    let certificate = client
         .execute_operation(Operation::user(application_id, &combined_op)?)
         .await
         .unwrap_ok_committed();
+    assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
 
     // Method 3: Publishing and reading in the same block but different transactions
     let test_data = b"This is test data for method 3.".to_vec();
@@ -1098,10 +1102,12 @@ where
     let read_op = publish_read_data_blob::Operation::ReadDataBlob(hash, test_data);
     let op1 = Operation::user(application_id, &publish_op)?;
     let op2 = Operation::user(application_id, &read_op)?;
-    client
+    let certificate = client
         .execute_operations(vec![op1, op2], vec![])
         .await
         .unwrap_ok_committed();
+    assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
+    assert_eq!(certificate.block().body.oracle_responses[1].len(), 0);
 
     Ok(())
 }
