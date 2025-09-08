@@ -60,16 +60,16 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     let contract = EvmContractModule::Revm {
         module: module.clone(),
     };
-    view.context()
-        .extra()
-        .user_contracts()
-        .insert(app_id, contract.clone().into());
+    {
+        let pinned = view.context().extra().user_contracts().pin();
+        pinned.insert(app_id, contract.clone().into());
+    }
 
     let service = EvmServiceModule::Revm { module };
-    view.context()
-        .extra()
-        .user_services()
-        .insert(app_id, service.into());
+    {
+        let pinned = view.context().extra().user_services().pin();
+        pinned.insert(app_id, service.into());
+    }
 
     view.simulate_instantiation(
         contract.into(),
@@ -179,16 +179,16 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
     let contract = EvmContractModule::Revm {
         module: module.clone(),
     };
-    view.context()
-        .extra()
-        .user_contracts()
-        .insert(app_id, contract.clone().into());
+    {
+        let pinned = view.context().extra().user_contracts().pin();
+        pinned.insert(app_id, contract.clone().into());
+    }
 
     let service = EvmServiceModule::Revm { module };
-    view.context()
-        .extra()
-        .user_services()
-        .insert(app_id, service.into());
+    {
+        let pinned = view.context().extra().user_services().pin();
+        pinned.insert(app_id, service.into());
+    }
 
     view.simulate_instantiation(
         contract.into(),
@@ -271,16 +271,16 @@ async fn test_terminate_query_by_lack_of_fuel() -> anyhow::Result<()> {
     let contract = EvmContractModule::Revm {
         module: module.clone(),
     };
-    view.context()
-        .extra()
-        .user_contracts()
-        .insert(app_id, contract.clone().into());
+    {
+        let pinned = view.context().extra().user_contracts().pin();
+        pinned.insert(app_id, contract.clone().into());
+    }
 
     let service = EvmServiceModule::Revm { module };
-    view.context()
-        .extra()
-        .user_services()
-        .insert(app_id, service.into());
+    {
+        let pinned = view.context().extra().user_services().pin();
+        pinned.insert(app_id, service.into());
+    }
 
     view.simulate_instantiation(
         contract.into(),
@@ -350,16 +350,16 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
     let contract = EvmContractModule::Revm {
         module: module.clone(),
     };
-    view.context()
-        .extra()
-        .user_contracts()
-        .insert(app_id, contract.clone().into());
+    {
+        let pinned = view.context().extra().user_contracts().pin();
+        pinned.insert(app_id, contract.clone().into());
+    }
 
     let service = EvmServiceModule::Revm { module };
-    view.context()
-        .extra()
-        .user_services()
-        .insert(app_id, service.into());
+    {
+        let pinned = view.context().extra().user_services().pin();
+        pinned.insert(app_id, service.into());
+    }
 
     view.simulate_instantiation(
         contract.into(),

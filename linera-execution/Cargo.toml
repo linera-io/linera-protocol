@@ -47,7 +47,6 @@ bcs.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true
-dashmap.workspace = true
 derive_more = { workspace = true, features = ["display"] }
 dyn-clone.workspace = true
 futures.workspace = true
@@ -59,6 +58,7 @@ linera-views-derive.workspace = true
 linera-witty = { workspace = true, features = ["log", "macros"] }
 lru.workspace = true
 oneshot.workspace = true
+papaya.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json", "stream"] }

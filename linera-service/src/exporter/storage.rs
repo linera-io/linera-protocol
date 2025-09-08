@@ -7,7 +7,6 @@ use std::{
     sync::{atomic::AtomicU64, Arc},
 };
 
-use dashmap::DashMap;
 use futures::future::try_join_all;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -397,7 +396,7 @@ struct CanonicalState<C> {
     ///
     /// This buffer is used to temporarily hold updates to the canonical state before they are
     /// flushed to the persistent storage.
-    state_updates_buffer: Arc<DashMap<usize, CanonicalBlock>>,
+    state_updates_buffer: Arc<papaya::HashMap<usize, CanonicalBlock>>,
 }
 
 impl<C> CanonicalState<C>
@@ -418,7 +417,7 @@ where
                 cache_size as u64,
                 CacheWeighter::default(),
             )),
-            state_updates_buffer: Arc::new(DashMap::new()),
+            state_updates_buffer: Arc::new(papaya::HashMap::new()),
             state_context,
         }
     }
@@ -441,11 +440,10 @@ where
         match self.state_cache.get_value_or_guard_async(&index).await {
             Ok(value) => Ok(value),
             Err(guard) => {
-                let block = if let Some(entry) = self
-                    .state_updates_buffer
-                    .get(&index)
-                    .map(|entry| entry.value().clone())
-                {
+                let block = if let Some(entry) = {
+                    let pinned = self.state_updates_buffer.pin();
+                    pinned.get(&index).cloned()
+                } {
                     entry
                 } else {
                     #[cfg(with_metrics)]
@@ -464,15 +462,16 @@ where
 
     fn push(&mut self, value: CanonicalBlock) {
         let index = self.next_index();
-        let _ = self.state_updates_buffer.insert(index, value.clone());
+        let _ = self.state_updates_buffer.pin().insert(index, value.clone());
         self.state_cache.insert(index, value);
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ExporterError> {
         for (_, value) in self
             .state_updates_buffer
+            .pin()
             .iter()
-            .map(|r| (*r.key(), r.value().clone()))
+            .map(|(key, value)| (*key, value.clone()))
             .collect::<BTreeMap<_, _>>()
         {
             self.state_context.push(value);
@@ -484,7 +483,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.state_updates_buffer.clear();
+        self.state_updates_buffer.pin().clear();
         self.state_context.rollback();
     }
 
