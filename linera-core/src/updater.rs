@@ -439,17 +439,8 @@ where
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
         let Ok(height) = target_block_height.try_sub_one() else {
-            if let Some(cert) = self
-                .local_node
-                .chain_state_view(chain_id)
-                .await?
-                .manager
-                .timeout
-                .get()
-            {
-                self.remote_node
-                    .handle_timeout_certificate(cert.clone())
-                    .await?;
+            if let Some(cert) = self.local_node.chain_info(chain_id).await?.manager.timeout {
+                self.remote_node.handle_timeout_certificate(*cert).await?;
             }
             return Ok(());
         };
