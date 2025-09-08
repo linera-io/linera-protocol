@@ -860,8 +860,7 @@ where
 
         this.resource_controller.track_http_request()?;
 
-        this
-            .execution_state_sender
+        this.execution_state_sender
             .send_request(|callback| ExecutionRequest::PerformHttpRequest {
                 request,
                 http_responses_are_oracle_responses:
