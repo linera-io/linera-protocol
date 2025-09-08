@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![recursion_limit = "256"]
+#![deny(clippy::large_futures)]
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -171,9 +172,10 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let timestamp = certificate.block().header.timestamp;
+                let epoch = certificate.block().header.epoch;
                 let id = description.id();
                 context
-                    .update_wallet_for_new_chain(id, Some(new_owner), timestamp)
+                    .update_wallet_for_new_chain(id, Some(new_owner), timestamp, epoch)
                     .await?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -225,8 +227,9 @@ impl Runnable for Job {
                 // No owner. This chain can be assigned explicitly using the assign command.
                 let owner = None;
                 let timestamp = certificate.block().header.timestamp;
+                let epoch = certificate.block().header.epoch;
                 context
-                    .update_wallet_for_new_chain(id, owner, timestamp)
+                    .update_wallet_for_new_chain(id, owner, timestamp, epoch)
                     .await?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -2162,7 +2165,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             genesis_config.persist().await?;
             options
                 .create_wallet(genesis_config.into_value())?
-                .mutate(|wallet| wallet.extend(chains))
+                .mutate(|w| w.extend(chains))
                 .await?;
             options.initialize_storage().boxed().await?;
             info!(
@@ -2323,20 +2326,21 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 owned,
             } => {
                 let start_time = Instant::now();
+                let wallet = options.wallet().await?;
                 let chain_ids = if let Some(chain_id) = chain_id {
                     ensure!(!owned, "Cannot specify both --owned and a chain ID");
                     vec![*chain_id]
                 } else if *owned {
-                    options.wallet().await?.owned_chain_ids()
+                    wallet.owned_chain_ids()
                 } else {
-                    options.wallet().await?.chain_ids()
+                    wallet.chain_ids()
                 };
                 if *short {
                     for chain_id in chain_ids {
                         println!("{chain_id}");
                     }
                 } else {
-                    wallet::pretty_print(&*options.wallet().await?, chain_ids).await;
+                    wallet::pretty_print(&wallet, chain_ids).await;
                 }
                 info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
                 Ok(0)
@@ -2384,9 +2388,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 options
                     .wallet()
                     .await?
-                    .mutate(|wallet| {
-                        wallet.extend([UserChain::make_other(*chain_id, Timestamp::now())])
-                    })
+                    .mutate(|w| w.extend([UserChain::make_other(*chain_id, Timestamp::now())]))
                     .await?;
                 if *sync {
                     options.run_with_storage(Job(options.clone())).await??;

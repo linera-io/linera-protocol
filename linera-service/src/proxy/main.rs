@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(clippy::large_futures)]
+
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Result};

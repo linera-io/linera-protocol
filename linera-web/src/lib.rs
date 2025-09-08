@@ -140,6 +140,7 @@ impl JsFaucet {
                     account_owner,
                     description.id(),
                     description.timestamp(),
+                    description.config().epoch,
                 )
             })
             .await??;

@@ -4,7 +4,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Not,
-    sync::Arc,
 };
 
 use custom_debug_derive::Debug;
@@ -15,21 +14,14 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_views::{
-    context::{Context, MemoryContext},
-    random::generate_test_namespace,
+    context::MemoryContext,
     views::{CryptoHashView, View},
-    ViewError,
 };
 
-use super::{
-    dummy_chain_description, dummy_committees, AccountPublicKey, MockApplication,
-    RegisterMockApplication, ValidatorPublicKey,
-};
+use super::{dummy_chain_description, dummy_committees, MockApplication, RegisterMockApplication};
 use crate::{
-    committee::Committee, execution::UserAction, ApplicationDescription, ExecutionError,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, OperationContext,
-    ResourceControlPolicy, ResourceController, ResourceTracker, TestExecutionRuntimeContext,
-    UserContractCode,
+    committee::Committee, ApplicationDescription, ExecutionRuntimeConfig, ExecutionRuntimeContext,
+    ExecutionStateView, TestExecutionRuntimeContext,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.

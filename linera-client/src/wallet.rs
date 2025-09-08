@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, iter::IntoIterator};
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, ChainDescription, Timestamp},
+    data_types::{BlockHeight, ChainDescription, Epoch, Timestamp},
     ensure,
     identifiers::{AccountOwner, ChainId},
 };
@@ -109,6 +109,7 @@ impl Wallet {
         owner: AccountOwner,
         chain_id: ChainId,
         timestamp: Timestamp,
+        epoch: Epoch,
     ) -> Result<(), Error> {
         let user_chain = UserChain {
             chain_id,
@@ -117,6 +118,7 @@ impl Wallet {
             timestamp,
             next_block_height: BlockHeight(0),
             pending_proposal: None,
+            epoch: Some(epoch),
         };
         self.insert(user_chain);
         Ok(())
@@ -144,6 +146,7 @@ impl Wallet {
             next_block_height: info.next_block_height,
             timestamp: info.timestamp,
             pending_proposal,
+            epoch: Some(info.epoch),
         });
     }
 
@@ -165,6 +168,7 @@ pub struct UserChain {
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
     pub pending_proposal: Option<PendingProposal>,
+    pub epoch: Option<Epoch>,
 }
 
 impl Clone for UserChain {
@@ -176,6 +180,7 @@ impl Clone for UserChain {
             timestamp: self.timestamp,
             next_block_height: self.next_block_height,
             pending_proposal: self.pending_proposal.clone(),
+            epoch: self.epoch,
         }
     }
 }
@@ -187,6 +192,7 @@ impl UserChain {
         description: ChainDescription,
         timestamp: Timestamp,
     ) -> Self {
+        let epoch = description.config().epoch;
         Self {
             chain_id: description.into(),
             owner: Some(owner),
@@ -194,11 +200,12 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
+            epoch: Some(epoch),
         }
     }
 
     /// Creates an entry for a chain that we don't own. The timestamp must be the genesis
-    /// timestamp or earlier.
+    /// timestamp or earlier. The Epoch is `None`.
     pub fn make_other(chain_id: ChainId, timestamp: Timestamp) -> Self {
         Self {
             chain_id,
@@ -207,6 +214,7 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
+            epoch: None,
         }
     }
 }
