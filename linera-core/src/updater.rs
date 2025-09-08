@@ -442,40 +442,31 @@ where
         // last one, so we optimistically send that one right away.
         let (remote_height, remote_round) = if let Ok(height) = target_block_height.try_sub_one() {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            let info = if let Some(hash) = chain
-                .block_hashes(height..target_block_height)
+            let hashes = chain.block_hashes(height..target_block_height).await?;
+            let hash = hashes.into_iter().next().ok_or_else(|| {
+                ChainClientError::InternalError(
+                    "send_chain_information called with invalid target_block_height",
+                )
+            })?;
+            let certificate = self
+                .local_node
+                .storage_client()
+                .read_certificate(hash)
                 .await?
-                .first()
-            {
-                let certificate = self
-                    .local_node
-                    .storage_client()
-                    .read_certificate(*hash)
-                    .await?
-                    .ok_or_else(|| ChainClientError::MissingConfirmedBlock(*hash))?;
-                match self.send_confirmed_certificate(certificate, delivery).await {
-                    Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(
-                        event_ids,
-                    ))) if event_ids.iter().all(|event_id| {
+                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+            let info = match self.send_confirmed_certificate(certificate, delivery).await {
+                Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
+                    if event_ids.iter().all(|event_id| {
                         event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
                             && event_id.chain_id == self.admin_id
                     }) =>
-                    {
-                        // The chain is missing epoch events. Send all blocks.
-                        let query = ChainInfoQuery::new(chain_id);
-                        self.remote_node.handle_chain_info_query(query).await?
-                    }
-                    Err(err) => return Err(err),
-                    Ok(info) => info,
+                {
+                    // The chain is missing epoch events. Send all blocks.
+                    let query = ChainInfoQuery::new(chain_id);
+                    self.remote_node.handle_chain_info_query(query).await?
                 }
-            } else {
-                // We don't have the block at the specified height. Send all blocks.
-                tracing::warn!(
-                    "send_chain_information called with height {target_block_height},
-                    but {chain_id:.8} does not have that block"
-                );
-                let query = ChainInfoQuery::new(chain_id);
-                self.remote_node.handle_chain_info_query(query).await?
+                Err(err) => return Err(err),
+                Ok(info) => info,
             };
             (info.next_block_height, info.manager.current_round)
         } else {
