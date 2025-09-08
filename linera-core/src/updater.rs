@@ -442,7 +442,7 @@ where
         // last one, so we optimistically send that one right away.
         let (remote_height, remote_round) = if let Ok(height) = target_block_height.try_sub_one() {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            let hashes = chain.block_hashes(height..target_block_height).await?;
+            let hashes = chain.block_hashes(height..=height).await?;
             let hash = hashes.into_iter().next().ok_or_else(|| {
                 ChainClientError::InternalError(
                     "send_chain_information called with invalid target_block_height",
