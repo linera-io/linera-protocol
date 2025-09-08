@@ -109,6 +109,7 @@ where
         self.context()
             .extra()
             .user_contracts()
+            .pin()
             .insert(application_id, contract);
 
         self.context()

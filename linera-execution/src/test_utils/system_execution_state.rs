@@ -116,8 +116,12 @@ impl SystemExecutionState {
         for (id, mock_application) in mock_applications {
             extra
                 .user_contracts()
+                .pin()
                 .insert(id, mock_application.clone().into());
-            extra.user_services().insert(id, mock_application.into());
+            extra
+                .user_services()
+                .pin()
+                .insert(id, mock_application.into());
         }
 
         let context = MemoryContext::new_for_testing(extra);
