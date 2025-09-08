@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
+# `linera-web`
+
 This module defines the client API for the Web extension.
- */
+*/
 
 // We sometimes need functions in this module to be async in order to
 // ensure the generated code will return a `Promise`.
