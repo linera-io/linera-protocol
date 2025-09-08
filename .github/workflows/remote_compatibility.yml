@@ -1,0 +1,43 @@
+name: Compatibility with existing testnet
+
+on:
+  push:
+    branches: [ 'testnet_conway' ]
+  merge_group:
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: full
+  # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
+  RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+  RUST_LOG: linera=debug
+  RUST_LOG_FORMAT: plain
+  # The remote faucet for this branch
+  LINERA_FAUCET_URL: https://faucet.testnet-conway.linera.net
+
+permissions:
+  contents: read
+
+jobs:
+  remote-net-test:
+    runs-on: ubuntu-latest-8-cores
+    timeout-minutes: 40
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run the remote-net tests
+      run: |
+        cargo test -p linera-service remote_net_grpc --features remote-net
