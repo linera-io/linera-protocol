@@ -3,7 +3,7 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use std::{collections::BTreeMap, vec};
+use std::{collections::{BTreeMap, BTreeSet}, vec};
 
 use linera_base::{data_types::Amount, identifiers::AccountOwner};
 use linera_execution::{
@@ -116,8 +116,8 @@ async fn test_read_owner_balances_system_api(
 
     application.expect_call(ExpectedCall::handle_query(move |runtime, _query| {
         assert_eq!(
-            runtime.read_owner_balances().unwrap(),
-            accounts.into_iter().collect::<Vec<_>>(),
+            runtime.read_owner_balances().unwrap().into_iter().collect::<BTreeMap<_,_>>(),
+            accounts,
         );
         Ok(vec![])
     }));
@@ -148,8 +148,8 @@ async fn test_read_balance_owners_system_api(
 
     application.expect_call(ExpectedCall::handle_query(move |runtime, _query| {
         assert_eq!(
-            runtime.read_balance_owners().unwrap(),
-            accounts.keys().copied().collect::<Vec<_>>()
+            runtime.read_balance_owners().unwrap().into_iter().collect::<BTreeSet<_>>(),
+            accounts.keys().copied().collect::<BTreeSet<_>>()
         );
         Ok(vec![])
     }));
