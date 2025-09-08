@@ -537,6 +537,13 @@ where
         }
     }
 
+    pub async fn next_height_to_preprocess(&self) -> Result<BlockHeight, ChainError> {
+        if let Some(height) = self.preprocessed_blocks.indices().await?.last() {
+            return Ok(height.saturating_add(BlockHeight(1)));
+        }
+        Ok(self.tip_state.get().next_block_height)
+    }
+
     pub async fn last_anticipated_block_height(
         &self,
         origin: &ChainId,
