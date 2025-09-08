@@ -446,13 +446,15 @@ where
         };
         // Figure out which certificates this validator is missing. In many cases, it's just the
         // last one, so we optimistically send that one right away.
-        let chain = self.local_node.chain_state_view(chain_id).await?;
-        let hashes = chain.block_hashes(height..=height).await?;
-        let hash = hashes.into_iter().next().ok_or_else(|| {
-            ChainClientError::InternalError(
-                "send_chain_information called with invalid target_block_height",
-            )
-        })?;
+        let hash = {
+            let chain = self.local_node.chain_state_view(chain_id).await?;
+            let hashes = chain.block_hashes(height..=height).await?;
+            hashes.into_iter().next().ok_or_else(|| {
+                ChainClientError::InternalError(
+                    "send_chain_information called with invalid target_block_height",
+                )
+            })?
+        };
         let certificate = self
             .local_node
             .storage_client()
