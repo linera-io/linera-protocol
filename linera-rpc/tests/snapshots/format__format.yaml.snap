@@ -852,7 +852,7 @@ OracleResponse:
       Event:
         TUPLE:
           - TYPENAME: EventId
-          - SEQ: U8
+          - BYTES
     6:
       EventExists:
         NEWTYPE:
