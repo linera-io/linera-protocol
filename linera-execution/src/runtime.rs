@@ -860,7 +860,7 @@ where
 
         this.resource_controller.track_http_request()?;
 
-        let response = this
+        this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::PerformHttpRequest {
                 request,
@@ -868,8 +868,7 @@ where
                     Self::LIMIT_HTTP_RESPONSE_SIZE_TO_ORACLE_RESPONSE_SIZE,
                 callback,
             })?
-            .recv_response()?;
-        Ok(response)
+            .recv_response()
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
@@ -897,8 +896,7 @@ where
         let blob_id = hash.into();
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
-            .recv_response()?;
-        Ok(())
+            .recv_response()
     }
 }
 
@@ -1467,7 +1465,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 required_application_ids,
                 callback,
             })?
-            .recv_response()??;
+            .recv_response()?;
 
         let contract = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 
