@@ -31,10 +31,9 @@ use thiserror::Error;
 use crate::{
     client::ChainClientError,
     data_types::{ChainInfo, ChainInfoQuery},
-    local_node::{LocalNodeClient, LocalNodeError},
+    local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
-    worker::WorkerError,
 };
 
 /// The default amount of time we wait for additional validators to contribute
@@ -79,6 +78,7 @@ where
 {
     pub remote_node: RemoteNode<A>,
     pub local_node: LocalNodeClient<S>,
+    pub admin_id: ChainId,
 }
 
 /// An error result for requests to a stake-weighted quorum.
@@ -229,15 +229,14 @@ where
 
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
-        let admin_id = self.admin_chain_id().await?;
         loop {
             result = match result {
                 Err(NodeError::EventsNotFound(event_ids))
                     if !sent_admin_chain
-                        && certificate.inner().chain_id() != admin_id
+                        && certificate.inner().chain_id() != self.admin_id
                         && event_ids.iter().all(|event_id| {
                             event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                                && event_id.chain_id == admin_id
+                                && event_id.chain_id == self.admin_id
                         }) =>
                 {
                     // The validator doesn't have the committee that signed the certificate.
@@ -419,26 +418,13 @@ where
     }
 
     async fn update_admin_chain(&mut self) -> Result<(), ChainClientError> {
-        let admin_id = self.admin_chain_id().await?;
-        let local_admin_info = self.local_node.chain_info(admin_id).await?;
+        let local_admin_info = self.local_node.chain_info(self.admin_id).await?;
         Box::pin(self.send_chain_information(
-            admin_id,
+            self.admin_id,
             local_admin_info.next_block_height,
             CrossChainMessageDelivery::NonBlocking,
         ))
         .await
-    }
-
-    async fn admin_chain_id(&self) -> Result<ChainId, ChainClientError> {
-        Ok(self
-            .local_node
-            .storage_client()
-            .read_network_description()
-            .await?
-            .ok_or(ChainClientError::LocalNodeError(
-                LocalNodeError::WorkerError(WorkerError::MissingNetworkDescription),
-            ))?
-            .admin_chain_id)
     }
 
     pub async fn send_chain_information(
@@ -462,13 +448,12 @@ where
                     .read_certificate(*hash)
                     .await?
                     .ok_or_else(|| ChainClientError::MissingConfirmedBlock(*hash))?;
-                let admin_id = self.admin_chain_id().await?;
                 match self.send_confirmed_certificate(certificate, delivery).await {
                     Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(
                         event_ids,
                     ))) if event_ids.iter().all(|event_id| {
                         event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                            && event_id.chain_id == admin_id
+                            && event_id.chain_id == self.admin_id
                     }) =>
                     {
                         // The chain is missing epoch events. Send all blocks.

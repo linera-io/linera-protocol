@@ -537,6 +537,9 @@ where
         }
     }
 
+    /// Returns the height of the highest block we have, plus one. Includes preprocessed blocks.
+    ///
+    /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
     pub async fn next_height_to_preprocess(&self) -> Result<BlockHeight, ChainError> {
         if let Some(height) = self.preprocessed_blocks.indices().await?.last() {
             return Ok(height.saturating_add(BlockHeight(1)));
