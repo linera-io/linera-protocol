@@ -2271,6 +2271,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 indexer_image_name,
                 explorer_image_name,
                 dual_store,
+                path,
                 ..
             } => {
                 net_up_utils::handle_net_up_kubernetes(
@@ -2294,6 +2295,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     indexer_image_name.clone(),
                     explorer_image_name.clone(),
                     *dual_store,
+                    path,
                 )
                 .boxed()
                 .await?;

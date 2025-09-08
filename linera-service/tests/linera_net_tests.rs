@@ -4167,7 +4167,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     let owner2 = client2.keygen().await?;
 
     let mut faucet_service = client1
-        .run_faucet(None, chain1, Amount::from_tokens(2))
+        .run_faucet(None, Some(chain1), Amount::from_tokens(2))
         .await?;
     let faucet = faucet_service.instance();
     let chain2 = faucet.claim(&owner2).await?.id();
@@ -4252,7 +4252,7 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     let new_chain_init_balance = Amount::ONE;
     let mut faucet_service = faucet_client
-        .run_faucet(None, faucet_chain, new_chain_init_balance)
+        .run_faucet(None, Some(faucet_chain), new_chain_init_balance)
         .await?;
     let faucet = faucet_service.instance();
 
@@ -4323,7 +4323,7 @@ async fn test_end_to_end_faucet_batch_processing(config: impl LineraNetConfig) -
 
     // Start faucet with small batch size for testing
     let mut faucet_service = client1
-        .run_faucet(None, chain1, Amount::from_tokens(2))
+        .run_faucet(None, Some(chain1), Amount::from_tokens(2))
         .await?;
     let faucet = faucet_service.instance();
 
@@ -4412,7 +4412,7 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
 
-    let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE).await?;
+    let mut faucet_service = client1.run_faucet(None, Some(chain1), Amount::ONE).await?;
     let faucet = faucet_service.instance();
 
     let path =

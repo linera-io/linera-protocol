@@ -540,7 +540,7 @@ impl ClientWrapper {
     pub async fn run_faucet(
         &self,
         port: impl Into<Option<u16>>,
-        chain_id: ChainId,
+        chain_id: Option<ChainId>,
         amount: Amount,
     ) -> Result<FaucetService> {
         let port = port.into().unwrap_or(8080);
@@ -548,16 +548,18 @@ impl ClientWrapper {
             .context("Failed to create temporary directory for faucet storage")?;
         let storage_path = temp_dir.path().join("faucet_storage.sqlite");
         let mut command = self.command().await?;
-        let child = command
+        let command = command
             .arg("faucet")
-            .arg(chain_id.to_string())
             .args(["--port".to_string(), port.to_string()])
             .args(["--amount".to_string(), amount.to_string()])
             .args([
                 "--storage-path".to_string(),
                 storage_path.to_string_lossy().to_string(),
-            ])
-            .spawn_into()?;
+            ]);
+        if let Some(chain_id) = chain_id {
+            command.arg(chain_id.to_string());
+        }
+        let child = command.spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
