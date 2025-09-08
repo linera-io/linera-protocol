@@ -27,6 +27,7 @@ use linera_chain::{
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{ResultReadCertificates, Storage};
 use thiserror::Error;
+use tracing::{instrument, Level};
 
 use crate::{
     client::ChainClientError,
@@ -217,6 +218,10 @@ where
     A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
+    #[instrument(
+        level = "trace", skip_all, err(level = Level::WARN),
+        fields(chain_id = %certificate.block().header.chain_id)
+    )]
     async fn send_confirmed_certificate(
         &mut self,
         certificate: GenericCertificate<ConfirmedBlock>,
@@ -240,21 +245,21 @@ where
                         }) =>
                 {
                     // The validator doesn't have the committee that signed the certificate.
-                    sent_admin_chain = true;
                     self.update_admin_chain().await?;
+                    sent_admin_chain = true;
                     self.remote_node
                         .handle_confirmed_certificate(certificate.clone(), delivery)
                         .await
                 }
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
                     // The validator is missing the blobs required by the certificate.
-                    sent_blobs = true;
                     self.remote_node
                         .check_blobs_not_found(&certificate, &blob_ids)?;
                     // The certificate is confirmed, so the blobs must be in storage.
                     let maybe_blobs = self.local_node.read_blobs_from_storage(&blob_ids).await?;
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
                     self.remote_node.node.upload_blobs(blobs).await?;
+                    sent_blobs = true;
                     self.remote_node
                         .handle_confirmed_certificate(certificate.clone(), delivery)
                         .await
