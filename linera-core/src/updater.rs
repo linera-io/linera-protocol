@@ -438,40 +438,51 @@ where
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
+        let Ok(height) = target_block_height.try_sub_one() else {
+            if let Some(cert) = self
+                .local_node
+                .chain_state_view(chain_id)
+                .await?
+                .manager
+                .timeout
+                .get()
+            {
+                self.remote_node
+                    .handle_timeout_certificate(cert.clone())
+                    .await?;
+            }
+            return Ok(());
+        };
         // Figure out which certificates this validator is missing. In many cases, it's just the
         // last one, so we optimistically send that one right away.
-        let (remote_height, remote_round) = if let Ok(height) = target_block_height.try_sub_one() {
-            let chain = self.local_node.chain_state_view(chain_id).await?;
-            let hashes = chain.block_hashes(height..=height).await?;
-            let hash = hashes.into_iter().next().ok_or_else(|| {
-                ChainClientError::InternalError(
-                    "send_chain_information called with invalid target_block_height",
-                )
-            })?;
-            let certificate = self
-                .local_node
-                .storage_client()
-                .read_certificate(hash)
-                .await?
-                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
-            let info = match self.send_confirmed_certificate(certificate, delivery).await {
-                Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
-                    if event_ids.iter().all(|event_id| {
-                        event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                            && event_id.chain_id == self.admin_id
-                    }) =>
-                {
-                    // The chain is missing epoch events. Send all blocks.
-                    let query = ChainInfoQuery::new(chain_id);
-                    self.remote_node.handle_chain_info_query(query).await?
-                }
-                Err(err) => return Err(err),
-                Ok(info) => info,
-            };
-            (info.next_block_height, info.manager.current_round)
-        } else {
-            (BlockHeight::ZERO, Round::Fast)
+        let chain = self.local_node.chain_state_view(chain_id).await?;
+        let hashes = chain.block_hashes(height..=height).await?;
+        let hash = hashes.into_iter().next().ok_or_else(|| {
+            ChainClientError::InternalError(
+                "send_chain_information called with invalid target_block_height",
+            )
+        })?;
+        let certificate = self
+            .local_node
+            .storage_client()
+            .read_certificate(hash)
+            .await?
+            .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+        let info = match self.send_confirmed_certificate(certificate, delivery).await {
+            Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
+                if event_ids.iter().all(|event_id| {
+                    event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
+                        && event_id.chain_id == self.admin_id
+                }) =>
+            {
+                // The chain is missing epoch events. Send all blocks.
+                let query = ChainInfoQuery::new(chain_id);
+                self.remote_node.handle_chain_info_query(query).await?
+            }
+            Err(err) => return Err(err),
+            Ok(info) => info,
         };
+        let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         // Obtain the missing blocks and the manager state from the local node.
         let range = remote_height..target_block_height;
         let keys = {
