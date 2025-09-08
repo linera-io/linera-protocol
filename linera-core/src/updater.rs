@@ -248,7 +248,7 @@ where
                 }
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
                     // The validator is missing the blobs required by the certificate.
-                    sent_blobs = false;
+                    sent_blobs = true;
                     self.remote_node
                         .check_blobs_not_found(&certificate, &blob_ids)?;
                     // The certificate is confirmed, so the blobs must be in storage.
