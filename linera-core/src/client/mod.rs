@@ -3042,6 +3042,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Clears the information on any operation that previously failed.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub fn clear_pending_proposal(&self) {
         self.update_state(|state| state.clear_pending_proposal());
