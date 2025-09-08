@@ -155,7 +155,7 @@ where
         Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
     }
 
-    /// Reads blob states from storage
+    /// Reads blob states from storage.
     pub async fn read_blob_states_from_storage(
         &self,
         blob_ids: &[BlobId],
