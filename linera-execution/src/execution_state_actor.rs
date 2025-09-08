@@ -452,17 +452,12 @@ where
                             .await?
                             .track_blob_read(content.bytes().len() as u64)?;
                     }
+                    self.state
+                        .system
+                        .blob_used(self.txn_tracker, blob_id)
+                        .await?;
                     content
                 };
-                let is_new = self
-                    .state
-                    .system
-                    .blob_used(self.txn_tracker, blob_id)
-                    .await?;
-                if is_new {
-                    self.txn_tracker
-                        .replay_oracle_response(OracleResponse::Blob(blob_id))?;
-                }
                 callback.respond(content)
             }
 
