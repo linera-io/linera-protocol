@@ -157,6 +157,12 @@ pub trait ValidatorNode {
 
     /// Returns the missing `Blob`s by their IDs.
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;
+
+    /// Returns the certificate that last used the blob.
+    async fn blob_last_used_by_certificate(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<ConfirmedBlockCertificate, NodeError>;
 }
 
 /// Turn an address into a validator node.

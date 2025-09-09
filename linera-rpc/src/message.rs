@@ -62,6 +62,9 @@ pub enum RpcMessage {
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
+
+    BlobLastUsedByCertificate(Box<BlobId>),
+    BlobLastUsedByCertificateResponse(Box<ConfirmedBlockCertificate>),
 }
 
 impl RpcMessage {
@@ -100,6 +103,8 @@ impl RpcMessage {
             | DownloadCertificates(_)
             | BlobLastUsedBy(_)
             | BlobLastUsedByResponse(_)
+            | BlobLastUsedByCertificate(_)
+            | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
             | DownloadCertificatesResponse(_) => {
@@ -122,6 +127,7 @@ impl RpcMessage {
             | DownloadBlob(_)
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
+            | BlobLastUsedByCertificate(_)
             | MissingBlobIds(_)
             | DownloadCertificates(_)
             | DownloadCertificatesByHeights(_, _) => true,
@@ -144,6 +150,7 @@ impl RpcMessage {
             | DownloadBlobResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)
+            | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadCertificatesResponse(_)
             | DownloadCertificatesByHeightsResponse(_) => false,
@@ -190,6 +197,17 @@ impl TryFrom<RpcMessage> for ConfirmedBlock {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::DownloadConfirmedBlockResponse(certificate) => Ok(*certificate),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for ConfirmedBlockCertificate {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::BlobLastUsedByCertificateResponse(certificate) => Ok(*certificate),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

@@ -97,6 +97,9 @@ service ValidatorNode {
 
   // Return the `BlobId`s that are not contained as `Blob`.
   rpc MissingBlobIds(BlobIds) returns (BlobIds);
+
+  // Returns the certificate that last used the blob.
+  rpc BlobLastUsedByCertificate(BlobId) returns (Certificate);
 }
 
 // Batch of raw certificates.
