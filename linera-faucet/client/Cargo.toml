@@ -11,6 +11,9 @@ homepage.workspace = true
 license.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 linera-base.workspace = true
 linera-client.workspace = true

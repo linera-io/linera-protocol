@@ -4,8 +4,6 @@
 
 //! This module provides the executables needed to operate a Linera service, including a placeholder wallet acting as a GraphQL service for user interfaces.
 
-#![deny(clippy::large_futures)]
-
 pub mod cli;
 pub mod cli_wrappers;
 pub mod config;

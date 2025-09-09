@@ -162,7 +162,7 @@ impl TestValidator {
         ModuleId<Abi, Parameters, InstantiationArgument>,
     ) {
         let validator = TestValidator::new().await;
-        let publisher = validator.new_chain().await;
+        let publisher = Box::pin(validator.new_chain()).await;
 
         let module_id = publisher.publish_current_module().await;
 
