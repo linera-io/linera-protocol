@@ -661,7 +661,7 @@ where
             }
 
             HasNonTrivialStorage { application, callback } => {
-                let view = self.users.try_load_entry(&application).await?;
+                let view = self.state.users.try_load_entry(&application).await?;
                 let result = match view {
                    Some(view) => {
                         let total_size = view.total_size();
