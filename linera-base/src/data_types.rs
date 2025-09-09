@@ -1044,7 +1044,12 @@ pub enum OracleResponse {
     /// The block's validation round.
     Round(Option<u32>),
     /// An event was read.
-    Event(EventId, Vec<u8>),
+    Event(
+        EventId,
+        #[debug(with = "hex_debug")]
+        #[serde(with = "serde_bytes")]
+        Vec<u8>,
+    ),
     /// An event exists.
     EventExists(EventId),
 }

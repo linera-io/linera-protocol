@@ -544,7 +544,6 @@ impl<Env: Environment> Client<Env> {
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let local_node = self.local_node.clone();
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
             &nodes,
@@ -553,7 +552,8 @@ impl<Env: Environment> Client<Env> {
             |remote_node| {
                 let mut updater = ValidatorUpdater {
                     remote_node,
-                    local_node: local_node.clone(),
+                    local_node: self.local_node.clone(),
+                    admin_id: self.admin_id,
                 };
                 Box::pin(async move {
                     updater
@@ -579,7 +579,6 @@ impl<Env: Environment> Client<Env> {
         action: CommunicateAction,
         value: T,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
-        let local_node = self.local_node.clone();
         let nodes = self.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
@@ -588,7 +587,8 @@ impl<Env: Environment> Client<Env> {
             |remote_node| {
                 let mut updater = ValidatorUpdater {
                     remote_node,
-                    local_node: local_node.clone(),
+                    local_node: self.local_node.clone(),
+                    admin_id: self.admin_id,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })

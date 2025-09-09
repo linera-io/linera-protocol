@@ -155,7 +155,7 @@ where
         Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
     }
 
-    /// Reads blob states from storage
+    /// Reads blob states from storage.
     pub async fn read_blob_states_from_storage(
         &self,
         blob_ids: &[BlobId],
@@ -257,7 +257,7 @@ where
         let (_response, actions) = self
             .node
             .state
-            .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+            .handle_chain_info_query(ChainInfoQuery::new(sender_chain).with_network_actions())
             .await?;
         let mut requests = VecDeque::from_iter(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
