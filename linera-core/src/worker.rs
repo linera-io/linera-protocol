@@ -836,11 +836,8 @@ where
             .tip_state
             .get()
             .next_block_height
-            > certificate.block().header.height
+            == certificate.block().header.height
         {
-            // Block already processed, no metrics to report.
-            None
-        } else {
             Some((
                 certificate.inner().to_log_str(),
                 certificate.round.type_name(),
@@ -852,6 +849,9 @@ where
                     .map(|(validator_name, _)| validator_name.to_string())
                     .collect::<Vec<_>>(),
             ))
+        } else {
+            // Block already processed or will only be preprocessed, no metrics to report.
+            None
         };
 
         let result = self
