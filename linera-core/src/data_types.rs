@@ -167,6 +167,11 @@ impl ChainInfoQuery {
         self.request_fallback = true;
         self
     }
+
+    pub fn with_network_actions(mut self) -> Self {
+        self.create_network_actions = true;
+        self
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
