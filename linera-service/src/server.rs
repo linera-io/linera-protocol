@@ -618,7 +618,6 @@ mod test {
             host = "proxy"
             public_port = 20100
             private_port = 20200
-            metrics_host = "proxy"
             metrics_port = 21100
 
             [[shards]]

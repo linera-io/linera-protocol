@@ -514,7 +514,6 @@ impl LocalNet {
                 host = "{internal_host}"
                 public_port = {public_port}
                 private_port = {internal_port}
-                metrics_host = "{external_host}"
                 metrics_port = {metrics_port}
                 "#
             ));

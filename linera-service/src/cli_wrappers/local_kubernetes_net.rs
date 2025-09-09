@@ -382,7 +382,7 @@ impl LocalKubernetesNet {
                 Grpc = "ClearText"
 
                 [[proxies]]
-                host = "proxy-0.default.svc.cluster.local"
+                host = "proxy-0.proxy-internal.default.svc.cluster.local"
                 public_port = {port}
                 private_port = {internal_port}
                 metrics_port = {metrics_port}
@@ -495,7 +495,7 @@ impl LocalKubernetesNet {
                 let local_port = 19100 + i;
                 kubectl_instance.port_forward(
                     proxy_service,
-                    &format!("{local_port}:{local_port}"),
+                    &format!("{local_port}:19100"),
                     cluster_id,
                 )?;
 
