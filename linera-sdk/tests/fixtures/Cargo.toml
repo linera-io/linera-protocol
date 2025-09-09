@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "contract-call",
     "create-and-call",
+    "meta-counter",
     "publish-read-data-blob",
     "track-instantiation",
 ]
@@ -15,6 +16,7 @@ tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 contract-call = { path = "./create-and-call" }
 counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
 create-and-call = { path = "./create-and-call" }
+meta-counter = { path = "./meta-counter" }
 publish-read-data-blob = { path = "./publish-read-data-blob" }
 track-instantiation = { path = "./track-instantiation" }
 
