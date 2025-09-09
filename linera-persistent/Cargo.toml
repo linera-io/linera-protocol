@@ -11,6 +11,9 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 fs = ["fs-err", "fs4"]
 indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]

@@ -14,6 +14,9 @@ version.workspace = true
 # Not used, but here to provide the `js` feature to `rand`
 metadata.cargo-machete.ignored = ["getrandom"]
 
+[lints]
+workspace = true
+
 [package.metadata.docs.rs]
 features = ["scylladb", "rocksdb", "dynamodb", "test"]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]

@@ -3,8 +3,6 @@
 
 //! This module defines the storage abstractions for individual chains and certificates.
 
-#![deny(clippy::large_futures)]
-
 mod db_storage;
 
 use std::{collections::BTreeMap, ops::RangeInclusive, sync::Arc};

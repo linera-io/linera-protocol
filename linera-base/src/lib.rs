@@ -6,7 +6,6 @@
 //! applications (compiled from Rust to Wasm).
 
 #![deny(missing_docs)]
-#![deny(clippy::large_futures)]
 #![allow(async_fn_in_trait)]
 
 use std::fmt;

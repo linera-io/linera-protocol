@@ -9,6 +9,9 @@ homepage = "https://linera.dev"
 documentation = "https://docs.rs/linera-explorer/latest/linera_explorer/"
 license = "Apache-2.0"
 
+[lints]
+workspace = true
+
 [lib]
 crate-type = ["cdylib"]
 

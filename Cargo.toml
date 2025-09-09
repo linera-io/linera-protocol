@@ -357,3 +357,6 @@ branch = "post-message"
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"
+
+[workspace.lints.clippy]
+large_futures = "deny"
