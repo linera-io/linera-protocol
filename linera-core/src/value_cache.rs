@@ -14,9 +14,6 @@ use std::{borrow::Cow, hash::Hash, num::NonZeroUsize, sync::Mutex};
 use linera_base::{crypto::CryptoHash, hashed::Hashed};
 use lru::LruCache;
 
-/// The default cache size.
-pub const DEFAULT_VALUE_CACHE_SIZE: usize = 10_000;
-
 /// A counter metric for the number of cache hits in the [`ValueCache`].
 #[cfg(with_metrics)]
 mod metrics {
@@ -51,24 +48,18 @@ where
     cache: Mutex<LruCache<K, V>>,
 }
 
-impl<K, V> Default for ValueCache<K, V>
-where
-    K: Hash + Eq + PartialEq + Copy,
-{
-    fn default() -> Self {
-        let size = NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE)
-            .expect("Default cache size is larger than zero");
-
-        ValueCache {
-            cache: Mutex::new(LruCache::new(size)),
-        }
-    }
-}
-
 impl<K, V> ValueCache<K, V>
 where
     K: Hash + Eq + PartialEq + Copy,
 {
+    /// Creates a new `ValueCache` with the given size.
+    pub fn new(size: usize) -> Self {
+        let size = NonZeroUsize::try_from(size).expect("Cache size is larger than zero");
+        ValueCache {
+            cache: Mutex::new(LruCache::new(size)),
+        }
+    }
+
     /// Inserts a `V` into the cache, if it's not already present.
     pub fn insert_owned(&self, key: &K, value: V) -> bool {
         let mut cache = self.cache.lock().unwrap();
