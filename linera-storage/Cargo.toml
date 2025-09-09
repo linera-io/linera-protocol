@@ -11,6 +11,9 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 revm = ["linera-execution/revm"]
 test = ["linera-execution/test", "linera-views/test"]

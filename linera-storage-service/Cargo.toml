@@ -11,6 +11,9 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 metrics = ["linera-views/metrics"]
 rocksdb = ["linera-views/rocksdb"]
