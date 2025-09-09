@@ -246,6 +246,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let create_network_actions = query.create_network_actions;
         if let Some((height, round)) = query.request_leader_timeout {
             self.vote_for_leader_timeout(height, round).await?;
         }
@@ -254,7 +255,11 @@ where
         }
         let response = self.prepare_chain_info_response(query).await?;
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = self.create_network_actions(None).await?;
+        let actions = if create_network_actions {
+            self.create_network_actions(None).await?
+        } else {
+            NetworkActions::default()
+        };
         Ok((response, actions))
     }
 
