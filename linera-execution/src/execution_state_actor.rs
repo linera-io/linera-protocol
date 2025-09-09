@@ -175,8 +175,7 @@ where
             }
 
             OwnerBalances { callback } => {
-                let balances = self.state.system.balances.index_values().await?;
-                callback.respond(balances.into_iter().collect());
+                callback.respond(self.state.system.balances.index_values().await?);
             }
 
             BalanceOwners { callback } => {
@@ -379,7 +378,7 @@ where
                         self.txn_tracker,
                     )
                     .await?;
-                callback.respond(Ok(create_application_result));
+                callback.respond(create_application_result);
             }
 
             PerformHttpRequest {
@@ -1113,7 +1112,7 @@ pub enum ExecutionRequest {
         parameters: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
         #[debug(skip)]
-        callback: Sender<Result<CreateApplicationResult, ExecutionError>>,
+        callback: Sender<CreateApplicationResult>,
     },
 
     PerformHttpRequest {
