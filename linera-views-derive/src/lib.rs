@@ -41,9 +41,8 @@ fn get_extended_entry(e: Type) -> Result<TokenStream2, Error> {
     let syn::Type::Path(typepath) = &e else {
         return Err(Error::new_spanned(e, "Expected a path type"));
     };
-    let path_segment = match typepath.path.segments.first() {
-        Some(segment) => segment,
-        None => return Err(Error::new_spanned(&typepath.path, "Path has no segments")),
+    let Some(path_segment) = typepath.path.segments.first() else {
+        return Err(Error::new_spanned(&typepath.path, "Path has no segments"));
     };
     let ident = &path_segment.ident;
     let arguments = &path_segment.arguments;
@@ -218,7 +217,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
     })
 }
 
-fn generate_root_view_code(input: ItemStruct) -> Result<TokenStream2, Error> {
+fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     let Constraints {
         input_constraints,
         impl_generics,
@@ -239,7 +238,7 @@ fn generate_root_view_code(input: ItemStruct) -> Result<TokenStream2, Error> {
         quote! {}
     };
 
-    Ok(quote! {
+    quote! {
         impl #impl_generics linera_views::views::RootView for #struct_name #type_generics
         where
             #(#input_constraints,)*
@@ -256,7 +255,7 @@ fn generate_root_view_code(input: ItemStruct) -> Result<TokenStream2, Error> {
                 Ok(())
             }
         }
-    })
+    }
 }
 
 fn generate_hash_view_code(input: ItemStruct) -> Result<TokenStream2, Error> {
@@ -311,7 +310,7 @@ fn generate_hash_view_code(input: ItemStruct) -> Result<TokenStream2, Error> {
     })
 }
 
-fn generate_crypto_hash_code(input: ItemStruct) -> Result<TokenStream2, Error> {
+fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let Constraints {
         input_constraints,
         impl_generics,
@@ -320,7 +319,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> Result<TokenStream2, Error> {
     let field_types = input.fields.iter().map(|field| &field.ty);
     let struct_name = &input.ident;
     let hash_type = syn::Ident::new(&format!("{struct_name}Hash"), Span::call_site());
-    Ok(quote! {
+    quote! {
         impl #impl_generics linera_views::views::CryptoHashView
         for #struct_name #type_generics
         where
@@ -356,7 +355,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> Result<TokenStream2, Error> {
                 Ok(CryptoHash::new(&#hash_type(hash)))
             }
         }
-    })
+    }
 }
 
 fn generate_clonable_view_code(input: ItemStruct) -> Result<TokenStream2, Error> {
@@ -430,7 +429,7 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
 
 fn derive_root_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
     let mut stream = generate_view_code(input.clone(), true)?;
-    stream.extend(generate_root_view_code(input)?);
+    stream.extend(generate_root_view_code(input));
     Ok(stream)
 }
 
@@ -445,7 +444,7 @@ pub fn derive_root_view(input: TokenStream) -> TokenStream {
 fn derive_crypto_hash_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
     let mut stream = generate_view_code(input.clone(), false)?;
     stream.extend(generate_hash_view_code(input.clone())?);
-    stream.extend(generate_crypto_hash_code(input)?);
+    stream.extend(generate_crypto_hash_code(input));
     Ok(stream)
 }
 
@@ -459,9 +458,9 @@ pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
 
 fn derive_crypto_hash_root_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
     let mut stream = generate_view_code(input.clone(), true)?;
-    stream.extend(generate_root_view_code(input.clone())?);
+    stream.extend(generate_root_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input.clone())?);
-    stream.extend(generate_crypto_hash_code(input)?);
+    stream.extend(generate_crypto_hash_code(input));
     Ok(stream)
 }
 
@@ -476,7 +475,7 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
 #[cfg(test)]
 fn derive_hashable_root_view_token_stream2(input: ItemStruct) -> Result<TokenStream2, Error> {
     let mut stream = generate_view_code(input.clone(), true)?;
-    stream.extend(generate_root_view_code(input.clone())?);
+    stream.extend(generate_root_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input)?);
     Ok(stream)
 }
@@ -557,7 +556,7 @@ pub mod tests {
                     },
                     context.name,
                 ),
-                pretty(generate_root_view_code(input).unwrap())
+                pretty(generate_root_view_code(input))
             );
         }
     }
@@ -566,7 +565,7 @@ pub mod tests {
     fn test_generate_crypto_hash_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_snapshot!(pretty(generate_crypto_hash_code(input).unwrap()));
+            insta::assert_snapshot!(pretty(generate_crypto_hash_code(input)));
         }
     }
 
@@ -816,8 +815,7 @@ pub mod tests {
         assert!(hash_result.is_ok());
 
         // Crypto hash code generation also succeeds
-        let crypto_result = generate_crypto_hash_code(input);
-        assert!(crypto_result.is_ok());
+        let _result = generate_crypto_hash_code(input);
     }
 
     #[test]
@@ -828,7 +826,6 @@ pub mod tests {
                 register: RegisterView<C, usize>,
             }
         };
-        let result = generate_crypto_hash_code(input);
-        assert!(result.is_ok());
+        let _result = generate_crypto_hash_code(input);
     }
 }

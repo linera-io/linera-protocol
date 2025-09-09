@@ -49,6 +49,6 @@ impl SummaryOptions {
     }
 
     pub fn workflows(&self) -> HashSet<String> {
-        self.workflows.split(',').map(|s| s.to_string()).collect()
+        self.workflows.split(',').map(str::to_string).collect()
     }
 }

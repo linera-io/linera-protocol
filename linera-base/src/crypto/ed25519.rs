@@ -37,7 +37,7 @@ impl Ed25519SecretKey {
     #[cfg(all(with_getrandom, with_testing))]
     /// Generates a new key pair using the operating system's RNG.
     ///
-    /// If you want control over the RNG, use `generate_from`[Ed25519SecretKey::generate_from].
+    /// If you want control over the RNG, use [`Ed25519SecretKey::generate_from`].
     pub fn generate() -> Self {
         let mut rng = rand::rngs::OsRng;
         Self::generate_from(&mut rng)
@@ -345,7 +345,7 @@ impl Ed25519Signature {
         let mut messages = Vec::new();
         let mut signatures = Vec::new();
         let mut public_keys = Vec::new();
-        for (addr, sig) in votes.into_iter() {
+        for (addr, sig) in votes {
             messages.push(msg.as_slice());
             signatures.push(sig.0);
             public_keys.push(dalek::VerifyingKey::from_bytes(&addr.0)?);

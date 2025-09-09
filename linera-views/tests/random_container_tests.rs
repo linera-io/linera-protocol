@@ -481,10 +481,10 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             let front2 = new_vector.first();
             assert_eq!(front1, front2);
             let back1 = view.queue.back().await?;
-            let back2 = new_vector.last().cloned();
+            let back2 = new_vector.last().copied();
             assert_eq!(back1, back2);
             for _ in 0..3 {
-                let count = rng.gen_range(0..new_vector.len() + 1);
+                let count = rng.gen_range(0..=new_vector.len());
                 let vec1 = view.queue.read_front(count).await?;
                 let vec2 = new_vector[..count].to_vec();
                 assert_eq!(vec1, vec2);
@@ -576,7 +576,7 @@ async fn queue_view_mutability_check() -> Result<()> {
                 new_vector.clone_from(&vector);
             }
             let front1 = view.queue.front().await?;
-            let front2 = new_vector.first().cloned();
+            let front2 = new_vector.first().copied();
             assert_eq!(front1, front2);
             let new_elements = view.queue.elements().await?;
             let new_hash = view.crypto_hash().await?;

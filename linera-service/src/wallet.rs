@@ -8,7 +8,7 @@ use comfy_table::{
 use linera_base::identifiers::ChainId;
 pub use linera_client::wallet::*;
 
-pub async fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId>) {
+pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId>) {
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -28,13 +28,12 @@ pub async fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = C
             chain_id,
             user_chain,
             Some(chain_id) == wallet.default,
-        )
-        .await;
+        );
     }
     println!("{}", table);
 }
 
-async fn update_table_with_chain(
+fn update_table_with_chain(
     table: &mut Table,
     chain_id: ChainId,
     user_chain: &UserChain,
@@ -61,12 +60,10 @@ Next Block Height:  {}
 Epoch:              {}"#,
             account_owner
                 .as_ref()
-                .map(|o| o.to_string())
-                .unwrap_or_else(|| "-".to_string()),
+                .map_or_else(|| "-".to_string(), |o| o.to_string()),
             user_chain
                 .block_hash
-                .map(|bh| bh.to_string())
-                .unwrap_or_else(|| "-".to_string()),
+                .map_or_else(|| "-".to_string(), |bh| bh.to_string()),
             user_chain.timestamp,
             user_chain.next_block_height,
             epoch_str

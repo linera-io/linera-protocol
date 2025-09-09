@@ -472,9 +472,10 @@ impl WritableKeyValueStore for LimitedTestMemoryStore {
     const MAX_VALUE_SIZE: usize = 100;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
-        if !batch.check_value_size(Self::MAX_VALUE_SIZE) {
-            panic!("The batch size is not adequate for this test");
-        }
+        assert!(
+            batch.check_value_size(Self::MAX_VALUE_SIZE),
+            "The batch size is not adequate for this test"
+        );
         self.inner.write_batch(batch).await
     }
 

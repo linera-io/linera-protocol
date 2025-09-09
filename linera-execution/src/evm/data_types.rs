@@ -17,7 +17,7 @@ impl Serialize for AmountU256 {
         use serde::ser::SerializeTuple;
         let v: [u8; 32] = self.0.to_be_bytes();
         let mut tuple = serializer.serialize_tuple(32)?;
-        for byte in v.iter() {
+        for byte in &v {
             tuple.serialize_element(byte)?;
         }
         tuple.end()

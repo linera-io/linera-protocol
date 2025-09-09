@@ -76,16 +76,16 @@ impl IndexedDbStore {
 }
 
 impl IndexedDbDatabase {
-    fn open_internal(&self, start_key: Vec<u8>) -> Result<IndexedDbStore, IndexedDbStoreError> {
+    fn open_internal(&self, start_key: Vec<u8>) -> IndexedDbStore {
         let database = self.database.clone();
         let object_store_name = self.object_store_name.clone();
         let max_stream_queries = self.max_stream_queries;
-        Ok(IndexedDbStore {
+        IndexedDbStore {
             database,
             object_store_name,
             max_stream_queries,
             start_key,
-        })
+        }
     }
 }
 
@@ -286,7 +286,7 @@ impl KeyValueDatabase for IndexedDbDatabase {
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
         let mut start_key = ROOT_KEY_DOMAIN.to_vec();
         start_key.extend(root_key);
-        self.open_internal(start_key)
+        Ok(self.open_internal(start_key))
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, IndexedDbStoreError> {
@@ -307,7 +307,7 @@ impl KeyValueDatabase for IndexedDbDatabase {
     ) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
         let database = Self::connect(config, namespace).await?;
         let start_key = STORED_ROOT_KEYS_PREFIX.to_vec();
-        let store = database.open_internal(start_key)?;
+        let store = database.open_internal(start_key);
         store.find_keys_by_prefix(&[]).await
     }
 

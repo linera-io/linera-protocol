@@ -80,7 +80,7 @@ impl Project {
     }
 
     /// Runs the unit and integration tests of an application.
-    pub async fn test(&self) -> Result<()> {
+    pub fn test(&self) -> Result<()> {
         let tests = Command::new("cargo")
             .arg("test")
             .args(["--target", CURRENT_PLATFORM])
