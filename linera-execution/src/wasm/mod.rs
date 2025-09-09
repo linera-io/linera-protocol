@@ -21,6 +21,7 @@ mod wasmtime;
 
 #[cfg(with_fs)]
 use std::path::Path;
+
 use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
