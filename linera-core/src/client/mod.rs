@@ -62,7 +62,11 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use linera_views::ViewError;
-use rand::distributions::{Distribution, WeightedIndex};
+use rand::{
+    distributions::{Distribution, WeightedIndex},
+    rngs::StdRng,
+    SeedableRng,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
@@ -317,29 +321,18 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
-    async fn weighted_shuffle(
-        &self,
-    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, ChainClientError> {
-        let (_, committee) = self.admin_committee().await?;
-        let mut remaining_validators = self.make_nodes(&committee)?;
-        // Shuffle validators using their weights
-        let mut remaining_weights = remaining_validators
-            .iter()
-            .map(|validator| {
-                let validator_state = committee.validators.get(&validator.public_key).unwrap();
-                validator_state.votes
-            })
-            .collect::<Vec<_>>();
-        let mut rng = rand::thread_rng();
-        let mut shuffled_validators = Vec::new();
-        while !remaining_validators.is_empty() {
-            let dist = WeightedIndex::new(&remaining_weights).unwrap();
-            let idx = dist.sample(&mut rng);
-            remaining_weights.remove(idx);
-            let validator = remaining_validators.remove(idx);
-            shuffled_validators.push(validator);
+    fn weighted_select(
+        remaining_validators: &mut Vec<RemoteNode<Env::ValidatorNode>>,
+        remaining_weights: &mut Vec<u64>,
+        rng: &mut StdRng,
+    ) -> Option<RemoteNode<Env::ValidatorNode>> {
+        if remaining_weights.is_empty() {
+            return None;
         }
-        Ok(shuffled_validators)
+        let dist = WeightedIndex::new(remaining_weights.clone()).unwrap();
+        let idx = dist.sample(rng);
+        remaining_weights.remove(idx);
+        Some(remaining_validators.remove(idx))
     }
 
     /// Downloads and processes all certificates up to (excluding) the specified height.
@@ -349,11 +342,24 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let shuffled_validators = self.weighted_shuffle().await?;
+        let (_, committee) = self.admin_committee().await?;
+        let mut remaining_validators = self.make_nodes(&committee)?;
         let mut info = self
-            .fetch_chain_info(chain_id, &shuffled_validators)
+            .fetch_chain_info(chain_id, &remaining_validators)
             .await?;
-        for remote_node in shuffled_validators {
+        // Determining the weights of the validators
+        let mut remaining_weights = remaining_validators
+            .iter()
+            .map(|validator| {
+                let validator_state = committee.validators.get(&validator.public_key).unwrap();
+                validator_state.votes
+            })
+            .collect::<Vec<_>>();
+        let mut rng: StdRng = StdRng::from_entropy();
+
+        while let Some(remote_node) =
+            Self::weighted_select(&mut remaining_validators, &mut remaining_weights, &mut rng)
+        {
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
