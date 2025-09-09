@@ -20,14 +20,11 @@ impl From<&'_ NodeOptions> for Options {
 
 cfg_if::cfg_if! {
     if #[cfg(web)] {
-        pub use tonic_web_wasm_client::{Client as Channel, Error, options::FetchOptions};
+        pub use tonic_web_wasm_client::{Client as Channel, Error};
 
-        pub fn create_channel(address: String, options: &Options) -> Result<Channel, Error> {
-            let mut client = tonic_web_wasm_client::Client::new(address);
-            if let Some(timeout) = options.timeout {
-                client.with_options(FetchOptions::new().timeout(timeout));
-            }
-            Ok(client)
+        pub fn create_channel(address: String, _options: &Options) -> Result<Channel, Error> {
+            // TODO(#1817): this should respect `options`
+            Ok(tonic_web_wasm_client::Client::new(address))
         }
     } else {
         pub use tonic::transport::{Channel, Error};
