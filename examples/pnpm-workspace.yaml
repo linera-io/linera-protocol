@@ -3,4 +3,4 @@ packages:
 - ../linera-web/signer
 - counter
 - counter/metamask
-- fungible
+- native-fungible
