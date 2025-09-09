@@ -540,9 +540,13 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
-        let chain = self.local_node.chain_state_view(chain_id).await?;
-        let pairs = chain.inboxes.try_load_all_entries().await?;
-        let sender_heights = pairs
+        let sender_heights = self
+            .local_node
+            .chain_state_view(chain_id)
+            .await?
+            .inboxes
+            .try_load_all_entries()
+            .await?
             .iter()
             .map(|(origin, inbox)| {
                 let next_height = inbox.next_block_height_to_receive()?;
