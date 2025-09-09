@@ -284,4 +284,18 @@ impl ValidatorNode for Client {
             Client::Simple(simple_client) => simple_client.missing_blob_ids(blob_ids).await?,
         })
     }
+
+    async fn blob_last_used_by_certificate(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.blob_last_used_by_certificate(blob_id).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client.blob_last_used_by_certificate(blob_id).await?
+            }
+        })
+    }
 }

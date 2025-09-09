@@ -779,6 +779,16 @@ where
             .map_err(Self::view_error_to_status)?;
         Ok(Response::new(missing_blob_ids.try_into()?))
     }
+
+    #[instrument(skip_all, err(level = Level::WARN))]
+    async fn blob_last_used_by_certificate(
+        &self,
+        request: Request<BlobId>,
+    ) -> Result<Response<Certificate>, Status> {
+        let cert_hash = self.blob_last_used_by(request).await?;
+        let request = Request::new(cert_hash.into_inner());
+        self.download_certificate(request).await
+    }
 }
 
 #[async_trait]

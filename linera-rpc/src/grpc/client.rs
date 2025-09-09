@@ -478,4 +478,12 @@ impl ValidatorNode for GrpcClient {
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Ok(client_delegate!(self, missing_blob_ids, blob_ids)?.try_into()?)
     }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    async fn blob_last_used_by_certificate(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        Ok(client_delegate!(self, blob_last_used_by_certificate, blob_id)?.try_into()?)
+    }
 }

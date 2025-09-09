@@ -400,6 +400,21 @@ where
             MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(
                 self.storage.missing_blobs(&blob_ids).await?,
             ))),
+            BlobLastUsedByCertificate(blob_id) => {
+                let blob_state = self.storage.read_blob_state(*blob_id).await?;
+                let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let last_used_by = blob_state
+                    .last_used_by
+                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let certificate = self
+                    .storage
+                    .read_certificate(last_used_by)
+                    .await?
+                    .ok_or_else(|| anyhow!("Certificate not found {}", last_used_by))?;
+                Ok(Some(RpcMessage::BlobLastUsedByCertificateResponse(
+                    Box::new(certificate),
+                )))
+            }
             BlockProposal(_)
             | LiteCertificate(_)
             | TimeoutCertificate(_)
@@ -417,6 +432,7 @@ where
             | DownloadPendingBlobResponse(_)
             | HandlePendingBlob(_)
             | BlobLastUsedByResponse(_)
+            | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)

@@ -262,6 +262,16 @@ where
         })
         .await
     }
+
+    async fn blob_last_used_by_certificate(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_blob_last_used_by_certificate(blob_id, sender)
+        })
+        .await
+    }
 }
 
 impl<S> LocalValidatorClient<S>
@@ -660,6 +670,20 @@ where
             .await
             .map_err(Into::into);
         sender.send(missing_blob_ids)
+    }
+
+    async fn do_blob_last_used_by_certificate(
+        self,
+        blob_id: BlobId,
+        sender: oneshot::Sender<Result<ConfirmedBlockCertificate, NodeError>>,
+    ) -> Result<(), Result<ConfirmedBlockCertificate, NodeError>> {
+        match self.blob_last_used_by(blob_id).await {
+            Ok(cert_hash) => {
+                let cert = self.download_certificate(cert_hash).await;
+                sender.send(cert)
+            }
+            Err(err) => sender.send(Err(err)),
+        }
     }
 }
 
