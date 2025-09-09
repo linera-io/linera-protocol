@@ -75,7 +75,7 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
 
     let validator_client = net.validator_client(1).await?;
     let chain_info = validator_client
-        .handle_chain_info_query(ChainInfoQuery::new(chain).no_network_actions())
+        .handle_chain_info_query(ChainInfoQuery::new(chain))
         .await?;
 
     // Check that the block exporter has exported the block.

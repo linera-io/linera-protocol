@@ -299,11 +299,7 @@ impl ActiveChain {
         let (information, _) = self
             .validator
             .worker()
-            .handle_chain_info_query(
-                ChainInfoQuery::new(chain_id)
-                    .with_pending_message_bundles()
-                    .no_network_actions(),
-            )
+            .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_message_bundles())
             .await
             .expect("Failed to query chain's pending messages");
         let messages = information.info.requested_pending_message_bundles;

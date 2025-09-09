@@ -116,11 +116,7 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
-        let (response, _actions) = self
-            .node
-            .state
-            .handle_chain_info_query(query.no_network_actions())
-            .await?;
+        let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
 

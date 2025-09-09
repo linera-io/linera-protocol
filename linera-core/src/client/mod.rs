@@ -403,9 +403,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id)
-            .with_committees()
-            .no_network_actions();
+        let query = ChainInfoQuery::new(chain_id).with_committees();
         let info = self.local_node.handle_chain_info_query(query).await?.info;
         Ok(info)
     }
@@ -762,9 +760,7 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = self.admin_committees().await?;
 
         // Retrieve the list of newly received certificates from this validator.
-        let query = ChainInfoQuery::new(chain_id)
-            .with_received_log_excluding_first_n(tracker)
-            .no_network_actions();
+        let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
         let remote_log = info.requested_received_log;
         let remote_heights = Self::heights_per_chain(&remote_log);
@@ -973,9 +969,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
         let mut local_info = self.local_node.chain_info(chain_id).await?;
-        let query = ChainInfoQuery::new(chain_id)
-            .with_manager_values()
-            .no_network_actions();
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let remote_info = remote_node.handle_chain_info_query(query).await?;
         if let Some(new_info) = self
             .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
@@ -1707,7 +1701,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain.
     #[instrument(level = "trace")]
     pub async fn chain_info(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id).no_network_actions();
+        let query = ChainInfoQuery::new(self.chain_id);
         let response = self
             .client
             .local_node
@@ -1720,9 +1714,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
     async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id)
-            .with_manager_values()
-            .no_network_actions();
+        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self
             .client
             .local_node
@@ -1746,9 +1738,7 @@ impl<Env: Environment> ChainClient<Env> {
             return Ok(Vec::new());
         }
 
-        let query = ChainInfoQuery::new(self.chain_id)
-            .with_pending_message_bundles()
-            .no_network_actions();
+        let query = ChainInfoQuery::new(self.chain_id).with_pending_message_bundles();
         let info = self
             .client
             .local_node
@@ -2709,7 +2699,7 @@ impl<Env: Environment> ChainClient<Env> {
             self.chain_info().await?.next_block_height >= self.initial_next_block_height,
             ChainClientError::WalletSynchronizationError
         );
-        let mut query = ChainInfoQuery::new(self.chain_id).no_network_actions();
+        let mut query = ChainInfoQuery::new(self.chain_id);
         query.request_owner_balance = owner;
         let response = self
             .client
@@ -3854,7 +3844,7 @@ impl<Env: Environment> ChainClient<Env> {
         remote_node: Env::ValidatorNode,
     ) -> Result<(), ChainClientError> {
         let validator_next_block_height = match remote_node
-            .handle_chain_info_query(ChainInfoQuery::new(self.chain_id).no_network_actions())
+            .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
             .await
         {
             Ok(info) => info.info.next_block_height.0,

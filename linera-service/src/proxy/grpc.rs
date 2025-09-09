@@ -637,8 +637,7 @@ where
     ) -> Result<Response<CertificatesBatchResponse>, Status> {
         let original_request: CertificatesByHeightRequest = request.into_inner().try_into()?;
         let chain_info_request = ChainInfoQuery::new(original_request.chain_id)
-            .with_sent_certificate_hashes_by_heights(original_request.heights)
-            .no_network_actions();
+            .with_sent_certificate_hashes_by_heights(original_request.heights);
 
         // Use handle_chain_info_query to get the certificate hashes
         let chain_info_response = self

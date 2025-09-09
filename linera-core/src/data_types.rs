@@ -119,7 +119,7 @@ impl ChainInfoQuery {
             request_leader_timeout: None,
             request_fallback: false,
             request_sent_certificate_hashes_by_heights: Vec::new(),
-            create_network_actions: true,
+            create_network_actions: false,
         }
     }
 
@@ -165,11 +165,6 @@ impl ChainInfoQuery {
 
     pub fn with_fallback(mut self) -> Self {
         self.request_fallback = true;
-        self
-    }
-
-    pub fn no_network_actions(mut self) -> Self {
-        self.create_network_actions = false;
         self
     }
 }

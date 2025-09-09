@@ -2269,9 +2269,7 @@ where
         );
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
-    let query = ChainInfoQuery::new(chain_2)
-        .with_received_log_excluding_first_n(0)
-        .no_network_actions();
+    let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
     let (response, _actions) = env.worker().handle_chain_info_query(query).await?;
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
@@ -3341,9 +3339,7 @@ where
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
-    let query = ChainInfoQuery::new(chain_1)
-        .with_timeout(BlockHeight(1), Round::SingleLeader(0))
-        .no_network_actions();
+    let query = ChainInfoQuery::new(chain_1).with_timeout(BlockHeight(1), Round::SingleLeader(0));
     let result = env.worker().handle_chain_info_query(query.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::NotTimedOutYet(_))
@@ -3432,9 +3428,7 @@ where
     env.worker()
         .handle_validated_certificate(certificate)
         .await?;
-    let query_values = ChainInfoQuery::new(chain_1)
-        .with_manager_values()
-        .no_network_actions();
+    let query_values = ChainInfoQuery::new(chain_1).with_manager_values();
     let (response, _) = env
         .worker()
         .handle_chain_info_query(query_values.clone())
@@ -3595,9 +3589,7 @@ where
     );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
-    let query = ChainInfoQuery::new(chain_id)
-        .with_timeout(BlockHeight(1), Round::Fast)
-        .no_network_actions();
+    let query = ChainInfoQuery::new(chain_id).with_timeout(BlockHeight(1), Round::Fast);
     let result = env.worker().handle_chain_info_query(query.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::NotTimedOutYet(_))
@@ -3633,9 +3625,7 @@ where
         .unwrap();
     let (_, actions) = env.worker().handle_block_proposal(proposal1).await?;
     assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
-    let query_values = ChainInfoQuery::new(chain_id)
-        .with_manager_values()
-        .no_network_actions();
+    let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
     Ok(())
@@ -3851,9 +3841,7 @@ where
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
-    let query_values = ChainInfoQuery::new(chain_id)
-        .with_manager_values()
-        .no_network_actions();
+    let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = env.worker().handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locking,
@@ -3929,8 +3917,7 @@ where
     // Now we need to switch the query to check chain_2 since that's where the incoming message is
     let query_chain_2 = ChainInfoQuery::new(chain_2)
         .with_fallback()
-        .with_committees()
-        .no_network_actions();
+        .with_committees();
 
     // The message only just arrived: No fallback mode.
     let (response, _) = env
