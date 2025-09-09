@@ -435,9 +435,10 @@ where
                         return Ok(()); // Don't return an error, so we retry.
                     }
                     chain_err => {
-                        let error_msg = format!("{}", chain_err);
                         for request in valid_requests {
-                            let _ = request.responder.send(Err(Error::new(error_msg.clone())));
+                            let _ = request
+                                .responder
+                                .send(Err(Error::new(chain_err.to_string())));
                         }
                         return Err(
                             ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
@@ -449,9 +450,8 @@ where
                 }
             }
             Err(err) => {
-                let error_msg = format!("{}", err);
                 for request in valid_requests {
-                    let _ = request.responder.send(Err(Error::new(error_msg.clone())));
+                    let _ = request.responder.send(Err(Error::new(err.to_string())));
                 }
                 return Err(err.into());
             }
