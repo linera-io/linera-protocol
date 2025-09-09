@@ -695,6 +695,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "counter-no-graphql"
 version = "0.1.0"
 dependencies = [
@@ -2736,6 +2747,17 @@ dependencies = [
  "keccak",
  "rand_core 0.6.4",
  "zeroize",
+]
+
+[[package]]
+name = "meta-counter"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "counter",
+ "linera-sdk",
+ "log",
+ "serde",
 ]
 
 [[package]]
