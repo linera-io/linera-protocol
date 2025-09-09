@@ -13,7 +13,6 @@ members = [
     "how-to/perform-http-requests",
     "llm",
     "matching-engine",
-    "meta-counter",
     "native-fungible",
     "non-fungible",
     "rfq",

@@ -310,7 +310,7 @@ ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
 hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
-meta-counter = { path = "./examples/meta-counter" }
+meta-counter = { path = "./linera-sdk/tests/fixtures/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
 publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data-blob" }
