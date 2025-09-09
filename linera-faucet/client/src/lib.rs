@@ -73,7 +73,25 @@ impl Faucet {
             .await?;
 
         if let Some(errors) = response.errors {
-            Err(ErrorInner::GraphQl(errors).into())
+            // Extract just the error messages, ignore locations and path
+            let messages = errors
+                .iter()
+                .filter_map(|error| {
+                    error
+                        .get("message")
+                        .and_then(|msg| msg.as_str())
+                        .map(|s| s.to_string())
+                })
+                .collect::<Vec<_>>();
+
+            if messages.is_empty() {
+                Err(ErrorInner::GraphQl(errors).into())
+            } else {
+                Err(
+                    ErrorInner::GraphQl(vec![serde_json::Value::String(messages.join("; "))])
+                        .into(),
+                )
+            }
         } else {
             Ok(response
                 .data
@@ -111,7 +129,6 @@ impl Faucet {
         struct Response {
             claim: ChainDescription,
         }
-
         Ok(self
             .query::<Response>(format!("mutation {{ claim(owner: \"{owner}\") }}"))
             .await?
