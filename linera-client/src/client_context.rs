@@ -149,7 +149,7 @@ where
             options.long_lived_services,
             chain_ids,
             name,
-            Duration::from_secs(30),
+            options.chain_worker_ttl,
             options.to_chain_client_options(),
         );
 
