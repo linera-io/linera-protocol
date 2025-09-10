@@ -564,6 +564,33 @@ impl Runnable for Job {
                 }
             }
 
+            SyncAllValidators { mut chains } => {
+                let context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+
+                if chains.is_empty() {
+                    chains.push(context.default_chain());
+                }
+
+                let committee = context.wallet().genesis_config().committee.clone();
+
+                for validator_name in committee.validators().keys() {
+                    let validator = context
+                        .make_node_provider()
+                        .make_node(&validator_name.to_string())?;
+
+                    for chain_id in &chains {
+                        let chain = context.make_chain_client(*chain_id);
+
+                        Box::pin(chain.sync_validator(validator.clone())).await?;
+                    }
+                }
+            }
+
             command @ (SetValidator { .. }
             | RemoveValidator { .. }
             | ResourceControlPolicy { .. }) => {
