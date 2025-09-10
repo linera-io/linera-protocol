@@ -2,7 +2,14 @@
 
 # `linera-web`
 
-This module defines the client API for the Web extension.
+This module defines the JavaScript bindings to the client API.
+
+It is compiled to Wasm, with a JavaScript wrapper to inject its imports, and published on
+NPM as `@linera/client`.
+
+There is a supplementary package `@linera/signer`, contained within the `signer`
+subdirectory, that defines signer implementations for different transaction-signing
+policies, including in-memory keys and signing using an existing MetaMask wallet.
 
 <!-- cargo-rdme end -->
 
