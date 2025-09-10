@@ -1630,25 +1630,25 @@ impl Runnable for Job {
                     .await?;
             }
 
-            Wallet(WalletCommand::FollowChain {
-                chain_id,
-                sync: true,
-            }) => {
+            Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
                 let mut context = ClientContext::new(
                     storage,
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
                 );
+                let start_time = Instant::now();
+                context.client.track_chain(chain_id);
                 let chain_client = context.make_chain_client(chain_id);
-                info!("Synchronizing chain information");
-                let time_start = Instant::now();
-                chain_client.synchronize_from_validators().await?;
+                if sync {
+                    chain_client.synchronize_from_validators().await?;
+                } else {
+                    chain_client.fetch_chain_info().await?;
+                }
                 context.update_wallet_from_client(&chain_client).await?;
-                let time_total = time_start.elapsed();
                 info!(
-                    "Synchronized chain information in {} ms",
-                    time_total.as_millis()
+                    "Chain followed and added in {} ms",
+                    start_time.elapsed().as_millis()
                 );
             }
 
@@ -2377,25 +2377,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 Ok(0)
             }
 
-            WalletCommand::FollowChain { chain_id, sync } => {
-                let start_time = Instant::now();
-                options
-                    .wallet()
-                    .await?
-                    .mutate(|wallet| {
-                        wallet.extend([UserChain::make_other(*chain_id, Timestamp::now())])
-                    })
-                    .await?;
-                if *sync {
-                    options.run_with_storage(Job(options.clone())).await??;
-                }
-                info!(
-                    "Chain followed and added in {} ms",
-                    start_time.elapsed().as_millis()
-                );
-                Ok(0)
-            }
-
             WalletCommand::ForgetChain { chain_id } => {
                 let start_time = Instant::now();
                 options
@@ -2404,11 +2385,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     .mutate(|w| w.forget_chain(chain_id))
                     .await??;
                 info!("Chain forgotten in {} ms", start_time.elapsed().as_millis());
-                Ok(0)
-            }
-
-            WalletCommand::RequestChain { .. } => {
-                options.run_with_storage(Job(options.clone())).await??;
                 Ok(0)
             }
 
@@ -2456,6 +2432,11 @@ Make sure to use a Linera client compatible with this network.
                     "Wallet initialized in {} ms",
                     start_time.elapsed().as_millis()
                 );
+                Ok(0)
+            }
+
+            WalletCommand::FollowChain { .. } | WalletCommand::RequestChain { .. } => {
+                options.run_with_storage(Job(options.clone())).await??;
                 Ok(0)
             }
         },
