@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "contract-call",
+    "create-and-call",
+    "meta-counter",
+    "publish-read-data-blob",
+    "track-instantiation",
+]
+
+[workspace.dependencies]
+async-graphql = { version = "=7.0.17", default-features = false }
+linera-sdk = { path = "../../../linera-sdk" }
+log = "0.4.20"
+serde = { version = "1.0.152", features = ["derive"] }
+tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
+
+contract-call = { path = "./create-and-call" }
+counter = { path = "../../../examples/counter" }
+counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
+create-and-call = { path = "./create-and-call" }
+meta-counter = { path = "./meta-counter" }
+publish-read-data-blob = { path = "./publish-read-data-blob" }
+track-instantiation = { path = "./track-instantiation" }
+
+[profile.release]
+debug = true
+lto = true
+opt-level = 'z'
+strip = 'debuginfo'
+
+[profile.bench]
+debug = true
