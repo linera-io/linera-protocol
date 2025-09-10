@@ -184,8 +184,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         &self,
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        let last_used_hash = self.node.blob_last_used_by(blob_id).await?;
-        let certificate = self.node.download_certificate(last_used_hash).await?;
+        let certificate = self.node.blob_last_used_by_certificate(blob_id).await?;
         if !certificate.block().requires_or_creates_blob(&blob_id) {
             warn!(
                 "Got invalid last used by certificate for blob {} from validator {}",
