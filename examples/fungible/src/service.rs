@@ -11,7 +11,7 @@ use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::{OwnerSpender, Parameters};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
-    graphql::GraphQLMutationRoot,
+    graphql::GraphQLMutationRoot as _,
     linera_base_types::{AccountOwner, Amount, WithServiceAbi},
     views::{MapView, View},
     Service, ServiceRuntime,

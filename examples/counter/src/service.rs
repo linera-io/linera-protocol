@@ -10,7 +10,7 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use counter::CounterOperation;
 use linera_sdk::{
-    graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service,
+    graphql::GraphQLMutationRoot as _, linera_base_types::WithServiceAbi, views::View, Service,
     ServiceRuntime,
 };
 

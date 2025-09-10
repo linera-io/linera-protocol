@@ -9,7 +9,7 @@ use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::Parameters;
 use linera_sdk::{
     abis::fungible::{NativeFungibleOperation, NativeFungibleTokenAbi},
-    graphql::GraphQLMutationRoot,
+    graphql::GraphQLMutationRoot as _,
     linera_base_types::{AccountOwner, WithServiceAbi},
     Service, ServiceRuntime,
 };
