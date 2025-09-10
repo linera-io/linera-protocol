@@ -120,7 +120,7 @@ mod in_mem {
         }
 
         /// Returns the public key corresponding to the given `owner`.
-        pub fn keys(&self) -> Vec<(AccountOwner, Vec<u8>)> {
+        pub fn keys(&self) -> Vec<(AccountOwner, String)> {
             let inner = self.0.read().unwrap();
             inner.keys()
         }
@@ -171,14 +171,12 @@ mod in_mem {
             }
         }
 
-        pub fn keys(&self) -> Vec<(AccountOwner, Vec<u8>)> {
+        pub fn keys(&self) -> Vec<(AccountOwner, String)> {
             self.keys
                 .iter()
                 .map(|(owner, secret)| {
-                    (
-                        *owner,
-                        serde_json::to_vec(secret).expect("serialization should not fail"),
-                    )
+                    let bytes = serde_json::to_vec(secret).expect("serialization should not fail");
+                    (*owner, hex::encode(bytes))
                 })
                 .collect()
         }
@@ -258,7 +256,7 @@ mod in_mem {
         {
             #[derive(Serialize, Debug)]
             struct Inner<'a> {
-                keys: &'a Vec<(AccountOwner, Vec<u8>)>,
+                keys: &'a Vec<(AccountOwner, String)>,
                 #[cfg(with_getrandom)]
                 prng_seed: Option<u64>,
             }
@@ -283,7 +281,7 @@ mod in_mem {
         {
             #[derive(Deserialize)]
             struct Inner {
-                keys: Vec<(AccountOwner, Vec<u8>)>,
+                keys: Vec<(AccountOwner, String)>,
                 #[cfg(with_getrandom)]
                 prng_seed: Option<u64>,
             }
@@ -293,9 +291,11 @@ mod in_mem {
             let keys = inner
                 .keys
                 .into_iter()
-                .map(|(owner, secret)| {
+                .map(|(owner, secret_hex)| {
+                    let secret_bytes =
+                        hex::decode(&secret_hex).map_err(serde::de::Error::custom)?;
                     let secret =
-                        serde_json::from_slice(&secret).map_err(serde::de::Error::custom)?;
+                        serde_json::from_slice(&secret_bytes).map_err(serde::de::Error::custom)?;
                     Ok((owner, secret))
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
