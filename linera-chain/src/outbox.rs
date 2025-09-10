@@ -88,7 +88,7 @@ where
         height: BlockHeight,
     ) -> Result<Vec<BlockHeight>, ViewError> {
         let mut updates = Vec::new();
-        while let Some(h) = self.queue.front().cloned() {
+        while let Some(h) = self.queue.front().copied() {
             if h > height {
                 break;
             }

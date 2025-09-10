@@ -129,7 +129,7 @@ pub enum InnerStorageConfigBuilder {
 }
 
 impl InnerStorageConfigBuilder {
-    #[allow(unused_variables)]
+    #[cfg_attr(not(with_testing), expect(unused_variables))]
     pub async fn build(self, database: Database) -> Result<InnerStorageConfig> {
         match self {
             #[cfg(with_testing)]
@@ -344,7 +344,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.cross_chain_config,
             self.path_provider,
             self.block_exporters,
-        )?;
+        );
         let client = net.make_client().await;
         ensure!(
             self.num_initial_validators > 0,
@@ -416,8 +416,8 @@ impl LocalNet {
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
         block_exporters: ExportersSetup,
-    ) -> Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             network,
             testing_prng_seed,
             next_client_id: 0,
@@ -432,7 +432,7 @@ impl LocalNet {
             cross_chain_config,
             path_provider,
             block_exporters,
-        })
+        }
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
@@ -562,7 +562,7 @@ impl LocalNet {
                 }
             }
             ExportersSetup::Remote(ref exporters) => {
-                for exporter in exporters.iter() {
+                for exporter in exporters {
                     let host = exporter.host.clone();
                     let port = exporter.port;
                     let config_content = format!(
@@ -955,7 +955,7 @@ impl LocalNet {
     }
 
     /// Returns a [`linera_rpc::Client`] to interact directly with a `validator`.
-    pub async fn validator_client(&mut self, validator: usize) -> Result<linera_rpc::Client> {
+    pub fn validator_client(&mut self, validator: usize) -> Result<linera_rpc::Client> {
         let node_provider = linera_rpc::NodeProvider::new(linera_rpc::NodeOptions {
             send_timeout: Duration::from_secs(1),
             recv_timeout: Duration::from_secs(1),

@@ -67,8 +67,8 @@ trait ChainClientExt {
 impl<Env: Environment> ChainClientExt for ChainClient<Env> {
     async fn publish_wasm_example(&self, name: &str) -> anyhow::Result<ModuleId> {
         let (contract_path, service_path) = wasm_test::get_example_bytecode_paths(name)?;
-        let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
-        let service_bytecode = Bytecode::load_from_file(service_path).await?;
+        let contract_bytecode = Bytecode::load_from_file(contract_path)?;
+        let service_bytecode = Bytecode::load_from_file(service_path)?;
         let (module_id, _cert) = self
             .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
             .await
@@ -90,7 +90,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> anyhow::Re
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_service_create_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_create_application(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
+    run_test_create_application(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -128,8 +128,8 @@ where
     let vm_runtime = VmRuntime::Wasm;
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
-    let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
-    let service_bytecode = Bytecode::load_from_file(service_path).await?;
+    let contract_bytecode = Bytecode::load_from_file(contract_path)?;
+    let service_bytecode = Bytecode::load_from_file(service_path)?;
     let contract_compressed_len = contract_bytecode.compress().compressed_bytes.len();
     let service_compressed_len = service_bytecode.compress().compressed_bytes.len();
 
@@ -236,10 +236,8 @@ async fn test_memory_run_application_with_dependency(
 async fn test_service_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    run_test_run_application_with_dependency(
-        ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await,
-    )
-    .await
+    run_test_run_application_with_dependency(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime))
+        .await
 }
 
 #[ignore]
@@ -494,7 +492,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::R
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_cross_chain_message(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
+    run_test_cross_chain_message(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -664,7 +662,7 @@ async fn test_memory_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_service_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_event_streams(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
+    run_test_event_streams(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -1007,8 +1005,7 @@ async fn test_memory_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_service_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_publish_read_data_blob(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await)
-        .await
+    run_test_publish_read_data_blob(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]

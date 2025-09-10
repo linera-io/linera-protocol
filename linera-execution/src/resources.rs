@@ -678,7 +678,7 @@ pub struct Sources<'a> {
 impl BalanceHolder for Sources<'_> {
     fn balance(&self) -> Result<Amount, ArithmeticError> {
         let mut amount = Amount::ZERO;
-        for source in self.sources.iter() {
+        for source in &self.sources {
             amount.try_add_assign(**source)?;
         }
         Ok(amount)
@@ -692,7 +692,7 @@ impl BalanceHolder for Sources<'_> {
     }
 
     fn try_sub_assign(&mut self, mut other: Amount) -> Result<(), ArithmeticError> {
-        for source in self.sources.iter_mut() {
+        for source in &mut self.sources {
             if source.try_sub_assign(other).is_ok() {
                 return Ok(());
             }

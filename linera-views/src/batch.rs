@@ -99,7 +99,7 @@ impl UnorderedBatch {
         let insertions = self.simple_unordered_batch.insertions;
         let mut deletions = self.simple_unordered_batch.deletions;
         for key_prefix in self.key_prefix_deletions {
-            for short_key in db.expand_delete_prefix(&key_prefix).await?.iter() {
+            for short_key in &db.expand_delete_prefix(&key_prefix).await? {
                 let mut key = key_prefix.clone();
                 key.extend(short_key);
                 if !insert_set.contains(&key) {
@@ -136,7 +136,7 @@ impl UnorderedBatch {
                 .next()
                 .is_some()
             {
-                for short_key in db.expand_delete_prefix(key_prefix).await?.iter() {
+                for short_key in &db.expand_delete_prefix(key_prefix).await? {
                     let mut key = key_prefix.clone();
                     key.extend(short_key);
                     if !inserted_keys.contains(&key) {

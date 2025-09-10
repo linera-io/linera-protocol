@@ -968,7 +968,7 @@ where
                 .expect("writing a blob should succeed");
             storage.create_chain(description.clone()).await.unwrap();
         }
-        for storage in self.chain_client_storages.iter_mut() {
+        for storage in &mut self.chain_client_storages {
             storage.create_chain(description.clone()).await.unwrap();
         }
         let chain_id = description.id();
@@ -1241,12 +1241,12 @@ pub struct ServiceStorageBuilder {
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 impl ServiceStorageBuilder {
     /// Creates a `ServiceStorage`.
-    pub async fn new() -> Self {
-        Self::with_wasm_runtime(None).await
+    pub fn new() -> Self {
+        Self::with_wasm_runtime(None)
     }
 
     /// Creates a `ServiceStorage` with the given Wasm runtime.
-    pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
+    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         ServiceStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
             ..ServiceStorageBuilder::default()

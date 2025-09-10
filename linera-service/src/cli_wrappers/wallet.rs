@@ -991,7 +991,7 @@ impl ClientWrapper {
         wallet.get(chain_id)?.owner
     }
 
-    pub async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
+    pub fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
         self.load_wallet()
             .ok()
             .is_some_and(|wallet| wallet.get(chain).is_some())
@@ -1303,7 +1303,7 @@ impl NodeService {
         }
     }
 
-    pub async fn make_application<A: ContractAbi>(
+    pub fn make_application<A: ContractAbi>(
         &self,
         chain_id: &ChainId,
         application_id: &ApplicationId<A>,
@@ -1338,8 +1338,8 @@ impl NodeService {
         service: PathBuf,
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId<Abi, Parameters, InstantiationArgument>> {
-        let contract_code = Bytecode::load_from_file(&contract).await?;
-        let service_code = Bytecode::load_from_file(&service).await?;
+        let contract_code = Bytecode::load_from_file(&contract)?;
+        let service_code = Bytecode::load_from_file(&service)?;
         let query = format!(
             "mutation {{ publishModule(chainId: {}, contract: {}, service: {}, vmRuntime: {}) }}",
             chain_id.to_value(),

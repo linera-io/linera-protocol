@@ -126,12 +126,14 @@ pub async fn handle_net_up_kubernetes(
     faucet_amount: Amount,
     dual_store: bool,
 ) -> anyhow::Result<()> {
-    if num_initial_validators < 1 {
-        panic!("The local test network must have at least one validator.");
-    }
-    if num_shards < 1 {
-        panic!("The local test network must have at least one shard per validator.");
-    }
+    assert!(
+        num_initial_validators >= 1,
+        "The local test network must have at least one validator."
+    );
+    assert!(
+        num_shards >= 1,
+        "The local test network must have at least one shard per validator."
+    );
     if faucet_chain.is_some() {
         assert!(
             with_faucet,
@@ -189,12 +191,14 @@ pub async fn handle_net_up_service(
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
 ) -> anyhow::Result<()> {
-    if num_initial_validators < 1 {
-        panic!("The local test network must have at least one validator.");
-    }
-    if num_shards < 1 {
-        panic!("The local test network must have at least one shard per validator.");
-    }
+    assert!(
+        num_initial_validators >= 1,
+        "The local test network must have at least one validator."
+    );
+    assert!(
+        num_shards >= 1,
+        "The local test network must have at least one shard per validator."
+    );
 
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));

@@ -303,7 +303,7 @@ where
         }
     }
 
-    async fn worker_client<R>(
+    fn worker_client<R>(
         &self,
         request: Request<R>,
     ) -> Result<(ValidatorWorkerClient<Channel>, R), Status>
@@ -379,7 +379,7 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.worker_client(request).await?;
+        let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_block_proposal(inner).await,
             "handle_block_proposal",
@@ -391,7 +391,7 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.worker_client(request).await?;
+        let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_lite_certificate(inner).await,
             "handle_lite_certificate",
@@ -403,7 +403,7 @@ where
         &self,
         request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.worker_client(request).await?;
+        let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_confirmed_certificate(inner).await,
             "handle_confirmed_certificate",
@@ -415,7 +415,7 @@ where
         &self,
         request: Request<api::HandleValidatedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.worker_client(request).await?;
+        let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_validated_certificate(inner).await,
             "handle_validated_certificate",
@@ -427,7 +427,7 @@ where
         &self,
         request: Request<api::HandleTimeoutCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.worker_client(request).await?;
+        let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_timeout_certificate(inner).await,
             "handle_timeout_certificate",
@@ -439,7 +439,7 @@ where
         &self,
         request: Request<api::ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.worker_client(request).await?;
+        let (mut client, inner) = self.worker_client(request)?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_chain_info_query(inner).await,
             "handle_chain_info_query",
@@ -524,7 +524,7 @@ where
         &self,
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
-        let (mut client, inner) = self.worker_client(request).await?;
+        let (mut client, inner) = self.worker_client(request)?;
         #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
         match client.download_pending_blob(inner).await {
             Ok(blob_result) => {
@@ -549,7 +549,7 @@ where
         &self,
         request: Request<HandlePendingBlobRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.worker_client(request).await?;
+        let (mut client, inner) = self.worker_client(request)?;
         #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
         match client.handle_pending_blob(inner).await {
             Ok(blob_result) => {
