@@ -44,6 +44,7 @@ web-default = ["web"]
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+bcs.workspace = true
 bincode.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
