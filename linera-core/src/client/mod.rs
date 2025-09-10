@@ -2804,6 +2804,14 @@ impl<Env: Environment> ChainClient<Env> {
         self.transfer(owner, amount, recipient).await
     }
 
+    #[instrument(level = "trace")]
+    pub async fn fetch_chain_info(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+        let validators = self.client.validator_nodes().await?;
+        self.client
+            .fetch_chain_info(self.chain_id, &validators)
+            .await
+    }
+
     /// Attempts to synchronize chains that have sent us messages and populate our local
     /// inbox.
     ///
