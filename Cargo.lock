@@ -5829,6 +5829,7 @@ dependencies = [
  "papaya",
  "prometheus",
  "serde",
+ "tracing",
 ]
 
 [[package]]
