@@ -24,7 +24,7 @@ async fn test_create_and_call() {
         .expect("Failed to get absolute path to counter-no-graphql");
 
     // Build and find the counter-no-graphql bytecode files
-    ActiveChain::build_bytecode_files_in(&counter_no_graphql_path).await;
+    ActiveChain::build_bytecode_files_in(&counter_no_graphql_path);
     let (counter_contract, counter_service) =
         ActiveChain::find_bytecode_files_in(&counter_no_graphql_path).await;
 

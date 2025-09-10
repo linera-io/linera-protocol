@@ -71,7 +71,7 @@ where
     }
 
     /// Process the entire stream and return responses
-    async fn process_stream(
+    fn process_stream(
         database: Arc<D>,
         stream: BoxStream<'static, Result<Element, Status>>,
     ) -> impl Stream<Item = Result<(), Status>>
@@ -213,7 +213,7 @@ where
         let stream = request.into_inner();
         let database = Arc::clone(&self.database);
 
-        let output_stream = Self::process_stream(database, stream.boxed()).await;
+        let output_stream = Self::process_stream(database, stream.boxed());
         Ok(Response::new(Box::pin(output_stream)))
     }
 }

@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::large_futures)]
-
 use std::{sync::Arc, time::Duration};
 
 use futures::{lock::Mutex, FutureExt as _};

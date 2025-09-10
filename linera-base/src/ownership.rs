@@ -137,11 +137,7 @@ impl ChainOwnership {
                 Some(tc.base_timeout)
             }
             Round::MultiLeader(_) => None,
-            Round::SingleLeader(r) => {
-                let increment = tc.timeout_increment.saturating_mul(u64::from(r));
-                Some(tc.base_timeout.saturating_add(increment))
-            }
-            Round::Validator(r) => {
+            Round::SingleLeader(r) | Round::Validator(r) => {
                 let increment = tc.timeout_increment.saturating_mul(u64::from(r));
                 Some(tc.base_timeout.saturating_add(increment))
             }

@@ -385,7 +385,7 @@ impl ActiveChain {
         let repository_path = fs::canonicalize(repository_path)
             .await
             .expect("Failed to obtain absolute application repository path");
-        Self::build_bytecode_files_in(&repository_path).await;
+        Self::build_bytecode_files_in(&repository_path);
         let (contract, service) = Self::find_compressed_bytecode_files_in(&repository_path).await;
         let contract_blob = Blob::new_contract_bytecode(contract);
         let service_blob = Blob::new_service_bytecode(service);
@@ -412,20 +412,19 @@ impl ActiveChain {
     }
 
     /// Compiles the crate in the `repository` path.
-    pub async fn build_bytecode_files_in(repository: &Path) {
+    pub fn build_bytecode_files_in(repository: &Path) {
         let output = std::process::Command::new("cargo")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .current_dir(repository)
             .output()
             .expect("Failed to build Wasm binaries");
 
-        if !output.status.success() {
-            panic!(
-                "Failed to build bytecode binaries.\nstdout: {}\nstderr: {}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
+        assert!(
+            output.status.success(),
+            "Failed to build bytecode binaries.\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     /// Searches the Cargo manifest of the crate calling this method for binaries to use as the
@@ -465,10 +464,8 @@ impl ActiveChain {
         let service_path = base_path.join(format!("{}.wasm", service_binary));
 
         let contract = Bytecode::load_from_file(contract_path)
-            .await
             .expect("Failed to load contract bytecode from file");
         let service = Bytecode::load_from_file(service_path)
-            .await
             .expect("Failed to load service bytecode from file");
         (contract, service)
     }

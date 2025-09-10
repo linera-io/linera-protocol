@@ -328,7 +328,7 @@ impl Specialization {
                     .iter_mut()
                     .flat_map(|variant| variant.fields.iter_mut()),
             ),
-            _ => Box::new(None.into_iter()),
+            Data::Struct(_) => Box::new(None.into_iter()),
         };
 
         for Field { ty, .. } in fields {
@@ -387,7 +387,7 @@ impl Specialization {
     /// Replaces the [`Self::type_parameter`] with the [`Self::specialized_type`] inside the
     /// [`Path`]'s type arguments.
     fn change_types_in_path(&self, path: &mut Path) {
-        for segment in path.segments.iter_mut() {
+        for segment in &mut path.segments {
             match &mut segment.arguments {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(angle_bracketed) => {
@@ -407,7 +407,7 @@ impl Specialization {
         &self,
         arguments: &mut AngleBracketedGenericArguments,
     ) {
-        for argument in arguments.args.iter_mut() {
+        for argument in &mut arguments.args {
             match argument {
                 GenericArgument::Type(the_type) => self.change_types_in_type(the_type),
                 GenericArgument::AssocType(AssocType { generics, ty, .. }) => {

@@ -3,8 +3,6 @@
 
 //! Tests for how the runtime computes fees based on consumed resources.
 
-#![allow(clippy::items_after_test_module)]
-
 use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
@@ -392,8 +390,7 @@ impl FeeSpend {
             FeeSpend::Read(_key, value) => {
                 let value_read_fee = value
                     .as_ref()
-                    .map(|value| Amount::from(value.len() as u128))
-                    .unwrap_or(Amount::ZERO);
+                    .map_or(Amount::ZERO, |value| Amount::from(value.len() as u128));
 
                 policy.read_operation.saturating_add(value_read_fee)
             }

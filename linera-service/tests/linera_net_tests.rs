@@ -479,9 +479,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let application = node_service
-        .make_application(&chain, &application_id)
-        .await?;
+    let application = node_service.make_application(&chain, &application_id)?;
 
     let query = get_valueCall {};
     let query = query.abi_encode();
@@ -563,9 +561,7 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let application = node_service
-        .make_application(&chain, &application_id)
-        .await?;
+    let application = node_service.make_application(&chain, &application_id)?;
 
     // Creating the subcontracts
 
@@ -599,10 +595,10 @@ async fn test_evm_end_to_end_child_subcontract(config: impl LineraNetConfig) -> 
     // Creating the applications
 
     let application0 = ApplicationId::from(address0).with_abi::<EvmAbi>();
-    let application0 = node_service.make_application(&chain, &application0).await?;
+    let application0 = node_service.make_application(&chain, &application0)?;
 
     let application1 = ApplicationId::from(address1).with_abi::<EvmAbi>();
-    let application1 = node_service.make_application(&chain, &application1).await?;
+    let application1 = node_service.make_application(&chain, &application1)?;
 
     let query = get_valueCall {};
     let query = EvmQuery::Query(query.abi_encode());
@@ -674,9 +670,7 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let application = node_service
-        .make_application(&chain, &application_id)
-        .await?;
+    let application = node_service.make_application(&chain, &application_id)?;
 
     let application_id = GenericApplicationId::User(application_id.forget_abi());
     let stream_name = bcs::to_bytes("ethereum_event")?;
@@ -802,9 +796,7 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let wasm_application = node_service
-        .make_application(&chain, &wasm_application_id)
-        .await?;
+    let wasm_application = node_service.make_application(&chain, &wasm_application_id)?;
 
     // Testing the queries
 
@@ -919,9 +911,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let nest_application = node_service
-        .make_application(&chain, &nest_application_id)
-        .await?;
+    let nest_application = node_service.make_application(&chain, &nest_application_id)?;
 
     let query = nest_get_valueCall {};
     let query = query.abi_encode();
@@ -1019,9 +1009,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let nest_application = node_service
-        .make_application(&chain, &nest_application_id)
-        .await?;
+    let nest_application = node_service.make_application(&chain, &nest_application_id)?;
 
     let result = nest_application.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
@@ -1112,13 +1100,9 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 
     // Creating the applications.
 
-    let application1 = node_service1
-        .make_application(&chain1, &application_id)
-        .await?;
+    let application1 = node_service1.make_application(&chain1, &application_id)?;
 
-    let application2 = node_service2
-        .make_application(&chain2, &application_id)
-        .await?;
+    let application2 = node_service2.make_application(&chain2, &application_id)?;
 
     // Now checking the APIs.
     // First: checking the initial value of the contracts.
@@ -1220,13 +1204,9 @@ async fn test_evm_empty_instantiate(config: impl LineraNetConfig) -> Result<()> 
 
     // Creating the applications.
 
-    let application1 = node_service1
-        .make_application(&chain1, &application_id)
-        .await?;
+    let application1 = node_service1.make_application(&chain1, &application_id)?;
 
-    let application2 = node_service2
-        .make_application(&chain2, &application_id)
-        .await?;
+    let application2 = node_service2.make_application(&chain2, &application_id)?;
 
     // Checking the initial value of the contracts.
     let result = application1.run_json_query(query.clone()).await?;
@@ -1317,13 +1297,9 @@ async fn test_evm_process_streams_end_to_end_counters(config: impl LineraNetConf
 
     // Creating the applications.
 
-    let application1 = node_service1
-        .make_application(&chain1, &evm_application_id)
-        .await?;
+    let application1 = node_service1.make_application(&chain1, &evm_application_id)?;
 
-    let application2 = node_service2
-        .make_application(&chain2, &evm_application_id)
-        .await?;
+    let application2 = node_service2.make_application(&chain2, &evm_application_id)?;
 
     let result = application2.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
@@ -1440,12 +1416,8 @@ async fn test_evm_msg_sender(config: impl LineraNetConfig) -> Result<()> {
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let application_inner = node_service
-        .make_application(&chain, &application_id_inner)
-        .await?;
-    let application_outer = node_service
-        .make_application(&chain, &application_id_outer)
-        .await?;
+    let application_inner = node_service.make_application(&chain, &application_id_inner)?;
+    let application_outer = node_service.make_application(&chain, &application_id_outer)?;
 
     let mutation = check_msg_senderCall {
         remote_address: owner,
@@ -1528,9 +1500,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         .await?;
     let hash: B256 = <[u8; 32]>::from(hash).into();
 
-    let application = node_service
-        .make_application(&chain, &application_id)
-        .await?;
+    let application = node_service.make_application(&chain, &application_id)?;
 
     // Testing the ChainId.
 
@@ -1622,9 +1592,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let application = node_service
-        .make_application(&chain, &application_id)
-        .await?;
+    let application = node_service.make_application(&chain, &application_id)?;
 
     let balance1 = node_service.balance(&account_chain).await?;
 
@@ -1713,13 +1681,9 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
-    let application1 = node_service1
-        .make_application(&chain1, &application_id)
-        .await?;
+    let application1 = node_service1.make_application(&chain1, &application_id)?;
 
-    let application2 = node_service2
-        .make_application(&chain2, &application_id)
-        .await?;
+    let application2 = node_service2.make_application(&chain2, &application_id)?;
 
     // Checking the total supply
 
@@ -1822,9 +1786,7 @@ async fn test_wasm_end_to_end_counter_no_graphql(config: impl LineraNetConfig) -
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let application = node_service
-        .make_application(&chain, &application_id)
-        .await?;
+    let application = node_service.make_application(&chain, &application_id)?;
 
     let query = CounterRequest::Query;
     let read_counter_value = application.run_json_query(&query).await?;
@@ -1883,9 +1845,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
         &application_id.forget_abi().to_string()
     );
 
-    let application = node_service
-        .make_application(&chain, &application_id)
-        .await?;
+    let application = node_service.make_application(&chain, &application_id)?;
 
     let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value);
@@ -1946,17 +1906,13 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
         .run_node_service(port2, ProcessInbox::Automatic)
         .await?;
 
-    let app2 = node_service2
-        .make_application(&chain2, &application_id)
-        .await?;
+    let app2 = node_service2.make_application(&chain2, &application_id)?;
     app2.mutate(format!("subscribe(chainId: \"{chain1}\")"))
         .await?;
 
     let mut notifications = Box::pin(node_service2.notifications(chain2).await?);
 
-    let app1 = node_service1
-        .make_application(&chain1, &application_id)
-        .await?;
+    let app1 = node_service1.make_application(&chain1, &application_id)?;
     app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
         .await?;
 
@@ -2113,21 +2069,9 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service3 = client3.run_node_service(port3, ProcessInbox::Skip).await?;
 
-    let app1 = FungibleApp(
-        node_service1
-            .make_application(&chain2, &application_id)
-            .await?,
-    );
-    let app2 = FungibleApp(
-        node_service2
-            .make_application(&chain2, &application_id)
-            .await?,
-    );
-    let app3 = FungibleApp(
-        node_service3
-            .make_application(&chain2, &application_id)
-            .await?,
-    );
+    let app1 = FungibleApp(node_service1.make_application(&chain2, &application_id)?);
+    let app2 = FungibleApp(node_service2.make_application(&chain2, &application_id)?);
+    let app3 = FungibleApp(node_service3.make_application(&chain2, &application_id)?);
 
     let expected_balances = [
         (owner1, Amount::from_tokens(9)),
@@ -2277,11 +2221,7 @@ async fn test_wasm_end_to_end_fungible(
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
-    let app1 = NativeFungibleApp(
-        node_service1
-            .make_application(&chain1, &application_id)
-            .await?,
-    );
+    let app1 = NativeFungibleApp(node_service1.make_application(&chain1, &application_id)?);
 
     let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
@@ -2314,11 +2254,7 @@ async fn test_wasm_end_to_end_fungible(
     assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2 = NativeFungibleApp(
-        node_service2
-            .make_application(&chain2, &application_id)
-            .await?,
-    );
+    let app2 = NativeFungibleApp(node_service2.make_application(&chain2, &application_id)?);
 
     let expected_balances = [
         (account_owner1, Amount::ZERO),
@@ -2431,11 +2367,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     let port = get_node_port().await;
     let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let app1 = NativeFungibleApp(
-        node_service
-            .make_application(&chain1, &application_id)
-            .await?,
-    );
+    let app1 = NativeFungibleApp(node_service.make_application(&chain1, &application_id)?);
 
     let expected_balances: Vec<(AccountOwner, Amount)> = state.accounts.into_iter().collect();
 
@@ -2464,11 +2396,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     app1.assert_entries(expected_balances).await;
     app1.assert_keys([account_owner1, account_owner2]).await;
 
-    let app2 = NativeFungibleApp(
-        node_service
-            .make_application(&chain2, &application_id)
-            .await?,
-    );
+    let app2 = NativeFungibleApp(node_service.make_application(&chain2, &application_id)?);
 
     let expected_balances = [(account_owner2, Amount::ONE)];
     app2.assert_balances(expected_balances).await;
@@ -2526,11 +2454,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
-    let app1 = NonFungibleApp(
-        node_service1
-            .make_application(&chain1, &application_id)
-            .await?,
-    );
+    let app1 = NonFungibleApp(node_service1.make_application(&chain1, &application_id)?);
 
     let nft1_name = "nft1".to_string();
     let nft1_minter = account_owner1;
@@ -2591,11 +2515,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .contains(&nft1_id));
 
     // Non Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2 = NonFungibleApp(
-        node_service2
-            .make_application(&chain2, &application_id)
-            .await?,
-    );
+    let app2 = NonFungibleApp(node_service2.make_application(&chain2, &application_id)?);
 
     // Checking that the NFT is on chain2 now, with the same owner
     assert_eq!(app2.get_nft(&nft1_id).await?, expected_nft1);
@@ -2843,15 +2763,10 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
 
-    let app_fungible1 = FungibleApp(
-        node_service1
-            .make_application(&chain1, &application_id_fungible)
-            .await?,
-    );
+    let app_fungible1 =
+        FungibleApp(node_service1.make_application(&chain1, &application_id_fungible)?);
 
-    let app_crowd1 = node_service1
-        .make_application(&chain1, &application_id_crowd)
-        .await?;
+    let app_crowd1 = node_service1.make_application(&chain1, &application_id_crowd)?;
 
     // Transferring tokens to user2 on chain2
     app_fungible1
@@ -2868,9 +2783,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     // Make sure that the transfer is received before we try to pledge.
     node_service2.process_inbox(&chain2).await?;
 
-    let app_crowd2 = node_service2
-        .make_application(&chain2, &application_id_crowd)
-        .await?;
+    let app_crowd2 = node_service2.make_application(&chain2, &application_id_crowd)?;
 
     // Transferring
     let mutation = format!(
@@ -2982,10 +2895,10 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let mut node_service_a = client_a.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service_b = client_b.run_node_service(port3, ProcessInbox::Skip).await?;
 
-    let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await?);
-    let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1).await?);
-    let app_fungible0_b = FungibleApp(node_service_b.make_application(&chain_b, &token0).await?);
-    let app_fungible1_b = FungibleApp(node_service_b.make_application(&chain_b, &token1).await?);
+    let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0)?);
+    let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1)?);
+    let app_fungible0_b = FungibleApp(node_service_b.make_application(&chain_b, &token0)?);
+    let app_fungible1_b = FungibleApp(node_service_b.make_application(&chain_b, &token1)?);
     app_fungible0_a
         .assert_balances([
             (owner_a, Amount::from_tokens(10)),
@@ -3000,16 +2913,10 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             (owner_admin, Amount::ZERO),
         ])
         .await;
-    let app_fungible0_admin = FungibleApp(
-        node_service_admin
-            .make_application(&chain_admin, &token0)
-            .await?,
-    );
-    let app_fungible1_admin = FungibleApp(
-        node_service_admin
-            .make_application(&chain_admin, &token1)
-            .await?,
-    );
+    let app_fungible0_admin =
+        FungibleApp(node_service_admin.make_application(&chain_admin, &token0)?);
+    let app_fungible1_admin =
+        FungibleApp(node_service_admin.make_application(&chain_admin, &token1)?);
     app_fungible0_admin
         .assert_balances([
             (owner_a, Amount::ZERO),
@@ -3047,21 +2954,13 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         )
         .await?;
     let app_matching_admin = MatchingEngineApp(
-        node_service_admin
-            .make_application(&chain_admin, &application_id_matching)
-            .await?,
+        node_service_admin.make_application(&chain_admin, &application_id_matching)?,
     );
 
-    let app_matching_a = MatchingEngineApp(
-        node_service_a
-            .make_application(&chain_a, &application_id_matching)
-            .await?,
-    );
-    let app_matching_b = MatchingEngineApp(
-        node_service_b
-            .make_application(&chain_b, &application_id_matching)
-            .await?,
-    );
+    let app_matching_a =
+        MatchingEngineApp(node_service_a.make_application(&chain_a, &application_id_matching)?);
+    let app_matching_b =
+        MatchingEngineApp(node_service_b.make_application(&chain_b, &application_id_matching)?);
 
     // Now creating orders
     for price in [1, 2] {
@@ -3250,16 +3149,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .await?;
 
     // Create wrappers
-    let app_fungible0_amm = FungibleApp(
-        node_service_amm
-            .make_application(&chain_amm, &token0)
-            .await?,
-    );
-    let app_fungible1_amm = FungibleApp(
-        node_service_amm
-            .make_application(&chain_amm, &token1)
-            .await?,
-    );
+    let app_fungible0_amm = FungibleApp(node_service_amm.make_application(&chain_amm, &token0)?);
+    let app_fungible1_amm = FungibleApp(node_service_amm.make_application(&chain_amm, &token1)?);
 
     // Sending tokens to proper chains
     app_fungible0_amm
@@ -3307,11 +3198,11 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     assert_eq!(node_service0.process_inbox(&chain0).await?.len(), 1);
     assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
-    let app_fungible0_0 = FungibleApp(node_service0.make_application(&chain0, &token0).await?);
-    let app_fungible1_0 = FungibleApp(node_service0.make_application(&chain0, &token1).await?);
+    let app_fungible0_0 = FungibleApp(node_service0.make_application(&chain0, &token0)?);
+    let app_fungible1_0 = FungibleApp(node_service0.make_application(&chain0, &token1)?);
 
-    let app_fungible0_1 = FungibleApp(node_service1.make_application(&chain1, &token0).await?);
-    let app_fungible1_1 = FungibleApp(node_service1.make_application(&chain1, &token1).await?);
+    let app_fungible0_1 = FungibleApp(node_service1.make_application(&chain1, &token0)?);
+    let app_fungible1_1 = FungibleApp(node_service1.make_application(&chain1, &token1)?);
 
     // Check initial balances
     app_fungible0_amm
@@ -3385,22 +3276,10 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let owner_amm_app = application_id_amm.into();
 
     // Create AMM wrappers
-    let app_amm = AmmApp(
-        node_service_amm
-            .make_application(&chain_amm, &application_id_amm)
-            .await?,
-    );
+    let app_amm = AmmApp(node_service_amm.make_application(&chain_amm, &application_id_amm)?);
 
-    let app_amm0 = AmmApp(
-        node_service0
-            .make_application(&chain0, &application_id_amm)
-            .await?,
-    );
-    let app_amm1 = AmmApp(
-        node_service1
-            .make_application(&chain1, &application_id_amm)
-            .await?,
-    );
+    let app_amm0 = AmmApp(node_service0.make_application(&chain0, &application_id_amm)?);
+    let app_amm1 = AmmApp(node_service1.make_application(&chain1, &application_id_amm)?);
 
     // Initial balances for both tokens are 0
     app_amm
@@ -3957,11 +3836,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let chain2: ChainId = serde_json::from_value(data["openMultiOwnerChain"].clone())?;
 
     // Send 8 tokens to the new chain.
-    let app1 = FungibleApp(
-        node_service
-            .make_application(&chain1, &application_id)
-            .await?,
-    );
+    let app1 = FungibleApp(node_service.make_application(&chain1, &application_id)?);
     app1.transfer(
         &owner,
         Amount::from_tokens(8),
@@ -3976,11 +3851,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     node_service.process_inbox(&chain2).await?;
 
     // Send 4 tokens back.
-    let app2 = FungibleApp(
-        node_service
-            .make_application(&chain2, &application_id)
-            .await?,
-    );
+    let app2 = FungibleApp(node_service.make_application(&chain2, &application_id)?);
     app2.transfer(
         &owner,
         Amount::from_tokens(4),

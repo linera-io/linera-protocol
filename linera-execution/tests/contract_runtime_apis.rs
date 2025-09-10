@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::field_reassign_with_default)]
-
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,

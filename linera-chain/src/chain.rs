@@ -984,7 +984,7 @@ where
         block: &ProposedBlock,
     ) -> Result<(), ChainError> {
         let mut mandatory = HashSet::<ApplicationId>::from_iter(
-            app_permissions.mandatory_applications.iter().cloned(),
+            app_permissions.mandatory_applications.iter().copied(),
         );
         for transaction in &block.transactions {
             match transaction {

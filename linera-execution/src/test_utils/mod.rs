@@ -243,7 +243,7 @@ where
     }
 }
 
-pub async fn create_dummy_user_application_registrations(
+pub fn create_dummy_user_application_registrations(
     count: u32,
 ) -> anyhow::Result<Vec<(ApplicationId, ApplicationDescription, Blob, Blob)>> {
     let mut ids = Vec::with_capacity(count as usize);
