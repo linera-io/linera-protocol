@@ -16,6 +16,7 @@
 #   --force-genesis     - Force re-download of genesis configuration
 #   --custom-tag TAG    - Use custom image tag (for testing, no _release suffix)
 #   --xfs-path PATH     - (Optional) XFS partition path for optimal ScyllaDB performance
+#   --cache-size SIZE   - (Optional) ScyllaDB cache size (default: 4G, e.g. 2G, 8G, 16G)
 #   --help, -h          - Show help message
 #   --dry-run           - Show what would be done without executing
 #   --verbose, -v       - Enable verbose output
@@ -32,7 +33,8 @@
 #   PORT                - Internal validator port (default: 19100)
 #   METRICS_PORT        - Metrics collection port (default: 21100)
 #   NUM_SHARDS          - Number of validator shards (default: 4)
-#   SCYLLA_XFS_PATH     - XFS partition mount path for ScyllaDB data (required)
+#   SCYLLA_XFS_PATH     - XFS partition mount path for ScyllaDB data (optional)
+#   SCYLLA_CACHE_SIZE   - ScyllaDB cache size (default: 4G)
 #
 # Requirements:
 #   - Docker
@@ -123,6 +125,7 @@ OPTIONS:
     --force-genesis     Force re-download of genesis configuration even if it exists
     --custom-tag TAG    Use custom image tag (for testing, no _release suffix)
     --xfs-path PATH     (Optional) XFS partition path for optimal ScyllaDB I/O performance
+    --cache-size SIZE   (Optional) ScyllaDB cache size (default: 4G, e.g. 2G, 8G, 16G)
     --help, -h          Show this help message
     --dry-run           Show what would be done without executing
     --verbose, -v       Enable verbose output
@@ -163,6 +166,9 @@ ENVIRONMENT VARIABLES:
 
     SCYLLA_XFS_PATH     (Optional) XFS partition path for ScyllaDB performance optimization
                         Default: None (uses Docker volumes, which is fine for most deployments)
+
+    SCYLLA_CACHE_SIZE   ScyllaDB cache size (e.g. 2G, 4G, 8G, 16G)
+                        Default: 4G
 
 EXAMPLES:
     # Deploy using local build
@@ -684,6 +690,7 @@ validate_xfs_partition() {
 # Generate docker-compose override for XFS volume
 generate_xfs_volume_config() {
 	local xfs_path="$1"
+	local cache_size="$2"
 	local compose_override="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/docker-compose.override.yml"
 
 	log INFO "Generating Docker Compose override for XFS volume..."
@@ -723,7 +730,7 @@ services:
       # Enable direct I/O on XFS
       SCYLLA_DIRECT_IO_MODE: "true"
       # Set appropriate cache size (adjust based on available RAM)
-      SCYLLA_CACHE_SIZE: "4G"
+      SCYLLA_CACHE_SIZE: "${cache_size}"
 EOF
 
 	log INFO "Docker Compose override generated at: ${compose_override}"
@@ -747,6 +754,7 @@ main() {
 	local verbose=0
 	local custom_tag=""
 	local xfs_path=""
+	local cache_size=""
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -780,6 +788,14 @@ main() {
 				exit 1
 			fi
 			xfs_path="$2"
+			shift 2
+			;;
+		--cache-size)
+			if [[ $# -lt 2 ]]; then
+				log ERROR "--cache-size requires an argument"
+				exit 1
+			fi
+			cache_size="$2"
 			shift 2
 			;;
 		--dry-run)
@@ -876,6 +892,11 @@ main() {
 		xfs_path="${SCYLLA_XFS_PATH:-}"
 	fi
 
+	# Get cache size from environment if not provided via CLI, default to 4G
+	if [ -z "${cache_size}" ]; then
+		cache_size="${SCYLLA_CACHE_SIZE:-4G}"
+	fi
+
 	# Check AIO configuration for ScyllaDB
 	check_aio_configuration
 
@@ -963,7 +984,7 @@ main() {
 
 	# Generate XFS volume configuration for Docker Compose
 	if [ -n "${xfs_path}" ]; then
-		if ! generate_xfs_volume_config "${xfs_path}"; then
+		if ! generate_xfs_volume_config "${xfs_path}" "${cache_size}"; then
 			log ERROR "Failed to generate XFS volume configuration"
 			exit 1
 		fi
@@ -1001,6 +1022,7 @@ main() {
 	log INFO "ACME Email: ${ACME_EMAIL}"
 	if [ -n "${xfs_path}" ]; then
 		log INFO "ScyllaDB XFS Path: ${xfs_path}"
+		log INFO "ScyllaDB Cache Size: ${cache_size}"
 	fi
 	echo ""
 	log WARNING "=== IMPORTANT: Next Steps for External Validators ==="
@@ -1039,6 +1061,7 @@ GENESIS_PATH_PREFIX=${genesis_path_prefix}
 GENESIS_URL=${genesis_url}
 SHARDS=${num_shards}
 XFS_PATH=${xfs_path:-N/A}
+CACHE_SIZE=${cache_size}
 EOF
 	log DEBUG "Deployment info saved to: ${deployment_info}"
 }
