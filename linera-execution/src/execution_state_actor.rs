@@ -660,10 +660,13 @@ where
                 callback.respond(validation_round);
             }
 
-            HasNonTrivialStorage { application, callback } => {
+            HasNonTrivialStorage {
+                application,
+                callback,
+            } => {
                 let view = self.state.users.try_load_entry(&application).await?;
                 let result = match view {
-                   Some(view) => {
+                    Some(view) => {
                         let total_size = view.total_size();
                         (total_size.key, total_size.value)
                     }
