@@ -165,7 +165,7 @@ where
         .unwrap_ok_committed();
 
     let increment = 5_u64;
-    let counter_operation = counter::CounterOperation::Increment(increment);
+    let counter_operation = counter::CounterOperation::Increment { value: increment };
     creator
         .execute_operation(Operation::user(application_id, &counter_operation)?)
         .await
@@ -882,7 +882,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         .unwrap_ok_committed();
 
     let increment = 5_u64;
-    let operation = counter::CounterOperation::Increment(increment);
+    let operation = counter::CounterOperation::Increment { value: increment };
     publisher
         .execute_operation(Operation::user(application_id, &operation)?)
         .await

@@ -253,7 +253,7 @@ where
 
     // Execute an application operation
     let increment = 5_u64;
-    let counter_operation = counter::CounterOperation::Increment(increment);
+    let counter_operation = counter::CounterOperation::Increment { value: increment };
     let user_operation = bcs::to_bytes(&counter_operation)?;
     let run_block = make_child_block(&create_certificate.into_value())
         .with_timestamp(3)

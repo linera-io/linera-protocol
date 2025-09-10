@@ -46,8 +46,8 @@ impl Contract for CounterContract {
     }
 
     async fn execute_operation(&mut self, operation: CounterOperation) -> u64 {
-        let CounterOperation::Increment(operation) = operation;
-        let new_value = self.state.value.get() + operation;
+        let CounterOperation::Increment { value } = operation;
+        let new_value = self.state.value.get() + value;
         self.state.value.set(new_value);
         new_value
     }
@@ -74,18 +74,18 @@ mod tests {
         let initial_value = 72_u64;
         let mut counter = create_and_instantiate_counter(initial_value);
 
-        let increment = 42_308_u64;
-        let operation = CounterOperation::Increment(increment);
+        let value = 42_308_u64;
+        let operation = CounterOperation::Increment { value };
 
         let response = counter
             .execute_operation(operation)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
-        let expected_value = initial_value + increment;
+        let expected_value = initial_value + value;
 
         assert_eq!(response, expected_value);
-        assert_eq!(*counter.state.value.get(), initial_value + increment);
+        assert_eq!(*counter.state.value.get(), initial_value + value);
     }
 
     #[test]
@@ -105,15 +105,15 @@ mod tests {
         let initial_value = 2_845_u64;
         let mut counter = create_and_instantiate_counter(initial_value);
 
-        let increment = 8_u64;
-        let operation = CounterOperation::Increment(increment);
+        let value = 8_u64;
+        let operation = CounterOperation::Increment { value };
 
         let response = counter
             .execute_operation(operation)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
-        let expected_value = initial_value + increment;
+        let expected_value = initial_value + value;
 
         assert_eq!(response, expected_value);
         assert_eq!(*counter.state.value.get(), expected_value);
