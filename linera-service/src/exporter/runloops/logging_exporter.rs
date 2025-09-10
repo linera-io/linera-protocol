@@ -71,8 +71,7 @@ impl LoggingExporter {
                         .block()
                         .header
                         .authenticated_signer
-                        .map(|signer| signer.to_string())
-                        .unwrap_or_else(|| "N/A".into()),
+                        .map_or_else(|| "N/A".into(), |signer| signer.to_string()),
                 )?;
                 for blob in blobs {
                     writeln!(self.file, "\tBlob ID: {}", blob.id(),)?;

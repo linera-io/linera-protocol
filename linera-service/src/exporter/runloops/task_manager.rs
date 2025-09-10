@@ -62,7 +62,7 @@ where
         F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
         <F as IntoFuture>::IntoFuture: Future<Output = ()> + Send + Sync + 'static,
     {
-        for id in self.startup_destinations.clone().iter() {
+        for id in self.startup_destinations.clone() {
             self.spawn(id.clone())
         }
     }
@@ -88,7 +88,7 @@ where
     }
 
     /// Shuts down block exporters for destinations that are not in the new committee.
-    pub(super) async fn shutdown_old_committee(&mut self, new_committee: Vec<DestinationId>) {
+    pub(super) fn shutdown_old_committee(&mut self, new_committee: Vec<DestinationId>) {
         // Shutdown the old committee members that are not in the new committee.
         for id in self
             .current_committee_destinations
@@ -102,7 +102,7 @@ where
     }
 
     pub(super) async fn join_all(self) {
-        for (id, handle) in self.join_handles.into_iter() {
+        for (id, handle) in self.join_handles {
             // Wait for all tasks to finish.
             if let Err(e) = handle.await.unwrap() {
                 tracing::error!(id=?id, error=?e, "failed to join task");

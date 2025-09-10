@@ -819,7 +819,7 @@ where
             requested_confirmed: None,
             requested_validated: None,
             current_round,
-            leader: manager.round_leader(current_round).cloned(),
+            leader: manager.round_leader(current_round).copied(),
             round_timeout: *manager.round_timeout.get(),
         }
     }

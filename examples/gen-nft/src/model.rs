@@ -135,8 +135,7 @@ impl ModelContext {
             if index_pos == 256 {
                 return Ok(output
                     .rsplit_once('.')
-                    .map(|(before, _)| format!("{}.", before))
-                    .unwrap_or_else(|| output.to_string()));
+                    .map_or_else(|| output.to_string(), |(before, _)| format!("{}.", before)));
             }
             let logits = model.forward(&input, index_pos)?;
             let logits = logits.i((0, logits.dim(1)? - 1))?;

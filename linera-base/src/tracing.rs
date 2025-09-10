@@ -40,8 +40,7 @@ pub fn init(log_name: &str) {
 
     let span_events = std::env::var("RUST_LOG_SPAN_EVENTS")
         .ok()
-        .map(|s| fmt_span_from_str(&s))
-        .unwrap_or(FmtSpan::NONE);
+        .map_or(FmtSpan::NONE, |s| fmt_span_from_str(&s));
 
     let format = std::env::var("RUST_LOG_FORMAT").ok();
 

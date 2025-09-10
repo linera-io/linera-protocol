@@ -94,8 +94,8 @@ impl Runnable for Job {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let Job(options) = self;
-        let wallet = options.wallet().await?;
-        let mut signer = options.signer().await?;
+        let wallet = options.wallet()?;
+        let mut signer = options.signer()?;
 
         let command = options.command;
 
@@ -1126,7 +1126,7 @@ impl Runnable for Job {
                     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
                     let mut join_set = JoinSet::new();
-                    let children_pids: Vec<u32> = children.iter().flat_map(|c| c.id()).collect();
+                    let children_pids: Vec<u32> = children.iter().filter_map(|c| c.id()).collect();
 
                     for ((mut child, stdout_handle), stderr_handle) in
                         children.into_iter().zip(stdout_handles).zip(stderr_handles)
@@ -1211,7 +1211,7 @@ impl Runnable for Job {
                 );
 
                 let default_chain = context.wallet().default_chain();
-                let service = NodeService::new(config, port, default_chain, context).await;
+                let service = NodeService::new(config, port, default_chain, context);
                 let cancellation_token = CancellationToken::new();
                 let child_token = cancellation_token.child_token();
                 tokio::spawn(listen_for_shutdown_signals(cancellation_token));
@@ -1238,13 +1238,11 @@ impl Runnable for Job {
 
                 let chain_id = chain_id.unwrap_or_else(|| context.first_non_admin_chain());
                 info!("Starting faucet service using chain {}", chain_id);
-                let end_timestamp = limit_rate_until
-                    .map(|et| {
-                        let micros = u64::try_from(et.timestamp_micros())
-                            .expect("End timestamp before 1970");
-                        Timestamp::from(micros)
-                    })
-                    .unwrap_or_else(Timestamp::now);
+                let end_timestamp = limit_rate_until.map_or_else(Timestamp::now, |et| {
+                    let micros =
+                        u64::try_from(et.timestamp_micros()).expect("End timestamp before 1970");
+                    Timestamp::from(micros)
+                });
                 let genesis_config = Arc::new(context.wallet().genesis_config().clone());
                 let config = FaucetConfig {
                     port,
@@ -1709,9 +1707,8 @@ impl ClientOptions {
     async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
         let storage_config = self.storage_config()?;
         debug!("Running command using storage configuration: {storage_config}");
-        let store_config = storage_config
-            .add_common_storage_options(&self.common_storage_options)
-            .await?;
+        let store_config =
+            storage_config.add_common_storage_options(&self.common_storage_options)?;
         let output =
             Box::pin(store_config.run_with_storage(self.wasm_runtime.with_wasm_default(), job))
                 .await?;
@@ -1721,9 +1718,8 @@ impl ClientOptions {
     async fn run_with_store<R: RunnableWithStore>(&self, job: R) -> Result<R::Output, Error> {
         let storage_config = self.storage_config()?;
         debug!("Running command using storage configuration: {storage_config}");
-        let store_config = storage_config
-            .add_common_storage_options(&self.common_storage_options)
-            .await?;
+        let store_config =
+            storage_config.add_common_storage_options(&self.common_storage_options)?;
         let output = Box::pin(store_config.run_with_store(job)).await?;
         Ok(output)
     }
@@ -1731,19 +1727,18 @@ impl ClientOptions {
     async fn initialize_storage(&self) -> Result<(), Error> {
         let storage_config = self.storage_config()?;
         debug!("Initializing storage using configuration: {storage_config}");
-        let store_config = storage_config
-            .add_common_storage_options(&self.common_storage_options)
-            .await?;
-        let wallet = self.wallet().await?;
+        let store_config =
+            storage_config.add_common_storage_options(&self.common_storage_options)?;
+        let wallet = self.wallet()?;
         store_config.initialize(wallet.genesis_config()).await?;
         Ok(())
     }
 
-    async fn wallet(&self) -> Result<persistent::File<Wallet>, Error> {
+    fn wallet(&self) -> Result<persistent::File<Wallet>, Error> {
         Ok(persistent::File::read(&self.wallet_path()?)?)
     }
 
-    async fn signer(&self) -> Result<persistent::File<InMemorySigner>, Error> {
+    fn signer(&self) -> Result<persistent::File<InMemorySigner>, Error> {
         Ok(persistent::File::read(&self.keystore_path()?)?)
     }
 
@@ -1755,7 +1750,7 @@ impl ClientOptions {
             .unwrap_or_default()
     }
 
-    fn config_path(&self) -> Result<PathBuf, Error> {
+    fn config_path() -> Result<PathBuf, Error> {
         let mut config_dir = dirs::config_dir().ok_or_else(|| anyhow!(
             "Default wallet directory is not supported in this platform: please specify storage and wallet paths"
         ))?;
@@ -1782,7 +1777,7 @@ impl ClientOptions {
                 let spawn_mode =
                     linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
                 let inner_storage_config = linera_service::storage::InnerStorageConfig::RocksDb {
-                    path: self.config_path()?.join("wallet.db"),
+                    path: Self::config_path()?.join("wallet.db"),
                     spawn_mode,
                 };
                 let namespace = "default".to_string();
@@ -1805,7 +1800,7 @@ impl ClientOptions {
         if let Some(path) = wallet_env_var {
             return Ok(path.parse()?);
         }
-        let config_path = self.config_path()?;
+        let config_path = Self::config_path()?;
         Ok(config_path.join("wallet.json"))
     }
 
@@ -1818,7 +1813,7 @@ impl ClientOptions {
         if let Some(path) = keystore_env_var {
             return Ok(path.parse()?);
         }
-        let config_path = self.config_path()?;
+        let config_path = Self::config_path()?;
         Ok(config_path.join("keystore.json"))
     }
 
@@ -2117,13 +2112,11 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     .map(|list| list.iter().cloned().collect())
                     .unwrap_or(existing_policy.http_request_allow_list),
             };
-            let timestamp = start_timestamp
-                .map(|st| {
-                    let micros =
-                        u64::try_from(st.timestamp_micros()).expect("Start timestamp before 1970");
-                    Timestamp::from(micros)
-                })
-                .unwrap_or_else(Timestamp::now);
+            let timestamp = start_timestamp.map_or_else(Timestamp::now, |st| {
+                let micros =
+                    u64::try_from(st.timestamp_micros()).expect("Start timestamp before 1970");
+                Timestamp::from(micros)
+            });
 
             let mut signer = options.create_keystore(*testing_prng_seed)?;
             let admin_public_key = signer.mutate(|s| s.generate_new()).await?;
@@ -2183,7 +2176,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 let start_time = Instant::now();
                 let path = path.clone().unwrap_or_else(|| env::current_dir().unwrap());
                 let project = Project::from_existing_project(path)?;
-                project.test().await?;
+                project.test()?;
                 info!(
                     "Test project created in {} ms",
                     start_time.elapsed().as_millis()
@@ -2203,7 +2196,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
 
         ClientCommand::Keygen => {
             let start_time = Instant::now();
-            let mut signer = options.signer().await?;
+            let mut signer = options.signer()?;
             let public_key = signer.mutate(|s| s.generate_new()).await?;
             let owner = AccountOwner::from(public_key);
             println!("{}", owner);
@@ -2320,20 +2313,21 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 owned,
             } => {
                 let start_time = Instant::now();
+                let wallet = options.wallet()?;
                 let chain_ids = if let Some(chain_id) = chain_id {
                     ensure!(!owned, "Cannot specify both --owned and a chain ID");
                     vec![*chain_id]
                 } else if *owned {
-                    options.wallet().await?.owned_chain_ids()
+                    wallet.owned_chain_ids()
                 } else {
-                    options.wallet().await?.chain_ids()
+                    wallet.chain_ids()
                 };
                 if *short {
                     for chain_id in chain_ids {
                         println!("{chain_id}");
                     }
                 } else {
-                    wallet::pretty_print(&*options.wallet().await?, chain_ids).await;
+                    wallet::pretty_print(&wallet, chain_ids);
                 }
                 info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
                 Ok(0)
@@ -2342,8 +2336,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             WalletCommand::SetDefault { chain_id } => {
                 let start_time = Instant::now();
                 options
-                    .wallet()
-                    .await?
+                    .wallet()?
                     .mutate(|w| w.set_default_chain(*chain_id))
                     .await??;
                 info!(
@@ -2356,13 +2349,11 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             WalletCommand::ForgetKeys { chain_id } => {
                 let start_time = Instant::now();
                 let owner = options
-                    .wallet()
-                    .await?
+                    .wallet()?
                     .mutate(|w| w.forget_keys(chain_id))
                     .await??;
                 if !options
-                    .signer()
-                    .await?
+                    .signer()?
                     .contains_key(&owner)
                     .await
                     .expect("Signer error")
@@ -2379,8 +2370,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             WalletCommand::ForgetChain { chain_id } => {
                 let start_time = Instant::now();
                 options
-                    .wallet()
-                    .await?
+                    .wallet()?
                     .mutate(|w| w.forget_chain(chain_id))
                     .await??;
                 info!("Chain forgotten in {} ms", start_time.elapsed().as_millis());

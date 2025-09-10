@@ -318,8 +318,7 @@ pub trait Storage: Sized {
                 cfg_if::cfg_if! {
                     if #[cfg(with_revm)] {
                         let evm_runtime = EvmRuntime::Revm;
-                        Ok(EvmContractModule::new(contract_bytecode, evm_runtime)
-                           .await?
+                        Ok(EvmContractModule::new(contract_bytecode, evm_runtime)?
                            .into())
                     } else {
                         panic!(
@@ -384,8 +383,7 @@ pub trait Storage: Sized {
                 cfg_if::cfg_if! {
                     if #[cfg(with_revm)] {
                         let evm_runtime = EvmRuntime::Revm;
-                        Ok(EvmServiceModule::new(service_bytecode, evm_runtime)
-                           .await?
+                        Ok(EvmServiceModule::new(service_bytecode, evm_runtime)?
                            .into())
                     } else {
                         panic!(

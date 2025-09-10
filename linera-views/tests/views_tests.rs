@@ -56,7 +56,7 @@ pub struct StateView<C> {
     pub key_value_store: KeyValueStoreView<C>,
 }
 
-#[allow(async_fn_in_trait)]
+#[expect(async_fn_in_trait)]
 pub trait StateStorage {
     type Context: Context<Extra = usize> + 'static;
 

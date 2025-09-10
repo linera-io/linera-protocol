@@ -248,7 +248,7 @@ async fn test_process_stream_end_to_end_mixed_elements() {
     let input_stream = tokio_stream::iter(elements).boxed();
 
     // Call the process_stream method
-    let output_stream = IndexerGrpcServer::process_stream(database.clone(), input_stream).await;
+    let output_stream = IndexerGrpcServer::process_stream(database.clone(), input_stream);
 
     // Collect all results from the output stream
     let results: Vec<Result<(), Status>> = output_stream.collect().await;
@@ -335,7 +335,7 @@ async fn test_process_stream_database_failure() {
     let input_stream = tokio_stream::iter(elements).boxed();
 
     // Call the process_stream method
-    let output_stream = IndexerGrpcServer::process_stream(database.clone(), input_stream).await;
+    let output_stream = IndexerGrpcServer::process_stream(database.clone(), input_stream);
 
     // Collect all results from the output stream
     let results: Vec<Result<(), Status>> = output_stream.collect().await;

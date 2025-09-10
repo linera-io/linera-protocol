@@ -72,7 +72,7 @@ impl PerformanceSummary {
         );
 
         markdown_content.push_str("### CI Runtime Comparison\n\n");
-        for (workflow_name, comparisons) in self.ci_runtime_comparison.0.iter() {
+        for (workflow_name, comparisons) in &self.ci_runtime_comparison.0 {
             markdown_content.push_str(&format!("#### Workflow: {}\n\n", workflow_name));
             markdown_content
                 .push_str("| Job Name | Base Runtime | PR Runtime | Runtime Difference (%) |\n");

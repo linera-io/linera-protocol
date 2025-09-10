@@ -229,8 +229,7 @@ async fn main() -> std::io::Result<()> {
         std::num::NonZeroU16::new(8080).unwrap(),
         None,
         DummyContext,
-    )
-    .await;
+    );
     let schema = service.schema().sdl();
     print!("{}", schema);
     Ok(())

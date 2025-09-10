@@ -473,8 +473,7 @@ impl ProxyOptions {
     async fn run(&self) -> Result<()> {
         let store_config = self
             .storage_config
-            .add_common_storage_options(&self.common_storage_options)
-            .await?;
+            .add_common_storage_options(&self.common_storage_options)?;
         store_config
             .run_with_storage(None, ProxyContext::from_options(self)?)
             .boxed()

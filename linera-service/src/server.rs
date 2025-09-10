@@ -181,7 +181,7 @@ impl ServerContext {
         prometheus_server::start_metrics((host.to_owned(), port), shutdown_signal);
     }
 
-    fn get_listen_address(&self) -> String {
+    fn get_listen_address() -> String {
         // Allow local IP address to be different from the public one.
         "0.0.0.0".to_string()
     }
@@ -196,7 +196,7 @@ impl Runnable for ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let shutdown_notifier = CancellationToken::new();
-        let listen_address = self.get_listen_address();
+        let listen_address = Self::get_listen_address();
 
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
@@ -488,7 +488,6 @@ async fn run(options: ServerOptions) {
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config
                 .add_common_storage_options(&common_storage_options)
-                .await
                 .unwrap();
             store_config
                 .run_with_storage(wasm_runtime, job)

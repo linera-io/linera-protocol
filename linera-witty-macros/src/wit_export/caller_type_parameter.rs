@@ -30,8 +30,7 @@ impl<'input> CallerTypeParameter<'input> {
 
         generics
             .type_params()
-            .filter_map(|parameter| Self::try_from_parameter(parameter, &where_bounds))
-            .next()
+            .find_map(|parameter| Self::try_from_parameter(parameter, &where_bounds))
     }
 
     /// Parses the bounds present in an optional `where_clause`.
@@ -100,8 +99,7 @@ impl<'input> CallerTypeParameter<'input> {
 
         let instance_bound_path_segment = bounds
             .filter_map(Self::extract_trait_bound_path)
-            .filter_map(Self::extract_instance_bound_path_segment)
-            .next()?;
+            .find_map(Self::extract_instance_bound_path_segment)?;
 
         let user_data =
             Self::extract_instance_bound_arguments(&instance_bound_path_segment.arguments)
