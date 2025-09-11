@@ -160,7 +160,7 @@ impl NativeFungibleApp {
         account_owner: &AccountOwner,
         amount_transfer: Amount,
         destination: Account,
-        num_operation: usize,
+        num_operations: usize,
     ) -> Value {
         let mutation = format!(
             "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
@@ -168,10 +168,7 @@ impl NativeFungibleApp {
             amount_transfer,
             destination.to_value(),
         );
-        let mut mutations = Vec::new();
-        for _ in 0..num_operation {
-            mutations.push(mutation.clone());
-        }
+        let mutations = vec![mutation; num_operations];
         self.0.multiple_mutate(&mutations).await.unwrap()
     }
 
