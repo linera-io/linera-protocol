@@ -70,7 +70,6 @@ chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
 clap-markdown.workspace = true
 colored.workspace = true
-comfy-table.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
 custom_debug_derive.workspace = true
