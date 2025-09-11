@@ -169,6 +169,15 @@ impl GenesisConfig {
             .await
             .map_err(linera_chain::ChainError::from)?
         {
+            if description != self.network_description() {
+                // We can't initialize storage with a different network description.
+                tracing::error!(
+                    current_network=?description,
+                    new_network=?self.network_description(),
+                    "storage already initialized"
+                );
+                return Err(Error::StorageIsAlreadyInitialized(Box::new(description)));
+            }
             tracing::debug!(?description, "storage already initialized");
             return Ok(());
         }
