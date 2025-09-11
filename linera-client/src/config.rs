@@ -172,16 +172,16 @@ impl GenesisConfig {
         }
         let network_description = self.network_description();
         storage
+            .write_network_description(&network_description)
+            .await
+            .map_err(linera_chain::ChainError::from)?;
+        storage
             .write_blob(&self.committee_blob())
             .await
             .map_err(linera_chain::ChainError::from)?;
         for description in &self.chains {
             storage.create_chain(description.clone()).await?;
         }
-        storage
-            .write_network_description(&network_description)
-            .await
-            .map_err(linera_chain::ChainError::from)?;
         Ok(())
     }
 
