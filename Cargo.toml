@@ -64,7 +64,7 @@ exclude = ["examples", "scripts"]
 resolver = "2"
 
 [workspace.package]
-version = "0.15.1"
+version = "0.15.2"
 authors = ["Linera <contact@linera.io>"]
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.dev"
@@ -274,31 +274,31 @@ web-time = "1.1.0"
 wit-bindgen = "0.24.0"
 zstd = "0.13.2"
 
-linera-base = { version = "0.15.1", path = "./linera-base" }
-linera-chain = { version = "0.15.1", path = "./linera-chain" }
-linera-client = { version = "0.15.1", path = "./linera-client", default-features = false }
-linera-core = { version = "0.15.1", path = "./linera-core", default-features = false }
-linera-ethereum = { version = "0.15.1", path = "./linera-ethereum", default-features = false }
-linera-execution = { version = "0.15.1", path = "./linera-execution", default-features = false }
-linera-faucet-client = { version = "0.15.1", path = "linera-faucet/client" }
-linera-faucet-server = { version = "0.15.1", path = "linera-faucet/server" }
-linera-indexer = { version = "0.15.1", path = "./linera-indexer/lib" }
-linera-indexer-graphql-client = { version = "0.15.1", path = "./linera-indexer/graphql-client" }
-linera-indexer-plugins = { version = "0.15.1", path = "./linera-indexer/plugins" }
-linera-metrics = { version = "0.15.1", path = "./linera-metrics" }
-linera-persistent = { version = "0.15.1", path = "./linera-persistent" }
-linera-rpc = { version = "0.15.1", path = "./linera-rpc" }
-linera-sdk = { version = "0.15.1", path = "./linera-sdk" }
-linera-sdk-derive = { version = "0.15.1", path = "./linera-sdk-derive" }
-linera-service = { version = "0.15.1", path = "./linera-service", default-features = false }
-linera-service-graphql-client = { version = "0.15.1", path = "./linera-service-graphql-client" }
-linera-storage = { version = "0.15.1", path = "./linera-storage", default-features = false }
-linera-storage-service = { version = "0.15.1", path = "./linera-storage-service", default-features = false }
-linera-version = { version = "0.15.1", path = "./linera-version" }
-linera-views = { version = "0.15.1", path = "./linera-views", default-features = false }
-linera-views-derive = { version = "0.15.1", path = "./linera-views-derive" }
-linera-witty = { version = "0.15.1", path = "./linera-witty" }
-linera-witty-macros = { version = "0.15.1", path = "./linera-witty-macros" }
+linera-base = { version = "0.15.2", path = "./linera-base" }
+linera-chain = { version = "0.15.2", path = "./linera-chain" }
+linera-client = { version = "0.15.2", path = "./linera-client", default-features = false }
+linera-core = { version = "0.15.2", path = "./linera-core", default-features = false }
+linera-ethereum = { version = "0.15.2", path = "./linera-ethereum", default-features = false }
+linera-execution = { version = "0.15.2", path = "./linera-execution", default-features = false }
+linera-faucet-client = { version = "0.15.2", path = "linera-faucet/client" }
+linera-faucet-server = { version = "0.15.2", path = "linera-faucet/server" }
+linera-indexer = { version = "0.15.2", path = "./linera-indexer/lib" }
+linera-indexer-graphql-client = { version = "0.15.2", path = "./linera-indexer/graphql-client" }
+linera-indexer-plugins = { version = "0.15.2", path = "./linera-indexer/plugins" }
+linera-metrics = { version = "0.15.2", path = "./linera-metrics" }
+linera-persistent = { version = "0.15.2", path = "./linera-persistent" }
+linera-rpc = { version = "0.15.2", path = "./linera-rpc" }
+linera-sdk = { version = "0.15.2", path = "./linera-sdk" }
+linera-sdk-derive = { version = "0.15.2", path = "./linera-sdk-derive" }
+linera-service = { version = "0.15.2", path = "./linera-service", default-features = false }
+linera-service-graphql-client = { version = "0.15.2", path = "./linera-service-graphql-client" }
+linera-storage = { version = "0.15.2", path = "./linera-storage", default-features = false }
+linera-storage-service = { version = "0.15.2", path = "./linera-storage-service", default-features = false }
+linera-version = { version = "0.15.2", path = "./linera-version" }
+linera-views = { version = "0.15.2", path = "./linera-views", default-features = false }
+linera-views-derive = { version = "0.15.2", path = "./linera-views-derive" }
+linera-witty = { version = "0.15.2", path = "./linera-witty" }
+linera-witty-macros = { version = "0.15.2", path = "./linera-witty-macros" }
 
 amm = { path = "./examples/amm" }
 call-evm-counter = { path = "./examples/call-evm-counter" }
@@ -356,3 +356,23 @@ branch = "post-message"
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"
+
+[workspace.lints.clippy]
+doc_link_with_quotes = "deny"
+filter_map_next = "deny"
+iter_filter_is_some = "deny"
+large_futures = "deny"
+large_stack_arrays = "deny"
+large_types_passed_by_value = "deny"
+macro_use_imports = "deny"
+manual_instant_elapsed = "deny"
+manual_is_power_of_two = "deny"
+manual_is_variant_and = "deny"
+map_unwrap_or = "deny"
+mismatching_type_param_order = "deny"
+naive_bytecount = "deny"
+non_std_lazy_statics = "deny"
+range_minus_one = "deny"
+range_plus_one = "deny"
+ref_option_ref = "deny"
+str_split_at_newline = "deny"

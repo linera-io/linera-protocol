@@ -1021,16 +1021,14 @@ impl ApplicationPermissions {
     pub fn can_call_services(&self, app_id: &ApplicationId) -> bool {
         self.call_service_as_oracle
             .as_ref()
-            .map(|app_ids| app_ids.contains(app_id))
-            .unwrap_or(true)
+            .is_none_or(|app_ids| app_ids.contains(app_id))
     }
 
     /// Returns whether the given application can make HTTP requests.
     pub fn can_make_http_requests(&self, app_id: &ApplicationId) -> bool {
         self.make_http_requests
             .as_ref()
-            .map(|app_ids| app_ids.contains(app_id))
-            .unwrap_or(true)
+            .is_none_or(|app_ids| app_ids.contains(app_id))
     }
 }
 
@@ -1128,7 +1126,7 @@ impl Bytecode {
     }
 
     /// Load bytecode from a Wasm module file.
-    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+    pub fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
         let bytes = fs::read(path)?;
         Ok(Bytecode { bytes })
     }
@@ -1340,13 +1338,13 @@ impl BlobContent {
         &self.bytes
     }
 
-    /// Convert a BlobContent into `Vec<u8>` without cloning if possible.
+    /// Converts a `BlobContent` into `Vec<u8>` without cloning if possible.
     pub fn into_vec_or_clone(self) -> Vec<u8> {
         let bytes = Arc::unwrap_or_clone(self.bytes);
         bytes.into_vec()
     }
 
-    /// Get the Arc<Box<[u8]>> directly without cloning.
+    /// Gets the `Arc<Box<[u8]>>` directly without cloning.
     pub fn into_arc_bytes(self) -> Arc<Box<[u8]>> {
         self.bytes
     }
@@ -1467,7 +1465,7 @@ impl Blob {
     }
 
     /// Loads data blob from a file.
-    pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
+    pub fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
         Ok(Self::new_data(fs::read(path)?))
     }
 

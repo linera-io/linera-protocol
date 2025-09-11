@@ -365,7 +365,7 @@ impl KeyValueDatabase for DynamoDbDatabaseInternal {
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
         let mut start_key = EMPTY_ROOT_KEY.to_vec();
         start_key.extend(root_key);
-        self.open_internal(start_key)
+        Ok(self.open_internal(start_key))
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, DynamoDbStoreInternalError> {
@@ -400,7 +400,7 @@ impl KeyValueDatabase for DynamoDbDatabaseInternal {
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
         let database = Self::connect(config, namespace).await?;
-        let store = database.open_internal(PARTITION_KEY_ROOT_KEY.to_vec())?;
+        let store = database.open_internal(PARTITION_KEY_ROOT_KEY.to_vec());
         store.find_keys_by_prefix(EMPTY_ROOT_KEY).await
     }
 
@@ -535,22 +535,19 @@ impl DynamoDbDatabaseInternal {
         Ok(())
     }
 
-    fn open_internal(
-        &self,
-        start_key: Vec<u8>,
-    ) -> Result<DynamoDbStoreInternal, DynamoDbStoreInternalError> {
+    fn open_internal(&self, start_key: Vec<u8>) -> DynamoDbStoreInternal {
         let client = self.client.clone();
         let namespace = self.namespace.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
-        Ok(DynamoDbStoreInternal {
+        DynamoDbStoreInternal {
             client,
             namespace,
             semaphore,
             max_stream_queries,
             start_key,
             root_key_written: Arc::new(AtomicBool::new(false)),
-        })
+        }
     }
 }
 

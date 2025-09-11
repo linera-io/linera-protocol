@@ -30,7 +30,7 @@ impl StorageService {
         }
     }
 
-    async fn command(&self) -> Command {
+    fn command(&self) -> Command {
         let mut command = Command::new(&self.binary);
         command.args(["memory", "--endpoint", &self.endpoint]);
         command.kill_on_drop(true);
@@ -51,7 +51,7 @@ impl StorageService {
 
     pub async fn run(&self) -> Result<StorageServiceGuard> {
         self.wait_for_absence().await?;
-        let mut command = self.command().await;
+        let mut command = self.command();
         let _child = command.spawn_into()?;
         let guard = StorageServiceGuard { _child };
         // We iterate until the child is spawned and can be accessed.

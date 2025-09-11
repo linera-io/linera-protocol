@@ -189,7 +189,7 @@ pub fn parse_log(
     let inner_types = get_inner_event_type(event_name_expanded)?;
     let ethereum_types = inner_types
         .split(',')
-        .map(|s| s.to_string())
+        .map(str::to_string)
         .collect::<Vec<_>>();
     let mut values = Vec::new();
     let mut topic_index = 0;

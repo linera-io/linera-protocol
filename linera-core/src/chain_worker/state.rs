@@ -565,8 +565,7 @@ where
                 .pending_proposed_blobs
                 .try_load_entry_mut(&owner)
                 .await?
-                .update(*round, validated, maybe_blobs)
-                .await?;
+                .update(*round, validated, maybe_blobs)?;
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
         }
@@ -615,8 +614,7 @@ where
         if !missing_blob_ids.is_empty() {
             self.chain
                 .pending_validated_blobs
-                .update(certificate.round, true, maybe_blobs)
-                .await?;
+                .update(certificate.round, true, maybe_blobs)?;
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
         }

@@ -150,7 +150,7 @@ impl TransportProtocol {
     ) -> Result<Box<dyn ConnectionPool>, std::io::Error> {
         let pool: Box<dyn ConnectionPool> = match self {
             Self::Udp => Box::new(UdpConnectionPool::new().await?),
-            Self::Tcp => Box::new(TcpConnectionPool::new().await?),
+            Self::Tcp => Box::new(TcpConnectionPool::new()),
         };
         Ok(pool)
     }
@@ -319,9 +319,9 @@ struct TcpConnectionPool {
 }
 
 impl TcpConnectionPool {
-    async fn new() -> Result<Self, std::io::Error> {
+    fn new() -> Self {
         let streams = HashMap::new();
-        Ok(Self { streams })
+        Self { streams }
     }
 
     async fn get_stream(
@@ -449,8 +449,7 @@ where
                     if let Err(error) = tcp_stream.shutdown().await {
                         let peer = tcp_stream
                             .peer_addr()
-                            .map(|address| address.to_string())
-                            .unwrap_or_else(|_| "an unknown peer".to_owned());
+                            .map_or_else(|_| "an unknown peer".to_owned(), |address| address.to_string());
                         warn!("Failed to close connection to {peer}: {error:?}");
                     }
                     return;
@@ -458,7 +457,7 @@ where
                 result = self.connection.next() => match result {
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
-                        self.handle_error(error);
+                        Self::handle_error(error);
                         return;
                     }
                     None => break,
@@ -480,7 +479,7 @@ where
     ///
     /// Ignores a successful connection termination, while logging an unexpected connection
     /// termination or any other error.
-    fn handle_error(&self, error: codec::Error) {
+    fn handle_error(error: codec::Error) {
         if !matches!(
             &error,
             codec::Error::IoError(error)

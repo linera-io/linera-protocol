@@ -27,7 +27,6 @@ pub trait IndexerDatabase: Send + Sync {
 
     /// Atomically store a block with its required blobs
     /// This is the high-level API that can be implemented in terms of the other methods
-    #[allow(clippy::too_many_arguments)]
     async fn store_block_with_blobs(
         &self,
         block_hash: &CryptoHash,

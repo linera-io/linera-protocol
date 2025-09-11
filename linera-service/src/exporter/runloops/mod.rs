@@ -26,7 +26,6 @@ mod validator_exporter;
 #[cfg(test)]
 pub use indexer::indexer_api;
 
-#[expect(clippy::type_complexity)]
 pub(crate) fn start_block_processor_task<S, F>(
     storage: S,
     shutdown_signal: F,
@@ -34,13 +33,10 @@ pub(crate) fn start_block_processor_task<S, F>(
     options: NodeOptions,
     block_exporter_id: u32,
     destination_config: DestinationConfig,
-) -> Result<
-    (
-        UnboundedSender<BlockId>,
-        std::thread::JoinHandle<Result<(), ExporterError>>,
-    ),
-    ExporterError,
->
+) -> (
+    UnboundedSender<BlockId>,
+    std::thread::JoinHandle<Result<(), ExporterError>>,
+)
 where
     S: Storage + Clone + Send + Sync + 'static,
     F: IntoFuture<Output = ()> + Clone + Send + Sync + 'static,
@@ -63,7 +59,7 @@ where
         )
     });
 
-    Ok((task_sender, handle))
+    (task_sender, handle)
 }
 
 struct NewBlockQueue {
@@ -83,7 +79,6 @@ impl NewBlockQueue {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 #[tokio::main(flavor = "current_thread")]
 async fn start_block_processor<S, F>(
     storage: S,
@@ -220,7 +215,7 @@ mod test {
                 committee_destination: false,
                 destinations: vec![destination_address],
             },
-        )?;
+        );
 
         assert!(
             notifier.send(notification).is_ok(),
@@ -276,7 +271,7 @@ mod test {
                 committee_destination: false,
                 destinations: destinations.clone(),
             },
-        )?;
+        );
 
         assert!(
             notifier.send(notification).is_ok(),
@@ -331,7 +326,7 @@ mod test {
                 destinations: destinations.clone(),
                 committee_destination: false,
             },
-        )?;
+        );
 
         sleep(Duration::from_secs(4)).await;
 
@@ -340,7 +335,7 @@ mod test {
 
         let (_, _, destination_states) =
             BlockExporterStateView::initiate(context.clone(), destination_ids).await?;
-        for destination in destinations.iter() {
+        for destination in destinations {
             assert_eq!(
                 destination_states
                     .load_state(&destination.id())
@@ -391,7 +386,7 @@ mod test {
                 committee_destination: true,
                 destinations: vec![],
             },
-        )?;
+        );
 
         let mut single_validator = BTreeMap::new();
         single_validator.insert(Secp256k1PublicKey::test_key(0), validator_state);

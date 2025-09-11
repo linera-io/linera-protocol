@@ -28,11 +28,11 @@ fn cross_chain_native_token_transfers(criterion: &mut Criterion) {
                 let mut total_time = Duration::ZERO;
 
                 for _ in 0..iterations {
-                    let chains = setup_native_token_balances(
+                    let chains = Box::pin(setup_native_token_balances(
                         chain_count,
                         accounts_per_chain,
                         transfers_per_account,
-                    )
+                    ))
                     .await;
 
                     let transfers = prepare_transfers(chains, transfers_per_account);

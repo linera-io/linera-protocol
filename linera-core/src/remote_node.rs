@@ -342,7 +342,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
             }
         }
-        let unique_missing_blob_ids = blob_ids.iter().cloned().collect::<HashSet<_>>();
+        let unique_missing_blob_ids = blob_ids.iter().copied().collect::<HashSet<_>>();
         if blob_ids.len() > unique_missing_blob_ids.len() {
             warn!("blobs requested by validator {public_key} contain duplicates");
             return Err(NodeError::DuplicatesInBlobsNotFound);

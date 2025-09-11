@@ -99,7 +99,6 @@ impl WasmContractModule {
     ) -> Result<Self, WasmExecutionError> {
         Self::new(
             Bytecode::load_from_file(contract_bytecode_file)
-                .await
                 .map_err(anyhow::Error::from)
                 .map_err(WasmExecutionError::LoadContractModule)?,
             runtime,
@@ -162,7 +161,6 @@ impl WasmServiceModule {
     ) -> Result<Self, WasmExecutionError> {
         Self::new(
             Bytecode::load_from_file(service_bytecode_file)
-                .await
                 .map_err(anyhow::Error::from)
                 .map_err(WasmExecutionError::LoadServiceModule)?,
             runtime,
@@ -352,15 +350,14 @@ pub mod test {
             .current_dir("../examples")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .output()?;
-        if !output.status.success() {
-            panic!(
-                "Failed to build example applications.\n\n\
+        assert!(
+            output.status.success(),
+            "Failed to build example applications.\n\n\
                 stdout:\n-------\n{}\n\n\
                 stderr:\n-------\n{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
-            );
-        }
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
         Ok(())
     }
 

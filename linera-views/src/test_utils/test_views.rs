@@ -107,7 +107,7 @@ impl TestView for TestLogView<MemoryContext<()>> {
 
         Ok(INITIAL_LOG_QUEUE_VIEW_CHANGES
             .iter()
-            .cloned()
+            .copied()
             .chain(new_values)
             .collect())
     }
@@ -121,7 +121,7 @@ impl TestView for TestLogView<MemoryContext<()>> {
 
         Ok(INITIAL_LOG_QUEUE_VIEW_CHANGES
             .iter()
-            .cloned()
+            .copied()
             .chain(new_values)
             .collect())
     }
@@ -239,13 +239,13 @@ impl TestView for TestSetView<MemoryContext<()>> {
             self.set.insert(key)?;
         }
 
-        Ok(INITIAL_SET_VIEW_CHANGES.iter().cloned().collect())
+        Ok(INITIAL_SET_VIEW_CHANGES.iter().copied().collect())
     }
 
     async fn stage_changes_to_be_discarded(&mut self) -> Result<Self::State, ViewError> {
         let mut state = INITIAL_SET_VIEW_CHANGES
             .iter()
-            .cloned()
+            .copied()
             .collect::<HashSet<_>>();
         let new_entries = [-1_000_000, 2_000_000];
 
@@ -267,7 +267,7 @@ impl TestView for TestSetView<MemoryContext<()>> {
     async fn stage_changes_to_be_persisted(&mut self) -> Result<Self::State, ViewError> {
         let mut state = INITIAL_SET_VIEW_CHANGES
             .iter()
-            .cloned()
+            .copied()
             .collect::<HashSet<_>>();
         let new_entries = [1_234, -2_101_010];
 

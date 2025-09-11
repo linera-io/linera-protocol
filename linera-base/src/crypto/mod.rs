@@ -272,7 +272,7 @@ impl AccountSignature {
         bcs::from_bytes(bytes).map_err(CryptoError::SignatureParseError)
     }
 
-    /// Returns the AccountOwner of the account that signed the value.
+    /// Returns the [`AccountOwner`] of the account that signed the value.
     pub fn owner(&self) -> AccountOwner {
         match self {
             AccountSignature::Ed25519 { public_key, .. } => AccountOwner::from(*public_key),

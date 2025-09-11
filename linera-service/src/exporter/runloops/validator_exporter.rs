@@ -186,10 +186,11 @@ where
         tracing::info!(?block_id, "dispatching block");
         #[cfg(with_metrics)]
         let start = linera_base::time::Instant::now();
-        match self
-            .node
-            .handle_confirmed_certificate(certificate, delivery)
-            .await
+        match Box::pin(
+            self.node
+                .handle_confirmed_certificate(certificate, delivery),
+        )
+        .await
         {
             Ok(_) => {
                 #[cfg(with_metrics)]

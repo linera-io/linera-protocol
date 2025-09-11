@@ -9,6 +9,9 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 

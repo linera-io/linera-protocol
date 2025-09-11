@@ -1002,7 +1002,7 @@ where
             return Ok(());
         }
         let mut futures = Vec::new();
-        for (key, bytes) in batch.key_value_bytes.into_iter() {
+        for (key, bytes) in batch.key_value_bytes {
             let store = self.database.open_shared(&[])?;
             futures.push(async move { Self::write_entry(&store, key, bytes).await });
         }
@@ -1081,7 +1081,7 @@ where
         let mut chain_ids = Vec::new();
         for root_key in root_keys {
             if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == INDEX_CHAIN_ID {
-                let root_key_red = &root_key[1..1 + CHAIN_ID_LENGTH];
+                let root_key_red = &root_key[1..=CHAIN_ID_LENGTH];
                 let chain_id = bcs::from_bytes(root_key_red)?;
                 chain_ids.push(chain_id);
             }

@@ -10,6 +10,9 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 graphql_client = { version = "0.13", features = ["reqwest-rustls"] }
 linera-base.workspace = true

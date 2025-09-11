@@ -43,7 +43,7 @@ impl<Runtime> RuntimeApiData<Runtime> {
 
     /// Registers a `promise` internally, returning an ID that is unique for the lifetime of this
     /// [`RuntimeApiData`].
-    fn register_promise<Promise>(&mut self, promise: Promise) -> Result<u32, RuntimeError>
+    fn register_promise<Promise>(&mut self, promise: Promise) -> u32
     where
         Promise: Send + Sync + 'static,
     {
@@ -52,7 +52,7 @@ impl<Runtime> RuntimeApiData<Runtime> {
         self.active_promises.insert(id, Box::new(promise));
         self.promise_counter += 1;
 
-        Ok(id)
+        id
     }
 
     /// Returns a `Promise` registered to the provided `promise_id`.
@@ -232,7 +232,7 @@ where
     }
 
     /// Logs a `message` with the provided information `level`.
-    fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
+    fn log(_caller: &mut Caller, message: String, level: log::Level) {
         match level {
             log::Level::Trace => tracing::trace!("{message}"),
             log::Level::Debug => tracing::debug!("{message}"),
@@ -240,7 +240,6 @@ where
             log::Level::Warn => tracing::warn!("{message}"),
             log::Level::Error => tracing::error!("{message}"),
         }
-        Ok(())
     }
 
     /// Creates a new promise to check if the `key` is in storage.
@@ -251,7 +250,7 @@ where
             .contains_key_new(key)
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
-        data.register_promise(promise)
+        Ok(data.register_promise(promise))
     }
 
     /// Waits for the promise to check if the `key` is in storage.
@@ -272,7 +271,7 @@ where
             .contains_keys_new(keys)
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
-        data.register_promise(promise)
+        Ok(data.register_promise(promise))
     }
 
     /// Waits for the promise to check if the `keys` are in storage.
@@ -296,7 +295,7 @@ where
             .read_multi_values_bytes_new(keys)
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
-        data.register_promise(promise)
+        Ok(data.register_promise(promise))
     }
 
     /// Waits for the promise to read multiple entries from storage.
@@ -320,7 +319,7 @@ where
             .read_value_bytes_new(key)
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
-        data.register_promise(promise)
+        Ok(data.register_promise(promise))
     }
 
     /// Waits for the promise to read a single entry from storage.
@@ -344,7 +343,7 @@ where
             .find_keys_by_prefix_new(key_prefix)
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
-        data.register_promise(promise)
+        Ok(data.register_promise(promise))
     }
 
     /// Waits for the promise to search for keys that start with the `key_prefix`.
@@ -365,7 +364,7 @@ where
             .find_key_values_by_prefix_new(key_prefix)
             .map_err(|error| RuntimeError::Custom(error.into()))?;
 
-        data.register_promise(promise)
+        Ok(data.register_promise(promise))
     }
 
     /// Waits for the promise to search for entries whose keys that start with the `key_prefix`.
