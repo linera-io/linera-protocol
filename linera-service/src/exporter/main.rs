@@ -113,7 +113,7 @@ impl Runnable for ExporterContext {
             self.node_options,
             self.config.id,
             self.config.destination_config,
-        )?;
+        );
 
         let service = ExporterService::new(sender);
         service
@@ -175,7 +175,6 @@ impl ExporterOptions {
             let store_config = self
                 .storage_config
                 .add_common_storage_options(&self.common_storage_options)
-                .await
                 .unwrap();
             store_config.run_with_storage(None, context).boxed().await
         };

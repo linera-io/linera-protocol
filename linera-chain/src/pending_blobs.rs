@@ -57,7 +57,7 @@ where
         Ok(true)
     }
 
-    pub async fn update(
+    pub fn update(
         &mut self,
         round: Round,
         validated: bool,

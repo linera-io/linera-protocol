@@ -903,7 +903,7 @@ async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
     // Restart the stopped validator
     net.restart_validator(LAGGING_VALIDATOR_INDEX).await?;
 
-    let lagging_validator = net.validator_client(LAGGING_VALIDATOR_INDEX).await?;
+    let lagging_validator = net.validator_client(LAGGING_VALIDATOR_INDEX)?;
 
     let state_before_sync = lagging_validator
         .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
@@ -986,7 +986,7 @@ async fn test_sync_child_chain(config: LocalNetConfig) -> Result<()> {
     // Restart the stopped validator
     net.restart_validator(LAGGING_VALIDATOR_INDEX).await?;
 
-    let lagging_validator = net.validator_client(LAGGING_VALIDATOR_INDEX).await?;
+    let lagging_validator = net.validator_client(LAGGING_VALIDATOR_INDEX)?;
 
     let state_before_sync = lagging_validator
         .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
@@ -1067,7 +1067,7 @@ async fn test_update_validator_sender_gaps(config: LocalNetConfig) -> Result<()>
     net.restart_validator(UNAWARE_VALIDATOR_INDEX).await?;
     net.stop_validator(STOPPED_VALIDATOR_INDEX).await?;
 
-    let unaware_validator = net.validator_client(UNAWARE_VALIDATOR_INDEX).await?;
+    let unaware_validator = net.validator_client(UNAWARE_VALIDATOR_INDEX)?;
 
     let sender_state_before_sync = unaware_validator
         .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
@@ -1188,11 +1188,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
-    let app = EthereumTrackerApp(
-        node_service
-            .make_application(&chain, &application_id)
-            .await?,
-    );
+    let app = EthereumTrackerApp(node_service.make_application(&chain, &application_id)?);
 
     // Check after the initialization
 

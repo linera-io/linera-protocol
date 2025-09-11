@@ -856,7 +856,7 @@ where
         Ok(())
     }
 
-    pub async fn bounce_message(
+    pub fn bounce_message(
         &mut self,
         context: MessageContext,
         grant: Amount,
@@ -874,7 +874,7 @@ where
         Ok(())
     }
 
-    pub async fn send_refund(
+    pub fn send_refund(
         &mut self,
         context: MessageContext,
         amount: Amount,

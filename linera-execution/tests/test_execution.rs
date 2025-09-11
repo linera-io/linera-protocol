@@ -36,7 +36,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let (app_id, app_desc, contract_blob, service_blob) =
-        &create_dummy_user_application_registrations(1).await?[0];
+        &create_dummy_user_application_registrations(1)?[0];
     let app_desc_blob = Blob::new_application_description(app_desc);
     let app_desc_blob_id = app_desc_blob.id();
     let contract_blob_id = contract_blob.id();

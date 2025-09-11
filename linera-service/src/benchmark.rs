@@ -167,9 +167,7 @@ async fn benchmark_with_fungible(
                 default_chain,
             };
             let app = FungibleApp(
-                node_service
-                    .make_application(&context.default_chain, &context.application_id)
-                    .await?,
+                node_service.make_application(&context.default_chain, &context.application_id)?,
             );
             Ok::<_, anyhow::Error>((app, context, node_service))
         },
@@ -234,14 +232,10 @@ async fn benchmark_with_fungible(
                         return Ok(()); // No transfers: The app won't be registered on this chain.
                     }
                     node_service.process_inbox(&context.default_chain).await?;
-                    let app = FungibleApp(
-                        node_service
-                            .make_application(
-                                &context.default_chain,
-                                &sender_context.application_id,
-                            )
-                            .await?,
-                    );
+                    let app = FungibleApp(node_service.make_application(
+                        &context.default_chain,
+                        &sender_context.application_id,
+                    )?);
                     for i in 0.. {
                         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
                         let actual_balance = app.get_amount(&context.owner).await;

@@ -101,7 +101,7 @@ where
                                 };
 
                                 let committee_destinations = committee.validator_addresses().map(|(_, address)| DestinationId::validator(address.to_owned())).collect::<Vec<_>>();
-                                self.exporters_tracker.shutdown_old_committee(committee_destinations.clone()).await;
+                                self.exporters_tracker.shutdown_old_committee(committee_destinations.clone());
                                 self.storage.new_committee(committee_destinations.clone());
                                 self.exporters_tracker.start_committee_exporters(committee_destinations.clone());
                             }

@@ -423,7 +423,7 @@ impl StorageConfig {
     }
 
     /// The addition of the common config to get a full configuration
-    pub async fn add_common_storage_options(
+    pub fn add_common_storage_options(
         &self,
         options: &CommonStorageOptions,
     ) -> Result<StoreConfig, anyhow::Error> {

@@ -310,7 +310,7 @@ where
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .keys()
-            .cloned()
+            .copied()
             .collect()
     }
 
@@ -470,17 +470,15 @@ where
 
     /// Asserts that a blob with the given hash exists in storage.
     pub fn assert_blob_exists(&self, hash: DataBlobHash) {
-        self.blobs
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|blobs| blobs.contains_key(&hash))
-            .unwrap_or_else(|| {
-                panic!(
-                    "Blob for hash {hash:?} has not been mocked, \
-                    please call `MockServiceRuntime::set_blob` first"
-                )
-            });
+        assert!(
+            self.blobs
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|blobs| blobs.contains_key(&hash)),
+            "Blob for hash {hash:?} has not been mocked, \
+            please call `MockServiceRuntime::set_blob` first"
+        );
     }
 
     /// Loads a mocked value from the `slot` cache or panics with a provided `message`.

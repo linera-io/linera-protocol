@@ -221,7 +221,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 .with_execution_context(chain_execution_context)?;
                 actor
                     .send_refund(context, grant)
-                    .await
                     .with_execution_context(chain_execution_context)?;
             }
             MessageAction::Reject => {
@@ -241,13 +240,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     // Bounce the message.
                     actor
                         .bounce_message(context, grant, posted_message.message.clone())
-                        .await
                         .with_execution_context(ChainExecutionContext::Block)?;
                 } else {
                     // Nothing to do except maybe refund the grant.
                     actor
                         .send_refund(context, grant)
-                        .await
                         .with_execution_context(ChainExecutionContext::Block)?;
                 }
             }

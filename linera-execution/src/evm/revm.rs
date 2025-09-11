@@ -340,34 +340,32 @@ pub enum EvmContractModule {
 
 impl EvmContractModule {
     /// Creates a new [`EvmContractModule`] using the EVM module with the provided `contract_bytecode`.
-    pub async fn new(
+    pub fn new(
         contract_bytecode: Bytecode,
         runtime: EvmRuntime,
     ) -> Result<Self, EvmExecutionError> {
         match runtime {
             #[cfg(with_revm)]
-            EvmRuntime::Revm => Self::from_revm(contract_bytecode).await,
+            EvmRuntime::Revm => Self::from_revm(contract_bytecode),
         }
     }
 
     /// Creates a new [`EvmContractModule`] using the EVM module in `contract_bytecode_file`.
     #[cfg(with_fs)]
-    pub async fn from_file(
+    pub fn from_file(
         contract_bytecode_file: impl AsRef<std::path::Path>,
         runtime: EvmRuntime,
     ) -> Result<Self, EvmExecutionError> {
         Self::new(
             Bytecode::load_from_file(contract_bytecode_file)
-                .await
                 .map_err(anyhow::Error::from)
                 .map_err(EvmExecutionError::LoadContractModule)?,
             runtime,
         )
-        .await
     }
 
     /// Creates a new [`EvmContractModule`] using Revm with the provided bytecode files.
-    pub async fn from_revm(contract_bytecode: Bytecode) -> Result<Self, EvmExecutionError> {
+    pub fn from_revm(contract_bytecode: Bytecode) -> Result<Self, EvmExecutionError> {
         let module = contract_bytecode.bytes;
         Ok(EvmContractModule::Revm { module })
     }
@@ -401,34 +399,29 @@ pub enum EvmServiceModule {
 
 impl EvmServiceModule {
     /// Creates a new [`EvmServiceModule`] using the EVM module with the provided bytecode.
-    pub async fn new(
-        service_bytecode: Bytecode,
-        runtime: EvmRuntime,
-    ) -> Result<Self, EvmExecutionError> {
+    pub fn new(service_bytecode: Bytecode, runtime: EvmRuntime) -> Result<Self, EvmExecutionError> {
         match runtime {
             #[cfg(with_revm)]
-            EvmRuntime::Revm => Self::from_revm(service_bytecode).await,
+            EvmRuntime::Revm => Self::from_revm(service_bytecode),
         }
     }
 
     /// Creates a new [`EvmServiceModule`] using the EVM module in `service_bytecode_file`.
     #[cfg(with_fs)]
-    pub async fn from_file(
+    pub fn from_file(
         service_bytecode_file: impl AsRef<std::path::Path>,
         runtime: EvmRuntime,
     ) -> Result<Self, EvmExecutionError> {
         Self::new(
             Bytecode::load_from_file(service_bytecode_file)
-                .await
                 .map_err(anyhow::Error::from)
                 .map_err(EvmExecutionError::LoadServiceModule)?,
             runtime,
         )
-        .await
     }
 
     /// Creates a new [`EvmServiceModule`] using Revm with the provided bytecode files.
-    pub async fn from_revm(contract_bytecode: Bytecode) -> Result<Self, EvmExecutionError> {
+    pub fn from_revm(contract_bytecode: Bytecode) -> Result<Self, EvmExecutionError> {
         let module = contract_bytecode.bytes;
         Ok(EvmServiceModule::Revm { module })
     }
@@ -571,10 +564,7 @@ enum RuntimePrecompile {
     Service(ServiceRuntimePrecompile),
 }
 
-fn get_precompile_output(
-    output: Vec<u8>,
-    gas_limit: u64,
-) -> Result<Option<InterpreterResult>, String> {
+fn get_precompile_output(output: Vec<u8>, gas_limit: u64) -> InterpreterResult {
     // The gas usage is set to `gas_limit` and no spending is being done on it.
     // This means that for REVM, it looks like the precompile call costs nothing.
     // This is because the costs of the EVM precompile calls is accounted for
@@ -582,11 +572,11 @@ fn get_precompile_output(
     let output = Bytes::from(output);
     let result = InstructionResult::default();
     let gas = Gas::new(gas_limit);
-    Ok(Some(InterpreterResult {
+    InterpreterResult {
         result,
         output,
         gas,
-    }))
+    }
 }
 
 fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
@@ -689,7 +679,7 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Cont
             let input = get_precompile_argument(context, &inputs.input);
             let output = Self::call_or_fail(&input, context)
                 .map_err(|error| format!("ContractPrecompile error: {error}"))?;
-            return get_precompile_output(output, gas_limit);
+            return Ok(Some(get_precompile_output(output, gas_limit)));
         }
         self.inner
             .run(context, address, inputs, is_static, gas_limit)
@@ -869,7 +859,7 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
             let input = get_precompile_argument(context, &inputs.input);
             let output = Self::call_or_fail(&input, context)
                 .map_err(|error| format!("ServicePrecompile error: {error}"))?;
-            return get_precompile_output(output, gas_limit);
+            return Ok(Some(get_precompile_output(output, gas_limit)));
         }
         self.inner
             .run(context, address, inputs, is_static, gas_limit)

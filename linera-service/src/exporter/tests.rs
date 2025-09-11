@@ -73,7 +73,7 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
 
     tokio::time::sleep(Duration::from_secs(4)).await;
 
-    let validator_client = net.validator_client(1).await?;
+    let validator_client = net.validator_client(1)?;
     let chain_info = validator_client
         .handle_chain_info_query(ChainInfoQuery::new(chain))
         .await?;

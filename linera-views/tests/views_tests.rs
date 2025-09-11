@@ -56,7 +56,7 @@ pub struct StateView<C> {
     pub key_value_store: KeyValueStoreView<C>,
 }
 
-#[allow(async_fn_in_trait)]
+#[expect(async_fn_in_trait)]
 pub trait StateStorage {
     type Context: Context<Extra = usize> + 'static;
 
@@ -310,88 +310,44 @@ async fn test_store<S>(
 where
     S: StateStorage,
 {
-    let default_hash = {
-        let view = store.load(1).await?;
-        view.hash().await?
-    };
-    {
-        let mut view = store.load(1).await?;
-        if config.with_x1 {
-            assert_eq!(view.x1.extra(), &1);
-        }
-        let hash = view.hash().await?;
-        assert_eq!(hash, default_hash);
-        if config.with_x1 {
-            assert_eq!(view.x1.get(), &0);
-            view.x1.set(1);
-        }
-        view.rollback();
-        assert_eq!(view.hash().await?, hash);
-        if config.with_x2 {
-            view.x2.set(2);
-        }
-        if config.with_x2 {
-            assert_ne!(view.hash().await?, hash);
-        }
-        if config.with_log {
-            view.log.push(4);
-        }
-        if config.with_queue {
-            view.queue.push_back(8);
-            assert_eq!(view.queue.front().await?, Some(8));
-            view.queue.push_back(7);
-            view.queue.delete_front();
-        }
-        if config.with_map {
-            view.map.insert("Hello", 5)?;
-            assert_eq!(view.map.indices().await?, vec!["Hello".to_string()]);
-            let mut count = 0;
-            view.map
-                .for_each_index(|_index| {
-                    count += 1;
-                    Ok(())
-                })
-                .await?;
-            assert_eq!(count, 1);
-        }
-        if config.with_set {
-            view.set.insert(&42)?;
-            assert_eq!(view.set.indices().await?, vec![42]);
-            let mut count = 0;
-            view.set
-                .for_each_index(|_index| {
-                    count += 1;
-                    Ok(())
-                })
-                .await?;
-            assert_eq!(count, 1);
-        }
-        if config.with_x1 {
-            assert_eq!(view.x1.get(), &0);
-        }
-        if config.with_x2 {
-            assert_eq!(view.x2.get(), &2);
-        }
-        if config.with_log {
-            assert_eq!(view.log.read(0..10).await?, vec![4]);
-        }
-        if config.with_queue {
-            assert_eq!(view.queue.read_front(10).await?, vec![7]);
-        }
-        if config.with_map {
-            assert_eq!(view.map.get("Hello").await?, Some(5));
-        }
-        if config.with_set {
-            assert!(view.set.contains(&42).await?);
-        }
-        if config.with_collection {
-            {
-                let subview = view.collection.load_entry_mut("hola").await?;
-                subview.push(17);
-                subview.push(18);
-                assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
+    Box::pin(async move {
+        let default_hash = {
+            let view = store.load(1).await?;
+            view.hash().await?
+        };
+        {
+            let mut view = store.load(1).await?;
+            if config.with_x1 {
+                assert_eq!(view.x1.extra(), &1);
+            }
+            let hash = view.hash().await?;
+            assert_eq!(hash, default_hash);
+            if config.with_x1 {
+                assert_eq!(view.x1.get(), &0);
+                view.x1.set(1);
+            }
+            view.rollback();
+            assert_eq!(view.hash().await?, hash);
+            if config.with_x2 {
+                view.x2.set(2);
+            }
+            if config.with_x2 {
+                assert_ne!(view.hash().await?, hash);
+            }
+            if config.with_log {
+                view.log.push(4);
+            }
+            if config.with_queue {
+                view.queue.push_back(8);
+                assert_eq!(view.queue.front().await?, Some(8));
+                view.queue.push_back(7);
+                view.queue.delete_front();
+            }
+            if config.with_map {
+                view.map.insert("Hello", 5)?;
+                assert_eq!(view.map.indices().await?, vec!["Hello".to_string()]);
                 let mut count = 0;
-                view.collection
+                view.map
                     .for_each_index(|_index| {
                         count += 1;
                         Ok(())
@@ -399,216 +355,263 @@ where
                     .await?;
                 assert_eq!(count, 1);
             }
-            let subview = view.collection.try_load_entry("hola").await?.unwrap();
-            assert_eq!(subview.read(0..10).await?, vec![17, 18]);
-        }
-    };
-    let staged_hash = {
-        let mut view = store.load(1).await?;
-        assert_eq!(view.hash().await?, default_hash);
-        if config.with_x1 {
-            assert_eq!(view.x1.get(), &0);
-        }
-        if config.with_x2 {
-            assert_eq!(view.x2.get(), &0);
-        }
-        if config.with_log {
-            assert_eq!(view.log.read(0..10).await?, Vec::<u32>::new());
-        }
-        if config.with_queue {
-            assert_eq!(view.queue.read_front(10).await?, Vec::<u64>::new());
-        }
-        if config.with_map {
-            assert_eq!(view.map.get("Hello").await?, None);
-        }
-        if config.with_set {
-            assert!(!view.set.contains(&42).await?);
-        }
-        if config.with_collection {
-            let subview = view.collection.load_entry_or_insert("hola").await?;
-            assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
-            let subview = view.collection2.load_entry_mut("ciao").await?;
-            let subsubview = subview.load_entry_mut("!").await?;
-            subsubview.set(3);
-            assert_eq!(subsubview.get(), &3);
-        }
-        if config.with_x1 {
-            view.x1.set(1);
-        }
-        if config.with_log {
-            view.log.push(4);
-        }
-        if config.with_queue {
-            view.queue.push_back(7);
-        }
-        if config.with_map {
-            view.map.insert("Hello", 5)?;
-            view.map.insert("Hi", 2)?;
-            view.map.remove("Hi")?;
-        }
-        if config.with_set {
-            view.set.insert(&42)?;
-            view.set.insert(&59)?;
-            view.set.remove(&59)?;
-        }
-        if config.with_collection {
-            let subview = view.collection.load_entry_mut("hola").await?;
-            subview.push(17);
-            subview.push(18);
-        }
-        if config.with_flush {
+            if config.with_set {
+                view.set.insert(&42)?;
+                assert_eq!(view.set.indices().await?, vec![42]);
+                let mut count = 0;
+                view.set
+                    .for_each_index(|_index| {
+                        count += 1;
+                        Ok(())
+                    })
+                    .await?;
+                assert_eq!(count, 1);
+            }
+            if config.with_x1 {
+                assert_eq!(view.x1.get(), &0);
+            }
+            if config.with_x2 {
+                assert_eq!(view.x2.get(), &2);
+            }
+            if config.with_log {
+                assert_eq!(view.log.read(0..10).await?, vec![4]);
+            }
+            if config.with_queue {
+                assert_eq!(view.queue.read_front(10).await?, vec![7]);
+            }
+            if config.with_map {
+                assert_eq!(view.map.get("Hello").await?, Some(5));
+            }
+            if config.with_set {
+                assert!(view.set.contains(&42).await?);
+            }
+            if config.with_collection {
+                {
+                    let subview = view.collection.load_entry_mut("hola").await?;
+                    subview.push(17);
+                    subview.push(18);
+                    assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
+                    let mut count = 0;
+                    view.collection
+                        .for_each_index(|_index| {
+                            count += 1;
+                            Ok(())
+                        })
+                        .await?;
+                    assert_eq!(count, 1);
+                }
+                let subview = view.collection.try_load_entry("hola").await?.unwrap();
+                assert_eq!(subview.read(0..10).await?, vec![17, 18]);
+            }
+        };
+        let staged_hash = {
+            let mut view = store.load(1).await?;
+            assert_eq!(view.hash().await?, default_hash);
+            if config.with_x1 {
+                assert_eq!(view.x1.get(), &0);
+            }
+            if config.with_x2 {
+                assert_eq!(view.x2.get(), &0);
+            }
+            if config.with_log {
+                assert_eq!(view.log.read(0..10).await?, Vec::<u32>::new());
+            }
+            if config.with_queue {
+                assert_eq!(view.queue.read_front(10).await?, Vec::<u64>::new());
+            }
+            if config.with_map {
+                assert_eq!(view.map.get("Hello").await?, None);
+            }
+            if config.with_set {
+                assert!(!view.set.contains(&42).await?);
+            }
+            if config.with_collection {
+                let subview = view.collection.load_entry_or_insert("hola").await?;
+                assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
+                let subview = view.collection2.load_entry_mut("ciao").await?;
+                let subsubview = subview.load_entry_mut("!").await?;
+                subsubview.set(3);
+                assert_eq!(subsubview.get(), &3);
+            }
+            if config.with_x1 {
+                view.x1.set(1);
+            }
+            if config.with_log {
+                view.log.push(4);
+            }
+            if config.with_queue {
+                view.queue.push_back(7);
+            }
+            if config.with_map {
+                view.map.insert("Hello", 5)?;
+                view.map.insert("Hi", 2)?;
+                view.map.remove("Hi")?;
+            }
+            if config.with_set {
+                view.set.insert(&42)?;
+                view.set.insert(&59)?;
+                view.set.remove(&59)?;
+            }
+            if config.with_collection {
+                let subview = view.collection.load_entry_mut("hola").await?;
+                subview.push(17);
+                subview.push(18);
+            }
+            if config.with_flush {
+                view.save().await?;
+            }
+            let hash1 = view.hash().await?;
+            let hash2 = view.hash().await?;
             view.save().await?;
-        }
-        let hash1 = view.hash().await?;
-        let hash2 = view.hash().await?;
-        view.save().await?;
-        let hash3 = view.hash().await?;
-        assert_eq!(hash1, hash2);
-        assert_eq!(hash1, hash3);
-        hash1
-    };
-    {
-        let mut view = store.load(1).await?;
-        let stored_hash = view.hash().await?;
-        assert_eq!(staged_hash, stored_hash);
-        if config.with_x1 {
-            assert_eq!(view.x1.get(), &1);
-        }
-        if config.with_x2 {
-            assert_eq!(view.x2.get(), &0);
-        }
-        if config.with_log {
-            assert_eq!(view.log.read(0..10).await?, vec![4]);
-        }
-        if config.with_queue {
-            view.queue.push_back(8);
-            assert_eq!(view.queue.read_front(10).await?, vec![7, 8]);
-            assert_eq!(view.queue.read_front(1).await?, vec![7]);
-            assert_eq!(view.queue.read_back(10).await?, vec![7, 8]);
-            assert_eq!(view.queue.read_back(1).await?, vec![8]);
-            assert_eq!(view.queue.front().await?, Some(7));
-            assert_eq!(view.queue.back().await?, Some(8));
-            assert_eq!(view.queue.count(), 2);
-            view.queue.delete_front();
-            assert_eq!(view.queue.front().await?, Some(8));
-            view.queue.delete_front();
-            assert_eq!(view.queue.front().await?, None);
-            assert_eq!(view.queue.count(), 0);
-            view.queue.push_back(13);
-        }
-        if config.with_map {
-            assert_eq!(view.map.get("Hello").await?, Some(5));
-            assert_eq!(view.map.get("Hi").await?, None);
-        }
-        if config.with_set {
-            assert!(view.set.contains(&42).await?);
-            assert!(!view.set.contains(&59).await?);
-        }
-        if config.with_collection {
-            let subview = view.collection.try_load_entry("hola").await?.unwrap();
-            assert_eq!(subview.read(0..10).await?, vec![17, 18]);
-            assert_eq!(subview.read(..).await?, vec![17, 18]);
-            assert_eq!(subview.read(1..).await?, vec![18]);
-            assert_eq!(subview.read(..=0).await?, vec![17]);
-        }
-        if config.with_flush {
-            view.save().await?;
-        }
-        if config.with_collection {
-            let subview = view.collection2.load_entry_mut("ciao").await?;
-            let subsubview = subview.try_load_entry("!").await?.unwrap();
-            assert!(subview.try_load_entry("!").await.is_err());
-            assert_eq!(subsubview.get(), &3);
-            assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
-            view.collection.remove_entry("hola")?;
-        }
-        if config.with_x1
-            && config.with_x2
-            && config.with_map
-            && config.with_set
-            && config.with_queue
-            && config.with_log
-            && config.with_collection
+            let hash3 = view.hash().await?;
+            assert_eq!(hash1, hash2);
+            assert_eq!(hash1, hash3);
+            hash1
+        };
         {
-            assert_ne!(view.hash().await?, stored_hash);
-        }
-        view.save().await?;
-    }
-    {
-        let mut view = store.load(1).await?;
-        if config.with_collection {
+            let mut view = store.load(1).await?;
+            let stored_hash = view.hash().await?;
+            assert_eq!(staged_hash, stored_hash);
+            if config.with_x1 {
+                assert_eq!(view.x1.get(), &1);
+            }
+            if config.with_x2 {
+                assert_eq!(view.x2.get(), &0);
+            }
+            if config.with_log {
+                assert_eq!(view.log.read(0..10).await?, vec![4]);
+            }
+            if config.with_queue {
+                view.queue.push_back(8);
+                assert_eq!(view.queue.read_front(10).await?, vec![7, 8]);
+                assert_eq!(view.queue.read_front(1).await?, vec![7]);
+                assert_eq!(view.queue.read_back(10).await?, vec![7, 8]);
+                assert_eq!(view.queue.read_back(1).await?, vec![8]);
+                assert_eq!(view.queue.front().await?, Some(7));
+                assert_eq!(view.queue.back().await?, Some(8));
+                assert_eq!(view.queue.count(), 2);
+                view.queue.delete_front();
+                assert_eq!(view.queue.front().await?, Some(8));
+                view.queue.delete_front();
+                assert_eq!(view.queue.front().await?, None);
+                assert_eq!(view.queue.count(), 0);
+                view.queue.push_back(13);
+            }
+            if config.with_map {
+                assert_eq!(view.map.get("Hello").await?, Some(5));
+                assert_eq!(view.map.get("Hi").await?, None);
+            }
+            if config.with_set {
+                assert!(view.set.contains(&42).await?);
+                assert!(!view.set.contains(&59).await?);
+            }
+            if config.with_collection {
+                let subview = view.collection.try_load_entry("hola").await?.unwrap();
+                assert_eq!(subview.read(0..10).await?, vec![17, 18]);
+                assert_eq!(subview.read(..).await?, vec![17, 18]);
+                assert_eq!(subview.read(1..).await?, vec![18]);
+                assert_eq!(subview.read(..=0).await?, vec![17]);
+            }
+            if config.with_flush {
+                view.save().await?;
+            }
+            if config.with_collection {
+                let subview = view.collection2.load_entry_mut("ciao").await?;
+                let subsubview = subview.try_load_entry("!").await?.unwrap();
+                assert!(subview.try_load_entry("!").await.is_err());
+                assert_eq!(subsubview.get(), &3);
+                assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
+                view.collection.remove_entry("hola")?;
+            }
+            if config.with_x1
+                && config.with_x2
+                && config.with_map
+                && config.with_set
+                && config.with_queue
+                && config.with_log
+                && config.with_collection
             {
-                let mut subview = view.collection4.try_load_entry_mut("hola").await?;
-                assert_eq!(subview.read_front(10).await?, Vec::<u64>::new());
-                assert!(view.collection4.try_load_entry_mut("hola").await.is_err());
-                if config.with_queue {
-                    subview.push_back(13);
-                    assert_eq!(subview.front().await?, Some(13));
-                    subview.delete_front();
-                    assert_eq!(subview.front().await?, None);
+                assert_ne!(view.hash().await?, stored_hash);
+            }
+            view.save().await?;
+        }
+        {
+            let mut view = store.load(1).await?;
+            if config.with_collection {
+                {
+                    let mut subview = view.collection4.try_load_entry_mut("hola").await?;
+                    assert_eq!(subview.read_front(10).await?, Vec::<u64>::new());
+                    assert!(view.collection4.try_load_entry_mut("hola").await.is_err());
+                    if config.with_queue {
+                        subview.push_back(13);
+                        assert_eq!(subview.front().await?, Some(13));
+                        subview.delete_front();
+                        assert_eq!(subview.front().await?, None);
+                        assert_eq!(subview.count(), 0);
+                    }
+                }
+                {
+                    let subview = view.collection4.try_load_entry("hola").await?.unwrap();
                     assert_eq!(subview.count(), 0);
+                    assert!(view.collection4.try_load_entry("hola").await.is_ok());
                 }
             }
+        }
+        if config.with_map {
             {
-                let subview = view.collection4.try_load_entry("hola").await?.unwrap();
-                assert_eq!(subview.count(), 0);
-                assert!(view.collection4.try_load_entry("hola").await.is_ok());
+                let mut view = store.load(1).await?;
+                let value = view.map.get_mut_or_default("Geia").await?;
+                assert_eq!(*value, 0);
+                *value = 42;
+                let value = view.map.get_mut_or_default("Geia").await?;
+                assert_eq!(*value, 42);
+                view.save().await?;
+            }
+            {
+                let view = store.load(1).await?;
+                assert_eq!(view.map.get("Geia").await?, Some(42));
+            }
+            {
+                let mut view = store.load(1).await?;
+                let value = view.map.get_mut_or_default("Geia").await?;
+                assert_eq!(*value, 42);
+                *value = 43;
+                view.rollback();
+                let value = view.map.get_mut_or_default("Geia").await?;
+                assert_eq!(*value, 42);
             }
         }
-    }
-    if config.with_map {
+        if config.with_map {
+            {
+                let mut view = store.load(1).await?;
+                view.map.insert("Konnichiwa", 5)?;
+                let value = view.map.get_mut("Konnichiwa").await?.unwrap();
+                *value = 6;
+                view.save().await?;
+            }
+            {
+                let view = store.load(1).await?;
+                assert_eq!(view.map.get("Konnichiwa").await?, Some(6));
+            }
+        }
         {
             let mut view = store.load(1).await?;
-            let value = view.map.get_mut_or_default("Geia").await?;
-            assert_eq!(*value, 0);
-            *value = 42;
-            let value = view.map.get_mut_or_default("Geia").await?;
-            assert_eq!(*value, 42);
+            if config.with_collection {
+                let subview = view.collection.load_entry_or_insert("hola").await?;
+                assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
+            }
+            if config.with_queue {
+                assert_eq!(view.queue.front().await?, Some(13));
+                view.queue.delete_front();
+                assert_eq!(view.queue.front().await?, None);
+                assert_eq!(view.queue.count(), 0);
+            }
+            view.clear();
             view.save().await?;
         }
-        {
-            let view = store.load(1).await?;
-            assert_eq!(view.map.get("Geia").await?, Some(42));
-        }
-        {
-            let mut view = store.load(1).await?;
-            let value = view.map.get_mut_or_default("Geia").await?;
-            assert_eq!(*value, 42);
-            *value = 43;
-            view.rollback();
-            let value = view.map.get_mut_or_default("Geia").await?;
-            assert_eq!(*value, 42);
-        }
-    }
-    if config.with_map {
-        {
-            let mut view = store.load(1).await?;
-            view.map.insert("Konnichiwa", 5)?;
-            let value = view.map.get_mut("Konnichiwa").await?.unwrap();
-            *value = 6;
-            view.save().await?;
-        }
-        {
-            let view = store.load(1).await?;
-            assert_eq!(view.map.get("Konnichiwa").await?, Some(6));
-        }
-    }
-    {
-        let mut view = store.load(1).await?;
-        if config.with_collection {
-            let subview = view.collection.load_entry_or_insert("hola").await?;
-            assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
-        }
-        if config.with_queue {
-            assert_eq!(view.queue.front().await?, Some(13));
-            view.queue.delete_front();
-            assert_eq!(view.queue.front().await?, None);
-            assert_eq!(view.queue.count(), 0);
-        }
-        view.clear();
-        view.save().await?;
-    }
-    Ok(staged_hash)
+        Ok(staged_hash)
+    })
+    .await
 }
 
 #[derive(CryptoHashRootView)]
@@ -764,38 +767,41 @@ async fn test_store_rollback_kernel<S>(store: &mut S) -> Result<()>
 where
     S: StateStorage,
 {
-    {
-        let mut view = store.load(1).await?;
-        view.queue.push_back(8);
-        view.map.insert("Hello", 5)?;
-        let subview = view.collection.load_entry_mut("hola").await?;
-        subview.push(17);
-        view.save().await?;
-    }
-    {
-        let mut view = store.load(1).await?;
-        view.queue.push_back(7);
-        view.map.insert("Hello", 4)?;
-        let subview = view.collection.load_entry_mut("DobryDen").await?;
-        subview.push(16);
-        view.rollback();
-        view.save().await?;
-    }
-    {
-        let mut view = store.load(1).await?;
-        view.queue.clear();
-        view.map.clear();
-        view.collection.clear();
-        view.rollback();
-        view.save().await?;
-    }
-    {
-        let view = store.load(1).await?;
-        assert_eq!(view.queue.front().await?, Some(8));
-        assert_eq!(view.map.get("Hello").await?, Some(5));
-        assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
-    }
-    Ok(())
+    Box::pin(async move {
+        {
+            let mut view = store.load(1).await?;
+            view.queue.push_back(8);
+            view.map.insert("Hello", 5)?;
+            let subview = view.collection.load_entry_mut("hola").await?;
+            subview.push(17);
+            view.save().await?;
+        }
+        {
+            let mut view = store.load(1).await?;
+            view.queue.push_back(7);
+            view.map.insert("Hello", 4)?;
+            let subview = view.collection.load_entry_mut("DobryDen").await?;
+            subview.push(16);
+            view.rollback();
+            view.save().await?;
+        }
+        {
+            let mut view = store.load(1).await?;
+            view.queue.clear();
+            view.map.clear();
+            view.collection.clear();
+            view.rollback();
+            view.save().await?;
+        }
+        {
+            let view = store.load(1).await?;
+            assert_eq!(view.queue.front().await?, Some(8));
+            assert_eq!(view.map.get("Hello").await?, Some(5));
+            assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
+        }
+        Ok(())
+    })
+    .await
 }
 
 #[cfg(with_rocksdb)]
@@ -1063,91 +1069,97 @@ async fn check_hash_memoization_persistence<S>(
 where
     S: StateStorage,
 {
-    let mut hash = {
-        let view = store.load(1).await?;
-        view.hash().await?
-    };
-    for pair in key_value_vector {
-        let str0 = format!("{:?}", &pair.0);
-        let str1 = format!("{:?}", &pair.1);
-        let pair0_first_u8 = *pair.0.first().unwrap();
-        let pair1_first_u8 = *pair.1.first().unwrap();
-        let choice = rng.gen_range(0..7);
-        if choice < 3 {
-            let mut view = store.load(1).await?;
-            view.x1.set(pair0_first_u8 as u64);
-            view.x2.set(pair1_first_u8 as u32);
-            view.log.push(pair0_first_u8 as u32);
-            view.log.push(pair1_first_u8 as u32);
-            view.queue.push_back(pair0_first_u8 as u64);
-            view.queue.push_back(pair1_first_u8 as u64);
-            view.map.insert(&str0, pair1_first_u8 as usize)?;
-            view.map.insert(&str1, pair0_first_u8 as usize)?;
-            view.key_value_store
-                .insert(pair.0.clone(), pair.1.clone())
-                .await?;
-            if choice == 0 {
-                view.rollback();
+    Box::pin(async move {
+        let mut hash = {
+            let view = store.load(1).await?;
+            view.hash().await?
+        };
+        for pair in key_value_vector {
+            let str0 = format!("{:?}", &pair.0);
+            let str1 = format!("{:?}", &pair.1);
+            let pair0_first_u8 = *pair.0.first().unwrap();
+            let pair1_first_u8 = *pair.1.first().unwrap();
+            let choice = rng.gen_range(0..7);
+            if choice < 3 {
+                let mut view = store.load(1).await?;
+                view.x1.set(pair0_first_u8 as u64);
+                view.x2.set(pair1_first_u8 as u32);
+                view.log.push(pair0_first_u8 as u32);
+                view.log.push(pair1_first_u8 as u32);
+                view.queue.push_back(pair0_first_u8 as u64);
+                view.queue.push_back(pair1_first_u8 as u64);
+                view.map.insert(&str0, pair1_first_u8 as usize)?;
+                view.map.insert(&str1, pair0_first_u8 as usize)?;
+                view.key_value_store
+                    .insert(pair.0.clone(), pair.1.clone())
+                    .await?;
+                if choice == 0 {
+                    view.rollback();
+                    let hash_new = view.hash().await?;
+                    assert_eq!(hash, hash_new);
+                } else {
+                    let hash_new = view.hash().await?;
+                    assert_ne!(hash, hash_new);
+                    if choice == 2 {
+                        view.save().await?;
+                        hash = hash_new;
+                    }
+                }
+            }
+            if choice == 3 {
+                let view = store.load(1).await?;
                 let hash_new = view.hash().await?;
                 assert_eq!(hash, hash_new);
-            } else {
+            }
+            if choice == 4 {
+                let mut view = store.load(1).await?;
+                let subview = view.collection.load_entry_mut(&str0).await?;
+                subview.push(pair1_first_u8 as u32);
                 let hash_new = view.hash().await?;
                 assert_ne!(hash, hash_new);
-                if choice == 2 {
+                view.save().await?;
+                hash = hash_new;
+            }
+            if choice == 5 {
+                let mut view = store.load(1).await?;
+                if view.queue.count() > 0 {
+                    view.queue.delete_front();
+                    let hash_new = view.hash().await?;
+                    assert_ne!(hash, hash_new);
+                    view.save().await?;
+                    hash = hash_new;
+                }
+            }
+            if choice == 6 {
+                let mut view = store.load(1).await?;
+                let indices = view.collection.indices().await?;
+                let size = indices.len();
+                if size > 0 {
+                    let pos = rng.gen_range(0..size);
+                    let x = &indices[pos];
+                    view.collection.remove_entry(x)?;
+                    let hash_new = view.hash().await?;
+                    assert_ne!(hash, hash_new);
                     view.save().await?;
                     hash = hash_new;
                 }
             }
         }
-        if choice == 3 {
-            let view = store.load(1).await?;
-            let hash_new = view.hash().await?;
-            assert_eq!(hash, hash_new);
-        }
-        if choice == 4 {
-            let mut view = store.load(1).await?;
-            let subview = view.collection.load_entry_mut(&str0).await?;
-            subview.push(pair1_first_u8 as u32);
-            let hash_new = view.hash().await?;
-            assert_ne!(hash, hash_new);
-            view.save().await?;
-            hash = hash_new;
-        }
-        if choice == 5 {
-            let mut view = store.load(1).await?;
-            if view.queue.count() > 0 {
-                view.queue.delete_front();
-                let hash_new = view.hash().await?;
-                assert_ne!(hash, hash_new);
-                view.save().await?;
-                hash = hash_new;
-            }
-        }
-        if choice == 6 {
-            let mut view = store.load(1).await?;
-            let indices = view.collection.indices().await?;
-            let size = indices.len();
-            if size > 0 {
-                let pos = rng.gen_range(0..size);
-                let x = &indices[pos];
-                view.collection.remove_entry(x)?;
-                let hash_new = view.hash().await?;
-                assert_ne!(hash, hash_new);
-                view.save().await?;
-                hash = hash_new;
-            }
-        }
-    }
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test]
 async fn check_hash_memoization_persistence_large() -> Result<()> {
-    let n = 100;
-    let mut rng = make_deterministic_rng();
-    let key_value_vector = get_random_key_values(&mut rng, n);
-    let mut store = MemoryTestStorage::new().await;
-    check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await
+    Box::pin(async move {
+        let n = 100;
+        let mut rng = make_deterministic_rng();
+        let key_value_vector = get_random_key_values(&mut rng, n);
+        let mut store = MemoryTestStorage::new().await;
+        check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -1155,19 +1167,22 @@ async fn check_large_write<S>(store: &mut S, vector: Vec<u8>) -> Result<()>
 where
     S: StateStorage,
 {
-    let hash1 = {
-        let mut view = store.load(1).await?;
-        for val in vector {
-            view.log.push(val as u32);
-        }
-        let hash = view.hash().await?;
-        view.save().await?;
-        hash
-    };
-    let view = store.load(1).await?;
-    let hash2 = view.hash().await?;
-    assert_eq!(hash1, hash2);
-    Ok(())
+    Box::pin(async move {
+        let hash1 = {
+            let mut view = store.load(1).await?;
+            for val in vector {
+                view.log.push(val as u32);
+            }
+            let hash = view.hash().await?;
+            view.save().await?;
+            hash
+        };
+        let view = store.load(1).await?;
+        let hash2 = view.hash().await?;
+        assert_eq!(hash1, hash2);
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test]
