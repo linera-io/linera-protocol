@@ -155,6 +155,23 @@ impl NativeFungibleApp {
         self.0.mutate(mutation).await.unwrap()
     }
 
+    async fn repeated_transfer(
+        &self,
+        account_owner: &AccountOwner,
+        amount_transfer: Amount,
+        destination: Account,
+        num_operations: usize,
+    ) -> Value {
+        let mutation = format!(
+            "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
+            account_owner.to_value(),
+            amount_transfer,
+            destination.to_value(),
+        );
+        let mutations = vec![mutation; num_operations];
+        self.0.multiple_mutate(&mutations).await.unwrap()
+    }
+
     async fn claim(&self, source: Account, target: Account, amount: Amount) {
         // Claiming tokens from chain1 to chain2.
         let mutation = format!(
@@ -2375,13 +2392,14 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     app1.assert_entries(expected_balances).await;
     app1.assert_keys([account_owner1, account_owner2]).await;
     // Transferring
-    app1.transfer(
+    app1.repeated_transfer(
         &account_owner1,
         Amount::ONE,
         Account {
             chain_id: chain2,
             owner: account_owner2,
         },
+        4,
     )
     .await;
 
@@ -2389,7 +2407,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
     // Checking the final values on chain1 and chain2.
     let expected_balances = [
-        (account_owner1, Amount::from_tokens(4)),
+        (account_owner1, Amount::from_tokens(1)),
         (account_owner2, Amount::from_tokens(2)),
     ];
     app1.assert_balances(expected_balances).await;
@@ -2398,7 +2416,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
     let app2 = NativeFungibleApp(node_service.make_application(&chain2, &application_id)?);
 
-    let expected_balances = [(account_owner2, Amount::ONE)];
+    let expected_balances = [(account_owner2, Amount::from_tokens(4))];
     app2.assert_balances(expected_balances).await;
     app2.assert_entries(expected_balances).await;
     app2.assert_keys([account_owner2]).await;
