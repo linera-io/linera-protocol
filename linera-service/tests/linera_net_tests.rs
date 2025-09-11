@@ -1601,7 +1601,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     let balance2 = node_service.balance(&account_chain).await?;
     assert_eq!(balance1, balance2);
 
-    let mutation = format!("increment(field0: {increment})");
+    let mutation = format!("increment(value: {increment})");
     application.mutate(mutation).await?;
     let balance3 = node_service.balance(&account_chain).await?;
     assert!(balance3 < balance2);
@@ -1850,7 +1850,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value);
 
-    let mutation = format!("increment(field0: {increment})");
+    let mutation = format!("increment(value: {increment})");
     application.mutate(mutation).await?;
 
     let counter_value: u64 = application.query_json("value").await?;

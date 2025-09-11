@@ -7,10 +7,10 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{EmptySubscription, Request, Response, Schema};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use counter::CounterOperation;
 use linera_sdk::{
-    graphql::GraphQLMutationRoot as _, linera_base_types::WithServiceAbi, views::View, Service,
+    linera_base_types::WithServiceAbi, views::View, Service,
     ServiceRuntime,
 };
 
@@ -43,13 +43,29 @@ impl Service for CounterService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
-            CounterOperation::mutation_root(self.runtime.clone()),
+            MutationRoot {
+                runtime: self.runtime.clone(),
+            },
             EmptySubscription,
         )
         .finish();
         schema.execute(request).await
     }
 }
+
+struct MutationRoot {
+    runtime: Arc<ServiceRuntime<CounterService>>,
+}
+
+#[Object]
+impl MutationRoot {
+    async fn increment(&self, value: u64) -> [u8; 0] {
+        let operation = CounterOperation::Increment(value);
+        self.runtime.schedule_operation(&operation);
+        []
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
