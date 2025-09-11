@@ -9,10 +9,7 @@ use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use counter::CounterOperation;
-use linera_sdk::{
-    linera_base_types::WithServiceAbi, views::View, Service,
-    ServiceRuntime,
-};
+use linera_sdk::{linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
 
 use self::state::CounterState;
 
@@ -65,7 +62,6 @@ impl MutationRoot {
         []
     }
 }
-
 
 #[cfg(test)]
 mod tests {
