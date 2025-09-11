@@ -897,6 +897,21 @@ where
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()
     }
+
+    fn has_non_trivial_storage(
+        &mut self,
+        application: ApplicationId,
+    ) -> Result<bool, ExecutionError> {
+        let this = self.inner();
+        let (key_size, value_size) = this
+            .execution_state_sender
+            .send_request(move |callback| ExecutionRequest::HasNonTrivialStorage {
+                application,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(key_size > 0 || value_size > 0)
+    }
 }
 
 /// An extension trait to determine in compile time the different behaviors between contract and
