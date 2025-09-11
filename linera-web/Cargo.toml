@@ -1,7 +1,7 @@
 [package]
 name = "linera-web"
 description = "The Linera Web client"
-version = "0.15.2"
+version.workspace = true
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 repository = "https://github.com/linera-io/linera-protocol/"
