@@ -301,6 +301,7 @@ where
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn worker_client<R>(
         &self,
         request: Request<R>,
