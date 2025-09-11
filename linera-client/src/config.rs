@@ -30,6 +30,8 @@ pub enum Error {
     Chain(#[from] linera_chain::ChainError),
     #[error("persistence error: {0}")]
     Persistence(Box<dyn std::error::Error + Send + Sync>),
+    #[error("storage is already initialized: {0:?}")]
+    StorageIsAlreadyInitialized(Box<NetworkDescription>),
     #[error("no admin chain configured")]
     NoAdminChain,
 }
@@ -167,16 +169,25 @@ impl GenesisConfig {
             .await
             .map_err(linera_chain::ChainError::from)?
         {
+            if description != self.network_description() {
+                // We can't initialize storage with a different network description.
+                tracing::error!(
+                    current_network=?description,
+                    new_network=?self.network_description(),
+                    "storage already initialized"
+                );
+                return Err(Error::StorageIsAlreadyInitialized(Box::new(description)));
+            }
             tracing::debug!(?description, "storage already initialized");
             return Ok(());
         }
         let network_description = self.network_description();
         storage
-            .write_network_description(&network_description)
+            .write_blob(&self.committee_blob())
             .await
             .map_err(linera_chain::ChainError::from)?;
         storage
-            .write_blob(&self.committee_blob())
+            .write_network_description(&network_description)
             .await
             .map_err(linera_chain::ChainError::from)?;
         for description in &self.chains {
