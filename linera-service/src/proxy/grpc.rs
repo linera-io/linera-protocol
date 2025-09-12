@@ -312,6 +312,7 @@ where
         }
     }
 
+    #[instrument(skip_all, fields(remote_addr = ?request.remote_addr(), chain_id = ?request.get_ref().chain_id()))]
     fn worker_client<R>(
         &self,
         request: Request<R>,
