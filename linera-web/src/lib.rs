@@ -2,8 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-This module defines the client API for the Web extension.
- */
+# `linera-web`
+
+This module defines the JavaScript bindings to the client API.
+
+It is compiled to Wasm, with a JavaScript wrapper to inject its imports, and published on
+NPM as `@linera/client`.
+
+There is a supplementary package `@linera/signer`, contained within the `signer`
+subdirectory, that defines signer implementations for different transaction-signing
+policies, including in-memory keys and signing using an existing MetaMask wallet.
+*/
 
 // We sometimes need functions in this module to be async in order to
 // ensure the generated code will return a `Promise`.
