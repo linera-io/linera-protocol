@@ -98,11 +98,11 @@
     },
     "nixup": {
       "locked": {
-        "lastModified": 1752796423,
-        "narHash": "sha256-k/kGtfcyIgVKV1K1U+jY+gE1q/tGy1l2CuUSdC7XFHY=",
+        "lastModified": 1756387708,
+        "narHash": "sha256-mRkzYipsj0sXjxeP8LDJ5vOHs6Q2QXkRC22EnpHgT6Q=",
         "owner": "Twey",
         "repo": "nixup",
-        "rev": "143252d16669dc019346c546ee5bb784a0f89c15",
+        "rev": "9bd4dcbc0c0da138688e8b4247290806f5a40525",
         "type": "github"
       },
       "original": {
