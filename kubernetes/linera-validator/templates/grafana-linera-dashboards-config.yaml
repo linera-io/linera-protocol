@@ -11,3 +11,4 @@ data:
   linera_execution.json: {{ .Files.Get "grafana-dashboards/linera/execution.json" | quote | indent 4 }}
   linera_storage.json: {{ .Files.Get "grafana-dashboards/linera/storage.json" | quote | indent 4 }}
   linera_views.json: {{ .Files.Get "grafana-dashboards/linera/views.json" | quote | indent 4 }}
+  linera_distributed_tracing.json: {{ .Files.Get "grafana-dashboards/linera/distributed_tracing.json" | quote | indent 4 }}

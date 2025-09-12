@@ -335,7 +335,10 @@
   "refresh": "5s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": [],
+  "tags": [
+    "linera",
+    "views"
+  ],
   "templating": {
     "list": []
   },

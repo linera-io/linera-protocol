@@ -3469,7 +3469,9 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
-    "linera"
+    "linera",
+    "general",
+    "overview"
   ],
   "templating": {
     "list": []
