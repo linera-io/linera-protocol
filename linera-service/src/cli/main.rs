@@ -586,9 +586,7 @@ impl Runnable for Job {
                 let committee = context.wallet().genesis_config().committee.clone();
 
                 for (_validator_name, network_address) in committee.validator_addresses() {
-                    let validator = context
-                        .make_node_provider()
-                        .make_node(network_address)?;
+                    let validator = context.make_node_provider().make_node(network_address)?;
 
                     for chain_id in &chains {
                         let chain = context.make_chain_client(*chain_id);
