@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, future::Future, iter};
+use std::{fmt, future::Future, iter, sync::Arc};
 
 use futures::{future, stream, StreamExt};
 use linera_base::{
@@ -29,6 +29,7 @@ use tracing::{debug, info, instrument, warn, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
+    pool::GrpcConnectionPool,
     transport, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
@@ -39,7 +40,7 @@ use crate::{
 #[derive(Clone)]
 pub struct GrpcClient {
     address: String,
-    client: ValidatorNodeClient<transport::Channel>,
+    pool: Arc<GrpcConnectionPool>,
     retry_delay: Duration,
     max_retries: u32,
 }
@@ -47,49 +48,66 @@ pub struct GrpcClient {
 impl GrpcClient {
     pub fn new(
         address: String,
-        channel: transport::Channel,
+        pool: Arc<GrpcConnectionPool>,
         retry_delay: Duration,
         max_retries: u32,
-    ) -> Self {
-        let client = ValidatorNodeClient::new(channel)
-            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-        Self {
+    ) -> Result<Self, super::GrpcError> {
+        // Just verify we can get a channel to this address
+        let _ = pool.channel(address.clone())?;
+        Ok(Self {
             address,
-            client,
+            pool,
             retry_delay,
             max_retries,
-        }
+        })
     }
 
     pub fn address(&self) -> &str {
         &self.address
     }
 
+    fn make_client(&self) -> Result<ValidatorNodeClient<transport::Channel>, super::GrpcError> {
+        let channel = self.pool.channel(self.address.clone())?;
+        Ok(ValidatorNodeClient::new(channel)
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE))
+    }
+
     /// Returns whether this gRPC status means the server stream should be reconnected to, or not.
     /// Logs a warning on unexpected status codes.
-    fn is_retryable(status: &Status) -> bool {
+    fn is_retryable_needs_reconnect(status: &Status) -> (bool, bool) {
         match status.code() {
             Code::DeadlineExceeded | Code::Aborted | Code::Unavailable | Code::Unknown => {
                 info!("gRPC request interrupted: {}; retrying", status);
-                true
+                (true, false)
             }
             Code::Ok | Code::Cancelled | Code::ResourceExhausted => {
                 info!("Unexpected gRPC status: {}; retrying", status);
-                true
+                (true, false)
             }
-            Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
+            Code::NotFound => (false, false), // This code is used if e.g. the validator is missing blobs.
+            Code::Internal => {
+                let error_string = status.to_string();
+                if error_string.contains("GoAway") && error_string.contains("max_age") {
+                    info!(
+                        "gRPC connection hit max_age and got a GoAway: {}; reconnecting then retrying",
+                        status
+                    );
+                    return (true, true);
+                }
+                info!("Unexpected gRPC status: {}", status);
+                (false, false)
+            }
             Code::InvalidArgument
             | Code::AlreadyExists
             | Code::PermissionDenied
             | Code::FailedPrecondition
             | Code::OutOfRange
             | Code::Unimplemented
-            | Code::Internal
             | Code::DataLoss
             | Code::Unauthenticated => {
                 info!("Unexpected gRPC status: {}", status);
-                false
+                (false, false)
             }
         }
     }
@@ -109,15 +127,36 @@ impl GrpcClient {
         let request_inner = request.try_into().map_err(|_| NodeError::GrpcError {
             error: "could not convert request to proto".to_string(),
         })?;
+
+        let mut reconnected = false;
         loop {
-            match f(self.client.clone(), Request::new(request_inner.clone())).await {
-                Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
-                    let delay = self.retry_delay.saturating_mul(retry_count);
-                    retry_count += 1;
-                    linera_base::time::timer::sleep(delay).await;
-                    continue;
+            // Create client on-demand for each attempt
+            let client = match self.make_client() {
+                Ok(client) => client,
+                Err(e) => {
+                    return Err(NodeError::GrpcError {
+                        error: format!("Failed to create client: {}", e),
+                    });
                 }
+            };
+
+            match f(client, Request::new(request_inner.clone())).await {
                 Err(s) => {
+                    let (is_retryable, needs_reconnect) = Self::is_retryable_needs_reconnect(&s);
+                    if is_retryable && retry_count < self.max_retries {
+                        // If this error indicates we need a connection refresh and we haven't already tried, do it
+                        if needs_reconnect && !reconnected {
+                            info!("Connection error detected, invalidating channel: {}", s);
+                            self.pool.invalidate_channel(&self.address);
+                            reconnected = true;
+                        }
+
+                        let delay = self.retry_delay.saturating_mul(retry_count);
+                        retry_count += 1;
+                        linera_base::time::timer::sleep(delay).await;
+                        continue;
+                    }
+
                     return Err(NodeError::GrpcError {
                         error: format!("remote request [{handler}] failed with status: {s:?}"),
                     });
@@ -270,32 +309,56 @@ impl ValidatorNode for GrpcClient {
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
-        let mut client = self.client.clone();
+        let pool = self.pool.clone();
+        let address = self.address.clone();
 
         // Make the first connection attempt before returning from this method.
-        let mut stream = Some(
+        let mut stream = Some({
+            let mut client = self
+                .make_client()
+                .map_err(|e| NodeError::SubscriptionFailed {
+                    status: format!("Failed to create client: {}", e),
+                })?;
             client
                 .subscribe(subscription_request.clone())
                 .await
                 .map_err(|status| NodeError::SubscriptionFailed {
                     status: status.to_string(),
                 })?
-                .into_inner(),
-        );
+                .into_inner()
+        });
 
         // A stream of `Result<grpc::Notification, tonic::Status>` that keeps calling
         // `client.subscribe(request)` endlessly and without delay.
         let endlessly_retrying_notification_stream = stream::unfold((), move |()| {
-            let mut client = client.clone();
+            let pool = pool.clone();
+            let address = address.clone();
             let subscription_request = subscription_request.clone();
             let mut stream = stream.take();
             async move {
                 let stream = if let Some(stream) = stream.take() {
                     future::Either::Right(stream)
                 } else {
-                    match client.subscribe(subscription_request.clone()).await {
-                        Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
-                        Ok(response) => future::Either::Right(response.into_inner()),
+                    // Create a new client for each reconnection attempt
+                    match pool.channel(address.clone()) {
+                        Ok(channel) => {
+                            let mut client = ValidatorNodeClient::new(channel)
+                                .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+                                .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+                            match client.subscribe(subscription_request.clone()).await {
+                                Err(err) => {
+                                    future::Either::Left(stream::iter(iter::once(Err(err))))
+                                }
+                                Ok(response) => future::Either::Right(response.into_inner()),
+                            }
+                        }
+                        Err(e) => {
+                            let status = tonic::Status::unavailable(format!(
+                                "Failed to create channel: {}",
+                                e
+                            ));
+                            future::Either::Left(stream::iter(iter::once(Err(status))))
+                        }
                     }
                 };
                 Some((stream, ()))
@@ -319,7 +382,9 @@ impl ValidatorNode for GrpcClient {
                     return future::Either::Left(future::ready(true));
                 };
 
-                if !span.in_scope(|| Self::is_retryable(status)) || retry_count >= max_retries {
+                let (is_retryable, _) =
+                    span.in_scope(|| Self::is_retryable_needs_reconnect(status));
+                if !is_retryable || retry_count >= max_retries {
                     return future::Either::Left(future::ready(false));
                 }
                 let delay = retry_delay.saturating_mul(retry_count);

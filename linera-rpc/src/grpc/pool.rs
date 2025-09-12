@@ -32,7 +32,7 @@ impl GrpcConnectionPool {
 
     /// Obtains a channel for the current address. Either clones an existing one (thereby
     /// reusing the connection), or creates one if needed. New channels do not create a
-    /// connection immediately.
+    /// connection immediately and will automatically reconnect when needed.
     pub fn channel(&self, address: String) -> Result<transport::Channel, GrpcError> {
         let pinned = self.channels.pin();
         if let Some(channel) = pinned.get(&address) {
@@ -40,5 +40,11 @@ impl GrpcConnectionPool {
         }
         let channel = transport::create_channel(address.clone(), &self.options)?;
         Ok(pinned.get_or_insert(address, channel).clone())
+    }
+
+    /// Removes a channel from the pool, forcing a new connection to be created on the next request.
+    /// This should be called when a channel is known to be broken (e.g., received GOAWAY).
+    pub fn invalidate_channel(&self, address: &str) {
+        self.channels.pin().remove(address);
     }
 }
