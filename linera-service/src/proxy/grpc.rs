@@ -53,9 +53,12 @@ use tonic::{
     transport::{Channel, Identity, Server, ServerTlsConfig},
     Request, Response, Status,
 };
+use tonic_tracing_opentelemetry::middleware::server as otel_server;
 use tonic_web::GrpcWebLayer;
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
+
+type OtelChannel = tonic_tracing_opentelemetry::middleware::client::OtelGrpcService<Channel>;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -221,9 +224,9 @@ where
     fn worker_client_for_shard(
         &self,
         shard: &ShardConfig,
-    ) -> Result<ValidatorWorkerClient<Channel>> {
+    ) -> Result<ValidatorWorkerClient<OtelChannel>> {
         let address = shard.http_address();
-        let channel = self.0.worker_connection_pool.channel(address)?;
+        let channel = self.0.worker_connection_pool.otel_channel(address)?;
         let client = ValidatorWorkerClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
@@ -256,6 +259,11 @@ where
             .await;
         let internal_server = join_set.spawn_task(
             Server::builder()
+                .layer(
+                    ServiceBuilder::new()
+                        .layer(otel_server::OtelGrpcLayer::default())
+                        .into_inner(),
+                )
                 .add_service(self.as_notifier_service())
                 .serve(self.internal_address())
                 .in_current_span(),
@@ -270,6 +278,7 @@ where
                 // interpreted as "not set"
                 .layer(
                     ServiceBuilder::new()
+                        .layer(otel_server::OtelGrpcLayer::default())
                         .layer(PrometheusMetricsMiddlewareLayer)
                         .into_inner(),
                 )
@@ -306,19 +315,20 @@ where
     fn worker_client<R>(
         &self,
         request: Request<R>,
-    ) -> Result<(ValidatorWorkerClient<Channel>, R), Status>
+    ) -> Result<(ValidatorWorkerClient<OtelChannel>, Request<R>), Status>
     where
         R: Debug + GrpcProxyable,
     {
         debug!("proxying request from {:?}", request.remote_addr());
-        let inner = request.into_inner();
+
         let shard = self
-            .shard_for(&inner)
+            .shard_for(request.get_ref())
             .ok_or_else(|| Status::not_found("could not find shard for message"))?;
         let client = self
             .worker_client_for_shard(&shard)
             .map_err(|_| Status::internal("could not connect to shard"))?;
-        Ok((client, inner))
+
+        Ok((client, request))
     }
 
     #[allow(clippy::result_large_err)]

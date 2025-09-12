@@ -143,6 +143,7 @@ tonic = { workspace = true, features = [
 tonic-health.workspace = true
 tonic-prost.workspace = true
 tonic-reflection.workspace = true
+tonic-tracing-opentelemetry.workspace = true
 tonic-web.workspace = true
 tower.workspace = true
 tower-http = { workspace = true, features = ["cors"] }

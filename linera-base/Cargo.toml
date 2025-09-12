@@ -51,6 +51,7 @@ hex.workspace = true
 is-terminal.workspace = true
 k256.workspace = true
 linera-witty = { workspace = true, features = ["macros"] }
+opentelemetry.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
 rand.workspace = true
@@ -80,6 +81,9 @@ tracing-web = { optional = true, workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry_sdk.workspace = true
+tracing-opentelemetry.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
 tokio = { workspace = true, features = [
     "process",

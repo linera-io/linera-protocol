@@ -23,6 +23,7 @@ use linera_storage::Storage;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
+use tonic_tracing_opentelemetry::middleware::server as otel_server;
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -45,6 +46,7 @@ use crate::{
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
+
 type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 
 #[cfg(with_metrics)]
@@ -262,6 +264,7 @@ where
             tonic::transport::Server::builder()
                 .layer(
                     ServiceBuilder::new()
+                        .layer(otel_server::OtelGrpcLayer::default())
                         .layer(GrpcPrometheusMetricsMiddlewareLayer)
                         .into_inner(),
                 )

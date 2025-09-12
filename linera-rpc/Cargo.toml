@@ -90,6 +90,7 @@ tonic = { workspace = true, features = [
     "router",
 ] }
 tonic-prost.workspace = true
+tonic-tracing-opentelemetry.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tonic = { workspace = true, features = ["codegen"] }
