@@ -14,10 +14,18 @@ version.workspace = true
 [lints]
 workspace = true
 
+[features]
+memory-profiling = ["jemalloc_pprof"]
+
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+jemalloc_pprof = { workspace = true, features = [
+    "symbolize",
+    "flamegraph",
+], optional = true }
 prometheus.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
 tracing.workspace = true
