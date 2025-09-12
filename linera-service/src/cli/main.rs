@@ -1672,7 +1672,7 @@ impl Runnable for Job {
 #[command(
     name = "linera",
     version = linera_version::VersionInfo::default_clap_str(),
-    about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput",
+    about = "Client implementation and command-line tool for the Linera blockchain",
 )]
 struct ClientOptions {
     /// Common options.

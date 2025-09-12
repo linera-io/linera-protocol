@@ -66,7 +66,7 @@ This document contains the help content for the `linera` command-line program.
 
 ## `linera`
 
-A Byzantine-fault tolerant sidechain with low-latency finality and high throughput
+Client implementation and command-line tool for the Linera blockchain
 
 **Usage:** `linera [OPTIONS] <COMMAND>`
 

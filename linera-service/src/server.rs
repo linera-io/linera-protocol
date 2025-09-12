@@ -234,7 +234,7 @@ impl Runnable for ServerContext {
 #[derive(clap::Parser)]
 #[command(
     name = "linera-server",
-    about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput",
+    about = "Server implementation (aka validator shard) for the Linera blockchain",
     version = linera_version::VersionInfo::default_clap_str(),
 )]
 struct ServerOptions {
