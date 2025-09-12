@@ -2,6 +2,9 @@
   "name": "@linera/signer",
   "version": "0.15.1",
   "description": "Implementations of Signer interface for the Linera blockchain",
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],

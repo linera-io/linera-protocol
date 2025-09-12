@@ -2,6 +2,9 @@
   "name": "@linera/client",
   "version": "0.15.1",
   "description": "Web client for the Linera blockchain",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/linera_web.js",
   "types": "dist/linera_web.d.ts",
   "files": [
@@ -22,12 +25,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/linera-io/linera-web.git"
+    "url": "git+https://github.com/linera-io/linera-protocol.git"
   },
   "bugs": {
-    "url": "https://github.com/linera-io/linera-web/issues"
+    "url": "https://github.com/linera-io/linera-protocol/issues"
   },
-  "homepage": "https://github.com/linera-io/linera-web#readme",
+  "homepage": "https://github.com/linera-io/linera-protocol/tree/main/linera-web#readme",
   "devDependencies": {
     "prettier": "3.5.3",
     "typedoc": "^0.28.5",
