@@ -11,10 +11,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 async fn client() {
     use linera_base::time::Duration;
     use linera_core::node::ValidatorNode as _;
-    use linera_rpc::grpc::{
-        transport::{create_channel, Options},
-        GrpcClient,
-    };
+    use linera_rpc::grpc::{transport::Options, GrpcClient};
 
     let retry_delay = Duration::from_millis(100);
     let max_retries = 5;
@@ -23,9 +20,8 @@ async fn client() {
         connect_timeout: Some(Duration::from_millis(100)),
         timeout: Some(Duration::from_millis(100)),
     };
-    let channel = create_channel(address.clone(), &options).unwrap();
-    let _ = GrpcClient::new(address, channel, retry_delay, max_retries)
-        .get_version_info()
-        .await
-        .unwrap();
+
+    let pool = std::sync::Arc::new(linera_rpc::grpc::pool::GrpcConnectionPool::new(options));
+    let client = GrpcClient::new(address, pool, retry_delay, max_retries).unwrap();
+    let _ = client.get_version_info().await.unwrap();
 }
