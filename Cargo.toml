@@ -147,6 +147,7 @@ k256 = { version = "0.13.4", default-features = false, features = [
 ] }
 k8s-openapi = { version = "0.21.1", features = ["v1_28"] }
 kube = "0.88.1"
+linera-kywasmtime = "0.1.0"
 linked-hash-map = "0.5.6"
 log = "0.4.21"
 lru = "0.12.3"
@@ -324,10 +325,6 @@ version = "1.6.3"
 default-features = false
 features = ["rt-tokio", "rustls"]
 version = "1.76.0"
-
-[workspace.dependencies.kywasmtime]
-git = "https://github.com/linera-io/kywasmtime"
-rev = "480df00badbe80520d5b990855138d3638c56159"
 
 [profile.release]
 lto = "thin"

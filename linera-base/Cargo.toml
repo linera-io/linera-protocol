@@ -21,7 +21,7 @@ revm = []
 test = ["test-strategy", "proptest"]
 web = [
     "getrandom/js",
-    "kywasmtime",
+    "linera-kywasmtime",
     "rand/getrandom",
     "rand/std",
     "rand/std_rng",
@@ -50,7 +50,7 @@ getrandom = { workspace = true, optional = true }
 hex.workspace = true
 is-terminal.workspace = true
 k256.workspace = true
-kywasmtime = { workspace = true, optional = true }
+linera-kywasmtime = { workspace = true, optional = true }
 linera-witty = { workspace = true, features = ["macros"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }

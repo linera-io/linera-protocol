@@ -4922,16 +4922,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kywasmtime"
-version = "0.1.0"
-source = "git+https://github.com/linera-io/kywasmtime?rev=480df00badbe80520d5b990855138d3638c56159#480df00badbe80520d5b990855138d3638c56159"
-dependencies = [
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures",
-]
-
-[[package]]
 name = "kzg-rs"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5134,8 +5124,8 @@ dependencies = [
  "hex",
  "is-terminal",
  "k256",
- "kywasmtime",
  "linera-base",
+ "linera-kywasmtime",
  "linera-witty",
  "port-selector",
  "prometheus",
@@ -5547,6 +5537,17 @@ dependencies = [
  "serde",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "linera-kywasmtime"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01150702de5ca202f8800452d13560ab93e7c63e46819182202de6f0781668dc"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
