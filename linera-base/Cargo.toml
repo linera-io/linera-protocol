@@ -21,16 +21,16 @@ revm = []
 test = ["test-strategy", "proptest"]
 web = [
     "getrandom/js",
+    "kywasmtime",
     "rand/getrandom",
     "rand/std",
     "rand/std_rng",
     "tracing-web",
-    "wasmtimer",
     "wasm-bindgen",
     "wasm-bindgen-futures",
     "wasm_thread",
-    "web-time",
     "web-sys",
+    "web-time",
 ]
 
 [dependencies]
@@ -50,6 +50,7 @@ getrandom = { workspace = true, optional = true }
 hex.workspace = true
 is-terminal.workspace = true
 k256.workspace = true
+kywasmtime = { workspace = true, optional = true }
 linera-witty = { workspace = true, features = ["macros"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
@@ -70,7 +71,6 @@ trait-variant.workspace = true
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 wasm_thread = { workspace = true, optional = true }
-wasmtimer = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
