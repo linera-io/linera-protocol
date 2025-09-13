@@ -106,13 +106,12 @@ query {
   value
 }
 ```
-
 To increase the value of the counter, you can run the `increment`
 mutation. Note that the result of a mutation is the hash of the
 resulting block, if any.
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
-mutation Increment {
+mutation {
   increment(value: 3)
 }
 ```
