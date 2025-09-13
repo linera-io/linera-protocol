@@ -447,7 +447,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "wasmtimer 0.4.2",
+ "wasmtimer",
 ]
 
 [[package]]
@@ -492,7 +492,7 @@ dependencies = [
  "tower 0.5.2",
  "tracing",
  "url",
- "wasmtimer 0.4.2",
+ "wasmtimer",
 ]
 
 [[package]]
@@ -687,7 +687,7 @@ dependencies = [
  "tower 0.5.2",
  "tracing",
  "url",
- "wasmtimer 0.4.2",
+ "wasmtimer",
 ]
 
 [[package]]
@@ -4866,6 +4866,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kywasmtime"
+version = "0.1.0"
+source = "git+https://github.com/linera-io/kywasmtime?rev=480df00badbe80520d5b990855138d3638c56159#480df00badbe80520d5b990855138d3638c56159"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "kzg-rs"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5068,6 +5078,7 @@ dependencies = [
  "hex",
  "is-terminal",
  "k256",
+ "kywasmtime",
  "linera-base",
  "linera-witty",
  "port-selector",
@@ -5094,7 +5105,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm_thread",
- "wasmtimer 0.2.1",
  "web-sys",
  "web-time",
  "zstd",
@@ -11068,20 +11078,6 @@ dependencies = [
  "heck 0.4.1",
  "indexmap 2.10.0",
  "wit-parser 0.217.1",
-]
-
-[[package]]
-name = "wasmtimer"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7ed9d8b15c7fb594d72bfb4b5a276f3d2029333cd93a932f376f5937f6f80ee"
-dependencies = [
- "futures",
- "js-sys",
- "parking_lot",
- "pin-utils",
- "slab",
- "wasm-bindgen",
 ]
 
 [[package]]
