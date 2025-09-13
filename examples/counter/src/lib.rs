@@ -10,6 +10,7 @@ use linera_sdk::{
 };
 use serde::{Deserialize, Serialize};
 
+// ANCHOR: contract_abi
 pub struct CounterAbi;
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
@@ -22,8 +23,11 @@ impl ContractAbi for CounterAbi {
     type Operation = CounterOperation;
     type Response = u64;
 }
+// ANCHOR_END: contract_abi
 
+// ANCHOR: service_abi
 impl ServiceAbi for CounterAbi {
     type Query = Request;
     type QueryResponse = Response;
 }
+// ANCHOR_END: service_abi
