@@ -269,7 +269,6 @@ wasmtime = { version = "25.0.0", default-features = false, features = [
     "runtime",
     "std",
 ] }
-wasmtimer = "0.2.0"
 web-sys = "0.3.69"
 web-time = "1.1.0"
 wit-bindgen = "0.24.0"
@@ -325,6 +324,10 @@ version = "1.6.3"
 default-features = false
 features = ["rt-tokio", "rustls"]
 version = "1.76.0"
+
+[workspace.dependencies.kywasmtime]
+git = "https://github.com/linera-io/kywasmtime"
+rev = "480df00badbe80520d5b990855138d3638c56159"
 
 [profile.release]
 lto = "thin"
