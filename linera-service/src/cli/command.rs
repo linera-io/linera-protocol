@@ -352,6 +352,13 @@ pub enum ClientCommand {
         chains: Vec<ChainId>,
     },
 
+    /// Synchronizes all validators with the local state of chains.
+    SyncAllValidators {
+        /// The chains to synchronize, or the default chain if empty.
+        #[arg(long, num_args = 0..)]
+        chains: Vec<ChainId>,
+    },
+
     /// Add or modify a validator (admin only)
     SetValidator {
         /// The public key of the validator.
@@ -969,6 +976,7 @@ impl ClientCommand {
             | ClientCommand::QueryValidator { .. }
             | ClientCommand::QueryValidators { .. }
             | ClientCommand::SyncValidator { .. }
+            | ClientCommand::SyncAllValidators { .. }
             | ClientCommand::SetValidator { .. }
             | ClientCommand::RemoveValidator { .. }
             | ClientCommand::ResourceControlPolicy { .. }

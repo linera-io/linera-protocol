@@ -544,6 +544,7 @@ impl Runnable for Job {
                 address,
                 mut chains,
             } => {
+                let time_start = Instant::now();
                 let context = ClientContext::new(
                     storage,
                     options.context_options.clone(),
@@ -562,6 +563,42 @@ impl Runnable for Job {
 
                     Box::pin(chain.sync_validator(validator.clone())).await?;
                 }
+                let time_total = time_start.elapsed();
+                info!(
+                    "Syncing with validator {address} in {} ms",
+                    time_total.as_millis()
+                );
+            }
+
+            SyncAllValidators { mut chains } => {
+                let time_start = Instant::now();
+                let context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+
+                if chains.is_empty() {
+                    chains.push(context.default_chain());
+                }
+
+                let committee = context.wallet().genesis_config().committee.clone();
+
+                for (_validator_name, network_address) in committee.validator_addresses() {
+                    let validator = context.make_node_provider().make_node(network_address)?;
+
+                    for chain_id in &chains {
+                        let chain = context.make_chain_client(*chain_id);
+
+                        Box::pin(chain.sync_validator(validator.clone())).await?;
+                    }
+                }
+                let time_total = time_start.elapsed();
+                info!(
+                    "Syncing with all validators in {} ms",
+                    time_total.as_millis()
+                );
             }
 
             command @ (SetValidator { .. }
