@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This section provides rationale for the defaults in rustls."><title>rustls::manual::_05_defaults - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../rustls/index.html">rustls</a><span class="version">0.23.31</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module _05_<wbr>defaults</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#rationale-for-defaults" title="Rationale for defaults">Rationale for defaults</a><ul><li><a href="#why-is-aes-256-preferred-over-aes-128" title="Why is AES-256 preferred over AES-128?">Why is AES-256 preferred over AES-128?</a></li><li><a href="#why-is-aes-gcm-preferred-over-chacha20-poly1305" title="Why is AES-GCM preferred over chacha20-poly1305?">Why is AES-GCM preferred over chacha20-poly1305?</a></li><li><a href="#why-is-x25519-preferred-for-key-exchange-over-nistp256" title="Why is x25519 preferred for key exchange over nistp256?">Why is x25519 preferred for key exchange over nistp256?</a></li><li><a href="#about-the-post-quantum-secure-key-exchange-x25519mlkem768" title="About the post-quantum-secure key exchange `X25519MLKEM768`">About the post-quantum-secure key exchange <code>X25519MLKEM768</code></a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In rustls::<wbr>manual</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">rustls</a>::<wbr><a href="../index.html">manual</a></div><h1>Module <span>_05_defaults</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/rustls/manual/defaults.rs.html#1-71">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This section provides rationale for the defaults in rustls.</p>
+<h3 id="rationale-for-defaults"><a class="doc-anchor" href="#rationale-for-defaults">§</a>Rationale for defaults</h3><h4 id="why-is-aes-256-preferred-over-aes-128"><a class="doc-anchor" href="#why-is-aes-256-preferred-over-aes-128">§</a>Why is AES-256 preferred over AES-128?</h4>
+<p>This is a trade-off between:</p>
+<ol>
+<li>classical security level: searching a 2^128 key space is as implausible as 2^256.</li>
+<li>post-quantum security level: the difference is more meaningful, and AES-256 seems like the conservative choice.</li>
+<li>performance: AES-256 is around 40% slower than AES-128, though hardware acceleration typically narrows this gap.</li>
+</ol>
+<p>The choice is frankly quite marginal.</p>
+<h4 id="why-is-aes-gcm-preferred-over-chacha20-poly1305"><a class="doc-anchor" href="#why-is-aes-gcm-preferred-over-chacha20-poly1305">§</a>Why is AES-GCM preferred over chacha20-poly1305?</h4>
+<p>Hardware support for accelerating AES-GCM is widespread, and hardware-accelerated AES-GCM
+is quicker than un-accelerated chacha20-poly1305.</p>
+<p>However, if you know your application will run on a platform without that, you should
+<em>definitely</em> change the default order to prefer chacha20-poly1305: both the performance and
+the implementation security will be improved.  We think this is an uncommon case.</p>
+<h4 id="why-is-x25519-preferred-for-key-exchange-over-nistp256"><a class="doc-anchor" href="#why-is-x25519-preferred-for-key-exchange-over-nistp256">§</a>Why is x25519 preferred for key exchange over nistp256?</h4>
+<p>Both provide roughly the same classical security level, but x25519 has better performance and
+it’s <em>much</em> more likely that both peers will have good quality implementations.</p>
+<h4 id="about-the-post-quantum-secure-key-exchange-x25519mlkem768"><a class="doc-anchor" href="#about-the-post-quantum-secure-key-exchange-x25519mlkem768">§</a>About the post-quantum-secure key exchange <code>X25519MLKEM768</code></h4>
+<p><a href="crate::crypto::aws_lc_rs::kx_group::X25519MLKEM768"><code>X25519MLKEM768</code></a> – a hybrid<sup id="fnref1"><a href="#fn1">1</a></sup>, post-quantum-secure<sup id="fnref2"><a href="#fn2">2</a></sup> key exchange
+algorithm – is available when using the aws-lc-rs provider.</p>
+<p>The <code>prefer-post-quantum</code> crate feature makes <code>X25519MLKEM768</code> the
+highest-priority key exchange algorithm.  Otherwise, it is available but
+not highest-priority.</p>
+<p><a href="https://datatracker.ietf.org/doc/draft-ietf-tls-ecdhe-mlkem/">X25519MLKEM768</a> is pre-standardization, but is now widely deployed,
+for example, by <a href="https://security.googleblog.com/2024/09/a-new-path-for-kyber-on-web.html">Chrome</a> and <a href="https://blog.cloudflare.com/pq-2024/#ml-kem-768-and-x25519">Cloudflare</a>.</p>
+<p>You may see unexpected connection failures (such as <a href="https://tldr.fail/">tldr.fail</a>)
+– <a href="https://github.com/rustls/rustls/issues/new?assignees=&amp;labels=&amp;projects=&amp;template=bug_report.md&amp;title=">please report these to us</a>.</p>
+<p>The two components of this key exchange are well regarded:
+X25519 alone is already used by default by rustls, and tends to have
+higher quality implementations than other elliptic curves.
+ML-KEM-768 was standardized by NIST in <a href="https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf">FIPS203</a>.</p>
+<p><a href="crate::crypto::aws_lc_rs::kx_group::MLKEM768"><code>MLKEM768</code></a> is available separately, but is not currently enabled
+by default out of conservatism.</p>
+<div class="footnotes"><hr><ol><li id="fn1"><p>meaning: a construction that runs a classical and post-quantum
+key exchange, and uses the output of both together.  This is a hedge
+against the post-quantum half being broken.&nbsp;<a href="#fnref1">↩</a></p></li><li id="fn2"><p>a “post-quantum-secure” algorithm is one posited to be invulnerable
+to attack using a cryptographically-relevant quantum computer.  In contrast,
+classical algorithms would be broken by such a computer.  Note that such computers
+do not currently exist, and may never exist, but current traffic could be captured
+now and attacked later.&nbsp;<a href="#fnref2">↩</a></p></li></ol></div></div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FixtureSnapshot","TestArgs","TestContext","TestFixture"],"trait":["TestFn","TestSupport","TestTermination"]};

@@ -1,0 +1,1397 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Educe"><title>educe - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="educe" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../educe/index.html">educe</a><span class="version">0.6.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#educe" title="Educe">Educe</a><ul><li><a href="#features" title="Features">Features</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></li></ul><h3><a href="#derives">Crate Items</a></h3><ul class="block"><li><a href="#derives" title="Derive Macros">Derive Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>educe</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/educe/lib.rs.html#1-2135">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="educe"><a class="doc-anchor" href="#educe">§</a>Educe</h2>
+<p>This crate offers procedural macros designed to facilitate the swift implementation of Rust’s built-in traits.</p>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<p>By default, every trait this crate supports will be enabled. You can disable all of them by turning off the default features and enable only the traits that you want to use by adding them to the <code>features</code> explicitly.</p>
+<p>For example,</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies.educe]
+version = &quot;*&quot;
+features = [&quot;Debug&quot;, &quot;Clone&quot;, &quot;Copy&quot;, &quot;Hash&quot;, &quot;Default&quot;]
+default-features = false</code></pre></div><h3 id="traits"><a class="doc-anchor" href="#traits">§</a>Traits</h3><h5 id="debug"><a class="doc-anchor" href="#debug">§</a>Debug</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Debug)]</code> to implement the <code>Debug</code> trait for a struct, enum, or union. This allows you to modify the names of your types, variants, and fields. You can also choose to ignore specific fields or set a method to replace the <code>Debug</code> trait. Additionally, you have the option to format a struct as a tuple and vice versa.</p>
+<h6 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic Usage</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        f1: u8,
+    },
+    V3(u8),
+}</code></pre></div>
+<h6 id="change-the-name-of-a-type-a-variant-or-a-field"><a class="doc-anchor" href="#change-the-name-of-a-type-a-variant-or-a-field">§</a>Change the Name of a Type, a Variant or a Field</h6>
+<p>The <code>name</code> parameter can rename a type, a variant or a field. If you set it to <code>false</code>, the name can be ignored or forced to show otherwise.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug(name(Struct2)))]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(Debug(name(f)))]
+    </span>f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug(name = <span class="bool-val">true</span>))]
+</span><span class="kw">enum </span>Enum {
+    <span class="attr">#[educe(Debug(name = <span class="bool-val">false</span>))]
+    </span>V1,
+    <span class="attr">#[educe(Debug(name(V)))]
+    </span>V2 {
+        <span class="attr">#[educe(Debug(name(f)))]
+        </span>f1: u8,
+    },
+    <span class="attr">#[educe(Debug(name = <span class="bool-val">false</span>))]
+    </span>V3(u8),
+}</code></pre></div>
+<h6 id="ignore-fields"><a class="doc-anchor" href="#ignore-fields">§</a>Ignore Fields</h6>
+<p>The <code>ignore</code> parameter can ignore a specific field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(Debug(ignore))]
+    </span>f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Debug(ignore))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Debug(ignore))]
+        </span>u8
+    ),
+}</code></pre></div>
+<h6 id="fake-structs-and-tuples"><a class="doc-anchor" href="#fake-structs-and-tuples">§</a>Fake Structs and Tuples</h6>
+<p>With the <code>named_field</code> parameter, structs can be formatted as tuples and tuples can be formatted as structs.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug(named_field = <span class="bool-val">false</span>))]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    <span class="attr">#[educe(Debug(named_field = <span class="bool-val">false</span>))]
+    </span>V2 {
+        f1: u8,
+    },
+    <span class="attr">#[educe(Debug(named_field = <span class="bool-val">true</span>))]
+    </span>V3(
+        u8,
+        <span class="attr">#[educe(Debug(name(value)))]
+        </span>i32
+    ),
+}</code></pre></div>
+<h6 id="use-another-method-to-handle-the-formatting"><a class="doc-anchor" href="#use-another-method-to-handle-the-formatting">§</a>Use Another Method to Handle the Formatting</h6>
+<p>The <code>method</code> parameter can be utilized to replace the implementation of the <code>Debug</code> trait for a field, eliminating the need to implement the <code>Debug</code> trait for the type of that field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">use </span>std::fmt::{<span class="self">self</span>, Formatter};
+
+<span class="kw">fn </span>fmt&lt;T&gt;(_s: <span class="kw-2">&amp;</span>T, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+    f.write_str(<span class="string">"Hi"</span>)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug)]
+</span><span class="kw">enum </span>Enum&lt;T&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Debug(method(fmt)))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Debug(method(std::fmt::UpperHex::fmt)))]
+        </span>u8,
+        <span class="attr">#[educe(Debug(method(fmt)))]
+        </span>T
+    ),
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-debug-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-debug-trait-or-others">§</a>Generic Parameters Bound to the <code>Debug</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>Debug</code> trait if necessary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">use </span>std::fmt::{<span class="self">self</span>, Formatter};
+
+<span class="kw">fn </span>fmt&lt;D&gt;(_s: <span class="kw-2">&amp;</span>D, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+    f.write_str(<span class="string">"Hi"</span>)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug(bound(T: std::fmt::Debug)))]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Debug(method(fmt)))]
+        </span>f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>In the above case, <code>T</code> is bound to the <code>Debug</code> trait, but <code>K</code> is not.</p>
+<p>Or, you can have <code>educe</code> replicate the behaviour of <code>std</code>’s <code>derive</code>’s, where a bound is produced for <em>every</em> generic parameter, without regard to how it’s used in the structure:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug(bound(<span class="kw-2">*</span>)))]
+</span><span class="kw">struct </span>Struct&lt;T&gt; {
+    <span class="attr">#[educe(Debug(ignore))]
+    </span>f: T,
+}</code></pre></div>
+<p>This can be useful if you don’t want to make the trait implementation part of your permanent public API. In this example, <code>Struct&lt;T&gt;</code> doesn’t implement <code>Debug</code> unless <code>T</code> does. I.e., it has a <code>T: Debug</code> bound even though that’s not needed right now. Later we might want to display <code>f</code>; we wouldn’t then need to make a breaking API change by adding the bound.</p>
+<p>This was the behaviour of <code>Trait(bound)</code> in educe 0.4.x and earlier.</p>
+<h6 id="union"><a class="doc-anchor" href="#union">§</a>Union</h6>
+<p>A union will be formatted as a <code>u8</code> slice because we don’t know its fields at runtime. The fields of a union cannot be ignored, renamed, or formatted with other methods. The implementation is <strong>unsafe</strong> because it may expose uninitialized memory.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Debug(<span class="kw">unsafe</span>))]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+    f2: i32,
+}</code></pre></div>
+<h5 id="clone"><a class="doc-anchor" href="#clone">§</a>Clone</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Clone)]</code> to implement the <code>Clone</code> trait for a struct, an enum, or a union. You can set a method to replace the <code>Clone</code> trait.</p>
+<h6 id="basic-usage-1"><a class="doc-anchor" href="#basic-usage-1">§</a>Basic Usage</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Clone)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Clone)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        f1: u8,
+    },
+    V3(u8),
+}</code></pre></div>
+<h6 id="use-another-method-to-perform-cloning"><a class="doc-anchor" href="#use-another-method-to-perform-cloning">§</a>Use Another Method to Perform Cloning</h6>
+<p>The <code>method</code> parameter can be utilized to replace the implementation of the <code>Clone</code> trait for a field, eliminating the need to implement the <code>Clone</code> trait for the type of that field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">fn </span>clone(v: <span class="kw-2">&amp;</span>u8) -&gt; u8 {
+    v + <span class="number">100
+</span>}
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>add(<span class="kw-2">&amp;</span><span class="self">self</span>, rhs: u8) -&gt; <span class="self">Self</span>;
+}
+
+<span class="kw">fn </span>clone2&lt;T: A&gt;(v: <span class="kw-2">&amp;</span>T) -&gt; T {
+    v.add(<span class="number">100</span>)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Clone)]
+</span><span class="kw">enum </span>Enum&lt;T: A&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Clone(method(clone)))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Clone(method(clone2)))]
+        </span>T
+    ),
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-clone-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-clone-trait-or-others">§</a>Generic Parameters Bound to the <code>Clone</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>Clone</code> trait if necessary. If the <code>#[educe(Copy)]</code> attribute exists, they will be bound to the <code>Copy</code> trait.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Clone)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>add(<span class="kw-2">&amp;</span><span class="self">self</span>, rhs: u8) -&gt; <span class="self">Self</span>;
+}
+
+<span class="kw">fn </span>clone&lt;T: A&gt;(v: <span class="kw-2">&amp;</span>T) -&gt; T {
+    v.add(<span class="number">100</span>)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Clone(bound(T: std::clone::Clone)))]
+</span><span class="kw">enum </span>Enum&lt;T, K: A&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Clone(method(clone)))]
+        </span>f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>In the above case, <code>T</code> is bound to the <code>Clone</code> trait, but <code>K</code> is not.</p>
+<p>Or, you can have <code>educe</code> replicate the behaviour of <code>std</code>’s <code>derive</code>’s by using <code>bound(*)</code>. See the <a href="#debug"><code>Debug</code></a> section for more information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>add(<span class="kw-2">&amp;</span><span class="self">self</span>, rhs: u8) -&gt; <span class="self">Self</span>;
+}
+
+<span class="kw">fn </span>clone&lt;T: A&gt;(v: <span class="kw-2">&amp;</span>T) -&gt; T {
+    v.add(<span class="number">100</span>)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Clone(bound(<span class="kw-2">*</span>)))]
+</span><span class="kw">struct </span>Struct&lt;T: A&gt; {
+    <span class="attr">#[educe(Clone(method(clone)))]
+    </span>f: T,
+}</code></pre></div>
+<h6 id="union-1"><a class="doc-anchor" href="#union-1">§</a>Union</h6>
+<p>Refer to the introduction of the <code>#[educe(Copy)]</code> attribute.</p>
+<h5 id="copy"><a class="doc-anchor" href="#copy">§</a>Copy</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Copy)]</code> to implement the <code>Copy</code> trait for a struct, an enum, or a union.</p>
+<h6 id="basic-usage-2"><a class="doc-anchor" href="#basic-usage-2">§</a>Basic Usage</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Copy, Clone)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Copy, Clone)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        f1: u8,
+    },
+    V3(u8),
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-copy-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-copy-trait-or-others">§</a>Generic Parameters Bound to the <code>Copy</code> Trait or Others</h6>
+<p>All generic parameters will be automatically bound to the <code>Copy</code> trait.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Copy, Clone)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>add(<span class="kw-2">&amp;</span><span class="self">self</span>, rhs: u8) -&gt; <span class="self">Self</span>;
+}
+
+<span class="kw">fn </span>clone&lt;T: A&gt;(v: <span class="kw-2">&amp;</span>T) -&gt; T {
+    v.add(<span class="number">100</span>)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Copy, Clone(bound(T: Copy, K: A + Copy)))]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Clone(method(clone)))]
+        </span>f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Note that utilizing custom cloning methods for a type that implements the <code>Copy</code> and <code>Clone</code> traits may not be entirely appropriate.</p>
+<h6 id="union-2"><a class="doc-anchor" href="#union-2">§</a>Union</h6>
+<p>The <code>#[educe(Copy, Clone)]</code> attribute can be used for a union. The fields of a union cannot be cloned with other methods.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Copy, Clone)]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+}</code></pre></div>
+<h5 id="partialeq"><a class="doc-anchor" href="#partialeq">§</a>PartialEq</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(PartialEq)]</code> to implement the <code>PartialEq</code> trait for a struct, enum, or union. You can also choose to ignore specific fields or set a method to replace the <code>PartialEq</code> trait.</p>
+<h6 id="basic-usage-3"><a class="doc-anchor" href="#basic-usage-3">§</a>Basic Usage</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        f1: u8,
+    },
+    V3(u8),
+}</code></pre></div>
+<h6 id="ignore-fields-1"><a class="doc-anchor" href="#ignore-fields-1">§</a>Ignore Fields</h6>
+<p>The <code>ignore</code> parameter can ignore a specific field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(PartialEq(ignore))]
+    </span>f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        <span class="attr">#[educe(PartialEq(ignore))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(PartialEq(ignore))]
+        </span>u8
+    ),
+}</code></pre></div>
+<h6 id="use-another-method-to-perform-comparison"><a class="doc-anchor" href="#use-another-method-to-perform-comparison">§</a>Use Another Method to Perform Comparison</h6>
+<p>The <code>method</code> parameter can be utilized to replace the implementation of the <code>PartialEq</code> trait for a field, eliminating the need to implement the <code>PartialEq</code> trait for the type of that field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">fn </span>eq(a: <span class="kw-2">&amp;</span>u8, b: <span class="kw-2">&amp;</span>u8) -&gt; bool {
+    a + <span class="number">1 </span>== <span class="kw-2">*</span>b
+}
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>is_same(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool;
+}
+
+<span class="kw">fn </span>eq2&lt;T: A&gt;(a: <span class="kw-2">&amp;</span>T, b: <span class="kw-2">&amp;</span>T) -&gt; bool {
+    a.is_same(b)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq)]
+</span><span class="kw">enum </span>Enum&lt;T: A&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(PartialEq(method(eq)))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(PartialEq(method(eq2)))]
+        </span>T
+    ),
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-partialeq-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-partialeq-trait-or-others">§</a>Generic Parameters Bound to the <code>PartialEq</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>PartialEq</code> trait if necessary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>is_same(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool;
+}
+
+<span class="kw">fn </span>eq&lt;T: A&gt;(a: <span class="kw-2">&amp;</span>T, b: <span class="kw-2">&amp;</span>T) -&gt; bool {
+    a.is_same(b)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq(bound(T: std::cmp::PartialEq, K: A)))]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(PartialEq(method(eq)))]
+        </span>f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>In the above case, <code>T</code> is bound to the <code>PartialEq</code> trait, but <code>K</code> is not.</p>
+<p>You can have <code>educe</code> replicate the behaviour of <code>std</code>’s <code>derive</code>’s by using <code>bound(*)</code>. See the <a href="#debug"><code>Debug</code></a> section for more information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq(bound(<span class="kw-2">*</span>)))]
+</span><span class="kw">struct </span>Struct&lt;T&gt; {
+    <span class="attr">#[educe(PartialEq(ignore))]
+    </span>f: T,
+}</code></pre></div>
+<h6 id="union-3"><a class="doc-anchor" href="#union-3">§</a>Union</h6>
+<p>The <code>#[educe(PartialEq(unsafe))]</code> attribute can be used for a union. The fields of a union cannot be compared with other methods. The implementation is <strong>unsafe</strong> because it disregards the specific fields it utilizes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq(<span class="kw">unsafe</span>))]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+    f2: i32
+}</code></pre></div>
+<h5 id="eq"><a class="doc-anchor" href="#eq">§</a>Eq</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Eq)]</code> to implement the <code>Eq</code> trait for a struct, enum, or union. You can also choose to ignore specific fields or set a method to replace the <code>PartialEq</code> trait.</p>
+<h6 id="basic-usage-4"><a class="doc-anchor" href="#basic-usage-4">§</a>Basic Usage</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq, Eq)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq, Eq)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        f1: u8,
+    },
+    V3(u8),
+}</code></pre></div>
+<h6 id="ignore-fields-2"><a class="doc-anchor" href="#ignore-fields-2">§</a>Ignore Fields</h6>
+<p>The <code>ignore</code> parameter can ignore a specific field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq, Eq)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(Eq(ignore))]
+    </span>f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq, Eq)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Eq(ignore))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Eq(ignore))]
+        </span>u8
+    ),
+}</code></pre></div>
+<h6 id="use-another-method-to-perform-comparison-1"><a class="doc-anchor" href="#use-another-method-to-perform-comparison-1">§</a>Use Another Method to Perform Comparison</h6>
+<p>The <code>method</code> parameter can be utilized to replace the implementation of the <code>Eq</code> trait for a field, eliminating the need to implement the <code>PartialEq</code> trait for the type of that field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">fn </span>eq(a: <span class="kw-2">&amp;</span>u8, b: <span class="kw-2">&amp;</span>u8) -&gt; bool {
+    a + <span class="number">1 </span>== <span class="kw-2">*</span>b
+}
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>is_same(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool;
+}
+
+<span class="kw">fn </span>eq2&lt;T: A&gt;(a: <span class="kw-2">&amp;</span>T, b: <span class="kw-2">&amp;</span>T) -&gt; bool {
+    a.is_same(b)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq, Eq)]
+</span><span class="kw">enum </span>Enum&lt;T: A&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Eq(method(eq)))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Eq(method(eq2)))]
+        </span>T
+    ),
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-partialeq-trait-or-others-1"><a class="doc-anchor" href="#generic-parameters-bound-to-the-partialeq-trait-or-others-1">§</a>Generic Parameters Bound to the <code>PartialEq</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>PartialEq</code> trait if necessary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq, Eq)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>is_same(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool;
+}
+
+<span class="kw">fn </span>eq&lt;T: A&gt;(a: <span class="kw-2">&amp;</span>T, b: <span class="kw-2">&amp;</span>T) -&gt; bool {
+    a.is_same(b)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq(bound(T: std::cmp::PartialEq, K: A)), Eq)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Eq(method(eq)))]
+        </span>f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<h6 id="union-4"><a class="doc-anchor" href="#union-4">§</a>Union</h6>
+<p>The <code>#[educe(PartialEq(unsafe), Eq)]</code> attribute can be used for a union. The fields of a union cannot be compared with other methods. The implementation is <strong>unsafe</strong> because it disregards the specific fields it utilizes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq(<span class="kw">unsafe</span>), Eq)]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+    f2: i32
+}</code></pre></div>
+<h5 id="partialord"><a class="doc-anchor" href="#partialord">§</a>PartialOrd</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(PartialOrd)]</code> to implement the <code>PartialOrd</code> trait for a struct or enum. You can also choose to ignore specific fields or set a method to replace the <code>PartialOrd</code> trait.</p>
+<h6 id="basic-usage-5"><a class="doc-anchor" href="#basic-usage-5">§</a>Basic Usage</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        f1: u8,
+    },
+    V3(u8),
+}</code></pre></div>
+<h6 id="ignore-fields-3"><a class="doc-anchor" href="#ignore-fields-3">§</a>Ignore Fields</h6>
+<p>The <code>ignore</code> parameter can ignore a specific field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(PartialOrd(ignore))]
+    </span>f1: u8
+}
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        <span class="attr">#[educe(PartialOrd(ignore))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(PartialOrd(ignore))]
+        </span>u8
+    ),
+}</code></pre></div>
+<h6 id="use-another-method-to-perform-comparison-2"><a class="doc-anchor" href="#use-another-method-to-perform-comparison-2">§</a>Use Another Method to Perform Comparison</h6>
+<p>The <code>method</code> parameter can be utilized to replace the implementation of the <code>PartialOrd</code> trait for a field, eliminating the need to implement the <code>PartialOrd</code> trait for the type of that field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">use </span>std::cmp::Ordering;
+
+<span class="kw">fn </span>partial_cmp(a: <span class="kw-2">&amp;</span>u8, b: <span class="kw-2">&amp;</span>u8) -&gt; <span class="prelude-ty">Option</span>&lt;Ordering&gt; {
+    <span class="kw">if </span>a &gt; b {
+        <span class="prelude-val">Some</span>(Ordering::Less)
+    } <span class="kw">else if </span>a &lt; b {
+        <span class="prelude-val">Some</span>(Ordering::Greater)
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Some</span>(Ordering::Equal)
+    }
+}
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8;
+}
+
+<span class="kw">fn </span>partial_cmp2&lt;T: A&gt;(a: <span class="kw-2">&amp;</span>T, b: <span class="kw-2">&amp;</span>T) -&gt; <span class="prelude-ty">Option</span>&lt;Ordering&gt; {
+    partial_cmp(<span class="kw-2">&amp;</span>a.value(), <span class="kw-2">&amp;</span>b.value())
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq, PartialOrd)]
+</span><span class="kw">enum </span>Enum&lt;T: A&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(PartialOrd(method(partial_cmp)))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(PartialOrd(method(partial_cmp2)))]
+        </span>T
+    ),
+}</code></pre></div>
+<h6 id="ranking"><a class="doc-anchor" href="#ranking">§</a>Ranking</h6>
+<p>Each field can add a <code>#[educe(PartialOrd(rank = priority_value))]</code> attribute, where <code>priority_value</code> is an integer value indicating its comparison precedence (lower values indicate higher priority). The default <code>priority_value</code> for a field depends on its ordinal position (lower towards the front) and starts with <code>isize::MIN</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(PartialOrd(rank = <span class="number">1</span>))]
+    </span>f1: u8,
+    <span class="attr">#[educe(PartialOrd(rank = <span class="number">0</span>))]
+    </span>f2: u8,
+}</code></pre></div>
+<p>For variants, the discriminant can be explicitly set for comparison.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd)]
+#[repr(u8)]
+</span><span class="kw">enum </span>Enum {
+    Three { f1: u8 } = <span class="number">3</span>,
+    Two(u8) = <span class="number">2</span>,
+    One = <span class="number">1</span>,
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-partialord-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-partialord-trait-or-others">§</a>Generic Parameters Bound to the <code>PartialOrd</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>PartialOrd</code> trait if necessary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">use </span>std::cmp::Ordering;
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8;
+}
+
+<span class="kw">fn </span>partial_cmp&lt;T: A&gt;(a: <span class="kw-2">&amp;</span>T, b: <span class="kw-2">&amp;</span>T) -&gt; <span class="prelude-ty">Option</span>&lt;Ordering&gt; {
+    a.value().partial_cmp(<span class="kw-2">&amp;</span>b.value())
+}
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd(bound(T: std::cmp::PartialOrd, K: PartialEq + A)))]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(PartialOrd(method(partial_cmp)))]
+        </span>f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>In the above case, <code>T</code> is bound to the <code>PartialOrd</code> trait, but <code>K</code> is not.</p>
+<p>You can have <code>educe</code> replicate the behaviour of <code>std</code>’s <code>derive</code>’s by using <code>bound(*)</code>. See the <a href="#debug"><code>Debug</code></a> section for more information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Educe)]
+#[educe(PartialOrd(bound(<span class="kw-2">*</span>)))]
+</span><span class="kw">struct </span>Struct&lt;T&gt; {
+    <span class="attr">#[educe(PartialOrd(ignore))]
+    </span>f: T,
+}</code></pre></div>
+<h6 id="union-5"><a class="doc-anchor" href="#union-5">§</a>Union</h6>
+<p>The <code>#[educe(PartialEq(unsafe))]</code> attribute can be used for a union. The fields of a union cannot be compared with other methods. The implementation is <strong>unsafe</strong> because it disregards the specific fields it utilizes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq(<span class="kw">unsafe</span>))]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+    f2: i32
+}</code></pre></div>
+<h5 id="ord"><a class="doc-anchor" href="#ord">§</a>Ord</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Ord)]</code> to implement the <code>Ord</code> trait for a struct or enum. You can also choose to ignore specific fields or set a method to replace the <code>Ord</code> trait.</p>
+<h6 id="basic-usage-6"><a class="doc-anchor" href="#basic-usage-6">§</a>Basic Usage</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Eq, Educe)]
+#[educe(PartialOrd, Ord)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(PartialEq, Eq, Educe)]
+#[educe(PartialOrd, Ord)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        f1: u8,
+    },
+    V3(u8),
+}</code></pre></div>
+<h6 id="ignore-fields-4"><a class="doc-anchor" href="#ignore-fields-4">§</a>Ignore Fields</h6>
+<p>The <code>ignore</code> parameter can ignore a specific field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Eq, Educe)]
+#[educe(PartialOrd, Ord)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(Ord(ignore))]
+    </span>f1: u8
+}
+
+<span class="attr">#[derive(PartialEq, Eq, Educe)]
+#[educe(PartialOrd, Ord)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Ord(ignore))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Ord(ignore))]
+        </span>u8
+    ),
+}</code></pre></div>
+<h6 id="use-another-method-to-perform-comparison-3"><a class="doc-anchor" href="#use-another-method-to-perform-comparison-3">§</a>Use Another Method to Perform Comparison</h6>
+<p>The <code>method</code> parameter can be utilized to replace the implementation of the <code>Ord</code> trait for a field, eliminating the need to implement the <code>Ord</code> trait for the type of that field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">use </span>std::cmp::Ordering;
+
+<span class="kw">fn </span>cmp(a: <span class="kw-2">&amp;</span>u8, b: <span class="kw-2">&amp;</span>u8) -&gt; Ordering {
+    <span class="kw">if </span>a &gt; b {
+        Ordering::Less
+    } <span class="kw">else if </span>a &lt; b {
+        Ordering::Greater
+    } <span class="kw">else </span>{
+        Ordering::Equal
+    }
+}
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8;
+}
+
+<span class="kw">fn </span>cmp2&lt;T: A&gt;(a: <span class="kw-2">&amp;</span>T, b: <span class="kw-2">&amp;</span>T) -&gt; Ordering {
+    cmp(<span class="kw-2">&amp;</span>a.value(), <span class="kw-2">&amp;</span>b.value())
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq, Eq, PartialOrd, Ord)]
+</span><span class="kw">enum </span>Enum&lt;T: A&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Ord(method(cmp)))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Ord(method(cmp2)))]
+        </span>T
+    ),
+}</code></pre></div>
+<h6 id="ranking-1"><a class="doc-anchor" href="#ranking-1">§</a>Ranking</h6>
+<p>Each field can add a <code>#[educe(Ord(rank = priority_value))]</code> attribute, where <code>priority_value</code> is an integer value indicating its comparison precedence (lower values indicate higher priority). The default <code>priority_value</code> for a field depends on its ordinal position (lower towards the front) and starts with <code>isize::MIN</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Eq, Educe)]
+#[educe(PartialOrd, Ord)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(Ord(rank = <span class="number">1</span>))]
+    </span>f1: u8,
+    <span class="attr">#[educe(Ord(rank = <span class="number">0</span>))]
+    </span>f2: u8,
+}</code></pre></div>
+<p>For variants, the discriminant can be explicitly set for comparison.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Eq, Educe)]
+#[educe(PartialOrd, Ord)]
+#[repr(u8)]
+</span><span class="kw">enum </span>Enum {
+    Three { f1: u8 } = <span class="number">3</span>,
+    Two(u8) = <span class="number">2</span>,
+    One = <span class="number">1</span>,
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-ord-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-ord-trait-or-others">§</a>Generic Parameters Bound to the <code>Ord</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>Ord</code> trait if necessary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(PartialEq, Eq, Educe)]
+#[educe(PartialOrd, Ord)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">use </span>std::cmp::Ordering;
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8;
+}
+
+<span class="kw">fn </span>cmp&lt;T: A&gt;(a: <span class="kw-2">&amp;</span>T, b: <span class="kw-2">&amp;</span>T) -&gt; Ordering {
+    a.value().cmp(<span class="kw-2">&amp;</span>b.value())
+}
+
+<span class="attr">#[derive(PartialEq, Eq, Educe)]
+#[educe(PartialOrd, Ord(bound(T: std::cmp::Ord, K: std::cmp::Ord + A)))]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(PartialOrd(method(cmp)))]
+        </span>f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<h5 id="hash"><a class="doc-anchor" href="#hash">§</a>Hash</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Hash)]</code> to implement the <code>Hash</code> trait for a struct, enum, or union. You can also choose to ignore specific fields or set a method to replace the <code>Hash</code> trait.</p>
+<h6 id="basic-usage-7"><a class="doc-anchor" href="#basic-usage-7">§</a>Basic Usage</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Hash)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Hash)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        f1: u8,
+    },
+    V3(u8),
+}</code></pre></div>
+<h6 id="ignore-fields-5"><a class="doc-anchor" href="#ignore-fields-5">§</a>Ignore Fields</h6>
+<p>The <code>ignore</code> parameter can ignore a specific field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Hash)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(Hash(ignore))]
+    </span>f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Hash)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Hash(ignore))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Hash(ignore))]
+        </span>u8
+    ),
+}</code></pre></div>
+<h6 id="use-another-method-for-hashing"><a class="doc-anchor" href="#use-another-method-for-hashing">§</a>Use Another Method for Hashing</h6>
+<p>The <code>method</code> parameter can be utilized to replace the implementation of the <code>Hash</code> trait for a field, eliminating the need to implement the <code>Hash</code> trait for the type of that field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">use </span>std::hash::{Hash, Hasher};
+
+<span class="kw">fn </span>hash&lt;H: Hasher&gt;(_s: <span class="kw-2">&amp;</span>u8, state: <span class="kw-2">&amp;mut </span>H) {
+    Hash::hash(<span class="kw-2">&amp;</span><span class="number">100</span>, state)
+}
+
+<span class="kw">fn </span>hash2&lt;H: Hasher, T&gt;(_s: <span class="kw-2">&amp;</span>T, state: <span class="kw-2">&amp;mut </span>H) {
+    Hash::hash(<span class="kw-2">&amp;</span><span class="number">100</span>, state)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Hash)]
+</span><span class="kw">enum </span>Enum&lt;T&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Hash(method(hash)))]
+        </span>f1: u8,
+    },
+    V3(
+        <span class="attr">#[educe(Hash(method(hash2)))]
+        </span>T
+    ),
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-hash-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-hash-trait-or-others">§</a>Generic Parameters Bound to the <code>Hash</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>Hash</code> trait if necessary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Hash)]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">use </span>std::hash::{Hash, Hasher};
+
+<span class="kw">trait </span>A {
+    <span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8;
+}
+
+<span class="kw">fn </span>hash&lt;H: Hasher, T: A&gt;(s: <span class="kw-2">&amp;</span>T, state: <span class="kw-2">&amp;mut </span>H) {
+    Hash::hash(<span class="kw-2">&amp;</span>s.value(), state)
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Hash(bound(T: std::hash::Hash, K: A)))]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1,
+    V2 {
+        <span class="attr">#[educe(Hash(method(hash)))]
+        </span>f1: K,
+    },
+    V3(
+        T
+    ),
+}</code></pre></div>
+<p>In the above case, <code>T</code> is bound to the <code>Hash</code> trait, but <code>K</code> is not.</p>
+<p>You can have <code>educe</code> replicate the behaviour of <code>std</code>’s <code>derive</code>’s by using <code>bound(*)</code>. See the <a href="#debug"><code>Debug</code></a> section for more information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Hash(bound(<span class="kw-2">*</span>)))]
+</span><span class="kw">struct </span>Struct&lt;T&gt; {
+    <span class="attr">#[educe(Hash(ignore))]
+    </span>f: T,
+}</code></pre></div>
+<h6 id="union-6"><a class="doc-anchor" href="#union-6">§</a>Union</h6>
+<p>The <code>#[educe(PartialEq(unsafe), Eq, Hash(unsafe))]</code> attribute can be used for a union. The fields of a union cannot be hashed with other methods. The implementation is <strong>unsafe</strong> because it disregards the specific fields it utilizes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(PartialEq(<span class="kw">unsafe</span>), Eq, Hash(<span class="kw">unsafe</span>))]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+    f2: i32
+}</code></pre></div>
+<h5 id="default"><a class="doc-anchor" href="#default">§</a>Default</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Default)]</code> to implement the <code>Default</code> trait for a struct, enum, or union. You can also choose to ignore specific fields or set a method to replace the <code>Hash</code> trait.</p>
+<h6 id="basic-usage-8"><a class="doc-anchor" href="#basic-usage-8">§</a>Basic Usage</h6>
+<p>For enums and unions, it is necessary to designate a default variant (for enums) and a default field (for unions) unless the enum has only one variant or the union has only one field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default)]
+</span><span class="kw">enum </span>Enum {
+    V1,
+    <span class="attr">#[educe(Default)]
+    </span>V2 {
+        f1: u8,
+    },
+    V3(u8),
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default)]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+    <span class="attr">#[educe(Default)]
+    </span>f2: f64,
+}</code></pre></div>
+<h6 id="the-default-value-for-the-entire-type"><a class="doc-anchor" href="#the-default-value-for-the-entire-type">§</a>The Default Value for the Entire Type</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default(expression = Struct { f1: <span class="number">1 </span>}))]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default(expression = Enum::Struct { f1: <span class="number">1 </span>}))]
+</span><span class="kw">enum </span>Enum {
+    Unit,
+    Struct {
+        f1: u8
+    },
+    Tuple(u8),
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default(expression = Union { f1: <span class="number">1 </span>}))]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+    f2: f64,
+}</code></pre></div>
+<p>You may need to activate the <code>full</code> feature to enable support for advanced expressions.</p>
+<h6 id="the-default-values-for-specific-fields"><a class="doc-anchor" href="#the-default-values-for-specific-fields">§</a>The Default Values for Specific Fields</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default)]
+</span><span class="kw">struct </span>Struct {
+    <span class="attr">#[educe(Default = <span class="number">1</span>)]
+    </span>f1: u8,
+    <span class="attr">#[educe(Default = <span class="number">11111111111111111111111111111</span>)]
+    </span>f2: i128,
+    <span class="attr">#[educe(Default = <span class="number">1.1</span>)]
+    </span>f3: f64,
+    <span class="attr">#[educe(Default = <span class="bool-val">true</span>)]
+    </span>f4: bool,
+    <span class="attr">#[educe(Default = <span class="string">"Hi"</span>)]
+    </span>f5: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+    <span class="attr">#[educe(Default = <span class="string">"Hello"</span>)]
+    </span>f6: String,
+    <span class="attr">#[educe(Default = <span class="string">'M'</span>)]
+    </span>f7: char,
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default)]
+</span><span class="kw">enum </span>Enum {
+    Unit,
+    <span class="attr">#[educe(Default)]
+    </span>Tuple(
+        <span class="attr">#[educe(Default(expression = <span class="number">0 </span>+ <span class="number">1</span>))]
+        </span>u8,
+        <span class="attr">#[educe(Default(expression = -<span class="number">11111111111111111111111111111 </span>* -<span class="number">1</span>))]
+        </span>i128,
+        <span class="attr">#[educe(Default(expression = <span class="number">1.0 </span>+ <span class="number">0.1</span>))]
+        </span>f64,
+        <span class="attr">#[educe(Default(expression = !<span class="bool-val">false</span>))]
+        </span>bool,
+        <span class="attr">#[educe(Default(expression = <span class="string">"Hi"</span>))]
+        </span><span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+        <span class="attr">#[educe(Default(expression = String::from(<span class="string">"Hello"</span>)))]
+        </span>String,
+        <span class="attr">#[educe(Default(expression = <span class="string">'M'</span>))]
+        </span>char,
+    ),
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default)]
+</span><span class="kw">union </span>Union {
+    f1: u8,
+    f2: i128,
+    f3: f64,
+    f4: bool,
+    <span class="attr">#[educe(Default = <span class="string">"Hi"</span>)]
+    </span>f5: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+    f6: char,
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-default-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-default-trait-or-others">§</a>Generic Parameters Bound to the <code>Default</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>Default</code> trait if necessary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default)]
+</span><span class="kw">enum </span>Enum&lt;T&gt; {
+    Unit,
+    <span class="attr">#[educe(Default)]
+    </span>Struct {
+        f1: T
+    },
+    Tuple(T),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default(bound(T: std::default::Default)))]
+</span><span class="kw">enum </span>Enum&lt;T&gt; {
+    Unit,
+    <span class="attr">#[educe(Default)]
+    </span>Struct {
+        f1: T
+    },
+    Tuple(T),
+}</code></pre></div>
+<h6 id="the-new-associated-function"><a class="doc-anchor" href="#the-new-associated-function">§</a>The <code>new</code> Associated Function</h6>
+<p>With the <code>#[educe(Default(new))]</code> attribute, your type will include an additional associated function called <code>new</code>. This function can be utilized to invoke the <code>default</code> method of the <code>Default</code> trait.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Default(new))]
+</span><span class="kw">struct </span>Struct {
+    f1: u8
+}</code></pre></div>
+<h5 id="deref"><a class="doc-anchor" href="#deref">§</a>Deref</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Deref)]</code> to implement the <code>Deref</code> trait for a struct or enum.</p>
+<h6 id="basic-usage-9"><a class="doc-anchor" href="#basic-usage-9">§</a>Basic Usage</h6>
+<p>You must designate a field as the default for obtaining an immutable reference unless the number of fields is exactly one.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Deref)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8,
+    <span class="attr">#[educe(Deref)]
+    </span>f2: u8,
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Deref)]
+</span><span class="kw">enum </span>Enum {
+    Struct {
+        f1: u8
+    },
+    Struct2 {
+        f1: u8,
+        <span class="attr">#[educe(Deref)]
+        </span>f2: u8,
+    },
+    Tuple(u8),
+    Tuple2(
+        u8,
+        <span class="attr">#[educe(Deref)]
+        </span>u8
+    ),
+}</code></pre></div>
+<h5 id="derefmut"><a class="doc-anchor" href="#derefmut">§</a>DerefMut</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(DerefMut)]</code> to implement the <code>DerefMut</code> trait for a struct or enum.</p>
+<h6 id="basic-usage-10"><a class="doc-anchor" href="#basic-usage-10">§</a>Basic Usage</h6>
+<p>You must designate a field as the default for obtaining an mutable reference unless the number of fields is exactly one.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Deref, DerefMut)]
+</span><span class="kw">struct </span>Struct {
+    f1: u8,
+    <span class="attr">#[educe(Deref, DerefMut)]
+    </span>f2: u8,
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Deref, DerefMut)]
+</span><span class="kw">enum </span>Enum {
+    Struct {
+        f1: u8
+    },
+    Struct2 {
+        f1: u8,
+        <span class="attr">#[educe(Deref, DerefMut)]
+        </span>f2: u8,
+    },
+    Tuple(u8),
+    Tuple2(
+        <span class="attr">#[educe(DerefMut)]
+        </span>u8,
+        <span class="attr">#[educe(Deref)]
+        </span>u8
+    ),
+}</code></pre></div>
+<p>The mutable dereferencing fields do not need to be the same as the immutable dereferencing fields, but their types must be consistent.</p>
+<h5 id="into"><a class="doc-anchor" href="#into">§</a>Into</h5>
+<p>Use <code>#[derive(Educe)]</code> and <code>#[educe(Into(type))]</code> to implement the <code>Into&lt;type&gt;</code> trait for a struct or enum.</p>
+<h6 id="basic-usage-11"><a class="doc-anchor" href="#basic-usage-11">§</a>Basic Usage</h6>
+<p>You need to designate a field as the default for <code>Into&lt;type&gt;</code> conversion unless the number of fields is exactly one. If you don’t, educe will automatically try to find a proper one.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Into(u8), Into(u16))]
+</span><span class="kw">struct </span>Struct {
+    f1: u8,
+    f2: u16,
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Into(u8))]
+</span><span class="kw">enum </span>Enum {
+    V1 {
+        f1: u8,
+        <span class="attr">#[educe(Into(u8))]
+        </span>f2: u8,
+    },
+    V2 (
+        u8
+    ),
+}</code></pre></div>
+<h6 id="use-another-method-to-perform-into-conversion"><a class="doc-anchor" href="#use-another-method-to-perform-into-conversion">§</a>Use Another Method to Perform Into Conversion</h6>
+<p>The <code>method</code> parameter can be utilized to replace the implementation of the <code>Into</code> trait for a field, eliminating the need to implement the <code>Into</code> trait for the type of that field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">fn </span>into(v: u16) -&gt; u8 {
+    v <span class="kw">as </span>u8
+}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Into(u8))]
+</span><span class="kw">enum </span>Enum {
+    V1 {
+        <span class="attr">#[educe(Into(u8, method(into)))]
+        </span>f1: u16,
+    },
+    V2 (
+        u8
+    ),
+}</code></pre></div>
+<h6 id="generic-parameters-bound-to-the-into-trait-or-others"><a class="doc-anchor" href="#generic-parameters-bound-to-the-into-trait-or-others">§</a>Generic Parameters Bound to the <code>Into</code> Trait or Others</h6>
+<p>Generic parameters will be automatically bound to the <code>Into&lt;type&gt;</code> trait if necessary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="attr">#[derive(Educe)]
+#[educe(Into(u8))]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1 {
+        f1: K,
+    },
+    V2 (
+        T
+    ),
+}</code></pre></div>
+<p>Or you can set the where predicates by yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>educe::Educe;
+
+<span class="kw">fn </span>into&lt;T&gt;(_v: T) -&gt; u8 {
+    <span class="number">0
+</span>}
+
+<span class="attr">#[derive(Educe)]
+#[educe(Into(u8, bound(K: Into&lt;u8&gt;)))]
+</span><span class="kw">enum </span>Enum&lt;T, K&gt; {
+    V1 {
+        f1: K,
+    },
+    V2 (
+        <span class="attr">#[educe(Into(u8, method(into)))]
+        </span>T
+    ),
+}</code></pre></div>
+</div></details><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><dl class="item-table"><dt><a class="derive" href="derive.Educe.html" title="derive educe::Educe">Educe</a></dt></dl></section></div></main></body></html>

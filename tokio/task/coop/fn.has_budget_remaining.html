@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns `true` if there is still budget left on the task."><title>has_budget_remaining in tokio::task::coop - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.47.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">has_<wbr>budget_<wbr>remaining</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In tokio::<wbr>task::<wbr>coop</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">tokio</a>::<wbr><a href="../index.html">task</a>::<wbr><a href="index.html">coop</a></div><h1>Function <span class="fn">has_budget_remaining</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/tokio/task/coop/mod.rs.html#223-227">Source</a> </span></div><pre class="rust item-decl"><code>pub fn has_budget_remaining() -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns <code>true</code> if there is still budget left on the task.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example defines a <code>Timeout</code> future that requires a given <code>future</code> to complete before the
+specified duration elapses. If it does, its result is returned; otherwise, an error is returned
+and the future is canceled.</p>
+<p>Note that the future could exhaust the budget before we evaluate the timeout. Using <code>has_budget_remaining</code>,
+we can detect this scenario and ensure the timeout is always checked.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>Timeout&lt;T&gt; {
+    future: T,
+    delay: Pin&lt;Box&lt;Sleep&gt;&gt;,
+}
+
+<span class="kw">impl</span>&lt;T&gt; Future <span class="kw">for </span>Timeout&lt;T&gt;
+<span class="kw">where
+    </span>T: Future + Unpin,
+{
+    <span class="kw">type </span>Output = <span class="prelude-ty">Result</span>&lt;T::Output, ()&gt;;
+
+    <span class="kw">fn </span>poll(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
+        <span class="kw">let </span>this = Pin::into_inner(<span class="self">self</span>);
+        <span class="kw">let </span>future = Pin::new(<span class="kw-2">&amp;mut </span>this.future);
+        <span class="kw">let </span>delay = Pin::new(<span class="kw-2">&amp;mut </span>this.delay);
+
+        <span class="comment">// check if the future is ready
+        </span><span class="kw">let </span>had_budget_before = coop::has_budget_remaining();
+        <span class="kw">if let </span>Poll::Ready(v) = future.poll(cx) {
+            <span class="kw">return </span>Poll::Ready(<span class="prelude-val">Ok</span>(v));
+        }
+        <span class="kw">let </span>has_budget_now = coop::has_budget_remaining();
+
+        <span class="comment">// evaluate the timeout
+        </span><span class="kw">if let </span>(<span class="bool-val">true</span>, <span class="bool-val">false</span>) = (had_budget_before, has_budget_now) {
+            <span class="comment">// it is the underlying future that exhausted the budget
+            </span><span class="macro">ready!</span>(<span class="macro">pin!</span>(coop::unconstrained(delay)).poll(cx));
+        } <span class="kw">else </span>{
+            <span class="macro">ready!</span>(delay.poll(cx));
+        }
+        <span class="kw">return </span>Poll::Ready(<span class="prelude-val">Err</span>(()));
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

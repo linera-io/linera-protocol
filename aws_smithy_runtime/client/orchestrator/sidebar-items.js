@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StopPoint"],"fn":["invoke","invoke_with_stop_point"],"mod":["endpoints","operation"]};

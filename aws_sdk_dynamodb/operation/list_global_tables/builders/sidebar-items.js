@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ListGlobalTablesFluentBuilder","ListGlobalTablesInputBuilder","ListGlobalTablesOutputBuilder"]};

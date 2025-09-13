@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Compares the contents of a `Writeable` to the given bytes without allocating a String to hold the `Writeable` contents."><title>cmp_str in writeable - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="writeable" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../writeable/index.html">writeable</a><span class="version">0.6.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">cmp_str</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate writeable</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">writeable</a></div><h1>Function <span class="fn">cmp_str</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/writeable/cmp.rs.html#101-103">Source</a> </span></div><pre class="rust item-decl"><code>pub fn cmp_str(writeable: &amp;impl <a class="trait" href="trait.Writeable.html" title="trait writeable::Writeable">Writeable</a>, other: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Compares the contents of a <code>Writeable</code> to the given bytes
+without allocating a String to hold the <code>Writeable</code> contents.</p>
+<p>This returns a lexicographical comparison, the same as if the Writeable
+were first converted to a String and then compared with <code>Ord</code>. For a
+string ordering suitable for display to end users, use a localized
+collation crate, such as <code>icu_collator</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::cmp::Ordering;
+<span class="kw">use </span>core::fmt;
+<span class="kw">use </span>writeable::Writeable;
+
+<span class="kw">struct </span>WelcomeMessage&lt;<span class="lifetime">'s</span>&gt; {
+    <span class="kw">pub </span>name: <span class="kw-2">&amp;</span><span class="lifetime">'s </span>str,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'s</span>&gt; Writeable <span class="kw">for </span>WelcomeMessage&lt;<span class="lifetime">'s</span>&gt; {
+    <span class="comment">// see impl in Writeable docs
+</span>}
+
+<span class="kw">let </span>message = WelcomeMessage { name: <span class="string">"Alice" </span>};
+<span class="kw">let </span>message_str = message.write_to_string();
+
+<span class="macro">assert_eq!</span>(Ordering::Equal, writeable::cmp_str(<span class="kw-2">&amp;</span>message, <span class="string">"Hello, Alice!"</span>));
+
+<span class="macro">assert_eq!</span>(Ordering::Greater, writeable::cmp_str(<span class="kw-2">&amp;</span>message, <span class="string">"Alice!"</span>));
+<span class="macro">assert_eq!</span>(Ordering::Greater, (<span class="kw-2">*</span>message_str).cmp(<span class="string">"Alice!"</span>));
+
+<span class="macro">assert_eq!</span>(Ordering::Less, writeable::cmp_str(<span class="kw-2">&amp;</span>message, <span class="string">"Hello, Bob!"</span>));
+<span class="macro">assert_eq!</span>(Ordering::Less, (<span class="kw-2">*</span>message_str).cmp(<span class="string">"Hello, Bob!"</span>));</code></pre></div>
+</div></details></section></div></main></body></html>

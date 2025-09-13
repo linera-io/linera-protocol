@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["NotUsed","Object","ObjectList"],"trait":["HasSpec","HasStatus"]};
