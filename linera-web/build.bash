@@ -4,6 +4,8 @@ set -eu
 
 cd $(dirname -- "${BASH_SOURCE[0]}")
 
+export RUST_TOOLCHAIN=nightly
+
 wasm_bindgen_cli_version=$(wasm-bindgen --version)
 wasm_bindgen_cli_version=${wasm_bindgen_cli_version##* }
 
