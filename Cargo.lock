@@ -5260,7 +5260,6 @@ dependencies = [
  "counter",
  "criterion",
  "custom_debug_derive",
- "dashmap 5.5.3",
  "fungible",
  "futures",
  "hex-game",
@@ -5274,6 +5273,7 @@ dependencies = [
  "linera-views",
  "lru 0.12.5",
  "meta-counter",
+ "papaya",
  "prometheus",
  "proptest",
  "rand 0.8.5",
@@ -5330,7 +5330,6 @@ dependencies = [
  "cfg_aliases",
  "clap",
  "custom_debug_derive",
- "dashmap 5.5.3",
  "derive_more 1.0.0",
  "dyn-clone",
  "futures",
@@ -5346,6 +5345,7 @@ dependencies = [
  "linera-witty",
  "lru 0.12.5",
  "oneshot",
+ "papaya",
  "prometheus",
  "proptest",
  "reqwest 0.11.27",
@@ -5591,7 +5591,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "clap",
- "dashmap 5.5.3",
  "ed25519-dalek",
  "futures",
  "insta",
@@ -5602,6 +5601,7 @@ dependencies = [
  "linera-rpc",
  "linera-storage",
  "linera-version",
+ "papaya",
  "prometheus",
  "proptest",
  "prost",
@@ -5634,7 +5634,6 @@ dependencies = [
  "bcs",
  "cargo_toml",
  "cfg_aliases",
- "dashmap 5.5.3",
  "futures",
  "linera-base",
  "linera-chain",
@@ -5646,6 +5645,7 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "log",
+ "papaya",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -5698,7 +5698,6 @@ dependencies = [
  "crowd-funding",
  "current_platform",
  "custom_debug_derive",
- "dashmap 5.5.3",
  "dirs",
  "ethereum-tracker",
  "fs-err",
@@ -5730,6 +5729,7 @@ dependencies = [
  "mini-moka",
  "native-fungible",
  "non-fungible",
+ "papaya",
  "pathdiff",
  "port-selector",
  "prometheus",
@@ -5799,7 +5799,6 @@ dependencies = [
  "bcs",
  "cfg-if",
  "cfg_aliases",
- "dashmap 5.5.3",
  "futures",
  "itertools 0.14.0",
  "linera-base",
@@ -5807,6 +5806,7 @@ dependencies = [
  "linera-execution",
  "linera-storage",
  "linera-views",
+ "papaya",
  "prometheus",
  "serde",
 ]
@@ -5890,7 +5890,6 @@ dependencies = [
  "cfg_aliases",
  "convert_case",
  "criterion",
- "dashmap 5.5.3",
  "derive_more 1.0.0",
  "futures",
  "generic-array",
@@ -5902,6 +5901,7 @@ dependencies = [
  "linera-views-derive",
  "linera-witty",
  "linked-hash-map",
+ "papaya",
  "prometheus",
  "rand 0.8.5",
  "rocksdb",
@@ -6951,6 +6951,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
 dependencies = [
  "group",
+]
+
+[[package]]
+name = "papaya"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeb8b9616002a83f9779ea70a2a44364fe804f8b532b96989d0790a34ad76479"
+dependencies = [
+ "equivalent",
+ "seize",
 ]
 
 [[package]]
@@ -8670,6 +8680,16 @@ checksum = "49db231d56a190491cb4aeda9527f1ad45345af50b0851622a7adb8c03b01c32"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seize"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d84b0c858bdd30cb56f5597f8b3bf702ec23829e652cc636a1e5a7b9de46ae93"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

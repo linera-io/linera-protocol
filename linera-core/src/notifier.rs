@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use dashmap::DashMap;
 use linera_base::identifiers::ChainId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::trace;
@@ -16,22 +15,26 @@ use crate::worker;
 /// from the validator.
 /// Clients will be evicted if their connections are terminated.
 pub struct ChannelNotifier<N> {
-    inner: DashMap<ChainId, Vec<UnboundedSender<N>>>,
+    inner: papaya::HashMap<ChainId, Vec<UnboundedSender<N>>>,
 }
 
 impl<N> Default for ChannelNotifier<N> {
     fn default() -> Self {
         Self {
-            inner: DashMap::default(),
+            inner: papaya::HashMap::default(),
         }
     }
 }
 
 impl<N> ChannelNotifier<N> {
     fn add_sender(&self, chain_ids: Vec<ChainId>, sender: &UnboundedSender<N>) {
+        let pinned = self.inner.pin();
         for id in chain_ids {
-            let mut senders = self.inner.entry(id).or_default();
-            senders.push(sender.clone());
+            pinned.update_or_insert_with(
+                id,
+                |senders| senders.iter().cloned().chain([sender.clone()]).collect(),
+                || vec![sender.clone()],
+            );
         }
     }
 
@@ -59,32 +62,22 @@ where
 {
     /// Notifies all the clients waiting for a notification from a given chain.
     pub fn notify_chain(&self, chain_id: &ChainId, notification: &N) {
-        let senders_is_empty = {
-            let Some(mut senders) = self.inner.get_mut(chain_id) else {
+        self.inner.pin().compute(*chain_id, |senders| {
+            let Some((_key, senders)) = senders else {
                 trace!("Chain {chain_id:?} has no subscribers.");
-                return;
+                return papaya::Operation::Abort(());
             };
-            let mut dead_senders = vec![];
-            let senders = senders.value_mut();
-
-            for (index, sender) in senders.iter_mut().enumerate() {
-                if sender.send(notification.clone()).is_err() {
-                    dead_senders.push(index);
-                }
+            let live_senders = senders
+                .iter()
+                .filter(|sender| sender.send(notification.clone()).is_ok())
+                .cloned()
+                .collect::<Vec<_>>();
+            if live_senders.is_empty() {
+                trace!("No more subscribers for chain {chain_id:?}. Removing entry.");
+                return papaya::Operation::Remove;
             }
-
-            for index in dead_senders.into_iter().rev() {
-                trace!("Removed dead subscriber for chain {chain_id:?}.");
-                senders.remove(index);
-            }
-
-            senders.is_empty()
-        };
-
-        if senders_is_empty {
-            trace!("No more subscribers for chain {chain_id:?}. Removing entry.");
-            self.inner.remove(chain_id);
-        }
+            papaya::Operation::Insert(live_senders)
+        });
     }
 }
 

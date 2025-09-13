@@ -25,7 +25,6 @@ use std::{any::Any, collections::BTreeMap, fmt, ops::RangeInclusive, str::FromSt
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
-use dashmap::DashMap;
 use derive_more::Display;
 #[cfg(web)]
 use js_sys::wasm_bindgen::JsValue;
@@ -360,9 +359,9 @@ pub trait ExecutionRuntimeContext {
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
-    fn user_contracts(&self) -> &Arc<DashMap<ApplicationId, UserContractCode>>;
+    fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>>;
 
-    fn user_services(&self) -> &Arc<DashMap<ApplicationId, UserServiceCode>>;
+    fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>>;
 
     async fn get_user_contract(
         &self,
@@ -998,10 +997,10 @@ impl OperationContext {
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
-    user_services: Arc<DashMap<ApplicationId, UserServiceCode>>,
-    blobs: Arc<DashMap<BlobId, Blob>>,
-    events: Arc<DashMap<EventId, Vec<u8>>>,
+    user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
+    user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    blobs: Arc<papaya::HashMap<BlobId, Blob>>,
+    events: Arc<papaya::HashMap<EventId, Vec<u8>>>,
 }
 
 #[cfg(with_testing)]
@@ -1030,11 +1029,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<DashMap<ApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<DashMap<ApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
     }
 
@@ -1043,9 +1042,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         description: &ApplicationDescription,
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError> {
-        let application_id = description.into();
-        Ok(self
-            .user_contracts()
+        let application_id: ApplicationId = description.into();
+        let pinned = self.user_contracts().pin();
+        Ok(pinned
             .get(&application_id)
             .ok_or_else(|| {
                 ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))
@@ -1058,9 +1057,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         description: &ApplicationDescription,
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError> {
-        let application_id = description.into();
-        Ok(self
-            .user_services()
+        let application_id: ApplicationId = description.into();
+        let pinned = self.user_services().pin();
+        Ok(pinned
             .get(&application_id)
             .ok_or_else(|| {
                 ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))
@@ -1069,17 +1068,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        match self.blobs.get(&blob_id) {
-            None => Ok(None),
-            Some(blob) => Ok(Some(blob.clone())),
-        }
+        Ok(self.blobs.pin().get(&blob_id).cloned())
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        match self.events.get(&event_id) {
-            None => Ok(None),
-            Some(event) => Ok(Some(event.clone())),
-        }
+        Ok(self.events.pin().get(&event_id).cloned())
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
@@ -1096,12 +1089,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         &self,
         epoch_range: RangeInclusive<Epoch>,
     ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        let committee_blob_bytes = self
-            .blobs
-            .iter()
-            .find(|item| item.key().blob_type == BlobType::Committee)
+        let pinned = self.blobs.pin();
+        let committee_blob_bytes = pinned
+            .values()
+            .find(|blob| blob.content().blob_type() == BlobType::Committee)
             .ok_or_else(|| ViewError::NotFound("committee not found".to_owned()))?
-            .value()
             .bytes()
             .to_vec();
         let committee: Committee = bcs::from_bytes(&committee_blob_bytes)?;
@@ -1114,11 +1106,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        Ok(self.blobs.contains_key(&blob_id))
+        Ok(self.blobs.pin().contains_key(&blob_id))
     }
 
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
-        Ok(self.events.contains_key(&event_id))
+        Ok(self.events.pin().contains_key(&event_id))
     }
 
     #[cfg(with_testing)]
@@ -1126,8 +1118,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
     ) -> Result<(), ViewError> {
+        let pinned = self.blobs.pin();
         for blob in blobs {
-            self.blobs.insert(blob.id(), blob);
+            pinned.insert(blob.id(), blob);
         }
 
         Ok(())
@@ -1138,8 +1131,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError> {
+        let pinned = self.events.pin();
         for (event_id, bytes) in events {
-            self.events.insert(event_id, bytes);
+            pinned.insert(event_id, bytes);
         }
 
         Ok(())
