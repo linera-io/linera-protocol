@@ -274,6 +274,12 @@ impl LruPrefixCache {
         }
     }
 
+    /// A used key needs to be put on top
+    fn put_cache_key_on_top(&mut self, cache_key: CacheKey) {
+        let size = self.queue.remove(&cache_key).unwrap();
+        self.queue.insert(cache_key, size);
+    }
+
     fn get_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindCacheEntry)> {
         match self.find_map.range(..=key.to_vec()).next_back() {
             None => None,
@@ -481,9 +487,7 @@ impl LruPrefixCache {
         };
         if result.is_some() {
             let cache_key = CacheKey::Value(key.to_vec());
-            // Put back the key on top
-            let size = self.queue.remove(&cache_key).expect("size");
-            self.queue.insert(cache_key, size);
+            self.put_cache_key_on_top(cache_key);
             return result;
         }
         if self.has_exclusive_access {
@@ -515,9 +519,7 @@ impl LruPrefixCache {
             .map(|entry| !matches!(entry, ValueCacheEntry::DoesNotExist));
         if result.is_some() {
             let cache_key = CacheKey::Value(key.to_vec());
-            // Put back the key on top.
-            let size = self.queue.remove(&cache_key).expect("size");
-            self.queue.insert(cache_key, size);
+            self.put_cache_key_on_top(cache_key);
             return result;
         }
         if self.has_exclusive_access {
@@ -529,10 +531,8 @@ impl LruPrefixCache {
             } else {
                 return None;
             };
-            // Put back the key on top.
             let cache_key = CacheKey::Find(lower_bound.clone());
-            let size = self.queue.remove(&cache_key).unwrap();
-            self.queue.insert(cache_key, size);
+            self.put_cache_key_on_top(cache_key);
             return Some(result);
         }
         result
@@ -549,10 +549,8 @@ impl LruPrefixCache {
                 (lower_bound, cache_entry.get_find_keys(key_prefix_red))
             }
         };
-        // Put back the key on top.
         let cache_key = CacheKey::Find(lower_bound.clone());
-        let cache_size = self.queue.remove(&cache_key).unwrap();
-        self.queue.insert(cache_key, cache_size);
+        self.put_cache_key_on_top(cache_key);
         Some(keys)
     }
 
