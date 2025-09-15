@@ -519,7 +519,7 @@ impl Runnable for Job {
                             .push(e);
                     }
                     if let Err(e) = context
-                        .check_validator_chain_info_response(None, address, &node, chain_id)
+                        .check_validator_chain_info_response(Some(name), address, &node, chain_id)
                         .await
                     {
                         error!("{}", e);
