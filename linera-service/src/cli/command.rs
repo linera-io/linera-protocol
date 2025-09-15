@@ -220,6 +220,13 @@ pub enum ClientCommand {
         balance: Amount,
     },
 
+    /// Display who owns the chain, and how the owners work together proposing blocks.
+    ShowOwnership {
+        /// The ID of the chain whose owners will be changed.
+        #[clap(long)]
+        chain_id: Option<ChainId>,
+    },
+
     /// Change who owns the chain, and how the owners work together proposing blocks.
     ///
     /// Specify the complete set of new owners, by public key. Existing owners that are
@@ -970,6 +977,7 @@ impl ClientCommand {
             ClientCommand::Transfer { .. }
             | ClientCommand::OpenChain { .. }
             | ClientCommand::OpenMultiOwnerChain { .. }
+            | ClientCommand::ShowOwnership { .. }
             | ClientCommand::ChangeOwnership { .. }
             | ClientCommand::SetPreferredOwner { .. }
             | ClientCommand::ChangeApplicationPermissions { .. }

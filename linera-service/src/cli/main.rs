@@ -260,6 +260,18 @@ impl Runnable for Job {
                 println!("{}", id);
             }
 
+            ShowOwnership { chain_id } => {
+                let mut context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+                let ownership = context.ownership(chain_id).await?;
+                let json = serde_json::to_string_pretty(&ownership)?;
+                println!("{}", json);
+            }
+
             ChangeOwnership {
                 chain_id,
                 ownership_config,
