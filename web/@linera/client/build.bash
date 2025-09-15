@@ -34,5 +34,3 @@ wasm-bindgen \
     --typescript \
     --target web \
     --split-linked-modules
-
-cd signer && pnpm prepare
