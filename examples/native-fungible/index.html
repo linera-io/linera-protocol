@@ -139,6 +139,15 @@
       </div>
     </div>
 
+    <script type="importmap">
+      {
+          "imports": {
+              "@linera/client": "./js/@linera/client/linera_web.js",
+              "@linera/signer": "./js/@linera/signer/index.js"
+          }
+      }
+    </script>
+
     <script type="module">
       import * as linera from '@linera/client';
       import { PrivateKey } from '@linera/signer';
