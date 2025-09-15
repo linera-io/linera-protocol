@@ -210,7 +210,7 @@ impl LruPrefixCache {
     }
 
     /// Inserts an entry into the cache.
-    fn insert(&mut self, key: Vec<u8>, cache_entry: ValueCacheEntry) {
+    fn insert_value(&mut self, key: Vec<u8>, cache_entry: ValueCacheEntry) {
         let size = key.len() + cache_entry.size();
         if (matches!(cache_entry, ValueCacheEntry::DoesNotExist) && !self.has_exclusive_access)
             || size > self.config.max_entry_size
@@ -256,7 +256,7 @@ impl LruPrefixCache {
             None => ValueCacheEntry::DoesNotExist,
             Some(vec) => ValueCacheEntry::Value(vec.to_vec()),
         };
-        self.insert(key, cache_entry)
+        self.insert_value(key, cache_entry)
     }
 
     /// Inserts a read_value entry into the cache.
@@ -265,7 +265,7 @@ impl LruPrefixCache {
             false => ValueCacheEntry::DoesNotExist,
             true => ValueCacheEntry::Exists,
         };
-        self.insert(key, cache_entry)
+        self.insert_value(key, cache_entry)
     }
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not
@@ -543,11 +543,11 @@ where
                 match operation {
                     WriteOperation::Put { key, value } => {
                         let cache_entry = ValueCacheEntry::Value(value.to_vec());
-                        cache.insert(key.to_vec(), cache_entry);
+                        cache.insert_value(key.to_vec(), cache_entry);
                     }
                     WriteOperation::Delete { key } => {
                         let cache_entry = ValueCacheEntry::DoesNotExist;
-                        cache.insert(key.to_vec(), cache_entry);
+                        cache.insert_value(key.to_vec(), cache_entry);
                     }
                     WriteOperation::DeletePrefix { key_prefix } => {
                         cache.delete_prefix(key_prefix);
