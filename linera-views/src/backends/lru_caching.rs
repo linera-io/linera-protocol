@@ -113,6 +113,12 @@ pub struct StorageCacheConfig {
     pub max_entry_size: usize,
     /// The maximum number of entries in the cache.
     pub max_cache_entries: usize,
+    /// The maximum size of cached values
+    pub max_cache_value_size: usize,
+    /// The maximum size of cached find_keys_by_prefix
+    pub max_cache_find_keys_size: usize,
+    /// The maximum size of cached find_key_values_by_prefix
+    pub max_cache_find_key_values_size: usize,
 }
 
 /// The maximum number of entries in the cache.
@@ -122,6 +128,9 @@ pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig 
     max_cache_size: 10000000,
     max_entry_size: 1000000,
     max_cache_entries: 1000,
+    max_cache_value_size: 10000000,
+    max_cache_find_keys_size: 10000000,
+    max_cache_find_key_values_size: 10000000,
 };
 
 #[derive(Eq, Hash, PartialEq)]
@@ -411,6 +420,81 @@ impl LruPrefixCache {
         }
     }
 
+    /// Trim value cache so that it fits within bounds
+    fn trim_value_cache(&mut self) {
+        let mut keys = Vec::new();
+        let mut total_size = self.total_value_size;
+        let mut iter = self.queue.iter();
+        loop {
+            let value = iter.next();
+            let Some((cache_key, size)) = value else {
+                break;
+            };
+            if total_size < self.config.max_cache_value_size {
+                break;
+            }
+            if let CacheKey::Value(key) = cache_key {
+                total_size -= size;
+                keys.push(key.to_vec());
+            }
+        }
+        for key in keys {
+            self.value_map.remove(&key);
+            let cache_key = CacheKey::Value(key);
+            self.remove_cache_key(&cache_key);
+        }
+    }
+
+    /// Trim find_keys_by_prefix cache so that it fits within bounds.
+    fn trim_find_keys_cache(&mut self) {
+        let mut prefixes = Vec::new();
+        let mut total_size = self.total_find_keys_size;
+        let mut iter = self.queue.iter();
+        loop {
+            let value = iter.next();
+            let Some((cache_key, size)) = value else {
+                break;
+            };
+            if total_size < self.config.max_cache_find_keys_size {
+                break;
+            }
+            if let CacheKey::FindKeys(prefix) = cache_key {
+                total_size -= size;
+                prefixes.push(prefix.to_vec());
+            }
+        }
+        for prefix in prefixes {
+            self.find_keys_map.remove(&prefix);
+            let cache_key = CacheKey::FindKeys(prefix);
+            self.remove_cache_key(&cache_key);
+        }
+    }
+
+    /// Trim find_key_values_by_prefix cache so that it fits within bounds.
+    fn trim_find_key_values_cache(&mut self) {
+        let mut prefixes = Vec::new();
+        let mut total_size = self.total_find_key_values_size;
+        let mut iter = self.queue.iter();
+        loop {
+            let value = iter.next();
+            let Some((cache_key, size)) = value else {
+                break;
+            };
+            if total_size < self.config.max_cache_find_key_values_size {
+                break;
+            }
+            if let CacheKey::FindKeyValues(prefix) = cache_key {
+                total_size -= size;
+                prefixes.push(prefix.to_vec());
+            }
+        }
+        for prefix in prefixes {
+            self.find_key_values_map.remove(&prefix);
+            let cache_key = CacheKey::FindKeyValues(prefix);
+            self.remove_cache_key(&cache_key);
+        }
+    }
+
     /// Trim the cache so that it fits within the constraints.
     fn trim_cache(&mut self) {
         // NOTE: The removal of entries might be too aggressive for the
@@ -467,6 +551,7 @@ impl LruPrefixCache {
                 self.insert_cache_key(cache_key, size);
             }
         }
+        self.trim_value_cache();
         self.trim_cache();
     }
 
@@ -527,6 +612,7 @@ impl LruPrefixCache {
             .insert(key_prefix.clone(), find_entry)
             .is_none());
         self.insert_cache_key(cache_key, size);
+        self.trim_find_keys_cache();
         self.trim_cache();
     }
 
@@ -587,6 +673,7 @@ impl LruPrefixCache {
             .insert(key_prefix.clone(), find_entry)
             .is_none());
         self.insert_cache_key(cache_key, size);
+        self.trim_find_key_values_cache();
         self.trim_cache();
     }
 
