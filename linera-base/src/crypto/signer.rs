@@ -126,6 +126,13 @@ mod in_mem {
         }
     }
 
+    #[derive(Debug, Deserialize, Serialize)]
+    struct Inner {
+        keys: Vec<(AccountOwner, String)>,
+        #[cfg(with_getrandom)]
+        prng_seed: Option<u64>,
+    }
+
     /// In-memory signer.
     struct InMemSignerInner {
         keys: BTreeMap<AccountOwner, AccountSecretKey>,
@@ -175,10 +182,8 @@ mod in_mem {
             self.keys
                 .iter()
                 .map(|(owner, secret)| {
-                    (
-                        *owner,
-                        serde_json::to_vec(secret).expect("serialization should not fail"),
-                    )
+                    let bytes = serde_json::to_vec(secret).expect("serialization should not fail");
+                    (*owner, bytes)
                 })
                 .collect()
         }
@@ -256,18 +261,17 @@ mod in_mem {
         where
             S: serde::Serializer,
         {
-            #[derive(Serialize, Debug)]
-            struct Inner<'a> {
-                keys: &'a Vec<(AccountOwner, Vec<u8>)>,
-                #[cfg(with_getrandom)]
-                prng_seed: Option<u64>,
-            }
-
             #[cfg(with_getrandom)]
             let prng_seed = self.rng_state.testing_seed;
 
+            let keys_as_strings = self
+                .keys()
+                .into_iter()
+                .map(|(owner, bytes)| (owner, hex::encode(bytes)))
+                .collect::<Vec<_>>();
+
             let inner = Inner {
-                keys: &self.keys(),
+                keys: keys_as_strings,
                 #[cfg(with_getrandom)]
                 prng_seed,
             };
@@ -281,21 +285,16 @@ mod in_mem {
         where
             D: serde::Deserializer<'de>,
         {
-            #[derive(Deserialize)]
-            struct Inner {
-                keys: Vec<(AccountOwner, Vec<u8>)>,
-                #[cfg(with_getrandom)]
-                prng_seed: Option<u64>,
-            }
-
             let inner = Inner::deserialize(deserializer)?;
 
             let keys = inner
                 .keys
                 .into_iter()
-                .map(|(owner, secret)| {
+                .map(|(owner, secret_hex)| {
+                    let secret_bytes =
+                        hex::decode(&secret_hex).map_err(serde::de::Error::custom)?;
                     let secret =
-                        serde_json::from_slice(&secret).map_err(serde::de::Error::custom)?;
+                        serde_json::from_slice(&secret_bytes).map_err(serde::de::Error::custom)?;
                     Ok((owner, secret))
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
