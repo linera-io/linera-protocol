@@ -489,7 +489,8 @@ impl LruPrefixCache {
         self.insert_value(key, cache_entry)
     }
 
-    pub fn insert_find_keys(&mut self, key_prefix: Vec<u8>, find_entry: FindKeysEntry) {
+    pub fn insert_find_keys(&mut self, key_prefix: Vec<u8>, keys: &[Vec<u8>]) {
+        let find_entry = FindKeysEntry(keys.iter().map(|x| x.to_vec()).collect());
         let size = find_entry.size() + key_prefix.len();
         if size > self.config.max_entry_size {
             // The entry is too large, we do not insert it,
@@ -514,7 +515,8 @@ impl LruPrefixCache {
     }
 
 
-    pub fn insert_find_key_values(&mut self, key_prefix: Vec<u8>, find_entry: FindKeyValuesEntry) {
+    pub fn insert_find_key_values(&mut self, key_prefix: Vec<u8>, key_values: &[(Vec<u8>, Vec<u8>)]) {
+        let find_entry = FindKeyValuesEntry(key_values.iter().map(|(k,v)| (k.to_vec(), v.to_vec())).collect());
         let size = find_entry.size() + key_prefix.len();
         if size > self.config.max_entry_size {
             // The entry is too large, we do not insert it,
@@ -968,7 +970,20 @@ where
         if !has_exclusive_access {
             return self.store.find_keys_by_prefix(key_prefix).await;
         }
-        self.store.find_keys_by_prefix(key_prefix).await
+        {
+            let mut cache = cache.lock().unwrap();
+            if let Some(value) = cache.query_find_keys(key_prefix) {
+                #[cfg(with_metrics)]
+                metrics::NUM_CACHE_FIND_SUCCESS.with_label_values(&[]).inc();
+                return Ok(value);
+            }
+        }
+        #[cfg(with_metrics)]
+        metrics::NUM_CACHE_FIND_FAULT.with_label_values(&[]).inc();
+        let keys = self.store.find_keys_by_prefix(key_prefix).await?;
+        let mut cache = cache.lock().unwrap();
+        cache.insert_find_keys(key_prefix.to_vec(), &keys);
+        Ok(keys)
     }
 
     async fn find_key_values_by_prefix(
@@ -985,11 +1000,20 @@ where
         if !has_exclusive_access {
             return self.store.find_key_values_by_prefix(key_prefix).await;
         }
-
-
-
-        
-        self.store.find_key_values_by_prefix(key_prefix).await
+        {
+            let mut cache = cache.lock().unwrap();
+            if let Some(value) = cache.query_find_key_values(key_prefix) {
+                #[cfg(with_metrics)]
+                metrics::NUM_CACHE_FIND_SUCCESS.with_label_values(&[]).inc();
+                return Ok(value);
+            }
+        }
+        #[cfg(with_metrics)]
+        metrics::NUM_CACHE_FIND_FAULT.with_label_values(&[]).inc();
+        let key_values = self.store.find_key_values_by_prefix(key_prefix).await?;
+        let mut cache = cache.lock().unwrap();
+        cache.insert_find_key_values(key_prefix.to_vec(), &key_values);
+        Ok(key_values)
     }
 }
 
