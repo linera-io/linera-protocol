@@ -65,13 +65,14 @@ mod metrics {
     });
 
     /// The total number of find_keys_by_prefix cache misses
-    pub static FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_find_keys_by_prefix_cache_miss",
-            "Number of find keys by prefix cache misses",
-            &[],
-        )
-    });
+    pub static FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "num_find_keys_by_prefix_cache_miss",
+                "Number of find keys by prefix cache misses",
+                &[],
+            )
+        });
 
     /// The total number of find_keys_by_prefix cache hits
     pub static FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -83,22 +84,24 @@ mod metrics {
     });
 
     /// The total number of find_key_values_by_prefix cache misses
-    pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_find_key_values_by_prefix_cache_miss",
-            "Number of find key values by prefix cache misses",
-            &[],
-        )
-    });
+    pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "num_find_key_values_by_prefix_cache_miss",
+                "Number of find key values by prefix cache misses",
+                &[],
+            )
+        });
 
     /// The total number of find_key_values_by_prefix cache hits
-    pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_find_key_values_by_prefix_cache_hit",
-            "Number of find key values by prefix cache hits",
-            &[],
-        )
-    });
+    pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "num_find_key_values_by_prefix_cache_hit",
+                "Number of find key values by prefix cache hits",
+                &[],
+            )
+        });
 }
 
 /// The parametrization of the cache.
@@ -167,15 +170,16 @@ impl FindKeysEntry {
         match new_value {
             None => {
                 self.0.remove(key);
-            },
+            }
             Some(_) => {
                 self.0.insert(key.to_vec());
-            },
+            }
         }
     }
 
     fn delete_prefix(&mut self, key_prefix: &[u8]) {
-        let keys = self.0
+        let keys = self
+            .0
             .range(get_interval(key_prefix.to_vec()))
             .cloned()
             .collect::<Vec<_>>();
@@ -185,7 +189,7 @@ impl FindKeysEntry {
     }
 }
 
-struct FindKeyValuesEntry(BTreeMap<Vec<u8>,Vec<u8>>);
+struct FindKeyValuesEntry(BTreeMap<Vec<u8>, Vec<u8>>);
 
 impl FindKeyValuesEntry {
     fn size(&self) -> usize {
@@ -225,15 +229,16 @@ impl FindKeyValuesEntry {
         match new_value {
             None => {
                 self.0.remove(key);
-            },
+            }
             Some(new_value) => {
                 self.0.insert(key.to_vec(), new_value);
-            },
-	}
+            }
+        }
     }
 
     fn delete_prefix(&mut self, key_prefix: &[u8]) {
-        let keys = self.0
+        let keys = self
+            .0
             .range(get_interval(key_prefix.to_vec()))
             .map(|(key, _)| key.clone())
             .collect::<Vec<_>>();
@@ -242,11 +247,6 @@ impl FindKeyValuesEntry {
         }
     }
 }
-
-
-
-
-
 
 /// Stores the data for simple `read_values` queries.
 ///
@@ -296,19 +296,19 @@ impl LruPrefixCache {
         match cache_key {
             CacheKey::Value(_) => {
                 self.total_value_size -= size;
-            },
+            }
             CacheKey::FindKeys(_) => {
                 self.total_find_keys_size -= size;
-            },
+            }
             CacheKey::FindKeyValues(_) => {
                 self.total_find_key_values_size -= size;
-            },
+            }
         }
     }
 
     /// Update the cache size to the new size without changing position
     fn update_cache_key_size(&mut self, cache_key: &CacheKey, new_size: usize) {
-    	let size = self.queue.get_mut(cache_key).unwrap();
+        let size = self.queue.get_mut(cache_key).unwrap();
         let old_size = *size;
         *size = new_size;
         self.total_size -= old_size;
@@ -317,15 +317,15 @@ impl LruPrefixCache {
             CacheKey::Value(_) => {
                 self.total_value_size -= old_size;
                 self.total_value_size += new_size;
-            },
+            }
             CacheKey::FindKeys(_) => {
                 self.total_find_keys_size -= old_size;
                 self.total_find_keys_size += new_size;
-            },
+            }
             CacheKey::FindKeyValues(_) => {
                 self.total_find_key_values_size -= old_size;
                 self.total_find_key_values_size += new_size;
-            },
+            }
         }
     }
 
@@ -335,13 +335,13 @@ impl LruPrefixCache {
         match cache_key {
             CacheKey::Value(_) => {
                 self.total_value_size += size;
-            },
+            }
             CacheKey::FindKeys(_) => {
                 self.total_find_keys_size += size;
-            },
+            }
             CacheKey::FindKeyValues(_) => {
                 self.total_find_key_values_size += size;
-            },
+            }
         }
         self.queue.insert(cache_key, size);
     }
@@ -359,7 +359,10 @@ impl LruPrefixCache {
         }
     }
 
-    fn get_find_keys_lower_bound_update(&mut self, key: &[u8]) -> Option<(&Vec<u8>, &mut FindKeysEntry)> {
+    fn get_find_keys_lower_bound_update(
+        &mut self,
+        key: &[u8],
+    ) -> Option<(&Vec<u8>, &mut FindKeysEntry)> {
         match self.find_keys_map.range_mut(..=key.to_vec()).next_back() {
             None => None,
             Some((key_store, value)) => {
@@ -372,7 +375,10 @@ impl LruPrefixCache {
         }
     }
 
-    fn get_find_key_values_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeyValuesEntry)> {
+    fn get_find_key_values_lower_bound(
+        &self,
+        key: &[u8],
+    ) -> Option<(&Vec<u8>, &FindKeyValuesEntry)> {
         match self.find_key_values_map.range(..=key.to_vec()).next_back() {
             None => None,
             Some((key_store, value)) => {
@@ -385,8 +391,15 @@ impl LruPrefixCache {
         }
     }
 
-    fn get_find_key_values_lower_bound_update(&mut self, key: &[u8]) -> Option<(&Vec<u8>, &mut FindKeyValuesEntry)> {
-        match self.find_key_values_map.range_mut(..=key.to_vec()).next_back() {
+    fn get_find_key_values_lower_bound_update(
+        &mut self,
+        key: &[u8],
+    ) -> Option<(&Vec<u8>, &mut FindKeyValuesEntry)> {
+        match self
+            .find_key_values_map
+            .range_mut(..=key.to_vec())
+            .next_back()
+        {
             None => None,
             Some((key_store, value)) => {
                 if key.starts_with(key_store) {
@@ -413,17 +426,17 @@ impl LruPrefixCache {
                     self.value_map.remove(&key);
                     self.total_size -= size;
                     self.total_value_size -= size;
-                },
+                }
                 CacheKey::FindKeys(key) => {
                     self.find_keys_map.remove(&key);
                     self.total_size -= size;
                     self.total_find_keys_size -= size;
-                },
+                }
                 CacheKey::FindKeyValues(key) => {
                     self.find_key_values_map.remove(&key);
                     self.total_size -= size;
                     self.total_find_key_values_size -= size;
-                },
+                }
             }
         }
     }
@@ -460,12 +473,12 @@ impl LruPrefixCache {
     /// Invalidates corresponding find entries
     pub fn correct_find_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
         let lower_bound = self.get_find_keys_lower_bound_update(key);
-	if let Some((lower_bound, cache_entry)) = lower_bound {
+        if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
             cache_entry.update_cache_entry(key_red, new_value.clone());
         }
         let lower_bound = self.get_find_key_values_lower_bound_update(key);
-	if let Some((lower_bound, cache_entry)) = lower_bound {
+        if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
             cache_entry.update_cache_entry(key_red, new_value);
         }
@@ -509,14 +522,25 @@ impl LruPrefixCache {
         }
         let cache_key = CacheKey::FindKeys(key_prefix.clone());
         // The entry has to be missing otherwise, it would have been found
-        assert!(self.find_keys_map.insert(key_prefix.clone(), find_entry).is_none());
+        assert!(self
+            .find_keys_map
+            .insert(key_prefix.clone(), find_entry)
+            .is_none());
         self.insert_cache_key(cache_key, size);
         self.trim_cache();
     }
 
-
-    pub fn insert_find_key_values(&mut self, key_prefix: Vec<u8>, key_values: &[(Vec<u8>, Vec<u8>)]) {
-        let find_entry = FindKeyValuesEntry(key_values.iter().map(|(k,v)| (k.to_vec(), v.to_vec())).collect());
+    pub fn insert_find_key_values(
+        &mut self,
+        key_prefix: Vec<u8>,
+        key_values: &[(Vec<u8>, Vec<u8>)],
+    ) {
+        let find_entry = FindKeyValuesEntry(
+            key_values
+                .iter()
+                .map(|(k, v)| (k.to_vec(), v.to_vec()))
+                .collect(),
+        );
         let size = find_entry.size() + key_prefix.len();
         if size > self.config.max_entry_size {
             // The entry is too large, we do not insert it,
@@ -558,7 +582,10 @@ impl LruPrefixCache {
         }
         let cache_key = CacheKey::FindKeyValues(key_prefix.clone());
         // The entry has to be missing otherwise, it would have been found
-        assert!(self.find_key_values_map.insert(key_prefix.clone(), find_entry).is_none());
+        assert!(self
+            .find_key_values_map
+            .insert(key_prefix.clone(), find_entry)
+            .is_none());
         self.insert_cache_key(cache_key, size);
         self.trim_cache();
     }
@@ -586,7 +613,10 @@ impl LruPrefixCache {
             }
             // Remove the find_key_values_by_prefix(es) that are covered by that key_prefix
             let mut prefixes = Vec::new();
-            for (prefix, _) in self.find_key_values_map.range(get_interval(key_prefix.to_vec())) {
+            for (prefix, _) in self
+                .find_key_values_map
+                .range(get_interval(key_prefix.to_vec()))
+            {
                 prefixes.push(prefix.to_vec());
             }
             for prefix in prefixes {
@@ -605,7 +635,7 @@ impl LruPrefixCache {
             } else {
                 None
             };
-	    if let Some((new_cache_size, lower_bound)) = result {
+            if let Some((new_cache_size, lower_bound)) = result {
                 // Update the size without changing the position.
                 let cache_key = CacheKey::FindKeys(lower_bound.clone());
                 self.update_cache_key_size(&cache_key, new_cache_size);
@@ -621,7 +651,7 @@ impl LruPrefixCache {
             } else {
                 None
             };
-	    if let Some((new_cache_size, lower_bound)) = result {
+            if let Some((new_cache_size, lower_bound)) = result {
                 // Update the size without changing the position.
                 let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
                 self.update_cache_key_size(&cache_key, new_cache_size);
@@ -631,7 +661,8 @@ impl LruPrefixCache {
                 let size = key_prefix.len();
                 let cache_key = CacheKey::FindKeyValues(key_prefix.to_vec());
                 let find_entry = FindKeyValuesEntry(BTreeMap::new());
-                self.find_key_values_map.insert(key_prefix.to_vec(), find_entry);
+                self.find_key_values_map
+                    .insert(key_prefix.to_vec(), find_entry);
                 self.insert_cache_key(cache_key, size);
             }
         } else {
@@ -733,9 +764,7 @@ impl LruPrefixCache {
     pub fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
         // Trying first the find_keys_by_prefix cache
         let result = match self.get_find_keys_lower_bound(key_prefix) {
-            None => {
-                None
-            },
+            None => None,
             Some((lower_bound, cache_entry)) => {
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
                 Some((lower_bound, cache_entry.get_find_keys(key_prefix_red)))
@@ -750,7 +779,7 @@ impl LruPrefixCache {
         let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
             None => {
                 return None;
-            },
+            }
             Some((lower_bound, cache_entry)) => {
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
                 (lower_bound, cache_entry.get_find_keys(key_prefix_red))
@@ -766,13 +795,10 @@ impl LruPrefixCache {
         let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
             None => {
                 return None;
-            },
+            }
             Some((lower_bound, cache_entry)) => {
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
-                (
-                    lower_bound,
-                    cache_entry.get_find_key_values(key_prefix_red),
-                )
+                (lower_bound, cache_entry.get_find_key_values(key_prefix_red))
             }
         };
         let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
@@ -974,12 +1000,16 @@ where
             let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_find_keys(key_prefix) {
                 #[cfg(with_metrics)]
-                metrics::NUM_CACHE_FIND_SUCCESS.with_label_values(&[]).inc();
+                metrics::FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
                 return Ok(value);
             }
         }
         #[cfg(with_metrics)]
-        metrics::NUM_CACHE_FIND_FAULT.with_label_values(&[]).inc();
+        metrics::FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT
+            .with_label_values(&[])
+            .inc();
         let keys = self.store.find_keys_by_prefix(key_prefix).await?;
         let mut cache = cache.lock().unwrap();
         cache.insert_find_keys(key_prefix.to_vec(), &keys);
@@ -1004,12 +1034,16 @@ where
             let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_find_key_values(key_prefix) {
                 #[cfg(with_metrics)]
-                metrics::NUM_CACHE_FIND_SUCCESS.with_label_values(&[]).inc();
+                metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
                 return Ok(value);
             }
         }
         #[cfg(with_metrics)]
-        metrics::NUM_CACHE_FIND_FAULT.with_label_values(&[]).inc();
+        metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT
+            .with_label_values(&[])
+            .inc();
         let key_values = self.store.find_key_values_by_prefix(key_prefix).await?;
         let mut cache = cache.lock().unwrap();
         cache.insert_find_key_values(key_prefix.to_vec(), &key_values);
