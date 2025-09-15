@@ -43,7 +43,7 @@ pub use crate::db_storage::TestClock;
 pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, WallClock};
 
 /// The default namespace to be used when none is specified
-pub const DEFAULT_NAMESPACE: &str = "table_linera";
+pub const DEFAULT_NAMESPACE: &str = "default";
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[cfg_attr(not(web), async_trait)]
