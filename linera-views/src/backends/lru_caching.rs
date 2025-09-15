@@ -291,7 +291,7 @@ impl LruPrefixCache {
 
     /// Remove an entry from the queue
     fn remove_cache_key(&mut self, cache_key: &CacheKey) {
-        let size = self.queue.remove(&cache_key).unwrap();
+        let size = self.queue.remove(cache_key).unwrap();
         self.total_size -= size;
         match cache_key {
             CacheKey::Value(_) => {
@@ -308,7 +308,7 @@ impl LruPrefixCache {
 
     /// Update the cache size to the new size without changing position
     fn update_cache_key_size(&mut self, cache_key: &CacheKey, new_size: usize) {
-    	let size = self.queue.get_mut(&cache_key).unwrap();
+    	let size = self.queue.get_mut(cache_key).unwrap();
         let old_size = *size;
         *size = new_size;
         self.total_size -= old_size;
@@ -489,58 +489,77 @@ impl LruPrefixCache {
         self.insert_value(key, cache_entry)
     }
 
-    /*
-    pub fn insert_find(&mut self, key_prefix: Vec<u8>, find_entry: FindCacheEntry) {
-        let size = cache_entry.size() + key_prefix.len();
-        if cache_size > self.storage_cache_policy.max_entry_size {
+    pub fn insert_find_keys(&mut self, key_prefix: Vec<u8>, find_entry: FindKeysEntry) {
+        let size = find_entry.size() + key_prefix.len();
+        if size > self.config.max_entry_size {
             // The entry is too large, we do not insert it,
             return;
         }
         // Clearing up the find entries
         let keys = self
-            .find_map
+            .find_keys_map
             .range(get_interval(key_prefix.clone()))
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for key in keys {
-            self.map_find.remove(&key);
-            let cache_key = CacheKey::Find(key);
-            let old_size = self.queue.remove(&cache_key).unwrap();
-            self.total_size -= old_size;
-            self.total_find_size -= old_size;
+            self.find_keys_map.remove(&key);
+            let cache_key = CacheKey::FindKeys(key);
+            self.remove_cache_key(&cache_key);
         }
-        if let FindCacheEntry::KeyValues(_) = find_entry {
-            // Clearing up the value entries if it is a KeyValues as
-            // it is obsoletes
-            let keys = self
-                .value_map
-                .range(get_interval(key_prefix.clone()))
-                .map(|(x, _)| x.clone())
-                .collect::<Vec<_>>();
-            for key in keys {
-                self.value_map.remove(&key);
-                let full_key = CacheKey::Value(key);
-                let old_size = self.queue.remove(&cache_key).unwrap();
-                self.total_size -= old_size;
-                self.total_value_size -= old_size;
-            }
-        }
-        let cache_key = CacheKey::Find(key_prefix.clone());
-        match self.map_find.entry(key_prefix.clone()) {
-            btree_map::Entry::Occupied(mut entry) => {
-                entry.insert(find_entry);
-                let old_size = self.queue.remove(&cache_key).unwrap();
-                self.total_size -= old_size;
-                self.total_value_size -= old_size;
-            }
-            btree_map::Entry::Vacant(entry) => {
-                entry.insert(find_entry);
-            }
-        }
-        self.insert_queue(full_prefix, cache_size);
+        let cache_key = CacheKey::FindKeys(key_prefix.clone());
+        // The entry has to be missing otherwise, it would have been found
+        assert!(self.find_keys_map.insert(key_prefix.clone(), find_entry).is_none());
+        self.insert_cache_key(cache_key, size);
         self.trim_cache();
     }
-    */
+
+
+    pub fn insert_find_key_values(&mut self, key_prefix: Vec<u8>, find_entry: FindKeyValuesEntry) {
+        let size = find_entry.size() + key_prefix.len();
+        if size > self.config.max_entry_size {
+            // The entry is too large, we do not insert it,
+            return;
+        }
+        // Clearing up the FindKeys entries
+        let prefixes = self
+            .find_keys_map
+            .range(get_interval(key_prefix.clone()))
+            .map(|(x, _)| x.clone())
+            .collect::<Vec<_>>();
+        for prefix in prefixes {
+            self.find_keys_map.remove(&prefix);
+            let cache_key = CacheKey::FindKeys(prefix);
+            self.remove_cache_key(&cache_key);
+        }
+        // Clearing up the FindKeys entries
+        let prefixes = self
+            .find_key_values_map
+            .range(get_interval(key_prefix.clone()))
+            .map(|(x, _)| x.clone())
+            .collect::<Vec<_>>();
+        for prefix in prefixes {
+            self.find_key_values_map.remove(&prefix);
+            let cache_key = CacheKey::FindKeyValues(prefix);
+            self.remove_cache_key(&cache_key);
+        }
+        // Clearing up the value entries if it is a KeyValues as
+        // it is obsoletes
+        let keys = self
+            .value_map
+            .range(get_interval(key_prefix.clone()))
+            .map(|(x, _)| x.clone())
+            .collect::<Vec<_>>();
+        for key in keys {
+            self.value_map.remove(&key);
+            let cache_key = CacheKey::Value(key);
+            self.remove_cache_key(&cache_key);
+        }
+        let cache_key = CacheKey::FindKeyValues(key_prefix.clone());
+        // The entry has to be missing otherwise, it would have been found
+        assert!(self.find_key_values_map.insert(key_prefix.clone(), find_entry).is_none());
+        self.insert_cache_key(cache_key, size);
+        self.trim_cache();
+    }
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not
     /// create new entries in the cache.
