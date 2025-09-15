@@ -409,7 +409,35 @@ impl LruPrefixCache {
                 self.total_size -= size;
                 self.total_find_size -= size;
             }
-            // 
+            // Finding a lower bound. If existing update, if not insert.
+            let lower_bound = self.get_lower_bound_update(key_prefix);
+            let result = if let Some((lower_bound, find_entry)) = lower_bound {
+                // Delete the keys (or key/values) in the entry
+                let key_prefix_red = &key_prefix[lower_bound.len()..];
+                find_entry.delete_prefix(key_prefix_red);
+                let new_cache_size = find_entry.size() + key_prefix.len();
+                Some((new_cache_size, lower_bound.clone()))
+            } else {
+                None
+            };
+	    if let Some((new_cache_size, lower_bound)) = result {
+                // Update the size without changing the position.
+                let cache_key = CacheKey::Find(lower_bound.clone());
+    	        let existing_cache_size = self.queue.get_mut(&cache_key).unwrap();
+                self.total_size -= *existing_cache_size;
+                *existing_cache_size = new_cache_size;
+                self.total_size += new_cache_size;
+            } else {
+                // There is no lower bound. Therefore we can insert
+                // the deleted prefix in the cache.
+                let size = key_prefix.len();
+                let cache_key = CacheKey::Find(key_prefix.to_vec());
+                let find_entry = FindCacheEntry::KeyValues(BTreeMap::new());
+                self.find_map.insert(key_prefix.to_vec(), find_entry);
+                self.queue.insert(cache_key, size);
+                self.total_size += size;
+                self.total_find_size += size;
+            }
         } else {
             // Just forget about the entries.
             let mut keys = Vec::new();
