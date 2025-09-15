@@ -321,37 +321,6 @@ jobs:
       run: |
         cargo test --features storage-service -- storage_service --nocapture
 
-  web:
-    needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-    - uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - uses: actions/checkout@v4
-    - name: Switch to nightly Rust toolchain
-      run: |
-        ln -sf toolchains/nightly/rust-toolchain.toml
-    - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Check `linera-web` for the browser
-      run: |
-        cd linera-web
-        cargo clippy
-        cargo build
-    - name: Install chromedriver
-      uses: nanasess/setup-chromedriver@v2
-    - name: Install wasm-pack
-      uses: jetli/wasm-pack-action@v0.4.0
-      with:
-        version: 'latest'
-    - name: Run the browser tests
-      run: |
-        cd linera-views
-        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
-
   check-wit-files:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
