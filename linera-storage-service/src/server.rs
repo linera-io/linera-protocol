@@ -288,6 +288,15 @@ enum StorageServerOptions {
         /// The maximum number of entries in the cache.
         #[arg(long, default_value = "1000")]
         max_cache_entries: usize,
+        /// The maximum value size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_value_size: usize,
+        /// The maximum find_keys_by_prefix size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_find_keys_size: usize,
+        /// The maximum find_key_values_by_prefix size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_find_key_values_size: usize,
     },
 }
 
@@ -649,6 +658,9 @@ async fn main() {
             max_cache_size,
             max_entry_size,
             max_cache_entries,
+            max_cache_value_size,
+            max_cache_find_keys_size,
+            max_cache_find_key_values_size,
         } => {
             let path_buf = path.into();
             let path_with_guard = PathWithGuard::new(path_buf);
@@ -662,6 +674,9 @@ async fn main() {
                 max_cache_size,
                 max_entry_size,
                 max_cache_entries,
+                max_cache_value_size,
+                max_cache_find_keys_size,
+                max_cache_find_key_values_size,
             };
             let config = RocksDbStoreConfig {
                 inner_config,

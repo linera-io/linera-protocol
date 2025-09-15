@@ -47,6 +47,18 @@ pub struct RocksDbConfig {
     /// The maximal number of entries in the storage cache.
     #[arg(long, default_value = "1000")]
     pub max_cache_entries: usize,
+
+    /// The maximal memory used in the value cache.
+    #[arg(long, default_value = "10000000")]
+    pub max_cache_value_size: usize,
+
+    /// The maximal memory used in the find_keys_by_prefix cache.
+    #[arg(long, default_value = "10000000")]
+    pub max_cache_find_keys_size: usize,
+
+    /// The maximal memory used in the find_key_values_by_prefix cache.
+    #[arg(long, default_value = "10000000")]
+    pub max_cache_find_key_values_size: usize,
 }
 
 pub type RocksDbRunner = Runner<RocksDbDatabase, RocksDbConfig>;
@@ -58,6 +70,9 @@ impl RocksDbRunner {
             max_cache_size: config.client.max_cache_size,
             max_entry_size: config.client.max_entry_size,
             max_cache_entries: config.client.max_cache_entries,
+            max_cache_value_size: config.client.max_cache_value_size,
+            max_cache_find_keys_size: config.client.max_cache_find_keys_size,
+            max_cache_find_key_values_size: config.client.max_cache_find_key_values_size,
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
         let path_with_guard = PathWithGuard::new(path_buf);

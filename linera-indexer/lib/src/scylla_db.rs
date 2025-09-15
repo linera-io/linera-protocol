@@ -42,6 +42,18 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "1000")]
     pub max_cache_entries: usize,
 
+    /// The maximal memory used in the value cache.
+    #[arg(long, default_value = "10000000")]
+    pub max_cache_value_size: usize,
+
+    /// The maximal memory used in the find_keys_by_prefix cache.
+    #[arg(long, default_value = "10000000")]
+    pub max_cache_find_keys_size: usize,
+
+    /// The maximal memory used in the find_key_values_by_prefix cache.
+    #[arg(long, default_value = "10000000")]
+    pub max_cache_find_key_values_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
     pub replication_factor: u32,
@@ -56,6 +68,9 @@ impl ScyllaDbRunner {
             max_cache_size: config.client.max_cache_size,
             max_entry_size: config.client.max_entry_size,
             max_cache_entries: config.client.max_cache_entries,
+            max_cache_value_size: config.client.max_cache_value_size,
+            max_cache_find_keys_size: config.client.max_cache_find_keys_size,
+            max_cache_find_key_values_size: config.client.max_cache_find_key_values_size,
         };
         let inner_config = ScyllaDbStoreInternalConfig {
             uri: config.client.uri.clone(),

@@ -1293,8 +1293,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::BTreeSet;
+
+    use super::*;
 
     fn create_test_cache(has_exclusive_access: bool) -> LruPrefixCache {
         let config = StorageCacheConfig {
