@@ -366,6 +366,15 @@ impl LruPrefixCache {
         self.trim_cache();
     }
 
+    /// Invalidates corresponding find entries
+    pub fn correct_find_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
+        let lower_bound = self.get_lower_bound_update(key);
+	if let Some((lower_bound, cache_entry)) = lower_bound {
+            let key_red = &key[lower_bound.len()..];
+            cache_entry.update_cache_entry(key_red, new_value);
+        }
+    }
+
     /// Inserts a read_value entry into the cache.
     fn insert_read_value(&mut self, key: Vec<u8>, value: &Option<Vec<u8>>) {
         let cache_entry = match value {
@@ -482,17 +491,16 @@ impl LruPrefixCache {
             let lower_bound = self.get_lower_bound(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
-                (Some(lower_bound), find_entry.get_read_value(key_red))
+                (lower_bound, find_entry.get_read_value(key_red))
             } else {
-                (None, None)
+                return None;
             };
             if result.is_some() {
-                if let Some(lower_bound) = lower_bound {
-                    let cache_key = CacheKey::Find(lower_bound.clone());
-                    let cache_size = self.queue.remove(&cache_key).unwrap();
-                    self.queue.insert(cache_key, cache_size);
-                }
+                let cache_key = CacheKey::Find(lower_bound.clone());
+                let cache_size = self.queue.remove(&cache_key).unwrap();
+                self.queue.insert(cache_key, cache_size);
             }
+            return result;
         }
         result
     }
@@ -517,19 +525,15 @@ impl LruPrefixCache {
             let lower_bound = self.get_lower_bound(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
-                (
-                    Some(lower_bound),
-                    Some(find_entry.get_contains_key(key_red)),
-                )
+                (lower_bound, find_entry.get_contains_key(key_red))
             } else {
-                (None, None)
+                return None;
             };
-            if let Some(lower_bound) = lower_bound {
-                // Put back the key on top.
-                let cache_key = CacheKey::Find(lower_bound.clone());
-                let size = self.queue.remove(&cache_key).unwrap();
-                self.queue.insert(cache_key, size);
-            }
+            // Put back the key on top.
+            let cache_key = CacheKey::Find(lower_bound.clone());
+            let size = self.queue.remove(&cache_key).unwrap();
+            self.queue.insert(cache_key, size);
+            return Some(result);
         }
         result
     }
@@ -766,10 +770,12 @@ where
             for operation in &batch.operations {
                 match operation {
                     WriteOperation::Put { key, value } => {
+                        cache.correct_find_entry(key, Some(value.to_vec()));
                         let cache_entry = ValueCacheEntry::Value(value.to_vec());
                         cache.insert_value(key.to_vec(), cache_entry);
                     }
                     WriteOperation::Delete { key } => {
+                        cache.correct_find_entry(key, None);
                         let cache_entry = ValueCacheEntry::DoesNotExist;
                         cache.insert_value(key.to_vec(), cache_entry);
                     }
