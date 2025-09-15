@@ -187,6 +187,32 @@ impl FindCacheEntry {
             }
         }
     }
+
+
+    fn delete_prefix(&mut self, key_prefix: &[u8]) {
+        match self {
+            FindCacheEntry::Keys(set) => {
+                let keys = set
+                    .range(get_interval(key_prefix.to_vec()))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                for key in keys {
+                    set.remove(&key);
+                }
+            }
+            FindCacheEntry::KeyValues(map) => {
+                let keys = map
+                    .range(get_interval(key_prefix.to_vec()))
+                    .map(|(key, _)| key.clone())
+                    .collect::<Vec<_>>();
+                for key in keys {
+                    map.remove(&key);
+                }
+            }
+        }
+    }
+
+
 }
 
 /// Stores the data for simple `read_values` queries.
@@ -217,6 +243,32 @@ impl LruPrefixCache {
             total_value_size: 0,
             total_find_size: 0,
             has_exclusive_access,
+        }
+    }
+
+    fn get_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindCacheEntry)> {
+        match self.find_map.range(..=key.to_vec()).next_back() {
+            None => None,
+            Some((key_store, value)) => {
+                if key.starts_with(key_store) {
+                    Some((key_store, value))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn get_lower_bound_update(&mut self, key: &[u8]) -> Option<(&Vec<u8>, &mut FindCacheEntry)> {
+        match self.find_map.range_mut(..=key.to_vec()).next_back() {
+            None => None,
+            Some((key_store, value)) => {
+                if key.starts_with(key_store) {
+                    Some((key_store, value))
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -315,6 +367,7 @@ impl LruPrefixCache {
                 self.total_value_size -= value.size();
                 *value = ValueCacheEntry::DoesNotExist;
             }
+            // Remove the prefixes that are covered by that delete_prefix.
             let mut prefixes = Vec::new();
             for (prefix, _) in self.find_map.range(get_interval(key_prefix.to_vec())) {
                 prefixes.push(prefix.to_vec());
@@ -328,6 +381,7 @@ impl LruPrefixCache {
                 self.total_size -= size;
                 self.total_find_size -= size;
             }
+            // 
         } else {
             // Just forget about the entries.
             let mut keys = Vec::new();
