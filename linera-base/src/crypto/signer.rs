@@ -126,6 +126,13 @@ mod in_mem {
         }
     }
 
+    #[derive(Debug, Deserialize, Serialize)]
+    struct Inner {
+        keys: Vec<(AccountOwner, String)>,
+        #[cfg(with_getrandom)]
+        prng_seed: Option<u64>,
+    }
+
     /// In-memory signer.
     struct InMemSignerInner {
         keys: BTreeMap<AccountOwner, AccountSecretKey>,
@@ -254,23 +261,17 @@ mod in_mem {
         where
             S: serde::Serializer,
         {
-            #[derive(Serialize, Debug)]
-            struct Inner<'a> {
-                keys: &'a Vec<(AccountOwner, String)>,
-                #[cfg(with_getrandom)]
-                prng_seed: Option<u64>,
-            }
-
             #[cfg(with_getrandom)]
             let prng_seed = self.rng_state.testing_seed;
 
-            let keys_as_strings: Vec<(AccountOwner, String)> = self.keys()
+            let keys_as_strings = self
+                .keys()
                 .into_iter()
                 .map(|(owner, bytes)| (owner, hex::encode(bytes)))
-                .collect();
+                .collect::<Vec<_>>();
 
             let inner = Inner {
-                keys: &keys_as_strings,
+                keys: keys_as_strings,
                 #[cfg(with_getrandom)]
                 prng_seed,
             };
@@ -284,13 +285,6 @@ mod in_mem {
         where
             D: serde::Deserializer<'de>,
         {
-            #[derive(Deserialize)]
-            struct Inner {
-                keys: Vec<(AccountOwner, String)>,
-                #[cfg(with_getrandom)]
-                prng_seed: Option<u64>,
-            }
-
             let inner = Inner::deserialize(deserializer)?;
 
             let keys = inner
