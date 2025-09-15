@@ -57,7 +57,7 @@ use linera_service::{
     storage::{CommonStorageOptions, Runnable, RunnableWithStore, StorageConfig},
     util, wallet,
 };
-use linera_storage::{DbStorage, Storage};
+use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
 use serde_json::Value;
 use tempfile::NamedTempFile;
@@ -1785,7 +1785,7 @@ impl ClientOptions {
                     path: Self::config_path()?.join("wallet.db"),
                     spawn_mode,
                 };
-                let namespace = "default".to_string();
+                let namespace = DEFAULT_NAMESPACE.to_string;
                 Ok(StorageConfig {
                     inner_storage_config,
                     namespace,
