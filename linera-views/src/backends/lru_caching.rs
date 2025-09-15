@@ -279,6 +279,19 @@ impl LruPrefixCache {
                 self.total_value_size -= value.size();
                 *value = ValueCacheEntry::DoesNotExist;
             }
+            let mut prefixes = Vec::new();
+            for (prefix, _) in self.find_map.range(get_interval(key_prefix.to_vec())) {
+                prefixes.push(prefix.to_vec());
+            }
+            for prefix in prefixes {
+                self.value_map.remove(&prefix);
+                let cache_key = CacheKey::Find(prefix);
+                let Some(size) = self.queue.remove(&cache_key) else {
+                    unreachable!("The key should be in the queue");
+                };
+                self.total_size -= size;
+                self.total_find_size -= size;
+            }
         } else {
             // Just forget about the entries.
             let mut keys = Vec::new();
