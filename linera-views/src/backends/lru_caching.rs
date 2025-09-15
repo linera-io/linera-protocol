@@ -307,6 +307,7 @@ impl LruPrefixCache {
                 self.total_size -= size;
                 self.total_value_size -= size;
             }
+            // No find keys for shared access
         }
     }
 
@@ -527,6 +528,16 @@ where
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let Some(cache) = &self.cache else {
+            return self.store.find_keys_by_prefix(key_prefix).await;
+        };
+        let has_exclusive_access = {
+            let cache = cache.lock().unwrap();
+            cache.has_exclusive_access
+        };
+        if !has_exclusive_access {
+            return self.store.find_keys_by_prefix(key_prefix).await;
+        }
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
@@ -534,6 +545,16 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        let Some(cache) = &self.cache else {
+            return self.store.find_key_values_by_prefix(key_prefix).await;
+        };
+        let has_exclusive_access = {
+            let cache = cache.lock().unwrap();
+            cache.has_exclusive_access
+        };
+        if !has_exclusive_access {
+            return self.store.find_key_values_by_prefix(key_prefix).await;
+        }
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
