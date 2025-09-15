@@ -25,10 +25,11 @@ members = [
     "linera-summary",
     "linera-views",
     "linera-views-derive",
-    "linera-web",
     "linera-witty",
     "linera-witty-macros",
     "linera-witty/test-modules",
+
+    "web/@linera/client",
 ]
 default-members = [
     "linera-base",

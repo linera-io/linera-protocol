@@ -6,7 +6,7 @@ settings:
 
 importers:
 
-  ../linera-web:
+  ../web/@linera/client:
     devDependencies:
       prettier:
         specifier: 3.5.3
@@ -18,11 +18,11 @@ importers:
         specifier: ^4.7.0
         version: 4.8.1(typedoc@0.28.10(typescript@5.9.2))
 
-  ../linera-web/signer:
+  ../web/@linera/signer:
     dependencies:
       '@linera/client':
         specifier: workspace:*
-        version: link:..
+        version: link:../client
       '@metamask/providers':
         specifier: ^22.1.0
         version: 22.1.0(webextension-polyfill@0.12.0)
@@ -56,10 +56,10 @@ importers:
     dependencies:
       '@linera/client':
         specifier: workspace:*
-        version: link:../../linera-web
+        version: link:../../web/@linera/client
       '@linera/signer':
         specifier: workspace:*
-        version: link:../../linera-web/signer
+        version: link:../../web/@linera/signer
       ethers:
         specifier: ^6.14.3
         version: 6.15.0
@@ -72,10 +72,10 @@ importers:
     dependencies:
       '@linera/client':
         specifier: workspace:*
-        version: link:../../../linera-web
+        version: link:../../../web/@linera/client
       '@linera/signer':
         specifier: workspace:*
-        version: link:../../../linera-web/signer
+        version: link:../../../web/@linera/signer
     devDependencies:
       vite:
         specifier: ^5.4.11
@@ -85,10 +85,10 @@ importers:
     dependencies:
       '@linera/client':
         specifier: workspace:*
-        version: link:../../linera-web
+        version: link:../../web/@linera/client
       '@linera/signer':
         specifier: workspace:*
-        version: link:../../linera-web/signer
+        version: link:../../web/@linera/signer
       ethers:
         specifier: ^6.14.3
         version: 6.15.0

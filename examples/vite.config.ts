@@ -12,7 +12,7 @@ export default defineConfig({
     },
     fs: {
       allow: [
-        path.resolve(__dirname, '../linera-web'),
+        path.resolve(__dirname, '../web'),
       ],
     },
   },
