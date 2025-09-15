@@ -64,10 +64,10 @@ COPY linera-persistent linera-persistent
 COPY linera-version linera-version
 COPY linera-views linera-views
 COPY linera-views-derive linera-views-derive
-COPY linera-web linera-web
 COPY linera-witty linera-witty
 COPY linera-witty-macros linera-witty-macros
 COPY scripts scripts
+COPY web web
 COPY rust-toolchain* Cargo.* ./
 
 ENV GIT_COMMIT=${git_commit}
