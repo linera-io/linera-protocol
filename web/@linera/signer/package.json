@@ -15,6 +15,7 @@
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
     "test": "jest",
+    "ci": "pnpm test",
     "prepare": "pnpm run build"
   },
   "dependencies": {
