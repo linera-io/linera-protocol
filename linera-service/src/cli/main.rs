@@ -34,8 +34,11 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    client::ListeningMode, data_types::ClientOutcome, node::ValidatorNodeProvider, worker::Reason,
-    JoinSetExt as _,
+    client::{ChainClientError, ListeningMode},
+    data_types::ClientOutcome,
+    node::ValidatorNodeProvider,
+    worker::Reason,
+    JoinSetExt as _, LocalNodeError,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
@@ -1667,9 +1670,20 @@ impl Runnable for Job {
                     signer.into_value(),
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let chain_state_view = context.storage().load_chain(chain_id).await?;
-                let block_hash = chain_state_view.block_hashes(height..=height).await?[0];
-                let block = context.storage().read_confirmed_block(block_hash).await?;
+                let chain_state_view = context
+                    .storage()
+                    .load_chain(chain_id)
+                    .await
+                    .context("Failed to load chain")?;
+                let block_hash = chain_state_view
+                    .block_hashes(height..=height)
+                    .await
+                    .context("Failed to find a block hash for the given height")?[0];
+                let block = context
+                    .storage()
+                    .read_confirmed_block(block_hash)
+                    .await
+                    .context("Failed to find the given block in storage")?;
                 println!("{:#?}", block);
             }
 
@@ -1682,7 +1696,14 @@ impl Runnable for Job {
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
-                let description = chain_client.get_chain_description().await?;
+                let description = match chain_client.get_chain_description().await {
+                    Ok(description) => description,
+                    Err(ChainClientError::LocalNodeError(LocalNodeError::BlobsNotFound(_))) => {
+                        println!("Could not find a chain description corresponding to the given chain ID.");
+                        return Ok(());
+                    }
+                    err => err.context("Failed to get the chain description")?,
+                };
                 println!("{:#?}", description);
             }
 

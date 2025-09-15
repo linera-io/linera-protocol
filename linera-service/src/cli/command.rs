@@ -1219,15 +1219,17 @@ pub enum WalletCommand {
 pub enum ChainCommand {
     /// Show the contents of a block.
     ShowBlock {
-        /// The chain to show the block.
-        chain_id: Option<ChainId>,
         /// The height of the block.
         height: BlockHeight,
+        /// The chain to show the block (if not specified, the default chain from the
+        /// wallet is used).
+        chain_id: Option<ChainId>,
     },
 
     /// Show the chain description of a chain.
     ShowChainDescription {
-        /// The chain ID to show.
+        /// The chain ID to show (if not specified, the default chain from the wallet is
+        /// used).
         chain_id: Option<ChainId>,
     },
 }

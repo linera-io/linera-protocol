@@ -12,6 +12,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera set-preferred-owner`↴](#linera-set-preferred-owner)
 * [`linera change-application-permissions`↴](#linera-change-application-permissions)
 * [`linera close-chain`↴](#linera-close-chain)
+* [`linera show-network-description`↴](#linera-show-network-description)
 * [`linera local-balance`↴](#linera-local-balance)
 * [`linera query-balance`↴](#linera-query-balance)
 * [`linera sync-balance`↴](#linera-sync-balance)
@@ -48,6 +49,9 @@ This document contains the help content for the `linera` command-line program.
 * [`linera wallet follow-chain`↴](#linera-wallet-follow-chain)
 * [`linera wallet forget-keys`↴](#linera-wallet-forget-keys)
 * [`linera wallet forget-chain`↴](#linera-wallet-forget-chain)
+* [`linera chain`↴](#linera-chain)
+* [`linera chain show-block`↴](#linera-chain-show-block)
+* [`linera chain show-chain-description`↴](#linera-chain-show-chain-description)
 * [`linera project`↴](#linera-project)
 * [`linera project new`↴](#linera-project-new)
 * [`linera project test`↴](#linera-project-test)
@@ -79,6 +83,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `set-preferred-owner` — Change the preferred owner of a chain
 * `change-application-permissions` — Changes the application permissions configuration
 * `close-chain` — Close an existing chain
+* `show-network-description` — Print out the network description
 * `local-balance` — Read the current native-token balance of the given account directly from the local state
 * `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
@@ -106,6 +111,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `assign` — Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
 * `wallet` — Show the contents of the wallet
+* `chain` — Show the contents of the wallet
 * `project` — Manage Linera projects
 * `net` — Manage a local Linera Network
 * `storage` — Operation on the storage
@@ -326,6 +332,14 @@ A closed chain cannot execute operations or accept messages anymore. It can stil
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — Chain ID (must be one of our chains)
+
+
+
+## `linera show-network-description`
+
+Print out the network description
+
+**Usage:** `linera show-network-description`
 
 
 
@@ -999,6 +1013,44 @@ Forgets the specified chain, including the associated key pair
 ###### **Arguments:**
 
 * `<CHAIN_ID>`
+
+
+
+## `linera chain`
+
+Show the contents of the wallet
+
+**Usage:** `linera chain <COMMAND>`
+
+###### **Subcommands:**
+
+* `show-block` — Show the contents of a block
+* `show-chain-description` — Show the chain description of a chain
+
+
+
+## `linera chain show-block`
+
+Show the contents of a block
+
+**Usage:** `linera chain show-block <HEIGHT> [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<HEIGHT>` — The height of the block
+* `<CHAIN_ID>` — The chain to show the block (if not specified, the default chain from the wallet is used)
+
+
+
+## `linera chain show-chain-description`
+
+Show the chain description of a chain
+
+**Usage:** `linera chain show-chain-description [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain ID to show (if not specified, the default chain from the wallet is used)
 
 
 
