@@ -61,7 +61,11 @@ spec:
         - name: linera-server
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          {{- if and .Values.blockExporter.enabled (eq .Values.environment "GCP") }}
+          command: ["./server-entrypoint.sh", {{ .Values.storage | quote }}, {{ .Values.storageReplicationFactor | quote }}, "--with-block-exporter", "--exporter-address", "linera-block-exporter", "--exporter-port", "{{ .Values.blockExporter.port }}"]
+          {{- else }}
           command: ["./server-entrypoint.sh", {{ .Values.storage | quote }}, {{ .Values.storageReplicationFactor | quote }}]
+          {{- end }}
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
