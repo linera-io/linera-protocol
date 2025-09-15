@@ -63,6 +63,42 @@ mod metrics {
             &[],
         )
     });
+
+    /// The total number of find_keys_by_prefix cache misses
+    pub static FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_find_keys_by_prefix_cache_miss",
+            "Number of find keys by prefix cache misses",
+            &[],
+        )
+    });
+
+    /// The total number of find_keys_by_prefix cache hits
+    pub static FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_find_keys_by_prefix_cache_hit",
+            "Number of find keys by prefix cache hits",
+            &[],
+        )
+    });
+
+    /// The total number of find_key_values_by_prefix cache misses
+    pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_find_key_values_by_prefix_cache_miss",
+            "Number of find key values by prefix cache misses",
+            &[],
+        )
+    });
+
+    /// The total number of find_key_values_by_prefix cache hits
+    pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_find_key_values_by_prefix_cache_hit",
+            "Number of find key values by prefix cache hits",
+            &[],
+        )
+    });
 }
 
 /// The parametrization of the cache.
@@ -555,6 +591,10 @@ where
         if !has_exclusive_access {
             return self.store.find_key_values_by_prefix(key_prefix).await;
         }
+
+
+
+        
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
