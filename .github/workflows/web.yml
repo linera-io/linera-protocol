@@ -1,0 +1,89 @@
+name: Web
+
+on:
+  push:
+    branches: [ 'devnet_*', 'testnet_*' ]
+  merge_group:
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+# This allows a subsequently queued workflow run to interrupt previous runs on pull requests
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: full
+  # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
+  RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+  RUST_LOG: linera=debug
+  RUST_LOG_FORMAT: plain
+  LINERA_STORAGE_SERVICE: 127.0.0.1:1235
+  LINERA_WALLET: /tmp/local-linera-net/wallet_0.json
+  LINERA_KEYSTORE: /tmp/local-linera-net/keystore_0.json
+  LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
+  LINERA_FAUCET_URL: http://localhost:8079
+
+permissions:
+  contents: read
+
+jobs:
+  changed-files:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.files-changed.outputs.paths }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Filter paths
+        uses: dorny/paths-filter@v3
+        id: files-changed
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            paths:
+              - '!docker/**'
+              - '!docker_scylla/**'
+              - '!configuration/**'
+              - '!kubernetes/**'
+              - '!CONTRIBUTING.md'
+              - '!INSTALL.md'
+
+  web:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Switch to nightly Rust toolchain
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - uses: nanasess/setup-chromedriver@v2
+    - uses: jetli/wasm-pack-action@v0.4.0
+      with:
+        version: v0.13.1
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+
+    - name: Test the npm packages
+      run: |
+        cd web
+        pnpm -r run ci
+    - name: Test `linera-views` on the Web
+      run: |
+        cd linera-views
+        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
