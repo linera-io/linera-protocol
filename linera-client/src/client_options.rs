@@ -45,19 +45,25 @@ util::impl_from_infallible!(Error);
 
 #[derive(Clone, clap::Parser)]
 pub struct ClientContextOptions {
-    /// Sets the file storing the private state of user chains (an empty one will be created if missing)
+    /// DEPRECATED: Use --with-wallet=NAME instead. Sets the file
+    /// storing the private state of user chains (an empty one will be created if missing)
     #[arg(long = "wallet")]
     pub wallet_state_path: Option<PathBuf>,
 
-    /// Sets the file storing the keystore state.
+    /// DEPRECATED: Use --with-wallet=NAME instead. Sets the file
+    /// storing the keystore state.
     #[arg(long = "keystore")]
     pub keystore_path: Option<PathBuf>,
 
-    /// Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet
-    /// storage config from the environment variables `LINERA_WALLET_{X}` and
-    /// `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and
-    /// `LINERA_STORAGE`.
-    #[arg(long, short = 'w', value_parser = util::parse_ascii_alphanumeric_string)]
+    /// Sets the home directory for storing Linera wallets. Alternatively, one may set the
+    /// environment variable LINERA_HOME.
+    #[arg(long, env = "LINERA_HOME")]
+    pub home_directory: Option<PathBuf>,
+
+    /// Name of the wallet to be used. Data will be stored in the corresponding
+    /// subdirectory of the home directory -- unless other (deprecated) options are
+    /// used.
+    #[arg(long, short = 'w', value_name = "NAME", value_parser = util::parse_ascii_alphanumeric_string)]
     pub with_wallet: Option<String>,
 
     /// Timeout for sending queries (milliseconds)

@@ -1814,17 +1814,21 @@ impl ClientOptions {
             .unwrap_or_default()
     }
 
-    fn config_path() -> Result<PathBuf, Error> {
-        let mut config_dir = dirs::config_dir().ok_or_else(|| anyhow!(
+    fn config_path(&self, file: &str) -> Result<PathBuf, Error> {
+        let mut path = self.context_options.home_directory.clone().or_else(dirs::config_dir).ok_or_else(|| anyhow!(
             "Default wallet directory is not supported in this platform: please specify storage and wallet paths"
         ))?;
-        config_dir.push("linera");
-        if !config_dir.exists() {
-            debug!("Creating default wallet directory {}", config_dir.display());
-            fs_err::create_dir_all(&config_dir)?;
+        path.push("linera");
+        if let Some(name) = &self.context_options.with_wallet {
+            path.push(name);
         }
-        info!("Using default wallet directory {}", config_dir.display());
-        Ok(config_dir)
+        if !path.exists() {
+            debug!("Creating default wallet directory {}", path.display());
+            fs_err::create_dir_all(&path)?;
+        }
+        path.push(file);
+        info!("Using wallet path {}", path.display());
+        Ok(path)
     }
 
     fn storage_config(&self) -> Result<StorageConfig, Error> {
@@ -1834,6 +1838,7 @@ impl ClientOptions {
         let suffix = self.suffix();
         let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
         if let Some(config) = storage_env_var {
+            warn!("LINERA_STORAGE_* is deprecated. Use --with-wallet=NAME or --storage=CONFIG instead.");
             return config.parse();
         }
         cfg_if::cfg_if! {
@@ -1841,7 +1846,7 @@ impl ClientOptions {
                 let spawn_mode =
                     linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
                 let inner_storage_config = linera_service::storage::InnerStorageConfig::RocksDb {
-                    path: Self::config_path()?.join("wallet.db"),
+                    path: self.config_path("wallet.db")?,
                     spawn_mode,
                 };
                 let namespace = "default".to_string();
@@ -1857,28 +1862,30 @@ impl ClientOptions {
 
     fn wallet_path(&self) -> Result<PathBuf, Error> {
         if let Some(path) = &self.context_options.wallet_state_path {
+            warn!("Option --wallet is deprecated. Use --with-wallet=NAME instead.");
             return Ok(path.clone());
         }
         let suffix = self.suffix();
         let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
         if let Some(path) = wallet_env_var {
+            warn!("LINERA_WALLET_* is deprecated. Use --with-wallet=NAME instead.");
             return Ok(path.parse()?);
         }
-        let config_path = Self::config_path()?;
-        Ok(config_path.join("wallet.json"))
+        self.config_path("wallet.json")
     }
 
     fn keystore_path(&self) -> Result<PathBuf, Error> {
         if let Some(path) = &self.context_options.keystore_path {
+            warn!("Option --keystore is deprecated. Use --with-wallet=NAME instead.");
             return Ok(path.clone());
         }
         let suffix = self.suffix();
         let keystore_env_var = env::var(format!("LINERA_KEYSTORE{suffix}")).ok();
         if let Some(path) = keystore_env_var {
+            warn!("LINERA_KEYSTORE_* is deprecated. Use --with-wallet=NAME instead.");
             return Ok(path.parse()?);
         }
-        let config_path = Self::config_path()?;
-        Ok(config_path.join("keystore.json"))
+        self.config_path("keystore.json")
     }
 
     pub fn create_wallet(
