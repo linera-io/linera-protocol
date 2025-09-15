@@ -1823,7 +1823,7 @@ impl ClientOptions {
                     path: Self::config_path()?.join("wallet.db"),
                     spawn_mode,
                 };
-                let namespace = "default".to_string();
+                let namespace = linera_storage::DEFAULT_NAMESPACE.to_string();
                 Ok(StorageConfig {
                     inner_storage_config,
                     namespace,
