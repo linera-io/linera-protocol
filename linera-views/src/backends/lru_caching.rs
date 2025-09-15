@@ -461,6 +461,7 @@ impl LruPrefixCache {
     /// database. If `None` is returned, the entry might exist in the database but is
     /// not in the cache.
     fn query_read_value(&mut self, key: &[u8]) -> Option<Option<Vec<u8>>> {
+        // First querying the value_map
         let result = match self.value_map.get(key) {
             None => None,
             Some(entry) => match entry {
@@ -474,6 +475,24 @@ impl LruPrefixCache {
             // Put back the key on top
             let size = self.queue.remove(&cache_key).expect("size");
             self.queue.insert(cache_key, size);
+            return result;
+        }
+        if self.has_exclusive_access {
+            // Now trying the find maps.
+            let lower_bound = self.get_lower_bound(key);
+            let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
+                let key_red = &key[lower_bound.len()..];
+                (Some(lower_bound), find_entry.get_read_value(key_red))
+            } else {
+                (None, None)
+            };
+            if result.is_some() {
+                if let Some(lower_bound) = lower_bound {
+                    let cache_key = CacheKey::Find(lower_bound.clone());
+                    let cache_size = self.queue.remove(&cache_key).unwrap();
+                    self.queue.insert(cache_key, cache_size);
+                }
+            }
         }
         result
     }
@@ -481,15 +500,36 @@ impl LruPrefixCache {
     /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
     /// exist in the database. Returns `None` if that information is not in the cache.
     fn query_contains_key(&mut self, key: &[u8]) -> Option<bool> {
+        // First try on the value_map
         let result = self
             .value_map
             .get(key)
             .map(|entry| !matches!(entry, ValueCacheEntry::DoesNotExist));
         if result.is_some() {
             let cache_key = CacheKey::Value(key.to_vec());
-            // Put back the key on top
+            // Put back the key on top.
             let size = self.queue.remove(&cache_key).expect("size");
             self.queue.insert(cache_key, size);
+            return result;
+        }
+        if self.has_exclusive_access {
+            // Now trying the find maps.
+            let lower_bound = self.get_lower_bound(key);
+            let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
+                let key_red = &key[lower_bound.len()..];
+                (
+                    Some(lower_bound),
+                    Some(find_entry.get_contains_key(key_red)),
+                )
+            } else {
+                (None, None)
+            };
+            if let Some(lower_bound) = lower_bound {
+                // Put back the key on top.
+                let cache_key = CacheKey::Find(lower_bound.clone());
+                let size = self.queue.remove(&cache_key).unwrap();
+                self.queue.insert(cache_key, size);
+            }
         }
         result
     }
