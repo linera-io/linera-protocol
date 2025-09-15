@@ -188,6 +188,36 @@ impl FindCacheEntry {
         }
     }
 
+    fn get_contains_key(&self, key: &[u8]) -> bool {
+        match self {
+            FindCacheEntry::Keys(set) => set.contains(key),
+            FindCacheEntry::KeyValues(map) => map.contains_key(key),
+        }
+    }
+
+    fn get_read_value(&self, key: &[u8]) -> Option<Option<Vec<u8>>> {
+        match self {
+            FindCacheEntry::Keys(_map) => None,
+            FindCacheEntry::KeyValues(map) => Some(map.get(key).cloned()),
+        }
+    }
+
+    fn update_cache_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
+        match self {
+            FindCacheEntry::Keys(set) => {
+                match new_value {
+                    None => set.remove(key),
+                    Some(_) => set.insert(key.to_vec()),
+                };
+            }
+            FindCacheEntry::KeyValues(map) => {
+                match new_value {
+                    None => map.remove(key),
+                    Some(new_value) => map.insert(key.to_vec(), new_value),
+	        };
+            }
+        }
+    }
 
     fn delete_prefix(&mut self, key_prefix: &[u8]) {
         match self {
@@ -211,8 +241,6 @@ impl FindCacheEntry {
             }
         }
     }
-
-
 }
 
 /// Stores the data for simple `read_values` queries.
