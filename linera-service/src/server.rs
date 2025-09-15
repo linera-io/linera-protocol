@@ -6,6 +6,14 @@
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+// jemalloc configuration for memory profiling with jemalloc_pprof
+// prof:true,prof_active:true - Enable profiling from start
+// lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
+#[cfg(feature = "memory-profiling")]
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+
 use std::{
     borrow::Cow,
     num::NonZeroU16,
@@ -24,7 +32,7 @@ use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerCon
 use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
-use linera_metrics::prometheus_server;
+use linera_metrics::monitoring_server;
 use linera_persistent::{self as persistent, Persist};
 use linera_rpc::{
     config::{
@@ -107,7 +115,10 @@ impl ServerContext {
 
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                Self::start_metrics(&listen_address, port, shutdown_signal.clone());
+                monitoring_server::start_metrics(
+                    (listen_address.clone(), port),
+                    shutdown_signal.clone(),
+                );
             }
 
             let server_handle = simple::Server::new(
@@ -150,7 +161,10 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                Self::start_metrics(listen_address, port, shutdown_signal.clone());
+                monitoring_server::start_metrics(
+                    (listen_address.to_string(), port),
+                    shutdown_signal.clone(),
+                );
             }
 
             let server_handle = grpc::GrpcServer::spawn(
@@ -178,11 +192,6 @@ impl ServerContext {
         join_set.spawn_task(handles.collect::<()>());
 
         join_set
-    }
-
-    #[cfg(with_metrics)]
-    fn start_metrics(host: &str, port: u16, shutdown_signal: CancellationToken) {
-        prometheus_server::start_metrics((host.to_owned(), port), shutdown_signal);
     }
 
     fn get_listen_address() -> String {

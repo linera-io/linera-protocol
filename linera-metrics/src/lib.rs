@@ -3,4 +3,7 @@
 
 //! A library for Linera server metrics.
 
-pub mod prometheus_server;
+pub mod monitoring_server;
+
+#[cfg(feature = "memory-profiling")]
+pub mod memory_profiler;

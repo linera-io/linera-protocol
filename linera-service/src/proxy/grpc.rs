@@ -23,7 +23,7 @@ use linera_core::{
     JoinSetExt as _,
 };
 #[cfg(with_metrics)]
-use linera_metrics::prometheus_server;
+use linera_metrics::monitoring_server;
 use linera_rpc::{
     config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
     grpc::{
@@ -248,7 +248,7 @@ where
         let mut join_set = JoinSet::new();
 
         #[cfg(with_metrics)]
-        prometheus_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
+        monitoring_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
 
         let (health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter

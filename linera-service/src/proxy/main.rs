@@ -5,6 +5,14 @@
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+// jemalloc configuration for memory profiling with jemalloc_pprof
+// prof:true,prof_active:true - Enable profiling from start
+// lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
+#[cfg(feature = "memory-profiling")]
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Result};
@@ -14,7 +22,7 @@ use linera_base::listen_for_shutdown_signals;
 use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
 #[cfg(with_metrics)]
-use linera_metrics::prometheus_server;
+use linera_metrics::monitoring_server;
 use linera_rpc::{
     config::{
         NetworkProtocol, ShardConfig, ValidatorInternalNetworkPreConfig,
@@ -249,7 +257,7 @@ where
         let address = self.get_listen_address();
 
         #[cfg(with_metrics)]
-        Self::start_metrics(address, shutdown_signal.clone());
+        monitoring_server::start_metrics(address, shutdown_signal.clone());
 
         self.public_config
             .protocol
@@ -276,11 +284,6 @@ where
             .get(self.id)
             .unwrap_or_else(|| panic!("proxy with id {} must be present", self.id))
             .metrics_port
-    }
-
-    #[cfg(with_metrics)]
-    pub fn start_metrics(address: SocketAddr, shutdown_signal: CancellationToken) {
-        prometheus_server::start_metrics(address, shutdown_signal)
     }
 
     fn get_listen_address(&self) -> SocketAddr {

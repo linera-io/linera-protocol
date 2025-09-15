@@ -10,7 +10,7 @@ use exporter_service::ExporterService;
 use futures::FutureExt;
 use linera_base::listen_for_shutdown_signals;
 #[cfg(with_metrics)]
-use linera_metrics::prometheus_server;
+use linera_metrics::monitoring_server;
 use linera_rpc::NodeOptions;
 use linera_service::{
     config::BlockExporterConfig,
@@ -104,7 +104,7 @@ impl Runnable for ExporterContext {
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         #[cfg(with_metrics)]
-        prometheus_server::start_metrics(self.config.metrics_address(), shutdown_notifier.clone());
+        monitoring_server::start_metrics(self.config.metrics_address(), shutdown_notifier.clone());
 
         let (sender, handle) = start_block_processor_task(
             storage,
