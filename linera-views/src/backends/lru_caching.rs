@@ -537,6 +537,47 @@ impl LruPrefixCache {
         }
         result
     }
+
+    /// Gets the find_keys entry from the key prefix
+    pub fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
+        let (lower_bound, keys) = match self.get_lower_bound(key_prefix) {
+            None => {
+                return None;
+            },
+            Some((lower_bound, cache_entry)) => {
+                let key_prefix_red = &key_prefix[lower_bound.len()..];
+                (lower_bound, cache_entry.get_find_keys(key_prefix_red))
+            }
+        };
+        // Put back the key on top.
+        let cache_key = CacheKey::Find(lower_bound.clone());
+        let cache_size = self.queue.remove(&cache_key).unwrap();
+        self.queue.insert(cache_key, cache_size);
+        Some(keys)
+    }
+
+    /// Gets the find key values entry from the key prefix
+    pub fn query_find_key_values(&mut self, key_prefix: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
+        let (lower_bound, result) = match self.get_lower_bound(key_prefix) {
+            None => {
+                return None;
+            },
+            Some((lower_bound, cache_entry)) => {
+                let key_prefix_red = &key_prefix[lower_bound.len()..];
+                (
+                    lower_bound,
+                    cache_entry.get_find_key_values(key_prefix_red),
+                )
+            }
+        };
+        if result.is_some() {
+            let cache_key = CacheKey::Find(lower_bound.to_vec());
+            let cache_size = self.queue.remove(&cache_key).unwrap();
+            self.queue.insert(cache_key, cache_size);
+            return result;
+        }
+        result
+    }
 }
 
 /// A key-value database with added LRU caching.
