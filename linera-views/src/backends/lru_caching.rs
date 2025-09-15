@@ -85,6 +85,12 @@ pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig 
     max_cache_entries: 1000,
 };
 
+#[derive(Eq, Hash, PartialEq)]
+enum CacheKey {
+    Value(Vec<u8>),
+    Find(Vec<u8>),
+}
+
 enum ValueCacheEntry {
     DoesNotExist,
     Exists,
@@ -154,7 +160,7 @@ impl FindCacheEntry {
 struct LruPrefixCache {
     value_map: BTreeMap<Vec<u8>, ValueCacheEntry>,
     find_map: BTreeMap<Vec<u8>, FindCacheEntry>,
-    queue: LinkedHashMap<Vec<u8>, usize, RandomState>,
+    queue: LinkedHashMap<CacheKey, usize, RandomState>,
     config: StorageCacheConfig,
     total_size: usize,
     /// Whether we have exclusive R/W access to the keys under the root key of the store.
@@ -179,11 +185,17 @@ impl LruPrefixCache {
         while self.total_size > self.config.max_cache_size
             || self.queue.len() > self.config.max_cache_entries
         {
-            let Some((key, key_value_size)) = self.queue.pop_front() else {
+            let Some((cache_key, key_value_size)) = self.queue.pop_front() else {
                 break;
             };
-            self.value_map.remove(&key);
-            self.total_size -= key_value_size;
+            match cache_key {
+                CacheKey::Value(key) => {
+                    self.value_map.remove(&key);
+                    self.total_size -= key_value_size;
+                },
+                CacheKey::Find(key) => {
+                },
+            }
         }
     }
 
@@ -193,9 +205,13 @@ impl LruPrefixCache {
         if (matches!(cache_entry, ValueCacheEntry::DoesNotExist) && !self.has_exclusive_access)
             || key_value_size > self.config.max_entry_size
         {
+            let cache_key = CacheKey::Value(key);
             // Just forget about the entry.
-            if let Some(old_key_value_size) = self.queue.remove(&key) {
+            if let Some(old_key_value_size) = self.queue.remove(&cache_key) {
                 self.total_size -= old_key_value_size;
+                let CacheKey::Value(key) = cache_key else {
+                    unreachable!();
+                };
                 self.value_map.remove(&key);
             };
             return;
@@ -204,14 +220,16 @@ impl LruPrefixCache {
             btree_map::Entry::Occupied(mut entry) => {
                 entry.insert(cache_entry);
                 // Put it on first position for LRU
-                let old_key_value_size = self.queue.remove(&key).expect("old_key_value_size");
+                let cache_key = CacheKey::Value(key);
+                let old_key_value_size = self.queue.remove(&cache_key).expect("old_key_value_size");
                 self.total_size -= old_key_value_size;
-                self.queue.insert(key, key_value_size);
+                self.queue.insert(cache_key, key_value_size);
                 self.total_size += key_value_size;
             }
             btree_map::Entry::Vacant(entry) => {
                 entry.insert(cache_entry);
-                self.queue.insert(key, key_value_size);
+                let cache_key = CacheKey::Value(key);
+                self.queue.insert(cache_key, key_value_size);
                 self.total_size += key_value_size;
             }
         }
@@ -241,7 +259,8 @@ impl LruPrefixCache {
     fn delete_prefix(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
             for (key, value) in self.value_map.range_mut(get_interval(key_prefix.to_vec())) {
-                *self.queue.get_mut(key).unwrap() = key.len();
+                let cache_key = CacheKey::Value(key.to_vec());
+                *self.queue.get_mut(&cache_key).unwrap() = key.len();
                 self.total_size -= value.size();
                 *value = ValueCacheEntry::DoesNotExist;
             }
@@ -253,7 +272,8 @@ impl LruPrefixCache {
             }
             for key in keys {
                 self.value_map.remove(&key);
-                let Some(key_value_size) = self.queue.remove(&key) else {
+                let cache_key = CacheKey::Value(key);
+                let Some(key_value_size) = self.queue.remove(&cache_key) else {
                     unreachable!("The key should be in the queue");
                 };
                 self.total_size -= key_value_size;
@@ -274,9 +294,10 @@ impl LruPrefixCache {
             },
         };
         if result.is_some() {
+            let cache_key = CacheKey::Value(key.to_vec());
             // Put back the key on top
-            let key_value_size = self.queue.remove(key).expect("key_value_size");
-            self.queue.insert(key.to_vec(), key_value_size);
+            let key_value_size = self.queue.remove(&cache_key).expect("key_value_size");
+            self.queue.insert(cache_key, key_value_size);
         }
         result
     }
@@ -289,9 +310,10 @@ impl LruPrefixCache {
             .get(key)
             .map(|entry| !matches!(entry, ValueCacheEntry::DoesNotExist));
         if result.is_some() {
+            let cache_key = CacheKey::Value(key.to_vec());
             // Put back the key on top
-            let key_value_size = self.queue.remove(key).expect("key_value_size");
-            self.queue.insert(key.to_vec(), key_value_size);
+            let key_value_size = self.queue.remove(&cache_key).expect("key_value_size");
+            self.queue.insert(cache_key, key_value_size);
         }
         result
     }
