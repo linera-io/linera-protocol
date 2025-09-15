@@ -592,7 +592,8 @@ impl Runnable for Job {
                         let context = context.clone();
                         let chains = chains.clone();
                         async move {
-                            let validator = context.make_node_provider().make_node(network_address)?;
+                            let validator =
+                                context.make_node_provider().make_node(network_address)?;
                             // For each validator, sync all chains sequentially
                             for chain_id in &chains {
                                 let chain = context.make_chain_client(*chain_id);
