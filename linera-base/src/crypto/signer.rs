@@ -120,7 +120,7 @@ mod in_mem {
         }
 
         /// Returns the public key corresponding to the given `owner`.
-        pub fn keys(&self) -> Vec<(AccountOwner, String)> {
+        pub fn keys(&self) -> Vec<(AccountOwner, Vec<u8>)> {
             let inner = self.0.read().unwrap();
             inner.keys()
         }
@@ -171,12 +171,12 @@ mod in_mem {
             }
         }
 
-        pub fn keys(&self) -> Vec<(AccountOwner, String)> {
+        pub fn keys(&self) -> Vec<(AccountOwner, Vec<u8>)> {
             self.keys
                 .iter()
                 .map(|(owner, secret)| {
                     let bytes = serde_json::to_vec(secret).expect("serialization should not fail");
-                    (*owner, hex::encode(bytes))
+                    (*owner, bytes)
                 })
                 .collect()
         }
@@ -264,8 +264,13 @@ mod in_mem {
             #[cfg(with_getrandom)]
             let prng_seed = self.rng_state.testing_seed;
 
+            let keys_as_strings: Vec<(AccountOwner, String)> = self.keys()
+                .into_iter()
+                .map(|(owner, bytes)| (owner, hex::encode(bytes)))
+                .collect();
+
             let inner = Inner {
-                keys: &self.keys(),
+                keys: &keys_as_strings,
                 #[cfg(with_getrandom)]
                 prng_seed,
             };
