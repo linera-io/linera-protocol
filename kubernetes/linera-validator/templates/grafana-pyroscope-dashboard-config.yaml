@@ -8,3 +8,4 @@ metadata:
     grafana_folder: "Profiling"
 data:
   cpu_profiling.json: {{ .Files.Get "grafana-dashboards/profiling/cpu.json" | quote }}
+  memory_profiling.json: {{ .Files.Get "grafana-dashboards/profiling/jemalloc-memory.json" | quote }}
