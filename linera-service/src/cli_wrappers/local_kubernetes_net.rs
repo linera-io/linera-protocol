@@ -13,7 +13,6 @@ use linera_base::{
     data_types::Amount,
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
-use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 #[cfg(with_testing)]
 use {linera_base::command::current_binary_parent, tokio::sync::OnceCell};
@@ -69,6 +68,7 @@ pub struct LocalKubernetesNetConfig {
     pub build_mode: BuildMode,
     pub policy_config: ResourceControlPolicyConfig,
     pub dual_store: bool,
+    pub path_provider: PathProvider,
 }
 
 /// A wrapper of [`LocalKubernetesNetConfig`] to create a shared local Kubernetes network
@@ -82,7 +82,6 @@ pub struct LocalKubernetesNet {
     network: Network,
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
-    tmp_dir: Arc<TempDir>,
     binaries: BuildArg,
     no_build: bool,
     docker_image_name: String,
@@ -92,6 +91,7 @@ pub struct LocalKubernetesNet {
     num_initial_validators: usize,
     num_shards: usize,
     dual_store: bool,
+    path_provider: PathProvider,
 }
 
 #[cfg(with_testing)]
@@ -127,6 +127,8 @@ impl SharedLocalKubernetesNetTestingConfig {
             build_mode: BuildMode::Release,
             policy_config: ResourceControlPolicyConfig::Testnet,
             dual_store: false,
+            path_provider: PathProvider::create_temporary_directory()
+                .expect("Creating temporary directory should not fail"),
         })
     }
 }
@@ -160,6 +162,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             self.num_initial_validators,
             self.num_shards,
             self.dual_store,
+            self.path_provider,
         )?;
 
         let client = net.make_client().await;
@@ -276,11 +279,8 @@ impl LineraNet for LocalKubernetesNet {
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
-        let path_provider = PathProvider::TemporaryDirectory {
-            tmp_dir: self.tmp_dir.clone(),
-        };
         let client = ClientWrapper::new(
-            path_provider,
+            self.path_provider.clone(),
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
@@ -340,12 +340,12 @@ impl LocalKubernetesNet {
         num_initial_validators: usize,
         num_shards: usize,
         dual_store: bool,
+        path_provider: PathProvider,
     ) -> Result<Self> {
         Ok(Self {
             network,
             testing_prng_seed,
             next_client_id: 0,
-            tmp_dir: Arc::new(tempdir()?),
             binaries,
             no_build,
             docker_image_name,
@@ -355,19 +355,23 @@ impl LocalKubernetesNet {
             num_initial_validators,
             num_shards,
             dual_store,
+            path_provider,
         })
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
         let path = resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
-        command.current_dir(self.tmp_dir.path());
+        command.current_dir(self.path_provider.path());
         Ok(command)
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
         let n = server_number;
-        let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
+        let path = self
+            .path_provider
+            .path()
+            .join(format!("validator_{n}.toml"));
         let port = 19100 + server_number;
         let internal_port = 20100;
         let metrics_port = 21100;
@@ -451,12 +455,12 @@ impl LocalKubernetesNet {
             .join("linera-validator")
             .join("working");
         fs_err::copy(
-            self.tmp_dir.path().join("genesis.json"),
+            self.path_provider.path().join("genesis.json"),
             base_dir.join("genesis.json"),
         )?;
 
         let kubectl_instance_clone = self.kubectl_instance.clone();
-        let tmp_dir_path_clone = self.tmp_dir.path().to_path_buf();
+        let path_provider_path_clone = self.path_provider.path().to_path_buf();
         let num_shards = self.num_shards;
 
         let mut validators_initialization_futures = Vec::new();
@@ -465,7 +469,7 @@ impl LocalKubernetesNet {
             let github_root = github_root.clone();
 
             let kubectl_instance = kubectl_instance_clone.clone();
-            let tmp_dir_path = tmp_dir_path_clone.clone();
+            let path_provider_path = path_provider_path_clone.clone();
 
             let docker_image_name = docker_image_name.clone();
             let dual_store = self.dual_store;
@@ -475,7 +479,7 @@ impl LocalKubernetesNet {
 
                 let server_config_filename = format!("server_{}.json", i);
                 fs_err::copy(
-                    tmp_dir_path.join(&server_config_filename),
+                    path_provider_path.join(&server_config_filename),
                     base_dir.join(&server_config_filename),
                 )?;
 

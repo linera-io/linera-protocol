@@ -125,6 +125,7 @@ pub async fn handle_net_up_kubernetes(
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
     dual_store: bool,
+    path: &Option<String>,
 ) -> anyhow::Result<()> {
     assert!(
         num_initial_validators >= 1,
@@ -157,6 +158,7 @@ pub async fn handle_net_up_kubernetes(
         build_mode,
         policy_config,
         dual_store,
+        path_provider: PathProvider::from_path_option(path)?,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
@@ -319,18 +321,23 @@ async fn print_messages_and_create_faucet(
 
     // Run the faucet,
     let faucet_service = if with_faucet {
-        let faucet_chain_idx = faucet_chain.unwrap_or(0);
-        assert!(
-            num_other_initial_chains > faucet_chain_idx,
-            "num_other_initial_chains must be strictly greater than the faucet chain index if \
+        let faucet_chain = if let Some(faucet_chain_idx) = faucet_chain {
+            assert!(
+                num_other_initial_chains > faucet_chain_idx,
+                "num_other_initial_chains must be strictly greater than the faucet chain index if \
             with_faucet is true"
-        );
-        // This picks a lexicographically faucet_chain_idx-th non-admin chain.
-        let faucet_chain = chains
-            .into_iter()
-            .filter(|chain_id| *chain_id != wallet.genesis_admin_chain())
-            .nth(faucet_chain_idx as usize)
-            .unwrap(); // we checked that there are enough chains above, so this should be safe
+            );
+            // This picks a lexicographically faucet_chain_idx-th non-admin chain.
+            Some(
+                chains
+                    .into_iter()
+                    .filter(|chain_id| *chain_id != wallet.genesis_admin_chain())
+                    .nth(faucet_chain_idx as usize)
+                    .unwrap(),
+            ) // we checked that there are enough chains above, so this should be safe
+        } else {
+            None
+        };
         let service = client
             .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount)
             .await?;
