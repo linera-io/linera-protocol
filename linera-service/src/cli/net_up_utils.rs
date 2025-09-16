@@ -113,6 +113,7 @@ pub async fn handle_net_up_kubernetes(
     num_other_initial_chains: u32,
     initial_amount: u128,
     num_initial_validators: usize,
+    num_proxies: usize,
     num_shards: usize,
     testing_prng_seed: Option<u64>,
     binaries: &Option<Option<PathBuf>>,
@@ -129,6 +130,10 @@ pub async fn handle_net_up_kubernetes(
     assert!(
         num_initial_validators >= 1,
         "The local test network must have at least one validator."
+    );
+    assert!(
+        num_proxies >= 1,
+        "The local test network must have at least one proxy."
     );
     assert!(
         num_shards >= 1,
@@ -150,6 +155,7 @@ pub async fn handle_net_up_kubernetes(
         num_other_initial_chains,
         initial_amount: Amount::from_tokens(initial_amount),
         num_initial_validators,
+        num_proxies,
         num_shards,
         binaries: binaries.clone().into(),
         no_build,

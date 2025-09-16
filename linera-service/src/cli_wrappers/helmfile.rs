@@ -14,6 +14,7 @@ impl HelmFile {
     pub async fn sync(
         server_config_id: usize,
         github_root: &Path,
+        num_proxies: usize,
         num_shards: usize,
         cluster_id: u32,
         docker_image_name: String,
@@ -40,6 +41,7 @@ impl HelmFile {
                 "LINERA_HELMFILE_SET_SERVER_CONFIG",
                 format!("working/server_{server_config_id}.json"),
             )
+            .env("LINERA_HELMFILE_SET_NUM_PROXIES", num_proxies.to_string())
             .env("LINERA_HELMFILE_SET_NUM_SHARDS", num_shards.to_string())
             .env("LINERA_HELMFILE_LINERA_IMAGE", docker_image_name)
             .env(

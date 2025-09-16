@@ -1064,6 +1064,10 @@ pub enum NetCommand {
         #[arg(long, default_value = "1")]
         validators: usize,
 
+        /// The number of proxies in the local test network.
+        #[arg(long, default_value = "1")]
+        proxies: usize,
+
         /// The number of shards per validator in the local test network.
         #[arg(long, default_value = "1")]
         shards: usize,
