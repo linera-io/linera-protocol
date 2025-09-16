@@ -1,0 +1,83 @@
+{{- if .Values.indexer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: linera-indexer
+  labels:
+    app: linera-indexer
+spec:
+  ports:
+    - port: {{ .Values.indexer.port }}
+      name: grpc
+  selector:
+    app: linera-indexer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linera-indexer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linera-indexer
+  template:
+    metadata:
+      labels:
+        app: linera-indexer
+    spec:
+      {{- if eq .Values.environment "GCP" }}
+      nodeSelector:
+        workload: system
+      tolerations:
+      - key: system
+        value: "true"
+        effect: NoSchedule
+      {{- end }}
+      containers:
+        - name: linera-indexer
+          image: {{ .Values.indexer.image }}
+          imagePullPolicy: {{ .Values.indexer.imagePullPolicy }}
+          command:
+            - "./linera-indexer-grpc"
+            - "--port"
+            - "{{ .Values.indexer.port }}"
+            - "--database-path"
+            - "{{ .Values.indexer.databasePath }}"
+          ports:
+            - containerPort: {{ .Values.indexer.port }}
+              name: grpc
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.indexer.logLevel }}
+            - name: RUST_BACKTRACE
+              value: "1"
+          volumeMounts:
+            - name: indexer-data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.indexer.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.indexer.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: indexer-data
+          persistentVolumeClaim:
+            claimName: indexer-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: indexer-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.indexer.storageSize }}
+{{- end }}
