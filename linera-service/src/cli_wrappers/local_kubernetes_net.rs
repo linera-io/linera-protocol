@@ -62,6 +62,7 @@ pub struct LocalKubernetesNetConfig {
     pub num_other_initial_chains: u32,
     pub initial_amount: Amount,
     pub num_initial_validators: usize,
+    pub num_proxies: usize,
     pub num_shards: usize,
     pub binaries: BuildArg,
     pub no_build: bool,
@@ -90,6 +91,7 @@ pub struct LocalKubernetesNet {
     kubectl_instance: Arc<Mutex<KubectlInstance>>,
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
+    num_proxies: usize,
     num_shards: usize,
     dual_store: bool,
 }
@@ -120,6 +122,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             num_other_initial_chains: 2,
             initial_amount: Amount::from_tokens(2000),
             num_initial_validators: 4,
+            num_proxies: 1,
             num_shards: 4,
             binaries,
             no_build: false,
@@ -158,6 +161,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             KubectlInstance::new(Vec::new()),
             clusters,
             self.num_initial_validators,
+            self.num_proxies,
             self.num_shards,
             self.dual_store,
         )?;
@@ -338,6 +342,7 @@ impl LocalKubernetesNet {
         kubectl_instance: KubectlInstance,
         kind_clusters: Vec<KindCluster>,
         num_initial_validators: usize,
+        num_proxies: usize,
         num_shards: usize,
         dual_store: bool,
     ) -> Result<Self> {
@@ -353,6 +358,7 @@ impl LocalKubernetesNet {
             kubectl_instance: Arc::new(Mutex::new(kubectl_instance)),
             kind_clusters,
             num_initial_validators,
+            num_proxies,
             num_shards,
             dual_store,
         })
@@ -365,40 +371,47 @@ impl LocalKubernetesNet {
         Ok(command)
     }
 
-    fn configuration_string(&self, server_number: usize) -> Result<String> {
-        let n = server_number;
-        let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
-        let port = 19100 + server_number;
-        let internal_port = 20100;
+    fn configuration_string(&self, validator_number: usize) -> Result<String> {
+        let path = self
+            .tmp_dir
+            .path()
+            .join(format!("validator_{validator_number}.toml"));
+        let public_port = 19100;
+        let private_port = 20100;
         let metrics_port = 21100;
+        let protocol = self.network.toml();
+        let host = self.network.localhost();
         let mut content = format!(
             r#"
-                server_config_path = "server_{n}.json"
-                host = "127.0.0.1"
-                port = {port}
-                [external_protocol]
-                Grpc = "ClearText"
-                [internal_protocol]
-                Grpc = "ClearText"
+                server_config_path = "server_{validator_number}.json"
+                host = "{host}"
+                port = {public_port}
+                external_protocol = {protocol}
+                internal_protocol = {protocol}
 
-                [[proxies]]
-                host = "proxy-0.proxy-internal.default.svc.cluster.local"
-                public_port = {port}
-                private_port = {internal_port}
-                metrics_port = {metrics_port}
             "#
         );
 
-        for k in 0..self.num_shards {
-            let shard_port = 19100;
-            let shard_metrics_port = 21100;
+        for proxy_id in 0..self.num_proxies {
+            content.push_str(&format!(
+                r#"
+                    [[proxies]]
+                    host = "proxy-{proxy_id}.proxy-internal.default.svc.cluster.local"
+                    public_port = {public_port}
+                    private_port = {private_port}
+                    metrics_port = {metrics_port}
+                "#
+            ));
+        }
+
+        for shard_id in 0..self.num_shards {
             content.push_str(&format!(
                 r#"
 
                 [[shards]]
-                host = "shards-{k}.shards.default.svc.cluster.local"
-                port = {shard_port}
-                metrics_port = {shard_metrics_port}
+                host = "shards-{shard_id}.shards.default.svc.cluster.local"
+                port = {public_port}
+                metrics_port = {metrics_port}
                 "#
             ));
         }
@@ -419,8 +432,8 @@ impl LocalKubernetesNet {
             self.testing_prng_seed = Some(seed + 1);
         }
         command.arg("--validators");
-        for i in 0..self.num_initial_validators {
-            command.arg(&self.configuration_string(i)?);
+        for validator_number in 0..self.num_initial_validators {
+            command.arg(&self.configuration_string(validator_number)?);
         }
         command
             .args(["--committee", "committee.json"])
@@ -457,10 +470,11 @@ impl LocalKubernetesNet {
 
         let kubectl_instance_clone = self.kubectl_instance.clone();
         let tmp_dir_path_clone = self.tmp_dir.path().to_path_buf();
+        let num_proxies = self.num_proxies;
         let num_shards = self.num_shards;
 
         let mut validators_initialization_futures = Vec::new();
-        for (i, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
+        for (validator_number, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
             let base_dir = base_dir.clone();
             let github_root = github_root.clone();
 
@@ -473,15 +487,16 @@ impl LocalKubernetesNet {
                 let cluster_id = kind_cluster.id();
                 kind_cluster.load_docker_image(&docker_image_name).await?;
 
-                let server_config_filename = format!("server_{}.json", i);
+                let server_config_filename = format!("server_{}.json", validator_number);
                 fs_err::copy(
                     tmp_dir_path.join(&server_config_filename),
                     base_dir.join(&server_config_filename),
                 )?;
 
                 HelmFile::sync(
-                    i,
+                    validator_number,
                     &github_root,
+                    num_proxies,
                     num_shards,
                     cluster_id,
                     docker_image_name,
@@ -492,7 +507,7 @@ impl LocalKubernetesNet {
                 let mut kubectl_instance = kubectl_instance.lock().await;
                 let proxy_service = "svc/proxy";
 
-                let local_port = 19100 + i;
+                let local_port = 19100 + validator_number;
                 kubectl_instance.port_forward(
                     proxy_service,
                     &format!("{local_port}:19100"),

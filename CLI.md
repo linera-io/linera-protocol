@@ -1103,6 +1103,9 @@ Start a Local Linera Network
 * `--validators <VALIDATORS>` — The number of validators in the local test network
 
   Default value: `1`
+* `--proxies <PROXIES>` — The number of proxies in the local test network
+
+  Default value: `1`
 * `--shards <SHARDS>` — The number of shards per validator in the local test network
 
   Default value: `1`
