@@ -54,8 +54,8 @@ test-strategy.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
-tonic-prost-build = { workspace = true, features = ["transport"] }
 tonic-prost.workspace = true
+tonic-prost-build = { workspace = true, features = ["transport"] }
 
 [package.metadata.cargo-machete]
 ignored = ["proptest", "prost", "tonic-prost"]
