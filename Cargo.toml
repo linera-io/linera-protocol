@@ -136,6 +136,7 @@ indexed_db_futures = "0.4.1"
 insta = "1.36.1"
 is-terminal = "0.4.12"
 itertools = "0.14.0"
+jemalloc_pprof = "0.8.1"
 js-sys = "0.3.70"
 k256 = { version = "0.13.4", default-features = false, features = [
     "ecdsa",

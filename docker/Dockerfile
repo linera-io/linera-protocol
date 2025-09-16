@@ -25,7 +25,7 @@ ARG binaries=
 ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
-ARG build_features=scylladb,metrics
+ARG build_features=scylladb,metrics,memory-profiling
 ARG rustflags="-C force-frame-pointers=yes"
 
 FROM rust:1.74-slim-bookworm AS builder
@@ -39,7 +39,8 @@ ARG rustflags
 RUN apt-get update && apt-get install -y \
     pkg-config \
     protobuf-compiler \
-    clang
+    clang \
+    make
 
 COPY examples examples
 COPY linera-base linera-base
