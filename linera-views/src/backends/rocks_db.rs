@@ -14,7 +14,7 @@ use std::{
 };
 
 use linera_base::ensure;
-use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle};
+use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform};
 use serde::{Deserialize, Serialize};
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tempfile::TempDir;
@@ -166,25 +166,38 @@ impl RocksDbStoreExecutor {
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
+    fn get_find_prefix_iterator(&self, prefix: &[u8]) -> rocksdb::DBRawIteratorWithThreadMode<DB> {
+        // Configure ReadOptions optimized for SSDs and iterator performance
+        let mut read_opts = rocksdb::ReadOptions::default();
+        // Enable async I/O for better concurrency
+        read_opts.set_async_io(true);
+
+        // Set precise upper bound to minimize key traversal
+        let upper_bound = get_upper_bound_option(prefix);
+        if let Some(upper_bound) = upper_bound {
+            read_opts.set_iterate_upper_bound(upper_bound);
+        }
+
+        let mut iter = self.db.raw_iterator_opt(read_opts);
+        iter.seek(prefix);
+        iter
+    }
+
     fn find_keys_by_prefix_internal(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
         check_key_size(&key_prefix)?;
+
         let mut prefix = self.start_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
-        let mut iter = self.db.raw_iterator();
+
+        let mut iter = self.get_find_prefix_iterator(&prefix);
         let mut keys = Vec::new();
-        iter.seek(&prefix);
-        let mut next_key = iter.key();
-        while let Some(key) = next_key {
-            if !key.starts_with(&prefix) {
-                break;
-            }
+        while let Some(key) = iter.key() {
             keys.push(key[len..].to_vec());
             iter.next();
-            next_key = iter.key();
         }
         Ok(keys)
     }
@@ -198,20 +211,13 @@ impl RocksDbStoreExecutor {
         let mut prefix = self.start_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
-        let mut iter = self.db.raw_iterator();
+
+        let mut iter = self.get_find_prefix_iterator(&prefix);
         let mut key_values = Vec::new();
-        iter.seek(&prefix);
-        let mut next_key = iter.key();
-        while let Some(key) = next_key {
-            if !key.starts_with(&prefix) {
-                break;
-            }
-            if let Some(value) = iter.value() {
-                let key_value = (key[len..].to_vec(), value.to_vec());
-                key_values.push(key_value);
-            }
+        while let Some((key, value)) = iter.item() {
+            let key_value = (key[len..].to_vec(), value.to_vec());
+            key_values.push(key_value);
             iter.next();
-            next_key = iter.key();
         }
         Ok(key_values)
     }
@@ -373,7 +379,31 @@ impl RocksDbStoreInternal {
             total_ram / 4,
             HYPER_CLOCK_CACHE_BLOCK_SIZE,
         ));
+
+        // Configure bloom filters for prefix iteration optimization
+        block_options.set_bloom_filter(10.0, false);
+        block_options.set_whole_key_filtering(false);
+
+        // 32KB blocks instead of default 4KB - reduces iterator seeks
+        block_options.set_block_size(32 * 1024);
+        // Use latest format for better compression and performance
+        block_options.set_format_version(5);
+
         options.set_block_based_table_factory(&block_options);
+
+        // Configure prefix extraction for bloom filter optimization
+        // Use 8 bytes: ROOT_KEY_DOMAIN (1 byte) + BCS variant (1-2 bytes) + identifier start (4-5 bytes)
+        let prefix_extractor = SliceTransform::create_fixed_prefix(8);
+        options.set_prefix_extractor(prefix_extractor);
+
+        // 12.5% of memtable size for bloom filter
+        options.set_memtable_prefix_bloom_ratio(0.125);
+        // Skip bloom filter for memtable when key exists
+        options.set_optimize_filters_for_hits(true);
+        // Use memory-mapped files for faster reads
+        options.set_allow_mmap_reads(true);
+        // Don't use random access pattern since we do prefix scans
+        options.set_advise_random_on_open(false);
 
         let db = DB::open(&options, path_buf)?;
         let executor = RocksDbStoreExecutor {
