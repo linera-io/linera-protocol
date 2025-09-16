@@ -11,12 +11,15 @@ use linera_base::{
 };
 use linera_chain::types::Timeout;
 
-use super::{ValueCache, DEFAULT_VALUE_CACHE_SIZE};
+use super::ValueCache;
+
+/// Test cache size for unit tests.
+const TEST_CACHE_SIZE: usize = 10;
 
 /// Tests attempt to retrieve non-existent value.
 #[test]
 fn test_retrieve_missing_value() {
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
+    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::new(TEST_CACHE_SIZE);
     let hash = CryptoHash::test_hash("Missing value");
 
     assert!(cache.get(&hash).is_none());
@@ -26,7 +29,7 @@ fn test_retrieve_missing_value() {
 /// Tests inserting a certificate value in the cache.
 #[test]
 fn test_insert_single_certificate_value() {
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
+    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::new(TEST_CACHE_SIZE);
     let value = create_dummy_certificate_value(0);
     let hash = value.hash();
 
@@ -39,9 +42,8 @@ fn test_insert_single_certificate_value() {
 /// Tests inserting many certificate values in the cache, one-by-one.
 #[test]
 fn test_insert_many_certificate_values_individually() {
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
-    let values =
-        create_dummy_certificate_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::new(TEST_CACHE_SIZE);
+    let values = create_dummy_certificate_values(0..(TEST_CACHE_SIZE as u64)).collect::<Vec<_>>();
 
     for value in &values {
         assert!(cache.insert(Cow::Borrowed(value)));
@@ -61,9 +63,8 @@ fn test_insert_many_certificate_values_individually() {
 /// Tests inserting many values in the cache, all-at-once.
 #[test]
 fn test_insert_many_values_together() {
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
-    let values =
-        create_dummy_certificate_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::new(TEST_CACHE_SIZE);
+    let values = create_dummy_certificate_values(0..(TEST_CACHE_SIZE as u64)).collect::<Vec<_>>();
 
     cache.insert_all(values.iter().map(Cow::Borrowed));
 
@@ -81,9 +82,8 @@ fn test_insert_many_values_together() {
 /// Tests re-inserting many values in the cache, all-at-once.
 #[test]
 fn test_reinsertion_of_values() {
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
-    let values =
-        create_dummy_certificate_values(0..(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::new(TEST_CACHE_SIZE);
+    let values = create_dummy_certificate_values(0..(TEST_CACHE_SIZE as u64)).collect::<Vec<_>>();
 
     cache.insert_all(values.iter().map(Cow::Borrowed));
 
@@ -105,9 +105,8 @@ fn test_reinsertion_of_values() {
 /// Tests eviction of one entry.
 #[test]
 fn test_one_eviction() {
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
-    let values =
-        create_dummy_certificate_values(0..=(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::new(TEST_CACHE_SIZE);
+    let values = create_dummy_certificate_values(0..=(TEST_CACHE_SIZE as u64)).collect::<Vec<_>>();
 
     cache.insert_all(values.iter().map(Cow::Borrowed));
 
@@ -128,18 +127,12 @@ fn test_one_eviction() {
 /// Tests eviction of the second entry.
 #[test]
 fn test_eviction_of_second_entry() {
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
-    let values =
-        create_dummy_certificate_values(0..=(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::new(TEST_CACHE_SIZE);
+    let values = create_dummy_certificate_values(0..=(TEST_CACHE_SIZE as u64)).collect::<Vec<_>>();
 
-    cache.insert_all(
-        values
-            .iter()
-            .take(DEFAULT_VALUE_CACHE_SIZE)
-            .map(Cow::Borrowed),
-    );
+    cache.insert_all(values.iter().take(TEST_CACHE_SIZE).map(Cow::Borrowed));
     cache.get(&values[0].hash());
-    assert!(cache.insert(Cow::Borrowed(&values[DEFAULT_VALUE_CACHE_SIZE])));
+    assert!(cache.insert(Cow::Borrowed(&values[TEST_CACHE_SIZE])));
 
     assert!(cache.contains(&values[0].hash()));
     assert_eq!(cache.get(&values[0].hash()).as_ref(), Some(&values[0]));
@@ -167,18 +160,12 @@ fn test_eviction_of_second_entry() {
 /// Tests if reinsertion of the first entry promotes it so that it's not evicted so soon.
 #[test]
 fn test_promotion_of_reinsertion() {
-    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::default();
-    let values =
-        create_dummy_certificate_values(0..=(DEFAULT_VALUE_CACHE_SIZE as u64)).collect::<Vec<_>>();
+    let cache = ValueCache::<CryptoHash, Hashed<Timeout>>::new(TEST_CACHE_SIZE);
+    let values = create_dummy_certificate_values(0..=(TEST_CACHE_SIZE as u64)).collect::<Vec<_>>();
 
-    cache.insert_all(
-        values
-            .iter()
-            .take(DEFAULT_VALUE_CACHE_SIZE)
-            .map(Cow::Borrowed),
-    );
+    cache.insert_all(values.iter().take(TEST_CACHE_SIZE).map(Cow::Borrowed));
     assert!(!cache.insert(Cow::Borrowed(&values[0])));
-    assert!(cache.insert(Cow::Borrowed(&values[DEFAULT_VALUE_CACHE_SIZE])));
+    assert!(cache.insert(Cow::Borrowed(&values[TEST_CACHE_SIZE])));
 
     assert!(cache.contains(&values[0].hash()));
     assert_eq!(cache.get(&values[0].hash()).as_ref(), Some(&values[0]));
