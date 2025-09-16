@@ -23,7 +23,7 @@ use linera_persistent::{Persist, PersistExt as _};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_version::VersionInfo;
 use thiserror_context::Context;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 #[cfg(not(web))]
 use {
     crate::{
@@ -556,6 +556,8 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
                         }
                         .into());
                     }
+                } else {
+                    warn!("Not checking signature as public key was not given");
                 }
                 Ok(())
             }
