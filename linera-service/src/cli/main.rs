@@ -4,6 +4,10 @@
 
 #![recursion_limit = "256"]
 
+#[cfg(feature = "jemalloc")]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
