@@ -544,6 +544,7 @@ impl Runnable for Job {
                 address,
                 mut chains,
             } => {
+                let time_start = Instant::now();
                 let context = ClientContext::new(
                     storage,
                     options.context_options.clone(),
@@ -562,6 +563,55 @@ impl Runnable for Job {
 
                     Box::pin(chain.sync_validator(validator.clone())).await?;
                 }
+                let time_total = time_start.elapsed();
+                info!(
+                    "Syncing with validator {address} in {} ms",
+                    time_total.as_millis()
+                );
+            }
+
+            SyncAllValidators { mut chains } => {
+                let time_start = Instant::now();
+                let context = Arc::new(ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                ));
+
+                if chains.is_empty() {
+                    chains.push(context.default_chain());
+                }
+
+                let committee = context.wallet().genesis_config().committee.clone();
+
+                // Parallelize the validator loop - sync all validators concurrently
+                let tasks = committee
+                    .validator_addresses()
+                    .map(|(_validator_name, network_address)| {
+                        let context = context.clone();
+                        let chains = chains.clone();
+                        async move {
+                            let validator =
+                                context.make_node_provider().make_node(network_address)?;
+                            // For each validator, sync all chains sequentially
+                            for chain_id in &chains {
+                                let chain = context.make_chain_client(*chain_id);
+                                Box::pin(chain.sync_validator(validator.clone())).await?;
+                            }
+                            anyhow::Result::<()>::Ok(())
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                // Wait for all validator sync tasks to complete
+                futures::future::try_join_all(tasks).await?;
+
+                let time_total = time_start.elapsed();
+                info!(
+                    "Syncing with all validators in {} ms",
+                    time_total.as_millis()
+                );
             }
 
             command @ (SetValidator { .. }

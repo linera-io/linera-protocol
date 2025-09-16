@@ -20,6 +20,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera query-validator`↴](#linera-query-validator)
 * [`linera query-validators`↴](#linera-query-validators)
 * [`linera sync-validator`↴](#linera-sync-validator)
+* [`linera sync-all-validators`↴](#linera-sync-all-validators)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
 * [`linera revoke-epochs`↴](#linera-revoke-epochs)
@@ -87,6 +88,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are at it
 * `query-validators` — Show the current set of validators for a chain. Also print some information about the given chain while we are at it
 * `sync-validator` — Synchronizes a validator with the local state of chains
+* `sync-all-validators` — Synchronizes all validators with the local state of chains
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
 * `revoke-epochs` — Deprecates all committees up to and including the specified one
@@ -433,6 +435,18 @@ Synchronizes a validator with the local state of chains
 ###### **Arguments:**
 
 * `<ADDRESS>` — The public address of the validator to synchronize
+
+###### **Options:**
+
+* `--chains <CHAINS>` — The chains to synchronize, or the default chain if empty
+
+
+
+## `linera sync-all-validators`
+
+Synchronizes all validators with the local state of chains
+
+**Usage:** `linera sync-all-validators [OPTIONS]`
 
 ###### **Options:**
 
