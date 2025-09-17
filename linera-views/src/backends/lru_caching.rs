@@ -294,13 +294,19 @@ impl LruPrefixCache {
 
     /// A used key needs to be put on top.
     fn put_cache_key_on_top(&mut self, cache_key: CacheKey) {
-        let size = self.queue.remove(&cache_key).expect("cache_key should be present");
+        let size = self
+            .queue
+            .remove(&cache_key)
+            .expect("cache_key should be present");
         self.queue.insert(cache_key, size);
     }
 
     /// Remove an entry from the queue.
     fn remove_cache_key(&mut self, cache_key: &CacheKey) {
-        let size = self.queue.remove(cache_key).expect("cache_key should be present");
+        let size = self
+            .queue
+            .remove(cache_key)
+            .expect("cache_key should be present");
         self.total_size -= size;
         match cache_key {
             CacheKey::Value(_) => {
@@ -317,7 +323,10 @@ impl LruPrefixCache {
 
     /// Update the cache size to the new size without changing position.
     fn update_cache_key_size(&mut self, cache_key: &CacheKey, new_size: usize) {
-        let size = self.queue.get_mut(cache_key).expect("cache_key should be present");
+        let size = self
+            .queue
+            .get_mut(cache_key)
+            .expect("cache_key should be present");
         let old_size = *size;
         *size = new_size;
         self.total_size -= old_size;
