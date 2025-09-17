@@ -735,8 +735,6 @@ pub trait BaseRuntime {
     /// Asserts the existence of a data blob with the given hash.
     fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError>;
 
-    /// Returns true if the corresponding contract uses a zero amount of storage.
-    fn has_trivial_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -884,6 +882,9 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Writes a batch of changes.
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
+
+    /// Returns true if the corresponding contract uses a zero amount of storage.
+    fn has_trivial_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError>;
 }
 
 /// An operation to be executed in a block.
