@@ -501,10 +501,11 @@ generate_validator_keys() {
 	local image="$1"
 	local config_file="validator-config.toml"
 
-	log INFO "Generating validator keys..."
+	# Log to stderr so it doesn't get captured in the output
+	log INFO "Generating validator keys..." >&2
 
 	if [[ "${DRY_RUN:-0}" == "1" ]]; then
-		log INFO "[DRY RUN] Would generate validator keys using image: ${image}"
+		log INFO "[DRY RUN] Would generate validator keys using image: ${image}" >&2
 		echo "DRY_RUN_PUBLIC_KEY"
 		return 0
 	fi
@@ -517,7 +518,7 @@ generate_validator_keys() {
 		/linera-server generate --validators "${config_file}")
 
 	if [ -z "${public_key}" ]; then
-		log ERROR "Failed to generate validator keys"
+		log ERROR "Failed to generate validator keys" >&2
 		return 1
 	fi
 
@@ -1014,7 +1015,7 @@ main() {
 	# Generate validator keys
 	local public_key
 	if ! public_key=$(generate_validator_keys "${LINERA_IMAGE}"); then
-		log ERROR "Failed to generate validator keys"
+		log ERROR "Failed to generate validator keys" >&2
 		exit 1
 	fi
 
