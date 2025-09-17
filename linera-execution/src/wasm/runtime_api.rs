@@ -677,7 +677,7 @@ where
     ) -> Result<bool, RuntimeError> {
         caller
             .user_data_mut()
-            .runtime
+            .runtime_mut()
             .has_trivial_storage(application)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }

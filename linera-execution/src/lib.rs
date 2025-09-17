@@ -734,7 +734,6 @@ pub trait BaseRuntime {
 
     /// Asserts the existence of a data blob with the given hash.
     fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError>;
-
 }
 
 pub trait ServiceRuntime: BaseRuntime {
