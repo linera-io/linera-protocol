@@ -16,7 +16,6 @@ interface base-runtime-api {
     assert-before: func(timestamp: timestamp);
     read-data-blob: func(hash: data-blob-hash) -> list<u8>;
     assert-data-blob-exists: func(hash: data-blob-hash);
-    has-trivial-storage: func(application: application-id) -> bool;
     log: func(message: string, level: log-level);
     contains-key-new: func(key: list<u8>) -> u32;
     contains-key-wait: func(promise-id: u32) -> bool;
