@@ -30,11 +30,11 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "10")]
     pub max_stream_queries: usize,
 
-    /// The maximal memory used in the storage cache.
+    /// The maximal memory used in the storage cache in bytes.
     #[arg(long, default_value = "10000000")]
     pub max_cache_size: usize,
 
-    /// The maximal size of an entry in the storage cache.
+    /// The maximal size of an entry in the storage cache in bytes.
     #[arg(long, default_value = "1000000")]
     pub max_entry_size: usize,
 
@@ -42,15 +42,15 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "1000")]
     pub max_cache_entries: usize,
 
-    /// The maximal memory used in the value cache.
+    /// The maximal memory used in the value cache in bytes.
     #[arg(long, default_value = "10000000")]
     pub max_cache_value_size: usize,
 
-    /// The maximal memory used in the find_keys_by_prefix cache.
+    /// The maximal memory used in the find_keys_by_prefix cache in bytes.
     #[arg(long, default_value = "10000000")]
     pub max_cache_find_keys_size: usize,
 
-    /// The maximal memory used in the find_key_values_by_prefix cache.
+    /// The maximal memory used in the find_key_values_by_prefix cache in bytes.
     #[arg(long, default_value = "10000000")]
     pub max_cache_find_key_values_size: usize,
 

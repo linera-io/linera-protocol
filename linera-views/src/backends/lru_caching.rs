@@ -28,7 +28,7 @@ mod metrics {
     use linera_base::prometheus_util::register_int_counter_vec;
     use prometheus::IntCounterVec;
 
-    /// The total number of cache read value misses
+    /// The total number of cache read value misses.
     pub static READ_VALUE_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "num_read_value_cache_miss",
@@ -37,7 +37,7 @@ mod metrics {
         )
     });
 
-    /// The total number of read value cache hits
+    /// The total number of read value cache hits.
     pub static READ_VALUE_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "num_read_value_cache_hits",
@@ -46,7 +46,7 @@ mod metrics {
         )
     });
 
-    /// The total number of contains key cache misses
+    /// The total number of contains key cache misses.
     pub static CONTAINS_KEY_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "num_contains_key_cache_miss",
@@ -55,7 +55,7 @@ mod metrics {
         )
     });
 
-    /// The total number of contains key cache hits
+    /// The total number of contains key cache hits.
     pub static CONTAINS_KEY_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "num_contains_key_cache_hit",
@@ -64,7 +64,7 @@ mod metrics {
         )
     });
 
-    /// The total number of find_keys_by_prefix cache misses
+    /// The total number of find_keys_by_prefix cache misses.
     pub static FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> =
         LazyLock::new(|| {
             register_int_counter_vec(
@@ -74,7 +74,7 @@ mod metrics {
             )
         });
 
-    /// The total number of find_keys_by_prefix cache hits
+    /// The total number of find_keys_by_prefix cache hits.
     pub static FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "num_find_keys_by_prefix_cache_hit",
@@ -83,7 +83,7 @@ mod metrics {
         )
     });
 
-    /// The total number of find_key_values_by_prefix cache misses
+    /// The total number of find_key_values_by_prefix cache misses.
     pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> =
         LazyLock::new(|| {
             register_int_counter_vec(
@@ -93,7 +93,7 @@ mod metrics {
             )
         });
 
-    /// The total number of find_key_values_by_prefix cache hits
+    /// The total number of find_key_values_by_prefix cache hits.
     pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> =
         LazyLock::new(|| {
             register_int_counter_vec(
@@ -107,23 +107,23 @@ mod metrics {
 /// The parametrization of the cache.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StorageCacheConfig {
-    /// The maximum size of the cache, in bytes (keys size + value sizes)
+    /// The maximum size of the cache, in bytes (keys size + value sizes).
     pub max_cache_size: usize,
-    /// The maximum size of an entry size, in bytes
+    /// The maximum size of an entry size, in bytes.
     pub max_entry_size: usize,
     /// The maximum number of entries in the cache.
     pub max_cache_entries: usize,
-    /// The maximum size of cached values
+    /// The maximum size of cached values.
     pub max_cache_value_size: usize,
-    /// The maximum size of cached find_keys_by_prefix
+    /// The maximum size of cached find_keys_by_prefix.
     pub max_cache_find_keys_size: usize,
-    /// The maximum size of cached find_key_values_by_prefix
+    /// The maximum size of cached find_key_values_by_prefix.
     pub max_cache_find_key_values_size: usize,
 }
 
 /// The maximum number of entries in the cache.
 /// If the number of entries in the cache is too large then the underlying maps
-/// become the limiting factor
+/// become the limiting factor.
 pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig {
     max_cache_size: 10000000,
     max_entry_size: 1000000,
@@ -162,7 +162,7 @@ impl FindKeysEntry {
         self.0.iter().map(|key| key.len()).sum()
     }
 
-    fn get_find_keys(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
+    fn get_keys_by_prefix(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let key_prefix = key_prefix.to_vec();
         let delta = key_prefix.len();
         self.0
@@ -171,11 +171,11 @@ impl FindKeysEntry {
             .collect()
     }
 
-    fn get_contains_key(&self, key: &[u8]) -> bool {
+    fn contains_key(&self, key: &[u8]) -> bool {
         self.0.contains(key)
     }
 
-    fn update_cache_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
+    fn update_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
         match new_value {
             None => {
                 self.0.remove(key);
@@ -208,7 +208,7 @@ impl FindKeyValuesEntry {
             .sum()
     }
 
-    fn get_find_keys(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
+    fn get_keys_by_prefix(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let key_prefix = key_prefix.to_vec();
         let delta = key_prefix.len();
         self.0
@@ -226,7 +226,7 @@ impl FindKeyValuesEntry {
             .collect()
     }
 
-    fn get_contains_key(&self, key: &[u8]) -> bool {
+    fn contains_key(&self, key: &[u8]) -> bool {
         self.0.contains_key(key)
     }
 
@@ -234,7 +234,7 @@ impl FindKeyValuesEntry {
         self.0.get(key).cloned()
     }
 
-    fn update_cache_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
+    fn update_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
         match new_value {
             None => {
                 self.0.remove(key);
@@ -292,15 +292,15 @@ impl LruPrefixCache {
         }
     }
 
-    /// A used key needs to be put on top
+    /// A used key needs to be put on top.
     fn put_cache_key_on_top(&mut self, cache_key: CacheKey) {
-        let size = self.queue.remove(&cache_key).unwrap();
+        let size = self.queue.remove(&cache_key).expect("cache_key should be present");
         self.queue.insert(cache_key, size);
     }
 
-    /// Remove an entry from the queue
+    /// Remove an entry from the queue.
     fn remove_cache_key(&mut self, cache_key: &CacheKey) {
-        let size = self.queue.remove(cache_key).unwrap();
+        let size = self.queue.remove(cache_key).expect("cache_key should be present");
         self.total_size -= size;
         match cache_key {
             CacheKey::Value(_) => {
@@ -315,9 +315,9 @@ impl LruPrefixCache {
         }
     }
 
-    /// Update the cache size to the new size without changing position
+    /// Update the cache size to the new size without changing position.
     fn update_cache_key_size(&mut self, cache_key: &CacheKey, new_size: usize) {
-        let size = self.queue.get_mut(cache_key).unwrap();
+        let size = self.queue.get_mut(cache_key).expect("cache_key should be present");
         let old_size = *size;
         *size = new_size;
         self.total_size -= old_size;
@@ -338,7 +338,7 @@ impl LruPrefixCache {
         }
     }
 
-    /// Insert a cache entry into the key
+    /// Insert a cache_key into the queue and update sizes.
     fn insert_cache_key(&mut self, cache_key: CacheKey, size: usize) {
         self.total_size += size;
         match cache_key {
@@ -355,7 +355,7 @@ impl LruPrefixCache {
         self.queue.insert(cache_key, size);
     }
 
-    fn get_find_keys_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
+    fn get_keys_by_prefix_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
         match self.find_keys_map.range(..=key.to_vec()).next_back() {
             None => None,
             Some((key_store, value)) => {
@@ -368,7 +368,7 @@ impl LruPrefixCache {
         }
     }
 
-    fn get_find_keys_lower_bound_update(
+    fn get_keys_by_prefix_lower_bound_mut(
         &mut self,
         key: &[u8],
     ) -> Option<(&Vec<u8>, &mut FindKeysEntry)> {
@@ -400,7 +400,7 @@ impl LruPrefixCache {
         }
     }
 
-    fn get_find_key_values_lower_bound_update(
+    fn get_find_key_values_lower_bound_mut(
         &mut self,
         key: &[u8],
     ) -> Option<(&Vec<u8>, &mut FindKeyValuesEntry)> {
@@ -420,7 +420,7 @@ impl LruPrefixCache {
         }
     }
 
-    /// Trim value cache so that it fits within bounds
+    /// Trim value cache so that it fits within bounds.
     fn trim_value_cache(&mut self) {
         let mut keys = Vec::new();
         let mut total_size = self.total_value_size;
@@ -555,17 +555,17 @@ impl LruPrefixCache {
         self.trim_cache();
     }
 
-    /// Invalidates corresponding find entries
+    /// Invalidates corresponding find entries.
     pub fn correct_find_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
-        let lower_bound = self.get_find_keys_lower_bound_update(key);
+        let lower_bound = self.get_keys_by_prefix_lower_bound_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
-            cache_entry.update_cache_entry(key_red, new_value.clone());
+            cache_entry.update_entry(key_red, new_value.clone());
         }
-        let lower_bound = self.get_find_key_values_lower_bound_update(key);
+        let lower_bound = self.get_find_key_values_lower_bound_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
-            cache_entry.update_cache_entry(key_red, new_value);
+            cache_entry.update_entry(key_red, new_value);
         }
     }
 
@@ -712,7 +712,7 @@ impl LruPrefixCache {
                 self.remove_cache_key(&cache_key);
             }
             // Finding a lower bound. If existing update, if not insert.
-            let lower_bound = self.get_find_keys_lower_bound_update(key_prefix);
+            let lower_bound = self.get_keys_by_prefix_lower_bound_mut(key_prefix);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 // Delete the keys in the entry
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
@@ -728,7 +728,7 @@ impl LruPrefixCache {
                 self.update_cache_key_size(&cache_key, new_cache_size);
             }
             // Finding a lower bound. If existing update, if not insert.
-            let lower_bound = self.get_find_key_values_lower_bound_update(key_prefix);
+            let lower_bound = self.get_find_key_values_lower_bound_mut(key_prefix);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 // Delete the keys (or key/values) in the entry
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
@@ -820,10 +820,10 @@ impl LruPrefixCache {
         }
         if self.has_exclusive_access {
             // Now trying the find keys maps.
-            let lower_bound = self.get_find_keys_lower_bound(key);
+            let lower_bound = self.get_keys_by_prefix_lower_bound(key);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
-                Some((lower_bound, find_entry.get_contains_key(key_red)))
+                Some((lower_bound, find_entry.contains_key(key_red)))
             } else {
                 None
             };
@@ -836,7 +836,7 @@ impl LruPrefixCache {
             let lower_bound = self.get_find_key_values_lower_bound(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
-                (lower_bound, find_entry.get_contains_key(key_red))
+                (lower_bound, find_entry.contains_key(key_red))
             } else {
                 return None;
             };
@@ -847,14 +847,14 @@ impl LruPrefixCache {
         result
     }
 
-    /// Gets the find_keys entry from the key prefix
+    /// Gets the find_keys entry from the key prefix.
     pub fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
         // Trying first the find_keys_by_prefix cache
-        let result = match self.get_find_keys_lower_bound(key_prefix) {
+        let result = match self.get_keys_by_prefix_lower_bound(key_prefix) {
             None => None,
             Some((lower_bound, cache_entry)) => {
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
-                Some((lower_bound, cache_entry.get_find_keys(key_prefix_red)))
+                Some((lower_bound, cache_entry.get_keys_by_prefix(key_prefix_red)))
             }
         };
         if let Some((lower_bound, keys)) = result {
@@ -869,7 +869,7 @@ impl LruPrefixCache {
             }
             Some((lower_bound, cache_entry)) => {
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
-                (lower_bound, cache_entry.get_find_keys(key_prefix_red))
+                (lower_bound, cache_entry.get_keys_by_prefix(key_prefix_red))
             }
         };
         let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
@@ -877,7 +877,7 @@ impl LruPrefixCache {
         Some(result)
     }
 
-    /// Gets the find key values entry from the key prefix
+    /// Gets the find key values entry from the key prefix.
     pub fn query_find_key_values(&mut self, key_prefix: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
         let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
             None => {
@@ -897,7 +897,7 @@ impl LruPrefixCache {
 /// A key-value database with added LRU caching.
 #[derive(Clone)]
 pub struct LruCachingDatabase<D> {
-    /// The inner store that is called by the LRU cache one
+    /// The inner store that is called by the LRU cache one.
     database: D,
     /// The configuration.
     config: StorageCacheConfig,
@@ -906,7 +906,7 @@ pub struct LruCachingDatabase<D> {
 /// A key-value store with added LRU caching.
 #[derive(Clone)]
 pub struct LruCachingStore<S> {
-    /// The inner store that is called by the LRU cache one
+    /// The inner store that is called by the LRU cache one.
     store: S,
     /// The LRU cache of values.
     cache: Option<Arc<Mutex<LruPrefixCache>>>,
@@ -1183,7 +1183,7 @@ where
 pub struct LruCachingConfig<C> {
     /// The inner configuration of the `LruCachingStore`.
     pub inner_config: C,
-    /// The cache size being used
+    /// The cache size being used.
     pub storage_cache_config: StorageCacheConfig,
 }
 
@@ -1457,7 +1457,7 @@ mod tests {
     }
 
     #[test]
-    fn test_correct_find_entry_update() {
+    fn test_correct_find_entry_mut() {
         let mut cache = create_test_cache(true);
         let prefix = vec![1];
         let key = vec![1, 2];
@@ -1564,25 +1564,25 @@ mod tests {
         let key3 = vec![1, 3, 4];
 
         // Add keys
-        find_entry.update_cache_entry(&key1, Some(vec![42]));
-        find_entry.update_cache_entry(&key2, Some(vec![43]));
+        find_entry.update_entry(&key1, Some(vec![42]));
+        find_entry.update_entry(&key2, Some(vec![43]));
 
         // Test contains_key
-        assert!(find_entry.get_contains_key(&key1));
-        assert!(find_entry.get_contains_key(&key2));
-        assert!(!find_entry.get_contains_key(&key3));
-        assert!(!find_entry.get_contains_key(&[9, 9]));
+        assert!(find_entry.contains_key(&key1));
+        assert!(find_entry.contains_key(&key2));
+        assert!(!find_entry.contains_key(&key3));
+        assert!(!find_entry.contains_key(&[9, 9]));
 
-        // Test get_find_keys with prefix
-        let keys = find_entry.get_find_keys(&[1]);
+        // Test get_keys_by_prefix
+        let keys = find_entry.get_keys_by_prefix(&[1]);
         assert_eq!(keys.len(), 2);
         assert!(keys.contains(&vec![2]));
         assert!(keys.contains(&vec![3]));
 
         // Remove a key
-        find_entry.update_cache_entry(&key1, None);
-        assert!(!find_entry.get_contains_key(&key1));
-        assert!(find_entry.get_contains_key(&key2));
+        find_entry.update_entry(&key1, None);
+        assert!(!find_entry.contains_key(&key1));
+        assert!(find_entry.contains_key(&key2));
     }
 
     #[test]
@@ -1594,12 +1594,12 @@ mod tests {
         let value2 = vec![43];
 
         // Add key-value pairs
-        find_entry.update_cache_entry(&key1, Some(value1.clone()));
-        find_entry.update_cache_entry(&key2, Some(value2.clone()));
+        find_entry.update_entry(&key1, Some(value1.clone()));
+        find_entry.update_entry(&key2, Some(value2.clone()));
 
         // Test contains_key
-        assert!(find_entry.get_contains_key(&key1));
-        assert!(find_entry.get_contains_key(&key2));
+        assert!(find_entry.contains_key(&key1));
+        assert!(find_entry.contains_key(&key2));
 
         // Test get_read_value
         assert_eq!(find_entry.get_read_value(&key1), Some(value1.clone()));
@@ -1612,8 +1612,8 @@ mod tests {
         assert!(key_values.contains(&(vec![3], value2.clone())));
 
         // Remove a key
-        find_entry.update_cache_entry(&key1, None);
-        assert!(!find_entry.get_contains_key(&key1));
+        find_entry.update_entry(&key1, None);
+        assert!(!find_entry.contains_key(&key1));
         assert_eq!(find_entry.get_read_value(&key1), None);
     }
 
