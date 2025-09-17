@@ -11,7 +11,8 @@
 #   <email>          - Email address for ACME/Let's Encrypt certificates (required)
 #
 # Options:
-#   --remote-image      - Use remote Docker image instead of building locally
+#   --local-build       - Build Docker image locally instead of using registry image
+#   --remote-image      - Explicitly use remote Docker image from registry (deprecated, now default)
 #   --skip-genesis      - Skip downloading genesis configuration
 #   --force-genesis     - Force re-download of genesis configuration
 #   --custom-tag TAG    - Use custom image tag (for testing, no _release suffix)
@@ -120,7 +121,8 @@ ARGUMENTS:
     <email>             Email address for ACME/Let's Encrypt certificates (required)
 
 OPTIONS:
-    --remote-image      Use remote Docker image instead of building locally
+    --local-build       Build Docker image locally instead of using registry image
+    --remote-image      Explicitly use remote Docker image from registry (deprecated, now default)
     --skip-genesis      Skip downloading genesis configuration
     --force-genesis     Force re-download of genesis configuration even if it exists
     --custom-tag TAG    Use custom image tag (for testing, no _release suffix)
@@ -171,20 +173,20 @@ ENVIRONMENT VARIABLES:
                         Default: 4G
 
 EXAMPLES:
-    # Deploy using local build
+    # Deploy using remote image (default behavior)
     $(basename "$0") validator.example.com admin@example.com
 
-    # Deploy using remote image with default tag (<branch>_release)
-    $(basename "$0") validator.example.com admin@example.com --remote-image
+    # Deploy using local build
+    $(basename "$0") validator.example.com admin@example.com --local-build
 
     # Deploy with custom tag for testing (no _release suffix)
-    $(basename "$0") validator.example.com admin@example.com --remote-image --custom-tag devnet_2025_08_21
+    $(basename "$0") validator.example.com admin@example.com --custom-tag devnet_2025_08_21
 
     # Deploy with fully custom image
     LINERA_IMAGE=my-registry/my-image:my-tag $(basename "$0") validator.example.com admin@example.com
 
     # Deploy with custom registry and image name
-    DOCKER_REGISTRY=gcr.io/my-project IMAGE_NAME=custom-linera $(basename "$0") validator.example.com admin@example.com --remote-image
+    DOCKER_REGISTRY=gcr.io/my-project IMAGE_NAME=custom-linera $(basename "$0") validator.example.com admin@example.com
 
     # Deploy with custom configuration
     NUM_SHARDS=8 $(basename "$0") validator.example.com admin@example.com
@@ -203,11 +205,11 @@ EXAMPLES:
 
     # Deploy with custom genesis bucket and path
     GENESIS_BUCKET=https://storage.googleapis.com/my-bucket GENESIS_PATH_PREFIX=my-deployment \
-    $(basename "$0") validator.example.com admin@example.com --remote-image
+    $(basename "$0") validator.example.com admin@example.com
 
     # Deploy with direct genesis URL override
     GENESIS_URL=https://storage.googleapis.com/linera-io-dev-public/testnet-babbage/genesis.json \
-    $(basename "$0") validator.example.com admin@example.com --remote-image
+    $(basename "$0") validator.example.com admin@example.com
 
 EOF
 }
@@ -747,6 +749,7 @@ main() {
 	# Parse command line arguments
 	local host=""
 	local email=""
+	local use_local_build=0
 	local use_remote_image=0
 	local skip_genesis=0
 	local force_genesis=0
@@ -762,7 +765,12 @@ main() {
 			usage
 			exit 0
 			;;
+		--local-build)
+			use_local_build=1
+			shift
+			;;
 		--remote-image)
+			# Deprecated option, remote is now default
 			use_remote_image=1
 			shift
 			;;
@@ -936,7 +944,14 @@ main() {
 	if [ -n "${LINERA_IMAGE:-}" ]; then
 		# User provided complete image path, use as-is
 		log INFO "Using user-specified Docker image: ${LINERA_IMAGE}"
-	elif [ ${use_remote_image} -eq 1 ]; then
+	elif [ ${use_local_build} -eq 1 ]; then
+		# Local build explicitly requested
+		export LINERA_IMAGE="${LINERA_IMAGE:-linera}"
+		if ! build_local_image "${git_commit}" "${LINERA_IMAGE}"; then
+			log ERROR "Failed to build local Docker image"
+			exit 1
+		fi
+	else
 		# Construct image path from components
 		local docker_registry="${DOCKER_REGISTRY:-$DEFAULT_DOCKER_REGISTRY}"
 		local image_name="${IMAGE_NAME:-$DEFAULT_IMAGE_NAME}"
@@ -951,19 +966,16 @@ main() {
 			# Environment variable override
 			image_tag="${IMAGE_TAG}"
 		else
-			# Default: branch_name with _release suffix
-			image_tag="${branch_name}_release"
+			# Default: branch_name with _release suffix, or 'latest' for main branch
+			if [ "${branch_name}" = "main" ]; then
+				image_tag="latest"
+			else
+				image_tag="${branch_name}_release"
+			fi
 		fi
 
 		export LINERA_IMAGE="${docker_registry}/${image_name}:${image_tag}"
 		log INFO "Using remote Docker image: ${LINERA_IMAGE}"
-	else
-		# Local build
-		export LINERA_IMAGE="${LINERA_IMAGE:-linera}"
-		if ! build_local_image "${git_commit}" "${LINERA_IMAGE}"; then
-			log ERROR "Failed to build local Docker image"
-			exit 1
-		fi
 	fi
 
 	# Generate genesis URL if not provided
