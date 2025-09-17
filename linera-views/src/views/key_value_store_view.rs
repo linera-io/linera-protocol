@@ -392,9 +392,9 @@ impl<C: Context> KeyValueStoreView<C> {
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0,1,2,3,4]).await.unwrap();
+    /// view.insert(vec![0, 1], vec![0, 1, 2, 3, 4]).await.unwrap();
     /// let total_size = view.total_size();
-    /// assert_eq!(total_size, SizeData { key: 2, value: 5});
+    /// assert_eq!(total_size, SizeData { key: 2, value: 5 });
     /// # })
     /// ```
     pub fn total_size(&self) -> SizeData {
