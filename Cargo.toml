@@ -157,6 +157,14 @@ num-format = "0.4.4"
 num-traits = "0.2.18"
 octocrab = "0.42.1"
 oneshot = "0.1.6"
+opentelemetry = { version = "0.30.0", features = ["trace"] }
+opentelemetry-http = "0.30.0"
+opentelemetry-otlp = { version = "0.30.0", features = [
+    "grpc-tonic",
+    "trace",
+    "tls-roots",
+] }
+opentelemetry_sdk = { version = "0.30.0", features = ["trace", "rt-tokio"] }
 papaya = "0.1.5"
 pathdiff = "0.2.1"
 port-selector = "0.1.6"
@@ -252,6 +260,7 @@ tonic-web-wasm-client = "0.8.0"
 tower = "0.4.13"
 tower-http = "0.6.6"
 tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
+tracing-opentelemetry = "0.31.0"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
     "env-filter",
 ] }
