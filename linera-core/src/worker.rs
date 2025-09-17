@@ -462,7 +462,7 @@ where
                         .ok_or(WorkerError::InvalidLiteCertificate)?,
                 ))
             }
-            _ => return Err(WorkerError::InvalidLiteCertificate),
+            _ => Err(WorkerError::InvalidLiteCertificate),
         }
     }
 }
@@ -555,7 +555,11 @@ where
     }
 
     /// Executes a [`Query`] for an application's state on a specific chain.
-    #[instrument(level = "trace", skip(self, chain_id, query))]
+    #[instrument(
+        level = "trace",
+        target = "telemetry_only",
+        skip(self, chain_id, query)
+    )]
     pub async fn query_application(
         &self,
         chain_id: ChainId,
@@ -567,7 +571,11 @@ where
         .await
     }
 
-    #[instrument(level = "trace", skip(self, chain_id, application_id))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self, chain_id, application_id), fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id,
+        application_id = %application_id
+    ))]
     pub async fn describe_application(
         &self,
         chain_id: ChainId,
@@ -585,7 +593,13 @@ where
     /// Processes a confirmed block (aka a commit).
     #[instrument(
         level = "trace",
-        skip(self, certificate, notify_when_messages_are_delivered)
+        target = "telemetry_only",
+        skip(self, certificate, notify_when_messages_are_delivered),
+        fields(
+            nickname = %self.nickname,
+            chain_id = %certificate.block().header.chain_id,
+            block_height = %certificate.block().header.height
+        )
     )]
     async fn process_confirmed_block(
         &self,
@@ -604,7 +618,11 @@ where
     }
 
     /// Processes a validated block issued from a multi-owner chain.
-    #[instrument(level = "trace", skip(self, certificate))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self, certificate), fields(
+        nickname = %self.nickname,
+        chain_id = %certificate.block().header.chain_id,
+        block_height = %certificate.block().header.height
+    ))]
     async fn process_validated_block(
         &self,
         certificate: ValidatedBlockCertificate,
@@ -620,7 +638,11 @@ where
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
-    #[instrument(level = "trace", skip(self, certificate))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self, certificate), fields(
+        nickname = %self.nickname,
+        chain_id = %certificate.value().chain_id(),
+        height = %certificate.value().height()
+    ))]
     async fn process_timeout(
         &self,
         certificate: TimeoutCertificate,
@@ -635,7 +657,12 @@ where
         .await
     }
 
-    #[instrument(level = "trace", skip(self, origin, recipient, bundles))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self, origin, recipient, bundles), fields(
+        nickname = %self.nickname,
+        origin = %origin,
+        recipient = %recipient,
+        num_bundles = %bundles.len()
+    ))]
     async fn process_cross_chain_update(
         &self,
         origin: ChainId,
@@ -653,7 +680,11 @@ where
     }
 
     /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
-    #[instrument(level = "trace", skip(self, chain_id, height))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self, chain_id, height), fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id,
+        height = %height
+    ))]
     #[cfg(with_testing)]
     pub async fn read_certificate(
         &self,
@@ -671,7 +702,10 @@ where
     ///
     /// The returned view holds a lock on the chain state, which prevents the worker from changing
     /// the state of that chain.
-    #[instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self), fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id
+    ))]
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
@@ -682,7 +716,10 @@ where
         .await
     }
 
-    #[instrument(level = "trace", skip(self, request_builder))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self, request_builder), fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id
+    ))]
     /// Sends a request to the [`ChainWorker`] for a [`ChainId`] and waits for the `Response`.
     async fn query_chain_worker<Response>(
         &self,
@@ -705,7 +742,10 @@ where
 
     /// Retrieves an endpoint to a [`ChainWorkerActor`] from the cache, creating one and adding it
     /// to the cache if needed.
-    #[instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self), fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id
+    ))]
     async fn get_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
@@ -754,7 +794,10 @@ where
     /// and add it to the cache if needed.
     ///
     /// Returns [`None`] if the cache is full and no candidate for eviction was found.
-    #[instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", target = "telemetry_only", skip(self), fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id
+    ))]
     #[expect(clippy::type_complexity)]
     fn try_get_chain_worker_endpoint(
         &self,
@@ -1067,6 +1110,11 @@ where
     }
 
     /// Updates the received certificate trackers to at least the given values.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id,
+        num_trackers = %new_trackers.len()
+    ))]
     pub async fn update_received_certificate_trackers(
         &self,
         chain_id: ChainId,
