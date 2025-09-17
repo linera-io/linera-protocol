@@ -232,14 +232,14 @@ where
     }
 
     /// Returns true if the corresponding contract uses a non-zero amount of storage.
-    fn has_non_trivial_storage(
+    fn has_trivial_storage(
         caller: &mut Caller,
         application: ApplicationId,
     ) -> Result<bool, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .has_non_trivial_storage(application)
+            .has_trivial_storage(application)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
