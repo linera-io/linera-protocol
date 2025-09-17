@@ -501,10 +501,11 @@ generate_validator_keys() {
 	local image="$1"
 	local config_file="validator-config.toml"
 
-	log INFO "Generating validator keys..."
+	# Log to stderr so it doesn't get captured in the output
+	log INFO "Generating validator keys..." >&2
 
 	if [[ "${DRY_RUN:-0}" == "1" ]]; then
-		log INFO "[DRY RUN] Would generate validator keys using image: ${image}"
+		log INFO "[DRY RUN] Would generate validator keys using image: ${image}" >&2
 		echo "DRY_RUN_PUBLIC_KEY"
 		return 0
 	fi
@@ -517,7 +518,7 @@ generate_validator_keys() {
 		/linera-server generate --validators "${config_file}")
 
 	if [ -z "${public_key}" ]; then
-		log ERROR "Failed to generate validator keys"
+		log ERROR "Failed to generate validator keys" >&2
 		return 1
 	fi
 
@@ -1014,7 +1015,7 @@ main() {
 	# Generate validator keys
 	local public_key
 	if ! public_key=$(generate_validator_keys "${LINERA_IMAGE}"); then
-		log ERROR "Failed to generate validator keys"
+		log ERROR "Failed to generate validator keys" >&2
 		exit 1
 	fi
 
@@ -1056,26 +1057,48 @@ main() {
 	log INFO "  Restart services:"
 	log INFO "    cd ${DOCKER_COMPOSE_DIR} && docker compose restart"
 
-	# Save deployment info
-	local deployment_info="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.deployment-info"
-	cat >"${deployment_info}" <<EOF
-# Deployment Information
+	# Create .env file for Docker Compose (this is the source of truth)
+	local env_file="${REPO_ROOT}/${DOCKER_COMPOSE_DIR}/.env"
+	cat >"${env_file}" <<EOF
+# Validator Deployment Configuration
 # Generated: $(date -Iseconds)
-HOST=${host}
-EMAIL=${ACME_EMAIL}
-PUBLIC_KEY=${public_key}
-BRANCH=${branch_name}
-COMMIT=${git_commit}
-IMAGE=${LINERA_IMAGE}
-CUSTOM_TAG=${custom_tag:-N/A}
+# This file is the source of truth for Docker Compose configuration
+# It persists all settings across container restarts
+
+# Deployment metadata
+DEPLOYMENT_HOST=${host}
+DEPLOYMENT_EMAIL=${ACME_EMAIL}
+DEPLOYMENT_PUBLIC_KEY=${public_key}
+DEPLOYMENT_BRANCH=${branch_name}
+DEPLOYMENT_COMMIT=${git_commit}
+DEPLOYMENT_CUSTOM_TAG=${custom_tag:-N/A}
+DEPLOYMENT_DATE=$(date -Iseconds)
+
+# Domain and SSL configuration (used by docker-compose.yml)
+DOMAIN=${host}
+ACME_EMAIL=${ACME_EMAIL}
+
+# Genesis configuration (critical for validator operation)
+GENESIS_URL=${genesis_url}
 GENESIS_BUCKET=${genesis_bucket}
 GENESIS_PATH_PREFIX=${genesis_path_prefix}
-GENESIS_URL=${genesis_url}
-SHARDS=${num_shards}
-XFS_PATH=${xfs_path:-N/A}
-CACHE_SIZE=${cache_size}
+
+# Validator configuration
+VALIDATOR_PUBLIC_KEY=${public_key}
+
+# Docker image
+LINERA_IMAGE=${LINERA_IMAGE}
+
+# ScyllaDB configuration
+NUM_SHARDS=${num_shards}
+${xfs_path:+XFS_PATH=${xfs_path}}
+${xfs_path:+CACHE_SIZE=${cache_size}}
+
+# Network configuration
+FAUCET_PORT=8080
+LINERA_STORAGE_SERVICE_PORT=1235
 EOF
-	log DEBUG "Deployment info saved to: ${deployment_info}"
+	log INFO "Environment variables saved to ${env_file} for persistence across restarts"
 }
 
 # Run main function with all arguments
