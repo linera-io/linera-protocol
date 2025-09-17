@@ -669,7 +669,7 @@ where
                 callback.respond(validation_round);
             }
 
-            HasNonTrivialStorage {
+            TotalStorageSize {
                 application,
                 callback,
             } => {
@@ -681,6 +681,7 @@ where
                     }
                     None => (0, 0),
                 };
+                tracing::info!("TotalStorageSize, result={result:?}");
                 callback.respond(result);
             }
         }
@@ -1231,7 +1232,7 @@ pub enum ExecutionRequest {
         callback: Sender<Option<u32>>,
     },
 
-    HasNonTrivialStorage {
+    TotalStorageSize {
         application: ApplicationId,
         #[debug(skip)]
         callback: Sender<(u32, u32)>,

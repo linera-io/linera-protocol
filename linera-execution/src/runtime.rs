@@ -898,19 +898,16 @@ where
             .recv_response()
     }
 
-    fn has_non_trivial_storage(
-        &mut self,
-        application: ApplicationId,
-    ) -> Result<bool, ExecutionError> {
+    fn has_trivial_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError> {
         let this = self.inner();
         let (key_size, value_size) = this
             .execution_state_sender
-            .send_request(move |callback| ExecutionRequest::HasNonTrivialStorage {
+            .send_request(move |callback| ExecutionRequest::TotalStorageSize {
                 application,
                 callback,
             })?
             .recv_response()?;
-        Ok(key_size > 0 || value_size > 0)
+        Ok(key_size + value_size == 0)
     }
 }
 
