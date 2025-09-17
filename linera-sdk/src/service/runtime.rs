@@ -160,10 +160,6 @@ where
         base_wit::assert_data_blob_exists(hash.into())
     }
 
-    /// Returns true if the corresponding contract uses a zero amount of storage.
-    pub fn has_trivial_storage(&self, application: ApplicationId) -> bool {
-        base_wit::has_trivial_storage(application.into())
-    }
 }
 
 impl<Application> ServiceRuntime<Application>
