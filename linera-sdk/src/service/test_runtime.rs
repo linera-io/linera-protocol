@@ -34,7 +34,6 @@ where
     owner_balances: Mutex<Option<HashMap<AccountOwner, Amount>>>,
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
     expected_http_requests: Mutex<VecDeque<(http::Request, http::Response)>>,
-    expected_has_trivial_storage_requests: Mutex<VecDeque<(ApplicationId, bool)>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
     scheduled_operations: Mutex<Vec<Vec<u8>>>,
     key_value_store: KeyValueStore,
@@ -66,7 +65,6 @@ where
             owner_balances: Mutex::new(None),
             query_application_handler: Mutex::new(None),
             expected_http_requests: Mutex::new(VecDeque::new()),
-            expected_has_trivial_storage_requests: Mutex::new(VecDeque::new()),
             blobs: Mutex::new(None),
             scheduled_operations: Mutex::new(vec![]),
             key_value_store: KeyValueStore::mock(),
@@ -413,18 +411,6 @@ where
             .push_back((request, response));
     }
 
-    /// Adds an expected `has_trivial_storage` call, and the response it should return in the test.
-    pub fn add_expected_has_trivial_storage_requests(
-        &mut self,
-        application: ApplicationId,
-        response: bool,
-    ) {
-        self.expected_has_trivial_storage_requests
-            .lock()
-            .unwrap()
-            .push_back((application, response));
-    }
-
     /// Makes an HTTP `request` as an oracle and returns the HTTP response.
     ///
     /// Should only be used with queries where it is very likely that all validators will receive
@@ -493,19 +479,6 @@ where
             "Blob for hash {hash:?} has not been mocked, \
             please call `MockServiceRuntime::set_blob` first"
         );
-    }
-
-    /// Returns true if the corresponding contract uses a zero amount of storage.
-    pub fn has_trivial_storage(&self, application: ApplicationId) -> bool {
-        let maybe_request = self
-            .expected_has_trivial_storage_requests
-            .lock()
-            .unwrap()
-            .pop_front();
-        let (expected_application_id, response) =
-            maybe_request.expect("Unexpected has_trivial_storage request");
-        assert_eq!(application, expected_application_id);
-        response
     }
 
     /// Loads a mocked value from the `slot` cache or panics with a provided `message`.
