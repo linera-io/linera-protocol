@@ -305,9 +305,9 @@ where
     pub fn query_service<A: ServiceAbi + Send>(
         &mut self,
         application_id: ApplicationId<A>,
-        query: A::Query,
+        query: &A::Query,
     ) -> A::QueryResponse {
-        let query = serde_json::to_vec(&query).expect("Failed to serialize service query");
+        let query = serde_json::to_vec(query).expect("Failed to serialize service query");
         let response = contract_wit::query_service(application_id.forget_abi().into(), &query);
         serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
@@ -375,8 +375,8 @@ where
     }
 
     /// Creates a new data blob and returns its hash.
-    pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
-        let hash = contract_wit::create_data_blob(&bytes);
+    pub fn create_data_blob(&mut self, bytes: &[u8]) -> DataBlobHash {
+        let hash = contract_wit::create_data_blob(bytes);
         hash.into()
     }
 

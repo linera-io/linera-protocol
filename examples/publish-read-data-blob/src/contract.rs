@@ -39,7 +39,7 @@ impl Contract for PublishReadDataBlobContract {
     async fn execute_operation(&mut self, operation: Operation) {
         match operation {
             Operation::CreateDataBlob(data) => {
-                self.runtime.create_data_blob(data);
+                self.runtime.create_data_blob(&data);
             }
             Operation::ReadDataBlob(hash, expected_data) => {
                 let data = self.runtime.read_data_blob(hash);
@@ -49,7 +49,7 @@ impl Contract for PublishReadDataBlobContract {
                 );
             }
             Operation::CreateAndReadDataBlob(data) => {
-                let hash: DataBlobHash = self.runtime.create_data_blob(data.clone());
+                let hash: DataBlobHash = self.runtime.create_data_blob(&data);
                 let data_read = self.runtime.read_data_blob(hash);
                 assert_eq!(data_read, data);
             }

@@ -803,7 +803,7 @@ where
     }
 
     /// Creates a new data blob and returns its hash.
-    pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
+    pub fn create_data_blob(&mut self, bytes: &[u8]) -> DataBlobHash {
         let ExpectedCreateDataBlobCall {
             bytes: expected_bytes,
             blob_id,
@@ -811,7 +811,7 @@ where
             .expected_create_data_blob_calls
             .pop_front()
             .expect("Unexpected create_data_blob call");
-        assert_eq!(bytes, expected_bytes);
+        assert_eq!(bytes, &expected_bytes);
         DataBlobHash(blob_id.hash)
     }
 
@@ -946,13 +946,13 @@ where
     pub fn query_service<A: ServiceAbi + Send>(
         &mut self,
         application_id: ApplicationId<A>,
-        query: A::Query,
+        query: &A::Query,
     ) -> A::QueryResponse {
         let maybe_query = self.expected_service_queries.pop_front();
         let (expected_id, expected_query, response) =
             maybe_query.expect("Unexpected service query");
         assert_eq!(application_id.forget_abi(), expected_id);
-        let query = serde_json::to_string(&query).expect("Failed to serialize query");
+        let query = serde_json::to_string(query).expect("Failed to serialize query");
         assert_eq!(query, expected_query);
         serde_json::from_str(&response).expect("Failed to deserialize response")
     }

@@ -84,7 +84,7 @@ impl Contract {
         let application_id = self.runtime.application_id();
         let request = async_graphql::Request::new("query { performHttpRequest }");
 
-        let graphql_response = self.runtime.query_service(application_id, request);
+        let graphql_response = self.runtime.query_service(application_id, &request);
 
         let async_graphql::Value::Object(graphql_response_data) = graphql_response.data else {
             panic!("Unexpected response from service: {graphql_response:#?}");

@@ -82,7 +82,7 @@ impl EthereumTrackerContract {
         let request = async_graphql::Request::new("query { readInitialEvent }");
 
         let application_id = self.runtime.application_id();
-        let response = self.runtime.query_service(application_id, request);
+        let response = self.runtime.query_service(application_id, &request);
 
         let async_graphql::Value::Object(data_object) = response.data else {
             panic!("Unexpected response from `readInitialEvent`: {response:#?}");
@@ -115,7 +115,7 @@ impl EthereumTrackerContract {
         ));
 
         let application_id = self.runtime.application_id();
-        let response = self.runtime.query_service(application_id, request);
+        let response = self.runtime.query_service(application_id, &request);
 
         let async_graphql::Value::Object(data_object) = response.data else {
             panic!("Unexpected response from `readTransferEvents`: {response:#?}");
