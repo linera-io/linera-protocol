@@ -206,7 +206,11 @@ impl Client {
     /// On transport or protocol error, or if persistent storage is
     /// unavailable.
     #[wasm_bindgen(constructor)]
-    pub async fn new(wallet: PersistentWallet, signer: JsSigner) -> Result<Client, JsError> {
+    pub async fn new(
+        wallet: PersistentWallet,
+        signer: JsSigner,
+        skip_process_inbox: bool,
+    ) -> Result<Client, JsError> {
         let mut storage = get_storage().await?;
         wallet
             .0
@@ -223,7 +227,10 @@ impl Client {
         )));
         let client_context_clone = client_context.clone();
         let chain_listener = ChainListener::new(
-            ChainListenerConfig::default(),
+            ChainListenerConfig {
+                skip_process_inbox,
+                ..ChainListenerConfig::default()
+            },
             client_context_clone,
             storage,
             tokio_util::sync::CancellationToken::new(),
