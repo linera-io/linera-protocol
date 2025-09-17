@@ -74,6 +74,9 @@ jobs:
     - uses: jetli/wasm-pack-action@v0.4.0
       with:
         version: v0.13.1
+    - uses: jetli/wasm-bindgen-action@v0.2.0
+      with:
+        version: 0.2.100
     - name: Install pnpm
       uses: pnpm/action-setup@v4
       with:
@@ -82,6 +85,7 @@ jobs:
     - name: Test the npm packages
       run: |
         cd web
+        pnpm install
         pnpm -r run ci
     - name: Test `linera-views` on the Web
       run: |
