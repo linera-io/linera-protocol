@@ -74,9 +74,6 @@ extern "C" {
     #[wasm_bindgen(catch, method)]
     async fn sign(this: &JsSigner, owner: JsValue, value: Vec<u8>) -> Result<JsValue, JsValue>;
 
-    #[wasm_bindgen(catch, method, js_name = "getPublicKey")]
-    async fn get_public_key(this: &JsSigner, owner: JsValue) -> Result<JsValue, JsValue>;
-
     #[wasm_bindgen(catch, method, js_name = "containsKey")]
     async fn contains_key(this: &JsSigner, owner: JsValue) -> Result<JsValue, JsValue>;
 }
