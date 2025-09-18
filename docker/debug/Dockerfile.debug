@@ -2,7 +2,7 @@
 #   * Create a buildx builder instance (if you don't have one already):
 #       docker buildx create --name my-buildx-builder --driver docker-container --use
 #   * Build the image:
-#       docker buildx build --platform linux/amd64,linux/arm64 -t us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest -f docker/debug/Dockerfile.debug . --push
+#       docker buildx build --platform linux/amd64,linux/arm64 -t us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-debug:latest -f docker/debug/Dockerfile.debug . --push
 #
 # To use this, given a running container that contains a pod you're interested in debugging (let's
 # call it `shards-0`), and a container within that pod (let's call it `linera-server`), do the following:
@@ -11,11 +11,11 @@
 #           - For a kind cluster with id for example `97461`, run:
 #               kubectl config use-context kind-97461
 #       2) Pull the docker image, if you don't have it locally:
-#           docker pull us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest
+#           docker pull us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-debug:latest
 #       3) Load the image into the kind cluster:
-#           kind load docker-image --name 97461 us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest
+#           kind load docker-image --name 97461 us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-debug:latest
 #       4) Create a debugging container that shares the same processes as the pod you're interested in debugging, and get a shell into it:
-#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=IfNotPresent --profile=sysadmin -- bash
+#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=IfNotPresent --profile=sysadmin -- bash
 
 #   * For debugging a GCP cluster:
 #       1) Connect to the cluster:
@@ -23,7 +23,7 @@
 #             in region `us-east1-b`. Run:
 #               gcloud container clusters get-credentials testnet-babbage-validator-1-cluster --region us-east1-b
 #       2) Create a debugging container that shares the same processes as the pod you're interested in debugging, and get a shell into it:
-#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=Always --profile=sysadmin -- bash
+#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=Always --profile=sysadmin -- bash
 # 
 # You should now have a shell in this debugging container, with all the different debugging tools
 # installed below, but without bloating the production Docker image.
