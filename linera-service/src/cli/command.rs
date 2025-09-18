@@ -6,7 +6,7 @@ use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, Epoch},
+    data_types::{Amount, BlockHeight, Epoch},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamId},
     time::Duration,
     vm::VmRuntime,
@@ -262,6 +262,9 @@ pub enum ClientCommand {
         /// Chain ID (must be one of our chains)
         chain_id: ChainId,
     },
+
+    /// Print out the network description.
+    ShowNetworkDescription,
 
     /// Read the current native-token balance of the given account directly from the local
     /// state.
@@ -910,6 +913,10 @@ pub enum ClientCommand {
     #[command(subcommand)]
     Wallet(WalletCommand),
 
+    /// Show the contents of the wallet.
+    #[command(subcommand)]
+    Chain(ChainCommand),
+
     /// Manage Linera projects.
     #[command(subcommand)]
     Project(ProjectCommand),
@@ -954,6 +961,7 @@ impl ClientCommand {
             | ClientCommand::SetPreferredOwner { .. }
             | ClientCommand::ChangeApplicationPermissions { .. }
             | ClientCommand::CloseChain { .. }
+            | ClientCommand::ShowNetworkDescription
             | ClientCommand::LocalBalance { .. }
             | ClientCommand::QueryBalance { .. }
             | ClientCommand::SyncBalance { .. }
@@ -976,6 +984,7 @@ impl ClientCommand {
             | ClientCommand::Keygen
             | ClientCommand::Assign { .. }
             | ClientCommand::Wallet { .. }
+            | ClientCommand::Chain { .. }
             | ClientCommand::RetryPendingBlock { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
@@ -1197,6 +1206,25 @@ pub enum WalletCommand {
 
     /// Forgets the specified chain, including the associated key pair.
     ForgetChain { chain_id: ChainId },
+}
+
+#[derive(Clone, clap::Subcommand)]
+pub enum ChainCommand {
+    /// Show the contents of a block.
+    ShowBlock {
+        /// The height of the block.
+        height: BlockHeight,
+        /// The chain to show the block (if not specified, the default chain from the
+        /// wallet is used).
+        chain_id: Option<ChainId>,
+    },
+
+    /// Show the chain description of a chain.
+    ShowChainDescription {
+        /// The chain ID to show (if not specified, the default chain from the wallet is
+        /// used).
+        chain_id: Option<ChainId>,
+    },
 }
 
 #[derive(Clone, clap::Parser)]

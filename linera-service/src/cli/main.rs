@@ -34,7 +34,8 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    data_types::ClientOutcome, node::ValidatorNodeProvider, worker::Reason, JoinSetExt as _,
+    client::ChainClientError, data_types::ClientOutcome, node::ValidatorNodeProvider,
+    worker::Reason, JoinSetExt as _, LocalNodeError,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
@@ -45,8 +46,8 @@ use linera_persistent::{self as persistent, Persist, PersistExt as _};
 use linera_service::{
     cli::{
         command::{
-            BenchmarkCommand, BenchmarkOptions, ClientCommand, DatabaseToolCommand, NetCommand,
-            ProjectCommand, WalletCommand,
+            BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
+            NetCommand, ProjectCommand, WalletCommand,
         },
         net_up_utils,
     },
@@ -326,6 +327,11 @@ impl Runnable for Job {
                     time_total.as_millis()
                 );
                 debug!("{:?}", certificate);
+            }
+
+            ShowNetworkDescription => {
+                let network_description = storage.read_network_description().await?;
+                println!("Network description: \n{:#?}", network_description);
             }
 
             LocalBalance { account } => {
@@ -1647,6 +1653,51 @@ impl Runnable for Job {
                     "Chain followed and added in {} ms",
                     start_time.elapsed().as_millis()
                 );
+            }
+
+            Chain(ChainCommand::ShowBlock { chain_id, height }) => {
+                let context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_state_view = context
+                    .storage()
+                    .load_chain(chain_id)
+                    .await
+                    .context("Failed to load chain")?;
+                let block_hash = chain_state_view
+                    .block_hashes(height..=height)
+                    .await
+                    .context("Failed to find a block hash for the given height")?[0];
+                let block = context
+                    .storage()
+                    .read_confirmed_block(block_hash)
+                    .await
+                    .context("Failed to find the given block in storage")?;
+                println!("{:#?}", block);
+            }
+
+            Chain(ChainCommand::ShowChainDescription { chain_id }) => {
+                let context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_client = context.make_chain_client(chain_id);
+                let description = match chain_client.get_chain_description().await {
+                    Ok(description) => description,
+                    Err(ChainClientError::LocalNodeError(LocalNodeError::BlobsNotFound(_))) => {
+                        println!("Could not find a chain description corresponding to the given chain ID.");
+                        return Ok(());
+                    }
+                    err => err.context("Failed to get the chain description")?,
+                };
+                println!("{:#?}", description);
             }
 
             CreateGenesisConfig { .. }
