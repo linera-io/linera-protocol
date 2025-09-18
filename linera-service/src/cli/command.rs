@@ -742,6 +742,11 @@ pub enum ClientCommand {
         /// The port on which to run the server
         #[arg(long)]
         port: NonZeroU16,
+
+        /// The port to expose metrics on.
+        #[cfg(with_metrics)]
+        #[arg(long)]
+        metrics_port: NonZeroU16,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.

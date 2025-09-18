@@ -15,8 +15,6 @@ pub fn start_metrics(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,
 ) {
-    info!("Starting to serve metrics on {:?}", address);
-
     #[cfg(feature = "memory-profiling")]
     let app = {
         // Try to add memory profiling endpoint
@@ -42,7 +40,13 @@ pub fn start_metrics(
     let app = Router::new().route("/metrics", get(serve_metrics));
 
     tokio::spawn(async move {
-        if let Err(e) = axum::serve(tokio::net::TcpListener::bind(address).await.unwrap(), app)
+        let listener = tokio::net::TcpListener::bind(address)
+            .await
+            .expect("Failed to bind to address");
+        let address = listener.local_addr().expect("Failed to get local address");
+
+        info!("Starting to serve metrics on {:?}", address);
+        if let Err(e) = axum::serve(listener, app)
             .with_graceful_shutdown(shutdown_signal.cancelled_owned())
             .await
         {
