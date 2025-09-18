@@ -171,8 +171,12 @@
 
           let errors = [];
           try {
-              const match = recipient.match(/^(0x[0-9a-f]{40})@([0-9a-f]{64})$/);
+              // I failed to make it work with a single regex,
+              // the regex with group alternatives for the owner produces different `match` array
+              // with different group indices so we can't extract it deterministicly when parsing as `recipient` down below.
+              const match = recipient.match(/^(0x[0-9a-f]{40})@([0-9a-f]{64})$/) || recipient.match(/^(0x[0-9a-f]{64})@([0-9a-f]{64})$/);
               if (!match) throw new Error('Invalid recipient address: expected `owner@chain_id`');
+              console.log('Match: ', match);
 
               const query = gql(`mutation(
                   $donor: AccountOwner!,
