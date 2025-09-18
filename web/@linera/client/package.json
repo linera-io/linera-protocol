@@ -5,8 +5,11 @@
   "publishConfig": {
     "access": "public"
   },
-  "main": "dist/linera_web.js",
-  "types": "dist/linera_web.d.ts",
+  "exports": {
+    ".": "dist/linera.js",
+    "./*": "dist/*"
+  },
+  "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -31,9 +34,12 @@
     "url": "https://github.com/linera-io/linera-protocol/issues"
   },
   "homepage": "https://github.com/linera-io/linera-protocol/tree/main/linera-web#readme",
+  "dependencies": {
+    "ethers": "^6.15.0"
+  },
   "devDependencies": {
     "prettier": "3.5.3",
-    "typedoc": "^0.28.5",
-    "typedoc-plugin-markdown": "^4.7.0"
+    "typedoc": "^0.28.13",
+    "typedoc-plugin-markdown": "^4.8.1"
   }
 }

@@ -73,7 +73,7 @@
           document.getElementById('owner').innerText = owner;
           document.getElementById('chain-id').innerText = await faucet.claimChain(wallet, owner);
           const client = await new linera.Client(wallet, signer);
-          const counter = await client.frontend().application(import.meta.env.LINERA_APPLICATION_ID);
+          const counter = await client.application(import.meta.env.LINERA_APPLICATION_ID);
           const logs = document.getElementById('logs');
           const incrementButton = document.getElementById('increment-btn');
           const blockTemplate = document.getElementById('block-template');

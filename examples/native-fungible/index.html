@@ -236,7 +236,7 @@
           document.querySelector('#chain-id').innerText = chainId;
           document.querySelector('#owner').innerText = owner;
 
-          const application = await client.frontend().application(import.meta.env.LINERA_APPLICATION_ID);
+          const application = await client.application(import.meta.env.LINERA_APPLICATION_ID);
 
           await updateBalance(application, owner);
 
