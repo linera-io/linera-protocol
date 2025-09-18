@@ -10,7 +10,7 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use crowd_funding::Operation;
 use linera_sdk::{
-    graphql::GraphQLMutationRoot,
+    graphql::GraphQLMutationRoot as _,
     linera_base_types::{ApplicationId, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,

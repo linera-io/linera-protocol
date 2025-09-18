@@ -113,7 +113,7 @@ resulting block, if any.
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
 mutation Increment {
-  increment(field0: 3)
+  increment(value: 3)
 }
 ```
 

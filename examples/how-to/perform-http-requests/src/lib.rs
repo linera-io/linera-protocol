@@ -4,10 +4,7 @@
 //! ABI of the Counter Example Application
 
 use async_graphql::{Request, Response};
-use linera_sdk::{
-    abi::{ContractAbi, ServiceAbi},
-    graphql::GraphQLMutationRoot,
-};
+use linera_sdk::abi::{ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
 /// The marker type that connects the types used to interface with the application.
@@ -24,7 +21,7 @@ impl ServiceAbi for Abi {
 }
 
 /// Operations that the contract can handle.
-#[derive(Debug, Deserialize, Eq, PartialEq, Serialize, GraphQLMutationRoot)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
     /// Handles the HTTP response of a request made outside the contract.
     HandleHttpResponse(Vec<u8>),
