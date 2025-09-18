@@ -4,7 +4,6 @@
 use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
-use dashmap::DashMap;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -302,8 +301,8 @@ pub struct DbStorage<Database, Clock = WallClock> {
     database: Arc<Database>,
     clock: Clock,
     wasm_runtime: Option<WasmRuntime>,
-    user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
-    user_services: Arc<DashMap<ApplicationId, UserServiceCode>>,
+    user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
+    user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
@@ -1017,8 +1016,8 @@ impl<Database, C> DbStorage<Database, C> {
             database: Arc::new(database),
             clock,
             wasm_runtime,
-            user_contracts: Arc::new(DashMap::new()),
-            user_services: Arc::new(DashMap::new()),
+            user_contracts: Arc::new(papaya::HashMap::new()),
+            user_services: Arc::new(papaya::HashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
