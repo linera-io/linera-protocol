@@ -75,7 +75,7 @@ impl Contract for CreateAndCallContract {
         // Step 3: Call the service. It should return the value before
         // the initialization of this contract and thus zero.
         let counter_request = CounterRequest::Query;
-        let value = self.runtime.query_service(application_id, counter_request);
+        let value = self.runtime.query_service(application_id, &counter_request);
         assert_eq!(value, 0);
 
         // Step 4: Call the contract with counter increment operation

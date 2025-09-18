@@ -74,7 +74,7 @@ impl Contract for MetaCounterContract {
             let counter_id = self.counter_id();
             let _ = self
                 .runtime
-                .query_service(counter_id, "query { value }".into());
+                .query_service(counter_id, &"query { value }".into());
         }
         message.send_to(recipient_id);
     }
