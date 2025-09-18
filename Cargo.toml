@@ -56,7 +56,6 @@ default-members = [
     "linera-summary",
     "linera-views",
     "linera-views-derive",
-    # "linera-web", # not this one
     "linera-witty",
     "linera-witty-macros",
     "linera-witty/test-modules",
