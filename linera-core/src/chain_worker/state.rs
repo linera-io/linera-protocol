@@ -71,6 +71,9 @@ where
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
     #[expect(clippy::too_many_arguments)]
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %chain_id
+    ))]
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
@@ -103,7 +106,7 @@ where
     }
 
     /// Handles a request and applies it to the chain state.
-    #[instrument(skip_all)]
+    #[instrument(target = "telemetry_only", skip_all, fields(chain_id = %self.chain_id()))]
     pub async fn handle_request(&mut self, request: ChainWorkerRequest<StorageClient::Context>) {
         tracing::trace!("Handling chain worker request: {request:?}");
         // TODO(#2237): Spawn concurrent tasks for read-only operations
@@ -264,6 +267,10 @@ where
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        blob_id = %blob_id
+    ))]
     pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
             return Ok(blob);
@@ -274,6 +281,9 @@ where
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are
     /// missing.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     async fn get_required_blobs(
         &self,
         required_blob_ids: impl IntoIterator<Item = BlobId>,
@@ -294,6 +304,9 @@ where
     }
 
     /// Tries to read the blobs from the chain manager or storage. Returns `None` if not found.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     async fn maybe_get_required_blobs(
         &self,
         blob_ids: impl IntoIterator<Item = BlobId>,
@@ -362,6 +375,9 @@ where
     }
 
     /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     async fn create_network_actions(
         &self,
         old_round: Option<Round>,
@@ -399,6 +415,10 @@ where
         })
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        num_recipients = %heights_by_recipient.len()
+    ))]
     async fn create_cross_chain_requests(
         &self,
         heights_by_recipient: BTreeMap<ChainId, Vec<BlockHeight>>,
@@ -470,6 +490,10 @@ where
 
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        height = %height
+    ))]
     pub async fn all_messages_to_tracked_chains_delivered_up_to(
         &self,
         height: BlockHeight,
@@ -496,6 +520,10 @@ where
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        height = %certificate.inner().height()
+    ))]
     pub(super) async fn process_timeout(
         &mut self,
         certificate: TimeoutCertificate,
@@ -534,6 +562,10 @@ where
     ///
     /// If they cannot be found, it creates an entry in `pending_proposed_blobs` so they can be
     /// submitted one by one.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %proposal.content.block.height
+    ))]
     pub(super) async fn load_proposal_blobs(
         &mut self,
         proposal: &BlockProposal,
@@ -578,6 +610,10 @@ where
     }
 
     /// Processes a validated block issued for this multi-owner chain.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %certificate.block().header.height
+    ))]
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
@@ -635,6 +671,11 @@ where
     }
 
     /// Processes a confirmed block (aka a commit).
+    #[instrument(skip_all, fields(
+        chain_id = %certificate.block().header.chain_id,
+        height = %certificate.block().header.height,
+        block_hash = %certificate.hash(),
+    ))]
     pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
@@ -812,6 +853,7 @@ where
                 computed: Box::new(verified_outcome),
             }
         );
+
         // Update the rest of the chain state.
         let updated_streams = chain
             .apply_confirmed_block(certificate.value(), local_time)
@@ -848,7 +890,6 @@ where
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
     /// `height`.
-    #[instrument(level = "trace", skip(self, notify_when_messages_are_delivered))]
     async fn register_delivery_notifier(
         &mut self,
         height: BlockHeight,
@@ -873,7 +914,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    #[instrument(level = "trace", skip(self, bundles))]
+    #[instrument(target = "telemetry_only", skip(self, bundles))]
     pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: ChainId,
@@ -922,6 +963,11 @@ where
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        recipient = %recipient,
+        latest_height = %latest_height
+    ))]
     pub(super) async fn confirm_updated_recipient(
         &mut self,
         recipient: ChainId,
@@ -944,6 +990,10 @@ where
         Ok(())
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        num_trackers = %new_trackers.len()
+    ))]
     pub async fn update_received_certificate_trackers(
         &mut self,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
@@ -955,6 +1005,11 @@ where
     }
 
     /// Attempts to vote for a leader timeout, if possible.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        height = %height,
+        round = %round
+    ))]
     pub(super) async fn vote_for_leader_timeout(
         &mut self,
         height: BlockHeight,
@@ -982,6 +1037,9 @@ where
     }
 
     /// Votes for falling back to a public chain.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     pub(super) async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.chain;
         if let (epoch, Some(entry)) = (
@@ -1004,6 +1062,10 @@ where
         Ok(())
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        blob_id = %blob.id()
+    ))]
     pub(super) async fn handle_pending_blob(
         &mut self,
         blob: Blob,
@@ -1040,6 +1102,10 @@ where
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
     #[cfg(with_testing)]
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        height = %height
+    ))]
     pub(super) async fn read_certificate(
         &mut self,
         height: BlockHeight,
@@ -1058,6 +1124,10 @@ where
     }
 
     /// Queries an application's state on the chain.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        query_application_id = %query.application_id()
+    ))]
     pub(super) async fn query_application(
         &mut self,
         query: Query,
@@ -1072,6 +1142,10 @@ where
     }
 
     /// Returns an application's description.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        application_id = %application_id
+    ))]
     pub(super) async fn describe_application(
         &mut self,
         application_id: ApplicationId,
@@ -1082,6 +1156,10 @@ where
     }
 
     /// Executes a block without persisting any changes to the state.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %block.height
+    ))]
     pub(super) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
@@ -1114,6 +1192,10 @@ where
     }
 
     /// Validates and executes a block proposed to extend this chain.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %proposal.content.block.height
+    ))]
     pub(super) async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -1257,6 +1339,9 @@ where
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     pub(super) async fn prepare_chain_info_response(
         &mut self,
         query: ChainInfoQuery,
@@ -1322,6 +1407,10 @@ where
     }
 
     /// Executes a block, caches the result, and returns the outcome.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %block.height
+    ))]
     async fn execute_block(
         &mut self,
         block: &ProposedBlock,
@@ -1363,6 +1452,9 @@ where
     /// Stores the chain state in persistent storage.
     ///
     /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     async fn save(&mut self) -> Result<(), WorkerError> {
         self.clear_shared_chain_view().await;
         self.chain.save().await?;

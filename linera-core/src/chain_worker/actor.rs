@@ -243,8 +243,9 @@ where
 
     /// Runs the worker until there are no more incoming requests.
     #[instrument(
+        target = "telemetry_only",
         skip_all,
-        fields(chain_id = format!("{:.8}", self.chain_id)),
+        fields(chain_id = format!("{:.8}", self.chain_id), long_lived_services = %self.config.long_lived_services),
     )]
     async fn handle_requests(
         self,
@@ -276,9 +277,12 @@ where
                 self.chain_id,
                 service_runtime_endpoint,
             )
+            .instrument(span.clone())
             .await?;
 
-            Box::pin(worker.handle_request(request).instrument(span)).await;
+            Box::pin(worker.handle_request(request))
+                .instrument(span)
+                .await;
 
             loop {
                 futures::select! {
@@ -287,7 +291,7 @@ where
                         let Some((request, span)) = maybe_request else {
                             break; // Request sender was dropped.
                         };
-                        Box::pin(worker.handle_request(request).instrument(span)).await;
+                        Box::pin(worker.handle_request(request)).instrument(span).await;
                     }
                 }
             }
