@@ -913,7 +913,7 @@ pub enum ClientCommand {
     #[command(subcommand)]
     Wallet(WalletCommand),
 
-    /// Show the contents of the wallet.
+    /// Show the information about a chain.
     #[command(subcommand)]
     Chain(ChainCommand),
 

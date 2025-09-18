@@ -160,9 +160,9 @@ fn chain_ownership_test_case() -> ChainOwnership {
 fn account_owner_debug_format() {
     assert_eq!(&format!("{:?}", AccountOwner::Reserved(10)), "Reserved(10)");
     let addr32 = AccountOwner::Address32(CryptoHash::from([10u8; 32]));
-    let debug32 = "Address32(0a0a0a0a0a0a0a0a..)";
+    let debug32 = "Address32(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a)";
     assert_eq!(&format!("{addr32:?}"), debug32);
     let addr20 = AccountOwner::Address20([10u8; 20]);
-    let debug20 = "Address20(0a0a0a0a0a0a0a0a..)";
+    let debug20 = "Address20(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a)";
     assert_eq!(&format!("{addr20:?}"), debug20);
 }
