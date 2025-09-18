@@ -45,8 +45,8 @@ impl fmt::Debug for AccountOwner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Reserved(byte) => f.debug_tuple("Reserved").field(byte).finish(),
-            Self::Address32(hash) => write!(f, "Address32({:?}..)", hash),
-            Self::Address20(bytes) => write!(f, "Address20({}..)", hex::encode(&bytes[..8])),
+            Self::Address32(hash) => write!(f, "Address32({:?})", hash),
+            Self::Address20(bytes) => write!(f, "Address20({})", hex::encode(bytes)),
         }
     }
 }
