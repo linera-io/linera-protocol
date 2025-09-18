@@ -493,6 +493,10 @@ where
                     .await?;
                 let index = *count;
                 *count = count.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                self.resource_controller
+                    .with_state(&mut self.state.system)
+                    .await?
+                    .track_event_published(&value)?;
                 self.txn_tracker.add_event(stream_id, index, value);
                 callback.respond(index)
             }
@@ -510,6 +514,10 @@ where
                     })
                     .await?
                     .to_event(&event_id)?;
+                self.resource_controller
+                    .with_state(&mut self.state.system)
+                    .await?
+                    .track_event_read(event.len() as u64)?;
                 callback.respond(event);
             }
 

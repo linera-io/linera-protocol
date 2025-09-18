@@ -132,6 +132,14 @@ pub struct ResourceTracker {
     pub blob_bytes_read: u64,
     /// The number of blob bytes published.
     pub blob_bytes_published: u64,
+    /// The number of events read.
+    pub events_read: u32,
+    /// The number of events published.
+    pub events_published: u32,
+    /// The number of event bytes read.
+    pub event_bytes_read: u64,
+    /// The number of event bytes published.
+    pub event_bytes_published: u64,
     /// The change in the number of bytes being stored by user applications.
     pub bytes_stored: i32,
     /// The number of operations executed.
@@ -492,6 +500,44 @@ where
                 .ok_or(ArithmeticError::Overflow)?;
             tracker.blobs_published = tracker
                 .blobs_published
+                .checked_add(1)
+                .ok_or(ArithmeticError::Overflow)?;
+        }
+        self.update_balance(self.policy.blob_published_price(size)?)?;
+        Ok(())
+    }
+
+    /// Tracks a number of event bytes read.
+    pub(crate) fn track_event_read(&mut self, count: u64) -> Result<(), ExecutionError> {
+        {
+            let tracker = self.tracker.as_mut();
+            tracker.event_bytes_read = tracker
+                .event_bytes_read
+                .checked_add(count)
+                .ok_or(ArithmeticError::Overflow)?;
+            tracker.events_read = tracker
+                .events_read
+                .checked_add(1)
+                .ok_or(ArithmeticError::Overflow)?;
+        }
+        self.update_balance(self.policy.blob_read_price(count)?)?;
+        Ok(())
+    }
+
+    /// Tracks a number of event bytes published.
+    pub(crate) fn track_event_published(
+        &mut self,
+        event_bytes: &[u8],
+    ) -> Result<(), ExecutionError> {
+        let size = event_bytes.len() as u64;
+        {
+            let tracker = self.tracker.as_mut();
+            tracker.event_bytes_published = tracker
+                .event_bytes_published
+                .checked_add(size)
+                .ok_or(ArithmeticError::Overflow)?;
+            tracker.events_published = tracker
+                .events_published
                 .checked_add(1)
                 .ok_or(ArithmeticError::Overflow)?;
         }
