@@ -2228,12 +2228,10 @@ mod graphql {
             values
                 .into_iter()
                 .zip(keys)
-                .map(|(value, key)|
-                     match value {
-                         None => Err(missing_key_error(&key)),
-                         Some(value) => Ok(Entry { value, key })
-                     }
-                )
+                .map(|(value, key)| match value {
+                    None => Err(missing_key_error(&key)),
+                    Some(value) => Ok(Entry { value, key }),
+                })
                 .collect()
         }
     }
@@ -2296,12 +2294,10 @@ mod graphql {
             values
                 .into_iter()
                 .zip(keys)
-                .map(|(value, key)|
-                     match value {
-                         None => Err(missing_key_error(&key)),
-                         Some(value) => Ok(Entry { value, key })
-                     }
-                )
+                .map(|(value, key)| match value {
+                    None => Err(missing_key_error(&key)),
+                    Some(value) => Ok(Entry { value, key }),
+                })
                 .collect()
         }
     }

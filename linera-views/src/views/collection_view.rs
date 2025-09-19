@@ -80,9 +80,7 @@ impl<W> std::ops::Deref for ReadGuardedView<'_, W> {
                 };
                 view
             }
-            ReadGuardedView::NotLoaded { _updates, view } => {
-                view
-            }
+            ReadGuardedView::NotLoaded { _updates, view } => view,
         }
     }
 }
@@ -289,22 +287,15 @@ impl<W: View> ByteCollectionView<W::Context, W> {
         &self,
         short_key: &[u8],
     ) -> Result<Option<ReadGuardedView<W>>, ViewError> {
-        let updates = self
-            .updates
-            .read()
-            .await;
+        let updates = self.updates.read().await;
         match updates.get(short_key) {
-            Some(update) => {
-                match update {
-                    Update::Removed => Ok(None),
-                    _ => {
-                        Ok(Some(ReadGuardedView::Loaded {
-                            updates,
-                            short_key: short_key.to_vec(),
-                        }))
-                    }
-                }
-            }
+            Some(update) => match update {
+                Update::Removed => Ok(None),
+                _ => Ok(Some(ReadGuardedView::Loaded {
+                    updates,
+                    short_key: short_key.to_vec(),
+                })),
+            },
             None => {
                 let key_index = self
                     .context
@@ -361,20 +352,18 @@ impl<W: View> ByteCollectionView<W::Context, W> {
 
         for (position, short_key) in short_keys.into_iter().enumerate() {
             match updates.get(&short_key) {
-                Some(update) => {
-                    match update {
-                        Update::Removed => {
-                            results.push(None);
-                        }
-                        _ => {
-                            let updates = self.updates.read().await;
-                            results.push(Some(ReadGuardedView::Loaded {
-                                updates,
-                                short_key: short_key.clone(),
-                            }));
-                        }
+                Some(update) => match update {
+                    Update::Removed => {
+                        results.push(None);
                     }
-                }
+                    _ => {
+                        let updates = self.updates.read().await;
+                        results.push(Some(ReadGuardedView::Loaded {
+                            updates,
+                            short_key: short_key.clone(),
+                        }));
+                    }
+                },
                 None => {
                     results.push(None); // Placeholder, may be updated later
                     if !self.delete_storage_first {
@@ -403,7 +392,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
         }
         let values = self
             .context
-	    .store()
+            .store()
             .read_multi_values_bytes(keys_to_load)
             .await?;
 
@@ -1657,12 +1646,10 @@ mod graphql {
             values
                 .into_iter()
                 .zip(keys)
-                .map(|(value, key)|
-                     match value {
-                         None => Err(missing_key_error(&key)),
-                         Some(value) => Ok(Entry { value, key })
-                     }
-                )
+                .map(|(value, key)| match value {
+                    None => Err(missing_key_error(&key)),
+                    Some(value) => Ok(Entry { value, key }),
+                })
                 .collect()
         }
     }
@@ -1724,12 +1711,10 @@ mod graphql {
             values
                 .into_iter()
                 .zip(keys)
-                .map(|(value, key)|
-                     match value {
-                         None => Err(missing_key_error(&key)),
-                         Some(value) => Ok(Entry { value, key })
-                     }
-                )
+                .map(|(value, key)| match value {
+                    None => Err(missing_key_error(&key)),
+                    Some(value) => Ok(Entry { value, key }),
+                })
                 .collect()
         }
     }
