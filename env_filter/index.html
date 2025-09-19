@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Filtering for log records."><title>env_filter - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="env_filter" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../env_filter/index.html">env_<wbr>filter</a><span class="version">0.1.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#using-env_filter-in-your-own-logger" title="Using `env_filter` in your own logger">Using <code>env_filter</code> in your own logger</a></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>env_filter</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/env_filter/lib.rs.html#1-59">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Filtering for log records.</p>
+<p>You can use the <a href="struct.Filter.html" title="struct env_filter::Filter"><code>Filter</code></a> type in your own logger implementation to use the same
+filter parsing and matching as <code>env_logger</code>.</p>
+<h3 id="using-env_filter-in-your-own-logger"><a class="doc-anchor" href="#using-env_filter-in-your-own-logger">§</a>Using <code>env_filter</code> in your own logger</h3>
+<p>You can use <code>env_filter</code>’s filtering functionality with your own logger.
+Call <a href="struct.Builder.html#method.parse" title="method env_filter::Builder::parse"><code>Builder::parse</code></a> to parse directives from a string when constructing
+your logger. Call <a href="struct.Filter.html#method.matches" title="method env_filter::Filter::matches"><code>Filter::matches</code></a> to check whether a record should be
+logged based on the parsed filters when log records are received.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>env_filter::Filter;
+<span class="kw">use </span>log::{Log, Metadata, Record};
+
+<span class="kw">struct </span>PrintLogger;
+
+<span class="kw">impl </span>Log <span class="kw">for </span>PrintLogger {
+    <span class="kw">fn </span>enabled(<span class="kw-2">&amp;</span><span class="self">self</span>, metadata: <span class="kw-2">&amp;</span>Metadata) -&gt; bool {
+        <span class="bool-val">true
+    </span>}
+
+    <span class="kw">fn </span>log(<span class="kw-2">&amp;</span><span class="self">self</span>, record: <span class="kw-2">&amp;</span>Record) {
+        <span class="macro">println!</span>(<span class="string">"{:?}"</span>, record);
+    }
+
+    <span class="kw">fn </span>flush(<span class="kw-2">&amp;</span><span class="self">self</span>) {}
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>builder = env_filter::Builder::new();
+<span class="comment">// Parse a directives string from an environment variable
+</span><span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="kw-2">ref </span>filter) = std::env::var(<span class="string">"MY_LOG_LEVEL"</span>) {
+    builder.parse(filter);
+}
+
+<span class="kw">let </span>logger = env_filter::FilteredLog::new(PrintLogger, builder.build());</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Builder.html" title="struct env_filter::Builder">Builder</a></dt><dd>A builder for a log filter.</dd><dt><a class="struct" href="struct.Filter.html" title="struct env_filter::Filter">Filter</a></dt><dd>A log filter.</dd><dt><a class="struct" href="struct.FilteredLog.html" title="struct env_filter::FilteredLog">Filtered<wbr>Log</a></dt><dd>Decorate a <a href="../log/trait.Log.html" title="trait log::Log"><code>log::Log</code></a> with record <a href="struct.Filter.html" title="struct env_filter::Filter"><code>Filter</code></a>ing.</dd><dt><a class="struct" href="struct.ParseError.html" title="struct env_filter::ParseError">Parse<wbr>Error</a></dt><dd>Error during logger directive parsing process.</dd></dl></section></div></main></body></html>

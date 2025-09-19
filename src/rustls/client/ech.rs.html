@@ -1,0 +1,899 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-0.23.31/src/client/ech.rs`."><title>ech.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">rustls/client/</div>ech.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>alloc::boxed::Box;
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>alloc::vec;
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>alloc::vec::Vec;
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>pki_types::{DnsName, EchConfigListBytes, ServerName};
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>subtle::ConstantTimeEq;
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::CipherSuite::TLS_EMPTY_RENEGOTIATION_INFO_SCSV;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span><span class="kw">crate</span>::client::tls13;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span><span class="kw">crate</span>::crypto::SecureRandom;
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::crypto::hash::Hash;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span><span class="kw">crate</span>::crypto::hpke::{EncapsulatedSecret, Hpke, HpkePublicKey, HpkeSealer, HpkeSuite};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span><span class="kw">crate</span>::hash_hs::{HandshakeHash, HandshakeHashBuffer};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span><span class="kw">crate</span>::log::{debug, trace, warn};
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::msgs::base::{Payload, PayloadU16};
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span><span class="kw">crate</span>::msgs::codec::{Codec, Reader};
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span><span class="kw">crate</span>::msgs::enums::{ExtensionType, HpkeKem};
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span><span class="kw">crate</span>::msgs::handshake::{
+<a href=#19 id=19 data-nosnippet>19</a>    ClientExtensions, ClientHelloPayload, EchConfigContents, EchConfigPayload, Encoding,
+<a href=#20 id=20 data-nosnippet>20</a>    EncryptedClientHello, EncryptedClientHelloOuter, HandshakeMessagePayload, HandshakePayload,
+<a href=#21 id=21 data-nosnippet>21</a>    HelloRetryRequest, HpkeKeyConfig, HpkeSymmetricCipherSuite, PresharedKeyBinder,
+<a href=#22 id=22 data-nosnippet>22</a>    PresharedKeyOffer, Random, ServerHelloPayload, ServerNamePayload,
+<a href=#23 id=23 data-nosnippet>23</a>};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span><span class="kw">crate</span>::msgs::message::{Message, MessagePayload};
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span><span class="kw">crate</span>::msgs::persist;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span><span class="kw">crate</span>::msgs::persist::Retrieved;
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span><span class="kw">crate</span>::tls13::key_schedule::{
+<a href=#28 id=28 data-nosnippet>28</a>    KeyScheduleEarly, KeyScheduleHandshakeStart, server_ech_hrr_confirmation_secret,
+<a href=#29 id=29 data-nosnippet>29</a>};
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use crate</span>::{
+<a href=#31 id=31 data-nosnippet>31</a>    AlertDescription, ClientConfig, CommonState, EncryptedClientHelloError, Error,
+<a href=#32 id=32 data-nosnippet>32</a>    PeerIncompatible, PeerMisbehaved, ProtocolVersion, Tls13CipherSuite,
+<a href=#33 id=33 data-nosnippet>33</a>};
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="doccomment">/// Controls how Encrypted Client Hello (ECH) is used in a client handshake.
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#37 id=37 data-nosnippet>37</a></span><span class="kw">pub enum </span>EchMode {
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="doccomment">/// ECH is enabled and the ClientHello will be encrypted based on the provided
+<a href=#39 id=39 data-nosnippet>39</a>    /// configuration.
+<a href=#40 id=40 data-nosnippet>40</a>    </span>Enable(EchConfig),
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="doccomment">/// No ECH configuration is available but the client should act as though it were.
+<a href=#43 id=43 data-nosnippet>43</a>    ///
+<a href=#44 id=44 data-nosnippet>44</a>    /// This is an anti-ossification measure, sometimes referred to as "GREASE"[^0].
+<a href=#45 id=45 data-nosnippet>45</a>    /// [^0]: &lt;https://www.rfc-editor.org/rfc/rfc8701&gt;
+<a href=#46 id=46 data-nosnippet>46</a>    </span>Grease(EchGreaseConfig),
+<a href=#47 id=47 data-nosnippet>47</a>}
+<a href=#48 id=48 data-nosnippet>48</a>
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">impl </span>EchMode {
+<a href=#50 id=50 data-nosnippet>50</a>    <span class="doccomment">/// Returns true if the ECH mode will use a FIPS approved HPKE suite.
+<a href=#51 id=51 data-nosnippet>51</a>    </span><span class="kw">pub fn </span>fips(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#52 id=52 data-nosnippet>52</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#53 id=53 data-nosnippet>53</a>            <span class="self">Self</span>::Enable(ech_config) =&gt; ech_config.suite.fips(),
+<a href=#54 id=54 data-nosnippet>54</a>            <span class="self">Self</span>::Grease(grease_config) =&gt; grease_config.suite.fips(),
+<a href=#55 id=55 data-nosnippet>55</a>        }
+<a href=#56 id=56 data-nosnippet>56</a>    }
+<a href=#57 id=57 data-nosnippet>57</a>}
+<a href=#58 id=58 data-nosnippet>58</a>
+<a href=#59 id=59 data-nosnippet>59</a><span class="kw">impl </span>From&lt;EchConfig&gt; <span class="kw">for </span>EchMode {
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="kw">fn </span>from(config: EchConfig) -&gt; <span class="self">Self </span>{
+<a href=#61 id=61 data-nosnippet>61</a>        <span class="self">Self</span>::Enable(config)
+<a href=#62 id=62 data-nosnippet>62</a>    }
+<a href=#63 id=63 data-nosnippet>63</a>}
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a><span class="kw">impl </span>From&lt;EchGreaseConfig&gt; <span class="kw">for </span>EchMode {
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">fn </span>from(config: EchGreaseConfig) -&gt; <span class="self">Self </span>{
+<a href=#67 id=67 data-nosnippet>67</a>        <span class="self">Self</span>::Grease(config)
+<a href=#68 id=68 data-nosnippet>68</a>    }
+<a href=#69 id=69 data-nosnippet>69</a>}
+<a href=#70 id=70 data-nosnippet>70</a>
+<a href=#71 id=71 data-nosnippet>71</a><span class="doccomment">/// Configuration for performing encrypted client hello.
+<a href=#72 id=72 data-nosnippet>72</a>///
+<a href=#73 id=73 data-nosnippet>73</a>/// Note: differs from the protocol-encoded EchConfig (`EchConfigMsg`).
+<a href=#74 id=74 data-nosnippet>74</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#75 id=75 data-nosnippet>75</a></span><span class="kw">pub struct </span>EchConfig {
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="doccomment">/// The selected EchConfig.
+<a href=#77 id=77 data-nosnippet>77</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) config: EchConfigPayload,
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="doccomment">/// An HPKE instance corresponding to a suite from the `config` we have selected as
+<a href=#80 id=80 data-nosnippet>80</a>    /// a compatible choice.
+<a href=#81 id=81 data-nosnippet>81</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) suite: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>Hpke,
+<a href=#82 id=82 data-nosnippet>82</a>}
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a><span class="kw">impl </span>EchConfig {
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="doccomment">/// Construct an EchConfig by selecting a ECH config from the provided bytes that is compatible
+<a href=#86 id=86 data-nosnippet>86</a>    /// with one of the given HPKE suites.
+<a href=#87 id=87 data-nosnippet>87</a>    ///
+<a href=#88 id=88 data-nosnippet>88</a>    /// The config list bytes should be sourced from a DNS-over-HTTPS lookup resolving the `HTTPS`
+<a href=#89 id=89 data-nosnippet>89</a>    /// resource record for the host name of the server you wish to connect via ECH,
+<a href=#90 id=90 data-nosnippet>90</a>    /// and extracting the ECH configuration from the `ech` parameter. The extracted bytes should
+<a href=#91 id=91 data-nosnippet>91</a>    /// be base64 decoded to yield the `EchConfigListBytes` you provide to rustls.
+<a href=#92 id=92 data-nosnippet>92</a>    ///
+<a href=#93 id=93 data-nosnippet>93</a>    /// One of the provided ECH configurations must be compatible with the HPKE provider's supported
+<a href=#94 id=94 data-nosnippet>94</a>    /// suites or an error will be returned.
+<a href=#95 id=95 data-nosnippet>95</a>    ///
+<a href=#96 id=96 data-nosnippet>96</a>    /// See the [`ech-client.rs`] example for a complete example of fetching ECH configs from DNS.
+<a href=#97 id=97 data-nosnippet>97</a>    ///
+<a href=#98 id=98 data-nosnippet>98</a>    /// [`ech-client.rs`]: https://github.com/rustls/rustls/blob/main/examples/src/bin/ech-client.rs
+<a href=#99 id=99 data-nosnippet>99</a>    </span><span class="kw">pub fn </span>new(
+<a href=#100 id=100 data-nosnippet>100</a>        ech_config_list: EchConfigListBytes&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#101 id=101 data-nosnippet>101</a>        hpke_suites: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>Hpke],
+<a href=#102 id=102 data-nosnippet>102</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
+<a href=#103 id=103 data-nosnippet>103</a>        <span class="kw">let </span>ech_configs = Vec::&lt;EchConfigPayload&gt;::read(<span class="kw-2">&amp;mut </span>Reader::init(<span class="kw-2">&amp;</span>ech_config_list))
+<a href=#104 id=104 data-nosnippet>104</a>            .map_err(|<span class="kw">_</span>| {
+<a href=#105 id=105 data-nosnippet>105</a>                Error::InvalidEncryptedClientHello(EncryptedClientHelloError::InvalidConfigList)
+<a href=#106 id=106 data-nosnippet>106</a>            })<span class="question-mark">?</span>;
+<a href=#107 id=107 data-nosnippet>107</a>
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="comment">// Note: we name the index var _i because if the log feature is disabled
+<a href=#109 id=109 data-nosnippet>109</a>        //       it is unused.
+<a href=#110 id=110 data-nosnippet>110</a>        </span><span class="attr">#[cfg_attr(not(feature = <span class="string">"logging"</span>), allow(clippy::unused_enumerate_index))]
+<a href=#111 id=111 data-nosnippet>111</a>        </span><span class="kw">for </span>(_i, config) <span class="kw">in </span>ech_configs.iter().enumerate() {
+<a href=#112 id=112 data-nosnippet>112</a>            <span class="kw">let </span>contents = <span class="kw">match </span>config {
+<a href=#113 id=113 data-nosnippet>113</a>                EchConfigPayload::V18(contents) =&gt; contents,
+<a href=#114 id=114 data-nosnippet>114</a>                EchConfigPayload::Unknown {
+<a href=#115 id=115 data-nosnippet>115</a>                    version: _version, ..
+<a href=#116 id=116 data-nosnippet>116</a>                } =&gt; {
+<a href=#117 id=117 data-nosnippet>117</a>                    <span class="macro">warn!</span>(
+<a href=#118 id=118 data-nosnippet>118</a>                        <span class="string">"ECH config {} has unsupported version {:?}"</span>,
+<a href=#119 id=119 data-nosnippet>119</a>                        _i + <span class="number">1</span>,
+<a href=#120 id=120 data-nosnippet>120</a>                        _version
+<a href=#121 id=121 data-nosnippet>121</a>                    );
+<a href=#122 id=122 data-nosnippet>122</a>                    <span class="kw">continue</span>; <span class="comment">// Unsupported version.
+<a href=#123 id=123 data-nosnippet>123</a>                </span>}
+<a href=#124 id=124 data-nosnippet>124</a>            };
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a>            <span class="kw">if </span>contents.has_unknown_mandatory_extension() || contents.has_duplicate_extension() {
+<a href=#127 id=127 data-nosnippet>127</a>                <span class="macro">warn!</span>(<span class="string">"ECH config has duplicate, or unknown mandatory extensions: {contents:?}"</span>,);
+<a href=#128 id=128 data-nosnippet>128</a>                <span class="kw">continue</span>; <span class="comment">// Unsupported, or malformed extensions.
+<a href=#129 id=129 data-nosnippet>129</a>            </span>}
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a>            <span class="kw">let </span>key_config = <span class="kw-2">&amp;</span>contents.key_config;
+<a href=#132 id=132 data-nosnippet>132</a>            <span class="kw">for </span>cipher_suite <span class="kw">in </span><span class="kw-2">&amp;</span>key_config.symmetric_cipher_suites {
+<a href=#133 id=133 data-nosnippet>133</a>                <span class="kw">if </span>cipher_suite.aead_id.tag_len().is_none() {
+<a href=#134 id=134 data-nosnippet>134</a>                    <span class="kw">continue</span>; <span class="comment">// Unsupported EXPORT_ONLY AEAD cipher suite.
+<a href=#135 id=135 data-nosnippet>135</a>                </span>}
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a>                <span class="kw">let </span>suite = HpkeSuite {
+<a href=#138 id=138 data-nosnippet>138</a>                    kem: key_config.kem_id,
+<a href=#139 id=139 data-nosnippet>139</a>                    sym: <span class="kw-2">*</span>cipher_suite,
+<a href=#140 id=140 data-nosnippet>140</a>                };
+<a href=#141 id=141 data-nosnippet>141</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(hpke) = hpke_suites
+<a href=#142 id=142 data-nosnippet>142</a>                    .iter()
+<a href=#143 id=143 data-nosnippet>143</a>                    .find(|hpke| hpke.suite() == suite)
+<a href=#144 id=144 data-nosnippet>144</a>                {
+<a href=#145 id=145 data-nosnippet>145</a>                    <span class="macro">debug!</span>(
+<a href=#146 id=146 data-nosnippet>146</a>                        <span class="string">"selected ECH config ID {:?} suite {:?} public_name {:?}"</span>,
+<a href=#147 id=147 data-nosnippet>147</a>                        key_config.config_id, suite, contents.public_name
+<a href=#148 id=148 data-nosnippet>148</a>                    );
+<a href=#149 id=149 data-nosnippet>149</a>                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#150 id=150 data-nosnippet>150</a>                        config: config.clone(),
+<a href=#151 id=151 data-nosnippet>151</a>                        suite: <span class="kw-2">*</span>hpke,
+<a href=#152 id=152 data-nosnippet>152</a>                    });
+<a href=#153 id=153 data-nosnippet>153</a>                }
+<a href=#154 id=154 data-nosnippet>154</a>            }
+<a href=#155 id=155 data-nosnippet>155</a>        }
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>        <span class="prelude-val">Err</span>(EncryptedClientHelloError::NoCompatibleConfig.into())
+<a href=#158 id=158 data-nosnippet>158</a>    }
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>state(
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#162 id=162 data-nosnippet>162</a>        server_name: ServerName&lt;<span class="lifetime">'static</span>&gt;,
+<a href=#163 id=163 data-nosnippet>163</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
+<a href=#164 id=164 data-nosnippet>164</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;EchState, Error&gt; {
+<a href=#165 id=165 data-nosnippet>165</a>        EchState::new(
+<a href=#166 id=166 data-nosnippet>166</a>            <span class="self">self</span>,
+<a href=#167 id=167 data-nosnippet>167</a>            server_name.clone(),
+<a href=#168 id=168 data-nosnippet>168</a>            config
+<a href=#169 id=169 data-nosnippet>169</a>                .client_auth_cert_resolver
+<a href=#170 id=170 data-nosnippet>170</a>                .has_certs(),
+<a href=#171 id=171 data-nosnippet>171</a>            config.provider.secure_random,
+<a href=#172 id=172 data-nosnippet>172</a>            config.enable_sni,
+<a href=#173 id=173 data-nosnippet>173</a>        )
+<a href=#174 id=174 data-nosnippet>174</a>    }
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a>    <span class="doccomment">/// Compute the HPKE `SetupBaseS` `info` parameter for this ECH configuration.
+<a href=#177 id=177 data-nosnippet>177</a>    ///
+<a href=#178 id=178 data-nosnippet>178</a>    /// See &lt;https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-17#section-6.1&gt;.
+<a href=#179 id=179 data-nosnippet>179</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>hpke_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
+<a href=#180 id=180 data-nosnippet>180</a>        <span class="kw">let </span><span class="kw-2">mut </span>info = Vec::with_capacity(<span class="number">128</span>);
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="comment">// "tls ech" || 0x00 || ECHConfig
+<a href=#182 id=182 data-nosnippet>182</a>        </span>info.extend_from_slice(<span class="string">b"tls ech\0"</span>);
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="self">self</span>.config.encode(<span class="kw-2">&amp;mut </span>info);
+<a href=#184 id=184 data-nosnippet>184</a>        info
+<a href=#185 id=185 data-nosnippet>185</a>    }
+<a href=#186 id=186 data-nosnippet>186</a>}
+<a href=#187 id=187 data-nosnippet>187</a>
+<a href=#188 id=188 data-nosnippet>188</a><span class="doccomment">/// Configuration for GREASE Encrypted Client Hello.
+<a href=#189 id=189 data-nosnippet>189</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#190 id=190 data-nosnippet>190</a></span><span class="kw">pub struct </span>EchGreaseConfig {
+<a href=#191 id=191 data-nosnippet>191</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) suite: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>Hpke,
+<a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) placeholder_key: HpkePublicKey,
+<a href=#193 id=193 data-nosnippet>193</a>}
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a><span class="kw">impl </span>EchGreaseConfig {
+<a href=#196 id=196 data-nosnippet>196</a>    <span class="doccomment">/// Construct a GREASE ECH configuration.
+<a href=#197 id=197 data-nosnippet>197</a>    ///
+<a href=#198 id=198 data-nosnippet>198</a>    /// This configuration is used when the client wishes to offer ECH to prevent ossification,
+<a href=#199 id=199 data-nosnippet>199</a>    /// but doesn't have a real ECH configuration to use for the remote server. In this case
+<a href=#200 id=200 data-nosnippet>200</a>    /// a placeholder or "GREASE"[^0] extension is used.
+<a href=#201 id=201 data-nosnippet>201</a>    ///
+<a href=#202 id=202 data-nosnippet>202</a>    /// Returns an error if the HPKE provider does not support the given suite.
+<a href=#203 id=203 data-nosnippet>203</a>    ///
+<a href=#204 id=204 data-nosnippet>204</a>    /// [^0]: &lt;https://www.rfc-editor.org/rfc/rfc8701&gt;
+<a href=#205 id=205 data-nosnippet>205</a>    </span><span class="kw">pub fn </span>new(suite: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>Hpke, placeholder_key: HpkePublicKey) -&gt; <span class="self">Self </span>{
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="self">Self </span>{
+<a href=#207 id=207 data-nosnippet>207</a>            suite,
+<a href=#208 id=208 data-nosnippet>208</a>            placeholder_key,
+<a href=#209 id=209 data-nosnippet>209</a>        }
+<a href=#210 id=210 data-nosnippet>210</a>    }
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="doccomment">/// Build a GREASE ECH extension based on the placeholder configuration.
+<a href=#213 id=213 data-nosnippet>213</a>    ///
+<a href=#214 id=214 data-nosnippet>214</a>    /// See &lt;https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-18#name-grease-ech&gt; for
+<a href=#215 id=215 data-nosnippet>215</a>    /// more information.
+<a href=#216 id=216 data-nosnippet>216</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>grease_ext(
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#218 id=218 data-nosnippet>218</a>        secure_random: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>SecureRandom,
+<a href=#219 id=219 data-nosnippet>219</a>        inner_name: ServerName&lt;<span class="lifetime">'static</span>&gt;,
+<a href=#220 id=220 data-nosnippet>220</a>        outer_hello: <span class="kw-2">&amp;</span>ClientHelloPayload,
+<a href=#221 id=221 data-nosnippet>221</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;EncryptedClientHello, Error&gt; {
+<a href=#222 id=222 data-nosnippet>222</a>        <span class="macro">trace!</span>(<span class="string">"Preparing GREASE ECH extension"</span>);
+<a href=#223 id=223 data-nosnippet>223</a>
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="comment">// Pick a random config id.
+<a href=#225 id=225 data-nosnippet>225</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>config_id: [u8; <span class="number">1</span>] = [<span class="number">0</span>; <span class="number">1</span>];
+<a href=#226 id=226 data-nosnippet>226</a>        secure_random.fill(<span class="kw-2">&amp;mut </span>config_id[..])<span class="question-mark">?</span>;
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">let </span>suite = <span class="self">self</span>.suite.suite();
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="comment">// Construct a dummy ECH state - we don't have a real ECH config from a server since
+<a href=#231 id=231 data-nosnippet>231</a>        // this is for GREASE.
+<a href=#232 id=232 data-nosnippet>232</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>grease_state = EchState::new(
+<a href=#233 id=233 data-nosnippet>233</a>            <span class="kw-2">&amp;</span>EchConfig {
+<a href=#234 id=234 data-nosnippet>234</a>                config: EchConfigPayload::V18(EchConfigContents {
+<a href=#235 id=235 data-nosnippet>235</a>                    key_config: HpkeKeyConfig {
+<a href=#236 id=236 data-nosnippet>236</a>                        config_id: config_id[<span class="number">0</span>],
+<a href=#237 id=237 data-nosnippet>237</a>                        kem_id: HpkeKem::DHKEM_P256_HKDF_SHA256,
+<a href=#238 id=238 data-nosnippet>238</a>                        public_key: PayloadU16::new(<span class="self">self</span>.placeholder_key.<span class="number">0</span>.clone()),
+<a href=#239 id=239 data-nosnippet>239</a>                        symmetric_cipher_suites: <span class="macro">vec!</span>[suite.sym],
+<a href=#240 id=240 data-nosnippet>240</a>                    },
+<a href=#241 id=241 data-nosnippet>241</a>                    maximum_name_length: <span class="number">0</span>,
+<a href=#242 id=242 data-nosnippet>242</a>                    public_name: DnsName::try_from(<span class="string">"filler"</span>).unwrap(),
+<a href=#243 id=243 data-nosnippet>243</a>                    extensions: Vec::default(),
+<a href=#244 id=244 data-nosnippet>244</a>                }),
+<a href=#245 id=245 data-nosnippet>245</a>                suite: <span class="self">self</span>.suite,
+<a href=#246 id=246 data-nosnippet>246</a>            },
+<a href=#247 id=247 data-nosnippet>247</a>            inner_name,
+<a href=#248 id=248 data-nosnippet>248</a>            <span class="bool-val">false</span>,
+<a href=#249 id=249 data-nosnippet>249</a>            secure_random,
+<a href=#250 id=250 data-nosnippet>250</a>            <span class="bool-val">false</span>, <span class="comment">// Does not matter if we enable/disable SNI here. Inner hello is not used.
+<a href=#251 id=251 data-nosnippet>251</a>        </span>)<span class="question-mark">?</span>;
+<a href=#252 id=252 data-nosnippet>252</a>
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="comment">// Construct an inner hello using the outer hello - this allows us to know the size of
+<a href=#254 id=254 data-nosnippet>254</a>        // dummy payload we should use for the GREASE extension.
+<a href=#255 id=255 data-nosnippet>255</a>        </span><span class="kw">let </span>encoded_inner_hello = grease_state.encode_inner_hello(outer_hello, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>);
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="comment">// Generate a payload of random data equivalent in length to a real inner hello.
+<a href=#258 id=258 data-nosnippet>258</a>        </span><span class="kw">let </span>payload_len = encoded_inner_hello.len()
+<a href=#259 id=259 data-nosnippet>259</a>            + suite
+<a href=#260 id=260 data-nosnippet>260</a>                .sym
+<a href=#261 id=261 data-nosnippet>261</a>                .aead_id
+<a href=#262 id=262 data-nosnippet>262</a>                .tag_len()
+<a href=#263 id=263 data-nosnippet>263</a>                <span class="comment">// Safety: we have confirmed the AEAD is supported when building the config. All
+<a href=#264 id=264 data-nosnippet>264</a>                //  supported AEADs have a tag length.
+<a href=#265 id=265 data-nosnippet>265</a>                </span>.unwrap();
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span><span class="kw-2">mut </span>payload = <span class="macro">vec!</span>[<span class="number">0</span>; payload_len];
+<a href=#267 id=267 data-nosnippet>267</a>        secure_random.fill(<span class="kw-2">&amp;mut </span>payload)<span class="question-mark">?</span>;
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="comment">// Return the GREASE extension.
+<a href=#270 id=270 data-nosnippet>270</a>        </span><span class="prelude-val">Ok</span>(EncryptedClientHello::Outer(EncryptedClientHelloOuter {
+<a href=#271 id=271 data-nosnippet>271</a>            cipher_suite: suite.sym,
+<a href=#272 id=272 data-nosnippet>272</a>            config_id: config_id[<span class="number">0</span>],
+<a href=#273 id=273 data-nosnippet>273</a>            enc: PayloadU16::new(grease_state.enc.<span class="number">0</span>),
+<a href=#274 id=274 data-nosnippet>274</a>            payload: PayloadU16::new(payload),
+<a href=#275 id=275 data-nosnippet>275</a>        }))
+<a href=#276 id=276 data-nosnippet>276</a>    }
+<a href=#277 id=277 data-nosnippet>277</a>}
+<a href=#278 id=278 data-nosnippet>278</a>
+<a href=#279 id=279 data-nosnippet>279</a><span class="doccomment">/// An enum representing ECH offer status.
+<a href=#280 id=280 data-nosnippet>280</a></span><span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+<a href=#281 id=281 data-nosnippet>281</a></span><span class="kw">pub enum </span>EchStatus {
+<a href=#282 id=282 data-nosnippet>282</a>    <span class="doccomment">/// ECH was not offered - it is a normal TLS handshake.
+<a href=#283 id=283 data-nosnippet>283</a>    </span>NotOffered,
+<a href=#284 id=284 data-nosnippet>284</a>    <span class="doccomment">/// GREASE ECH was sent. This is not considered offering ECH.
+<a href=#285 id=285 data-nosnippet>285</a>    </span>Grease,
+<a href=#286 id=286 data-nosnippet>286</a>    <span class="doccomment">/// ECH was offered but we do not yet know whether the offer was accepted or rejected.
+<a href=#287 id=287 data-nosnippet>287</a>    </span>Offered,
+<a href=#288 id=288 data-nosnippet>288</a>    <span class="doccomment">/// ECH was offered and the server accepted.
+<a href=#289 id=289 data-nosnippet>289</a>    </span>Accepted,
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="doccomment">/// ECH was offered and the server rejected.
+<a href=#291 id=291 data-nosnippet>291</a>    </span>Rejected,
+<a href=#292 id=292 data-nosnippet>292</a>}
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a><span class="doccomment">/// Contextual data for a TLS client handshake that has offered encrypted client hello (ECH).
+<a href=#295 id=295 data-nosnippet>295</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>EchState {
+<a href=#296 id=296 data-nosnippet>296</a>    <span class="comment">// The public DNS name from the ECH configuration we've chosen - this is included as the SNI
+<a href=#297 id=297 data-nosnippet>297</a>    // value for the "outer" client hello. It can only be a DnsName, not an IP address.
+<a href=#298 id=298 data-nosnippet>298</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) outer_name: DnsName&lt;<span class="lifetime">'static</span>&gt;,
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="comment">// If we're resuming in the inner hello, this is the early key schedule to use for encrypting
+<a href=#300 id=300 data-nosnippet>300</a>    // early data if the ECH offer is accepted.
+<a href=#301 id=301 data-nosnippet>301</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) early_data_key_schedule: <span class="prelude-ty">Option</span>&lt;KeyScheduleEarly&gt;,
+<a href=#302 id=302 data-nosnippet>302</a>    <span class="comment">// A random value we use for the inner hello.
+<a href=#303 id=303 data-nosnippet>303</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) inner_hello_random: Random,
+<a href=#304 id=304 data-nosnippet>304</a>    <span class="comment">// A transcript buffer maintained for the inner hello. Once ECH is confirmed we switch to
+<a href=#305 id=305 data-nosnippet>305</a>    // using this transcript for the handshake.
+<a href=#306 id=306 data-nosnippet>306</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) inner_hello_transcript: HandshakeHashBuffer,
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="comment">// A source of secure random data.
+<a href=#308 id=308 data-nosnippet>308</a>    </span>secure_random: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>SecureRandom,
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="comment">// An HPKE sealer context that can be used for encrypting ECH data.
+<a href=#310 id=310 data-nosnippet>310</a>    </span>sender: Box&lt;<span class="kw">dyn </span>HpkeSealer&gt;,
+<a href=#311 id=311 data-nosnippet>311</a>    <span class="comment">// The ID of the ECH configuration we've chosen - this is included in the outer ECH extension.
+<a href=#312 id=312 data-nosnippet>312</a>    </span>config_id: u8,
+<a href=#313 id=313 data-nosnippet>313</a>    <span class="comment">// The private server name we'll use for the inner protected hello.
+<a href=#314 id=314 data-nosnippet>314</a>    </span>inner_name: ServerName&lt;<span class="lifetime">'static</span>&gt;,
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="comment">// The advertised maximum name length from the ECH configuration we've chosen - this is used
+<a href=#316 id=316 data-nosnippet>316</a>    // for padding calculations.
+<a href=#317 id=317 data-nosnippet>317</a>    </span>maximum_name_length: u8,
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="comment">// A supported symmetric cipher suite from the ECH configuration we've chosen - this is
+<a href=#319 id=319 data-nosnippet>319</a>    // included in the outer ECH extension.
+<a href=#320 id=320 data-nosnippet>320</a>    </span>cipher_suite: HpkeSymmetricCipherSuite,
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="comment">// A secret encapsulated to the public key of the remote server. This is included in the
+<a href=#322 id=322 data-nosnippet>322</a>    // outer ECH extension for non-retry outer hello messages.
+<a href=#323 id=323 data-nosnippet>323</a>    </span>enc: EncapsulatedSecret,
+<a href=#324 id=324 data-nosnippet>324</a>    <span class="comment">// Whether the inner client hello should contain a server name indication (SNI) extension.
+<a href=#325 id=325 data-nosnippet>325</a>    </span>enable_sni: bool,
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="comment">// The extensions sent in the inner hello.
+<a href=#327 id=327 data-nosnippet>327</a>    </span>sent_extensions: Vec&lt;ExtensionType&gt;,
+<a href=#328 id=328 data-nosnippet>328</a>}
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a><span class="kw">impl </span>EchState {
+<a href=#331 id=331 data-nosnippet>331</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(
+<a href=#332 id=332 data-nosnippet>332</a>        config: <span class="kw-2">&amp;</span>EchConfig,
+<a href=#333 id=333 data-nosnippet>333</a>        inner_name: ServerName&lt;<span class="lifetime">'static</span>&gt;,
+<a href=#334 id=334 data-nosnippet>334</a>        client_auth_enabled: bool,
+<a href=#335 id=335 data-nosnippet>335</a>        secure_random: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>SecureRandom,
+<a href=#336 id=336 data-nosnippet>336</a>        enable_sni: bool,
+<a href=#337 id=337 data-nosnippet>337</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Error&gt; {
+<a href=#338 id=338 data-nosnippet>338</a>        <span class="kw">let </span>EchConfigPayload::V18(config_contents) = <span class="kw-2">&amp;</span>config.config <span class="kw">else </span>{
+<a href=#339 id=339 data-nosnippet>339</a>            <span class="comment">// the public EchConfig::new() constructor ensures we only have supported
+<a href=#340 id=340 data-nosnippet>340</a>            // configurations.
+<a href=#341 id=341 data-nosnippet>341</a>            </span><span class="macro">unreachable!</span>(<span class="string">"ECH config version mismatch"</span>);
+<a href=#342 id=342 data-nosnippet>342</a>        };
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">let </span>key_config = <span class="kw-2">&amp;</span>config_contents.key_config;
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="comment">// Encapsulate a secret for the server's public key, and set up a sender context
+<a href=#346 id=346 data-nosnippet>346</a>        // we can use to seal messages.
+<a href=#347 id=347 data-nosnippet>347</a>        </span><span class="kw">let </span>(enc, sender) = config.suite.setup_sealer(
+<a href=#348 id=348 data-nosnippet>348</a>            <span class="kw-2">&amp;</span>config.hpke_info(),
+<a href=#349 id=349 data-nosnippet>349</a>            <span class="kw-2">&amp;</span>HpkePublicKey(key_config.public_key.<span class="number">0</span>.clone()),
+<a href=#350 id=350 data-nosnippet>350</a>        )<span class="question-mark">?</span>;
+<a href=#351 id=351 data-nosnippet>351</a>
+<a href=#352 id=352 data-nosnippet>352</a>        <span class="comment">// Start a new transcript buffer for the inner hello.
+<a href=#353 id=353 data-nosnippet>353</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>inner_hello_transcript = HandshakeHashBuffer::new();
+<a href=#354 id=354 data-nosnippet>354</a>        <span class="kw">if </span>client_auth_enabled {
+<a href=#355 id=355 data-nosnippet>355</a>            inner_hello_transcript.set_client_auth_enabled();
+<a href=#356 id=356 data-nosnippet>356</a>        }
+<a href=#357 id=357 data-nosnippet>357</a>
+<a href=#358 id=358 data-nosnippet>358</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#359 id=359 data-nosnippet>359</a>            secure_random,
+<a href=#360 id=360 data-nosnippet>360</a>            sender,
+<a href=#361 id=361 data-nosnippet>361</a>            config_id: key_config.config_id,
+<a href=#362 id=362 data-nosnippet>362</a>            inner_name,
+<a href=#363 id=363 data-nosnippet>363</a>            outer_name: config_contents.public_name.clone(),
+<a href=#364 id=364 data-nosnippet>364</a>            maximum_name_length: config_contents.maximum_name_length,
+<a href=#365 id=365 data-nosnippet>365</a>            cipher_suite: config.suite.suite().sym,
+<a href=#366 id=366 data-nosnippet>366</a>            enc,
+<a href=#367 id=367 data-nosnippet>367</a>            inner_hello_random: Random::new(secure_random)<span class="question-mark">?</span>,
+<a href=#368 id=368 data-nosnippet>368</a>            inner_hello_transcript,
+<a href=#369 id=369 data-nosnippet>369</a>            early_data_key_schedule: <span class="prelude-val">None</span>,
+<a href=#370 id=370 data-nosnippet>370</a>            enable_sni,
+<a href=#371 id=371 data-nosnippet>371</a>            sent_extensions: Vec::new(),
+<a href=#372 id=372 data-nosnippet>372</a>        })
+<a href=#373 id=373 data-nosnippet>373</a>    }
+<a href=#374 id=374 data-nosnippet>374</a>
+<a href=#375 id=375 data-nosnippet>375</a>    <span class="doccomment">/// Construct a ClientHelloPayload offering ECH.
+<a href=#376 id=376 data-nosnippet>376</a>    ///
+<a href=#377 id=377 data-nosnippet>377</a>    /// An outer hello, with a protected inner hello for the `inner_name` will be returned, and the
+<a href=#378 id=378 data-nosnippet>378</a>    /// ECH context will be updated to reflect the inner hello that was offered.
+<a href=#379 id=379 data-nosnippet>379</a>    ///
+<a href=#380 id=380 data-nosnippet>380</a>    /// If `retry_req` is `Some`, then the outer hello will be constructed for a hello retry request.
+<a href=#381 id=381 data-nosnippet>381</a>    ///
+<a href=#382 id=382 data-nosnippet>382</a>    /// If `resuming` is `Some`, then the inner hello will be constructed for a resumption handshake.
+<a href=#383 id=383 data-nosnippet>383</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>ech_hello(
+<a href=#384 id=384 data-nosnippet>384</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#385 id=385 data-nosnippet>385</a>        <span class="kw-2">mut </span>outer_hello: ClientHelloPayload,
+<a href=#386 id=386 data-nosnippet>386</a>        retry_req: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>HelloRetryRequest&gt;,
+<a href=#387 id=387 data-nosnippet>387</a>        resuming: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Retrieved&lt;<span class="kw-2">&amp;</span>persist::Tls13ClientSessionValue&gt;&gt;,
+<a href=#388 id=388 data-nosnippet>388</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientHelloPayload, Error&gt; {
+<a href=#389 id=389 data-nosnippet>389</a>        <span class="macro">trace!</span>(
+<a href=#390 id=390 data-nosnippet>390</a>            <span class="string">"Preparing ECH offer {}"</span>,
+<a href=#391 id=391 data-nosnippet>391</a>            <span class="kw">if </span>retry_req.is_some() { <span class="string">"for retry" </span>} <span class="kw">else </span>{ <span class="string">"" </span>}
+<a href=#392 id=392 data-nosnippet>392</a>        );
+<a href=#393 id=393 data-nosnippet>393</a>
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="comment">// Construct the encoded inner hello and update the transcript.
+<a href=#395 id=395 data-nosnippet>395</a>        </span><span class="kw">let </span>encoded_inner_hello = <span class="self">self</span>.encode_inner_hello(<span class="kw-2">&amp;</span>outer_hello, retry_req, resuming);
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a>        <span class="comment">// Complete the ClientHelloOuterAAD with an ech extension, the payload should be a placeholder
+<a href=#398 id=398 data-nosnippet>398</a>        // of size L, all zeroes. L == length of encrypting encoded client hello inner w/ the selected
+<a href=#399 id=399 data-nosnippet>399</a>        // HPKE AEAD. (sum of plaintext + tag length, typically).
+<a href=#400 id=400 data-nosnippet>400</a>        </span><span class="kw">let </span>payload_len = encoded_inner_hello.len()
+<a href=#401 id=401 data-nosnippet>401</a>            + <span class="self">self
+<a href=#402 id=402 data-nosnippet>402</a>                </span>.cipher_suite
+<a href=#403 id=403 data-nosnippet>403</a>                .aead_id
+<a href=#404 id=404 data-nosnippet>404</a>                .tag_len()
+<a href=#405 id=405 data-nosnippet>405</a>                <span class="comment">// Safety: we've already verified this AEAD is supported when loading the config
+<a href=#406 id=406 data-nosnippet>406</a>                // that was used to create the ECH context. All supported AEADs have a tag length.
+<a href=#407 id=407 data-nosnippet>407</a>                </span>.unwrap();
+<a href=#408 id=408 data-nosnippet>408</a>
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="comment">// Outer hello's created in response to a hello retry request omit the enc value.
+<a href=#410 id=410 data-nosnippet>410</a>        </span><span class="kw">let </span>enc = <span class="kw">match </span>retry_req.is_some() {
+<a href=#411 id=411 data-nosnippet>411</a>            <span class="bool-val">true </span>=&gt; Vec::default(),
+<a href=#412 id=412 data-nosnippet>412</a>            <span class="bool-val">false </span>=&gt; <span class="self">self</span>.enc.<span class="number">0</span>.clone(),
+<a href=#413 id=413 data-nosnippet>413</a>        };
+<a href=#414 id=414 data-nosnippet>414</a>
+<a href=#415 id=415 data-nosnippet>415</a>        <span class="kw">fn </span>outer_hello_ext(ctx: <span class="kw-2">&amp;</span>EchState, enc: Vec&lt;u8&gt;, payload: Vec&lt;u8&gt;) -&gt; EncryptedClientHello {
+<a href=#416 id=416 data-nosnippet>416</a>            EncryptedClientHello::Outer(EncryptedClientHelloOuter {
+<a href=#417 id=417 data-nosnippet>417</a>                cipher_suite: ctx.cipher_suite,
+<a href=#418 id=418 data-nosnippet>418</a>                config_id: ctx.config_id,
+<a href=#419 id=419 data-nosnippet>419</a>                enc: PayloadU16::new(enc),
+<a href=#420 id=420 data-nosnippet>420</a>                payload: PayloadU16::new(payload),
+<a href=#421 id=421 data-nosnippet>421</a>            })
+<a href=#422 id=422 data-nosnippet>422</a>        }
+<a href=#423 id=423 data-nosnippet>423</a>
+<a href=#424 id=424 data-nosnippet>424</a>        <span class="comment">// The outer handshake is not permitted to resume a session. If we're resuming in the
+<a href=#425 id=425 data-nosnippet>425</a>        // inner handshake we remove the PSK extension from the outer hello, replacing it
+<a href=#426 id=426 data-nosnippet>426</a>        // with a GREASE PSK to implement the "ClientHello Malleability Mitigation" mentioned
+<a href=#427 id=427 data-nosnippet>427</a>        // in 10.12.3.
+<a href=#428 id=428 data-nosnippet>428</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(psk_offer) = outer_hello.preshared_key_offer.as_mut() {
+<a href=#429 id=429 data-nosnippet>429</a>            <span class="self">self</span>.grease_psk(psk_offer)<span class="question-mark">?</span>;
+<a href=#430 id=430 data-nosnippet>430</a>        }
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="comment">// To compute the encoded AAD we add a placeholder extension with an empty payload.
+<a href=#433 id=433 data-nosnippet>433</a>        </span>outer_hello.encrypted_client_hello =
+<a href=#434 id=434 data-nosnippet>434</a>            <span class="prelude-val">Some</span>(outer_hello_ext(<span class="self">self</span>, enc.clone(), <span class="macro">vec!</span>[<span class="number">0</span>; payload_len]));
+<a href=#435 id=435 data-nosnippet>435</a>
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="comment">// Next we compute the proper extension payload.
+<a href=#437 id=437 data-nosnippet>437</a>        </span><span class="kw">let </span>payload = <span class="self">self
+<a href=#438 id=438 data-nosnippet>438</a>            </span>.sender
+<a href=#439 id=439 data-nosnippet>439</a>            .seal(<span class="kw-2">&amp;</span>outer_hello.get_encoding(), <span class="kw-2">&amp;</span>encoded_inner_hello)<span class="question-mark">?</span>;
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>        <span class="comment">// And then we replace the placeholder extension with the real one.
+<a href=#442 id=442 data-nosnippet>442</a>        </span>outer_hello.encrypted_client_hello = <span class="prelude-val">Some</span>(outer_hello_ext(<span class="self">self</span>, enc, payload));
+<a href=#443 id=443 data-nosnippet>443</a>
+<a href=#444 id=444 data-nosnippet>444</a>        <span class="prelude-val">Ok</span>(outer_hello)
+<a href=#445 id=445 data-nosnippet>445</a>    }
+<a href=#446 id=446 data-nosnippet>446</a>
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="doccomment">/// Confirm whether an ECH offer was accepted based on examining the server hello.
+<a href=#448 id=448 data-nosnippet>448</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>confirm_acceptance(
+<a href=#449 id=449 data-nosnippet>449</a>        <span class="self">self</span>,
+<a href=#450 id=450 data-nosnippet>450</a>        ks: <span class="kw-2">&amp;mut </span>KeyScheduleHandshakeStart,
+<a href=#451 id=451 data-nosnippet>451</a>        server_hello: <span class="kw-2">&amp;</span>ServerHelloPayload,
+<a href=#452 id=452 data-nosnippet>452</a>        server_hello_encoded: <span class="kw-2">&amp;</span>Payload&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#453 id=453 data-nosnippet>453</a>        hash: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>Hash,
+<a href=#454 id=454 data-nosnippet>454</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;EchAccepted&gt;, Error&gt; {
+<a href=#455 id=455 data-nosnippet>455</a>        <span class="comment">// Start the inner transcript hash now that we know the hash algorithm to use.
+<a href=#456 id=456 data-nosnippet>456</a>        </span><span class="kw">let </span>inner_transcript = <span class="self">self
+<a href=#457 id=457 data-nosnippet>457</a>            </span>.inner_hello_transcript
+<a href=#458 id=458 data-nosnippet>458</a>            .start_hash(hash);
+<a href=#459 id=459 data-nosnippet>459</a>
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="comment">// Fork the transcript that we've started with the inner hello to use for a confirmation step.
+<a href=#461 id=461 data-nosnippet>461</a>        // We need to preserve the original inner_transcript to use if this confirmation succeeds.
+<a href=#462 id=462 data-nosnippet>462</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>confirmation_transcript = inner_transcript.clone();
+<a href=#463 id=463 data-nosnippet>463</a>
+<a href=#464 id=464 data-nosnippet>464</a>        <span class="comment">// Add the server hello confirmation - this is computed by altering the received
+<a href=#465 id=465 data-nosnippet>465</a>        // encoding rather than reencoding it.
+<a href=#466 id=466 data-nosnippet>466</a>        </span>confirmation_transcript
+<a href=#467 id=467 data-nosnippet>467</a>            .add_message(<span class="kw-2">&amp;</span><span class="self">Self</span>::server_hello_conf(server_hello, server_hello_encoded));
+<a href=#468 id=468 data-nosnippet>468</a>
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="comment">// Derive a confirmation secret from the inner hello random and the confirmation transcript.
+<a href=#470 id=470 data-nosnippet>470</a>        </span><span class="kw">let </span>derived = ks.server_ech_confirmation_secret(
+<a href=#471 id=471 data-nosnippet>471</a>            <span class="self">self</span>.inner_hello_random.<span class="number">0</span>.as_ref(),
+<a href=#472 id=472 data-nosnippet>472</a>            confirmation_transcript.current_hash(),
+<a href=#473 id=473 data-nosnippet>473</a>        );
+<a href=#474 id=474 data-nosnippet>474</a>
+<a href=#475 id=475 data-nosnippet>475</a>        <span class="comment">// Check that first 8 digits of the derived secret match the last 8 digits of the original
+<a href=#476 id=476 data-nosnippet>476</a>        // server random. This match signals that the server accepted the ECH offer.
+<a href=#477 id=477 data-nosnippet>477</a>        // Indexing safety: Random is [0; 32] by construction.
+<a href=#478 id=478 data-nosnippet>478</a>
+<a href=#479 id=479 data-nosnippet>479</a>        </span><span class="kw">match </span>ConstantTimeEq::ct_eq(derived.as_ref(), server_hello.random.<span class="number">0</span>[<span class="number">24</span>..].as_ref()).into() {
+<a href=#480 id=480 data-nosnippet>480</a>            <span class="bool-val">true </span>=&gt; {
+<a href=#481 id=481 data-nosnippet>481</a>                <span class="macro">trace!</span>(<span class="string">"ECH accepted by server"</span>);
+<a href=#482 id=482 data-nosnippet>482</a>                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(EchAccepted {
+<a href=#483 id=483 data-nosnippet>483</a>                    transcript: inner_transcript,
+<a href=#484 id=484 data-nosnippet>484</a>                    random: <span class="self">self</span>.inner_hello_random,
+<a href=#485 id=485 data-nosnippet>485</a>                    sent_extensions: <span class="self">self</span>.sent_extensions,
+<a href=#486 id=486 data-nosnippet>486</a>                }))
+<a href=#487 id=487 data-nosnippet>487</a>            }
+<a href=#488 id=488 data-nosnippet>488</a>            <span class="bool-val">false </span>=&gt; {
+<a href=#489 id=489 data-nosnippet>489</a>                <span class="macro">trace!</span>(<span class="string">"ECH rejected by server"</span>);
+<a href=#490 id=490 data-nosnippet>490</a>                <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+<a href=#491 id=491 data-nosnippet>491</a>            }
+<a href=#492 id=492 data-nosnippet>492</a>        }
+<a href=#493 id=493 data-nosnippet>493</a>    }
+<a href=#494 id=494 data-nosnippet>494</a>
+<a href=#495 id=495 data-nosnippet>495</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>confirm_hrr_acceptance(
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#497 id=497 data-nosnippet>497</a>        hrr: <span class="kw-2">&amp;</span>HelloRetryRequest,
+<a href=#498 id=498 data-nosnippet>498</a>        cs: <span class="kw-2">&amp;</span>Tls13CipherSuite,
+<a href=#499 id=499 data-nosnippet>499</a>        common: <span class="kw-2">&amp;mut </span>CommonState,
+<a href=#500 id=500 data-nosnippet>500</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool, Error&gt; {
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="comment">// The client checks for the "encrypted_client_hello" extension.
+<a href=#502 id=502 data-nosnippet>502</a>        </span><span class="kw">let </span>ech_conf = <span class="kw">match </span><span class="kw-2">&amp;</span>hrr.encrypted_client_hello {
+<a href=#503 id=503 data-nosnippet>503</a>            <span class="comment">// If none is found, the server has implicitly rejected ECH.
+<a href=#504 id=504 data-nosnippet>504</a>            </span><span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
+<a href=#505 id=505 data-nosnippet>505</a>            <span class="comment">// Otherwise, if it has a length other than 8, the client aborts the
+<a href=#506 id=506 data-nosnippet>506</a>            // handshake with a "decode_error" alert.
+<a href=#507 id=507 data-nosnippet>507</a>            </span><span class="prelude-val">Some</span>(ech_conf) <span class="kw">if </span>ech_conf.bytes().len() != <span class="number">8 </span>=&gt; {
+<a href=#508 id=508 data-nosnippet>508</a>                <span class="kw">return </span><span class="prelude-val">Err</span>({
+<a href=#509 id=509 data-nosnippet>509</a>                    common.send_fatal_alert(
+<a href=#510 id=510 data-nosnippet>510</a>                        AlertDescription::DecodeError,
+<a href=#511 id=511 data-nosnippet>511</a>                        PeerMisbehaved::IllegalHelloRetryRequestWithInvalidEch,
+<a href=#512 id=512 data-nosnippet>512</a>                    )
+<a href=#513 id=513 data-nosnippet>513</a>                });
+<a href=#514 id=514 data-nosnippet>514</a>            }
+<a href=#515 id=515 data-nosnippet>515</a>            <span class="prelude-val">Some</span>(ech_conf) =&gt; ech_conf,
+<a href=#516 id=516 data-nosnippet>516</a>        };
+<a href=#517 id=517 data-nosnippet>517</a>
+<a href=#518 id=518 data-nosnippet>518</a>        <span class="comment">// Otherwise the client computes hrr_accept_confirmation as described in Section
+<a href=#519 id=519 data-nosnippet>519</a>        // 7.2.1
+<a href=#520 id=520 data-nosnippet>520</a>        </span><span class="kw">let </span>confirmation_transcript = <span class="self">self</span>.inner_hello_transcript.clone();
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span><span class="kw-2">mut </span>confirmation_transcript =
+<a href=#522 id=522 data-nosnippet>522</a>            confirmation_transcript.start_hash(cs.common.hash_provider);
+<a href=#523 id=523 data-nosnippet>523</a>        confirmation_transcript.rollup_for_hrr();
+<a href=#524 id=524 data-nosnippet>524</a>        confirmation_transcript.add_message(<span class="kw-2">&amp;</span><span class="self">Self</span>::hello_retry_request_conf(hrr));
+<a href=#525 id=525 data-nosnippet>525</a>
+<a href=#526 id=526 data-nosnippet>526</a>        <span class="kw">let </span>derived = server_ech_hrr_confirmation_secret(
+<a href=#527 id=527 data-nosnippet>527</a>            cs.hkdf_provider,
+<a href=#528 id=528 data-nosnippet>528</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.inner_hello_random.<span class="number">0</span>,
+<a href=#529 id=529 data-nosnippet>529</a>            confirmation_transcript.current_hash(),
+<a href=#530 id=530 data-nosnippet>530</a>        );
+<a href=#531 id=531 data-nosnippet>531</a>
+<a href=#532 id=532 data-nosnippet>532</a>        <span class="kw">match </span>ConstantTimeEq::ct_eq(derived.as_ref(), ech_conf.bytes()).into() {
+<a href=#533 id=533 data-nosnippet>533</a>            <span class="bool-val">true </span>=&gt; {
+<a href=#534 id=534 data-nosnippet>534</a>                <span class="macro">trace!</span>(<span class="string">"ECH accepted by server in hello retry request"</span>);
+<a href=#535 id=535 data-nosnippet>535</a>                <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
+<a href=#536 id=536 data-nosnippet>536</a>            }
+<a href=#537 id=537 data-nosnippet>537</a>            <span class="bool-val">false </span>=&gt; {
+<a href=#538 id=538 data-nosnippet>538</a>                <span class="macro">trace!</span>(<span class="string">"ECH rejected by server in hello retry request"</span>);
+<a href=#539 id=539 data-nosnippet>539</a>                <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)
+<a href=#540 id=540 data-nosnippet>540</a>            }
+<a href=#541 id=541 data-nosnippet>541</a>        }
+<a href=#542 id=542 data-nosnippet>542</a>    }
+<a href=#543 id=543 data-nosnippet>543</a>
+<a href=#544 id=544 data-nosnippet>544</a>    <span class="doccomment">/// Update the ECH context inner hello transcript based on a received hello retry request message.
+<a href=#545 id=545 data-nosnippet>545</a>    ///
+<a href=#546 id=546 data-nosnippet>546</a>    /// This will start the in-progress transcript using the given `hash`, convert it into an HRR
+<a href=#547 id=547 data-nosnippet>547</a>    /// buffer, and then add the hello retry message `m`.
+<a href=#548 id=548 data-nosnippet>548</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>transcript_hrr_update(<span class="kw-2">&amp;mut </span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">dyn </span>Hash, m: <span class="kw-2">&amp;</span>Message&lt;<span class="lifetime">'_</span>&gt;) {
+<a href=#549 id=549 data-nosnippet>549</a>        <span class="macro">trace!</span>(<span class="string">"Updating ECH inner transcript for HRR"</span>);
+<a href=#550 id=550 data-nosnippet>550</a>
+<a href=#551 id=551 data-nosnippet>551</a>        <span class="kw">let </span>inner_transcript = <span class="self">self
+<a href=#552 id=552 data-nosnippet>552</a>            </span>.inner_hello_transcript
+<a href=#553 id=553 data-nosnippet>553</a>            .clone()
+<a href=#554 id=554 data-nosnippet>554</a>            .start_hash(hash);
+<a href=#555 id=555 data-nosnippet>555</a>
+<a href=#556 id=556 data-nosnippet>556</a>        <span class="kw">let </span><span class="kw-2">mut </span>inner_transcript_buffer = inner_transcript.into_hrr_buffer();
+<a href=#557 id=557 data-nosnippet>557</a>        inner_transcript_buffer.add_message(m);
+<a href=#558 id=558 data-nosnippet>558</a>        <span class="self">self</span>.inner_hello_transcript = inner_transcript_buffer;
+<a href=#559 id=559 data-nosnippet>559</a>    }
+<a href=#560 id=560 data-nosnippet>560</a>
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="comment">// 5.1 "Encoding the ClientHelloInner"
+<a href=#562 id=562 data-nosnippet>562</a>    </span><span class="kw">fn </span>encode_inner_hello(
+<a href=#563 id=563 data-nosnippet>563</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#564 id=564 data-nosnippet>564</a>        outer_hello: <span class="kw-2">&amp;</span>ClientHelloPayload,
+<a href=#565 id=565 data-nosnippet>565</a>        retryreq: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>HelloRetryRequest&gt;,
+<a href=#566 id=566 data-nosnippet>566</a>        resuming: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Retrieved&lt;<span class="kw-2">&amp;</span>persist::Tls13ClientSessionValue&gt;&gt;,
+<a href=#567 id=567 data-nosnippet>567</a>    ) -&gt; Vec&lt;u8&gt; {
+<a href=#568 id=568 data-nosnippet>568</a>        <span class="comment">// Start building an inner hello using the outer_hello as a template.
+<a href=#569 id=569 data-nosnippet>569</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>inner_hello = ClientHelloPayload {
+<a href=#570 id=570 data-nosnippet>570</a>            <span class="comment">// Some information is copied over as-is.
+<a href=#571 id=571 data-nosnippet>571</a>            </span>client_version: outer_hello.client_version,
+<a href=#572 id=572 data-nosnippet>572</a>            session_id: outer_hello.session_id,
+<a href=#573 id=573 data-nosnippet>573</a>            compression_methods: outer_hello.compression_methods.clone(),
+<a href=#574 id=574 data-nosnippet>574</a>
+<a href=#575 id=575 data-nosnippet>575</a>            <span class="comment">// We will build up the included extensions ourselves.
+<a href=#576 id=576 data-nosnippet>576</a>            </span>extensions: Box::new(ClientExtensions::default()),
+<a href=#577 id=577 data-nosnippet>577</a>
+<a href=#578 id=578 data-nosnippet>578</a>            <span class="comment">// Set the inner hello random to the one we generated when creating the ECH state.
+<a href=#579 id=579 data-nosnippet>579</a>            // We hold on to the inner_hello_random in the ECH state to use later for confirming
+<a href=#580 id=580 data-nosnippet>580</a>            // whether ECH was accepted or not.
+<a href=#581 id=581 data-nosnippet>581</a>            </span>random: <span class="self">self</span>.inner_hello_random,
+<a href=#582 id=582 data-nosnippet>582</a>
+<a href=#583 id=583 data-nosnippet>583</a>            <span class="comment">// We remove the empty renegotiation info SCSV from the outer hello's ciphersuite.
+<a href=#584 id=584 data-nosnippet>584</a>            // Similar to the TLS 1.2 specific extensions we will filter out, this is seen as a
+<a href=#585 id=585 data-nosnippet>585</a>            // TLS 1.2 only feature by bogo.
+<a href=#586 id=586 data-nosnippet>586</a>            </span>cipher_suites: outer_hello
+<a href=#587 id=587 data-nosnippet>587</a>                .cipher_suites
+<a href=#588 id=588 data-nosnippet>588</a>                .iter()
+<a href=#589 id=589 data-nosnippet>589</a>                .filter(|cs| <span class="kw-2">**</span>cs != TLS_EMPTY_RENEGOTIATION_INFO_SCSV)
+<a href=#590 id=590 data-nosnippet>590</a>                .cloned()
+<a href=#591 id=591 data-nosnippet>591</a>                .collect(),
+<a href=#592 id=592 data-nosnippet>592</a>        };
+<a href=#593 id=593 data-nosnippet>593</a>
+<a href=#594 id=594 data-nosnippet>594</a>        inner_hello.order_seed = outer_hello.order_seed;
+<a href=#595 id=595 data-nosnippet>595</a>
+<a href=#596 id=596 data-nosnippet>596</a>        <span class="comment">// The inner hello will always have an inner variant of the ECH extension added.
+<a href=#597 id=597 data-nosnippet>597</a>        // See Section 6.1 rule 4.
+<a href=#598 id=598 data-nosnippet>598</a>        </span>inner_hello.encrypted_client_hello = <span class="prelude-val">Some</span>(EncryptedClientHello::Inner);
+<a href=#599 id=599 data-nosnippet>599</a>
+<a href=#600 id=600 data-nosnippet>600</a>        <span class="kw">let </span>inner_sni = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.inner_name {
+<a href=#601 id=601 data-nosnippet>601</a>            <span class="comment">// The inner hello only gets a SNI value if enable_sni is true and the inner name
+<a href=#602 id=602 data-nosnippet>602</a>            // is a domain name (not an IP address).
+<a href=#603 id=603 data-nosnippet>603</a>            </span>ServerName::DnsName(dns_name) <span class="kw">if </span><span class="self">self</span>.enable_sni =&gt; <span class="prelude-val">Some</span>(dns_name),
+<a href=#604 id=604 data-nosnippet>604</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#605 id=605 data-nosnippet>605</a>        };
+<a href=#606 id=606 data-nosnippet>606</a>
+<a href=#607 id=607 data-nosnippet>607</a>        <span class="comment">// Now we consider each of the outer hello's extensions - we can either:
+<a href=#608 id=608 data-nosnippet>608</a>        // 1. Omit the extension if it isn't appropriate (e.g. is a TLS 1.2 extension).
+<a href=#609 id=609 data-nosnippet>609</a>        // 2. Add the extension to the inner hello as-is.
+<a href=#610 id=610 data-nosnippet>610</a>        // 3. Compress the extension, by collecting it into a list of to-be-compressed
+<a href=#611 id=611 data-nosnippet>611</a>        //    extensions we'll handle separately.
+<a href=#612 id=612 data-nosnippet>612</a>        </span><span class="kw">let </span>outer_extensions = outer_hello.used_extensions_in_encoding_order();
+<a href=#613 id=613 data-nosnippet>613</a>        <span class="kw">let </span><span class="kw-2">mut </span>compressed_exts = Vec::with_capacity(outer_extensions.len());
+<a href=#614 id=614 data-nosnippet>614</a>        <span class="kw">for </span>ext <span class="kw">in </span>outer_extensions {
+<a href=#615 id=615 data-nosnippet>615</a>            <span class="comment">// Some outer hello extensions are only useful in the context where a TLS 1.3
+<a href=#616 id=616 data-nosnippet>616</a>            // connection allows TLS 1.2. This isn't the case for ECH so we skip adding them
+<a href=#617 id=617 data-nosnippet>617</a>            // to the inner hello.
+<a href=#618 id=618 data-nosnippet>618</a>            </span><span class="kw">if </span><span class="macro">matches!</span>(
+<a href=#619 id=619 data-nosnippet>619</a>                ext,
+<a href=#620 id=620 data-nosnippet>620</a>                ExtensionType::ExtendedMasterSecret
+<a href=#621 id=621 data-nosnippet>621</a>                    | ExtensionType::SessionTicket
+<a href=#622 id=622 data-nosnippet>622</a>                    | ExtensionType::ECPointFormats
+<a href=#623 id=623 data-nosnippet>623</a>            ) {
+<a href=#624 id=624 data-nosnippet>624</a>                <span class="kw">continue</span>;
+<a href=#625 id=625 data-nosnippet>625</a>            }
+<a href=#626 id=626 data-nosnippet>626</a>
+<a href=#627 id=627 data-nosnippet>627</a>            <span class="kw">if </span>ext == ExtensionType::ServerName {
+<a href=#628 id=628 data-nosnippet>628</a>                <span class="comment">// We may want to replace the outer hello SNI with our own inner hello specific SNI.
+<a href=#629 id=629 data-nosnippet>629</a>                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(sni_value) = inner_sni {
+<a href=#630 id=630 data-nosnippet>630</a>                    inner_hello.server_name = <span class="prelude-val">Some</span>(ServerNamePayload::from(sni_value));
+<a href=#631 id=631 data-nosnippet>631</a>                }
+<a href=#632 id=632 data-nosnippet>632</a>                <span class="comment">// We don't want to add, or compress, the SNI from the outer hello.
+<a href=#633 id=633 data-nosnippet>633</a>                </span><span class="kw">continue</span>;
+<a href=#634 id=634 data-nosnippet>634</a>            }
+<a href=#635 id=635 data-nosnippet>635</a>
+<a href=#636 id=636 data-nosnippet>636</a>            <span class="comment">// Compressed extensions need to be put aside to include in one contiguous block.
+<a href=#637 id=637 data-nosnippet>637</a>            // Uncompressed extensions get added directly to the inner hello.
+<a href=#638 id=638 data-nosnippet>638</a>            </span><span class="kw">if </span>ext.ech_compress() {
+<a href=#639 id=639 data-nosnippet>639</a>                compressed_exts.push(ext);
+<a href=#640 id=640 data-nosnippet>640</a>            }
+<a href=#641 id=641 data-nosnippet>641</a>
+<a href=#642 id=642 data-nosnippet>642</a>            inner_hello.clone_one(outer_hello, ext);
+<a href=#643 id=643 data-nosnippet>643</a>        }
+<a href=#644 id=644 data-nosnippet>644</a>
+<a href=#645 id=645 data-nosnippet>645</a>        <span class="comment">// We've added all the uncompressed extensions. Now we need to add the contiguous
+<a href=#646 id=646 data-nosnippet>646</a>        // block of to-be-compressed extensions.
+<a href=#647 id=647 data-nosnippet>647</a>        </span>inner_hello.contiguous_extensions = compressed_exts.clone();
+<a href=#648 id=648 data-nosnippet>648</a>
+<a href=#649 id=649 data-nosnippet>649</a>        <span class="comment">// Note which extensions we're sending in the inner hello. This may differ from
+<a href=#650 id=650 data-nosnippet>650</a>        // the outer hello (e.g. the inner hello may omit SNI while the outer hello will
+<a href=#651 id=651 data-nosnippet>651</a>        // always have the ECH cover name in SNI).
+<a href=#652 id=652 data-nosnippet>652</a>        </span><span class="self">self</span>.sent_extensions = inner_hello.collect_used();
+<a href=#653 id=653 data-nosnippet>653</a>
+<a href=#654 id=654 data-nosnippet>654</a>        <span class="comment">// If we're resuming, we need to update the PSK binder in the inner hello.
+<a href=#655 id=655 data-nosnippet>655</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(resuming) = resuming.as_ref() {
+<a href=#656 id=656 data-nosnippet>656</a>            <span class="kw">let </span><span class="kw-2">mut </span>chp = HandshakeMessagePayload(HandshakePayload::ClientHello(inner_hello));
+<a href=#657 id=657 data-nosnippet>657</a>
+<a href=#658 id=658 data-nosnippet>658</a>            <span class="comment">// Retain the early key schedule we get from processing the binder.
+<a href=#659 id=659 data-nosnippet>659</a>            </span><span class="self">self</span>.early_data_key_schedule = <span class="prelude-val">Some</span>(tls13::fill_in_psk_binder(
+<a href=#660 id=660 data-nosnippet>660</a>                resuming,
+<a href=#661 id=661 data-nosnippet>661</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.inner_hello_transcript,
+<a href=#662 id=662 data-nosnippet>662</a>                <span class="kw-2">&amp;mut </span>chp,
+<a href=#663 id=663 data-nosnippet>663</a>            ));
+<a href=#664 id=664 data-nosnippet>664</a>
+<a href=#665 id=665 data-nosnippet>665</a>            <span class="comment">// fill_in_psk_binder works on an owned HandshakeMessagePayload, so we need to
+<a href=#666 id=666 data-nosnippet>666</a>            // extract our inner hello back out of it to retain ownership.
+<a href=#667 id=667 data-nosnippet>667</a>            </span>inner_hello = <span class="kw">match </span>chp.<span class="number">0 </span>{
+<a href=#668 id=668 data-nosnippet>668</a>                HandshakePayload::ClientHello(chp) =&gt; chp,
+<a href=#669 id=669 data-nosnippet>669</a>                <span class="comment">// Safety: we construct the HMP above and know its type unconditionally.
+<a href=#670 id=670 data-nosnippet>670</a>                </span><span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+<a href=#671 id=671 data-nosnippet>671</a>            };
+<a href=#672 id=672 data-nosnippet>672</a>        }
+<a href=#673 id=673 data-nosnippet>673</a>
+<a href=#674 id=674 data-nosnippet>674</a>        <span class="macro">trace!</span>(<span class="string">"ECH Inner Hello: {inner_hello:#?}"</span>);
+<a href=#675 id=675 data-nosnippet>675</a>
+<a href=#676 id=676 data-nosnippet>676</a>        <span class="comment">// Encode the inner hello according to the rules required for ECH. This differs
+<a href=#677 id=677 data-nosnippet>677</a>        // from the standard encoding in several ways. Notably this is where we will
+<a href=#678 id=678 data-nosnippet>678</a>        // replace the block of contiguous to-be-compressed extensions with a marker.
+<a href=#679 id=679 data-nosnippet>679</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>encoded_hello = inner_hello.ech_inner_encoding(compressed_exts);
+<a href=#680 id=680 data-nosnippet>680</a>
+<a href=#681 id=681 data-nosnippet>681</a>        <span class="comment">// Calculate padding
+<a href=#682 id=682 data-nosnippet>682</a>        // max_name_len = L
+<a href=#683 id=683 data-nosnippet>683</a>        </span><span class="kw">let </span>max_name_len = <span class="self">self</span>.maximum_name_length;
+<a href=#684 id=684 data-nosnippet>684</a>        <span class="kw">let </span>max_name_len = <span class="kw">if </span>max_name_len &gt; <span class="number">0 </span>{ max_name_len } <span class="kw">else </span>{ <span class="number">255 </span>};
+<a href=#685 id=685 data-nosnippet>685</a>
+<a href=#686 id=686 data-nosnippet>686</a>        <span class="kw">let </span>padding_len = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.inner_name {
+<a href=#687 id=687 data-nosnippet>687</a>            ServerName::DnsName(name) =&gt; {
+<a href=#688 id=688 data-nosnippet>688</a>                <span class="comment">// name.len() = D
+<a href=#689 id=689 data-nosnippet>689</a>                // max(0, L - D)
+<a href=#690 id=690 data-nosnippet>690</a>                </span>core::cmp::max(
+<a href=#691 id=691 data-nosnippet>691</a>                    <span class="number">0</span>,
+<a href=#692 id=692 data-nosnippet>692</a>                    max_name_len.saturating_sub(name.as_ref().len() <span class="kw">as </span>u8) <span class="kw">as </span>usize,
+<a href=#693 id=693 data-nosnippet>693</a>                )
+<a href=#694 id=694 data-nosnippet>694</a>            }
+<a href=#695 id=695 data-nosnippet>695</a>            <span class="kw">_ </span>=&gt; {
+<a href=#696 id=696 data-nosnippet>696</a>                <span class="comment">// L + 9
+<a href=#697 id=697 data-nosnippet>697</a>                // "This is the length of a "server_name" extension with an L-byte name."
+<a href=#698 id=698 data-nosnippet>698</a>                // We widen to usize here to avoid overflowing u8 + u8.
+<a href=#699 id=699 data-nosnippet>699</a>                </span>max_name_len <span class="kw">as </span>usize + <span class="number">9
+<a href=#700 id=700 data-nosnippet>700</a>            </span>}
+<a href=#701 id=701 data-nosnippet>701</a>        };
+<a href=#702 id=702 data-nosnippet>702</a>
+<a href=#703 id=703 data-nosnippet>703</a>        <span class="comment">// Let L be the length of the EncodedClientHelloInner with all the padding computed so far
+<a href=#704 id=704 data-nosnippet>704</a>        // Let N = 31 - ((L - 1) % 32) and add N bytes of padding.
+<a href=#705 id=705 data-nosnippet>705</a>        </span><span class="kw">let </span>padding_len = <span class="number">31 </span>- ((encoded_hello.len() + padding_len - <span class="number">1</span>) % <span class="number">32</span>);
+<a href=#706 id=706 data-nosnippet>706</a>        encoded_hello.extend(<span class="macro">vec!</span>[<span class="number">0</span>; padding_len]);
+<a href=#707 id=707 data-nosnippet>707</a>
+<a href=#708 id=708 data-nosnippet>708</a>        <span class="comment">// Construct the inner hello message that will be used for the transcript.
+<a href=#709 id=709 data-nosnippet>709</a>        </span><span class="kw">let </span>inner_hello_msg = Message {
+<a href=#710 id=710 data-nosnippet>710</a>            version: <span class="kw">match </span>retryreq {
+<a href=#711 id=711 data-nosnippet>711</a>                <span class="comment">// &lt;https://datatracker.ietf.org/doc/html/rfc8446#section-5.1&gt;:
+<a href=#712 id=712 data-nosnippet>712</a>                // "This value MUST be set to 0x0303 for all records generated
+<a href=#713 id=713 data-nosnippet>713</a>                //  by a TLS 1.3 implementation ..."
+<a href=#714 id=714 data-nosnippet>714</a>                </span><span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; ProtocolVersion::TLSv1_2,
+<a href=#715 id=715 data-nosnippet>715</a>                <span class="comment">// "... other than an initial ClientHello (i.e., one not
+<a href=#716 id=716 data-nosnippet>716</a>                // generated after a HelloRetryRequest), where it MAY also be
+<a href=#717 id=717 data-nosnippet>717</a>                // 0x0301 for compatibility purposes"
+<a href=#718 id=718 data-nosnippet>718</a>                //
+<a href=#719 id=719 data-nosnippet>719</a>                // (retryreq == None means we're in the "initial ClientHello" case)
+<a href=#720 id=720 data-nosnippet>720</a>                </span><span class="prelude-val">None </span>=&gt; ProtocolVersion::TLSv1_0,
+<a href=#721 id=721 data-nosnippet>721</a>            },
+<a href=#722 id=722 data-nosnippet>722</a>            payload: MessagePayload::handshake(HandshakeMessagePayload(
+<a href=#723 id=723 data-nosnippet>723</a>                HandshakePayload::ClientHello(inner_hello),
+<a href=#724 id=724 data-nosnippet>724</a>            )),
+<a href=#725 id=725 data-nosnippet>725</a>        };
+<a href=#726 id=726 data-nosnippet>726</a>
+<a href=#727 id=727 data-nosnippet>727</a>        <span class="comment">// Update the inner transcript buffer with the inner hello message.
+<a href=#728 id=728 data-nosnippet>728</a>        </span><span class="self">self</span>.inner_hello_transcript
+<a href=#729 id=729 data-nosnippet>729</a>            .add_message(<span class="kw-2">&amp;</span>inner_hello_msg);
+<a href=#730 id=730 data-nosnippet>730</a>
+<a href=#731 id=731 data-nosnippet>731</a>        encoded_hello
+<a href=#732 id=732 data-nosnippet>732</a>    }
+<a href=#733 id=733 data-nosnippet>733</a>
+<a href=#734 id=734 data-nosnippet>734</a>    <span class="comment">// See https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-18#name-grease-psk
+<a href=#735 id=735 data-nosnippet>735</a>    </span><span class="kw">fn </span>grease_psk(<span class="kw-2">&amp;</span><span class="self">self</span>, psk_offer: <span class="kw-2">&amp;mut </span>PresharedKeyOffer) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+<a href=#736 id=736 data-nosnippet>736</a>        <span class="kw">for </span>ident <span class="kw">in </span>psk_offer.identities.iter_mut() {
+<a href=#737 id=737 data-nosnippet>737</a>            <span class="comment">// "For each PSK identity advertised in the ClientHelloInner, the
+<a href=#738 id=738 data-nosnippet>738</a>            // client generates a random PSK identity with the same length."
+<a href=#739 id=739 data-nosnippet>739</a>            </span><span class="self">self</span>.secure_random
+<a href=#740 id=740 data-nosnippet>740</a>                .fill(<span class="kw-2">&amp;mut </span>ident.identity.<span class="number">0</span>)<span class="question-mark">?</span>;
+<a href=#741 id=741 data-nosnippet>741</a>            <span class="comment">// "It also generates a random, 32-bit, unsigned integer to use as
+<a href=#742 id=742 data-nosnippet>742</a>            // the obfuscated_ticket_age."
+<a href=#743 id=743 data-nosnippet>743</a>            </span><span class="kw">let </span><span class="kw-2">mut </span>ticket_age = [<span class="number">0_u8</span>; <span class="number">4</span>];
+<a href=#744 id=744 data-nosnippet>744</a>            <span class="self">self</span>.secure_random
+<a href=#745 id=745 data-nosnippet>745</a>                .fill(<span class="kw-2">&amp;mut </span>ticket_age)<span class="question-mark">?</span>;
+<a href=#746 id=746 data-nosnippet>746</a>            ident.obfuscated_ticket_age = u32::from_be_bytes(ticket_age);
+<a href=#747 id=747 data-nosnippet>747</a>        }
+<a href=#748 id=748 data-nosnippet>748</a>
+<a href=#749 id=749 data-nosnippet>749</a>        <span class="comment">// "Likewise, for each inner PSK binder, the client generates a random string
+<a href=#750 id=750 data-nosnippet>750</a>        // of the same length."
+<a href=#751 id=751 data-nosnippet>751</a>        </span>psk_offer.binders = psk_offer
+<a href=#752 id=752 data-nosnippet>752</a>            .binders
+<a href=#753 id=753 data-nosnippet>753</a>            .iter()
+<a href=#754 id=754 data-nosnippet>754</a>            .map(|old_binder| {
+<a href=#755 id=755 data-nosnippet>755</a>                <span class="comment">// We can't access the wrapped binder PresharedKeyBinder's PayloadU8 mutably,
+<a href=#756 id=756 data-nosnippet>756</a>                // so we construct new PresharedKeyBinder's from scratch with the same length.
+<a href=#757 id=757 data-nosnippet>757</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>new_binder = <span class="macro">vec!</span>[<span class="number">0</span>; old_binder.as_ref().len()];
+<a href=#758 id=758 data-nosnippet>758</a>                <span class="self">self</span>.secure_random
+<a href=#759 id=759 data-nosnippet>759</a>                    .fill(<span class="kw-2">&amp;mut </span>new_binder)<span class="question-mark">?</span>;
+<a href=#760 id=760 data-nosnippet>760</a>                <span class="prelude-val">Ok</span>::&lt;PresharedKeyBinder, Error&gt;(PresharedKeyBinder::from(new_binder))
+<a href=#761 id=761 data-nosnippet>761</a>            })
+<a href=#762 id=762 data-nosnippet>762</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#763 id=763 data-nosnippet>763</a>        <span class="prelude-val">Ok</span>(())
+<a href=#764 id=764 data-nosnippet>764</a>    }
+<a href=#765 id=765 data-nosnippet>765</a>
+<a href=#766 id=766 data-nosnippet>766</a>    <span class="kw">fn </span>server_hello_conf(
+<a href=#767 id=767 data-nosnippet>767</a>        server_hello: <span class="kw-2">&amp;</span>ServerHelloPayload,
+<a href=#768 id=768 data-nosnippet>768</a>        server_hello_encoded: <span class="kw-2">&amp;</span>Payload&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#769 id=769 data-nosnippet>769</a>    ) -&gt; Message&lt;<span class="lifetime">'static</span>&gt; {
+<a href=#770 id=770 data-nosnippet>770</a>        <span class="comment">// The confirmation is computed over the server hello, which has had
+<a href=#771 id=771 data-nosnippet>771</a>        // its `random` field altered to zero the final 8 bytes.
+<a href=#772 id=772 data-nosnippet>772</a>        //
+<a href=#773 id=773 data-nosnippet>773</a>        // nb. we don't require that we can round-trip a `ServerHelloPayload`, to
+<a href=#774 id=774 data-nosnippet>774</a>        // allow for efficiency in its in-memory representation.  That means
+<a href=#775 id=775 data-nosnippet>775</a>        // we operate here on the received encoding, as the confirmation needs
+<a href=#776 id=776 data-nosnippet>776</a>        // to be computed on that.
+<a href=#777 id=777 data-nosnippet>777</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>encoded = server_hello_encoded.clone().into_vec();
+<a href=#778 id=778 data-nosnippet>778</a>        encoded[SERVER_HELLO_ECH_CONFIRMATION_SPAN].fill(<span class="number">0x00</span>);
+<a href=#779 id=779 data-nosnippet>779</a>
+<a href=#780 id=780 data-nosnippet>780</a>        Message {
+<a href=#781 id=781 data-nosnippet>781</a>            version: ProtocolVersion::TLSv1_3,
+<a href=#782 id=782 data-nosnippet>782</a>            payload: MessagePayload::Handshake {
+<a href=#783 id=783 data-nosnippet>783</a>                encoded: Payload::Owned(encoded),
+<a href=#784 id=784 data-nosnippet>784</a>                parsed: HandshakeMessagePayload(HandshakePayload::ServerHello(
+<a href=#785 id=785 data-nosnippet>785</a>                    server_hello.clone(),
+<a href=#786 id=786 data-nosnippet>786</a>                )),
+<a href=#787 id=787 data-nosnippet>787</a>            },
+<a href=#788 id=788 data-nosnippet>788</a>        }
+<a href=#789 id=789 data-nosnippet>789</a>    }
+<a href=#790 id=790 data-nosnippet>790</a>
+<a href=#791 id=791 data-nosnippet>791</a>    <span class="kw">fn </span>hello_retry_request_conf(retry_req: <span class="kw-2">&amp;</span>HelloRetryRequest) -&gt; Message&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#792 id=792 data-nosnippet>792</a>        <span class="self">Self</span>::ech_conf_message(HandshakeMessagePayload(
+<a href=#793 id=793 data-nosnippet>793</a>            HandshakePayload::HelloRetryRequest(retry_req.clone()),
+<a href=#794 id=794 data-nosnippet>794</a>        ))
+<a href=#795 id=795 data-nosnippet>795</a>    }
+<a href=#796 id=796 data-nosnippet>796</a>
+<a href=#797 id=797 data-nosnippet>797</a>    <span class="kw">fn </span>ech_conf_message(hmp: HandshakeMessagePayload&lt;<span class="lifetime">'_</span>&gt;) -&gt; Message&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#798 id=798 data-nosnippet>798</a>        <span class="kw">let </span><span class="kw-2">mut </span>hmp_encoded = Vec::new();
+<a href=#799 id=799 data-nosnippet>799</a>        hmp.payload_encode(<span class="kw-2">&amp;mut </span>hmp_encoded, Encoding::EchConfirmation);
+<a href=#800 id=800 data-nosnippet>800</a>        Message {
+<a href=#801 id=801 data-nosnippet>801</a>            version: ProtocolVersion::TLSv1_3,
+<a href=#802 id=802 data-nosnippet>802</a>            payload: MessagePayload::Handshake {
+<a href=#803 id=803 data-nosnippet>803</a>                encoded: Payload::new(hmp_encoded),
+<a href=#804 id=804 data-nosnippet>804</a>                parsed: hmp,
+<a href=#805 id=805 data-nosnippet>805</a>            },
+<a href=#806 id=806 data-nosnippet>806</a>        }
+<a href=#807 id=807 data-nosnippet>807</a>    }
+<a href=#808 id=808 data-nosnippet>808</a>}
+<a href=#809 id=809 data-nosnippet>809</a>
+<a href=#810 id=810 data-nosnippet>810</a><span class="doccomment">/// The last eight bytes of the ServerHello's random, taken from a Handshake message containing it.
+<a href=#811 id=811 data-nosnippet>811</a>///
+<a href=#812 id=812 data-nosnippet>812</a>/// This has:
+<a href=#813 id=813 data-nosnippet>813</a>/// - a HandshakeType (1 byte),
+<a href=#814 id=814 data-nosnippet>814</a>/// - an exterior length (3 bytes),
+<a href=#815 id=815 data-nosnippet>815</a>/// - the legacy_version (2 bytes), and
+<a href=#816 id=816 data-nosnippet>816</a>/// - the balance of the random field (24 bytes).
+<a href=#817 id=817 data-nosnippet>817</a></span><span class="kw">const </span>SERVER_HELLO_ECH_CONFIRMATION_SPAN: core::ops::Range&lt;usize&gt; =
+<a href=#818 id=818 data-nosnippet>818</a>    (<span class="number">1 </span>+ <span class="number">3 </span>+ <span class="number">2 </span>+ <span class="number">24</span>)..(<span class="number">1 </span>+ <span class="number">3 </span>+ <span class="number">2 </span>+ <span class="number">32</span>);
+<a href=#819 id=819 data-nosnippet>819</a>
+<a href=#820 id=820 data-nosnippet>820</a><span class="doccomment">/// Returned from EchState::check_acceptance when the server has accepted the ECH offer.
+<a href=#821 id=821 data-nosnippet>821</a>///
+<a href=#822 id=822 data-nosnippet>822</a>/// Holds the state required to continue the handshake with the inner hello from the ECH offer.
+<a href=#823 id=823 data-nosnippet>823</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>EchAccepted {
+<a href=#824 id=824 data-nosnippet>824</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) transcript: HandshakeHash,
+<a href=#825 id=825 data-nosnippet>825</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) random: Random,
+<a href=#826 id=826 data-nosnippet>826</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) sent_extensions: Vec&lt;ExtensionType&gt;,
+<a href=#827 id=827 data-nosnippet>827</a>}
+<a href=#828 id=828 data-nosnippet>828</a>
+<a href=#829 id=829 data-nosnippet>829</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fatal_alert_required(
+<a href=#830 id=830 data-nosnippet>830</a>    retry_configs: <span class="prelude-ty">Option</span>&lt;Vec&lt;EchConfigPayload&gt;&gt;,
+<a href=#831 id=831 data-nosnippet>831</a>    common: <span class="kw-2">&amp;mut </span>CommonState,
+<a href=#832 id=832 data-nosnippet>832</a>) -&gt; Error {
+<a href=#833 id=833 data-nosnippet>833</a>    common.send_fatal_alert(
+<a href=#834 id=834 data-nosnippet>834</a>        AlertDescription::EncryptedClientHelloRequired,
+<a href=#835 id=835 data-nosnippet>835</a>        PeerIncompatible::ServerRejectedEncryptedClientHello(retry_configs),
+<a href=#836 id=836 data-nosnippet>836</a>    )
+<a href=#837 id=837 data-nosnippet>837</a>}
+<a href=#838 id=838 data-nosnippet>838</a>
+<a href=#839 id=839 data-nosnippet>839</a><span class="attr">#[cfg(test)]
+<a href=#840 id=840 data-nosnippet>840</a></span><span class="kw">mod </span>tests {
+<a href=#841 id=841 data-nosnippet>841</a>    <span class="kw">use </span><span class="kw">crate</span>::enums::CipherSuite;
+<a href=#842 id=842 data-nosnippet>842</a>    <span class="kw">use </span><span class="kw">crate</span>::msgs::handshake::{Random, ServerExtensions, SessionId};
+<a href=#843 id=843 data-nosnippet>843</a>
+<a href=#844 id=844 data-nosnippet>844</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#845 id=845 data-nosnippet>845</a>
+<a href=#846 id=846 data-nosnippet>846</a>    <span class="attr">#[test]
+<a href=#847 id=847 data-nosnippet>847</a>    </span><span class="kw">fn </span>server_hello_conf_alters_server_hello_random() {
+<a href=#848 id=848 data-nosnippet>848</a>        <span class="kw">let </span>server_hello = ServerHelloPayload {
+<a href=#849 id=849 data-nosnippet>849</a>            legacy_version: ProtocolVersion::TLSv1_2,
+<a href=#850 id=850 data-nosnippet>850</a>            random: Random([<span class="number">0xffu8</span>; <span class="number">32</span>]),
+<a href=#851 id=851 data-nosnippet>851</a>            session_id: SessionId::empty(),
+<a href=#852 id=852 data-nosnippet>852</a>            cipher_suite: CipherSuite::TLS13_AES_256_GCM_SHA384,
+<a href=#853 id=853 data-nosnippet>853</a>            compression_method: <span class="kw">crate</span>::msgs::enums::Compression::Null,
+<a href=#854 id=854 data-nosnippet>854</a>            extensions: Box::new(ServerExtensions::default()),
+<a href=#855 id=855 data-nosnippet>855</a>        };
+<a href=#856 id=856 data-nosnippet>856</a>        <span class="kw">let </span>message = Message {
+<a href=#857 id=857 data-nosnippet>857</a>            version: ProtocolVersion::TLSv1_3,
+<a href=#858 id=858 data-nosnippet>858</a>            payload: MessagePayload::handshake(HandshakeMessagePayload(
+<a href=#859 id=859 data-nosnippet>859</a>                HandshakePayload::ServerHello(server_hello.clone()),
+<a href=#860 id=860 data-nosnippet>860</a>            )),
+<a href=#861 id=861 data-nosnippet>861</a>        };
+<a href=#862 id=862 data-nosnippet>862</a>        <span class="kw">let </span>Message {
+<a href=#863 id=863 data-nosnippet>863</a>            payload:
+<a href=#864 id=864 data-nosnippet>864</a>                MessagePayload::Handshake {
+<a href=#865 id=865 data-nosnippet>865</a>                    encoded: server_hello_encoded_before,
+<a href=#866 id=866 data-nosnippet>866</a>                    ..
+<a href=#867 id=867 data-nosnippet>867</a>                },
+<a href=#868 id=868 data-nosnippet>868</a>            ..
+<a href=#869 id=869 data-nosnippet>869</a>        } = <span class="kw-2">&amp;</span>message
+<a href=#870 id=870 data-nosnippet>870</a>        <span class="kw">else </span>{
+<a href=#871 id=871 data-nosnippet>871</a>            <span class="macro">unreachable!</span>(<span class="string">"ServerHello is a handshake message"</span>);
+<a href=#872 id=872 data-nosnippet>872</a>        };
+<a href=#873 id=873 data-nosnippet>873</a>
+<a href=#874 id=874 data-nosnippet>874</a>        <span class="kw">let </span>message = EchState::server_hello_conf(<span class="kw-2">&amp;</span>server_hello, server_hello_encoded_before);
+<a href=#875 id=875 data-nosnippet>875</a>
+<a href=#876 id=876 data-nosnippet>876</a>        <span class="kw">let </span>Message {
+<a href=#877 id=877 data-nosnippet>877</a>            payload:
+<a href=#878 id=878 data-nosnippet>878</a>                MessagePayload::Handshake {
+<a href=#879 id=879 data-nosnippet>879</a>                    encoded: server_hello_encoded_after,
+<a href=#880 id=880 data-nosnippet>880</a>                    ..
+<a href=#881 id=881 data-nosnippet>881</a>                },
+<a href=#882 id=882 data-nosnippet>882</a>            ..
+<a href=#883 id=883 data-nosnippet>883</a>        } = <span class="kw-2">&amp;</span>message
+<a href=#884 id=884 data-nosnippet>884</a>        <span class="kw">else </span>{
+<a href=#885 id=885 data-nosnippet>885</a>            <span class="macro">unreachable!</span>(<span class="string">"ServerHello is a handshake message"</span>);
+<a href=#886 id=886 data-nosnippet>886</a>        };
+<a href=#887 id=887 data-nosnippet>887</a>
+<a href=#888 id=888 data-nosnippet>888</a>        <span class="macro">assert_eq!</span>(
+<a href=#889 id=889 data-nosnippet>889</a>            <span class="macro">std::format!</span>(<span class="string">"{server_hello_encoded_before:x?}"</span>),
+<a href=#890 id=890 data-nosnippet>890</a>            <span class="string">"020000280303ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff001302000000"</span>,
+<a href=#891 id=891 data-nosnippet>891</a>            <span class="string">"beforehand eight bytes at end of Random should be 0xff here ^^^^^^^^^^^^^^^^            "
+<a href=#892 id=892 data-nosnippet>892</a>        </span>);
+<a href=#893 id=893 data-nosnippet>893</a>        <span class="macro">assert_eq!</span>(
+<a href=#894 id=894 data-nosnippet>894</a>            <span class="macro">std::format!</span>(<span class="string">"{server_hello_encoded_after:x?}"</span>),
+<a href=#895 id=895 data-nosnippet>895</a>            <span class="string">"020000280303ffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000001302000000"</span>,
+<a href=#896 id=896 data-nosnippet>896</a>            <span class="string">"                          afterwards those bytes are zeroed ^^^^^^^^^^^^^^^^            "
+<a href=#897 id=897 data-nosnippet>897</a>        </span>);
+<a href=#898 id=898 data-nosnippet>898</a>    }
+<a href=#899 id=899 data-nosnippet>899</a>}</code></pre></div></section></main></body></html>

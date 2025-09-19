@@ -1,0 +1,1 @@
+searchState.loadedDescShard("ruint_macro", 0, "The <code>uint!</code> macro for <code>Uint</code> and <code>Bits</code> literals\nThe <code>uint!</code> macro for <code>Uint</code> and <code>Bits</code> literals")

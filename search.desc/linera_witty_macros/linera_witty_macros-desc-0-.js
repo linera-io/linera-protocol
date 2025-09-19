@@ -1,0 +1,1 @@
+searchState.loadedDescShard("linera_witty_macros", 0, "Linera Witty Macros\nDerives <code>WitLoad</code> for the Rust type.\nDerives <code>WitStore</code> for the Rust type.\nDerives <code>WitType</code> for a Rust type.\nRegisters an <code>impl</code> block’s functions as callable host …\nGenerates a generic type from a trait.")

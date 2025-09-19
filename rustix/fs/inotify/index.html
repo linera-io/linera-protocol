@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="inotify support for working with inotify objects."><title>rustix::fs::inotify - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rustix" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../rustix/index.html">rustix</a><span class="version">1.0.8</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module inotify</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In rustix::<wbr>fs</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">rustix</a>::<wbr><a href="../index.html">fs</a></div><h1>Module <span>inotify</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/rustix/fs/inotify.rs.html#1-219">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>inotify support for working with inotify objects.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rustix::fs::inotify;
+<span class="kw">use </span>rustix::io;
+<span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="comment">// Create an inotify object. In this example, we use `NONBLOCK` so that the
+// reader fails with `WOULDBLOCK` when no events are ready. Otherwise it
+// will block until at least one event is ready.
+</span><span class="kw">let </span>inotify = inotify::init(inotify::CreateFlags::NONBLOCK)<span class="question-mark">?</span>;
+
+<span class="comment">// Add a directory to watch.
+</span>inotify::add_watch(
+    <span class="kw-2">&amp;</span>inotify,
+    <span class="string">"/path/to/some/directory/to/watch"</span>,
+    inotify::WatchFlags::ALL_EVENTS,
+)<span class="question-mark">?</span>;
+
+<span class="comment">// Generate some events in the watched directory…
+
+// Loop over pending events.
+</span><span class="kw">let </span><span class="kw-2">mut </span>buf = [MaybeUninit::uninit(); <span class="number">512</span>];
+<span class="kw">let </span><span class="kw-2">mut </span>iter = inotify::Reader::new(inotify, <span class="kw-2">&amp;mut </span>buf);
+<span class="kw">loop </span>{
+    <span class="kw">let </span>entry = <span class="kw">match </span>iter.next() {
+        <span class="comment">// Stop iterating if there are no more events for now.
+        </span><span class="prelude-val">Err</span>(io::Errno::WOULDBLOCK) =&gt; <span class="kw">break</span>,
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
+        <span class="prelude-val">Ok</span>(entry) =&gt; entry,
+    };
+
+    <span class="comment">// Use `entry`…
+</span>}
+</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.CreateFlags.html" title="struct rustix::fs::inotify::CreateFlags">Create<wbr>Flags</a></dt><dd><code>IN_*</code> for use with <a href="fn.init.html" title="fn rustix::fs::inotify::init"><code>inotify::init</code></a>.</dd><dt><a class="struct" href="struct.Event.html" title="struct rustix::fs::inotify::Event">Event</a></dt><dd>An inotify event.</dd><dt><a class="struct" href="struct.ReadFlags.html" title="struct rustix::fs::inotify::ReadFlags">Read<wbr>Flags</a></dt><dd><code>IN*</code> for use with <a href="crate::fs::inotify::InotifyReader"><code>inotify::Reader</code></a>.</dd><dt><a class="struct" href="struct.Reader.html" title="struct rustix::fs::inotify::Reader">Reader</a></dt><dd>An inotify event iterator implemented with the read syscall.</dd><dt><a class="struct" href="struct.WatchFlags.html" title="struct rustix::fs::inotify::WatchFlags">Watch<wbr>Flags</a></dt><dd><code>IN*</code> for use with <a href="fn.add_watch.html" title="fn rustix::fs::inotify::add_watch"><code>inotify::add_watch</code></a>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.add_watch.html" title="fn rustix::fs::inotify::add_watch">add_<wbr>watch</a></dt><dd><code>inotify_add_watch(self, path, flags)</code>—Adds a watch to inotify.</dd><dt><a class="fn" href="fn.init.html" title="fn rustix::fs::inotify::init">init</a></dt><dd><code>inotify_init1(flags)</code>—Creates a new inotify object.</dd><dt><a class="fn" href="fn.remove_watch.html" title="fn rustix::fs::inotify::remove_watch">remove_<wbr>watch</a></dt><dd><code>inotify_rm_watch(self, wd)</code>—Removes a watch from this inotify.</dd></dl></section></div></main></body></html>

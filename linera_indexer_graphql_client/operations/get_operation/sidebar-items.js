@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["OPERATION_NAME","QUERY"],"enum":["OperationKeyKind"],"struct":["GetOperationOperation","ResponseData","Variables"]};

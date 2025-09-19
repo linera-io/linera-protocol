@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TX_GAS_LIMIT_CAP"]};

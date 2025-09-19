@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DescribeEndpointsError"],"mod":["builders"],"struct":["DescribeEndpoints","DescribeEndpointsInput","DescribeEndpointsOutput"]};

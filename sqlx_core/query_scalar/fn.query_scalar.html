@@ -1,0 +1,91 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Execute a single SQL query as a prepared statement (transparently cached) and extract the first column of each row."><title>query_scalar in sqlx_core::query_scalar - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sqlx_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sqlx_core/index.html">sqlx_<wbr>core</a><span class="version">0.8.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">query_<wbr>scalar</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example-simple-lookup" title="Example: Simple Lookup">Example: Simple Lookup</a></li><li><a href="#example-count" title="Example: `COUNT`">Example: <code>COUNT</code></a></li><li><a href="#example-exists" title="Example: `EXISTS`">Example: <code>EXISTS</code></a></li><li><a href="#example-other-aggregates" title="Example: Other Aggregates">Example: Other Aggregates</a></li><li><a href="#example-vec-of-scalars" title="Example: `Vec` of Scalars">Example: <code>Vec</code> of Scalars</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In sqlx_<wbr>core::<wbr>query_<wbr>scalar</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sqlx_core</a>::<wbr><a href="index.html">query_scalar</a></div><h1>Function <span class="fn">query_scalar</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sqlx_core/query_scalar.rs.html#321-331">Source</a> </span></div><pre class="rust item-decl"><code>pub fn query_scalar&lt;'q, DB, O&gt;(
+    sql: &amp;'q <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="struct" href="struct.QueryScalar.html" title="struct sqlx_core::query_scalar::QueryScalar">QueryScalar</a>&lt;'q, DB, O, &lt;DB as <a class="trait" href="../database/trait.Database.html" title="trait sqlx_core::database::Database">Database</a>&gt;::<a class="associatedtype" href="../database/trait.Database.html#associatedtype.Arguments" title="type sqlx_core::database::Database::Arguments">Arguments</a>&lt;'q&gt;&gt;<div class="where">where
+    DB: <a class="trait" href="../database/trait.Database.html" title="trait sqlx_core::database::Database">Database</a>,
+    <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.tuple.html">(O,)</a>: for&lt;'r&gt; <a class="trait" href="../from_row/trait.FromRow.html" title="trait sqlx_core::from_row::FromRow">FromRow</a>&lt;'r, DB::<a class="associatedtype" href="../database/trait.Database.html#associatedtype.Row" title="type sqlx_core::database::Database::Row">Row</a>&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Execute a single SQL query as a prepared statement (transparently cached) and extract the first
+column of each row.</p>
+<p>Extracts the first column of each row. Additional columns are ignored.
+Any type that implements <code>Type&lt;DB&gt; + Decode&lt;DB&gt;</code> may be used.</p>
+<p>For details about prepared statements and allowed SQL syntax, see <a href="../query/fn.query.html" title="fn sqlx_core::query::query"><code>query()</code></a>.</p>
+<h4 id="example-simple-lookup"><a class="doc-anchor" href="#example-simple-lookup">§</a>Example: Simple Lookup</h4>
+<p>If you just want to look up a single value with little fanfare, this API is perfect for you:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>uuid::Uuid;
+
+<span class="comment">// MySQL and MariaDB: use `?`
+</span><span class="kw">let </span>user_id: <span class="prelude-ty">Option</span>&lt;Uuid&gt; = sqlx::query_scalar(<span class="string">"SELECT user_id FROM users WHERE username = $1"</span>)
+    .bind(<span class="string">"alice"</span>)
+    <span class="comment">// Use `&amp;mut` where `conn` is a connection or a transaction, or use `&amp;` for a `Pool`.
+    </span>.fetch_optional(<span class="kw-2">&amp;mut </span>conn)
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="kw">let </span>user_id = user_id.ok_or(<span class="string">"unknown user"</span>)<span class="question-mark">?</span>;
+</code></pre></div>
+<p>Note how we’re using <code>.fetch_optional()</code> because the lookup may return no results,
+in which case we need to be able to handle an empty result set.
+Any rows after the first are ignored.</p>
+<h4 id="example-count"><a class="doc-anchor" href="#example-count">§</a>Example: <code>COUNT</code></h4>
+<p>This API is the easiest way to invoke an aggregate query like <code>SELECT COUNT(*)</code>, because you
+can conveniently extract the result:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Note that `usize` is not used here because unsigned integers are generally not supported,
+// and `usize` doesn't even make sense as a mapping because the database server may have
+// a completely different architecture.
+//
+// `i64` is generally a safe choice for `COUNT`.
+</span><span class="kw">let </span>count: i64 = sqlx::query_scalar(<span class="string">"SELECT COUNT(*) FROM users WHERE accepted_tos IS TRUE"</span>)
+    <span class="comment">// Use `&amp;mut` where `conn` is a connection or a transaction, or use `&amp;` for a `Pool`.
+    </span>.fetch_one(<span class="kw-2">&amp;mut </span>conn)
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// The above is functionally equivalent to the following:
+// Note the trailing comma, required for the compiler to recognize a 1-element tuple.
+</span><span class="kw">let </span>(count,): (i64,) = sqlx::query_as(<span class="string">"SELECT COUNT(*) FROM users WHERE accepted_tos IS TRUE"</span>)
+    .fetch_one(<span class="kw-2">&amp;mut </span>conn)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<h4 id="example-exists"><a class="doc-anchor" href="#example-exists">§</a>Example: <code>EXISTS</code></h4>
+<p>To test if a row exists or not, use <code>SELECT EXISTS(&lt;query&gt;)</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// MySQL and MariaDB: use `?`
+</span><span class="kw">let </span>username_taken: bool = sqlx::query_scalar(
+    <span class="string">"SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)"
+</span>)
+    .bind(<span class="string">"alice"</span>)
+    <span class="comment">// Use `&amp;mut` where `conn` is a connection or a transaction, or use `&amp;` for a `Pool`.
+    </span>.fetch_one(<span class="kw-2">&amp;mut </span>conn)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<h4 id="example-other-aggregates"><a class="doc-anchor" href="#example-other-aggregates">§</a>Example: Other Aggregates</h4>
+<p>Be aware that most other aggregate functions return <code>NULL</code> if the query yields an empty set:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>max_upvotes: <span class="prelude-ty">Option</span>&lt;i64&gt; = sqlx::query_scalar(<span class="string">"SELECT MAX(upvotes) FROM posts"</span>)
+    <span class="comment">// Use `&amp;mut` where `conn` is a connection or a transaction, or use `&amp;` for a `Pool`.
+    </span>.fetch_one(<span class="kw-2">&amp;mut </span>conn)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Note how we’re using <code>Option&lt;i64&gt;</code> with <code>.fetch_one()</code>, because we’re always expecting one row
+but the column value may be <code>NULL</code>. If no rows are returned, this will error.</p>
+<p>This is in contrast to using <code>.fetch_optional()</code> with <code>Option&lt;i64&gt;</code>, which implies that
+we’re expecting <em>either</em> a row with a <code>i64</code> (<code>BIGINT</code>), <em>or</em> no rows at all.</p>
+<p>Either way, any rows after the first are ignored.</p>
+<h4 id="example-vec-of-scalars"><a class="doc-anchor" href="#example-vec-of-scalars">§</a>Example: <code>Vec</code> of Scalars</h4>
+<p>If you want to collect a single column from a query into a vector,
+try <code>.fetch_all()</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>top_users: Vec&lt;String&gt; = sqlx::query_scalar(
+    <span class="comment">// Note the `LIMIT` to ensure that this doesn't return *all* users:
+    </span><span class="string">"SELECT username
+     FROM (
+         SELECT SUM(upvotes) total, user_id
+         FROM posts
+         GROUP BY user_id
+     ) top_users
+     INNER JOIN users USING (user_id)
+     ORDER BY total DESC
+     LIMIT 10"
+</span>)
+    <span class="comment">// Use `&amp;mut` where `conn` is a connection or a transaction, or use `&amp;` for a `Pool`.
+    </span>.fetch_all(<span class="kw-2">&amp;mut </span>conn)
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// `top_users` could be empty, too.
+</span><span class="macro">assert!</span>(top_users.len() &lt;= <span class="number">10</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`ark-serialize` defines the `CanonicalSerialize` and `CanonicalDeserialize` traits for serializing and deserializing Rust data structures to bytes efficiently. The interfaces offered by these traits are specialized for serializing cryptographic objects. In particular, they offer special support for compressed representation of elliptic curve elements. Most types in `arkworks-rs` implement these traits."><title>ark_serialize - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ark_serialize" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ark_serialize/index.html">ark_<wbr>serialize</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage" title="Usage">Usage</a><ul><li><a href="#examples" title="Examples">Examples</a></li></ul></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>ark_serialize</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/ark_serialize/lib.rs.html#1-245">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h1 align="center">ark-serialize</h1>
+<p align="center">
+    <img src="https://github.com/arkworks-rs/algebra/workflows/CI/badge.svg?branch=master">
+    <a href="https://github.com/arkworks-rs/algebra/blob/master/LICENSE-APACHE"><img src="https://img.shields.io/badge/license-APACHE-blue.svg"></a>
+    <a href="https://github.com/arkworks-rs/algebra/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+    <a href="https://deps.rs/repo/github/arkworks-rs/algebra"><img src="https://deps.rs/repo/github/arkworks-rs/algebra/status.svg"></a>
+</p>
+<p><code>ark-serialize</code> defines the <code>CanonicalSerialize</code> and <code>CanonicalDeserialize</code> traits for serializing and deserializing Rust data structures to bytes efficiently. The interfaces offered by these traits are specialized for serializing cryptographic objects. In particular, they offer special support for compressed representation of elliptic curve elements.
+Most types in <code>arkworks-rs</code> implement these traits.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>To use <code>ark-serialize</code>, add the following to your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>ark-serialize = &quot;0.4&quot;</code></pre></div>
+<p>If you additionally want to derive implementations of the <code>CanonicalSerialize</code> and <code>CanonicalDeserialize</code> traits for your own types, you can enable the <code>derive</code> feature:</p>
+<div class="example-wrap"><pre class="language-toml"><code>ark-serialize = { version = &quot;0.4&quot;, features = [&quot;derive&quot;] }</code></pre></div><h4 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h4>
+<p>Let us first see how to use <code>ark-serialize</code> for existing types:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// We'll use the BLS12-381 pairing-friendly group for this example.
+</span><span class="kw">use </span>ark_test_curves::bls12_381::{G1Projective <span class="kw">as </span>G1, G2Projective <span class="kw">as </span>G2, G1Affine, G2Affine};
+<span class="kw">use </span>ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
+<span class="kw">use </span>ark_std::UniformRand;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = ark_std::test_rng();
+<span class="comment">// Let's sample uniformly random group elements:
+</span><span class="kw">let </span>a: G1Affine = G1::rand(<span class="kw-2">&amp;mut </span>rng).into();
+<span class="kw">let </span>b: G2Affine = G2::rand(<span class="kw-2">&amp;mut </span>rng).into();
+
+<span class="comment">// We can serialize with compression...
+</span><span class="kw">let </span><span class="kw-2">mut </span>compressed_bytes = Vec::new();
+a.serialize_compressed(<span class="kw-2">&amp;mut </span>compressed_bytes).unwrap();
+<span class="comment">// ...and without:
+</span><span class="kw">let </span><span class="kw-2">mut </span>uncompressed_bytes = Vec::new();
+a.serialize_uncompressed(<span class="kw-2">&amp;mut </span>uncompressed_bytes).unwrap();
+
+<span class="comment">// We can reconstruct our points from the compressed serialization...
+</span><span class="kw">let </span>a_compressed = G1Affine::deserialize_compressed(<span class="kw-2">&amp;*</span>compressed_bytes).unwrap();
+
+<span class="comment">// ... and from the uncompressed one:
+</span><span class="kw">let </span>a_uncompressed = G1Affine::deserialize_uncompressed(<span class="kw-2">&amp;*</span>uncompressed_bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(a_compressed, a);
+<span class="macro">assert_eq!</span>(a_uncompressed, a);
+
+<span class="comment">// If we trust the origin of the serialization
+// (eg: if the serialization was stored on authenticated storage),
+// then we can skip some validation checks, which can greatly reduce deserialization time.
+</span><span class="kw">let </span>a_uncompressed_unchecked = G1Affine::deserialize_uncompressed_unchecked(<span class="kw-2">&amp;*</span>uncompressed_bytes).unwrap();
+<span class="kw">let </span>a_compressed_unchecked = G1Affine::deserialize_compressed_unchecked(<span class="kw-2">&amp;*</span>compressed_bytes).unwrap();
+<span class="macro">assert_eq!</span>(a_uncompressed_unchecked, a);
+<span class="macro">assert_eq!</span>(a_compressed_unchecked, a);</code></pre></div>
+<p>If we want to serialize our own structs, we can derive implementations of the <code>CanonicalSerialize</code> and <code>CanonicalDeserialize</code> traits if all fields implement these traits. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_test_curves::bls12_381::{G1Affine, G2Affine};
+<span class="kw">use </span>ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
+
+<span class="attr">#[derive(CanonicalSerialize, CanonicalDeserialize)]
+</span><span class="kw">pub struct </span>MyStruct {
+    a: G1Affine,
+    b: G2Affine,
+}</code></pre></div>
+<p>We can also implement these traits manually. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_test_curves::bls12_381::{G1Affine, G2Affine};
+<span class="kw">use </span>ark_serialize::{CanonicalSerialize, CanonicalDeserialize, Compress, SerializationError, Valid, Validate};
+<span class="kw">use </span>ark_std::io::{Read, Write};
+
+<span class="kw">pub struct </span>MyStruct {
+    a: G1Affine,
+    b: G2Affine,
+}
+
+<span class="kw">impl </span>CanonicalSerialize <span class="kw">for </span>MyStruct {
+    <span class="comment">// We only have to implement the `serialize_with_mode` method; the other methods 
+    // have default implementations that call the latter.
+    //
+    // Notice that `serialize_with_mode` takes `mode: Compress` as an argument. This 
+    // is used to indicate whether we want to serialize with or without compression.
+    </span><span class="kw">fn </span>serialize_with_mode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W, mode: Compress) -&gt; <span class="prelude-ty">Result</span>&lt;(), SerializationError&gt; {
+        <span class="self">self</span>.a.serialize_with_mode(<span class="kw-2">&amp;mut </span>writer, mode)<span class="question-mark">?</span>;
+        <span class="self">self</span>.b.serialize_with_mode(<span class="kw-2">&amp;mut </span>writer, mode)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">fn </span>serialized_size(<span class="kw-2">&amp;</span><span class="self">self</span>, mode: Compress) -&gt; usize {
+        <span class="self">self</span>.a.serialized_size(mode) + <span class="self">self</span>.b.serialized_size(mode)
+    }
+}
+
+<span class="kw">impl </span>CanonicalDeserialize <span class="kw">for </span>MyStruct {
+    <span class="comment">// We only have to implement the `deserialize_with_mode` method; the other methods 
+    // have default implementations that call the latter.
+    </span><span class="kw">fn </span>deserialize_with_mode&lt;R: Read&gt;(<span class="kw-2">mut </span>reader: R, compress: Compress, validate: Validate) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, SerializationError&gt; {
+        <span class="kw">let </span>a = G1Affine::deserialize_with_mode(<span class="kw-2">&amp;mut </span>reader, compress, validate)<span class="question-mark">?</span>;
+        <span class="kw">let </span>b = G2Affine::deserialize_with_mode(<span class="kw-2">&amp;mut </span>reader, compress, validate)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ a, b })
+    }
+}
+
+<span class="comment">// We additionally have to implement the `Valid` trait for our struct.
+// This trait specifies how to perform certain validation checks on deserialized types.
+// For example, we can check that the deserialized group elements are in the prime-order subgroup.
+</span><span class="kw">impl </span>Valid <span class="kw">for </span>MyStruct {
+    <span class="kw">fn </span>check(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), SerializationError&gt; {
+        <span class="self">self</span>.a.check()<span class="question-mark">?</span>;
+        <span class="self">self</span>.b.check()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+}</code></pre></div>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.serialize_to_vec.html" title="macro ark_serialize::serialize_to_vec">serialize_<wbr>to_<wbr>vec</a></dt><dd>Serializes the given <code>CanonicalSerialize</code> items in sequence. <code>serialize_to_vec![a, b, c, d, e]</code>
+is identical to the value of <code>buf</code> after <code>(a, b, c, d, e).serialize_compressed(&amp;mut buf)</code>.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.EmptyFlags.html" title="struct ark_serialize::EmptyFlags">Empty<wbr>Flags</a></dt><dd>Flags to be encoded into the serialization.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Compress.html" title="enum ark_serialize::Compress">Compress</a></dt><dd>Whether to use a compressed version of the serialization algorithm. Specific behavior depends
+on implementation. If no compressed version exists (e.g. on <code>Fp</code>), mode is ignored.</dd><dt><a class="enum" href="enum.SerializationError.html" title="enum ark_serialize::SerializationError">Serialization<wbr>Error</a></dt><dd>This is an error that could occur during serialization</dd><dt><a class="enum" href="enum.Validate.html" title="enum ark_serialize::Validate">Validate</a></dt><dd>Whether to validate the element after deserializing it. Specific behavior depends on
+implementation. If no validation algorithm exists (e.g. on <code>Fp</code>), mode is ignored.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.CanonicalDeserialize.html" title="trait ark_serialize::CanonicalDeserialize">Canonical<wbr>Deserialize</a></dt><dd>Deserializer in little endian format.
+This trait can be derived if all fields of a struct implement
+<code>CanonicalDeserialize</code> and the <code>derive</code> feature is enabled.</dd><dt><a class="trait" href="trait.CanonicalDeserializeWithFlags.html" title="trait ark_serialize::CanonicalDeserializeWithFlags">Canonical<wbr>Deserialize<wbr>With<wbr>Flags</a></dt><dd>Deserializer in little endian format allowing flags to be encoded.</dd><dt><a class="trait" href="trait.CanonicalSerialize.html" title="trait ark_serialize::CanonicalSerialize">Canonical<wbr>Serialize</a></dt><dd>Serializer in little endian format.
+This trait can be derived if all fields of a struct implement
+<code>CanonicalSerialize</code> and the <code>derive</code> feature is enabled.</dd><dt><a class="trait" href="trait.CanonicalSerializeHashExt.html" title="trait ark_serialize::CanonicalSerializeHashExt">Canonical<wbr>Serialize<wbr>Hash<wbr>Ext</a></dt><dd>The CanonicalSerialize induces a natural way to hash the
+corresponding value, of which this is the convenience trait.</dd><dt><a class="trait" href="trait.CanonicalSerializeWithFlags.html" title="trait ark_serialize::CanonicalSerializeWithFlags">Canonical<wbr>Serialize<wbr>With<wbr>Flags</a></dt><dd>Serializer in little endian format allowing to encode flags.</dd><dt><a class="trait" href="trait.Flags.html" title="trait ark_serialize::Flags">Flags</a></dt><dd>Represents metadata to be appended to an object’s serialization. For
+example, when serializing elliptic curve points, one can
+use a <code>Flag</code> to represent whether the serialization is the point
+at infinity, or whether the <code>y</code> coordinate is positive or not.
+These bits will be appended to the end of the point’s serialization,
+or included in a new byte, depending on space available.</dd><dt><a class="trait" href="trait.Read.html" title="trait ark_serialize::Read">Read</a></dt><dd>The <code>Read</code> trait allows for reading bytes from a source.</dd><dt><a class="trait" href="trait.Valid.html" title="trait ark_serialize::Valid">Valid</a></dt><dt><a class="trait" href="trait.Write.html" title="trait ark_serialize::Write">Write</a></dt><dd>A trait for objects which are byte-oriented sinks.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.buffer_bit_byte_size.html" title="fn ark_serialize::buffer_bit_byte_size">buffer_<wbr>bit_<wbr>byte_<wbr>size</a></dt><dt><a class="fn" href="fn.buffer_byte_size.html" title="fn ark_serialize::buffer_byte_size">buffer_<wbr>byte_<wbr>size</a></dt><dd>Converts the number of bits required to represent a number
+into the number of bytes required to represent it.</dd></dl></section></div></main></body></html>
