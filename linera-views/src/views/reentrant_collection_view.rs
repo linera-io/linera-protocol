@@ -1186,7 +1186,7 @@ where
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is put on the collection. The obtained view can
@@ -1339,7 +1339,7 @@ where
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Load multiple entries for writing at once.
     /// The entries in indices have to be all distinct.
@@ -1485,7 +1485,7 @@ where
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Returns the list of indices in the collection in an order determined
     /// by serialization.
@@ -1693,7 +1693,7 @@ where
 impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is put in the collection on this index.
@@ -1846,7 +1846,7 @@ where
 
 impl<I, W: View> ReentrantCustomCollectionView<W::Context, I, W>
 where
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Load multiple entries for writing at once.
     /// The entries in indices have to be all distinct.
@@ -1867,13 +1867,13 @@ where
     /// assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entries_mut<Q>(
+    pub async fn try_load_entries_mut<'a, Q>(
         &mut self,
-        indices: impl IntoIterator<Item = Q>,
+        indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize,
+        Q: CustomSerialize + 'a,
     {
         let short_keys = indices
             .into_iter()
@@ -1903,13 +1903,13 @@ where
     /// assert_eq!(*value0, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entries<Q>(
+    pub async fn try_load_entries<'a, Q>(
         &self,
-        indices: impl IntoIterator<Item = Q>,
+        indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize,
+        Q: CustomSerialize + 'a,
     {
         let short_keys = indices
             .into_iter()
@@ -1990,7 +1990,7 @@ where
 impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Returns the list of indices in the collection. The order is determined by
     /// the custom serialization.
@@ -2191,8 +2191,7 @@ mod graphql {
             + async_graphql::OutputType
             + serde::ser::Serialize
             + serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone,
+            + std::fmt::Debug,
         V: View + async_graphql::OutputType,
         MapInput<K>: async_graphql::InputType,
         MapFilters<K>: async_graphql::InputType,
@@ -2260,8 +2259,7 @@ mod graphql {
         K: async_graphql::InputType
             + async_graphql::OutputType
             + crate::common::CustomSerialize
-            + std::fmt::Debug
-            + Clone,
+            + std::fmt::Debug,
         V: View + async_graphql::OutputType,
         MapInput<K>: async_graphql::InputType,
         MapFilters<K>: async_graphql::InputType,
@@ -2294,7 +2292,7 @@ mod graphql {
                 self.indices().await?
             };
 
-            let values = self.try_load_entries(keys.clone()).await?;
+            let values = self.try_load_entries(&keys).await?;
             values
                 .into_iter()
                 .zip(keys)
