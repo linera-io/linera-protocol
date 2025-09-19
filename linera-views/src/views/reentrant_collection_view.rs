@@ -2225,16 +2225,17 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                let value = self
-                    .try_load_entry(&key)
-                    .await?
-                    .ok_or_else(|| missing_key_error(&key))?;
-                values.push(Entry { value, key })
-            }
-
-            Ok(values)
+            let values = self.try_load_entries(&keys).await?;
+            values
+                .into_iter()
+                .zip(keys)
+                .map(|(value, key)|
+                     match value {
+                         None => Err(missing_key_error(&key)),
+                         Some(value) => Ok(Entry { value, key })
+                     }
+                )
+                .collect()
         }
     }
 
@@ -2293,16 +2294,17 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                let value = self
-                    .try_load_entry(&key)
-                    .await?
-                    .ok_or_else(|| missing_key_error(&key))?;
-                values.push(Entry { value, key })
-            }
-
-            Ok(values)
+            let values = self.try_load_entries(keys.clone()).await?;
+            values
+                .into_iter()
+                .zip(keys)
+                .map(|(value, key)|
+                     match value {
+                         None => Err(missing_key_error(&key)),
+                         Some(value) => Ok(Entry { value, key })
+                     }
+                )
+                .collect()
         }
     }
 }

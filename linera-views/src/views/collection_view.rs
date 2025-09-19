@@ -359,34 +359,32 @@ impl<W: View> ByteCollectionView<W::Context, W> {
         let mut keys_to_check_metadata = Vec::new();
         let updates = self.updates.read().await;
 
-        {
-            for (position, short_key) in short_keys.into_iter().enumerate() {
-                match updates.get(&short_key) {
-                    Some(update) => {
-                        match update {
-                            Update::Removed => {
-                                results.push(None);
-                            }
-                            _ => {
-                                let updates = self.updates.read().await;
-                                results.push(Some(ReadGuardedView::Loaded {
-                                    updates,
-                                    short_key: short_key.clone(),
-                                }));
-                            }
+        for (position, short_key) in short_keys.into_iter().enumerate() {
+            match updates.get(&short_key) {
+                Some(update) => {
+                    match update {
+                        Update::Removed => {
+                            results.push(None);
+                        }
+                        _ => {
+                            let updates = self.updates.read().await;
+                            results.push(Some(ReadGuardedView::Loaded {
+                                updates,
+                                short_key: short_key.clone(),
+                            }));
                         }
                     }
-                    None => {
-                        results.push(None); // Placeholder, may be updated later
-                        if !self.delete_storage_first {
-                            let key = self
-                                .context
-                                .base_key()
-                                .base_tag_index(KeyTag::Index as u8, &short_key);
-                            let subview_context = self.context.clone_with_base_key(key.clone());
-                            keys_to_check.push(key);
-                            keys_to_check_metadata.push((position, subview_context));
-                        }
+                }
+                None => {
+                    results.push(None); // Placeholder, may be updated later
+                    if !self.delete_storage_first {
+                        let key = self
+                            .context
+                            .base_key()
+                            .base_tag_index(KeyTag::Index as u8, &short_key);
+                        let subview_context = self.context.clone_with_base_key(key.clone());
+                        keys_to_check.push(key);
+                        keys_to_check_metadata.push((position, subview_context));
                     }
                 }
             }
@@ -1656,16 +1654,17 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                let value = self
-                    .try_load_entry(&key)
-                    .await?
-                    .ok_or_else(|| missing_key_error(&key))?;
-                values.push(Entry { value, key })
-            }
-
-            Ok(values)
+            let values = self.try_load_entries(&keys).await?;
+            values
+                .into_iter()
+                .zip(keys)
+                .map(|(value, key)|
+                     match value {
+                         None => Err(missing_key_error(&key)),
+                         Some(value) => Ok(Entry { value, key })
+                     }
+                )
+                .collect()
         }
     }
 
