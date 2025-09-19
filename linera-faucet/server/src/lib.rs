@@ -692,7 +692,9 @@ where
         let batch_processor_task = batch_processor.run(cancellation_token.clone());
         let tcp_listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
-        let server = axum::serve(tcp_listener, app).into_future();
+        let server = axum::serve(tcp_listener, app)
+            .with_graceful_shutdown(cancellation_token.cancelled_owned())
+            .into_future();
         futures::select! {
             result = Box::pin(chain_listener).fuse() => result?,
             _ = Box::pin(batch_processor_task).fuse() => {},

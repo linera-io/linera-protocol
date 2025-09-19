@@ -227,6 +227,8 @@ async fn main() -> std::io::Result<()> {
     let service = NodeService::new(
         ChainListenerConfig::default(),
         std::num::NonZeroU16::new(8080).unwrap(),
+        #[cfg(with_metrics)]
+        std::num::NonZeroU16::new(8081).unwrap(),
         None,
         DummyContext,
     );

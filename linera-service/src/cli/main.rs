@@ -1250,7 +1250,12 @@ impl Runnable for Job {
                 info!("Notification stream ended.");
             }
 
-            Service { config, port } => {
+            Service {
+                config,
+                port,
+                #[cfg(with_metrics)]
+                metrics_port,
+            } => {
                 let context = ClientContext::new(
                     storage,
                     options.context_options.clone(),
@@ -1259,11 +1264,17 @@ impl Runnable for Job {
                 );
 
                 let default_chain = context.wallet().default_chain();
-                let service = NodeService::new(config, port, default_chain, context);
+                let service = NodeService::new(
+                    config,
+                    port,
+                    #[cfg(with_metrics)]
+                    metrics_port,
+                    default_chain,
+                    context,
+                );
                 let cancellation_token = CancellationToken::new();
-                let child_token = cancellation_token.child_token();
-                tokio::spawn(listen_for_shutdown_signals(cancellation_token));
-                service.run(child_token).await?;
+                tokio::spawn(listen_for_shutdown_signals(cancellation_token.clone()));
+                service.run(cancellation_token).await?;
             }
 
             Faucet {
