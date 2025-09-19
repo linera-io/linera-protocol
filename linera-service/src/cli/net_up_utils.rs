@@ -6,7 +6,7 @@ use std::{num::NonZeroU16, str::FromStr};
 use colored::Colorize as _;
 use linera_base::{data_types::Amount, listen_for_shutdown_signals, time::Duration};
 use linera_client::client_options::ResourceControlPolicyConfig;
-use linera_rpc::config::{CrossChainConfig, ExporterServiceConfig};
+use linera_rpc::config::CrossChainConfig;
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
     child::{StorageService, StorageServiceGuard},
@@ -125,6 +125,10 @@ pub async fn handle_net_up_kubernetes(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    with_block_exporter: bool,
+    num_block_exporters: usize,
+    indexer_image_name: String,
+    explorer_image_name: String,
     dual_store: bool,
 ) -> anyhow::Result<()> {
     assert!(
@@ -149,6 +153,16 @@ pub async fn handle_net_up_kubernetes(
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
+    let num_block_exporters = if with_block_exporter {
+        assert!(
+            num_block_exporters > 0,
+            "If --with-block-exporter is provided, --num-block-exporters must be greater than 0"
+        );
+        num_block_exporters
+    } else {
+        0
+    };
+
     let config = LocalKubernetesNetConfig {
         network: Network::Grpc,
         testing_prng_seed,
@@ -162,6 +176,9 @@ pub async fn handle_net_up_kubernetes(
         docker_image_name,
         build_mode,
         policy_config,
+        num_block_exporters,
+        indexer_image_name,
+        explorer_image_name,
         dual_store,
     };
     let (mut net, client) = config.instantiate().await?;
@@ -223,15 +240,11 @@ pub async fn handle_net_up_service(
     let network = NetworkConfig { external, internal };
     let path_provider = PathProvider::from_path_option(path)?;
     let num_proxies = 1; // Local networks currently support exactly 1 proxy.
-    let block_exporters = if with_block_exporter {
-        let exporter_config = ExporterServiceConfig {
-            host: block_exporter_address,
-            port: block_exporter_port.into(),
-        };
-        ExportersSetup::Remote(vec![exporter_config])
-    } else {
-        ExportersSetup::Local(vec![])
-    };
+    let block_exporters = ExportersSetup::new(
+        with_block_exporter,
+        block_exporter_address,
+        block_exporter_port,
+    );
     let config = LocalNetConfig {
         network,
         database,

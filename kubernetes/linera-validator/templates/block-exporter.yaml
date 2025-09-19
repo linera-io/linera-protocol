@@ -1,0 +1,138 @@
+{{- if .Values.blockExporter.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: block-exporter-config
+data:
+{{- range $i := until (int .Values.blockExporter.replicas) }}
+  exporter-config-{{ $i }}.toml: |
+{{ tpl ($.Files.Get "exporter-config.toml.tpl") (dict "exporterId" $i "Values" $.Values) | indent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: linera-block-exporter
+  labels:
+    app: linera-block-exporter
+spec:
+  ports:
+    - port: {{ .Values.blockExporter.port }}
+      name: http
+    - port: {{ .Values.blockExporter.metricsPort }}
+      name: metrics
+  selector:
+    app: linera-block-exporter
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: linera-block-exporter
+spec:
+  serviceName: linera-block-exporter
+  replicas: {{ .Values.blockExporter.replicas }}
+  selector:
+    matchLabels:
+      app: linera-block-exporter
+  template:
+    metadata:
+      labels:
+        app: linera-block-exporter
+    spec:
+      {{- if eq .Values.environment "GCP" }}
+      nodeSelector:
+        workload: system
+      tolerations:
+      - key: system
+        value: "true"
+        effect: NoSchedule
+      {{- end }}
+      initContainers:
+        - name: config-selector
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              ORDINAL=$(echo $HOSTNAME | sed 's/.*-//')
+              cp /configmap/exporter-config-${ORDINAL}.toml /config/exporter-config.toml
+          volumeMounts:
+            - name: configmap
+              mountPath: /configmap
+            - name: config
+              mountPath: /config
+      containers:
+        - name: linera-block-exporter
+          image: {{ .Values.indexer.image }}
+          imagePullPolicy: {{ .Values.indexer.imagePullPolicy }}
+          command:
+            - "./linera-exporter"
+            - "--storage"
+            - "{{ .Values.storage }}"
+            - "--config-path"
+            - "/config/exporter-config.toml"
+            - "--metrics-port"
+            - "{{ .Values.blockExporter.metricsPort }}"
+          ports:
+            - containerPort: {{ .Values.blockExporter.port }}
+              name: http
+            - containerPort: {{ .Values.blockExporter.metricsPort }}
+              name: metrics
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.blockExporter.logLevel }}
+            - name: RUST_BACKTRACE
+              value: "1"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: exporter-data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.blockExporter.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.blockExporter.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: configmap
+          configMap:
+            name: block-exporter-config
+        - name: config
+          emptyDir: {}
+        - name: exporter-data
+          persistentVolumeClaim:
+            claimName: exporter-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: exporter-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.blockExporter.storageSize }}
+{{- if .Values.blockExporter.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: linera-block-exporter
+  labels:
+    app: linera-block-exporter
+spec:
+  selector:
+    matchLabels:
+      app: linera-block-exporter
+  endpoints:
+  - port: metrics
+    path: /metrics
+{{- end }}
+{{- end }}

@@ -14,13 +14,13 @@ use linera_base::{
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
 use tempfile::{tempdir, TempDir};
-use tokio::process::Command;
+use tokio::{process::Command, task::JoinSet};
 #[cfg(with_testing)]
 use {linera_base::command::current_binary_parent, tokio::sync::OnceCell};
 
 use crate::cli_wrappers::{
-    docker::{BuildArg, DockerImage},
-    helmfile::HelmFile,
+    docker::{BuildArg, DockerImage, Dockerfile},
+    helmfile::{HelmFile, DEFAULT_BLOCK_EXPORTER_PORT},
     kind::KindCluster,
     kubectl::KubectlInstance,
     local_net::PathProvider,
@@ -69,6 +69,9 @@ pub struct LocalKubernetesNetConfig {
     pub docker_image_name: String,
     pub build_mode: BuildMode,
     pub policy_config: ResourceControlPolicyConfig,
+    pub num_block_exporters: usize,
+    pub indexer_image_name: String,
+    pub explorer_image_name: String,
     pub dual_store: bool,
 }
 
@@ -93,6 +96,9 @@ pub struct LocalKubernetesNet {
     num_initial_validators: usize,
     num_proxies: usize,
     num_shards: usize,
+    num_block_exporters: usize,
+    indexer_image_name: String,
+    explorer_image_name: String,
     dual_store: bool,
 }
 
@@ -129,6 +135,9 @@ impl SharedLocalKubernetesNetTestingConfig {
             docker_image_name: String::from("linera:latest"),
             build_mode: BuildMode::Release,
             policy_config: ResourceControlPolicyConfig::Testnet,
+            num_block_exporters: 0,
+            indexer_image_name: String::from("linera-indexer:latest"),
+            explorer_image_name: String::from("linera-explorer:latest"),
             dual_store: false,
         })
     }
@@ -163,6 +172,9 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             self.num_initial_validators,
             self.num_proxies,
             self.num_shards,
+            self.num_block_exporters,
+            self.indexer_image_name,
+            self.explorer_image_name,
             self.dual_store,
         )?;
 
@@ -344,6 +356,9 @@ impl LocalKubernetesNet {
         num_initial_validators: usize,
         num_proxies: usize,
         num_shards: usize,
+        num_block_exporters: usize,
+        indexer_image_name: String,
+        explorer_image_name: String,
         dual_store: bool,
     ) -> Result<Self> {
         Ok(Self {
@@ -360,6 +375,9 @@ impl LocalKubernetesNet {
             num_initial_validators,
             num_proxies,
             num_shards,
+            num_block_exporters,
+            indexer_image_name,
+            explorer_image_name,
             dual_store,
         })
     }
@@ -415,6 +433,24 @@ impl LocalKubernetesNet {
                 "#
             ));
         }
+
+        if self.num_block_exporters > 0 {
+            for _ in 0..self.num_block_exporters {
+                let block_exporter_port = DEFAULT_BLOCK_EXPORTER_PORT;
+                let block_exporter_host = "linera-block-exporter";
+                let config_content = format!(
+                    r#"
+
+                        [[block_exporters]]
+                        host = "{block_exporter_host}"
+                        port = {block_exporter_port}
+                        "#
+                );
+
+                content.push_str(&config_content);
+            }
+        }
+
         fs_err::write(&path, content)?;
         path.into_os_string().into_string().map_err(|error| {
             anyhow!(
@@ -444,19 +480,53 @@ impl LocalKubernetesNet {
 
     async fn run(&mut self) -> Result<()> {
         let github_root = get_github_root().await?;
-        // Build Docker image
-        let docker_image_name = if self.no_build {
-            self.docker_image_name.clone()
-        } else {
-            DockerImage::build(
-                &self.docker_image_name,
-                &self.binaries,
-                &github_root,
-                &self.build_mode,
-                self.dual_store,
+        // Build Docker images
+        let (docker_image_name, indexer_image_name, explorer_image_name) = if self.no_build {
+            (
+                self.docker_image_name.clone(),
+                self.indexer_image_name.clone(),
+                self.explorer_image_name.clone(),
             )
-            .await?;
-            self.docker_image_name.clone()
+        } else {
+            let mut join_set = JoinSet::new();
+            join_set.spawn(DockerImage::build(
+                self.docker_image_name.clone(),
+                self.binaries.clone(),
+                github_root.clone(),
+                self.build_mode.clone(),
+                self.dual_store,
+                Dockerfile::Main,
+            ));
+            if self.num_block_exporters > 0 {
+                join_set.spawn(DockerImage::build(
+                    self.indexer_image_name.clone(),
+                    self.binaries.clone(),
+                    github_root.clone(),
+                    self.build_mode.clone(),
+                    self.dual_store,
+                    Dockerfile::Indexer,
+                ));
+                join_set.spawn(DockerImage::build(
+                    self.explorer_image_name.clone(),
+                    self.binaries.clone(),
+                    github_root.clone(),
+                    self.build_mode.clone(),
+                    self.dual_store,
+                    Dockerfile::Explorer,
+                ));
+            }
+
+            join_set
+                .join_all()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>>>()?;
+
+            (
+                self.docker_image_name.clone(),
+                self.indexer_image_name.clone(),
+                self.explorer_image_name.clone(),
+            )
         };
 
         let base_dir = github_root
@@ -482,10 +552,15 @@ impl LocalKubernetesNet {
             let tmp_dir_path = tmp_dir_path_clone.clone();
 
             let docker_image_name = docker_image_name.clone();
+            let indexer_image_name = indexer_image_name.clone();
+            let explorer_image_name = explorer_image_name.clone();
             let dual_store = self.dual_store;
+            let num_block_exporters = self.num_block_exporters;
             let future = async move {
                 let cluster_id = kind_cluster.id();
                 kind_cluster.load_docker_image(&docker_image_name).await?;
+                kind_cluster.load_docker_image(&indexer_image_name).await?;
+                kind_cluster.load_docker_image(&explorer_image_name).await?;
 
                 let server_config_filename = format!("server_{}.json", validator_number);
                 fs_err::copy(
@@ -500,6 +575,10 @@ impl LocalKubernetesNet {
                     num_shards,
                     cluster_id,
                     docker_image_name,
+                    num_block_exporters > 0,
+                    num_block_exporters,
+                    indexer_image_name,
+                    explorer_image_name,
                     dual_store,
                 )
                 .await?;

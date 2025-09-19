@@ -10,6 +10,22 @@ use tokio::process::Command;
 
 use crate::cli_wrappers::local_kubernetes_net::BuildMode;
 
+pub enum Dockerfile {
+    Main,
+    Indexer,
+    Explorer,
+}
+
+impl Dockerfile {
+    pub fn path(&self) -> &'static str {
+        match self {
+            Dockerfile::Main => "docker/Dockerfile",
+            Dockerfile::Indexer => "docker/Dockerfile.indexer-test",
+            Dockerfile::Explorer => "docker/Dockerfile.explorer",
+        }
+    }
+}
+
 pub struct DockerImage {
     name: String,
 }
@@ -20,83 +36,91 @@ impl DockerImage {
     }
 
     pub async fn build(
-        name: &str,
-        binaries: &BuildArg,
-        github_root: &PathBuf,
-        build_mode: &BuildMode,
+        name: String,
+        binaries: BuildArg,
+        github_root: PathBuf,
+        build_mode: BuildMode,
         dual_store: bool,
+        dockerfile: Dockerfile,
     ) -> Result<Self> {
-        let build_arg = match binaries {
-            BuildArg::Directory(bin_path) => {
-                // Get the binaries from the specified path
-                let bin_path =
-                    diff_paths(bin_path, github_root).context("Getting relative path failed")?;
-                let bin_path_str = bin_path.to_str().context("Getting str failed")?;
-                format!("binaries={bin_path_str}")
-            }
-            BuildArg::ParentDirectory => {
-                // Get the binaries from current_binary_parent
-                let parent_path = current_binary_parent()
-                    .expect("Fetching current binaries path should not fail");
-                let bin_path =
-                    diff_paths(parent_path, github_root).context("Getting relative path failed")?;
-                let bin_path_str = bin_path.to_str().context("Getting str failed")?;
-                format!("binaries={bin_path_str}")
-            }
-            BuildArg::Build => {
-                // Build inside the Docker container
-                let arch = std::env::consts::ARCH;
-                // Translate architecture for Docker build arg
-                let docker_arch = match arch {
-                    "arm" => "aarch",
-                    _ => arch,
-                };
-                format!("target={}-unknown-linux-gnu", docker_arch)
-            }
-        };
-
         let docker_image = Self {
             name: name.to_owned(),
         };
         let mut command = Command::new("docker");
         command
-            .current_dir(github_root)
+            .current_dir(github_root.clone())
             .arg("build")
-            .args(["-f", "docker/Dockerfile"])
-            .args(["--build-arg", &build_arg]);
+            .args(["-f", dockerfile.path()]);
 
-        match build_mode {
-            // Release is the default, so no need to add any arguments
-            BuildMode::Release => {}
-            BuildMode::Debug => {
-                command.args(["--build-arg", "build_folder=debug"]);
-                command.args(["--build-arg", "build_flag="]);
+        if let Dockerfile::Main = dockerfile {
+            let build_arg = match binaries {
+                BuildArg::Directory(bin_path) => {
+                    // Get the binaries from the specified path
+                    let bin_path = diff_paths(bin_path, github_root)
+                        .context("Getting relative path failed")?;
+                    let bin_path_str = bin_path.to_str().context("Getting str failed")?;
+                    format!("binaries={bin_path_str}")
+                }
+                BuildArg::ParentDirectory => {
+                    // Get the binaries from current_binary_parent
+                    let parent_path = current_binary_parent()
+                        .expect("Fetching current binaries path should not fail");
+                    let bin_path = diff_paths(parent_path, github_root)
+                        .context("Getting relative path failed")?;
+                    let bin_path_str = bin_path.to_str().context("Getting str failed")?;
+                    format!("binaries={bin_path_str}")
+                }
+                BuildArg::Build => {
+                    // Build inside the Docker container
+                    let arch = std::env::consts::ARCH;
+                    // Translate architecture for Docker build arg
+                    let docker_arch = match arch {
+                        "arm" => "aarch",
+                        _ => arch,
+                    };
+                    format!("target={}-unknown-linux-gnu", docker_arch)
+                }
+            };
+
+            command.args(["--build-arg", &build_arg]);
+
+            match build_mode {
+                // Release is the default, so no need to add any arguments
+                BuildMode::Release => {}
+                BuildMode::Debug => {
+                    command.args(["--build-arg", "build_folder=debug"]);
+                    command.args(["--build-arg", "build_flag="]);
+                }
             }
+
+            if dual_store {
+                command.args(["--build-arg", "build_features=rocksdb,scylladb,metrics"]);
+            }
+
+            #[cfg(not(with_testing))]
+            command
+                .args([
+                    "--build-arg",
+                    &format!(
+                        "git_commit={}",
+                        linera_version::VersionInfo::get()?.git_commit
+                    ),
+                ])
+                .args([
+                    "--build-arg",
+                    &format!(
+                        "build_date={}",
+                        // Same format as $(TZ=UTC date)
+                        chrono::Utc::now().format("%a %b %d %T UTC %Y")
+                    ),
+                ]);
         }
 
-        if dual_store {
-            command.args(["--build-arg", "build_features=rocksdb,scylladb,metrics"]);
-        }
-
-        #[cfg(not(with_testing))]
         command
-            .args([
-                "--build-arg",
-                &format!(
-                    "git_commit={}",
-                    linera_version::VersionInfo::get()?.git_commit
-                ),
-            ])
-            .args([
-                "--build-arg",
-                &format!(
-                    "build_date={}",
-                    // Same format as $(TZ=UTC date)
-                    chrono::Utc::now().format("%a %b %d %T UTC %Y")
-                ),
-            ]);
-
-        command.arg(".").args(["-t", name]).spawn_and_wait().await?;
+            .arg(".")
+            .args(["-t", &name])
+            .spawn_and_wait()
+            .await?;
         Ok(docker_image)
     }
 }

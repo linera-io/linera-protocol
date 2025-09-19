@@ -1,0 +1,118 @@
+{{- if .Values.explorer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: linera-explorer
+  labels:
+    app: linera-explorer
+spec:
+  ports:
+    - port: {{ .Values.explorer.frontendPort }}
+      name: frontend
+    - port: {{ .Values.explorer.apiPort }}
+      name: api
+  selector:
+    app: linera-explorer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linera-explorer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linera-explorer
+  template:
+    metadata:
+      labels:
+        app: linera-explorer
+    spec:
+      {{- if eq .Values.environment "GCP" }}
+      nodeSelector:
+        workload: system
+      tolerations:
+      - key: system
+        value: "true"
+        effect: NoSchedule
+      {{- end }}
+      containers:
+        - name: linera-explorer
+          image: {{ .Values.explorer.image }}
+          imagePullPolicy: {{ .Values.explorer.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.explorer.frontendPort }}
+              name: frontend
+            - containerPort: {{ .Values.explorer.apiPort }}
+              name: api
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DB_PATH
+              value: "/data/indexer.db"
+            - name: EXPLORER_FRONTEND_PORT
+              value: "{{ .Values.explorer.frontendPort }}"
+            - name: EXPLORER_API_PORT
+              value: "{{ .Values.explorer.apiPort }}"
+            - name: LOG_LEVEL
+              value: {{ .Values.explorer.logLevel }}
+          volumeMounts:
+            - name: indexer-data
+              mountPath: /data
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.explorer.apiPort }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.explorer.apiPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: indexer-data
+          persistentVolumeClaim:
+            claimName: indexer-data
+{{- if .Values.explorer.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: linera-explorer
+  labels:
+    app: linera-explorer
+  {{- with .Values.explorer.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.explorer.ingress.tls }}
+  tls:
+    {{- range .Values.explorer.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.explorer.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: linera-explorer
+                port:
+                  number: {{ $.Values.explorer.frontendPort }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

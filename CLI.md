@@ -1214,6 +1214,9 @@ Start a Local Linera Network
 * `--with-block-exporter` — Whether to start a block exporter for each validator
 
   Default value: `false`
+* `--num-block-exporters <NUM_BLOCK_EXPORTERS>` — The number of block exporters to start
+
+  Default value: `1`
 * `--exporter-address <EXPORTER_ADDRESS>` — The address of the block exporter
 
   Default value: `localhost`

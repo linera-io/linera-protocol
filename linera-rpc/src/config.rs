@@ -304,6 +304,12 @@ pub struct ExporterServiceConfig {
     pub port: u16,
 }
 
+impl ExporterServiceConfig {
+    pub fn new(host: String, port: u16) -> ExporterServiceConfig {
+        ExporterServiceConfig { host, port }
+    }
+}
+
 #[test]
 fn cross_chain_config_to_args() {
     let config = CrossChainConfig::default();

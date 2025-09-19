@@ -10,7 +10,7 @@ use serde::{
 };
 
 /// The configuration file for the linera-exporter.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct BlockExporterConfig {
     /// Identity for the block exporter state.
     pub id: u32,
@@ -39,7 +39,7 @@ impl BlockExporterConfig {
 }
 
 /// Configuration file for the exports.
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct DestinationConfig {
     /// The destination URIs to export to.
     pub destinations: Vec<Destination>,
@@ -248,7 +248,7 @@ impl<'de> Deserialize<'de> for Destination {
 }
 /// The configuration file to impose various limits
 /// on the resources used by the linera-exporter.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub struct LimitsConfig {
     /// Time period in milliseconds between periodic persistence
     /// to the shared storage.
