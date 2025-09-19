@@ -330,6 +330,99 @@ impl<W: View> ByteCollectionView<W::Context, W> {
         }
     }
 
+    /// Load multiple entries for reading at once.
+    /// The entries in `short_keys` have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: ByteCollectionView<_, RegisterView<_, String>> =
+    ///     ByteCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.load_entry_or_insert(&[0, 1]).await.unwrap();
+    /// }
+    /// let short_keys = vec![vec![0, 1], vec![2, 3]];
+    /// let subviews = view.try_load_entries(short_keys).await.unwrap();
+    /// let value0 = subviews[0].as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries(
+        &self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError> {
+        let mut results = Vec::with_capacity(short_keys.len());
+        let mut keys_to_check = Vec::new();
+        let mut keys_to_check_metadata = Vec::new();
+        let updates = self.updates.read().await;
+
+        {
+            for (position, short_key) in short_keys.into_iter().enumerate() {
+                match updates.get(&short_key) {
+                    Some(update) => {
+                        match update {
+                            Update::Removed => {
+                                results.push(None);
+                            }
+                            _ => {
+                                let updates = self.updates.read().await;
+                                results.push(Some(ReadGuardedView::Loaded {
+                                    updates,
+                                    short_key: short_key.clone(),
+                                }));
+                            }
+                        }
+                    }
+                    None => {
+                        results.push(None); // Placeholder, may be updated later
+                        if !self.delete_storage_first {
+                            let key = self
+                                .context
+                                .base_key()
+                                .base_tag_index(KeyTag::Index as u8, &short_key);
+                            let subview_context = self.context.clone_with_base_key(key.clone());
+                            keys_to_check.push(key);
+                            keys_to_check_metadata.push((position, subview_context));
+                        }
+                    }
+                }
+            }
+        }
+
+        let found_keys = self.context.store().contains_keys(keys_to_check).await?;
+        let entries_to_load = keys_to_check_metadata
+            .into_iter()
+            .zip(found_keys)
+            .filter_map(|(metadata, found)| found.then_some(metadata))
+            .collect::<Vec<_>>();
+
+        let mut keys_to_load = Vec::with_capacity(entries_to_load.len() * W::NUM_INIT_KEYS);
+        for (_, context) in &entries_to_load {
+            keys_to_load.extend(W::pre_load(context)?);
+        }
+        let values = self
+            .context
+	    .store()
+            .read_multi_values_bytes(keys_to_load)
+            .await?;
+
+        for (loaded_values, (position, context)) in
+            values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
+        {
+            let view = W::post_load(context, loaded_values)?;
+            let updates = self.updates.read().await;
+            results[position] = Some(ReadGuardedView::NotLoaded {
+                _updates: updates,
+                view,
+            });
+        }
+
+        Ok(results)
+    }
+
     /// Resets an entry to the default value.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -847,6 +940,41 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
         self.collection.try_load_entry(&short_key).await
     }
 
+    /// Load multiple entries for reading at once.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
+    ///     CollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    /// }
+    /// let indices = vec![23, 24];
+    /// let subviews = view.try_load_entries(&indices).await.unwrap();
+    /// let value0 = subviews[0].as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| BaseKey::derive_short_key(index))
+            .collect::<Result<_, _>>()?;
+        self.collection.try_load_entries(short_keys).await
+    }
+
     /// Resets an entry to the default value.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1195,6 +1323,41 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.try_load_entry(&short_key).await
+    }
+
+    /// Load multiple entries for reading at once.
+    /// The entries in indices have to be all distinct.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut view: CustomCollectionView<_, u128, RegisterView<_, String>> =
+    ///     CustomCollectionView::load(context).await.unwrap();
+    /// {
+    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    /// }
+    /// let indices = vec![23, 24];
+    /// let subviews = view.try_load_entries(indices).await.unwrap();
+    /// let value0 = subviews[0].as_ref().unwrap().get();
+    /// assert_eq!(*value0, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entries<Q>(
+        &self,
+        indices: impl IntoIterator<Item = Q>,
+    ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| index.to_custom_bytes())
+            .collect::<Result<_, _>>()?;
+        self.collection.try_load_entries(short_keys).await
     }
 
     /// Marks the entry so that it is removed in the next flush.
