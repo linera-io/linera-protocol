@@ -20,8 +20,11 @@ type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::Output
 pub type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 
 #[derive(Clone, Debug)]
-pub(crate) enum Update<T> {
+/// An update, for example to a view.
+pub enum Update<T> {
+    /// The entry is removed.
     Removed,
+    /// The entry is set to the following.
     Set(T),
 }
 
