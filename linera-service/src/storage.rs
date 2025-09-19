@@ -62,6 +62,18 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub storage_max_cache_entries: usize,
 
+    /// The maximal memory used in the value cache.
+    #[arg(long, default_value = "10000000", global = true)]
+    pub storage_max_cache_value_size: usize,
+
+    /// The maximal memory used in the find_keys_by_prefix cache.
+    #[arg(long, default_value = "10000000", global = true)]
+    pub storage_max_cache_find_keys_size: usize,
+
+    /// The maximal memory used in the find_key_values_by_prefix cache.
+    #[arg(long, default_value = "10000000", global = true)]
+    pub storage_max_cache_find_key_values_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
@@ -73,6 +85,9 @@ impl CommonStorageOptions {
             max_cache_size: self.storage_max_cache_size,
             max_entry_size: self.storage_max_entry_size,
             max_cache_entries: self.storage_max_cache_entries,
+            max_cache_value_size: self.storage_max_cache_value_size,
+            max_cache_find_keys_size: self.storage_max_cache_find_keys_size,
+            max_cache_find_key_values_size: self.storage_max_cache_find_key_values_size,
         }
     }
 }
