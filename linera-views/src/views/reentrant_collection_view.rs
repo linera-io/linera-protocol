@@ -1859,8 +1859,7 @@ where
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
-    /// let indices = vec![23, 42];
-    /// let subviews = view.try_load_entries_mut(indices).await.unwrap();
+    /// let subviews = view.try_load_entries_mut(&[23, 42]).await.unwrap();
     /// let value1 = subviews[0].get();
     /// let value2 = subviews[1].get();
     /// assert_eq!(*value1, String::default());
@@ -1896,8 +1895,7 @@ where
     /// {
     ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
     /// }
-    /// let indices = vec![23, 42];
-    /// let subviews = view.try_load_entries(indices).await.unwrap();
+    /// let subviews = view.try_load_entries(&[23, 42]).await.unwrap();
     /// assert!(subviews[1].is_none());
     /// let value0 = subviews[0].as_ref().unwrap().get();
     /// assert_eq!(*value0, String::default());

@@ -1326,8 +1326,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     /// {
     ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
     /// }
-    /// let indices = vec![23, 24];
-    /// let subviews = view.try_load_entries(indices).await.unwrap();
+    /// let subviews = view.try_load_entries(&[23, 42]).await.unwrap();
     /// let value0 = subviews[0].as_ref().unwrap().get();
     /// assert_eq!(*value0, String::default());
     /// # })
