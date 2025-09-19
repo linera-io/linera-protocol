@@ -394,7 +394,7 @@ where
         };
 
         self.server.packets_processed += 1;
-        if self.server.packets_processed % 5000 == 0 {
+        if self.server.packets_processed.is_multiple_of(5000) {
             debug!(
                 "[{}] {}:{} (shard {}) has processed {} packets",
                 self.server.state.nickname(),

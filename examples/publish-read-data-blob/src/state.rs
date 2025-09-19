@@ -6,6 +6,7 @@ use linera_sdk::{
     views::{linera_views, RegisterView, RootView, ViewStorageContext},
 };
 
+#[allow(dead_code)]
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct PublishReadDataBlobState {
