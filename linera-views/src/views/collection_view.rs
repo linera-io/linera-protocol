@@ -268,7 +268,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     pub async fn try_load_entry(
         &self,
         short_key: &[u8],
-    ) -> Result<Option<ReadGuardedView<W>>, ViewError> {
+    ) -> Result<Option<ReadGuardedView<'_, W>>, ViewError> {
         let mut updates = self
             .updates
             .try_write()
@@ -822,7 +822,7 @@ impl<I: Serialize, W: View> CollectionView<W::Context, I, W> {
     pub async fn try_load_entry<Q>(
         &self,
         index: &Q,
-    ) -> Result<Option<ReadGuardedView<W>>, ViewError>
+    ) -> Result<Option<ReadGuardedView<'_, W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -1172,7 +1172,7 @@ impl<I: CustomSerialize, W: View> CustomCollectionView<W::Context, I, W> {
     pub async fn try_load_entry<Q>(
         &self,
         index: &Q,
-    ) -> Result<Option<ReadGuardedView<W>>, ViewError>
+    ) -> Result<Option<ReadGuardedView<'_, W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
@@ -1456,7 +1456,7 @@ mod graphql {
         async fn entry(
             &self,
             key: K,
-        ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
+        ) -> Result<Entry<K, ReadGuardedView<'_, V>>, async_graphql::Error> {
             let value = self
                 .try_load_entry(&key)
                 .await?
@@ -1467,7 +1467,7 @@ mod graphql {
         async fn entries(
             &self,
             input: Option<MapInput<K>>,
-        ) -> Result<Vec<Entry<K, ReadGuardedView<V>>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<K, ReadGuardedView<'_, V>>>, async_graphql::Error> {
             let keys = if let Some(keys) = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys)
@@ -1522,7 +1522,7 @@ mod graphql {
         async fn entry(
             &self,
             key: K,
-        ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
+        ) -> Result<Entry<K, ReadGuardedView<'_, V>>, async_graphql::Error> {
             let value = self
                 .try_load_entry(&key)
                 .await?
@@ -1533,7 +1533,7 @@ mod graphql {
         async fn entries(
             &self,
             input: Option<MapInput<K>>,
-        ) -> Result<Vec<Entry<K, ReadGuardedView<V>>>, async_graphql::Error> {
+        ) -> Result<Vec<Entry<K, ReadGuardedView<'_, V>>>, async_graphql::Error> {
             let keys = if let Some(keys) = input
                 .and_then(|input| input.filters)
                 .and_then(|filters| filters.keys)
