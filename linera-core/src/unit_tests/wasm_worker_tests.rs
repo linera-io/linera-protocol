@@ -231,7 +231,7 @@ where
     let create_certificate = env.make_certificate(create_block_proposal);
 
     storage
-        .write_blobs(&[application_description_blob.clone()])
+        .write_blobs(std::slice::from_ref(&application_description_blob))
         .await?;
     creator_state
         .context()

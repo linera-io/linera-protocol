@@ -1141,7 +1141,7 @@ impl<Env: Environment> Client<Env> {
                     if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
                         self.update_local_node_with_blobs_from(
                             blob_ids.clone(),
-                            &[remote_node.clone()],
+                            std::slice::from_ref(remote_node),
                         )
                         .await?;
                         // We found the missing blobs: retry.

@@ -41,13 +41,13 @@ impl<UserData> EntrypointInstance<UserData> {
 impl<UserData> AsContext for EntrypointInstance<UserData> {
     type Data = UserData;
 
-    fn as_context(&self) -> StoreContext<UserData> {
+    fn as_context(&self) -> StoreContext<'_, UserData> {
         self.store.as_context()
     }
 }
 
 impl<UserData> AsContextMut for EntrypointInstance<UserData> {
-    fn as_context_mut(&mut self) -> StoreContextMut<UserData> {
+    fn as_context_mut(&mut self) -> StoreContextMut<'_, UserData> {
         self.store.as_context_mut()
     }
 }

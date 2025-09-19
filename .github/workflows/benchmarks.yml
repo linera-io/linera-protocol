@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_RETRY: 10
+  RUST_VERSION: 1.90.0
 
 jobs:
   benchmark:
@@ -17,6 +18,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: ${{ vars.RUST_VERSION }}
     - name: Clear up some space
       run: |
         sudo rm -rf /usr/share/dotnet

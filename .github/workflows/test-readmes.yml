@@ -24,6 +24,7 @@ env:
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: linera=debug
   RUST_LOG_FORMAT: plain
+  RUST_VERSION: 1.90.0
   LINERA_STORAGE_SERVICE: 127.0.0.1:1235
   LINERA_WALLET: /tmp/local-linera-net/wallet_0.json
   LINERA_KEYSTORE: /tmp/local-linera-net/keystore_0.json
@@ -44,6 +45,8 @@ jobs:
       with:
         version: 10.11.0
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: ${{ vars.RUST_VERSION }}
     - uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}

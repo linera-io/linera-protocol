@@ -21,6 +21,7 @@ env:
   RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
+  RUST_VERSION: 1.90.0
   RUST_LOG: warn
   DOCKER_COMPOSE_WAIT: "true"
 
@@ -39,6 +40,8 @@ jobs:
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: ${{ vars.RUST_VERSION }}
     - name: Install cargo-all-features
       run: |
         cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata --locked

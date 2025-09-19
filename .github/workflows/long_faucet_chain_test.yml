@@ -15,6 +15,7 @@ env:
   RUST_LOG: warn
   RUST_LOG_FORMAT: plain
   LINERA_TEST_ITERATIONS: 1000
+  RUST_VERSION: 1.90.0
 
 jobs:
   long-faucet-chain-test:
@@ -25,6 +26,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: ${{ vars.RUST_VERSION }}
     - name: Clear up some space
       run: |
         sudo rm -rf /usr/share/dotnet

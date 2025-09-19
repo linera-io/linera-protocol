@@ -25,6 +25,7 @@ env:
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
   LINERA_PACKAGES: "packages.txt"
+  RUST_VERSION: 1.90.0
 
 permissions:
   contents: read
@@ -41,6 +42,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: ${{ vars.RUST_VERSION }}
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
@@ -63,6 +66,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: ${{ vars.RUST_VERSION }}
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
