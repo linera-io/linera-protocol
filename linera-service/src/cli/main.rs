@@ -11,9 +11,17 @@ static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 // jemalloc configuration for memory profiling with jemalloc_pprof
 // prof:true,prof_active:true - Enable profiling from start
 // lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
-#[cfg(feature = "memory-profiling")]
+
+// Linux/other platforms: use unprefixed malloc (with unprefixed_malloc_on_supported_platforms)
+#[cfg(all(feature = "memory-profiling", not(target_os = "macos")))]
 #[allow(non_upper_case_globals)]
 #[export_name = "malloc_conf"]
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+
+// macOS: use prefixed malloc (without unprefixed_malloc_on_supported_platforms)
+#[cfg(all(feature = "memory-profiling", target_os = "macos"))]
+#[allow(non_upper_case_globals)]
+#[export_name = "_rjem_malloc_conf"]
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
 use std::{
