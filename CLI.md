@@ -111,7 +111,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `assign` — Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
 * `wallet` — Show the contents of the wallet
-* `chain` — Show the contents of the wallet
+* `chain` — Show the information about a chain
 * `project` — Manage Linera projects
 * `net` — Manage a local Linera Network
 * `storage` — Operation on the storage
@@ -1016,7 +1016,7 @@ Forgets the specified chain, including the associated key pair
 
 ## `linera chain`
 
-Show the contents of the wallet
+Show the information about a chain
 
 **Usage:** `linera chain <COMMAND>`
 
