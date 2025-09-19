@@ -136,6 +136,7 @@ indexed_db_futures = "0.4.1"
 insta = "1.36.1"
 is-terminal = "0.4.12"
 itertools = "0.14.0"
+jemalloc_pprof = "0.8.1"
 js-sys = "0.3.70"
 k256 = { version = "0.13.4", default-features = false, features = [
     "ecdsa",
@@ -234,6 +235,7 @@ test-log = { version = "0.2.15", default-features = false, features = [
 test-strategy = "0.3.1"
 thiserror = "1.0.65"
 thiserror-context = "0.1.1"
+tikv-jemallocator = "0.6.0"
 tokio = "1.36.0"
 tokio-stream = "0.1.14"
 tokio-test = "0.4.3"

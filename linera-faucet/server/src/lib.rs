@@ -42,7 +42,7 @@ use linera_execution::{
     Committee, ExecutionError, Operation,
 };
 #[cfg(feature = "metrics")]
-use linera_metrics::prometheus_server;
+use linera_metrics::monitoring_server;
 use linera_storage::{Clock as _, Storage};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{oneshot, Notify};
@@ -652,7 +652,7 @@ where
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
         #[cfg(feature = "metrics")]
-        prometheus_server::start_metrics(self.metrics_address(), cancellation_token.clone());
+        monitoring_server::start_metrics(self.metrics_address(), cancellation_token.clone());
 
         let app = Router::new()
             .route("/", index_handler)
@@ -692,7 +692,9 @@ where
         let batch_processor_task = batch_processor.run(cancellation_token.clone());
         let tcp_listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
-        let server = axum::serve(tcp_listener, app).into_future();
+        let server = axum::serve(tcp_listener, app)
+            .with_graceful_shutdown(cancellation_token.cancelled_owned())
+            .into_future();
         futures::select! {
             result = Box::pin(chain_listener).fuse() => result?,
             _ = Box::pin(batch_processor_task).fuse() => {},
