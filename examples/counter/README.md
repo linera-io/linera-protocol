@@ -112,7 +112,7 @@ mutation. Note that the result of a mutation is the hash of the
 resulting block, if any.
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
-mutation Increment {
+mutation {
   increment(field0: 3)
 }
 ```
