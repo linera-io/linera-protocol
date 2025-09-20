@@ -1453,6 +1453,11 @@ mod graphql {
             Ok(self.indices().await?)
         }
 
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
+        }
+
         async fn entry(
             &self,
             key: K,
@@ -1517,6 +1522,11 @@ mod graphql {
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
         }
 
         async fn entry(
