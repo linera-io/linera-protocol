@@ -280,7 +280,11 @@ struct ServerOptions {
     block_cache_size: usize,
 
     /// Size of the execution state cache (default: 10000)
-    #[arg(long, env = "LINERA_EXECUTION_STATE_CACHE_SIZE", default_value = "10000")]
+    #[arg(
+        long,
+        env = "LINERA_EXECUTION_STATE_CACHE_SIZE",
+        default_value = "10000"
+    )]
     execution_state_cache_size: usize,
 }
 
