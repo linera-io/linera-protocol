@@ -186,6 +186,12 @@ Client implementation and command-line tool for the Linera blockchain
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
 * `--tokio-blocking-threads <TOKIO_BLOCKING_THREADS>` — The number of Tokio blocking threads to use
+* `--block-cache-size <BLOCK_CACHE_SIZE>` — Size of the block cache (default: 5000)
+
+  Default value: `5000`
+* `--execution-state-cache-size <EXECUTION_STATE_CACHE_SIZE>` — Size of the execution state cache (default: 10000)
+
+  Default value: `10000`
 
 
 
