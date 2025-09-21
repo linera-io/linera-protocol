@@ -43,9 +43,6 @@ use crate::{
     value_cache::ValueCache,
 };
 
-const BLOCK_CACHE_SIZE: usize = 5_000;
-const EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
-
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
@@ -343,13 +340,15 @@ where
         nickname: String,
         key_pair: Option<ValidatorSecretKey>,
         storage: StorageClient,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
     ) -> Self {
         WorkerState {
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            block_cache: Arc::new(ValueCache::new(BLOCK_CACHE_SIZE)),
-            execution_state_cache: Arc::new(ValueCache::new(EXECUTION_STATE_CACHE_SIZE)),
+            block_cache: Arc::new(ValueCache::new(block_cache_size)),
+            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -362,13 +361,15 @@ where
         nickname: String,
         storage: StorageClient,
         tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
     ) -> Self {
         WorkerState {
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
-            block_cache: Arc::new(ValueCache::new(BLOCK_CACHE_SIZE)),
-            execution_state_cache: Arc::new(ValueCache::new(EXECUTION_STATE_CACHE_SIZE)),
+            block_cache: Arc::new(ValueCache::new(block_cache_size)),
+            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),

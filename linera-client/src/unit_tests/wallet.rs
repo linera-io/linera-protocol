@@ -65,7 +65,8 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         },
         blobs: vec![Blob::new_data(b"blob".to_vec())],
     });
-    let mut context = ClientContext::new_test_client_context(storage, wallet, signer);
+    let mut context =
+        ClientContext::new_test_client_context(storage, wallet, signer, 5_000, 10_000);
     context.save_wallet().await?;
     Ok(())
 }

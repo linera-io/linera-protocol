@@ -96,6 +96,9 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     with_wallet: None,
 };
 
+const BLOCK_CACHE_SIZE: usize = 5000;
+const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
+
 #[wasm_bindgen(js_name = Faucet)]
 pub struct JsFaucet(Faucet);
 
@@ -224,6 +227,8 @@ impl Client {
             OPTIONS,
             wallet.0,
             signer,
+            BLOCK_CACHE_SIZE,
+            EXECUTION_STATE_CACHE_SIZE,
         )));
         let client_context_clone = client_context.clone();
         let chain_listener = ChainListener::new(

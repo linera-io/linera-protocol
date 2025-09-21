@@ -92,6 +92,8 @@ impl TestValidator {
             "Single validator node".to_string(),
             Some(validator_keypair.secret_key.copy()),
             storage.clone(),
+            5_000,
+            10_000,
         );
 
         // Create an admin chain.
