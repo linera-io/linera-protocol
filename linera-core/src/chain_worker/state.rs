@@ -49,7 +49,7 @@ use crate::{
 };
 
 /// The state of the chain worker.
-pub struct ChainWorkerState<StorageClient>
+pub(crate) struct ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
@@ -71,7 +71,7 @@ where
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
     #[expect(clippy::too_many_arguments)]
-    pub async fn load(
+    pub(super) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
@@ -98,13 +98,16 @@ where
     }
 
     /// Returns the [`ChainId`] of the chain handled by this worker.
-    pub fn chain_id(&self) -> ChainId {
+    fn chain_id(&self) -> ChainId {
         self.chain.chain_id()
     }
 
     /// Handles a request and applies it to the chain state.
     #[instrument(skip_all)]
-    pub async fn handle_request(&mut self, request: ChainWorkerRequest<StorageClient::Context>) {
+    pub(super) async fn handle_request(
+        &mut self,
+        request: ChainWorkerRequest<StorageClient::Context>,
+    ) {
         tracing::trace!("Handling chain worker request: {request:?}");
         // TODO(#2237): Spawn concurrent tasks for read-only operations
         let responded = match request {
@@ -211,7 +214,7 @@ where
     ///
     /// The returned view holds a lock on the chain state, which prevents the worker from changing
     /// it.
-    pub(super) async fn chain_state_view(
+    async fn chain_state_view(
         &mut self,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
         if self.shared_chain_view.is_none() {
@@ -242,7 +245,7 @@ where
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn handle_chain_info_query(
+    async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -264,7 +267,7 @@ where
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
-    pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
+    async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
             return Ok(blob);
         }
@@ -470,7 +473,7 @@ where
 
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
-    pub async fn all_messages_to_tracked_chains_delivered_up_to(
+    async fn all_messages_to_tracked_chains_delivered_up_to(
         &self,
         height: BlockHeight,
     ) -> Result<bool, WorkerError> {
@@ -496,7 +499,7 @@ where
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
-    pub(super) async fn process_timeout(
+    async fn process_timeout(
         &mut self,
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -534,7 +537,7 @@ where
     ///
     /// If they cannot be found, it creates an entry in `pending_proposed_blobs` so they can be
     /// submitted one by one.
-    pub(super) async fn load_proposal_blobs(
+    async fn load_proposal_blobs(
         &mut self,
         proposal: &BlockProposal,
     ) -> Result<Vec<Blob>, WorkerError> {
@@ -578,7 +581,7 @@ where
     }
 
     /// Processes a validated block issued for this multi-owner chain.
-    pub(super) async fn process_validated_block(
+    async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
@@ -635,7 +638,7 @@ where
     }
 
     /// Processes a confirmed block (aka a commit).
-    pub(super) async fn process_confirmed_block(
+    async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
@@ -874,7 +877,7 @@ where
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     #[instrument(level = "trace", skip(self, bundles))]
-    pub(super) async fn process_cross_chain_update(
+    async fn process_cross_chain_update(
         &mut self,
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
@@ -922,7 +925,7 @@ where
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
-    pub(super) async fn confirm_updated_recipient(
+    async fn confirm_updated_recipient(
         &mut self,
         recipient: ChainId,
         latest_height: BlockHeight,
@@ -944,7 +947,7 @@ where
         Ok(())
     }
 
-    pub async fn update_received_certificate_trackers(
+    async fn update_received_certificate_trackers(
         &mut self,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
@@ -955,7 +958,7 @@ where
     }
 
     /// Attempts to vote for a leader timeout, if possible.
-    pub(super) async fn vote_for_leader_timeout(
+    async fn vote_for_leader_timeout(
         &mut self,
         height: BlockHeight,
         round: Round,
@@ -982,7 +985,7 @@ where
     }
 
     /// Votes for falling back to a public chain.
-    pub(super) async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
+    async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.chain;
         if let (epoch, Some(entry)) = (
             chain.execution_state.system.epoch.get(),
@@ -1004,10 +1007,7 @@ where
         Ok(())
     }
 
-    pub(super) async fn handle_pending_blob(
-        &mut self,
-        blob: Blob,
-    ) -> Result<ChainInfoResponse, WorkerError> {
+    async fn handle_pending_blob(&mut self, blob: Blob) -> Result<ChainInfoResponse, WorkerError> {
         let mut was_expected = self
             .chain
             .pending_validated_blobs
@@ -1040,7 +1040,7 @@ where
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
     #[cfg(with_testing)]
-    pub(super) async fn read_certificate(
+    async fn read_certificate(
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
@@ -1058,10 +1058,7 @@ where
     }
 
     /// Queries an application's state on the chain.
-    pub(super) async fn query_application(
-        &mut self,
-        query: Query,
-    ) -> Result<QueryOutcome, WorkerError> {
+    async fn query_application(&mut self, query: Query) -> Result<QueryOutcome, WorkerError> {
         self.ensure_is_active().await?;
         let local_time = self.storage.clock().current_time();
         let outcome = self
@@ -1072,7 +1069,7 @@ where
     }
 
     /// Returns an application's description.
-    pub(super) async fn describe_application(
+    async fn describe_application(
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
@@ -1082,7 +1079,7 @@ where
     }
 
     /// Executes a block without persisting any changes to the state.
-    pub(super) async fn stage_block_execution(
+    async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,
@@ -1114,7 +1111,7 @@ where
     }
 
     /// Validates and executes a block proposed to extend this chain.
-    pub(super) async fn handle_block_proposal(
+    async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -1257,7 +1254,7 @@ where
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
-    pub(super) async fn prepare_chain_info_response(
+    async fn prepare_chain_info_response(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
@@ -1398,14 +1395,14 @@ fn check_block_epoch(
 
 /// Helper type for handling cross-chain updates.
 pub(crate) struct CrossChainUpdateHelper<'a> {
-    pub allow_messages_from_deprecated_epochs: bool,
-    pub current_epoch: Epoch,
-    pub committees: &'a BTreeMap<Epoch, Committee>,
+    pub(crate) allow_messages_from_deprecated_epochs: bool,
+    pub(crate) current_epoch: Epoch,
+    pub(crate) committees: &'a BTreeMap<Epoch, Committee>,
 }
 
 impl<'a> CrossChainUpdateHelper<'a> {
     /// Creates a new [`CrossChainUpdateHelper`].
-    pub fn new<C>(config: &ChainWorkerConfig, chain: &'a ChainStateView<C>) -> Self
+    fn new<C>(config: &ChainWorkerConfig, chain: &'a ChainStateView<C>) -> Self
     where
         C: Context + Clone + Send + Sync + 'static,
     {
@@ -1425,7 +1422,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
     /// * Basic invariants are checked for good measure. We still crucially trust
     ///   the worker of the sending chain to have verified and executed the blocks
     ///   correctly.
-    pub fn select_message_bundles(
+    pub(crate) fn select_message_bundles(
         &self,
         origin: &'a ChainId,
         recipient: ChainId,
