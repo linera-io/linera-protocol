@@ -211,6 +211,7 @@ pub struct Client<Env: Environment> {
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         environment: Env,
         admin_id: ChainId,
@@ -219,12 +220,16 @@ impl<Env: Environment> Client<Env> {
         name: impl Into<String>,
         chain_worker_ttl: Duration,
         options: ChainClientOptions,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
             name.into(),
             environment.storage().clone(),
             tracked_chains.clone(),
+            block_cache_size,
+            execution_state_cache_size,
         )
         .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)

@@ -861,6 +861,8 @@ where
                 format!("Node {}", i),
                 Some(validator_keypair.secret_key),
                 storage.clone(),
+                5_000,
+                10_000,
             )
             .with_allow_inactive_chains(false)
             .with_allow_messages_from_deprecated_epochs(false);
@@ -1047,6 +1049,8 @@ where
             format!("Client node for {:.8}", chain_id),
             Duration::from_secs(30),
             ChainClientOptions::test_default(),
+            5_000,
+            10_000,
         ));
         Ok(client.create_chain_client(
             chain_id,

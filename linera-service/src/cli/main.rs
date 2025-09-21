@@ -123,6 +123,8 @@ impl Runnable for Job {
         let wallet = options.wallet()?;
         let mut signer = options.signer()?;
 
+        let block_cache_size = options.block_cache_size;
+        let execution_state_cache_size = options.execution_state_cache_size;
         let command = options.command;
 
         use ClientCommand::*;
@@ -137,6 +139,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_client = context.make_chain_client(sender.chain_id);
                 info!(
@@ -173,6 +177,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -223,6 +229,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -274,6 +282,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 context.change_ownership(chain_id, ownership_config).await?
             }
@@ -284,6 +294,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 context.set_preferred_owner(chain_id, owner).await?
             }
@@ -297,6 +309,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -330,6 +344,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_client = context.make_chain_client(chain_id);
                 info!("Closing chain {}", chain_id);
@@ -367,6 +383,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
@@ -384,6 +402,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
@@ -404,6 +424,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
@@ -428,6 +450,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -448,6 +472,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -472,6 +498,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let node = context.make_node_provider().make_node(&address)?;
                 let mut has_errors = false;
@@ -515,6 +543,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -580,6 +610,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 if chains.is_empty() {
@@ -607,6 +639,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 ));
 
                 if chains.is_empty() {
@@ -654,6 +688,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let context = Arc::new(Mutex::new(context));
@@ -854,6 +890,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
@@ -923,6 +961,8 @@ impl Runnable for Job {
                         options.context_options.clone(),
                         wallet,
                         signer.into_value(),
+                        block_cache_size,
+                        execution_state_cache_size,
                     );
                     let (chain_clients, all_chains) = context
                         .prepare_for_benchmark(
@@ -1287,6 +1327,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let mut join_set = JoinSet::new();
@@ -1318,6 +1360,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let default_chain = context.wallet().default_chain();
@@ -1350,6 +1394,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let chain_id = chain_id.unwrap_or_else(|| context.first_non_admin_chain());
@@ -1390,6 +1436,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let start_time = Instant::now();
@@ -1416,6 +1464,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let start_time = Instant::now();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
@@ -1435,6 +1485,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let start_time = Instant::now();
@@ -1456,6 +1508,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let start_time = Instant::now();
@@ -1480,6 +1534,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let start_time = Instant::now();
@@ -1536,6 +1592,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
 
                 let start_time = Instant::now();
@@ -1581,6 +1639,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let start_time = Instant::now();
                 info!(
@@ -1612,6 +1672,8 @@ impl Runnable for Job {
                         options.context_options.clone(),
                         wallet,
                         signer.into_value(),
+                        block_cache_size,
+                        execution_state_cache_size,
                     );
                     let start_time = Instant::now();
                     let publisher = publisher.unwrap_or_else(|| context.default_chain());
@@ -1664,6 +1726,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let start_time = Instant::now();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
@@ -1697,6 +1761,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let owner = public_key.into();
                 info!(
@@ -1734,6 +1800,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let committee = faucet.current_committee().await?;
@@ -1749,6 +1817,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let start_time = Instant::now();
                 context.client.track_chain(chain_id);
@@ -1771,6 +1841,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_state_view = context
@@ -1796,6 +1868,8 @@ impl Runnable for Job {
                     options.context_options.clone(),
                     wallet,
                     signer.into_value(),
+                    block_cache_size,
+                    execution_state_cache_size,
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -1855,6 +1929,14 @@ struct ClientOptions {
     #[arg(long, env = "LINERA_CLIENT_TOKIO_BLOCKING_THREADS")]
     tokio_blocking_threads: Option<usize>,
 
+    /// Size of the block cache (default: 5000)
+    #[arg(long, env = "LINERA_BLOCK_CACHE_SIZE", default_value = "5000")]
+    block_cache_size: usize,
+
+    /// Size of the execution state cache (default: 10000)
+    #[arg(long, env = "LINERA_EXECUTION_STATE_CACHE_SIZE", default_value = "10000")]
+    execution_state_cache_size: usize,
+
     /// Subcommand.
     #[command(subcommand)]
     command: ClientCommand,
@@ -1864,6 +1946,7 @@ impl ClientOptions {
     fn init() -> Self {
         <ClientOptions as clap::Parser>::parse()
     }
+
 
     async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
         let storage_config = self.storage_config()?;

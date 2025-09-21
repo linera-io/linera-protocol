@@ -68,6 +68,8 @@ struct ServerContext {
     shard: Option<usize>,
     grace_period: Duration,
     chain_worker_ttl: Duration,
+    block_cache_size: usize,
+    execution_state_cache_size: usize,
 }
 
 impl ServerContext {
@@ -90,6 +92,8 @@ impl ServerContext {
             format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
             Some(self.server_config.validator_secret.copy()),
             storage,
+            self.block_cache_size,
+            self.execution_state_cache_size,
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
@@ -270,6 +274,14 @@ struct ServerOptions {
     /// The number of Tokio blocking threads to use.
     #[arg(long, env = "LINERA_SERVER_TOKIO_BLOCKING_THREADS")]
     tokio_blocking_threads: Option<usize>,
+
+    /// Size of the block cache (default: 5000)
+    #[arg(long, env = "LINERA_BLOCK_CACHE_SIZE", default_value = "5000")]
+    block_cache_size: usize,
+
+    /// Size of the execution state cache (default: 10000)
+    #[arg(long, env = "LINERA_EXECUTION_STATE_CACHE_SIZE", default_value = "10000")]
+    execution_state_cache_size: usize,
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -505,6 +517,8 @@ async fn run(options: ServerOptions) {
                 shard,
                 grace_period,
                 chain_worker_ttl,
+                block_cache_size: options.block_cache_size,
+                execution_state_cache_size: options.execution_state_cache_size,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config

@@ -149,6 +149,8 @@ where
             "Single validator node".to_string(),
             Some(validator_keypair.secret_key),
             storage,
+            5_000,
+            10_000,
         )
         .with_allow_inactive_chains(is_client)
         .with_allow_messages_from_deprecated_epochs(is_client)
