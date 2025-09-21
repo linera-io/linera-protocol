@@ -368,7 +368,7 @@ type ChainStateExtendedView {
 	"""
 	Unskippable bundles that have been removed but are still in the queue.
 	"""
-	removedUnskippableBundles: [BundleInInbox!]!
+	removedUnskippableBundles: SetView_BundleInInbox_092a4377!
 	"""
 	The heights of previous blocks that sent messages to the same recipients.
 	"""
@@ -707,42 +707,49 @@ input MapInput_StreamIdInput_b7c3909d {
 
 type MapView_AccountOwner_Amount_11ef1379 {
 	keys(count: Int): [AccountOwner!]!
+	count: Int!
 	entry(key: AccountOwner!): Entry_AccountOwner_Amount_aaf96548!
 	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_aaf96548!]!
 }
 
 type MapView_BlobId_Blob_3711e760 {
 	keys(count: Int): [BlobId!]!
+	count: Int!
 	entry(key: BlobId!): Entry_BlobId_Blob_9f0b41f3!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_9f0b41f3!]!
 }
 
 type MapView_BlobId_Blob_9f0b41f3 {
 	keys(count: Int): [BlobId!]!
+	count: Int!
 	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
 }
 
 type MapView_BlockHeight_CryptoHash_1bae6d76 {
 	keys(count: Int): [BlockHeight!]!
+	count: Int!
 	entry(key: BlockHeight!): Entry_BlockHeight_CryptoHash_74e16b71!
 	entries(input: MapInput_BlockHeight_e824a938): [Entry_BlockHeight_CryptoHash_74e16b71!]!
 }
 
 type MapView_ChainId_BlockHeight_f2e56e12 {
 	keys(count: Int): [ChainId!]!
+	count: Int!
 	entry(key: ChainId!): Entry_ChainId_BlockHeight_2fe78645!
 	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_BlockHeight_2fe78645!]!
 }
 
 type MapView_StreamId_BlockHeight_e6657ad9 {
 	keys(count: Int): [StreamId!]!
+	count: Int!
 	entry(key: StreamIdInput!): Entry_StreamId_BlockHeight_50cd702e!
 	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_BlockHeight_50cd702e!]!
 }
 
 type MapView_StreamId_Int_3d7f5335 {
 	keys(count: Int): [StreamId!]!
+	count: Int!
 	entry(key: StreamIdInput!): Entry_StreamId_Int_459c4ec3!
 	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_Int_459c4ec3!]!
 }
@@ -1254,18 +1261,21 @@ type QueueView_MessageBundle_f4399f0b {
 
 type ReentrantCollectionView_AccountOwner_PendingBlobsView_d58d342d {
 	keys: [AccountOwner!]!
+	count: Int!
 	entry(key: AccountOwner!): Entry_AccountOwner_PendingBlobsView_5d91edcf!
 	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_PendingBlobsView_5d91edcf!]!
 }
 
 type ReentrantCollectionView_ChainId_InboxStateView_466640be {
 	keys: [ChainId!]!
+	count: Int!
 	entry(key: ChainId!): Entry_ChainId_InboxStateView_a9e4d828!
 	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_InboxStateView_a9e4d828!]!
 }
 
 type ReentrantCollectionView_ChainId_OutboxStateView_06c2376d {
 	keys: [ChainId!]!
+	count: Int!
 	entry(key: ChainId!): Entry_ChainId_OutboxStateView_855dcf53!
 	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_OutboxStateView_855dcf53!]!
 }
@@ -1279,6 +1289,11 @@ scalar ResourceControlPolicyScalar
 A number to identify successive attempts to decide a value in a consensus protocol.
 """
 scalar Round
+
+type SetView_BundleInInbox_092a4377 {
+	elements(count: Int): [BundleInInbox!]!
+	count: Int!
+}
 
 """
 An event stream ID.
