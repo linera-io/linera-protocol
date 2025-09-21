@@ -43,7 +43,6 @@ use crate::{
     value_cache::ValueCache,
 };
 
-
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;

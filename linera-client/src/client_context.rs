@@ -124,7 +124,14 @@ where
     Si: linera_core::environment::Signer,
     W: Persist<Target = Wallet>,
 {
-    pub fn new(storage: S, options: ClientContextOptions, wallet: W, signer: Si, block_cache_size: usize, execution_state_cache_size: usize) -> Self {
+    pub fn new(
+        storage: S,
+        options: ClientContextOptions,
+        wallet: W,
+        signer: Si,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
+    ) -> Self {
         #[cfg(not(web))]
         let timing_config = options.to_timing_config();
         let node_provider = NodeProvider::new(NodeOptions {
@@ -176,7 +183,13 @@ where
     }
 
     #[cfg(with_testing)]
-    pub fn new_test_client_context(storage: S, wallet: W, signer: Si, block_cache_size: usize, execution_state_cache_size: usize) -> Self {
+    pub fn new_test_client_context(
+        storage: S,
+        wallet: W,
+        signer: Si,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
+    ) -> Self {
         use linera_core::{client::ChainClientOptions, node::CrossChainMessageDelivery};
 
         let send_recv_timeout = Duration::from_millis(4000);
