@@ -8,6 +8,10 @@ pub enum ViewError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
+    /// We failed to acquire an entry in a `CollectionView`.
+    #[error("trying to access a collection view while some entries are still being accessed")]
+    CannotAcquireCollectionEntry,
+
     /// Input output error.
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
