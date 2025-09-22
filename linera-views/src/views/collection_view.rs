@@ -291,7 +291,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
         match updates.get(short_key) {
             Some(update) => match update {
                 Update::Removed => Ok(None),
-                _ => Ok(Some(ReadGuardedView::Loaded {
+                Update::Set(_) => Ok(Some(ReadGuardedView::Loaded {
                     updates,
                     short_key: short_key.to_vec(),
                 })),
