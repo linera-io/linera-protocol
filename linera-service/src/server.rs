@@ -432,8 +432,6 @@ enum ServerCommand {
 fn main() {
     let options = <ServerOptions as clap::Parser>::parse();
 
-    linera_base::tracing::init(&log_file_name_for(&options.command));
-
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
     } else {
@@ -481,6 +479,8 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
 }
 
 async fn run(options: ServerOptions) {
+    linera_base::tracing::init_with_opentelemetry(&log_file_name_for(&options.command)).await;
+
     match options.command {
         ServerCommand::Run {
             server_config_path,
