@@ -115,9 +115,9 @@ pub struct StorageCacheConfig {
     pub max_cache_entries: usize,
     /// The maximum size of cached values.
     pub max_cache_value_size: usize,
-    /// The maximum size of cached find_keys_by_prefix.
+    /// The maximum size of cached `find_keys_by_prefix` results.
     pub max_cache_find_keys_size: usize,
-    /// The maximum size of cached find_key_values_by_prefix.
+    /// The maximum size of cached `find_key_values_by_prefix` results.
     pub max_cache_find_key_values_size: usize,
 }
 
