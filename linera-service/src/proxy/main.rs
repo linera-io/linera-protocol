@@ -459,11 +459,6 @@ where
 
 fn main() -> Result<()> {
     let options = <ProxyOptions as clap::Parser>::parse();
-    let server_config: ValidatorServerConfig =
-        util::read_json(&options.config_path).expect("Fail to read server config");
-    let public_key = &server_config.validator.public_key;
-
-    linera_base::tracing::init(&format!("validator-{public_key}-proxy"));
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -486,6 +481,12 @@ fn main() -> Result<()> {
 
 impl ProxyOptions {
     async fn run(&self) -> Result<()> {
+        let server_config: ValidatorServerConfig =
+            util::read_json(&self.config_path).expect("Fail to read server config");
+        let public_key = &server_config.validator.public_key;
+        linera_base::tracing::init_with_opentelemetry(&format!("validator-{public_key}-proxy"))
+            .await;
+
         let store_config = self
             .storage_config
             .add_common_storage_options(&self.common_storage_options)?;
