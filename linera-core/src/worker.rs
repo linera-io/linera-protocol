@@ -857,7 +857,7 @@ where
 
         #[cfg(with_metrics)]
         {
-            if !matches!(_outcome, BlockOutcome::Skipped) {
+            if matches!(_outcome, BlockOutcome::Processed) {
                 let (
                     certificate_log_str,
                     round_type,
@@ -905,7 +905,7 @@ where
         let (info, actions, _outcome) = self.process_validated_block(certificate).await?;
         #[cfg(with_metrics)]
         {
-            if !matches!(_outcome, BlockOutcome::Skipped) {
+            if matches!(_outcome, BlockOutcome::Processed) {
                 metrics::NUM_ROUNDS_IN_CERTIFICATE
                     .with_label_values(&[cert_str, round.type_name()])
                     .observe(round.number() as f64);
