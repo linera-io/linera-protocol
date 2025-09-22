@@ -131,6 +131,11 @@ async fn test_faucet_rate_limiting() {
 
     // Start the batch processor in the background
     let cancellation_token = CancellationToken::new();
+
+    // Start the save task for faucet storage
+    faucet_storage
+        .start_save_task(cancellation_token.clone())
+        .await;
     let processor_task = {
         let mut batch_processor = batch_processor;
         let token = cancellation_token.clone();
@@ -183,16 +188,16 @@ async fn test_faucet_rate_limiting() {
     cancellation_token.cancel();
     let _ = processor_task.await;
 
-    for i in 0..5 {
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_secs(i)).await;
-        let data = tokio::fs::read(&storage_path).await.unwrap();
-        let map =
-            serde_json::from_slice::<BTreeMap<AccountOwner, ChainDescription>>(&data).unwrap();
-        if map.contains_key(&AccountPublicKey::test_key(4).into()) {
-            return;
-        }
-    }
-    panic!("Chain map was not written.");
+    // Wait for the save task to complete
+    faucet_storage.wait_for_save_task().await;
+
+    // Verify the data was persisted
+    let data = tokio::fs::read(&storage_path).await.unwrap();
+    let map = serde_json::from_slice::<BTreeMap<AccountOwner, ChainDescription>>(&data).unwrap();
+    assert!(
+        map.contains_key(&AccountPublicKey::test_key(4).into()),
+        "Chain map should have been written after save task completion"
+    );
 }
 
 #[test]

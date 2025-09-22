@@ -128,6 +128,8 @@ struct FaucetStorage {
     owner_to_chain: Arc<papaya::HashMap<AccountOwner, ChainDescription>>,
     sender: Arc<watch::Sender<()>>,
     _save_join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    storage_path: PathBuf,
+    receiver: Arc<Mutex<watch::Receiver<()>>>,
 }
 
 impl FaucetStorage {
@@ -146,46 +148,84 @@ impl FaucetStorage {
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => return Err(e),
         }
-        let (sender, mut receiver) = watch::channel(());
-        receiver.mark_unchanged();
-        let map_clone = Arc::clone(&owner_to_chain);
-        let save_join_handle = tokio::task::spawn(async move {
-            while receiver.changed().await.is_ok() {
-                let storage_path = storage_path.clone();
-                let map_clone = Arc::clone(&map_clone);
-                let result = tokio::task::spawn_blocking(move || {
-                    let data = {
-                        let pin = map_clone.pin();
-                        let map = pin.iter().collect::<BTreeMap<_, _>>();
-                        serde_json::to_vec_pretty(&map)
-                            .context("Failed to serialize faucet storage")?
-                    };
-                    let mut file = if let Some(parent) = storage_path.parent() {
-                        std::fs::create_dir_all(parent)?;
-                        NamedTempFile::new_in(parent)?
-                    } else {
-                        NamedTempFile::new()?
-                    };
-                    file.write_all(&data)?;
-                    file.flush()?;
-                    file.persist(storage_path.clone())?;
-                    Result::<_, anyhow::Error>::Ok(())
-                })
-                .await;
-                if let Err(err) = result {
-                    tracing::error!("Failed to persist faucet storage: {err}");
-                }
-            }
-        });
+        let (sender, receiver) = watch::channel(());
         Ok(Self {
             owner_to_chain,
             sender: Arc::new(sender),
-            _save_join_handle: Arc::new(Mutex::new(Some(save_join_handle))),
+            _save_join_handle: Arc::new(Mutex::new(None)),
+            storage_path,
+            receiver: Arc::new(Mutex::new(receiver)),
         })
+    }
+
+    /// Starts the background save task with cancellation support
+    async fn start_save_task(&self, cancellation_token: CancellationToken) {
+        let mut save_handle = self._save_join_handle.lock().await;
+        if save_handle.is_some() {
+            // Task already running
+            return;
+        }
+
+        let mut receiver = self.receiver.lock().await.clone();
+        receiver.mark_unchanged();
+        let map_clone = Arc::clone(&self.owner_to_chain);
+        let storage_path = self.storage_path.clone();
+
+        let save_task = tokio::task::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = cancellation_token.cancelled() => {
+                        tracing::debug!("Faucet storage save task shutting down gracefully");
+                        break;
+                    }
+                    result = receiver.changed() => {
+                        if result.is_err() {
+                            // Sender has been dropped
+                            break;
+                        }
+                        let storage_path = storage_path.clone();
+                        let map_clone = Arc::clone(&map_clone);
+                        let result = tokio::task::spawn_blocking(move || {
+                            let data = {
+                                let pin = map_clone.pin();
+                                let map = pin.iter().collect::<BTreeMap<_, _>>();
+                                serde_json::to_vec_pretty(&map)
+                                    .context("Failed to serialize faucet storage")?
+                            };
+                            let mut file = if let Some(parent) = storage_path.parent() {
+                                std::fs::create_dir_all(parent)?;
+                                NamedTempFile::new_in(parent)?
+                            } else {
+                                NamedTempFile::new()?
+                            };
+                            file.write_all(&data)?;
+                            file.flush()?;
+                            file.persist(storage_path.clone())?;
+                            Result::<_, anyhow::Error>::Ok(())
+                        })
+                        .await;
+                        if let Err(err) = result {
+                            tracing::error!("Failed to persist faucet storage: {err}");
+                        }
+                    }
+                }
+            }
+        });
+
+        *save_handle = Some(save_task);
     }
 
     fn save(&self) -> anyhow::Result<()> {
         Ok(self.sender.send(())?)
+    }
+
+    /// Waits for the save task to complete. Used primarily for testing.
+    #[cfg(test)]
+    async fn wait_for_save_task(&self) {
+        let mut handle = self._save_join_handle.lock().await;
+        if let Some(task) = handle.take() {
+            let _ = task.await;
+        }
     }
 
     /// Gets the chain description for an owner if it exists
@@ -694,6 +734,11 @@ where
             .layer(CorsLayer::permissive());
 
         info!("GraphiQL IDE: http://localhost:{}", port);
+
+        // Start the background save task for faucet storage
+        self.faucet_storage
+            .start_save_task(cancellation_token.clone())
+            .await;
 
         // Start the batch processor
         let batch_processor_config = BatchProcessorConfig {
