@@ -12,8 +12,9 @@ use std::{
 
 use is_terminal::IsTerminal as _;
 use tracing::Subscriber;
+#[cfg(all(not(target_arch = "wasm32"), feature = "tempo"))]
+use tracing_subscriber::filter::{filter_fn, FilterExt as _};
 use tracing_subscriber::{
-    filter::filter_fn,
     fmt::{
         self,
         format::{FmtSpan, Format, Full},
@@ -59,20 +60,33 @@ pub fn init(log_name: &str) {
 /// ## Span Filtering for Performance
 ///
 /// By default, spans created by `#[instrument]` are logged to console AND sent
-/// to OpenTelemetry. To disable console output for performance-critical functions
-/// while keeping OpenTelemetry tracing, use:
+/// to OpenTelemetry. In order to not spam stderr, you can set a low level, and use the
+/// `telemetry_only` target:
 ///
 /// ```rust
-/// use tracing::instrument;
+/// use tracing::{instrument, Level};
 ///
-/// #[instrument(target = "telemetry_only")]
-/// fn my_performance_critical_function() {
-///     // This span will ONLY be sent to OpenTelemetry, not logged to console
+/// // Always sent to telemetry; console output controlled by level
+/// #[instrument(level = "trace", target = "telemetry_only")]
+/// fn my_called_too_frequently_function() {
+///     // Will be sent to OpenTelemetry regardless of RUST_LOG level
+///     // Will only appear in console if RUST_LOG includes trace level
+/// }
+///
+/// // Higher level - more likely to appear in console
+/// #[instrument(level = "info", target = "telemetry_only")]
+/// fn my_important_function() {
+///     // Will be sent to OpenTelemetry regardless of RUST_LOG level
+///     // Will appear in console if RUST_LOG includes info level or higher
 /// }
 /// ```
 ///
-/// All explicit log calls (tracing::info!(), etc.) are always printed regardless
-/// of span filtering.
+/// **Key behaviors:**
+/// - If span level >= RUST_LOG level: span goes to BOTH telemetry AND console (regardless of target)
+/// - If span level < RUST_LOG level AND target = "telemetry_only": span goes to telemetry ONLY
+/// - If span level < RUST_LOG level AND target != "telemetry_only": span is filtered out completely
+/// - Default level for `telemetry_only` should be `trace` for minimal console noise
+/// - All explicit log calls (tracing::info!(), etc.) are always printed regardless of span filtering
 pub async fn init_with_opentelemetry(log_name: &str) {
     #[cfg(feature = "tempo")]
     {
@@ -102,28 +116,13 @@ fn init_internal(log_name: &str, with_opentelemetry: bool) {
     let color_output =
         !std::env::var("NO_COLOR").is_ok_and(|x| !x.is_empty()) && std::io::stderr().is_terminal();
 
-    // Create a filter that:
-    // 1. Allows all explicit events (tracing::info!(), etc.)
-    // 2. Allows spans from #[instrument] by default
-    // 3. Blocks spans ONLY if they have target = "telemetry_only"
-    let console_filter = filter_fn(|metadata| {
-        if metadata.is_span() {
-            // Block spans that explicitly request telemetry-only via target = "telemetry_only"
-            metadata.target() != "telemetry_only"
-        } else {
-            // Always allow explicit log events (tracing::info!(), etc.)
-            true
-        }
-    });
-
     let stderr_layer = prepare_formatted_layer(
         format.as_deref(),
         fmt::layer()
             .with_span_events(span_events.clone())
             .with_writer(std::io::stderr)
             .with_ansi(color_output),
-    )
-    .with_filter(console_filter.clone());
+    );
 
     let maybe_log_file_layer = open_log_file(log_name).map(|file_writer| {
         prepare_formatted_layer(
@@ -133,7 +132,6 @@ fn init_internal(log_name: &str, with_opentelemetry: bool) {
                 .with_writer(Arc::new(file_writer))
                 .with_ansi(false),
         )
-        .with_filter(console_filter.clone())
     });
 
     #[cfg(any(target_arch = "wasm32", not(feature = "tempo")))]
@@ -173,7 +171,18 @@ fn init_internal(log_name: &str, with_opentelemetry: bool) {
             global::set_tracer_provider(tracer_provider.clone());
 
             let tracer = tracer_provider.tracer("linera");
-            let opentelemetry_layer = OpenTelemetryLayer::new(tracer);
+
+            let telemetry_only_filter =
+                filter_fn(|metadata| metadata.is_span() && metadata.target() == "telemetry_only");
+
+            let otel_env_filter = tracing_subscriber::EnvFilter::builder()
+                .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+                .from_env_lossy();
+
+            let opentelemetry_filter = otel_env_filter.or(telemetry_only_filter);
+
+            let opentelemetry_layer =
+                OpenTelemetryLayer::new(tracer).with_filter(opentelemetry_filter);
 
             tracing_subscriber::registry()
                 .with(env_filter)

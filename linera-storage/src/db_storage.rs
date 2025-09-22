@@ -28,6 +28,7 @@ use linera_views::{
     ViewError,
 };
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
@@ -544,6 +545,7 @@ where
         &self.clock
     }
 
+    #[instrument(level = "trace", target = "telemetry_only", skip_all, fields(chain_id = %chain_id))]
     async fn load_chain(
         &self,
         chain_id: ChainId,
@@ -563,6 +565,7 @@ where
         ChainStateView::load(context).await
     }
 
+    #[instrument(level = "trace", target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let store = self.database.open_shared(&[])?;
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
@@ -572,6 +575,7 @@ where
         Ok(test)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_count = blob_ids.len()))]
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let store = self.database.open_shared(&[])?;
         let mut keys = Vec::new();
@@ -602,6 +606,7 @@ where
         Ok(test)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(hash = %hash))]
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
@@ -616,6 +621,7 @@ where
         Ok(value)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         let store = self.database.open_shared(&[])?;
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
@@ -682,6 +688,7 @@ where
         Ok(blob_states)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.add_blob(blob)?;
@@ -996,6 +1003,7 @@ where
         Ok(())
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(batch_size = batch.key_value_bytes.len()))]
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         if batch.key_value_bytes.is_empty() {
             return Ok(());
