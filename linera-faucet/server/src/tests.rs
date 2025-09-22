@@ -3,12 +3,15 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::VecDeque, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+};
 
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, InMemorySigner, TestString},
-    data_types::{Amount, Epoch, Timestamp},
+    data_types::{Amount, ChainDescription, Epoch, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
 use linera_client::{chain_listener, wallet::Wallet};
@@ -89,8 +92,13 @@ async fn test_faucet_rate_limiting() {
         update_calls: 0,
     };
     let context = Arc::new(Mutex::new(context));
-    let faucet_storage = Arc::new(Mutex::new(super::FaucetStorage::default()));
-    let storage_path = PathBuf::from("/tmp/test_faucet_rate_limiting.json");
+    let temp_dir = tempdir().unwrap();
+    let storage_path = temp_dir.path().join("test_batch_reduction.json");
+    let faucet_storage = Arc::new(
+        super::FaucetStorage::load(storage_path.clone())
+            .await
+            .unwrap(),
+    );
 
     // Set up the batching components
     let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
@@ -109,7 +117,6 @@ async fn test_faucet_rate_limiting() {
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
-        storage_path,
         max_batch_size: 1,
     };
 
@@ -175,6 +182,17 @@ async fn test_faucet_rate_limiting() {
     // Clean up
     cancellation_token.cancel();
     let _ = processor_task.await;
+
+    for i in 0..5 {
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_secs(i)).await;
+        let data = tokio::fs::read(&storage_path).await.unwrap();
+        let map =
+            serde_json::from_slice::<BTreeMap<AccountOwner, ChainDescription>>(&data).unwrap();
+        if map.contains_key(&AccountPublicKey::test_key(4).into()) {
+            return;
+        }
+    }
+    panic!("Chain map was not written.");
 }
 
 #[test]
@@ -188,7 +206,7 @@ fn test_multiply() {
     assert_eq!(multiply(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_batch_size_reduction_on_limit_errors() {
     // Test that the batch processor reduces batch size when hitting BlockTooLarge limit
 
@@ -220,7 +238,11 @@ async fn test_batch_size_reduction_on_limit_errors() {
         update_calls: 0,
     }));
 
-    let faucet_storage = Arc::new(Mutex::new(super::FaucetStorage::default()));
+    let faucet_storage = Arc::new(
+        super::FaucetStorage::load(storage_path.clone())
+            .await
+            .unwrap(),
+    );
     let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
     let request_notifier = Arc::new(Notify::new());
 
@@ -231,7 +253,6 @@ async fn test_batch_size_reduction_on_limit_errors() {
         start_balance: Amount::from_tokens(100),
         start_timestamp: Timestamp::from(1000), // start > end disables rate limiting
         end_timestamp: Timestamp::from(999),
-        storage_path: storage_path.clone(),
         max_batch_size: initial_batch_size,
     };
 

@@ -37,6 +37,7 @@ linera-execution.workspace = true
 linera-metrics.workspace = true
 linera-storage.workspace = true
 linera-version.workspace = true
+papaya.workspace = true
 prometheus = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
@@ -51,6 +52,7 @@ async-trait.workspace = true
 derive_more.workspace = true
 linera-views.workspace = true
 tempfile.workspace = true
+test-log.workspace = true
 [dev-dependencies.linera-core]
 features = ["test"]
 workspace = true
