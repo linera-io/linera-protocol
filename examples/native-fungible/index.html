@@ -171,7 +171,7 @@
 
           let errors = [];
           try {
-              const match = recipient.match(/^(0x[0-9a-f]{40})@([0-9a-f]{64})$/);
+              const match = recipient.match(/^(0x[0-9a-f]{40}|0x[0-9a-f]{64})@([0-9a-f]{64})$/i);
               if (!match) throw new Error('Invalid recipient address: expected `owner@chain_id`');
 
               const query = gql(`mutation(
