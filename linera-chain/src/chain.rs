@@ -35,6 +35,7 @@ use linera_views::{
     views::{ClonableView, CryptoHashView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use crate::{
     block::{Block, ConfirmedBlock},
@@ -391,6 +392,9 @@ where
         self.context().extra().chain_id()
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+    ))]
     pub async fn query_application(
         &mut self,
         local_time: Timestamp,
@@ -408,6 +412,10 @@ where
             .with_execution_context(ChainExecutionContext::Query)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        application_id = %application_id
+    ))]
     pub async fn describe_application(
         &mut self,
         application_id: ApplicationId,
@@ -419,6 +427,11 @@ where
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        target = %target,
+        height = %height
+    ))]
     pub async fn mark_messages_as_received(
         &mut self,
         target: &ChainId,
@@ -506,6 +519,9 @@ where
 
     /// Verifies that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     pub async fn validate_incoming_bundles(&self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let pairs = self.inboxes.try_load_all_entries().await?;
@@ -567,6 +583,11 @@ where
     /// round timeouts.
     ///
     /// Returns `true` if incoming `Subscribe` messages created new outbox entries.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        origin = %origin,
+        bundle_height = %bundle.height
+    ))]
     pub async fn receive_message_bundle(
         &mut self,
         origin: &ChainId,
@@ -661,6 +682,9 @@ where
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+    ))]
     pub async fn remove_bundles_from_inboxes(
         &mut self,
         timestamp: Timestamp,
@@ -750,6 +774,10 @@ where
 
     /// Executes a block: first the incoming messages, then the main operation.
     /// Does not update chain state other than the execution state.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %block.chain_id,
+        block_height = %block.height
+    ))]
     #[expect(clippy::too_many_arguments)]
     async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
@@ -859,6 +887,10 @@ where
 
     /// Executes a block: first the incoming messages, then the main operation.
     /// Does not update chain state other than the execution state.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %block.height
+    ))]
     pub async fn execute_block(
         &mut self,
         block: &ProposedBlock,
@@ -919,6 +951,10 @@ where
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
     /// manager. This does not touch the execution state itself, which must be updated separately.
     /// Returns the set of event streams that were updated as a result of applying the block.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %block.inner().inner().header.height
+    ))]
     pub async fn apply_confirmed_block(
         &mut self,
         block: &ConfirmedBlock,
@@ -953,6 +989,10 @@ where
 
     /// Adds a block to `preprocessed_blocks`, and updates the outboxes where possible.
     /// Returns the set of streams that were updated as a result of preprocessing the block.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %block.inner().inner().header.height
+    ))]
     pub async fn preprocess_block(
         &mut self,
         block: &ConfirmedBlock,
@@ -979,6 +1019,10 @@ where
     }
 
     /// Verifies that the block is valid according to the chain's application permission settings.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        block_height = %block.height,
+        num_transactions = %block.transactions.len()
+    ))]
     fn check_app_permissions(
         app_permissions: &ApplicationPermissions,
         block: &ProposedBlock,
@@ -1021,6 +1065,10 @@ where
     }
 
     /// Returns the hashes of all blocks we have in the given range.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        next_block_height = %self.tip_state.get().next_block_height
+    ))]
     pub async fn block_hashes(
         &self,
         range: impl RangeBounds<BlockHeight>,
@@ -1066,6 +1114,10 @@ where
     /// Updates the outboxes with the messages sent in the block.
     ///
     /// Returns the set of all recipients.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %block.header.height
+    ))]
     async fn process_outgoing_messages(
         &mut self,
         block: &Block,
@@ -1157,6 +1209,10 @@ where
     /// Updates the event streams with events emitted by the block if they form a contiguous
     /// sequence (might not be the case when preprocessing a block).
     /// Returns the set of updated event streams.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        block_height = %block.header.height
+    ))]
     async fn process_emitted_events(
         &mut self,
         block: &Block,
