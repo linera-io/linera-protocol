@@ -1565,7 +1565,7 @@ mod graphql {
 
     use super::{CollectionView, CustomCollectionView, ReadGuardedView};
     use crate::{
-        graphql::{hash_name, mangle, missing_key_error, Entry, MapFilters, MapInput},
+        graphql::{hash_name, mangle, missing_key_error, Entry, MapInput},
         views::View,
     };
 
@@ -1610,8 +1610,6 @@ mod graphql {
             + serde::de::DeserializeOwned
             + std::fmt::Debug,
         V: View + async_graphql::OutputType,
-        MapInput<K>: async_graphql::InputType,
-        MapFilters<K>: async_graphql::InputType,
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
@@ -1675,8 +1673,6 @@ mod graphql {
             + crate::common::CustomSerialize
             + std::fmt::Debug,
         V: View + async_graphql::OutputType,
-        MapInput<K>: async_graphql::InputType,
-        MapFilters<K>: async_graphql::InputType,
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
