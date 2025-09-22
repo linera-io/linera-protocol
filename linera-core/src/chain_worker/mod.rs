@@ -14,4 +14,5 @@ pub(crate) use self::state::CrossChainUpdateHelper;
 pub(crate) use self::{
     actor::{ChainWorkerActor, ChainWorkerRequest},
     config::ChainWorkerConfig,
+    state::BlockOutcome,
 };
