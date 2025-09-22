@@ -356,7 +356,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                     Update::Removed => {
                         results.push(None);
                     }
-                    _ => {
+                    Update::Set(_) => {
                         let updates = self.updates.read().await;
                         results.push(Some(ReadGuardedView::Loaded {
                             updates,
@@ -1640,14 +1640,11 @@ mod graphql {
             };
 
             let values = self.try_load_entries(&keys).await?;
-            values
+            Ok(values
                 .into_iter()
                 .zip(keys)
-                .map(|(value, key)| match value {
-                    None => Err(missing_key_error(&key)),
-                    Some(value) => Ok(Entry { value, key }),
-                })
-                .collect()
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .collect())
         }
     }
 
@@ -1703,14 +1700,11 @@ mod graphql {
             };
 
             let values = self.try_load_entries(&keys).await?;
-            values
+            Ok(values
                 .into_iter()
                 .zip(keys)
-                .map(|(value, key)| match value {
-                    None => Err(missing_key_error(&key)),
-                    Some(value) => Ok(Entry { value, key }),
-                })
-                .collect()
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .collect())
         }
     }
 }

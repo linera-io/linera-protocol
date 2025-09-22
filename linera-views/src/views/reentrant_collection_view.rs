@@ -2221,14 +2221,11 @@ mod graphql {
             };
 
             let values = self.try_load_entries(&keys).await?;
-            values
+            Ok(values
                 .into_iter()
                 .zip(keys)
-                .map(|(value, key)| match value {
-                    None => Err(missing_key_error(&key)),
-                    Some(value) => Ok(Entry { value, key }),
-                })
-                .collect()
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .collect())
         }
     }
 
@@ -2285,14 +2282,11 @@ mod graphql {
             };
 
             let values = self.try_load_entries(&keys).await?;
-            values
+            Ok(values
                 .into_iter()
                 .zip(keys)
-                .map(|(value, key)| match value {
-                    None => Err(missing_key_error(&key)),
-                    Some(value) => Ok(Entry { value, key }),
-                })
-                .collect()
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .collect())
         }
     }
 }
