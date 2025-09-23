@@ -752,7 +752,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
 Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 
-**Usage:** `linera faucet [OPTIONS] --amount <AMOUNT> [CHAIN_ID]`
+**Usage:** `linera faucet [OPTIONS] --amount <AMOUNT> --storage-path <STORAGE_PATH> [CHAIN_ID]`
 
 ###### **Arguments:**
 
