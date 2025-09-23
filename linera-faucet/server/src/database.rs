@@ -6,7 +6,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Context as _;
-use linera_base::{data_types::ChainDescription, identifiers::AccountOwner};
+use linera_base::{
+    data_types::ChainDescription,
+    identifiers::{AccountOwner, ChainId},
+};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
     Row,
@@ -23,7 +26,6 @@ const CREATE_CHAINS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS chains (
     owner TEXT PRIMARY KEY NOT NULL,
     chain_id TEXT NOT NULL,
-    description_json TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -109,12 +111,10 @@ impl FaucetDatabase {
         for (owner, description) in chain_map {
             let owner_str = serde_json::to_string(&owner)?;
             let chain_id = description.id().to_string();
-            let description_json = serde_json::to_string(&description)?;
 
-            sqlx::query("INSERT INTO chains (owner, chain_id, description_json) VALUES (?, ?, ?)")
+            sqlx::query("INSERT INTO chains (owner, chain_id) VALUES (?, ?)")
                 .bind(&owner_str)
                 .bind(&chain_id)
-                .bind(&description_json)
                 .execute(&mut *tx)
                 .await?;
 
@@ -136,46 +136,41 @@ impl FaucetDatabase {
         Ok(())
     }
 
-    /// Gets the chain description for an owner if it exists.
-    pub async fn get_chain(
-        &self,
-        owner: &AccountOwner,
-    ) -> anyhow::Result<Option<ChainDescription>> {
+    /// Gets the chain ID for an owner if it exists.
+    pub async fn get_chain_id(&self, owner: &AccountOwner) -> anyhow::Result<Option<ChainId>> {
         let owner_str = serde_json::to_string(owner)?;
 
-        let Some(row) = sqlx::query("SELECT description_json FROM chains WHERE owner = ?")
+        let Some(row) = sqlx::query("SELECT chain_id FROM chains WHERE owner = ?")
             .bind(&owner_str)
             .fetch_optional(&self.pool)
             .await?
         else {
             return Ok(None);
         };
-        let description_json: String = row.get("description_json");
-        let description: ChainDescription = serde_json::from_str(&description_json)?;
-        Ok(Some(description))
+        let chain_id_str: String = row.get("chain_id");
+        let chain_id: ChainId = chain_id_str.parse()?;
+        Ok(Some(chain_id))
     }
 
     /// Stores multiple chain mappings in a single transaction
     pub async fn store_chains_batch(
         &self,
-        chains: Vec<(AccountOwner, ChainDescription)>,
+        chains: Vec<(AccountOwner, ChainId)>,
     ) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        for (owner, description) in chains {
+        for (owner, chain_id) in chains {
             let owner_str = serde_json::to_string(&owner)?;
-            let chain_id = description.id().to_string();
-            let description_json = serde_json::to_string(&description)?;
+            let chain_id_str = chain_id.to_string();
 
             sqlx::query(
                 r#"
-                INSERT OR REPLACE INTO chains (owner, chain_id, description_json)
-                VALUES (?, ?, ?)
+                INSERT OR REPLACE INTO chains (owner, chain_id)
+                VALUES (?, ?)
                 "#,
             )
             .bind(&owner_str)
-            .bind(&chain_id)
-            .bind(&description_json)
+            .bind(&chain_id_str)
             .execute(&mut *tx)
             .await?;
         }

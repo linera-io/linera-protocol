@@ -20,7 +20,7 @@ use linera_base::{
     bcs,
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, ChainDescription, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
 };
 use linera_chain::{ChainError, ChainExecutionContext};
@@ -69,10 +69,11 @@ pub struct QueryRoot<C: ClientContext> {
 }
 
 /// The root GraphQL mutation type.
-pub struct MutationRoot {
+pub struct MutationRoot<S> {
     faucet_storage: Arc<FaucetDatabase>,
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
+    storage: S,
 }
 
 /// The result of a successful `claim` mutation.
@@ -151,23 +152,30 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl MutationRoot {
+impl<S> MutationRoot<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
         self.do_claim(owner).await
     }
 }
 
-impl MutationRoot {
+impl<S> MutationRoot<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
         // Check if this owner already has a chain.
-        if let Some(existing_description) = self
+        if let Some(existing_chain_id) = self
             .faucet_storage
-            .get_chain(&owner)
+            .get_chain_id(&owner)
             .await
             .map_err(|e| Error::new(e.to_string()))?
         {
-            return Ok(existing_description);
+            // Retrieve the chain description from local storage
+            return get_chain_description_from_storage(&self.storage, existing_chain_id).await;
         }
 
         // Create a oneshot channel to receive the result.
@@ -198,6 +206,57 @@ fn multiply(a: u128, b: u64) -> [u64; 3] {
     let a0 = (a & lower) * b;
     a1 += a0 >> 64;
     [(a1 >> 64) as u64, (a1 & lower) as u64, (a0 & lower) as u64]
+}
+
+/// Retrieves a chain description from storage by reading the blob directly.
+///
+/// This function handles errors appropriately and returns a GraphQL-compatible result.
+async fn get_chain_description_from_storage<S>(
+    storage: &S,
+    chain_id: ChainId,
+) -> Result<ChainDescription, Error>
+where
+    S: Storage,
+{
+    // Create blob ID from chain ID - the chain ID is the hash of the chain description blob
+    let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+
+    // Read the blob directly from storage
+    let blob = storage
+        .read_blob(blob_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to read chain description blob for {}: {}",
+                chain_id,
+                e
+            );
+            Error::new(format!(
+                "Storage error while reading chain description: {e}"
+            ))
+        })?
+        .ok_or_else(|| {
+            tracing::error!("Chain description blob not found for chain {}", chain_id);
+            Error::new(format!(
+                "Chain description not found for chain {}",
+                chain_id
+            ))
+        })?;
+
+    // Deserialize the chain description from the blob bytes
+    let description = bcs::from_bytes::<ChainDescription>(blob.bytes()).map_err(|e| {
+        tracing::error!(
+            "Failed to deserialize chain description for {}: {}",
+            chain_id,
+            e
+        );
+        Error::new(format!(
+            "Invalid chain description data for chain {}",
+            chain_id
+        ))
+    })?;
+
+    Ok(description)
 }
 
 impl<C> BatchProcessor<C>
@@ -282,12 +341,19 @@ where
 
         for request in batch_requests {
             // Check if this owner already has a chain. Otherwise send response immediately.
-            let response = match self.faucet_storage.get_chain(&request.owner).await {
+            let response = match self.faucet_storage.get_chain_id(&request.owner).await {
                 Ok(None) => {
                     valid_requests.push(request);
                     continue;
                 }
-                Ok(Some(existing_description)) => Ok(existing_description),
+                Ok(Some(existing_chain_id)) => {
+                    // Retrieve the chain description from local storage.
+                    get_chain_description_from_storage(
+                        self.client.storage_client(),
+                        existing_chain_id,
+                    )
+                    .await
+                }
                 Err(err) => {
                     tracing::error!("Database error: {err}");
                     Err(Error::new(err.to_string()))
@@ -451,7 +517,7 @@ where
             .zip(chain_descriptions.into_iter())
             .map(|(request, description)| {
                 let _ = request.responder.send(Ok(description.clone()));
-                (request.owner, description)
+                (request.owner, description.id())
             })
             .collect::<Vec<_>>();
 
@@ -604,11 +670,18 @@ where
         })
     }
 
-    fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot, EmptySubscription> {
+    fn schema(
+        &self,
+    ) -> Schema<
+        QueryRoot<C>,
+        MutationRoot<<C::Environment as linera_core::Environment>::Storage>,
+        EmptySubscription,
+    > {
         let mutation_root = MutationRoot {
             faucet_storage: Arc::clone(&self.faucet_storage),
             pending_requests: Arc::clone(&self.pending_requests),
             request_notifier: Arc::clone(&self.request_notifier),
+            storage: self.storage.clone(),
         };
         let query_root = QueryRoot {
             genesis_config: Arc::clone(&self.genesis_config),

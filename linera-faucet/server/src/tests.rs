@@ -107,6 +107,7 @@ async fn test_faucet_rate_limiting() {
         faucet_storage: Arc::clone(&faucet_storage),
         pending_requests: Arc::clone(&pending_requests),
         request_notifier: Arc::clone(&request_notifier),
+        storage: client.storage_client().clone(),
     };
 
     // Create the BatchProcessor configuration and instance

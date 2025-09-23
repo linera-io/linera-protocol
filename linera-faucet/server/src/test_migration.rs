@@ -67,13 +67,11 @@ mod tests {
         db.migrate_from_json(&json_path).await.unwrap();
 
         // Verify the data was migrated correctly.
-        let chain1 = db.get_chain(&owner1).await.unwrap().unwrap();
-        assert_eq!(chain1.id(), description1.id());
-        assert_eq!(chain1.timestamp(), description1.timestamp());
+        let chain1_id = db.get_chain_id(&owner1).await.unwrap().unwrap();
+        assert_eq!(chain1_id, description1.id());
 
-        let chain2 = db.get_chain(&owner2).await.unwrap().unwrap();
-        assert_eq!(chain2.id(), description2.id());
-        assert_eq!(chain2.timestamp(), description2.timestamp());
+        let chain2_id = db.get_chain_id(&owner2).await.unwrap().unwrap();
+        assert_eq!(chain2_id, description2.id());
 
         // Verify the JSON file was renamed.
         assert!(tokio::fs::metadata(&json_path).await.is_err());
@@ -85,8 +83,8 @@ mod tests {
 
         // Verify database contents.
         assert_eq!(db.get_chain_count().await.unwrap(), 2);
-        assert!(db.get_chain(&owner1).await.unwrap().is_some());
-        assert!(db.get_chain(&owner2).await.unwrap().is_some());
+        assert!(db.get_chain_id(&owner1).await.unwrap().is_some());
+        assert!(db.get_chain_id(&owner2).await.unwrap().is_some());
     }
 
     #[tokio::test]
@@ -135,7 +133,7 @@ mod tests {
             },
             Timestamp::from(100),
         );
-        db.store_chains_batch(vec![(owner, description)])
+        db.store_chains_batch(vec![(owner, description.id())])
             .await
             .unwrap();
 
@@ -162,7 +160,7 @@ mod tests {
         db.migrate_from_json(&json_path).await.unwrap();
 
         // Verify the new chain was NOT added and the file not renamed.
-        assert!(db.get_chain(&new_owner).await.unwrap().is_none());
+        assert!(db.get_chain_id(&new_owner).await.unwrap().is_none());
         assert!(tokio::fs::metadata(&json_path).await.is_ok());
         assert_eq!(db.get_chain_count().await.unwrap(), 1);
     }
