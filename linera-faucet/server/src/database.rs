@@ -3,7 +3,7 @@
 
 //! SQLite database module for storing chain assignments.
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::Context as _;
 use linera_base::{
@@ -105,7 +105,7 @@ impl FaucetDatabase {
     async fn build_sync_map<E>(
         &self,
         client: &ChainClient<E>,
-    ) -> anyhow::Result<HashMap<BlockHeight, CryptoHash>>
+    ) -> anyhow::Result<BTreeMap<BlockHeight, CryptoHash>>
     where
         E: linera_core::Environment,
         E::Storage: Storage,
@@ -115,10 +115,10 @@ impl FaucetDatabase {
 
         if end_height == BlockHeight::ZERO {
             info!("Chain is empty, no synchronization needed");
-            return Ok(HashMap::new());
+            return Ok(BTreeMap::new());
         }
 
-        let mut height_to_hash = HashMap::new();
+        let mut height_to_hash = BTreeMap::new();
         let mut current_hash = info.block_hash;
 
         // Traverse backwards to build the height -> hash mapping and find sync point
@@ -162,7 +162,7 @@ impl FaucetDatabase {
     async fn sync_forward_with_map<E>(
         &self,
         client: &ChainClient<E>,
-        height_to_hash: HashMap<BlockHeight, CryptoHash>,
+        height_to_hash: BTreeMap<BlockHeight, CryptoHash>,
     ) -> anyhow::Result<()>
     where
         E: linera_core::Environment,
