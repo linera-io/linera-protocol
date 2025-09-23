@@ -74,6 +74,9 @@ pub mod context;
 /// Common definitions used for views and backends.
 pub mod common;
 
+/// Definitions for the LRU cache.
+mod lru_prefix_cache;
+
 mod error;
 pub use error::ViewError;
 
