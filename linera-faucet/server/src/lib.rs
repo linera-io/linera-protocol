@@ -6,8 +6,6 @@
 //! The server component of the Linera faucet.
 
 mod database;
-#[cfg(test)]
-mod test_migration;
 
 use std::{collections::VecDeque, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc};
 
@@ -623,12 +621,6 @@ where
         let faucet_storage = FaucetDatabase::new(&storage_path)
             .await
             .context("Failed to initialize faucet database")?;
-
-        // Try to migrate from legacy JSON file if it exists
-        let json_path = storage_path.with_extension("json");
-        if let Err(e) = faucet_storage.migrate_from_json(&json_path).await {
-            tracing::warn!("Failed to migrate from JSON storage: {}", e);
-        }
 
         let faucet_storage = Arc::new(faucet_storage);
 
