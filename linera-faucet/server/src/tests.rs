@@ -277,3 +277,204 @@ async fn test_batch_size_reduction_on_limit_errors() {
     // Now the batch size should be reduced.
     assert!(batch_processor.config.max_batch_size < initial_batch_size);
 }
+
+#[tokio::test]
+async fn test_faucet_persistence() {
+    // Test that the faucet correctly persists chain IDs and retrieves them after restart.
+    // This ensures the database is working correctly across sessions.
+
+    let storage_builder = MemoryStorageBuilder::default();
+    let keys = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    clock.set(Timestamp::from(0));
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await.unwrap();
+    let client = builder
+        .add_root_chain(1, Amount::from_tokens(6))
+        .await
+        .unwrap();
+
+    let temp_dir = tempdir().unwrap();
+    let storage_path = temp_dir.path().join("test_faucet_persistence.sqlite");
+
+    // Create first faucet instance
+    let faucet_storage = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
+
+    let context = ClientContext {
+        client: client.clone(),
+        update_calls: 0,
+    };
+    let context = Arc::new(Mutex::new(context));
+
+    // Set up the first MutationRoot instance
+    let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
+    let request_notifier = Arc::new(Notify::new());
+
+    let root = super::MutationRoot {
+        faucet_storage: Arc::clone(&faucet_storage),
+        pending_requests: Arc::clone(&pending_requests),
+        request_notifier: Arc::clone(&request_notifier),
+        storage: client.storage_client().clone(),
+    };
+
+    // Create the BatchProcessor configuration
+    let batch_config = super::BatchProcessorConfig {
+        amount: Amount::from_tokens(1),
+        end_timestamp: Timestamp::from(6000),
+        start_timestamp: Timestamp::from(0),
+        start_balance: Amount::from_tokens(6),
+        max_batch_size: 1,
+    };
+
+    let batch_processor = super::BatchProcessor::new(
+        batch_config,
+        Arc::clone(&context),
+        client.clone(),
+        Arc::clone(&faucet_storage),
+        Arc::clone(&pending_requests),
+        Arc::clone(&request_notifier),
+    );
+
+    // Start the batch processor
+    let cancellation_token = CancellationToken::new();
+    let processor_task = {
+        let mut batch_processor = batch_processor;
+        let token = cancellation_token.clone();
+        tokio::spawn(async move { batch_processor.run(token).await })
+    };
+
+    // Set time to allow claims
+    clock.set(Timestamp::from(1000));
+
+    // Make first claim with a specific owner
+    let test_owner_1 = AccountPublicKey::test_key(42).into();
+    let test_owner_2 = AccountPublicKey::test_key(43).into();
+
+    // Claim chains for two different owners
+    let chain_1 = root
+        .do_claim(test_owner_1)
+        .await
+        .expect("First claim should succeed");
+
+    clock.set(Timestamp::from(2000));
+    let chain_2 = root
+        .do_claim(test_owner_2)
+        .await
+        .expect("Second claim should succeed");
+
+    // Verify that immediate re-claims return the same chains
+    let chain_1_again = root
+        .do_claim(test_owner_1)
+        .await
+        .expect("Re-claim should return existing chain");
+    assert_eq!(
+        chain_1.id(),
+        chain_1_again.id(),
+        "Should return same chain for same owner"
+    );
+
+    let chain_2_again = root
+        .do_claim(test_owner_2)
+        .await
+        .expect("Re-claim should return existing chain");
+    assert_eq!(
+        chain_2.id(),
+        chain_2_again.id(),
+        "Should return same chain for same owner"
+    );
+
+    // Store the chain IDs for later comparison
+    let chain_1_id = chain_1.id();
+    let chain_2_id = chain_2.id();
+
+    // Stop the batch processor
+    cancellation_token.cancel();
+    let _ = processor_task.await;
+
+    // Drop the first faucet instance to simulate shutdown
+    drop(root);
+    drop(faucet_storage);
+
+    // Create a new faucet instance with the same database path (simulating restart)
+    let faucet_storage_2 = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
+
+    // Set up the new MutationRoot instance
+    let pending_requests_2 = Arc::new(Mutex::new(VecDeque::new()));
+    let request_notifier_2 = Arc::new(Notify::new());
+
+    let root_2 = super::MutationRoot {
+        faucet_storage: Arc::clone(&faucet_storage_2),
+        pending_requests: Arc::clone(&pending_requests_2),
+        request_notifier: Arc::clone(&request_notifier_2),
+        storage: client.storage_client().clone(),
+    };
+
+    // Create new batch processor for the second instance
+    let batch_config_2 = super::BatchProcessorConfig {
+        amount: Amount::from_tokens(1),
+        end_timestamp: Timestamp::from(6000),
+        start_timestamp: Timestamp::from(0),
+        start_balance: Amount::from_tokens(6),
+        max_batch_size: 1,
+    };
+    let batch_processor_2 = super::BatchProcessor::new(
+        batch_config_2,
+        Arc::clone(&context),
+        client.clone(),
+        Arc::clone(&faucet_storage_2),
+        Arc::clone(&pending_requests_2),
+        Arc::clone(&request_notifier_2),
+    );
+
+    // Start the new batch processor
+    let cancellation_token_2 = CancellationToken::new();
+    let processor_task_2 = {
+        let mut batch_processor = batch_processor_2;
+        let token = cancellation_token_2.clone();
+        tokio::spawn(async move { batch_processor.run(token).await })
+    };
+
+    // Verify that the new instance returns the same chain IDs for the same owners
+    let chain_1_after_restart = root_2
+        .do_claim(test_owner_1)
+        .await
+        .expect("Should return existing chain after restart");
+    assert_eq!(
+        chain_1_id,
+        chain_1_after_restart.id(),
+        "Chain ID should be preserved after restart for owner 1"
+    );
+
+    let chain_2_after_restart = root_2
+        .do_claim(test_owner_2)
+        .await
+        .expect("Should return existing chain after restart");
+    assert_eq!(
+        chain_2_id,
+        chain_2_after_restart.id(),
+        "Chain ID should be preserved after restart for owner 2"
+    );
+
+    // Verify that a new owner can still claim a new chain after restart
+    clock.set(Timestamp::from(3000));
+    let test_owner_3 = AccountPublicKey::test_key(44).into();
+    let chain_3 = root_2
+        .do_claim(test_owner_3)
+        .await
+        .expect("New owner should be able to claim after restart");
+
+    // Verify the new chain is different from the existing ones
+    assert_ne!(
+        chain_3.id(),
+        chain_1_id,
+        "New chain should have different ID"
+    );
+    assert_ne!(
+        chain_3.id(),
+        chain_2_id,
+        "New chain should have different ID"
+    );
+
+    // Clean up
+    cancellation_token_2.cancel();
+    let _ = processor_task_2.await;
+}
