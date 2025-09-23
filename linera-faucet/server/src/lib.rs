@@ -5,14 +5,9 @@
 
 //! The server component of the Linera faucet.
 
-use std::{
-    collections::{HashMap, VecDeque},
-    future::IntoFuture,
-    io,
-    net::SocketAddr,
-    path::PathBuf,
-    sync::Arc,
-};
+mod database;
+
+use std::{collections::VecDeque, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::Context as _;
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
@@ -23,7 +18,7 @@ use linera_base::{
     bcs,
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, ChainDescription, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
 };
 use linera_chain::{ChainError, ChainExecutionContext};
@@ -44,11 +39,13 @@ use linera_execution::{
 #[cfg(feature = "metrics")]
 use linera_metrics::monitoring_server;
 use linera_storage::{Clock as _, Storage};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::info;
+
+use crate::database::FaucetDatabase;
 
 /// Returns an HTML response constructing the GraphiQL web page for the given URI.
 pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
@@ -70,10 +67,11 @@ pub struct QueryRoot<C: ClientContext> {
 }
 
 /// The root GraphQL mutation type.
-pub struct MutationRoot {
-    faucet_storage: Arc<Mutex<FaucetStorage>>,
+pub struct MutationRoot<S> {
+    faucet_storage: Arc<FaucetDatabase>,
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
+    storage: S,
 }
 
 /// The result of a successful `claim` mutation.
@@ -91,81 +89,30 @@ pub struct Validator {
     pub network_address: String,
 }
 
-/// A pending chain creation request
+/// A pending chain creation request.
 #[derive(Debug)]
 struct PendingRequest {
     owner: AccountOwner,
     responder: oneshot::Sender<Result<ChainDescription, Error>>,
 }
 
-/// Configuration for the batch processor
+/// Configuration for the batch processor.
 struct BatchProcessorConfig {
     amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
-    storage_path: PathBuf,
     max_batch_size: usize,
 }
 
-/// Batching coordinator for processing chain creation requests
+/// Batching coordinator for processing chain creation requests.
 struct BatchProcessor<C: ClientContext> {
     config: BatchProcessorConfig,
     context: Arc<Mutex<C>>,
     client: ChainClient<C::Environment>,
-    faucet_storage: Arc<Mutex<FaucetStorage>>,
+    faucet_storage: Arc<FaucetDatabase>,
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
-}
-
-/// Persistent mapping of account owners to chain descriptions
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct FaucetStorage {
-    /// Maps account owners to their corresponding chain descriptions
-    owner_to_chain: HashMap<AccountOwner, ChainDescription>,
-}
-
-impl FaucetStorage {
-    /// Loads the faucet storage from disk, creating a new one if it doesn't exist
-    async fn load(storage_path: &PathBuf) -> Result<Self, io::Error> {
-        match tokio::fs::read(storage_path).await {
-            Ok(data) => serde_json::from_slice(&data).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Failed to deserialize faucet storage: {}", e),
-                )
-            }),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Saves the faucet storage to disk
-    async fn save(&self, storage_path: &PathBuf) -> Result<(), io::Error> {
-        let data = serde_json::to_vec_pretty(self).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Failed to serialize faucet storage: {}", e),
-            )
-        })?;
-
-        // Create parent directory if it doesn't exist
-        if let Some(parent) = storage_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        tokio::fs::write(storage_path, data).await
-    }
-
-    /// Gets the chain description for an owner if it exists
-    fn get_chain(&self, owner: &AccountOwner) -> Option<&ChainDescription> {
-        self.owner_to_chain.get(owner)
-    }
-
-    /// Stores a new mapping from owner to chain description
-    fn store_chain(&mut self, owner: AccountOwner, description: ChainDescription) {
-        self.owner_to_chain.insert(owner, description);
-    }
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
@@ -203,27 +150,36 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl MutationRoot {
+impl<S> MutationRoot<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
         self.do_claim(owner).await
     }
 }
 
-impl MutationRoot {
+impl<S> MutationRoot<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
-        // Check if this owner already has a chain
+        // Check if this owner already has a chain.
+        if let Some(existing_chain_id) = self
+            .faucet_storage
+            .get_chain_id(&owner)
+            .await
+            .map_err(|e| Error::new(e.to_string()))?
         {
-            let storage = self.faucet_storage.lock().await;
-            if let Some(existing_description) = storage.get_chain(&owner) {
-                return Ok(existing_description.clone());
-            }
+            // Retrieve the chain description from local storage
+            return get_chain_description_from_storage(&self.storage, existing_chain_id).await;
         }
 
-        // Create a oneshot channel to receive the result
+        // Create a oneshot channel to receive the result.
         let (tx, rx) = oneshot::channel();
 
-        // Add request to the queue
+        // Add request to the queue.
         {
             let mut requests = self.pending_requests.lock().await;
             requests.push_back(PendingRequest {
@@ -232,7 +188,7 @@ impl MutationRoot {
             });
         }
 
-        // Notify the batch processor that there's a new request
+        // Notify the batch processor that there's a new request.
         self.request_notifier.notify_one();
 
         // Wait for the result
@@ -250,16 +206,67 @@ fn multiply(a: u128, b: u64) -> [u64; 3] {
     [(a1 >> 64) as u64, (a1 & lower) as u64, (a0 & lower) as u64]
 }
 
+/// Retrieves a chain description from storage by reading the blob directly.
+///
+/// This function handles errors appropriately and returns a GraphQL-compatible result.
+async fn get_chain_description_from_storage<S>(
+    storage: &S,
+    chain_id: ChainId,
+) -> Result<ChainDescription, Error>
+where
+    S: Storage,
+{
+    // Create blob ID from chain ID - the chain ID is the hash of the chain description blob
+    let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+
+    // Read the blob directly from storage
+    let blob = storage
+        .read_blob(blob_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to read chain description blob for {}: {}",
+                chain_id,
+                e
+            );
+            Error::new(format!(
+                "Storage error while reading chain description: {e}"
+            ))
+        })?
+        .ok_or_else(|| {
+            tracing::error!("Chain description blob not found for chain {}", chain_id);
+            Error::new(format!(
+                "Chain description not found for chain {}",
+                chain_id
+            ))
+        })?;
+
+    // Deserialize the chain description from the blob bytes
+    let description = bcs::from_bytes::<ChainDescription>(blob.bytes()).map_err(|e| {
+        tracing::error!(
+            "Failed to deserialize chain description for {}: {}",
+            chain_id,
+            e
+        );
+        Error::new(format!(
+            "Invalid chain description data for chain {}",
+            chain_id
+        ))
+    })?;
+
+    Ok(description)
+}
+
 impl<C> BatchProcessor<C>
 where
     C: ClientContext + 'static,
 {
-    /// Creates a new batch processor
+    /// Creates a new batch processor.
     fn new(
         config: BatchProcessorConfig,
         context: Arc<Mutex<C>>,
         client: ChainClient<C::Environment>,
-        faucet_storage: Arc<Mutex<FaucetStorage>>,
+        faucet_storage: Arc<FaucetDatabase>,
         pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
         request_notifier: Arc<Notify>,
     ) -> Self {
@@ -273,7 +280,7 @@ where
         }
     }
 
-    /// Runs the batch processor loop
+    /// Runs the batch processor loop.
     async fn run(&mut self, cancellation_token: CancellationToken) {
         loop {
             tokio::select! {
@@ -322,32 +329,47 @@ where
         }
     }
 
-    /// Executes a batch of chain creation requests
+    /// Executes a batch of chain creation requests.
     async fn execute_batch(
         &mut self,
         batch_requests: Vec<PendingRequest>,
     ) -> Result<(), anyhow::Error> {
-        // Pre-validate: check rate limiting and existing chains
+        // Pre-validate: check existing chains.
         let mut valid_requests = Vec::new();
 
         for request in batch_requests {
-            // Check if this owner already has a chain
-            {
-                let storage = self.faucet_storage.lock().await;
-                if let Some(existing_description) = storage.get_chain(&request.owner) {
-                    let _ = request.responder.send(Ok(existing_description.clone()));
+            // Check if this owner already has a chain. Otherwise send response immediately.
+            let response = match self.faucet_storage.get_chain_id(&request.owner).await {
+                Ok(None) => {
+                    valid_requests.push(request);
                     continue;
                 }
+                Ok(Some(existing_chain_id)) => {
+                    // Retrieve the chain description from local storage.
+                    get_chain_description_from_storage(
+                        self.client.storage_client(),
+                        existing_chain_id,
+                    )
+                    .await
+                }
+                Err(err) => {
+                    tracing::error!("Database error: {err}");
+                    Err(Error::new(err.to_string()))
+                }
+            };
+            if let Err(response) = request.responder.send(response) {
+                tracing::error!(
+                    "Receiver dropped while sending response {response:?} for request from {}",
+                    request.owner
+                );
             }
-
-            valid_requests.push(request);
         }
 
         if valid_requests.is_empty() {
             return Ok(());
         }
 
-        // Rate limiting check for the batch
+        // Rate limiting check for the batch.
         if self.config.start_timestamp < self.config.end_timestamp {
             let local_time = self.client.storage_client().clock().current_time();
             if local_time < self.config.end_timestamp {
@@ -474,23 +496,31 @@ where
             for request in valid_requests {
                 let _ = request.responder.send(Err(Error::new(error_msg.clone())));
             }
-            return Err(anyhow::anyhow!(error_msg));
+            anyhow::bail!(error_msg);
         }
 
-        // Store results and respond to requests
-        {
-            let mut storage = self.faucet_storage.lock().await;
-            for (request, description) in valid_requests
-                .into_iter()
-                .zip(chain_descriptions.into_iter())
-            {
-                storage.store_chain(request.owner, description.clone());
-                let _ = request.responder.send(Ok(description));
-            }
+        // Store results.
+        let chains_to_store = valid_requests
+            .iter()
+            .zip(&chain_descriptions)
+            .map(|(request, description)| (request.owner, description.id()))
+            .collect();
 
-            if let Err(e) = storage.save(&self.config.storage_path).await {
-                tracing::warn!("Failed to save faucet storage: {}", e);
+        if let Err(e) = self
+            .faucet_storage
+            .store_chains_batch(chains_to_store)
+            .await
+        {
+            let error_msg = format!("Failed to save chains to database: {}", e);
+            for request in valid_requests {
+                let _ = request.responder.send(Err(Error::new(error_msg.clone())));
             }
+            anyhow::bail!(error_msg);
+        }
+
+        // Respond to requests.
+        for (request, description) in valid_requests.into_iter().zip(chain_descriptions) {
+            let _ = request.responder.send(Ok(description));
         }
 
         Ok(())
@@ -515,10 +545,8 @@ where
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
-    faucet_storage: Arc<Mutex<FaucetStorage>>,
+    faucet_storage: Arc<FaucetDatabase>,
     storage_path: PathBuf,
-    /// Temporary directory handle to keep it alive (if using temporary storage)
-    _temp_dir: Option<Arc<tempfile::TempDir>>,
     /// Batching components
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
@@ -546,7 +574,6 @@ where
             start_balance: self.start_balance,
             faucet_storage: Arc::clone(&self.faucet_storage),
             storage_path: self.storage_path.clone(),
-            _temp_dir: self._temp_dir.clone(),
             pending_requests: Arc::clone(&self.pending_requests),
             request_notifier: Arc::clone(&self.request_notifier),
             max_batch_size: self.max_batch_size,
@@ -563,7 +590,7 @@ pub struct FaucetConfig {
     pub end_timestamp: Timestamp,
     pub genesis_config: Arc<GenesisConfig>,
     pub chain_listener_config: ChainListenerConfig,
-    pub storage_path: Option<PathBuf>,
+    pub storage_path: PathBuf,
     pub max_batch_size: usize,
 }
 
@@ -583,22 +610,20 @@ where
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
 
-        // Create storage path: use provided path or create temporary directory
-        let (storage_path, temp_dir) = match config.storage_path {
-            Some(path) => (path, None),
-            None => {
-                let temp_dir = tempfile::tempdir()
-                    .context("Failed to create temporary directory for faucet storage")?;
-                let storage_path = temp_dir.path().join("faucet_storage.json");
-                (storage_path, Some(Arc::new(temp_dir)))
-            }
-        };
+        // Use provided storage path
+        let storage_path = config.storage_path.clone();
 
-        // Load the faucet storage
-        let faucet_storage = FaucetStorage::load(&storage_path)
+        // Initialize database.
+        let faucet_storage = FaucetDatabase::new(&storage_path)
             .await
-            .context("Failed to load faucet storage")?;
-        let faucet_storage = Arc::new(Mutex::new(faucet_storage));
+            .context("Failed to initialize faucet database")?;
+
+        // Synchronize database with blockchain history.
+        if let Err(e) = faucet_storage.sync_with_blockchain(&client).await {
+            tracing::warn!("Failed to synchronize database with blockchain: {}", e);
+        }
+
+        let faucet_storage = Arc::new(faucet_storage);
 
         // Initialize batching components
         let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
@@ -620,18 +645,24 @@ where
             start_balance,
             faucet_storage,
             storage_path,
-            _temp_dir: temp_dir,
             pending_requests,
             request_notifier,
             max_batch_size: config.max_batch_size,
         })
     }
 
-    fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot, EmptySubscription> {
+    fn schema(
+        &self,
+    ) -> Schema<
+        QueryRoot<C>,
+        MutationRoot<<C::Environment as linera_core::Environment>::Storage>,
+        EmptySubscription,
+    > {
         let mutation_root = MutationRoot {
             faucet_storage: Arc::clone(&self.faucet_storage),
             pending_requests: Arc::clone(&self.pending_requests),
             request_notifier: Arc::clone(&self.request_notifier),
+            storage: self.storage.clone(),
         };
         let query_root = QueryRoot {
             genesis_config: Arc::clone(&self.genesis_config),
@@ -669,7 +700,6 @@ where
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
-            storage_path: self.storage_path.clone(),
             max_batch_size: self.max_batch_size,
         };
         let mut batch_processor = BatchProcessor::new(
