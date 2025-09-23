@@ -289,8 +289,8 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 }
             },
             Vacant(entry) => {
-                let wrapped_view = Self::wrapped_view(&self.context, self.delete_storage_first, short_key)
-                    .await?;
+                let wrapped_view =
+                    Self::wrapped_view(&self.context, self.delete_storage_first, short_key).await?;
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
@@ -679,14 +679,13 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         &self,
     ) -> Result<Vec<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
         let short_keys = self.keys().await?;
-        let mut loaded_views: BTreeMap<Vec<u8>, Arc<RwLock<W>>> = BTreeMap::new();
+        let mut loaded_views = vec![None; short_keys.len()];
 
         // Load views that are not in updates and not deleted
         if !self.delete_storage_first {
             let mut keys = Vec::new();
-            let mut short_keys_to_load = Vec::new();
-            
-            for short_key in &short_keys {
+            let mut short_keys_and_indexes = Vec::new();
+            for (index, short_key) in short_keys.iter().enumerate() {
                 if !self.updates.contains_key(short_key) {
                     let key = self
                         .context
@@ -694,14 +693,13 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                         .base_tag_index(KeyTag::Subview as u8, short_key);
                     let context = self.context.clone_with_base_key(key);
                     keys.extend(W::pre_load(&context)?);
-                    short_keys_to_load.push(short_key.to_vec());
+                    short_keys_and_indexes.push((short_key.to_vec(), index));
                 }
             }
-            
             let values = self.context.store().read_multi_values_bytes(keys).await?;
-            for (loaded_values, short_key) in values
+            for (loaded_values, (short_key, index)) in values
                 .chunks_exact(W::NUM_INIT_KEYS)
-                .zip(short_keys_to_load)
+                .zip(short_keys_and_indexes)
             {
                 let key = self
                     .context
@@ -710,18 +708,19 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 let context = self.context.clone_with_base_key(key);
                 let view = W::post_load(context, loaded_values)?;
                 let wrapped_view = Arc::new(RwLock::new(view));
-                loaded_views.insert(short_key.to_vec(), wrapped_view);
+                loaded_views[index] = Some(wrapped_view);
             }
         }
 
         // Create result from updates and loaded views
         short_keys
             .into_iter()
-            .map(|short_key| {
+            .zip(loaded_views)
+            .map(|(short_key, loaded_view)| {
                 let view = if let Some(Update::Set(view)) = self.updates.get(&short_key) {
                     view.clone()
-                } else if let Some(view) = loaded_views.get(&short_key) {
-                    view.clone()
+                } else if let Some(view) = loaded_view {
+                    view
                 } else {
                     unreachable!("All entries should have been loaded into memory");
                 };
@@ -758,7 +757,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         if !self.delete_storage_first {
             let mut keys = Vec::new();
             let mut short_keys_to_load = Vec::new();
-            
+
             for short_key in &short_keys {
                 if !self.updates.contains_key(short_key) {
                     let key = self
@@ -770,7 +769,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                     short_keys_to_load.push(short_key.to_vec());
                 }
             }
-            
+
             let values = self.context.store().read_multi_values_bytes(keys).await?;
             for (loaded_values, short_key) in values
                 .chunks_exact(W::NUM_INIT_KEYS)
