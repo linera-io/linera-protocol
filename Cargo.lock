@@ -5505,6 +5505,7 @@ dependencies = [
  "prometheus",
  "serde",
  "serde_json",
+ "sqlx",
  "tempfile",
  "tokio",
  "tokio-util",

@@ -544,12 +544,19 @@ impl ClientWrapper {
         amount: Amount,
     ) -> Result<FaucetService> {
         let port = port.into().unwrap_or(8080);
+        let temp_dir = tempfile::tempdir()
+            .context("Failed to create temporary directory for faucet storage")?;
+        let storage_path = temp_dir.path().join("faucet_storage.sqlite");
         let mut command = self.command().await?;
         let child = command
             .arg("faucet")
             .arg(chain_id.to_string())
             .args(["--port".to_string(), port.to_string()])
             .args(["--amount".to_string(), amount.to_string()])
+            .args([
+                "--storage-path".to_string(),
+                storage_path.to_string_lossy().to_string(),
+            ])
             .spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
@@ -560,7 +567,7 @@ impl ClientWrapper {
                 .await;
             if request.is_ok() {
                 info!("Faucet has started");
-                return Ok(FaucetService::new(port, child));
+                return Ok(FaucetService::new(port, child, temp_dir));
             } else {
                 warn!("Waiting for faucet to start");
             }
@@ -1530,11 +1537,16 @@ impl NodeService {
 pub struct FaucetService {
     port: u16,
     child: Child,
+    _temp_dir: tempfile::TempDir,
 }
 
 impl FaucetService {
-    fn new(port: u16, child: Child) -> Self {
-        Self { port, child }
+    fn new(port: u16, child: Child, temp_dir: tempfile::TempDir) -> Self {
+        Self {
+            port,
+            child,
+            _temp_dir: temp_dir,
+        }
     }
 
     pub async fn terminate(mut self) -> Result<()> {
