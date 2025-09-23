@@ -1046,6 +1046,7 @@ where
             [chain_id],
             format!("Client node for {:.8}", chain_id),
             Duration::from_secs(30),
+            Duration::from_secs(1),
             ChainClientOptions::test_default(),
         ));
         Ok(client.create_chain_client(
