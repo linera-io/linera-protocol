@@ -254,7 +254,7 @@ impl LruPrefixCache {
         self.queue.insert(cache_key, size);
     }
 
-    fn get_keys_by_prefix_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
+    fn get_find_keys_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
         match self.find_keys_map.range(..=key.to_vec()).next_back() {
             None => None,
             Some((key_store, value)) => {
@@ -267,7 +267,7 @@ impl LruPrefixCache {
         }
     }
 
-    fn get_keys_by_prefix_lower_bound_mut(
+    fn get_find_keys_lower_bound_mut(
         &mut self,
         key: &[u8],
     ) -> Option<(&Vec<u8>, &mut FindKeysEntry)> {
@@ -452,7 +452,7 @@ impl LruPrefixCache {
 
     /// Updates the find entries.
     fn update_find_entries(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
-        let lower_bound = self.get_keys_by_prefix_lower_bound_mut(key);
+        let lower_bound = self.get_find_keys_lower_bound_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
             cache_entry.update_entry(key_red, new_value.clone());
@@ -499,6 +499,22 @@ impl LruPrefixCache {
         for key in keys {
             self.find_keys_map.remove(&key);
             let cache_key = CacheKey::FindKeys(key);
+            self.remove_cache_key(&cache_key);
+        }
+        // Clearing up the value entries as they are covered by the new FindKeys.
+        // That is the exists or not. The Value entries are not covered by FindKeys.
+        let keys = self
+            .value_map
+            .range(get_interval(key_prefix.clone()))
+            .filter_map(|(key, value)| match value {
+                ValueCacheEntry::DoesNotExist => Some(key.to_vec()),
+                ValueCacheEntry::Exists => Some(key.to_vec()),
+                ValueCacheEntry::Value(_) => None,
+            })
+            .collect::<Vec<_>>();
+        for key in keys {
+            self.value_map.remove(&key);
+            let cache_key = CacheKey::Value(key);
             self.remove_cache_key(&cache_key);
         }
         let cache_key = CacheKey::FindKeys(key_prefix.clone());
@@ -584,7 +600,7 @@ impl LruPrefixCache {
                 self.total_value_size -= value.size();
                 *value = ValueCacheEntry::DoesNotExist;
             }
-            // Remove the find_keys_by_prefix(es) that are covered by that key_prefix
+            // Remove the FindKeys that are covered by key_prefix.
             let mut prefixes = Vec::new();
             for (prefix, _) in self.find_keys_map.range(get_interval(key_prefix.to_vec())) {
                 prefixes.push(prefix.to_vec());
@@ -594,7 +610,7 @@ impl LruPrefixCache {
                 let cache_key = CacheKey::FindKeys(prefix);
                 self.remove_cache_key(&cache_key);
             }
-            // Remove the find_key_values_by_prefix(es) that are covered by that key_prefix
+            // Remove the FindKeyValues that are covered by key_prefix.
             let mut prefixes = Vec::new();
             for (prefix, _) in self
                 .find_key_values_map
@@ -607,8 +623,8 @@ impl LruPrefixCache {
                 let cache_key = CacheKey::FindKeyValues(prefix);
                 self.remove_cache_key(&cache_key);
             }
-            // Finding a lower bound. If existing update, if not insert.
-            let lower_bound = self.get_keys_by_prefix_lower_bound_mut(key_prefix);
+            // Finding a containing FindKeys. If existing update..
+            let lower_bound = self.get_find_keys_lower_bound_mut(key_prefix);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 // Delete the keys in the entry
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
@@ -623,7 +639,7 @@ impl LruPrefixCache {
                 let cache_key = CacheKey::FindKeys(lower_bound.clone());
                 self.update_cache_key_size(&cache_key, new_cache_size);
             }
-            // Finding a lower bound. If existing update, if not insert.
+            // Finding a containing FindKeyValues. If existing update, if not insert.
             let lower_bound = self.get_find_key_values_lower_bound_mut(key_prefix);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 // Delete the keys (or key/values) in the entry
@@ -640,7 +656,7 @@ impl LruPrefixCache {
                 self.update_cache_key_size(&cache_key, new_cache_size);
             } else {
                 // There is no lower bound. Therefore we can insert
-                // the deleted prefix in the cache.
+                // the deleted prefix as a FindKeyValues.
                 let size = key_prefix.len();
                 let cache_key = CacheKey::FindKeyValues(key_prefix.to_vec());
                 let find_entry = FindKeyValuesEntry(BTreeMap::new());
@@ -715,8 +731,8 @@ impl LruPrefixCache {
             return result;
         }
         if self.has_exclusive_access {
-            // Now trying the find keys maps.
-            let lower_bound = self.get_keys_by_prefix_lower_bound(key);
+            // Now trying the FindKeys map.
+            let lower_bound = self.get_find_keys_lower_bound(key);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
                 Some((lower_bound, find_entry.contains_key(key_red)))
@@ -728,7 +744,7 @@ impl LruPrefixCache {
                 self.put_cache_key_on_top(cache_key);
                 return Some(result);
             }
-            // Now trying the find key-values maps.
+            // Now trying the FindKeyValues map.
             let lower_bound = self.get_find_key_values_lower_bound(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
@@ -743,10 +759,10 @@ impl LruPrefixCache {
         result
     }
 
-    /// Gets the find_keys entry from the key prefix.
+    /// Gets the find_keys entry from the key prefix. Returns `None` if absent from the cache.
     pub fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
-        // Trying first the find_keys_by_prefix cache
-        let result = match self.get_keys_by_prefix_lower_bound(key_prefix) {
+        // Trying first the FindKeys cache
+        let result = match self.get_find_keys_lower_bound(key_prefix) {
             None => None,
             Some((lower_bound, cache_entry)) => {
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
@@ -758,7 +774,7 @@ impl LruPrefixCache {
             self.put_cache_key_on_top(cache_key);
             return Some(keys);
         }
-        // Trying first the find_keys_by_prefix cache
+        // Then with the FindKeyValues cache
         let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
             None => {
                 return None;
@@ -773,7 +789,7 @@ impl LruPrefixCache {
         Some(result)
     }
 
-    /// Gets the find key values entry from the key prefix.
+    /// Gets the find key values entry from the key prefix. Returns `None` if absent from the cache.
     pub fn query_find_key_values(&mut self, key_prefix: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
         let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
             None => {
