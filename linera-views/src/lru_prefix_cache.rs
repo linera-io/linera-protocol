@@ -4,7 +4,7 @@
 //! A prefix based cache for the key/value store.
 
 use std::{
-    collections::{btree_map, hash_map::RandomState, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, hash_map::RandomState, BTreeMap, BTreeSet},
 };
 
 use linked_hash_map::LinkedHashMap;
@@ -13,8 +13,6 @@ use serde::{Deserialize, Serialize};
 use crate::{
     common::get_interval,
 };
-
-
 
 /// The parametrization of the cache.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -201,12 +199,8 @@ impl LruPrefixCache {
         self.queue.insert(cache_key, size);
     }
 
-    /// Remove an entry from the queue.
-    fn remove_cache_key(&mut self, cache_key: &CacheKey) {
-        let size = self
-            .queue
-            .remove(cache_key)
-            .expect("cache_key should be present");
+    /// Decrease the sizes of the keys.
+    fn decrease_sizes(&mut self, cache_key: &CacheKey, size: usize) {
         self.total_size -= size;
         match cache_key {
             CacheKey::Value(_) => {
@@ -221,34 +215,8 @@ impl LruPrefixCache {
         }
     }
 
-    /// Update the cache size to the new size without changing position.
-    fn update_cache_key_size(&mut self, cache_key: &CacheKey, new_size: usize) {
-        let size = self
-            .queue
-            .get_mut(cache_key)
-            .expect("cache_key should be present");
-        let old_size = *size;
-        *size = new_size;
-        self.total_size -= old_size;
-        self.total_size += new_size;
-        match cache_key {
-            CacheKey::Value(_) => {
-                self.total_value_size -= old_size;
-                self.total_value_size += new_size;
-            }
-            CacheKey::FindKeys(_) => {
-                self.total_find_keys_size -= old_size;
-                self.total_find_keys_size += new_size;
-            }
-            CacheKey::FindKeyValues(_) => {
-                self.total_find_key_values_size -= old_size;
-                self.total_find_key_values_size += new_size;
-            }
-        }
-    }
-
-    /// Insert a cache_key into the queue and update sizes.
-    fn insert_cache_key(&mut self, cache_key: CacheKey, size: usize) {
+    /// Increase the sizes of the keys.
+    fn increase_sizes(&mut self, cache_key: &CacheKey, size: usize) {
         self.total_size += size;
         match cache_key {
             CacheKey::Value(_) => {
@@ -261,6 +229,32 @@ impl LruPrefixCache {
                 self.total_find_key_values_size += size;
             }
         }
+    }
+
+    /// Remove an entry from the queue and update the sizes.
+    fn remove_cache_key(&mut self, cache_key: &CacheKey) {
+        let size = self
+            .queue
+            .remove(cache_key)
+            .expect("cache_key should be present");
+        self.decrease_sizes(cache_key, size);
+    }
+
+    /// Update the cache size to the new size without changing position.
+    fn update_cache_key_size(&mut self, cache_key: &CacheKey, new_size: usize) {
+        let size = self
+            .queue
+            .get_mut(cache_key)
+            .expect("cache_key should be present");
+        let old_size = *size;
+        *size = new_size;
+        self.decrease_sizes(cache_key, old_size);
+        self.increase_sizes(cache_key, new_size);
+    }
+
+    /// Insert a cache_key into the queue and update sizes.
+    fn insert_cache_key(&mut self, cache_key: CacheKey, size: usize) {
+        self.increase_sizes(&cache_key, size);
         self.queue.insert(cache_key, size);
     }
 
@@ -354,7 +348,7 @@ impl LruPrefixCache {
         }
     }
 
-    /// Trim find_keys_by_prefix cache so that it fits within bounds.
+    /// Trim `find_keys_by_prefix` cache so that it fits within bounds.
     fn trim_find_keys_cache(&mut self) {
         let mut prefixes = Vec::new();
         let mut total_size = self.total_find_keys_size;
@@ -379,7 +373,7 @@ impl LruPrefixCache {
         }
     }
 
-    /// Trim find_key_values_by_prefix cache so that it fits within bounds.
+    /// Trim `find_key_values_by_prefix` cache so that it fits within bounds.
     fn trim_find_key_values_cache(&mut self) {
         let mut prefixes = Vec::new();
         let mut total_size = self.total_find_key_values_size;
@@ -406,31 +400,13 @@ impl LruPrefixCache {
 
     /// Trim the cache so that it fits within the constraints.
     fn trim_cache(&mut self) {
-        // NOTE: The removal of entries might be too aggressive for the
-        // total_size / total_value_size / total_find_size
         while self.total_size > self.config.max_cache_size
             || self.queue.len() > self.config.max_cache_entries
         {
             let Some((cache_key, size)) = self.queue.pop_front() else {
                 break;
             };
-            match cache_key {
-                CacheKey::Value(key) => {
-                    self.value_map.remove(&key);
-                    self.total_size -= size;
-                    self.total_value_size -= size;
-                }
-                CacheKey::FindKeys(key) => {
-                    self.find_keys_map.remove(&key);
-                    self.total_size -= size;
-                    self.total_find_keys_size -= size;
-                }
-                CacheKey::FindKeyValues(key) => {
-                    self.find_key_values_map.remove(&key);
-                    self.total_size -= size;
-                    self.total_find_key_values_size -= size;
-                }
-            }
+            self.decrease_sizes(&cache_key, size);
         }
     }
 
@@ -447,14 +423,14 @@ impl LruPrefixCache {
             return;
         }
         match self.value_map.entry(key.clone()) {
-            btree_map::Entry::Occupied(mut entry) => {
+            Entry::Occupied(mut entry) => {
                 entry.insert(cache_entry);
                 // Put it on first position for LRU with the new size
                 let cache_key = CacheKey::Value(key);
                 self.remove_cache_key(&cache_key);
                 self.insert_cache_key(cache_key, size);
             }
-            btree_map::Entry::Vacant(entry) => {
+            Entry::Vacant(entry) => {
                 entry.insert(cache_entry);
                 let cache_key = CacheKey::Value(key);
                 self.insert_cache_key(cache_key, size);
@@ -464,12 +440,14 @@ impl LruPrefixCache {
         self.trim_cache();
     }
 
+    /// Puts a key/value in the cache.
     pub fn put_key_value(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.correct_find_entry(&key, Some(value.to_vec()));
         let cache_entry = ValueCacheEntry::Value(value.to_vec());
 	self.insert_value(key.to_vec(), cache_entry);
     }
 
+    /// Deletes a key from the cache.
     pub fn delete_key(&mut self, key: &[u8]) {
         self.correct_find_entry(key, None);
         let cache_entry = ValueCacheEntry::DoesNotExist;
