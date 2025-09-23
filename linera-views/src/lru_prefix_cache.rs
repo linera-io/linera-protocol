@@ -525,10 +525,7 @@ impl LruPrefixCache {
         }
         let cache_key = CacheKey::FindKeys(key_prefix.clone());
         // The entry has to be missing otherwise, it would have been found
-        assert!(self
-            .find_keys_map
-            .insert(key_prefix, find_entry)
-            .is_none());
+        assert!(self.find_keys_map.insert(key_prefix, find_entry).is_none());
         self.insert_cache_key(cache_key, size);
         self.trim_find_keys_cache();
         self.trim_cache();

@@ -12,7 +12,7 @@ use linera_views::{
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
-    lru_caching::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig,
     rocks_db::{
         PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,

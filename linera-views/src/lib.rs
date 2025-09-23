@@ -75,7 +75,7 @@ pub mod context;
 pub mod common;
 
 /// Definitions for the LRU cache.
-mod lru_prefix_cache;
+pub mod lru_prefix_cache;
 
 mod error;
 pub use error::ViewError;

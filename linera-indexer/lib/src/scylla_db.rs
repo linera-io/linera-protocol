@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    lru_caching::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig,
     scylla_db::{ScyllaDbDatabase, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
     store::KeyValueDatabase,
 };

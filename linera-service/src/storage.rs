@@ -21,7 +21,7 @@ use linera_views::rocks_db::{
     RocksDbStoreInternalConfig,
 };
 use linera_views::{
-    lru_caching::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig,
     memory::{MemoryDatabase, MemoryStoreConfig},
     store::{KeyValueDatabase, KeyValueStore},
 };
