@@ -7,7 +7,7 @@ use std::{
     io::Write,
     marker::PhantomData,
     mem,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use async_lock::{RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
@@ -81,8 +81,6 @@ pub struct ReentrantByteCollectionView<C, W> {
     delete_storage_first: bool,
     /// Entries that may have staged changes.
     updates: BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
-    /// Entries cached in memory that have the exact same state as in the persistent storage.
-    cached_entries: Mutex<BTreeMap<Vec<u8>, Arc<RwLock<W>>>>,
 }
 
 impl<W, C2> ReplaceContext<C2> for ReentrantByteCollectionView<W::Context, W>
@@ -97,7 +95,6 @@ where
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
         let mut updates: BTreeMap<_, Update<Arc<RwLock<W::Target>>>> = BTreeMap::new();
-        let mut cached_entries = BTreeMap::new();
         for (key, update) in &self.updates {
             let new_value = match update {
                 Update::Removed => Update::Removed,
@@ -107,20 +104,10 @@ where
             };
             updates.insert(key.clone(), new_value);
         }
-        let old_cached_entries = self.cached_entries.lock().unwrap().clone();
-        for (key, entry) in old_cached_entries {
-            cached_entries.insert(
-                key,
-                Arc::new(RwLock::new(
-                    entry.write().await.with_context(ctx.clone()).await,
-                )),
-            );
-        }
         ReentrantByteCollectionView {
             context: ctx(self.context()),
             delete_storage_first: self.delete_storage_first,
             updates,
-            cached_entries: Mutex::new(cached_entries),
         }
     }
 }
@@ -158,7 +145,6 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
             context,
             delete_storage_first: false,
             updates: BTreeMap::new(),
-            cached_entries: Mutex::new(BTreeMap::new()),
         })
     }
 
@@ -219,7 +205,6 @@ impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
     fn clear(&mut self) {
         self.delete_storage_first = true;
         self.updates.clear();
-        self.cached_entries.get_mut().unwrap().clear();
     }
 }
 
@@ -247,7 +232,6 @@ impl<W: ClonableView> ClonableView for ReentrantByteCollectionView<W::Context, W
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             updates: cloned_updates,
-            cached_entries: Mutex::new(BTreeMap::new()),
         }
     }
 }
@@ -305,13 +289,8 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 }
             },
             Vacant(entry) => {
-                let wrapped_view = match self.cached_entries.get_mut().unwrap().remove(short_key) {
-                    Some(view) => view,
-                    None => {
-                        Self::wrapped_view(&self.context, self.delete_storage_first, short_key)
-                            .await?
-                    }
-                };
+                let wrapped_view =
+                    Self::wrapped_view(&self.context, self.delete_storage_first, short_key).await?;
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
@@ -330,26 +309,15 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         } else if self.delete_storage_first {
             None
         } else {
-            let view = {
-                let cached_entries = self.cached_entries.lock().unwrap();
-                let view = cached_entries.get(short_key);
-                view.cloned()
-            };
-            if let Some(view) = view {
-                Some(view.clone())
+            let key_index = self
+                .context
+                .base_key()
+                .base_tag_index(KeyTag::Index as u8, short_key);
+            if self.context.store().contains_key(&key_index).await? {
+                let view = Self::wrapped_view(&self.context, false, short_key).await?;
+                Some(view)
             } else {
-                let key_index = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Index as u8, short_key);
-                if self.context.store().contains_key(&key_index).await? {
-                    let view = Self::wrapped_view(&self.context, false, short_key).await?;
-                    let mut cached_entries = self.cached_entries.lock().unwrap();
-                    cached_entries.insert(short_key.to_owned(), view.clone());
-                    Some(view)
-                } else {
-                    None
-                }
+                None
             }
         })
     }
@@ -438,8 +406,6 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             }
         } else if self.delete_storage_first {
             false
-        } else if self.cached_entries.lock().unwrap().contains_key(short_key) {
-            true
         } else {
             let key_index = self
                 .context
@@ -468,7 +434,6 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     /// # })
     /// ```
     pub fn remove_entry(&mut self, short_key: Vec<u8>) {
-        self.cached_entries.get_mut().unwrap().remove(&short_key);
         if self.delete_storage_first {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.remove(&short_key);
@@ -508,7 +473,6 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         let view = Arc::new(RwLock::new(view));
         let view = Update::Set(view);
         self.updates.insert(short_key.to_vec(), view);
-        self.cached_entries.get_mut().unwrap().remove(short_key);
         Ok(())
     }
 
@@ -546,7 +510,6 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         &mut self,
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
-        let cached_entries = self.cached_entries.get_mut().unwrap();
         let mut short_keys_to_load = Vec::new();
         let mut keys = Vec::new();
         for short_key in &short_keys {
@@ -561,16 +524,12 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
                         entry.insert(Update::Set(view));
-                        cached_entries.remove(short_key);
                     }
                 }
                 btree_map::Entry::Vacant(entry) => {
                     if self.delete_storage_first {
-                        cached_entries.remove(short_key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
-                        entry.insert(Update::Set(view));
-                    } else if let Some(view) = cached_entries.remove(short_key) {
                         entry.insert(Update::Set(view));
                     } else {
                         keys.extend(W::pre_load(&context)?);
@@ -639,23 +598,18 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         let mut keys_to_check = Vec::new();
         let mut keys_to_check_metadata = Vec::new();
 
-        {
-            let cached_entries = self.cached_entries.lock().unwrap();
-            for (position, short_key) in short_keys.into_iter().enumerate() {
-                if let Some(update) = self.updates.get(&short_key) {
-                    if let Update::Set(view) = update {
-                        results[position] = Some((short_key, view.clone()));
-                    }
-                } else if let Some(view) = cached_entries.get(&short_key) {
+        for (position, short_key) in short_keys.into_iter().enumerate() {
+            if let Some(update) = self.updates.get(&short_key) {
+                if let Update::Set(view) = update {
                     results[position] = Some((short_key, view.clone()));
-                } else if !self.delete_storage_first {
-                    let key_index = self
-                        .context
-                        .base_key()
-                        .base_tag_index(KeyTag::Index as u8, &short_key);
-                    keys_to_check.push(key_index);
-                    keys_to_check_metadata.push((position, short_key));
                 }
+            } else if !self.delete_storage_first {
+                let key_index = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Index as u8, &short_key);
+                keys_to_check.push(key_index);
+                keys_to_check_metadata.push((position, short_key));
             }
         }
 
@@ -683,13 +637,11 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 .store()
                 .read_multi_values_bytes(keys_to_load)
                 .await?;
-            let mut cached_entries = self.cached_entries.lock().unwrap();
             for (loaded_values, (position, short_key, context)) in
                 values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
             {
                 let view = W::post_load(context, loaded_values)?;
                 let wrapped_view = Arc::new(RwLock::new(view));
-                cached_entries.insert(short_key.clone(), wrapped_view.clone());
                 results[position] = Some((short_key, wrapped_view));
             }
         }
@@ -727,51 +679,48 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         &self,
     ) -> Result<Vec<(Vec<u8>, ReadGuardedView<W>)>, ViewError> {
         let short_keys = self.keys().await?;
+        let mut loaded_views = vec![None; short_keys.len()];
+
+        // Load views that are not in updates and not deleted
         if !self.delete_storage_first {
             let mut keys = Vec::new();
-            let mut short_keys_to_load = Vec::new();
-            {
-                let cached_entries = self.cached_entries.lock().unwrap();
-                for short_key in &short_keys {
-                    if !self.updates.contains_key(short_key)
-                        && !cached_entries.contains_key(short_key)
-                    {
-                        let key = self
-                            .context
-                            .base_key()
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        keys.extend(W::pre_load(&context)?);
-                        short_keys_to_load.push(short_key.to_vec());
-                    }
-                }
-            }
-            let values = self.context.store().read_multi_values_bytes(keys).await?;
-            {
-                let mut cached_entries = self.cached_entries.lock().unwrap();
-                for (loaded_values, short_key) in values
-                    .chunks_exact(W::NUM_INIT_KEYS)
-                    .zip(short_keys_to_load)
-                {
+            let mut short_keys_and_indexes = Vec::new();
+            for (index, short_key) in short_keys.iter().enumerate() {
+                if !self.updates.contains_key(short_key) {
                     let key = self
                         .context
                         .base_key()
-                        .base_tag_index(KeyTag::Subview as u8, &short_key);
+                        .base_tag_index(KeyTag::Subview as u8, short_key);
                     let context = self.context.clone_with_base_key(key);
-                    let view = W::post_load(context, loaded_values)?;
-                    let wrapped_view = Arc::new(RwLock::new(view));
-                    cached_entries.insert(short_key.to_vec(), wrapped_view);
+                    keys.extend(W::pre_load(&context)?);
+                    short_keys_and_indexes.push((short_key.to_vec(), index));
                 }
             }
+            let values = self.context.store().read_multi_values_bytes(keys).await?;
+            for (loaded_values, (short_key, index)) in values
+                .chunks_exact(W::NUM_INIT_KEYS)
+                .zip(short_keys_and_indexes)
+            {
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                let view = W::post_load(context, loaded_values)?;
+                let wrapped_view = Arc::new(RwLock::new(view));
+                loaded_views[index] = Some(wrapped_view);
+            }
         }
-        let cached_entries = self.cached_entries.lock().unwrap();
+
+        // Create result from updates and loaded views
         short_keys
             .into_iter()
-            .map(|short_key| {
+            .zip(loaded_views)
+            .map(|(short_key, loaded_view)| {
                 let view = if let Some(Update::Set(view)) = self.updates.get(&short_key) {
                     view.clone()
-                } else if let Some(view) = cached_entries.get(&short_key) {
-                    view.clone()
+                } else if let Some(view) = loaded_view {
+                    view
                 } else {
                     unreachable!("All entries should have been loaded into memory");
                 };
@@ -808,24 +757,19 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         if !self.delete_storage_first {
             let mut keys = Vec::new();
             let mut short_keys_to_load = Vec::new();
-            {
-                let cached_entries = self.cached_entries.get_mut().unwrap();
-                for short_key in &short_keys {
-                    if !self.updates.contains_key(short_key) {
-                        if let Some(view) = cached_entries.remove(short_key) {
-                            self.updates.insert(short_key.to_vec(), Update::Set(view));
-                        } else {
-                            let key = self
-                                .context
-                                .base_key()
-                                .base_tag_index(KeyTag::Subview as u8, short_key);
-                            let context = self.context.clone_with_base_key(key);
-                            keys.extend(W::pre_load(&context)?);
-                            short_keys_to_load.push(short_key.to_vec());
-                        }
-                    }
+
+            for short_key in &short_keys {
+                if !self.updates.contains_key(short_key) {
+                    let key = self
+                        .context
+                        .base_key()
+                        .base_tag_index(KeyTag::Subview as u8, short_key);
+                    let context = self.context.clone_with_base_key(key);
+                    keys.extend(W::pre_load(&context)?);
+                    short_keys_to_load.push(short_key.to_vec());
                 }
             }
+
             let values = self.context.store().read_multi_values_bytes(keys).await?;
             for (loaded_values, short_key) in values
                 .chunks_exact(W::NUM_INIT_KEYS)
@@ -1023,18 +967,12 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
         let keys = self.keys().await?;
         let count = keys.len() as u32;
         hasher.update_with_bcs_bytes(&count)?;
-        let cached_entries = self.cached_entries.get_mut().unwrap();
         for key in keys {
             hasher.update_with_bytes(&key)?;
             let hash = if let Some(entry) = self.updates.get_mut(&key) {
                 let Update::Set(view) = entry else {
                     unreachable!();
                 };
-                let mut view = view
-                    .try_write_arc()
-                    .ok_or_else(|| ViewError::TryLockError(key))?;
-                view.hash_mut().await?
-            } else if let Some(view) = cached_entries.get_mut(&key) {
                 let mut view = view
                     .try_write_arc()
                     .ok_or_else(|| ViewError::TryLockError(key))?;
@@ -1060,24 +998,12 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
         let keys = self.keys().await?;
         let count = keys.len() as u32;
         hasher.update_with_bcs_bytes(&count)?;
-        let mut cached_entries_result = Vec::new();
-        {
-            let cached_entries = self.cached_entries.lock().unwrap();
-            for key in &keys {
-                cached_entries_result.push(cached_entries.get(key).cloned());
-            }
-        }
-        for (key, cached_entry) in keys.into_iter().zip(cached_entries_result) {
+        for key in keys {
             hasher.update_with_bytes(&key)?;
             let hash = if let Some(entry) = self.updates.get(&key) {
                 let Update::Set(view) = entry else {
                     unreachable!();
                 };
-                let view = view
-                    .try_read_arc()
-                    .ok_or_else(|| ViewError::TryLockError(key))?;
-                view.hash().await?
-            } else if let Some(view) = cached_entry {
                 let view = view
                     .try_read_arc()
                     .ok_or_else(|| ViewError::TryLockError(key))?;
