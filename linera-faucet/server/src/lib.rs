@@ -521,7 +521,11 @@ where
             .store_chains_batch(chains_to_store)
             .await
         {
-            tracing::warn!("Failed to save chains to database: {}", e);
+            let error_msg = format!("Failed to save chains to database: {}", e);
+            for request in valid_requests {
+                let _ = request.responder.send(Err(Error::new(error_msg.clone())));
+            }
+            anyhow::bail!(error_msg);
         }
 
         // Respond to requests.
