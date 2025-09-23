@@ -90,6 +90,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_json_extension_safety_check() {
+        let temp_dir = tempdir().unwrap();
+        let json_path = temp_dir.path().join("dangerous.json");
+
+        // Attempt to create database with .json extension should fail.
+        let result = FaucetDatabase::new(&json_path).await;
+        match result {
+            Ok(_) => panic!("Expected error when creating database with .json extension"),
+            Err(error) => {
+                let error_message = error.to_string();
+                assert!(error_message.contains("Database path cannot end with '.json' extension"));
+                assert!(error_message.contains("dangerous.json"));
+                assert!(error_message.contains("Use '.sqlite' or '.db' extension instead"));
+            }
+        }
+
+        // But valid extensions should work fine.
+        let sqlite_path = temp_dir.path().join("valid.sqlite");
+        assert!(FaucetDatabase::new(&sqlite_path).await.is_ok());
+
+        let db_path = temp_dir.path().join("valid.db");
+        assert!(FaucetDatabase::new(&db_path).await.is_ok());
+    }
+
+    #[tokio::test]
     async fn test_no_migration_if_db_not_empty() {
         let temp_dir = tempdir().unwrap();
         let json_path = temp_dir.path().join("test_no_migration.json");

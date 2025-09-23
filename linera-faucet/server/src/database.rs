@@ -33,7 +33,16 @@ CREATE INDEX IF NOT EXISTS idx_chains_chain_id ON chains(chain_id);
 impl FaucetDatabase {
     /// Creates a new SQLite database connection.
     pub async fn new(database_path: &PathBuf) -> anyhow::Result<Self> {
-        // Create parent directory if it doesn't exist
+        // Safety check: prevent accidentally overwriting JSON files
+        if database_path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+            anyhow::bail!(
+                "Database path cannot end with '.json' extension to prevent overwriting JSON files. \
+                Path: {}. Use '.sqlite' or '.db' extension instead.",
+                database_path.display()
+            );
+        }
+
+        // Create parent directory if it doesn't exist.
         if let Some(parent) = database_path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
