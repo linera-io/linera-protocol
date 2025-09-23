@@ -49,7 +49,7 @@ services:
     image: "${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:latest}"
     container_name: proxy
     ports:
-      - "19100:19100"
+      - "19100:443"
     command: ["./compose-proxy-entrypoint.sh", "1"]
     volumes:
       - .:/config
