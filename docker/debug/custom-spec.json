@@ -1,0 +1,10 @@
+{
+  "securityContext": {
+    "runAsUser": 0,
+    "runAsNonRoot": false
+  },
+  "podSecurityContext": {
+    "runAsUser": 0,
+    "runAsNonRoot": false
+  }
+}
