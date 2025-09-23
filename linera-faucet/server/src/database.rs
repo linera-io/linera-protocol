@@ -3,15 +3,24 @@
 
 //! SQLite database module for storing chain assignments.
 
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Context as _;
-use linera_base::identifiers::{AccountOwner, ChainId};
+use linera_base::{
+    bcs,
+    crypto::CryptoHash,
+    data_types::{BlockHeight, ChainDescription},
+    identifiers::{AccountOwner, ChainId},
+};
+use linera_chain::{data_types::Transaction, types::ConfirmedBlockCertificate};
+use linera_core::client::ChainClient;
+use linera_execution::{system::SystemOperation, Operation};
+use linera_storage::Storage;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
     Row,
 };
-use tracing::info;
+use tracing::{debug, info};
 
 /// SQLite database for persistent storage of chain assignments.
 pub struct FaucetDatabase {
@@ -65,6 +74,168 @@ impl FaucetDatabase {
             .context("Failed to create chains table")?;
         info!("Database schema initialized");
         Ok(())
+    }
+
+    /// Synchronizes the database with the blockchain by traversing block history.
+    pub async fn sync_with_blockchain<E>(&self, client: &ChainClient<E>) -> anyhow::Result<()>
+    where
+        E: linera_core::Environment,
+        E::Storage: Storage,
+    {
+        info!("Starting database synchronization with blockchain");
+
+        // Build height->hash map and find sync point in a single traversal.
+        let height_to_hash = self.build_sync_map(client).await?;
+
+        info!(
+            "Found sync point at height {}, processing {} blocks",
+            height_to_hash.keys().next().unwrap_or(&BlockHeight::ZERO),
+            height_to_hash.len()
+        );
+
+        // Sync forward from the sync point using the pre-built map.
+        self.sync_forward_with_map(client, height_to_hash).await?;
+
+        info!("Database synchronization completed");
+        Ok(())
+    }
+
+    /// Builds a height->hash map and finds the sync point in a single blockchain traversal.
+    /// Returns (sync_point, height_to_hash_map).
+    async fn build_sync_map<E>(
+        &self,
+        client: &ChainClient<E>,
+    ) -> anyhow::Result<HashMap<BlockHeight, CryptoHash>>
+    where
+        E: linera_core::Environment,
+        E::Storage: Storage,
+    {
+        let info = client.chain_info().await?;
+        let end_height = info.next_block_height;
+
+        if end_height == BlockHeight::ZERO {
+            info!("Chain is empty, no synchronization needed");
+            return Ok(HashMap::new());
+        }
+
+        let mut height_to_hash = HashMap::new();
+        let mut current_hash = info.block_hash;
+
+        // Traverse backwards to build the height -> hash mapping and find sync point
+        while let Some(hash) = current_hash {
+            let certificate = client
+                .storage_client()
+                .read_certificate(hash)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Certificate not found for hash {}", hash))?;
+            let current_height = certificate.block().header.height;
+
+            // Check if this block's chains are already in our database
+            let chains_in_block = self.extract_opened_chains(&certificate).await?;
+
+            if !chains_in_block.is_empty() {
+                let mut all_chains_exist = true;
+                for (owner, _chain_id) in &chains_in_block {
+                    if self.get_chain_id(owner).await?.is_none() {
+                        all_chains_exist = false;
+                        break;
+                    }
+                }
+
+                if all_chains_exist {
+                    // All chains from this block are already in the database.
+                    break;
+                }
+            }
+
+            // Add to our height->hash map
+            height_to_hash.insert(current_height, hash);
+
+            // Move to the previous block
+            current_hash = certificate.block().header.previous_block_hash;
+        }
+
+        Ok(height_to_hash)
+    }
+
+    /// Syncs the database using a pre-built height->hash map.
+    async fn sync_forward_with_map<E>(
+        &self,
+        client: &ChainClient<E>,
+        height_to_hash: HashMap<BlockHeight, CryptoHash>,
+    ) -> anyhow::Result<()>
+    where
+        E: linera_core::Environment,
+        E::Storage: Storage,
+    {
+        if height_to_hash.is_empty() {
+            return Ok(());
+        }
+
+        // Process blocks in chronological order (forward)
+        for (height, hash) in height_to_hash {
+            let certificate = client
+                .storage_client()
+                .read_certificate(hash)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Certificate not found for hash {}", hash))?;
+
+            let chains_to_store = self.extract_opened_chains(&certificate).await?;
+
+            if !chains_to_store.is_empty() {
+                info!(
+                    "Processing block at height {height} with {} new chains",
+                    chains_to_store.len()
+                );
+                self.store_chains_batch(chains_to_store).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Extracts OpenChain operations from a certificate and returns (owner, chain_id) pairs.
+    async fn extract_opened_chains(
+        &self,
+        certificate: &ConfirmedBlockCertificate,
+    ) -> anyhow::Result<Vec<(AccountOwner, ChainId)>> {
+        let mut chains = Vec::new();
+        let block = certificate.block();
+
+        // Parse chain descriptions from the block's blobs
+        let blobs = block.body.blobs.iter().flatten();
+        let chain_descriptions = blobs
+            .map(|blob| bcs::from_bytes::<ChainDescription>(blob.bytes()))
+            .collect::<Result<Vec<ChainDescription>, _>>()?;
+
+        let mut chain_desc_iter = chain_descriptions.into_iter();
+
+        // Examine each transaction in the block
+        for transaction in &block.body.transactions {
+            if let Transaction::ExecuteOperation(Operation::System(system_op)) = transaction {
+                if let SystemOperation::OpenChain(config) = system_op.as_ref() {
+                    // Extract the owner from the OpenChain operation
+                    // We expect single-owner chains from the faucet
+                    let mut owners = config.ownership.all_owners();
+                    if let Some(owner) = owners.next() {
+                        // Verify it's a single-owner chain (faucet only creates these)
+                        if owners.next().is_none() {
+                            // Get the corresponding chain description from the blobs
+                            if let Some(description) = chain_desc_iter.next() {
+                                chains.push((*owner, description.id()));
+                                debug!(
+                                    "Found OpenChain operation for owner {} creating chain {}",
+                                    owner,
+                                    description.id()
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(chains)
     }
 
     /// Gets the chain ID for an owner if it exists.

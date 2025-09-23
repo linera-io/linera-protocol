@@ -622,6 +622,11 @@ where
             .await
             .context("Failed to initialize faucet database")?;
 
+        // Synchronize database with blockchain history.
+        if let Err(e) = faucet_storage.sync_with_blockchain(&client).await {
+            tracing::warn!("Failed to synchronize database with blockchain: {}", e);
+        }
+
         let faucet_storage = Arc::new(faucet_storage);
 
         // Initialize batching components
