@@ -734,9 +734,7 @@ where
             let is_tracked = self
                 .tracked_chains
                 .as_ref()
-                .map_or(false, |tracked_chains| {
-                    tracked_chains.read().unwrap().contains(&chain_id)
-                });
+                .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
 
             let actor_task = ChainWorkerActor::run(
                 self.chain_worker_config.clone(),

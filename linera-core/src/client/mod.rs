@@ -162,6 +162,7 @@ pub struct Client<Env: Environment> {
 
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
+    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all)]
     pub fn new(
         environment: Env,
