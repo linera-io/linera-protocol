@@ -438,20 +438,20 @@ impl LruPrefixCache {
 
     /// Puts a key/value in the cache.
     pub fn put_key_value(&mut self, key: &[u8], value: &[u8]) {
-        self.correct_find_entry(key, Some(value.to_vec()));
+        self.update_find_entries(key, Some(value.to_vec()));
         let cache_entry = ValueCacheEntry::Value(value.to_vec());
         self.insert_value(key, cache_entry);
     }
 
     /// Deletes a key from the cache.
     pub fn delete_key(&mut self, key: &[u8]) {
-        self.correct_find_entry(key, None);
+        self.update_find_entries(key, None);
         let cache_entry = ValueCacheEntry::DoesNotExist;
         self.insert_value(key, cache_entry);
     }
 
     /// Updates the find entries.
-    fn correct_find_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
+    fn update_find_entries(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
         let lower_bound = self.get_keys_by_prefix_lower_bound_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
@@ -464,7 +464,7 @@ impl LruPrefixCache {
         }
     }
 
-    /// Inserts a read_value entry into the cache.
+    /// Inserts a read_value result into the cache.
     pub fn insert_read_value(&mut self, key: &[u8], value: &Option<Vec<u8>>) {
         let cache_entry = match value {
             None => ValueCacheEntry::DoesNotExist,
@@ -473,7 +473,7 @@ impl LruPrefixCache {
         self.insert_value(key, cache_entry)
     }
 
-    /// Inserts a read_value entry into the cache.
+    /// Inserts a contains_key result into the cache.
     pub fn insert_contains_key(&mut self, key: &[u8], result: bool) {
         let cache_entry = match result {
             false => ValueCacheEntry::DoesNotExist,
@@ -482,6 +482,7 @@ impl LruPrefixCache {
         self.insert_value(key, cache_entry)
     }
 
+    /// Inserts the result of `find_keys_by_prefix` in the cache.
     pub fn insert_find_keys(&mut self, key_prefix: Vec<u8>, keys: &[Vec<u8>]) {
         let find_entry = FindKeysEntry(keys.iter().map(|x| x.to_vec()).collect());
         let size = find_entry.size() + key_prefix.len();
@@ -489,7 +490,7 @@ impl LruPrefixCache {
             // The entry is too large, we do not insert it,
             return;
         }
-        // Clearing up the find entries
+        // Clearing up the FindKeys entries that are covered by the new FindKeys.
         let keys = self
             .find_keys_map
             .range(get_interval(key_prefix.clone()))
@@ -504,13 +505,14 @@ impl LruPrefixCache {
         // The entry has to be missing otherwise, it would have been found
         assert!(self
             .find_keys_map
-            .insert(key_prefix.clone(), find_entry)
+            .insert(key_prefix, find_entry)
             .is_none());
         self.insert_cache_key(cache_key, size);
         self.trim_find_keys_cache();
         self.trim_cache();
     }
 
+    /// Inserts the result of `find_key_values_by_prefix` in the cache.
     pub fn insert_find_key_values(
         &mut self,
         key_prefix: Vec<u8>,
@@ -527,7 +529,7 @@ impl LruPrefixCache {
             // The entry is too large, we do not insert it,
             return;
         }
-        // Clearing up the FindKeys entries
+        // Clearing up the FindKeys entries that are covered by the new FindKeyValues.
         let prefixes = self
             .find_keys_map
             .range(get_interval(key_prefix.clone()))
@@ -538,7 +540,7 @@ impl LruPrefixCache {
             let cache_key = CacheKey::FindKeys(prefix);
             self.remove_cache_key(&cache_key);
         }
-        // Clearing up the FindKeys entries
+        // Clearing up the FindKeyValues entries that are covered by the new FindKeyValues.
         let prefixes = self
             .find_key_values_map
             .range(get_interval(key_prefix.clone()))
@@ -549,8 +551,7 @@ impl LruPrefixCache {
             let cache_key = CacheKey::FindKeyValues(prefix);
             self.remove_cache_key(&cache_key);
         }
-        // Clearing up the value entries if it is a KeyValues as
-        // it is obsoletes
+        // Clearing up the value entries as they are covered by the new FindKeyValues.
         let keys = self
             .value_map
             .range(get_interval(key_prefix.clone()))
@@ -565,7 +566,7 @@ impl LruPrefixCache {
         // The entry has to be missing otherwise, it would have been found
         assert!(self
             .find_key_values_map
-            .insert(key_prefix.clone(), find_entry)
+            .insert(key_prefix, find_entry)
             .is_none());
         self.insert_cache_key(cache_key, size);
         self.trim_find_key_values_cache();
@@ -955,7 +956,7 @@ mod tests {
     }
 
     #[test]
-    fn test_correct_find_entry_mut() {
+    fn test_update_find_entry_mut() {
         let mut cache = create_test_cache(true);
         let prefix = vec![1];
         let key = vec![1, 2];
@@ -965,7 +966,7 @@ mod tests {
         cache.insert_find_keys(prefix.clone(), &original_keys);
 
         // Update an entry
-        cache.correct_find_entry(&key, Some(vec![42]));
+        cache.update_find_entries(&key, Some(vec![42]));
 
         // The find_keys entry should now contain the updated key
         let result = cache.query_find_keys(&prefix);
