@@ -3,16 +3,12 @@
 
 //! A prefix based cache for the key/value store.
 
-use std::{
-    collections::{btree_map::Entry, hash_map::RandomState, BTreeMap, BTreeSet},
-};
+use std::collections::{btree_map::Entry, hash_map::RandomState, BTreeMap, BTreeSet};
 
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    common::get_interval,
-};
+use crate::common::get_interval;
 
 /// The parametrization of the cache.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -411,28 +407,28 @@ impl LruPrefixCache {
     }
 
     /// Inserts an entry into the cache.
-    fn insert_value(&mut self, key: Vec<u8>, cache_entry: ValueCacheEntry) {
+    fn insert_value(&mut self, key: &[u8], cache_entry: ValueCacheEntry) {
         let size = key.len() + cache_entry.size();
         if (matches!(cache_entry, ValueCacheEntry::DoesNotExist) && !self.has_exclusive_access)
             || size > self.config.max_entry_size
         {
-            if self.value_map.remove(&key).is_some() {
-                let cache_key = CacheKey::Value(key);
+            if self.value_map.remove(key).is_some() {
+                let cache_key = CacheKey::Value(key.to_vec());
                 self.remove_cache_key(&cache_key);
             };
             return;
         }
-        match self.value_map.entry(key.clone()) {
+        match self.value_map.entry(key.to_vec()) {
             Entry::Occupied(mut entry) => {
                 entry.insert(cache_entry);
                 // Put it on first position for LRU with the new size
-                let cache_key = CacheKey::Value(key);
+                let cache_key = CacheKey::Value(key.to_vec());
                 self.remove_cache_key(&cache_key);
                 self.insert_cache_key(cache_key, size);
             }
             Entry::Vacant(entry) => {
                 entry.insert(cache_entry);
-                let cache_key = CacheKey::Value(key);
+                let cache_key = CacheKey::Value(key.to_vec());
                 self.insert_cache_key(cache_key, size);
             }
         }
@@ -441,20 +437,20 @@ impl LruPrefixCache {
     }
 
     /// Puts a key/value in the cache.
-    pub fn put_key_value(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        self.correct_find_entry(&key, Some(value.to_vec()));
+    pub fn put_key_value(&mut self, key: &[u8], value: &[u8]) {
+        self.correct_find_entry(key, Some(value.to_vec()));
         let cache_entry = ValueCacheEntry::Value(value.to_vec());
-	self.insert_value(key.to_vec(), cache_entry);
+        self.insert_value(key, cache_entry);
     }
 
     /// Deletes a key from the cache.
     pub fn delete_key(&mut self, key: &[u8]) {
         self.correct_find_entry(key, None);
         let cache_entry = ValueCacheEntry::DoesNotExist;
-        self.insert_value(key.to_vec(), cache_entry);
+        self.insert_value(key, cache_entry);
     }
 
-    /// Invalidates corresponding find entries.
+    /// Updates the find entries.
     fn correct_find_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
         let lower_bound = self.get_keys_by_prefix_lower_bound_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
@@ -469,7 +465,7 @@ impl LruPrefixCache {
     }
 
     /// Inserts a read_value entry into the cache.
-    pub fn insert_read_value(&mut self, key: Vec<u8>, value: &Option<Vec<u8>>) {
+    pub fn insert_read_value(&mut self, key: &[u8], value: &Option<Vec<u8>>) {
         let cache_entry = match value {
             None => ValueCacheEntry::DoesNotExist,
             Some(vec) => ValueCacheEntry::Value(vec.to_vec()),
@@ -478,7 +474,7 @@ impl LruPrefixCache {
     }
 
     /// Inserts a read_value entry into the cache.
-    pub fn insert_contains_key(&mut self, key: Vec<u8>, result: bool) {
+    pub fn insert_contains_key(&mut self, key: &[u8], result: bool) {
         let cache_entry = match result {
             false => ValueCacheEntry::DoesNotExist,
             true => ValueCacheEntry::Exists,
@@ -746,9 +742,6 @@ impl LruPrefixCache {
         result
     }
 
-
-
-
     /// Gets the find_keys entry from the key prefix.
     pub fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
         // Trying first the find_keys_by_prefix cache
@@ -835,7 +828,7 @@ mod tests {
         let value = vec![4, 5, 6];
 
         // Insert a value
-        cache.insert_read_value(key.clone(), &Some(value.clone()));
+        cache.insert_read_value(&key, &Some(value.clone()));
 
         // Query the value
         let result = cache.query_read_value(&key);
@@ -851,18 +844,18 @@ mod tests {
         let mut cache = create_test_cache(true);
         let key = vec![1, 2, 3];
 
-	// Insert a key that exists
-        cache.insert_contains_key(key.clone(), true);
+        // Insert a key that exists
+        cache.insert_contains_key(&key, true);
 
-	// Query the key
+        // Query the key
         let result = cache.query_contains_key(&key);
         assert_eq!(result, Some(true));
 
-	// Insert a key that doesn't exist
+        // Insert a key that doesn't exist
         let key2 = vec![4, 5, 6];
-        cache.insert_contains_key(key2.clone(), false);
+        cache.insert_contains_key(&key2, false);
 
-	let result = cache.query_contains_key(&key2);
+        let result = cache.query_contains_key(&key2);
         assert_eq!(result, Some(false));
     }
 
@@ -872,19 +865,19 @@ mod tests {
         let prefix = vec![1, 2];
         let keys = vec![vec![3], vec![4], vec![5]];
 
-	// Insert find_keys entry
+        // Insert find_keys entry
         cache.insert_find_keys(prefix.clone(), &keys);
 
-	// Query with exact prefix
+        // Query with exact prefix
         let result = cache.query_find_keys(&prefix);
         assert_eq!(result, Some(keys.clone()));
 
-	// Query with longer prefix that should find the suffix
+        // Query with longer prefix that should find the suffix
         let longer_prefix = vec![1, 2, 3];
         let result = cache.query_find_keys(&longer_prefix);
         assert_eq!(result, Some(vec![vec![]])); // Should return empty vec since [1,2,3] matches exactly
 
-	// Query with non-matching prefix
+        // Query with non-matching prefix
         let result = cache.query_find_keys(&[9, 9]);
         assert_eq!(result, None);
     }
@@ -895,14 +888,14 @@ mod tests {
         let prefix = vec![1, 2];
         let key_values = vec![(vec![3], vec![10]), (vec![4], vec![20])];
 
-	// Insert find_key_values entry
+        // Insert find_key_values entry
         cache.insert_find_key_values(prefix.clone(), &key_values);
 
-	// Query with exact prefix
+        // Query with exact prefix
         let result = cache.query_find_key_values(&prefix);
         assert_eq!(result, Some(key_values.clone()));
 
-	// Query with non-matching prefix
+        // Query with non-matching prefix
         let result = cache.query_find_key_values(&[9, 9]);
         assert_eq!(result, None);
     }
@@ -911,14 +904,14 @@ mod tests {
     fn test_lru_eviction_by_cache_size() {
         let mut cache = create_test_cache(true);
 
-	// Fill cache beyond max_cache_size
+        // Fill cache beyond max_cache_size
         for i in 0..20 {
             let key = vec![i];
             let value = vec![0; 100]; // Large value to trigger size-based eviction
-            cache.insert_read_value(key, &Some(value));
+            cache.insert_read_value(&key, &Some(value));
         }
 
-	// Should have evicted some entries to stay within limits
+        // Should have evicted some entries to stay within limits
         assert!(cache.total_size <= cache.config.max_cache_size);
         assert!(cache.queue.len() <= cache.config.max_cache_entries);
     }
@@ -927,14 +920,14 @@ mod tests {
     fn test_lru_eviction_by_entry_count() {
         let mut cache = create_test_cache(true);
 
-	// Fill cache beyond max_cache_entries
+        // Fill cache beyond max_cache_entries
         for i in 0..15 {
             let key = vec![i];
             let value = vec![i]; // Small values
-            cache.insert_read_value(key, &Some(value));
+            cache.insert_read_value(&key, &Some(value));
         }
 
-	// Should have evicted entries to stay within max_cache_entries
+        // Should have evicted entries to stay within max_cache_entries
         assert!(cache.queue.len() <= cache.config.max_cache_entries);
     }
 
@@ -946,17 +939,17 @@ mod tests {
         let key3 = vec![3];
         let value = vec![42];
 
-	// Insert two entries
-        cache.insert_read_value(key1.clone(), &Some(value.clone()));
-        cache.insert_read_value(key2.clone(), &Some(value.clone()));
+        // Insert two entries
+        cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.insert_read_value(&key2, &Some(value.clone()));
 
-	// Access key1 to promote it
+        // Access key1 to promote it
         assert_eq!(Some(Some(value)), cache.query_read_value(&key1));
 
-	// Access key3 to promote it
+        // Access key3 to promote it
         assert_eq!(None, cache.query_read_value(&key3));
 
-	// The queue should have key1 at the end (most recently used)
+        // The queue should have key1 at the end (most recently used)
         let queue_keys = cache.queue.keys().collect::<Vec<_>>();
         assert_eq!(queue_keys[queue_keys.len() - 1], &CacheKey::Value(key1));
     }
@@ -968,13 +961,13 @@ mod tests {
         let key = vec![1, 2];
         let original_keys = vec![vec![2], vec![3]];
 
-	// Insert find_keys entry
+        // Insert find_keys entry
         cache.insert_find_keys(prefix.clone(), &original_keys);
 
-	// Update an entry
+        // Update an entry
         cache.correct_find_entry(&key, Some(vec![42]));
 
-	// The find_keys entry should now contain the updated key
+        // The find_keys entry should now contain the updated key
         let result = cache.query_find_keys(&prefix);
         assert!(result.is_some());
         let keys = result.unwrap();
@@ -990,22 +983,22 @@ mod tests {
         let key3 = vec![2, 4]; // Should not be affected
         let value = vec![42];
 
-	// Insert some values
-        cache.insert_read_value(key1.clone(), &Some(value.clone()));
-        cache.insert_read_value(key2.clone(), &Some(value.clone()));
-        cache.insert_read_value(key3.clone(), &Some(value.clone()));
+        // Insert some values
+        cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.insert_read_value(&key2, &Some(value.clone()));
+        cache.insert_read_value(&key3, &Some(value.clone()));
 
-	// Delete prefix [1]
+        // Delete prefix [1]
         cache.delete_prefix(&prefix);
 
-	// Keys with prefix [1] should be marked as DoesNotExist
+        // Keys with prefix [1] should be marked as DoesNotExist
         let result1 = cache.query_read_value(&key1);
         assert_eq!(result1, Some(None));
 
-	let result2 = cache.query_read_value(&key2);
+        let result2 = cache.query_read_value(&key2);
         assert_eq!(result2, Some(None));
 
-	// Key with different prefix should be unaffected
+        // Key with different prefix should be unaffected
         let result3 = cache.query_read_value(&key3);
         assert_eq!(result3, Some(Some(value)));
     }
@@ -1018,18 +1011,18 @@ mod tests {
         let key2 = vec![2, 3]; // Different prefix
         let value = vec![42];
 
-	// Insert some values
-        cache.insert_read_value(key1.clone(), &Some(value.clone()));
-        cache.insert_read_value(key2.clone(), &Some(value.clone()));
+        // Insert some values
+        cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.insert_read_value(&key2, &Some(value.clone()));
 
-	// Delete prefix [1]
+        // Delete prefix [1]
         cache.delete_prefix(&prefix);
 
-	// Key with prefix [1] should be removed from cache
+        // Key with prefix [1] should be removed from cache
         let result1 = cache.query_read_value(&key1);
         assert_eq!(result1, None);
 
-	// Key with different prefix should be unaffected
+        // Key with different prefix should be unaffected
         let result2 = cache.query_read_value(&key2);
         assert_eq!(result2, Some(Some(value)));
     }
@@ -1040,10 +1033,10 @@ mod tests {
         let key = vec![1];
         let large_value = vec![0; cache.config.max_entry_size + 1];
 
-	// Insert value larger than max_entry_size
-        cache.insert_read_value(key.clone(), &Some(large_value));
+        // Insert value larger than max_entry_size
+        cache.insert_read_value(&key, &Some(large_value));
 
-	// Should not be cached
+        // Should not be cached
         let result = cache.query_read_value(&key);
         assert_eq!(result, None);
     }
@@ -1053,10 +1046,10 @@ mod tests {
         let mut cache = create_test_cache(false);
         let key = vec![1];
 
-	// Insert DoesNotExist entry without exclusive access
-        cache.insert_read_value(key.clone(), &None);
+        // Insert DoesNotExist entry without exclusive access
+        cache.insert_read_value(&key, &None);
 
-	// Should not be cached due to lack of exclusive access
+        // Should not be cached due to lack of exclusive access
         let result = cache.query_read_value(&key);
         assert_eq!(result, None);
     }
@@ -1068,23 +1061,23 @@ mod tests {
         let key2 = vec![1, 3];
         let key3 = vec![1, 3, 4];
 
-	// Add keys
+        // Add keys
         find_entry.update_entry(&key1, Some(vec![42]));
         find_entry.update_entry(&key2, Some(vec![43]));
 
-	// Test contains_key
+        // Test contains_key
         assert!(find_entry.contains_key(&key1));
         assert!(find_entry.contains_key(&key2));
         assert!(!find_entry.contains_key(&key3));
         assert!(!find_entry.contains_key(&[9, 9]));
 
-	// Test get_keys_by_prefix
+        // Test get_keys_by_prefix
         let keys = find_entry.get_keys_by_prefix(&[1]);
         assert_eq!(keys.len(), 2);
         assert!(keys.contains(&vec![2]));
         assert!(keys.contains(&vec![3]));
 
-	// Remove a key
+        // Remove a key
         find_entry.update_entry(&key1, None);
         assert!(!find_entry.contains_key(&key1));
         assert!(find_entry.contains_key(&key2));
@@ -1098,25 +1091,25 @@ mod tests {
         let value1 = vec![42];
         let value2 = vec![43];
 
-	// Add key-value pairs
+        // Add key-value pairs
         find_entry.update_entry(&key1, Some(value1.clone()));
         find_entry.update_entry(&key2, Some(value2.clone()));
 
-	// Test contains_key
+        // Test contains_key
         assert!(find_entry.contains_key(&key1));
         assert!(find_entry.contains_key(&key2));
 
-	// Test get_read_value
+        // Test get_read_value
         assert_eq!(find_entry.get_read_value(&key1), Some(value1.clone()));
         assert_eq!(find_entry.get_read_value(&key2), Some(value2.clone()));
 
-	// Test get_find_key_values with prefix
+        // Test get_find_key_values with prefix
         let key_values = find_entry.get_find_key_values(&[1]);
         assert_eq!(key_values.len(), 2);
         assert!(key_values.contains(&(vec![2], value1.clone())));
         assert!(key_values.contains(&(vec![3], value2.clone())));
 
-	// Remove a key
+        // Remove a key
         find_entry.update_entry(&key1, None);
         assert!(!find_entry.contains_key(&key1));
         assert_eq!(find_entry.get_read_value(&key1), None);
@@ -1128,20 +1121,20 @@ mod tests {
         let initial_size = cache.total_size;
         let initial_value_size = cache.total_value_size;
 
-	let key = vec![1, 2, 3];
+        let key = vec![1, 2, 3];
         let value = vec![4, 5, 6];
-        cache.insert_read_value(key.clone(), &Some(value.clone()));
+        cache.insert_read_value(&key, &Some(value.clone()));
 
-	// Size should increase
+        // Size should increase
         assert!(cache.total_size > initial_size);
         assert!(cache.total_value_size > initial_value_size);
 
-	let value_size_with_entry = cache.total_value_size;
+        let value_size_with_entry = cache.total_value_size;
 
-	// Insert DoesNotExist entry (None value)
-        cache.insert_read_value(key, &None);
+        // Insert DoesNotExist entry (None value)
+        cache.insert_read_value(&key, &None);
 
-	// Value size should be less than when we had a real value,
+        // Value size should be less than when we had a real value,
         // since DoesNotExist entries have size 0 for the value part
         assert!(cache.total_value_size < value_size_with_entry);
     }
@@ -1160,14 +1153,14 @@ mod tests {
             true,
         );
 
-	// Insert multiple values to exceed max_cache_value_size
+        // Insert multiple values to exceed max_cache_value_size
         for i in 0..10 {
             let key = vec![i];
             let value = vec![0; 20]; // Each entry ~20 bytes
-            cache.insert_read_value(key, &Some(value));
+            cache.insert_read_value(&key, &Some(value));
         }
 
-	// Should have trimmed to stay within value cache limit
+        // Should have trimmed to stay within value cache limit
         assert!(cache.total_value_size <= cache.config.max_cache_value_size);
     }
 
@@ -1179,19 +1172,19 @@ mod tests {
         let keys1 = vec![vec![2], vec![3]];
         let keys2 = vec![vec![4]];
 
-	// Insert entries with different prefixes
+        // Insert entries with different prefixes
         cache.insert_find_keys(prefix1.clone(), &keys1);
         cache.insert_find_keys(prefix2.clone(), &keys2);
 
-	// Query with exact prefix1 - should return the keys we inserted
+        // Query with exact prefix1 - should return the keys we inserted
         let result = cache.query_find_keys(&prefix1);
         assert_eq!(result, Some(keys1));
 
-	// Query with exact prefix2 - should return the keys we inserted
+        // Query with exact prefix2 - should return the keys we inserted
         let result = cache.query_find_keys(&prefix2);
         assert_eq!(result, Some(keys2));
 
-	// Query with prefix that doesn't match any cached entry
+        // Query with prefix that doesn't match any cached entry
         let query_key = vec![9];
         let result = cache.query_find_keys(&query_key);
         assert_eq!(result, None);

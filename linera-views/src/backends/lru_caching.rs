@@ -176,7 +176,7 @@ where
             .inc();
         let value = self.store.read_value_bytes(key).await?;
         let mut cache = cache.lock().unwrap();
-        cache.insert_read_value(key.to_vec(), &value);
+        cache.insert_read_value(key, &value);
         Ok(value)
     }
 
@@ -200,7 +200,7 @@ where
             .inc();
         let result = self.store.contains_key(key).await?;
         let mut cache = cache.lock().unwrap();
-        cache.insert_contains_key(key.to_vec(), result);
+        cache.insert_contains_key(key, result);
         Ok(result)
     }
 
@@ -236,7 +236,7 @@ where
             let mut cache = cache.lock().unwrap();
             for ((index, result), key) in indices.into_iter().zip(key_results).zip(key_requests) {
                 results[index] = result;
-                cache.insert_contains_key(key, result);
+                cache.insert_contains_key(&key, result);
             }
         }
         Ok(results)
@@ -283,7 +283,7 @@ where
                 .into_iter()
                 .zip(miss_keys.into_iter().zip(values))
             {
-                cache.insert_read_value(key, &value);
+                cache.insert_read_value(&key, &value);
                 result[i] = value;
             }
         }
@@ -373,7 +373,7 @@ where
             for operation in &batch.operations {
                 match operation {
                     WriteOperation::Put { key, value } => {
-                        cache.put_key_value(key.to_vec(), value.to_vec());
+                        cache.put_key_value(key, value);
                     }
                     WriteOperation::Delete { key } => {
                         cache.delete_key(key);
