@@ -339,11 +339,11 @@ impl<Env: Environment> Client<Env> {
         }
         // Now download the rest in batches from the remote node.
         while next_height < stop {
-            // TODO(#2045): Analyze network errors instead of guessing the batch size.
+            // TODO(#2045): Analyze network errors instead of using a fixed batch size.
             let limit = u64::from(stop)
                 .checked_sub(u64::from(next_height))
                 .ok_or(ArithmeticError::Overflow)?
-                .min(1000);
+                .min(self.options.certificate_download_batch_size);
             let certificates = remote_node
                 .query_certificates_from(chain_id, next_height, limit)
                 .await?;
@@ -1365,7 +1365,12 @@ pub struct ChainClientOptions {
     pub grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
     pub blob_download_timeout: Duration,
+    /// Maximum number of certificates that we download at a time from one validator when
+    /// synchronizing one of our chains.
+    pub certificate_download_batch_size: u64,
 }
+
+pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 
 #[cfg(with_testing)]
 impl ChainClientOptions {
@@ -1378,6 +1383,7 @@ impl ChainClientOptions {
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             grace_period: DEFAULT_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
+            certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         }
     }
 }
