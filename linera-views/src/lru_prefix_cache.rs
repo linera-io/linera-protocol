@@ -344,7 +344,7 @@ impl LruPrefixCache {
             }
         }
         for key in keys {
-            self.value_map.remove(&key);
+            assert!(self.value_map.remove(&key).is_some());
             let cache_key = CacheKey::Value(key);
             self.remove_cache_key(&cache_key);
         }
@@ -369,7 +369,7 @@ impl LruPrefixCache {
             }
         }
         for prefix in prefixes {
-            self.find_keys_map.remove(&prefix);
+            assert!(self.find_keys_map.remove(&prefix).is_some());
             let cache_key = CacheKey::FindKeys(prefix);
             self.remove_cache_key(&cache_key);
         }
@@ -394,7 +394,7 @@ impl LruPrefixCache {
             }
         }
         for prefix in prefixes {
-            self.find_key_values_map.remove(&prefix);
+            assert!(self.find_key_values_map.remove(&prefix).is_some());
             let cache_key = CacheKey::FindKeyValues(prefix);
             self.remove_cache_key(&cache_key);
         }
@@ -409,6 +409,17 @@ impl LruPrefixCache {
                 break;
             };
             self.decrease_sizes(&cache_key, size);
+            match cache_key {
+                CacheKey::Value(key) => {
+                    assert!(self.value_map.remove(&key).is_some());
+                }
+                CacheKey::FindKeys(key) => {
+                    assert!(self.find_keys_map.remove(&key).is_some());
+                }
+                CacheKey::FindKeyValues(key) => {
+                    assert!(self.find_key_values_map.remove(&key).is_some());
+                }
+            }
         }
     }
 
