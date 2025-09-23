@@ -5168,7 +5168,7 @@ dependencies = [
 
 [[package]]
 name = "linera-base"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -5226,7 +5226,7 @@ dependencies = [
 
 [[package]]
 name = "linera-chain"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -5254,7 +5254,7 @@ dependencies = [
 
 [[package]]
 name = "linera-client"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "amm",
  "anyhow",
@@ -5314,7 +5314,7 @@ dependencies = [
 
 [[package]]
 name = "linera-core"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -5365,7 +5365,7 @@ dependencies = [
 
 [[package]]
 name = "linera-ethereum"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "alloy",
  "alloy-primitives",
@@ -5385,7 +5385,7 @@ dependencies = [
 
 [[package]]
 name = "linera-execution"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -5442,7 +5442,7 @@ dependencies = [
 
 [[package]]
 name = "linera-explorer"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -5468,7 +5468,7 @@ dependencies = [
 
 [[package]]
 name = "linera-faucet-client"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "linera-base",
  "linera-client",
@@ -5483,7 +5483,7 @@ dependencies = [
 
 [[package]]
 name = "linera-faucet-server"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -5515,7 +5515,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "assert_matches",
  "async-graphql",
@@ -5550,7 +5550,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-example"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -5575,7 +5575,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-graphql-client"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "graphql_client",
  "linera-base",
@@ -5592,7 +5592,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-plugins"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -5621,7 +5621,7 @@ dependencies = [
 
 [[package]]
 name = "linera-metrics"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -5641,7 +5641,7 @@ checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
 name = "linera-persistent"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "cfg-if",
  "cfg_aliases",
@@ -5663,7 +5663,7 @@ dependencies = [
 
 [[package]]
 name = "linera-rpc"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5707,7 +5707,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -5738,7 +5738,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk-derive"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -5747,7 +5747,7 @@ dependencies = [
 
 [[package]]
 name = "linera-service"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -5849,7 +5849,7 @@ dependencies = [
 
 [[package]]
 name = "linera-service-graphql-client"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "fungible",
@@ -5875,7 +5875,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5897,7 +5897,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-service"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -5942,7 +5942,7 @@ dependencies = [
 
 [[package]]
 name = "linera-version"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -5962,7 +5962,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -6009,7 +6009,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views-derive"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "cfg_aliases",
  "deluxe",
@@ -6160,7 +6160,7 @@ dependencies = [
 
 [[package]]
 name = "linera-web"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "console_error_panic_hook",
  "futures",
@@ -6187,7 +6187,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -6207,7 +6207,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-macros"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "cfg_aliases",
  "heck 0.4.1",
@@ -6219,7 +6219,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-test-modules"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "wit-bindgen 0.7.0",
 ]
