@@ -553,8 +553,6 @@ where
     start_balance: Amount,
     faucet_storage: Arc<FaucetDatabase>,
     storage_path: PathBuf,
-    /// Temporary directory handle to keep it alive (if using temporary storage)
-    _temp_dir: Option<Arc<tempfile::TempDir>>,
     /// Batching components
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
@@ -582,7 +580,6 @@ where
             start_balance: self.start_balance,
             faucet_storage: Arc::clone(&self.faucet_storage),
             storage_path: self.storage_path.clone(),
-            _temp_dir: self._temp_dir.clone(),
             pending_requests: Arc::clone(&self.pending_requests),
             request_notifier: Arc::clone(&self.request_notifier),
             max_batch_size: self.max_batch_size,
@@ -599,7 +596,7 @@ pub struct FaucetConfig {
     pub end_timestamp: Timestamp,
     pub genesis_config: Arc<GenesisConfig>,
     pub chain_listener_config: ChainListenerConfig,
-    pub storage_path: Option<PathBuf>,
+    pub storage_path: PathBuf,
     pub max_batch_size: usize,
 }
 
@@ -619,16 +616,8 @@ where
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
 
-        // Create storage path: use provided path or create temporary directory.
-        let (storage_path, temp_dir) = match config.storage_path {
-            Some(path) => (path, None),
-            None => {
-                let temp_dir = tempfile::tempdir()
-                    .context("Failed to create temporary directory for faucet storage")?;
-                let storage_path = temp_dir.path().join("faucet_storage.sqlite");
-                (storage_path, Some(Arc::new(temp_dir)))
-            }
-        };
+        // Use provided storage path
+        let storage_path = config.storage_path.clone();
 
         // Initialize database.
         let faucet_storage = FaucetDatabase::new(&storage_path)
@@ -663,7 +652,6 @@ where
             start_balance,
             faucet_storage,
             storage_path,
-            _temp_dir: temp_dir,
             pending_requests,
             request_notifier,
             max_batch_size: config.max_batch_size,
