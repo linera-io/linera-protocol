@@ -240,7 +240,7 @@ impl FaucetDatabase {
 
     /// Gets the chain ID for an owner if it exists.
     pub async fn get_chain_id(&self, owner: &AccountOwner) -> anyhow::Result<Option<ChainId>> {
-        let owner_str = serde_json::to_string(owner)?;
+        let owner_str = owner.to_string();
 
         let Some(row) = sqlx::query("SELECT chain_id FROM chains WHERE owner = ?")
             .bind(&owner_str)
@@ -262,7 +262,7 @@ impl FaucetDatabase {
         let mut tx = self.pool.begin().await?;
 
         for (owner, chain_id) in chains {
-            let owner_str = serde_json::to_string(&owner)?;
+            let owner_str = owner.to_string();
             let chain_id_str = chain_id.to_string();
 
             sqlx::query(
