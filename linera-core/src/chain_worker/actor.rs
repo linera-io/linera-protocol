@@ -33,6 +33,7 @@ use tracing::{debug, instrument, trace, Instrument as _};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
+    chain_worker::BlockOutcome,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     value_cache::ValueCache,
     worker::{NetworkActions, WorkerError},
@@ -100,7 +101,8 @@ where
     ProcessValidatedBlock {
         certificate: ValidatedBlockCertificate,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
+        callback:
+            oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError>>,
     },
 
     /// Process a confirmed block (a commit).
@@ -109,7 +111,8 @@ where
         #[debug(with = "elide_option")]
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
+        callback:
+            oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError>>,
     },
 
     /// Process a cross-chain update.
