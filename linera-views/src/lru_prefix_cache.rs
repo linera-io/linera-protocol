@@ -254,6 +254,8 @@ impl LruPrefixCache {
         self.queue.insert(cache_key, size);
     }
 
+    /// If the FindKeys map contain a prefix that is a prefix of key in argument,
+    /// then returns it and the corresponding FindKeys. Otherwise `None`.
     fn get_find_keys_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
         match self.find_keys_map.range(..=key.to_vec()).next_back() {
             None => None,
@@ -267,6 +269,7 @@ impl LruPrefixCache {
         }
     }
 
+    /// Same as above but returns a mutable reference.
     fn get_find_keys_lower_bound_mut(
         &mut self,
         key: &[u8],
@@ -283,6 +286,8 @@ impl LruPrefixCache {
         }
     }
 
+    /// If the FindKeyValues map contain a prefix that is a prefix of key in argument,
+    /// then returns it and the corresponding FindKeyValues. Otherwise `None`.
     fn get_find_key_values_lower_bound(
         &self,
         key: &[u8],
@@ -299,6 +304,7 @@ impl LruPrefixCache {
         }
     }
 
+    /// Same as above but returns a mutable reference.
     fn get_find_key_values_lower_bound_mut(
         &mut self,
         key: &[u8],
@@ -623,7 +629,7 @@ impl LruPrefixCache {
                 let cache_key = CacheKey::FindKeyValues(prefix);
                 self.remove_cache_key(&cache_key);
             }
-            // Finding a containing FindKeys. If existing update..
+            // Finding a containing FindKeys. If existing update.
             let lower_bound = self.get_find_keys_lower_bound_mut(key_prefix);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 // Delete the keys in the entry
@@ -702,7 +708,7 @@ impl LruPrefixCache {
             return result;
         }
         if self.has_exclusive_access {
-            // Now trying the find maps.
+            // Now trying the FindKeyValues map.
             let lower_bound = self.get_find_key_values_lower_bound(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
@@ -761,7 +767,7 @@ impl LruPrefixCache {
 
     /// Gets the find_keys entry from the key prefix. Returns `None` if absent from the cache.
     pub fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
-        // Trying first the FindKeys cache
+        // Trying first the FindKeys cache.
         let result = match self.get_find_keys_lower_bound(key_prefix) {
             None => None,
             Some((lower_bound, cache_entry)) => {
@@ -774,7 +780,7 @@ impl LruPrefixCache {
             self.put_cache_key_on_top(cache_key);
             return Some(keys);
         }
-        // Then with the FindKeyValues cache
+        // Then with the FindKeyValues cache.
         let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
             None => {
                 return None;
