@@ -90,14 +90,14 @@ pub struct Validator {
     pub network_address: String,
 }
 
-/// A pending chain creation request
+/// A pending chain creation request.
 #[derive(Debug)]
 struct PendingRequest {
     owner: AccountOwner,
     responder: oneshot::Sender<Result<ChainDescription, Error>>,
 }
 
-/// Configuration for the batch processor
+/// Configuration for the batch processor.
 struct BatchProcessorConfig {
     amount: Amount,
     end_timestamp: Timestamp,
@@ -106,7 +106,7 @@ struct BatchProcessorConfig {
     max_batch_size: usize,
 }
 
-/// Batching coordinator for processing chain creation requests
+/// Batching coordinator for processing chain creation requests.
 struct BatchProcessor<C: ClientContext> {
     config: BatchProcessorConfig,
     context: Arc<Mutex<C>>,
@@ -160,7 +160,7 @@ impl MutationRoot {
 
 impl MutationRoot {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
-        // Check if this owner already has a chain
+        // Check if this owner already has a chain.
         if let Some(existing_description) = self
             .faucet_storage
             .get_chain(&owner)
@@ -170,10 +170,10 @@ impl MutationRoot {
             return Ok(existing_description);
         }
 
-        // Create a oneshot channel to receive the result
+        // Create a oneshot channel to receive the result.
         let (tx, rx) = oneshot::channel();
 
-        // Add request to the queue
+        // Add request to the queue.
         {
             let mut requests = self.pending_requests.lock().await;
             requests.push_back(PendingRequest {
@@ -182,7 +182,7 @@ impl MutationRoot {
             });
         }
 
-        // Notify the batch processor that there's a new request
+        // Notify the batch processor that there's a new request.
         self.request_notifier.notify_one();
 
         // Wait for the result
@@ -204,7 +204,7 @@ impl<C> BatchProcessor<C>
 where
     C: ClientContext + 'static,
 {
-    /// Creates a new batch processor
+    /// Creates a new batch processor.
     fn new(
         config: BatchProcessorConfig,
         context: Arc<Mutex<C>>,
@@ -223,7 +223,7 @@ where
         }
     }
 
-    /// Runs the batch processor loop
+    /// Runs the batch processor loop.
     async fn run(&mut self, cancellation_token: CancellationToken) {
         loop {
             tokio::select! {
@@ -272,28 +272,32 @@ where
         }
     }
 
-    /// Executes a batch of chain creation requests
+    /// Executes a batch of chain creation requests.
     async fn execute_batch(
         &mut self,
         batch_requests: Vec<PendingRequest>,
     ) -> Result<(), anyhow::Error> {
-        // Pre-validate: check rate limiting and existing chains
+        // Pre-validate: check existing chains.
         let mut valid_requests = Vec::new();
 
         for request in batch_requests {
-            // Check if this owner already has a chain
-            match self.faucet_storage.get_chain(&request.owner).await {
-                Ok(Some(existing_description)) => {
-                    let _ = request.responder.send(Ok(existing_description));
-                    continue;
-                }
+            // Check if this owner already has a chain. Otherwise send response immediately.
+            let response = match self.faucet_storage.get_chain(&request.owner).await {
                 Ok(None) => {
                     valid_requests.push(request);
-                }
-                Err(e) => {
-                    let _ = request.responder.send(Err(Error::new(e.to_string())));
                     continue;
                 }
+                Ok(Some(existing_description)) => Ok(existing_description),
+                Err(err) => {
+                    tracing::error!("Database error: {err}");
+                    Err(Error::new(err.to_string()))
+                }
+            };
+            if let Err(response) = request.responder.send(response) {
+                tracing::error!(
+                    "Receiver dropped while sending response {response:?} for request from {}",
+                    request.owner
+                );
             }
         }
 
@@ -301,7 +305,7 @@ where
             return Ok(());
         }
 
-        // Rate limiting check for the batch
+        // Rate limiting check for the batch.
         if self.config.start_timestamp < self.config.end_timestamp {
             let local_time = self.client.storage_client().clock().current_time();
             if local_time < self.config.end_timestamp {
@@ -438,10 +442,10 @@ where
             for request in valid_requests {
                 let _ = request.responder.send(Err(Error::new(error_msg.clone())));
             }
-            return Err(anyhow::anyhow!(error_msg));
+            anyhow::bail!(error_msg);
         }
 
-        // Store results and respond to requests
+        // Store results and respond to requests.
         let chains_to_store = valid_requests
             .into_iter()
             .zip(chain_descriptions.into_iter())
@@ -549,7 +553,7 @@ where
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
 
-        // Create storage path: use provided path or create temporary directory
+        // Create storage path: use provided path or create temporary directory.
         let (storage_path, temp_dir) = match config.storage_path {
             Some(path) => (path, None),
             None => {
@@ -560,7 +564,7 @@ where
             }
         };
 
-        // Initialize database
+        // Initialize database.
         let faucet_storage = FaucetDatabase::new(&storage_path)
             .await
             .context("Failed to initialize faucet database")?;
