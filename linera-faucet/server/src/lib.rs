@@ -5,14 +5,11 @@
 
 //! The server component of the Linera faucet.
 
-use std::{
-    collections::{HashMap, VecDeque},
-    future::IntoFuture,
-    io,
-    net::SocketAddr,
-    path::PathBuf,
-    sync::Arc,
-};
+mod database;
+#[cfg(test)]
+mod test_migration;
+
+use std::{collections::VecDeque, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::Context as _;
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
@@ -44,11 +41,13 @@ use linera_execution::{
 #[cfg(feature = "metrics")]
 use linera_metrics::monitoring_server;
 use linera_storage::{Clock as _, Storage};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::info;
+
+use crate::database::FaucetDatabase;
 
 /// Returns an HTML response constructing the GraphiQL web page for the given URI.
 pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
@@ -71,7 +70,7 @@ pub struct QueryRoot<C: ClientContext> {
 
 /// The root GraphQL mutation type.
 pub struct MutationRoot {
-    faucet_storage: Arc<Mutex<FaucetStorage>>,
+    faucet_storage: Arc<FaucetDatabase>,
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
 }
@@ -104,7 +103,6 @@ struct BatchProcessorConfig {
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
-    storage_path: PathBuf,
     max_batch_size: usize,
 }
 
@@ -113,59 +111,9 @@ struct BatchProcessor<C: ClientContext> {
     config: BatchProcessorConfig,
     context: Arc<Mutex<C>>,
     client: ChainClient<C::Environment>,
-    faucet_storage: Arc<Mutex<FaucetStorage>>,
+    faucet_storage: Arc<FaucetDatabase>,
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
-}
-
-/// Persistent mapping of account owners to chain descriptions
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct FaucetStorage {
-    /// Maps account owners to their corresponding chain descriptions
-    owner_to_chain: HashMap<AccountOwner, ChainDescription>,
-}
-
-impl FaucetStorage {
-    /// Loads the faucet storage from disk, creating a new one if it doesn't exist
-    async fn load(storage_path: &PathBuf) -> Result<Self, io::Error> {
-        match tokio::fs::read(storage_path).await {
-            Ok(data) => serde_json::from_slice(&data).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Failed to deserialize faucet storage: {}", e),
-                )
-            }),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Saves the faucet storage to disk
-    async fn save(&self, storage_path: &PathBuf) -> Result<(), io::Error> {
-        let data = serde_json::to_vec_pretty(self).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Failed to serialize faucet storage: {}", e),
-            )
-        })?;
-
-        // Create parent directory if it doesn't exist
-        if let Some(parent) = storage_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        tokio::fs::write(storage_path, data).await
-    }
-
-    /// Gets the chain description for an owner if it exists
-    fn get_chain(&self, owner: &AccountOwner) -> Option<&ChainDescription> {
-        self.owner_to_chain.get(owner)
-    }
-
-    /// Stores a new mapping from owner to chain description
-    fn store_chain(&mut self, owner: AccountOwner, description: ChainDescription) {
-        self.owner_to_chain.insert(owner, description);
-    }
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
@@ -213,11 +161,13 @@ impl MutationRoot {
 impl MutationRoot {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
         // Check if this owner already has a chain
+        if let Some(existing_description) = self
+            .faucet_storage
+            .get_chain(&owner)
+            .await
+            .map_err(|e| Error::new(e.to_string()))?
         {
-            let storage = self.faucet_storage.lock().await;
-            if let Some(existing_description) = storage.get_chain(&owner) {
-                return Ok(existing_description.clone());
-            }
+            return Ok(existing_description);
         }
 
         // Create a oneshot channel to receive the result
@@ -259,7 +209,7 @@ where
         config: BatchProcessorConfig,
         context: Arc<Mutex<C>>,
         client: ChainClient<C::Environment>,
-        faucet_storage: Arc<Mutex<FaucetStorage>>,
+        faucet_storage: Arc<FaucetDatabase>,
         pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
         request_notifier: Arc<Notify>,
     ) -> Self {
@@ -332,15 +282,19 @@ where
 
         for request in batch_requests {
             // Check if this owner already has a chain
-            {
-                let storage = self.faucet_storage.lock().await;
-                if let Some(existing_description) = storage.get_chain(&request.owner) {
-                    let _ = request.responder.send(Ok(existing_description.clone()));
+            match self.faucet_storage.get_chain(&request.owner).await {
+                Ok(Some(existing_description)) => {
+                    let _ = request.responder.send(Ok(existing_description));
+                    continue;
+                }
+                Ok(None) => {
+                    valid_requests.push(request);
+                }
+                Err(e) => {
+                    let _ = request.responder.send(Err(Error::new(e.to_string())));
                     continue;
                 }
             }
-
-            valid_requests.push(request);
         }
 
         if valid_requests.is_empty() {
@@ -488,19 +442,21 @@ where
         }
 
         // Store results and respond to requests
-        {
-            let mut storage = self.faucet_storage.lock().await;
-            for (request, description) in valid_requests
-                .into_iter()
-                .zip(chain_descriptions.into_iter())
-            {
-                storage.store_chain(request.owner, description.clone());
-                let _ = request.responder.send(Ok(description));
-            }
+        let chains_to_store = valid_requests
+            .into_iter()
+            .zip(chain_descriptions.into_iter())
+            .map(|(request, description)| {
+                let _ = request.responder.send(Ok(description.clone()));
+                (request.owner, description)
+            })
+            .collect::<Vec<_>>();
 
-            if let Err(e) = storage.save(&self.config.storage_path).await {
-                tracing::warn!("Failed to save faucet storage: {}", e);
-            }
+        if let Err(e) = self
+            .faucet_storage
+            .store_chains_batch(chains_to_store)
+            .await
+        {
+            tracing::warn!("Failed to save chains to database: {}", e);
         }
 
         Ok(())
@@ -525,7 +481,7 @@ where
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
-    faucet_storage: Arc<Mutex<FaucetStorage>>,
+    faucet_storage: Arc<FaucetDatabase>,
     storage_path: PathBuf,
     /// Temporary directory handle to keep it alive (if using temporary storage)
     _temp_dir: Option<Arc<tempfile::TempDir>>,
@@ -599,16 +555,23 @@ where
             None => {
                 let temp_dir = tempfile::tempdir()
                     .context("Failed to create temporary directory for faucet storage")?;
-                let storage_path = temp_dir.path().join("faucet_storage.json");
+                let storage_path = temp_dir.path().join("faucet_storage.sqlite");
                 (storage_path, Some(Arc::new(temp_dir)))
             }
         };
 
-        // Load the faucet storage
-        let faucet_storage = FaucetStorage::load(&storage_path)
+        // Initialize database
+        let faucet_storage = FaucetDatabase::new(&storage_path)
             .await
-            .context("Failed to load faucet storage")?;
-        let faucet_storage = Arc::new(Mutex::new(faucet_storage));
+            .context("Failed to initialize faucet database")?;
+
+        // Try to migrate from legacy JSON file if it exists
+        let json_path = storage_path.with_extension("json");
+        if let Err(e) = faucet_storage.migrate_from_json(&json_path).await {
+            tracing::warn!("Failed to migrate from JSON storage: {}", e);
+        }
+
+        let faucet_storage = Arc::new(faucet_storage);
 
         // Initialize batching components
         let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
@@ -679,7 +642,6 @@ where
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
-            storage_path: self.storage_path.clone(),
             max_batch_size: self.max_batch_size,
         };
         let mut batch_processor = BatchProcessor::new(

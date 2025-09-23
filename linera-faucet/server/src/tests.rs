@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::VecDeque, path::PathBuf, sync::Arc};
+use std::{collections::VecDeque, sync::Arc};
 
 use futures::lock::Mutex;
 use linera_base::{
@@ -21,6 +21,8 @@ use linera_execution::ResourceControlPolicy;
 use tempfile::tempdir;
 use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
+
+use crate::database::FaucetDatabase;
 
 struct ClientContext {
     client: ChainClient<environment::Test>,
@@ -89,8 +91,12 @@ async fn test_faucet_rate_limiting() {
         update_calls: 0,
     };
     let context = Arc::new(Mutex::new(context));
-    let faucet_storage = Arc::new(Mutex::new(super::FaucetStorage::default()));
-    let storage_path = PathBuf::from("/tmp/test_faucet_rate_limiting.json");
+    let temp_dir = tempdir().unwrap();
+    let faucet_storage = Arc::new(
+        FaucetDatabase::new(&temp_dir.path().join("test_faucet_rate_limiting.sqlite"))
+            .await
+            .unwrap(),
+    );
 
     // Set up the batching components
     let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
@@ -109,7 +115,6 @@ async fn test_faucet_rate_limiting() {
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
-        storage_path,
         max_batch_size: 1,
     };
 
@@ -194,7 +199,7 @@ async fn test_batch_size_reduction_on_limit_errors() {
 
     // Set up test environment
     let temp_dir = tempdir().unwrap();
-    let storage_path = temp_dir.path().join("test_batch_reduction.json");
+    let storage_path = temp_dir.path().join("test_batch_reduction.sqlite");
 
     let storage_builder = MemoryStorageBuilder::default();
     let keys = InMemorySigner::new(None);
@@ -220,7 +225,7 @@ async fn test_batch_size_reduction_on_limit_errors() {
         update_calls: 0,
     }));
 
-    let faucet_storage = Arc::new(Mutex::new(super::FaucetStorage::default()));
+    let faucet_storage = Arc::new(FaucetDatabase::new(&storage_path).await.unwrap());
     let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
     let request_notifier = Arc::new(Notify::new());
 
@@ -231,7 +236,6 @@ async fn test_batch_size_reduction_on_limit_errors() {
         start_balance: Amount::from_tokens(100),
         start_timestamp: Timestamp::from(1000), // start > end disables rate limiting
         end_timestamp: Timestamp::from(999),
-        storage_path: storage_path.clone(),
         max_batch_size: initial_batch_size,
     };
 
