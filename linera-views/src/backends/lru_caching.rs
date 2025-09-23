@@ -291,16 +291,9 @@ where
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let Some(cache) = &self.cache else {
+        let Some(cache) = self.get_exclusive_cache() else {
             return self.store.find_keys_by_prefix(key_prefix).await;
         };
-        let has_exclusive_access = {
-            let cache = cache.lock().unwrap();
-            cache.has_exclusive_access
-        };
-        if !has_exclusive_access {
-            return self.store.find_keys_by_prefix(key_prefix).await;
-        }
         {
             let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_find_keys(key_prefix) {
@@ -325,16 +318,9 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-        let Some(cache) = &self.cache else {
+        let Some(cache) = self.get_exclusive_cache() else {
             return self.store.find_key_values_by_prefix(key_prefix).await;
         };
-        let has_exclusive_access = {
-            let cache = cache.lock().unwrap();
-            cache.has_exclusive_access
-        };
-        if !has_exclusive_access {
-            return self.store.find_key_values_by_prefix(key_prefix).await;
-        }
         {
             let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_find_key_values(key_prefix) {
@@ -483,6 +469,22 @@ impl<S> LruCachingStore<S> {
             }
         };
         Self { store, cache }
+    }
+
+    /// Returns a cache with exclusive access if one exists.
+    fn get_exclusive_cache(&self) -> Option<&Arc<Mutex<LruPrefixCache>>> {
+        let Some(cache) = &self.cache else {
+            return None;
+        };
+        let has_exclusive_access = {
+            let cache = cache.lock().unwrap();
+            cache.has_exclusive_access
+        };
+        if has_exclusive_access {
+            Some(cache)
+        } else {
+            None
+        }
     }
 }
 
