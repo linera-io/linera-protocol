@@ -509,15 +509,12 @@ where
             anyhow::bail!(error_msg);
         }
 
-        // Store results and respond to requests.
+        // Store results.
         let chains_to_store = valid_requests
-            .into_iter()
-            .zip(chain_descriptions.into_iter())
-            .map(|(request, description)| {
-                let _ = request.responder.send(Ok(description.clone()));
-                (request.owner, description.id())
-            })
-            .collect::<Vec<_>>();
+            .iter()
+            .zip(&chain_descriptions)
+            .map(|(request, description)| (request.owner, description.id()))
+            .collect();
 
         if let Err(e) = self
             .faucet_storage
@@ -525,6 +522,11 @@ where
             .await
         {
             tracing::warn!("Failed to save chains to database: {}", e);
+        }
+
+        // Respond to requests.
+        for (request, description) in valid_requests.into_iter().zip(chain_descriptions) {
+            let _ = request.responder.send(Ok(description));
         }
 
         Ok(())
