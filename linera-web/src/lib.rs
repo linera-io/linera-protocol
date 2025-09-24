@@ -86,7 +86,7 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     long_lived_services: false,
     blob_download_timeout: linera_base::time::Duration::from_millis(1000),
     chain_worker_ttl: Duration::from_secs(30),
-    sender_chain_worker_ttl: Duration::from_secs(1),
+    sender_chain_worker_ttl: Duration::from_millis(200),
     grace_period: linera_core::DEFAULT_GRACE_PERIOD,
 
     // TODO(linera-protocol#2944): separate these out from the
