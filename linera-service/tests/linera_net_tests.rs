@@ -4098,7 +4098,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     // Verify that a third party can also follow the chain.
     client3.follow_chain(chain2, true).await?;
     assert!(client3.local_balance(account2).await? > Amount::ZERO);
-    assert!(client3.load_wallet()?.owned_chain_ids().contains(&chain2));
+    assert!(client3.load_wallet()?.chain_ids().contains(&chain2));
 
     // Verify that trying to follow a chain that does not exist will fail, even without --sync.
     let wrong_id = ChainId(CryptoHash::test_hash("wrong chain ID"));
