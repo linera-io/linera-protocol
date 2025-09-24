@@ -382,12 +382,20 @@ where
         Ok(())
     }
 
+    /// Sends an error response to all requestors.
+    fn send_err(requests: Vec<PendingRequest>, err: impl Into<async_graphql::Error>) {
+        let err = err.into();
+        for request in requests {
+            if request.responder.send(Err(err.clone())).is_err() {
+                tracing::warn!("Receiver dropped while sending error to {}.", request.owner);
+            }
+        }
+    }
+
     /// Executes a batch of chain creation requests.
     async fn execute_batch(&mut self, requests: Vec<PendingRequest>) -> anyhow::Result<()> {
         if let Err(err) = self.check_rate_limiting(requests.len()).await {
-            for request in requests {
-                let _ = request.responder.send(Err(err.clone()));
-            }
+            Self::send_err(requests, err);
             return Ok(());
         }
 
@@ -435,11 +443,7 @@ where
                         return Ok(()); // Don't return an error, so we retry.
                     }
                     chain_err => {
-                        for request in requests {
-                            let _ = request
-                                .responder
-                                .send(Err(Error::new(chain_err.to_string())));
-                        }
+                        Self::send_err(requests, chain_err.to_string());
                         return Err(
                             ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                                 WorkerError::ChainError(chain_err.into()),
@@ -450,9 +454,7 @@ where
                 }
             }
             Err(err) => {
-                for request in requests {
-                    let _ = request.responder.send(Err(Error::new(err.to_string())));
-                }
+                Self::send_err(requests, err.to_string());
                 return Err(err.into());
             }
             Ok(ClientOutcome::Committed(certificate)) => certificate,
@@ -462,9 +464,7 @@ where
                     Try again at {}",
                     timeout.timestamp,
                 );
-                for request in requests {
-                    let _ = request.responder.send(Err(Error::new(error_msg.clone())));
-                }
+                Self::send_err(requests, error_msg.clone());
                 return Ok(());
             }
         };
@@ -478,9 +478,7 @@ where
                 requests.len(),
                 chain_descriptions.len()
             );
-            for request in requests {
-                let _ = request.responder.send(Err(Error::new(error_msg.clone())));
-            }
+            Self::send_err(requests, error_msg.clone());
             anyhow::bail!(error_msg);
         }
 
@@ -497,15 +495,25 @@ where
             .await
         {
             let error_msg = format!("Failed to save chains to database: {}", e);
-            for request in requests {
-                let _ = request.responder.send(Err(Error::new(error_msg.clone())));
-            }
+            Self::send_err(requests, error_msg.clone());
             anyhow::bail!(error_msg);
         }
 
         // Respond to requests.
-        for (request, (_owner, description)) in requests.into_iter().zip(chain_descriptions) {
-            let _ = request.responder.send(Ok(description));
+        for (request, (owner, description)) in requests.into_iter().zip(chain_descriptions) {
+            let response = if request.owner == owner {
+                Ok(description)
+            } else {
+                let error_msg = format!(
+                    "Owner mismatch: description for {owner}, but requested by {}",
+                    request.owner
+                );
+                tracing::error!("{}", error_msg);
+                Err(Error::new(error_msg))
+            };
+            if request.responder.send(response).is_err() {
+                tracing::warn!("Receiver dropped while sending response to {owner}.");
+            }
         }
 
         Ok(())
