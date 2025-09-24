@@ -2030,7 +2030,7 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     let client3 = net.make_client().await;
     client3.wallet_init(None).await?;
 
-    let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
+    let chain1 = *client1.load_wallet()?.owned_chain_ids().first().unwrap();
 
     // Generate keys for all clients.
     let owner1 = client1.keygen().await?;
@@ -2356,7 +2356,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     // Get a chain different than the default
     let chain2 = client1
         .load_wallet()?
-        .chain_ids()
+        .owned_chain_ids()
         .into_iter()
         .find(|chain_id| chain_id != &chain1)
         .expect("Failed to obtain a chain ID from the wallet");
@@ -3912,7 +3912,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
     client2.wallet_init(None).await?;
 
     // Get some chain owned by Client 1.
-    let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
+    let chain1 = *client1.load_wallet()?.owned_chain_ids().first().unwrap();
 
     // Generate a key for Client 2.
     let owner2 = client2.keygen().await?;
@@ -3957,7 +3957,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
 
-    let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
+    let chain1 = *client1.load_wallet()?.owned_chain_ids().first().unwrap();
 
     // Generate keys for both clients.
     let owner1 = client1.keygen().await?;
@@ -4071,7 +4071,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     let client3 = net.make_client().await;
     client3.wallet_init(None).await?;
 
-    let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
+    let chain1 = *client1.load_wallet()?.owned_chain_ids().first().unwrap();
 
     // Generate keys for client 2.
     let owner2 = client2.keygen().await?;
@@ -4098,7 +4098,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     // Verify that a third party can also follow the chain.
     client3.follow_chain(chain2, true).await?;
     assert!(client3.local_balance(account2).await? > Amount::ZERO);
-    assert!(client3.load_wallet()?.chain_ids().contains(&chain2));
+    assert!(client3.load_wallet()?.owned_chain_ids().contains(&chain2));
 
     // Verify that trying to follow a chain that does not exist will fail, even without --sync.
     let wrong_id = ChainId(CryptoHash::test_hash("wrong chain ID"));
@@ -4461,7 +4461,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     let (mut net, client1) = config.instantiate().await?;
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
-    let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
+    let chain1 = *client1.load_wallet()?.owned_chain_ids().first().unwrap();
 
     // Open a chain owned by both clients, with only single-leader rounds.
     let owner1 = client1.keygen().await?;
