@@ -59,7 +59,7 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
             }
             Fields::Unnamed(_) => {
                 return syn::Error::new_spanned(
-                    &variant_name,
+                    variant_name,
                     "Unnamed fields are not supported in GraphQL mutation root derivation",
                 )
                 .to_compile_error();
