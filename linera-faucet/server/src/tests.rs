@@ -194,7 +194,7 @@ fn test_multiply() {
     assert_eq!(multiply(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_batch_size_reduction_on_limit_errors() {
     // Test that the batch processor reduces batch size when hitting BlockTooLarge limit
 
@@ -235,8 +235,8 @@ async fn test_batch_size_reduction_on_limit_errors() {
     let config = super::BatchProcessorConfig {
         amount: Amount::from_tokens(1),
         start_balance: Amount::from_tokens(100),
-        start_timestamp: Timestamp::from(1000), // start > end disables rate limiting
-        end_timestamp: Timestamp::from(999),
+        start_timestamp: Timestamp::from(0),
+        end_timestamp: Timestamp::from(0), // All tokens are unlocked: no rate limiting.
         max_batch_size: initial_batch_size,
     };
 
@@ -278,7 +278,7 @@ async fn test_batch_size_reduction_on_limit_errors() {
     assert!(batch_processor.config.max_batch_size < initial_batch_size);
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_faucet_persistence() {
     // Test that the faucet correctly persists chain IDs and retrieves them after restart.
     // This ensures the database is working correctly across sessions.
@@ -479,7 +479,7 @@ async fn test_faucet_persistence() {
     let _ = processor_task_2.await;
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_blockchain_sync_after_database_deletion() {
     // Test that the faucet correctly syncs with blockchain after database deletion.
     // This verifies that the blockchain synchronization can restore chain mappings from

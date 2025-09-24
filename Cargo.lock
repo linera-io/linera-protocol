@@ -5419,6 +5419,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tempfile",
+ "test-log",
  "tokio",
  "tokio-util",
  "tower-http 0.6.6",
