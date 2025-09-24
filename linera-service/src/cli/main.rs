@@ -1595,13 +1595,15 @@ impl Runnable for Job {
                 let Some(network_description) = storage.read_network_description().await? else {
                     anyhow::bail!("Missing network description");
                 };
-                let context = options.create_client_context(storage, wallet, signer.into_value());
+                let mut context =
+                    options.create_client_context(storage, wallet, signer.into_value());
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let committee = faucet.current_committee().await?;
                 let chain_client = context.make_chain_client(network_description.admin_chain_id);
                 chain_client
                     .synchronize_chain_state_from_committee(committee)
                     .await?;
+                context.update_wallet_from_client(&chain_client).await?;
             }
 
             Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
