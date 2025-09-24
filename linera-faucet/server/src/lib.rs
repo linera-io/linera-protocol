@@ -303,18 +303,7 @@ where
     /// Processes batches until there are no more pending requests in the queue.
     async fn process_batch(&mut self) -> anyhow::Result<()> {
         loop {
-            let max_batch_size = self.config.max_batch_size;
-            let mut batch_requests = Vec::new();
-
-            // Collect requests from the queue.
-            {
-                let mut requests = self.pending_requests.lock().await;
-                while batch_requests.len() < max_batch_size && !requests.is_empty() {
-                    if let Some(request) = requests.pop_front() {
-                        batch_requests.push(request);
-                    }
-                }
-            }
+            let batch_requests = self.get_request_batch().await;
 
             if batch_requests.is_empty() {
                 return Ok(());
@@ -329,16 +318,19 @@ where
         }
     }
 
-    /// Executes a batch of chain creation requests.
-    async fn execute_batch(&mut self, batch_requests: Vec<PendingRequest>) -> anyhow::Result<()> {
-        // Pre-validate: check existing chains.
-        let mut valid_requests = Vec::new();
-
-        for request in batch_requests {
+    // Collects requests for new accounts from the queue; answers the ones for existing
+    // accounts immediately.
+    async fn get_request_batch(&mut self) -> Vec<PendingRequest> {
+        let mut batch_requests = Vec::new();
+        let mut requests = self.pending_requests.lock().await;
+        while batch_requests.len() < self.config.max_batch_size {
+            let Some(request) = requests.pop_front() else {
+                break;
+            };
             // Check if this owner already has a chain. Otherwise send response immediately.
             let response = match self.faucet_storage.get_chain_id(&request.owner).await {
                 Ok(None) => {
-                    valid_requests.push(request);
+                    batch_requests.push(request);
                     continue;
                 }
                 Ok(Some(existing_chain_id)) => {
@@ -361,58 +353,47 @@ where
                 );
             }
         }
+        batch_requests
+    }
 
-        if valid_requests.is_empty() {
-            return Ok(());
+    /// Checks if the given number of requests can currently be fulfilled, based on the balance
+    /// and rate limiting settings. Returns an error if not.
+    async fn check_rate_limiting(&self, request_count: usize) -> async_graphql::Result<()> {
+        let end_timestamp = self.config.end_timestamp;
+        let start_timestamp = self.config.start_timestamp;
+        let local_time = self.client.storage_client().clock().current_time();
+        let full_duration = end_timestamp.delta_since(start_timestamp).as_micros();
+        let remaining_duration = end_timestamp.delta_since(local_time).as_micros();
+        let balance = self.client.local_balance().await?;
+
+        let total_amount = self.config.amount.saturating_mul(request_count as u128);
+        let Ok(remaining_balance) = balance.try_sub(total_amount) else {
+            // Not enough balance - reject all requests
+            return Err(Error::new("The faucet is empty."));
+        };
+
+        // Rate limit: Locked token balance decreases lineraly with time, i.e.:
+        // remaining_balance / remaining_duration >= start_balance / full_duration
+        if multiply(u128::from(self.config.start_balance), remaining_duration)
+            > multiply(u128::from(remaining_balance), full_duration)
+        {
+            return Err(Error::new("Not enough unlocked balance; try again later."));
         }
+        Ok(())
+    }
 
-        // Rate limiting check for the batch.
-        if self.config.start_timestamp < self.config.end_timestamp {
-            let local_time = self.client.storage_client().clock().current_time();
-            if local_time < self.config.end_timestamp {
-                let full_duration = self
-                    .config
-                    .end_timestamp
-                    .delta_since(self.config.start_timestamp)
-                    .as_micros();
-                let remaining_duration = self
-                    .config
-                    .end_timestamp
-                    .delta_since(local_time)
-                    .as_micros();
-                let balance = self.client.local_balance().await?;
-
-                let total_amount = self
-                    .config
-                    .amount
-                    .saturating_mul(valid_requests.len() as u128);
-                let Ok(remaining_balance) = balance.try_sub(total_amount) else {
-                    // Not enough balance - reject all requests
-                    for request in valid_requests {
-                        let _ = request
-                            .responder
-                            .send(Err(Error::new("The faucet is empty.")));
-                    }
-                    return Ok(());
-                };
-
-                if multiply(u128::from(self.config.start_balance), remaining_duration)
-                    > multiply(u128::from(remaining_balance), full_duration)
-                {
-                    // Rate limit exceeded - reject all requests
-                    for request in valid_requests {
-                        let _ = request.responder.send(Err(Error::new(
-                            "Not enough unlocked balance; try again later.",
-                        )));
-                    }
-                    return Ok(());
-                }
+    /// Executes a batch of chain creation requests.
+    async fn execute_batch(&mut self, requests: Vec<PendingRequest>) -> anyhow::Result<()> {
+        if let Err(err) = self.check_rate_limiting(requests.len()).await {
+            for request in requests {
+                let _ = request.responder.send(Err(err.clone()));
             }
+            return Ok(());
         }
 
         // Create OpenChain operations for all valid requests
         let mut operations = Vec::new();
-        for request in &valid_requests {
+        for request in &requests {
             let config = OpenChainConfig {
                 ownership: ChainOwnership::single(request.owner),
                 balance: self.config.amount,
@@ -448,13 +429,13 @@ where
                         self.config.max_batch_size = i as usize;
                         // Put the valid requests back into the queue.
                         let mut pending_requests = self.pending_requests.lock().await;
-                        for request in valid_requests.into_iter().rev() {
+                        for request in requests.into_iter().rev() {
                             pending_requests.push_front(request);
                         }
                         return Ok(()); // Don't return an error, so we retry.
                     }
                     chain_err => {
-                        for request in valid_requests {
+                        for request in requests {
                             let _ = request
                                 .responder
                                 .send(Err(Error::new(chain_err.to_string())));
@@ -469,7 +450,7 @@ where
                 }
             }
             Err(err) => {
-                for request in valid_requests {
+                for request in requests {
                     let _ = request.responder.send(Err(Error::new(err.to_string())));
                 }
                 return Err(err.into());
@@ -481,7 +462,7 @@ where
                     Try again at {}",
                     timeout.timestamp,
                 );
-                for request in valid_requests {
+                for request in requests {
                     let _ = request.responder.send(Err(Error::new(error_msg.clone())));
                 }
                 return Ok(());
@@ -491,20 +472,20 @@ where
         // Parse chain descriptions from the block's blobs
         let chain_descriptions = extract_opened_single_owner_chains(&certificate)?;
 
-        if chain_descriptions.len() != valid_requests.len() {
+        if chain_descriptions.len() != requests.len() {
             let error_msg = format!(
                 "Mismatch between operations ({}) and results ({})",
-                valid_requests.len(),
+                requests.len(),
                 chain_descriptions.len()
             );
-            for request in valid_requests {
+            for request in requests {
                 let _ = request.responder.send(Err(Error::new(error_msg.clone())));
             }
             anyhow::bail!(error_msg);
         }
 
         // Store results.
-        let chains_to_store = valid_requests
+        let chains_to_store = requests
             .iter()
             .zip(&chain_descriptions)
             .map(|(request, (_owner, description))| (request.owner, description.id()))
@@ -516,14 +497,14 @@ where
             .await
         {
             let error_msg = format!("Failed to save chains to database: {}", e);
-            for request in valid_requests {
+            for request in requests {
                 let _ = request.responder.send(Err(Error::new(error_msg.clone())));
             }
             anyhow::bail!(error_msg);
         }
 
         // Respond to requests.
-        for (request, (_owner, description)) in valid_requests.into_iter().zip(chain_descriptions) {
+        for (request, (_owner, description)) in requests.into_iter().zip(chain_descriptions) {
             let _ = request.responder.send(Ok(description));
         }
 
