@@ -56,7 +56,11 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use linera_views::ViewError;
-use rand::distributions::{Distribution, WeightedIndex};
+use rand::{
+    distributions::{Distribution, WeightedIndex},
+    rngs::StdRng,
+    SeedableRng,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
@@ -266,12 +270,13 @@ impl<Env: Environment> Client<Env> {
     fn weighted_select(
         remaining_validators: &mut Vec<RemoteNode<Env::ValidatorNode>>,
         remaining_weights: &mut Vec<u64>,
+        rng: &mut StdRng,
     ) -> Option<RemoteNode<Env::ValidatorNode>> {
         if remaining_weights.is_empty() {
             return None;
         }
         let dist = WeightedIndex::new(remaining_weights.clone()).unwrap();
-        let idx = dist.sample(&mut rand::thread_rng());
+        let idx = dist.sample(rng);
         remaining_weights.remove(idx);
         Some(remaining_validators.remove(idx))
     }
@@ -296,9 +301,10 @@ impl<Env: Environment> Client<Env> {
                 validator_state.votes
             })
             .collect::<Vec<_>>();
+        let mut rng: StdRng = StdRng::from_entropy();
 
         while let Some(remote_node) =
-            Self::weighted_select(&mut remaining_validators, &mut remaining_weights)
+            Self::weighted_select(&mut remaining_validators, &mut remaining_weights, &mut rng)
         {
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
