@@ -12,7 +12,7 @@ pub struct CounterAbi;
 #[derive(Debug, Deserialize, Serialize)]
 pub enum CounterOperation {
     /// Increment the counter by the given value
-    Increment(u64),
+    Increment { value: u64 },
 }
 
 impl ContractAbi for CounterAbi {

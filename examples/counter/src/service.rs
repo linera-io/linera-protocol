@@ -57,7 +57,7 @@ struct MutationRoot {
 #[Object]
 impl MutationRoot {
     async fn increment(&self, value: u64) -> [u8; 0] {
-        let operation = CounterOperation::Increment(value);
+        let operation = CounterOperation::Increment { value };
         self.runtime.schedule_operation(&operation);
         []
     }
