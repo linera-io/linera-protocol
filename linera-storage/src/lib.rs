@@ -257,7 +257,7 @@ pub trait Storage: Sized {
         let mut chain = self.load_chain(id).await?;
         assert!(!chain.is_active(), "Attempting to create a chain twice");
         let current_time = self.clock().current_time();
-        chain.ensure_is_active(current_time).await?;
+        chain.initialize_if_inactive(current_time).await?;
         chain.save().await?;
         Ok(())
     }
