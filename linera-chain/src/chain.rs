@@ -487,8 +487,8 @@ where
         self.execution_state.system.is_active()
     }
 
-    /// Invariant for the states of active chains.
-    pub async fn ensure_is_active(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
+    /// Initializes the chain if it is not active yet.
+    pub async fn initialize_if_needed(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
         // Initialize ourselves.
         if self
             .execution_state
@@ -497,7 +497,7 @@ where
             .await
             .with_execution_context(ChainExecutionContext::Block)?
         {
-            // the chain was already initialized
+            // The chain was already initialized.
             return Ok(());
         }
         // Recompute the state hash.
@@ -603,7 +603,7 @@ where
             height: bundle.height,
         };
 
-        match self.ensure_is_active(local_time).await {
+        match self.initialize_if_needed(local_time).await {
             Ok(_) => (),
             // if the only issue was that we couldn't initialize the chain because of a
             // missing chain description blob, we might still want to update the inbox
@@ -901,7 +901,7 @@ where
             self.execution_state.context().extra().chain_id()
         );
 
-        self.ensure_is_active(local_time).await?;
+        self.initialize_if_needed(local_time).await?;
 
         let chain_timestamp = *self.execution_state.system.timestamp.get();
         ensure!(
