@@ -192,7 +192,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
 
     // Initialize the chain.
 
-    chain.initialize_if_inactive(time).await.unwrap();
+    chain.initialize_if_needed(time).await.unwrap();
 
     let valid_block = make_first_block(chain_id)
         .with_authenticated_signer(Some(owner))
@@ -294,7 +294,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .await?;
 
     // Initialize the chain, with a chain application.
-    chain.initialize_if_inactive(time).await?;
+    chain.initialize_if_needed(time).await?;
 
     // An operation that doesn't belong to the app isn't allowed.
     let invalid_block = make_first_block(chain_id).with_simple_transfer(chain_id, Amount::ONE);
@@ -715,7 +715,7 @@ async fn prepare_test_with_dummy_mock_application(
         .add_blobs(env.description_blobs())
         .await?;
 
-    chain.initialize_if_inactive(time).await?;
+    chain.initialize_if_needed(time).await?;
 
     // Create a mock application.
     let (app_description, contract_blob, service_blob) = env.make_app_description();

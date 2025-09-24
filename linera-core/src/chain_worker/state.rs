@@ -540,7 +540,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         let (chain_epoch, committee) = self.chain.current_committee()?;
         ensure!(
             certificate.inner().epoch() == chain_epoch,
@@ -634,7 +634,7 @@ where
         let height = header.height;
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         let (epoch, committee) = self.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -811,7 +811,7 @@ where
         // If we got here, `height` is equal to `tip.next_block_height` and the block is
         // properly chained. Verify that the chain is active and that the epoch we used for
         // verifying the certificate is actually the active one on the chain.
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         let (epoch, _) = self.chain.current_committee()?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
@@ -827,7 +827,7 @@ where
         // because we already wrote the blob state above, so the client can now upload the
         // blob, which will get accepted, and retry.
         if height == BlockHeight::ZERO {
-            self.initialize_and_save_if_inactive().await?;
+            self.initialize_and_save_if_needed().await?;
             let (epoch, _) = self.chain.current_committee()?;
             check_block_epoch(epoch, chain_id, block.header.epoch)?;
         }
@@ -1126,7 +1126,7 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -1145,7 +1145,7 @@ where
         query_application_id = %query.application_id()
     ))]
     async fn query_application(&mut self, query: Query) -> Result<QueryOutcome, WorkerError> {
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let outcome = self
             .chain
@@ -1163,7 +1163,7 @@ where
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         let response = self.chain.describe_application(application_id).await?;
         Ok(response)
     }
@@ -1179,7 +1179,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let (_, committee) = self.chain.current_committee()?;
@@ -1213,7 +1213,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         proposal
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
@@ -1359,7 +1359,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.initialize_and_save_if_inactive().await?;
+        self.initialize_and_save_if_needed().await?;
         let chain = &self.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
@@ -1448,10 +1448,10 @@ where
     }
 
     /// Initializes and saves the current chain if it is not active yet.
-    async fn initialize_and_save_if_inactive(&mut self) -> Result<(), WorkerError> {
+    async fn initialize_and_save_if_needed(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
             let local_time = self.storage.clock().current_time();
-            self.chain.initialize_if_inactive(local_time).await?;
+            self.chain.initialize_if_needed(local_time).await?;
             self.save().await?;
             self.knows_chain_is_active = true;
         }
