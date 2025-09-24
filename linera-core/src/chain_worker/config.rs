@@ -24,7 +24,7 @@ pub struct ChainWorkerConfig {
     pub grace_period: Duration,
     /// Idle chain workers free their memory after that duration without requests.
     pub ttl: Duration,
-    /// Ttl for sender chains.
+    /// TTL for sender chains.
     // We don't want them to keep in memory forever since usually they're short-lived.
     pub sender_chain_ttl: Duration,
 }
