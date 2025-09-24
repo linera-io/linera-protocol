@@ -746,6 +746,11 @@ mod graphql {
         C: Send + Sync,
         T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
     {
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count() as u32)
+        }
+
         async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {
             Ok(self
                 .read_front(count.unwrap_or_else(|| self.count()))
