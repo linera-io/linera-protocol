@@ -1785,21 +1785,20 @@ where
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
-    /// let indices = vec![23, 42];
-    /// let subviews = view.try_load_entries_mut(indices).await.unwrap();
+    /// let subviews = view.try_load_entries_mut(&[23, 42]).await.unwrap();
     /// let value1 = subviews[0].get();
     /// let value2 = subviews[1].get();
     /// assert_eq!(*value1, String::default());
     /// assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entries_mut<Q>(
+    pub async fn try_load_entries_mut<'a, Q>(
         &mut self,
-        indices: impl IntoIterator<Item = Q>,
+        indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<Vec<WriteGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize,
+        Q: CustomSerialize + 'a,
     {
         let short_keys = indices
             .into_iter()
@@ -1822,20 +1821,19 @@ where
     /// {
     ///     let _subview = view.try_load_entry_mut(&23).await.unwrap();
     /// }
-    /// let indices = vec![23, 42];
-    /// let subviews = view.try_load_entries(indices).await.unwrap();
+    /// let subviews = view.try_load_entries(&[23, 42]).await.unwrap();
     /// assert!(subviews[1].is_none());
     /// let value0 = subviews[0].as_ref().unwrap().get();
     /// assert_eq!(*value0, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entries<Q>(
+    pub async fn try_load_entries<'a, Q>(
         &self,
-        indices: impl IntoIterator<Item = Q>,
+        indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: CustomSerialize,
+        Q: CustomSerialize + 'a,
     {
         let short_keys = indices
             .into_iter()
@@ -2074,7 +2072,7 @@ mod graphql {
 
     use super::{ReadGuardedView, ReentrantCollectionView};
     use crate::{
-        graphql::{hash_name, mangle, missing_key_error, Entry, MapFilters, MapInput},
+        graphql::{hash_name, mangle, missing_key_error, Entry, MapInput},
         views::View,
     };
 
@@ -2117,11 +2115,8 @@ mod graphql {
             + async_graphql::OutputType
             + serde::ser::Serialize
             + serde::de::DeserializeOwned
-            + std::fmt::Debug
-            + Clone,
+            + std::fmt::Debug,
         V: View + async_graphql::OutputType,
-        MapInput<K>: async_graphql::InputType,
-        MapFilters<K>: async_graphql::InputType,
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
@@ -2156,16 +2151,12 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                let value = self
-                    .try_load_entry(&key)
-                    .await?
-                    .ok_or_else(|| missing_key_error(&key))?;
-                values.push(Entry { value, key })
-            }
-
-            Ok(values)
+            let values = self.try_load_entries(&keys).await?;
+            Ok(values
+                .into_iter()
+                .zip(keys)
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .collect())
         }
     }
 
@@ -2190,11 +2181,8 @@ mod graphql {
         K: async_graphql::InputType
             + async_graphql::OutputType
             + crate::common::CustomSerialize
-            + std::fmt::Debug
-            + Clone,
+            + std::fmt::Debug,
         V: View + async_graphql::OutputType,
-        MapInput<K>: async_graphql::InputType,
-        MapFilters<K>: async_graphql::InputType,
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
@@ -2224,16 +2212,12 @@ mod graphql {
                 self.indices().await?
             };
 
-            let mut values = vec![];
-            for key in keys {
-                let value = self
-                    .try_load_entry(&key)
-                    .await?
-                    .ok_or_else(|| missing_key_error(&key))?;
-                values.push(Entry { value, key })
-            }
-
-            Ok(values)
+            let values = self.try_load_entries(&keys).await?;
+            Ok(values
+                .into_iter()
+                .zip(keys)
+                .filter_map(|(value, key)| value.map(|value| Entry { value, key }))
+                .collect())
         }
     }
 }

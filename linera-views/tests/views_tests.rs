@@ -518,7 +518,7 @@ where
             if config.with_collection {
                 let subview = view.collection2.load_entry_mut("ciao").await?;
                 let subsubview = subview.try_load_entry("!").await?.unwrap();
-                assert!(subview.try_load_entry("!").await.is_err());
+                subview.try_load_entry("!").await?.unwrap();
                 assert_eq!(subsubview.get(), &3);
                 assert_eq!(view.collection.indices().await?, vec!["hola".to_string()]);
                 view.collection.remove_entry("hola")?;
