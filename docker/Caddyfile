@@ -5,7 +5,7 @@
 {$DOMAIN:localhost} {
     # Automatic HTTPS with Let's Encrypt (or self-signed for localhost)
 
-    # Set gRPC content-type header for all requests (matching Traefik's grpc-web middleware)
+    # Set gRPC content-type header for all requests
     header Content-Type application/grpc
 
     # Reverse proxy to the Linera proxy container (gRPC over HTTPS)
@@ -15,14 +15,12 @@
             # Use HTTP/2 for gRPC
             versions 2
 
-            # Timeouts matching Traefik's grpc-transport configuration
             dial_timeout 10s
             response_header_timeout 10s
 
             # Skip TLS verification for self-signed certificates
             tls_insecure_skip_verify
 
-            # Connection pooling matching Traefik's maxIdleConnsPerHost
             keepalive 90s
             keepalive_idle_conns 64
         }
@@ -33,7 +31,7 @@
         # Don't add extra headers that might interfere with gRPC
     }
 
-    # Enable access logs in JSON format (matching Traefik)
+    # Enable access logs in JSON format
     log {
         output stdout
         format json
