@@ -24,7 +24,7 @@ async fn single_chain_test() {
         .await;
 
     let increment = 15u64;
-    let operation = CounterOperation::Increment(increment);
+    let operation = CounterOperation::Increment { value: increment };
     chain
         .add_block(|block| {
             block.with_operation(application_id, operation);

@@ -7,7 +7,6 @@ use std::fmt::{Display, Formatter};
 
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
-    graphql::GraphQLMutationRoot,
     linera_base_types::{Account, AccountOwner, ApplicationId, ChainId, ContractAbi, ServiceAbi},
     ToBcsBytes,
 };
@@ -34,7 +33,7 @@ impl ServiceAbi for GenNftAbi {
 }
 
 /// An operation.
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum Operation {
     /// Mints a token
     Mint {
