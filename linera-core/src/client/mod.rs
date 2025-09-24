@@ -293,7 +293,7 @@ impl<Env: Environment> Client<Env> {
             .iter()
             .map(|validator| {
                 let validator_state = committee.validators.get(&validator.public_key).unwrap();
-                100u64 - validator_state.votes
+                101u64.saturating_sub(validator_state.votes).max(1)
             })
             .collect::<Vec<_>>();
 
