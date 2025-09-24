@@ -21,7 +21,7 @@ use linera_base::{
     identifiers::{AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
 };
-use linera_chain::{ChainError, ChainExecutionContext};
+use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
 use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
     config::GenesisConfig,
@@ -301,7 +301,7 @@ where
     }
 
     /// Processes batches until there are no more pending requests in the queue.
-    async fn process_batch(&mut self) -> Result<(), anyhow::Error> {
+    async fn process_batch(&mut self) -> anyhow::Result<()> {
         loop {
             let max_batch_size = self.config.max_batch_size;
             let mut batch_requests = Vec::new();
@@ -330,10 +330,7 @@ where
     }
 
     /// Executes a batch of chain creation requests.
-    async fn execute_batch(
-        &mut self,
-        batch_requests: Vec<PendingRequest>,
-    ) -> Result<(), anyhow::Error> {
+    async fn execute_batch(&mut self, batch_requests: Vec<PendingRequest>) -> anyhow::Result<()> {
         // Pre-validate: check existing chains.
         let mut valid_requests = Vec::new();
 
@@ -492,10 +489,7 @@ where
         };
 
         // Parse chain descriptions from the block's blobs
-        let blobs = certificate.block().body.blobs.iter().flatten();
-        let chain_descriptions = blobs
-            .map(|blob| bcs::from_bytes::<ChainDescription>(blob.bytes()))
-            .collect::<Result<Vec<ChainDescription>, _>>()?;
+        let chain_descriptions = extract_opened_single_owner_chains(&certificate)?;
 
         if chain_descriptions.len() != valid_requests.len() {
             let error_msg = format!(
@@ -513,7 +507,7 @@ where
         let chains_to_store = valid_requests
             .iter()
             .zip(&chain_descriptions)
-            .map(|(request, description)| (request.owner, description.id()))
+            .map(|(request, (_owner, description))| (request.owner, description.id()))
             .collect();
 
         if let Err(e) = self
@@ -529,7 +523,7 @@ where
         }
 
         // Respond to requests.
-        for (request, description) in valid_requests.into_iter().zip(chain_descriptions) {
+        for (request, (_owner, description)) in valid_requests.into_iter().zip(chain_descriptions) {
             let _ = request.responder.send(Ok(description));
         }
 
@@ -749,4 +743,36 @@ where
         let schema = service.0.schema();
         schema.execute(request.into_inner()).await.into()
     }
+}
+
+/// Returns all `(AccountOwner, ChainDescription)` pairs for single-owner chains created in this
+/// block.
+fn extract_opened_single_owner_chains(
+    certificate: &ConfirmedBlockCertificate,
+) -> anyhow::Result<Vec<(AccountOwner, ChainDescription)>> {
+    let created_blobs = certificate.block().body.blobs.iter().flatten();
+    created_blobs
+        .filter_map(|blob| {
+            if blob.content().blob_type() != BlobType::ChainDescription {
+                return None;
+            }
+            let description = match bcs::from_bytes::<ChainDescription>(blob.bytes()) {
+                Err(err) => return Some(Err(anyhow::anyhow!(err))),
+                Ok(description) => description,
+            };
+            let chain_id = description.id();
+            let owner = {
+                let mut owners = description.config().ownership.all_owners();
+                match (owners.next(), owners.next()) {
+                    (Some(owner), None) => *owner,
+                    (None, None) | (_, Some(_)) => {
+                        tracing::info!("Skipping chain {chain_id}; not exactly one owner.");
+                        return None;
+                    }
+                }
+            };
+            tracing::debug!("Found chain {chain_id} created for owner {owner}",);
+            Some(Ok((owner, description)))
+        })
+        .collect::<Result<Vec<_>, _>>()
 }
