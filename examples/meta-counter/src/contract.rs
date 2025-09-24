@@ -95,7 +95,7 @@ impl Contract for MetaCounterContract {
             Message::Increment(value) => {
                 let counter_id = self.counter_id();
                 log::trace!("executing {} via {:?}", value, counter_id);
-                let operation = counter::CounterOperation::Increment(value);
+                let operation = counter::CounterOperation::Increment { value };
                 self.runtime.call_application(true, counter_id, &operation);
             }
         }
