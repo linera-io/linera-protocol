@@ -1,5 +1,5 @@
 {
-    email $ACME_EMAIL
+    email {$ACME_EMAIL}
 }
 
 {$DOMAIN:localhost} {
