@@ -16,7 +16,8 @@ pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId
         return;
     }
 
-    println!("\n\x1b[1mWALLET CHAINS ({} total)\x1b[0m", total_chains);
+    let plural_s = if total_chains == 1 { "" } else { "s" };
+    println!("\n\x1b[1mWALLET ({total_chains} chain{plural_s} in total)\x1b[0m",);
 
     let mut chains = chain_ids
         .into_iter()
