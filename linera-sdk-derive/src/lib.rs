@@ -57,26 +57,12 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
                     }
                 });
             }
-            Fields::Unnamed(unnamed) => {
-                let mut fields = vec![];
-                let mut field_names = vec![];
-                for (i, field) in unnamed.unnamed.iter().enumerate() {
-                    let name = concat(&syn::parse_str::<Ident>("field").unwrap(), &i.to_string());
-                    let ty = &field.ty;
-                    fields.push(quote! {#name: #ty});
-                    field_names.push(name);
-                }
-                methods.push(quote! {
-                    async fn #function_name(&self, #(#fields,)*) -> [u8; 0] {
-                        let operation = #enum_name::#variant_name(
-                            #(#field_names,)*
-                        );
-
-                        self.runtime.schedule_operation(&operation);
-
-                        []
-                    }
-                });
+            Fields::Unnamed(_) => {
+                return syn::Error::new_spanned(
+                    &variant_name,
+                    "Unnamed fields are not supported in GraphQL mutation root derivation",
+                )
+                .to_compile_error();
             }
             Fields::Unit => {
                 methods.push(quote! {
@@ -147,7 +133,6 @@ pub mod tests {
     fn test_derive_mutation_root() {
         let operation: ItemEnum = parse_quote! {
             enum SomeOperation {
-                TupleVariant(String),
                 StructVariant {
                     a: u32,
                     b: u64
@@ -174,12 +159,6 @@ pub mod tests {
                 Application: linera_sdk::Service,
                 linera_sdk::ServiceRuntime<Application>: Send + Sync,
             {
-                async fn tuple_variant(&self, field0: String,) -> [u8; 0] {
-                    let operation = SomeOperation::TupleVariant(field0,);
-                    self.runtime.schedule_operation(&operation);
-                    []
-                }
-
                 async fn struct_variant(&self, a: u32, b: u64,) -> [u8; 0] {
                     let operation = SomeOperation::StructVariant { a, b, };
                     self.runtime.schedule_operation(&operation);
@@ -210,5 +189,18 @@ pub mod tests {
         };
 
         assert_eq_no_whitespace(output.to_string(), expected.to_string());
+    }
+
+    #[test]
+    fn test_derive_mutation_root_rejects_unnamed_fields() {
+        let operation: ItemEnum = parse_quote! {
+            enum SomeOperation {
+                TupleVariant(String),
+            }
+        };
+
+        let output = generate_mutation_root_code(operation, "linera_sdk");
+        let output_str = output.to_string();
+        assert!(output_str.contains("Unnamed fields are not supported"));
     }
 }
