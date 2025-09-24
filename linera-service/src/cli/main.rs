@@ -1672,7 +1672,7 @@ impl Runnable for Job {
                 let Some(network_description) = storage.read_network_description().await? else {
                     anyhow::bail!("Missing network description");
                 };
-                let context = ClientContext::new(
+                let mut context = ClientContext::new(
                     storage,
                     options.context_options.clone(),
                     wallet,
@@ -1684,6 +1684,7 @@ impl Runnable for Job {
                 chain_client
                     .synchronize_chain_state_from_committee(committee)
                     .await?;
+                context.update_wallet_from_client(&chain_client).await?;
             }
 
             Wallet(WalletCommand::FollowChain { chain_id, sync }) => {
