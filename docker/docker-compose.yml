@@ -11,8 +11,6 @@ services:
       - caddy_config:/config
     environment:
       - DOMAIN=${DOMAIN:-localhost}
-    depends_on:
-      - proxy
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
