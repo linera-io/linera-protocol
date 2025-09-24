@@ -395,6 +395,7 @@ where
     /// Executes a batch of chain creation requests.
     async fn execute_batch(&mut self, requests: Vec<PendingRequest>) -> anyhow::Result<()> {
         if let Err(err) = self.check_rate_limiting(requests.len()).await {
+            tracing::debug!("Rejecting requests due to rate limiting: {err:?}");
             Self::send_err(requests, err);
             return Ok(());
         }
@@ -422,6 +423,7 @@ where
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_err),
             ))) => {
+                tracing::debug!("Local worker error executing operations: {chain_err}");
                 match *chain_err {
                     ChainError::ExecutionError(exec_err, ChainExecutionContext::Operation(i))
                         if i > 0
@@ -454,6 +456,7 @@ where
                 }
             }
             Err(err) => {
+                tracing::debug!("Error executing operations: {err}");
                 Self::send_err(requests, err.to_string());
                 return Err(err.into());
             }
