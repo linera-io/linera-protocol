@@ -483,12 +483,10 @@ where
         }
 
         // Store results.
-        let chains_to_store = requests
+        let chains_to_store = chain_descriptions
             .iter()
-            .zip(&chain_descriptions)
-            .map(|(request, (_owner, description))| (request.owner, description.id()))
+            .map(|(owner, description)| (*owner, description.id()))
             .collect();
-
         if let Err(e) = self
             .faucet_storage
             .store_chains_batch(chains_to_store)
