@@ -206,10 +206,12 @@ A block height to identify blocks in a chain
 scalar BlockHeight
 
 type BucketQueueView_BlockHeight_e824a938 {
+	count: Int!
 	entries(count: Int): [BlockHeight!]!
 }
 
 type BucketQueueView_TimestampedBundleInInbox_5a630c55 {
+	count: Int!
 	entries(count: Int): [TimestampedBundleInInbox!]!
 }
 
@@ -622,10 +624,12 @@ A scalar that can represent any JSON Object value.
 scalar JSONObject
 
 type LogView_ChainAndHeight_7af83576 {
+	count: Int!
 	entries(start: Int, end: Int): [ChainAndHeight!]!
 }
 
 type LogView_CryptoHash_87fbb60c {
+	count: Int!
 	entries(start: Int, end: Int): [CryptoHash!]!
 }
 
@@ -1018,6 +1022,7 @@ type QueryRoot {
 }
 
 type QueueView_MessageBundle_f4399f0b {
+	count: Int!
 	entries(count: Int): [MessageBundle!]!
 }
 
