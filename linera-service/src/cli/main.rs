@@ -2576,7 +2576,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 short,
                 owned,
             } => {
-                let start_time = Instant::now();
                 let wallet = options.wallet()?;
                 let chain_ids = if let Some(chain_id) = chain_id {
                     ensure!(!owned, "Cannot specify both --owned and a chain ID");
@@ -2593,7 +2592,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 } else {
                     wallet::pretty_print(&wallet, chain_ids);
                 }
-                info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
                 Ok(0)
             }
 
