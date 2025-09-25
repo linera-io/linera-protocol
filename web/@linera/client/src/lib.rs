@@ -87,6 +87,7 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     blob_download_timeout: linera_base::time::Duration::from_millis(1000),
     certificate_download_batch_size: linera_core::client::DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     chain_worker_ttl: Duration::from_secs(30),
+    sender_chain_worker_ttl: Duration::from_millis(200),
     grace_period: linera_core::DEFAULT_GRACE_PERIOD,
 
     // TODO(linera-protocol#2944): separate these out from the
