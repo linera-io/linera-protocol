@@ -48,7 +48,7 @@ const incomingBundles = computed(() => getIncomingBundles(props.block.block.body
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Timestamp</strong></span>
-          <span>{{ (new Date(block.block.header.timestamp/1000)).toLocaleString() }}</span>
+          <span>{{ (new Date(Number(block.block.header.timestamp)/1000)).toLocaleString() }}</span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Signer</strong></span>
