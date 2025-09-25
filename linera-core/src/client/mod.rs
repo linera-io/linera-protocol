@@ -65,6 +65,9 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 
 use crate::{
+    chain_worker::{
+        CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES_DEFAULT, CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES_VAR,
+    },
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
@@ -836,9 +839,22 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = self.admin_committees().await?;
 
         // Retrieve the list of newly received certificates from this validator.
-        let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
-        let info = remote_node.handle_chain_info_query(query).await?;
-        let remote_log = info.requested_received_log;
+        let mut remote_log = Vec::new();
+        let mut offset = tracker;
+        let max_entries = std::env::var(CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES_VAR)
+            .ok()
+            .and_then(|var| var.parse().ok())
+            .unwrap_or(CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES_DEFAULT);
+        loop {
+            let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
+            let info = remote_node.handle_chain_info_query(query).await?;
+            let received_entries = info.requested_received_log.len();
+            offset += received_entries as u64;
+            remote_log.extend(info.requested_received_log);
+            if received_entries < max_entries {
+                break;
+            }
+        }
         let remote_heights = Self::heights_per_chain(&remote_log);
 
         // Obtain the next block height we need in the local node, for each chain.
