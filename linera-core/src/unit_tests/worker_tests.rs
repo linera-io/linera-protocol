@@ -1725,7 +1725,7 @@ where
         .inboxes
         .try_load_entry(&chain_3)
         .await?
-        .expect("Missing inbox for `chain_3` in `ChainId::root(1)`");
+        .expect("Missing inbox for `chain_3` in `chain_1`");
     assert_eq!(BlockHeight::ZERO, inbox.next_block_height_to_receive()?);
     assert_eq!(inbox.added_bundles.count(), 0);
     assert_matches!(
@@ -1993,7 +1993,7 @@ where
         .inboxes
         .try_load_entry(&chain_1)
         .await?
-        .expect("Missing inbox for `ChainId::root(1)` in `chain_2`");
+        .expect("Missing inbox for `chain_1` in `chain_2`");
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
         inbox
