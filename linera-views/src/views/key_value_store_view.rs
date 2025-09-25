@@ -15,9 +15,10 @@
 
 use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mutex};
 
+use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
-use linera_base::{data_types::ArithmeticError, ensure};
+use linera_base::{data_types::ArithmeticError, ensure, visit_allocative_simple};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -149,7 +150,7 @@ enum KeyTag {
 }
 
 /// A pair containing the key and value size.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Allocative)]
 pub struct SizeData {
     /// The size of the key
     pub key: u32,
@@ -200,15 +201,19 @@ impl SizeData {
 ///   The no domination is essential here.
 ///
 /// [entry1]: crate::batch::WriteOperation::DeletePrefix
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C")]
 pub struct KeyValueStoreView<C> {
+    #[allocative(skip)]
     context: C,
     deletion_set: DeletionSet,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     stored_total_size: SizeData,
     total_size: SizeData,
     sizes: ByteMapView<C, u32>,
+    #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<HasherOutput>,
+    #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<HasherOutput>>,
 }
 

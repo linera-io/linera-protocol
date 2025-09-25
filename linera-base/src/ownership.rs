@@ -9,6 +9,7 @@ use std::{
     iter,
 };
 
+use allocative::Allocative;
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
@@ -21,7 +22,19 @@ use crate::{
 };
 
 /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
-#[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize, WitLoad, WitStore, WitType)]
+#[derive(
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    Allocative,
+)]
 pub struct TimeoutConfig {
     /// The duration of the fast round.
     #[debug(skip_if = Option::is_none)]
@@ -50,7 +63,18 @@ impl Default for TimeoutConfig {
 
 /// Represents the owner(s) of a chain.
 #[derive(
-    PartialEq, Eq, Clone, Hash, Debug, Default, Serialize, Deserialize, WitLoad, WitStore, WitType,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    Allocative,
 )]
 pub struct ChainOwnership {
     /// Super owners can propose fast blocks in the first round, and regular blocks in any round.

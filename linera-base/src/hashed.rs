@@ -6,13 +6,14 @@
 
 use std::borrow::Cow;
 
+use allocative::Allocative;
 use custom_debug_derive::Debug;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::{BcsHashable, CryptoHash};
 
 /// Wrapper type around hashed instance of `T` type.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
 pub struct Hashed<T> {
     value: T,
     /// Hash of the value (used as key for storage).

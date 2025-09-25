@@ -3,6 +3,7 @@
 
 use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData, mem};
 
+use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
@@ -36,8 +37,10 @@ mod metrics {
 }
 
 /// A [`View`] that supports inserting and removing values indexed by a key.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C")]
 pub struct ByteSetView<C> {
+    #[allocative(skip)]
     context: C,
     delete_storage_first: bool,
     updates: BTreeMap<Vec<u8>, Update<()>>,
@@ -370,9 +373,11 @@ impl<C: Context> HashableView for ByteSetView<C> {
 }
 
 /// A [`View`] implementing the set functionality with the index `I` being any serializable type.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I")]
 pub struct SetView<C, I> {
     set: ByteSetView<C>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
@@ -641,9 +646,11 @@ where
 
 /// A [`View`] implementing the set functionality with the index `I` being a type with a custom
 /// serialization format.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, I")]
 pub struct CustomSetView<C, I> {
     set: ByteSetView<C>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 

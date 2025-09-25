@@ -8,6 +8,7 @@
 use std::ops::RangeInclusive;
 use std::{borrow::Cow, fmt, io, str::FromStr};
 
+use allocative::{Allocative, Visitor};
 #[cfg(with_testing)]
 use alloy_primitives::FixedBytes;
 use alloy_primitives::{Keccak256, B256};
@@ -32,6 +33,12 @@ use crate::{
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct CryptoHash(B256);
+
+impl Allocative for CryptoHash {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
 
 impl CryptoHash {
     /// Computes a hash.

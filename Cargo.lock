@@ -84,6 +84,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocative"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fac2ce611db8b8cee9b2aa886ca03c924e9da5e5295d0dbd0526e5d0b0710f7"
+dependencies = [
+ "allocative_derive",
+ "ctor",
+]
+
+[[package]]
+name = "allocative_derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe233a377643e0fc1a56421d7c90acdec45c291b30345eb9f08e8d0ddce5a4ab"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.105",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2779,6 +2800,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d2301688392eb071b0bf1a37be05c469d3cc4dbbd95df672fe28ab021e6a096"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "current_platform"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5081,6 +5112,7 @@ dependencies = [
 name = "linera-base"
 version = "0.16.0"
 dependencies = [
+ "allocative",
  "alloy-primitives",
  "anyhow",
  "assert_matches",
@@ -5141,6 +5173,7 @@ dependencies = [
 name = "linera-chain"
 version = "0.16.0"
 dependencies = [
+ "allocative",
  "anyhow",
  "assert_matches",
  "async-graphql",
@@ -5304,6 +5337,7 @@ dependencies = [
 name = "linera-execution"
 version = "0.16.0"
 dependencies = [
+ "allocative",
  "alloy-primitives",
  "alloy-sol-types",
  "anyhow",
@@ -5435,6 +5469,7 @@ dependencies = [
 name = "linera-indexer"
 version = "0.16.0"
 dependencies = [
+ "allocative",
  "assert_matches",
  "async-graphql",
  "async-graphql-axum",
@@ -5887,6 +5922,7 @@ dependencies = [
 name = "linera-views"
 version = "0.16.0"
 dependencies = [
+ "allocative",
  "anyhow",
  "async-graphql",
  "async-lock",

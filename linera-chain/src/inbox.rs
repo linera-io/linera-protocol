@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use allocative::Allocative;
 use async_graphql::SimpleObject;
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight},
@@ -64,7 +65,8 @@ mod metrics {
 /// * Reconciliation of added and removed bundles is allowed to skip some added bundles.
 ///   However, the opposite is not true: every removed bundle must be eventually added.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
-#[derive(Debug, ClonableView, View)]
+#[derive(Allocative, Debug, ClonableView, View)]
+#[allocative(bound = "C")]
 pub struct InboxStateView<C>
 where
     C: Clone + Context + Send + Sync,
@@ -93,6 +95,7 @@ where
     Serialize,
     Deserialize,
     SimpleObject,
+    Allocative,
 )]
 pub struct Cursor {
     height: BlockHeight,
