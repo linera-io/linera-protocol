@@ -1109,13 +1109,12 @@ pub enum NetCommand {
         external_protocol: String,
 
         /// If present, a faucet is started using the chain provided by --faucet-chain, or
-        /// `ChainId::root(1)` if not provided, as root 0 is usually the admin chain.
+        /// the first non-admin chain if not provided.
         #[arg(long, default_value = "false")]
         with_faucet: bool,
 
         /// When using --with-faucet, this specifies the chain on which the faucet will be started.
-        /// The chain is specified by its root number (0 for the admin chain, 1 for the first
-        /// non-admin initial chain, etc).
+        /// If this is `n`, the `n`-th non-admin chain (lexicographically) in the wallet is selected.
         #[arg(long)]
         faucet_chain: Option<u32>,
 
