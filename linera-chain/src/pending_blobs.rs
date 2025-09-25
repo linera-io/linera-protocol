@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use allocative::Allocative;
 use linera_base::{
     data_types::{Blob, Round},
     ensure,
@@ -20,7 +21,8 @@ use crate::ChainError;
 
 /// The pending blobs belonging to a block that can't be processed without them.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
-#[derive(Debug, View, ClonableView)]
+#[derive(Debug, View, ClonableView, Allocative)]
+#[allocative(bound = "C")]
 pub struct PendingBlobsView<C>
 where
     C: Clone + Context + Send + Sync + 'static,

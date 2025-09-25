@@ -8,6 +8,7 @@ mod tests;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+use allocative::Allocative;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
@@ -59,7 +60,8 @@ mod metrics {
 }
 
 /// A view accessing the execution state of the system of a chain.
-#[derive(Debug, ClonableView, HashableView)]
+#[derive(Debug, ClonableView, HashableView, Allocative)]
+#[allocative(bound = "C")]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
     pub description: HashedRegisterView<C, Option<ChainDescription>>,
@@ -118,7 +120,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
 }
 
 /// The applications subscribing to a particular stream, and the next event index.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, Allocative)]
 pub struct EventSubscriptions {
     /// The next event index, i.e. the total number of events in this stream that have already
     /// been processed by this chain.
@@ -128,7 +130,7 @@ pub struct EventSubscriptions {
 }
 
 /// The initial configuration for a new chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub struct OpenChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
@@ -159,7 +161,7 @@ impl OpenChainConfig {
 }
 
 /// A system operation.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
@@ -230,7 +232,7 @@ pub enum SystemOperation {
 }
 
 /// Operations that are only allowed on the admin chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum AdminOperation {
     /// Publishes a new committee as a blob. This can be assigned to an epoch using
     /// [`AdminOperation::CreateCommittee`] in a later block.
@@ -245,7 +247,7 @@ pub enum AdminOperation {
 }
 
 /// A system message meant to be executed on a remote chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.

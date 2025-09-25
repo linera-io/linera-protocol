@@ -4,6 +4,7 @@
 
 use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
+use allocative::Allocative;
 use linera_base::crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey};
 use serde::{Deserialize, Serialize};
 
@@ -47,7 +48,7 @@ impl<'de> Deserialize<'de> for ValidatorName {
 }
 
 /// Public state of a validator.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
 pub struct ValidatorState {
     /// The network address (in a string format understood by the networking layer).
     pub network_address: String,
@@ -58,7 +59,7 @@ pub struct ValidatorState {
 }
 
 /// A set of validators (identified by their public keys) and their voting rights.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Default)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Allocative)]
 #[cfg_attr(with_graphql, derive(async_graphql::InputObject))]
 pub struct Committee {
     /// The validators in the committee.

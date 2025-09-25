@@ -70,6 +70,7 @@
 
 use std::collections::BTreeMap;
 
+use allocative::Allocative;
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
@@ -110,7 +111,7 @@ pub type ValidatedOrConfirmedVote<'a> = Either<&'a Vote<ValidatedBlock>, &'a Vot
 /// The latest block that validators may have voted to confirm: this is either the block proposal
 /// from the fast round or a validated block certificate. Validators are allowed to vote for this
 /// even if they have locked (i.e. voted to confirm) a different block earlier.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum LockingBlock {
     /// A proposal in the `Fast` round.
@@ -139,7 +140,8 @@ impl LockingBlock {
 
 /// The state of the certification process for a chain's next block.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject), graphql(complex))]
-#[derive(Debug, View, ClonableView)]
+#[derive(Debug, View, ClonableView, Allocative)]
+#[allocative(bound = "C")]
 pub struct ChainManager<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -150,9 +152,11 @@ where
     pub seed: RegisterView<C, u64>,
     /// The probability distribution for choosing a round leader.
     #[cfg_attr(with_graphql, graphql(skip))] // Derived from ownership.
+    #[allocative(skip)]
     pub distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
     /// The probability distribution for choosing a fallback round leader.
     #[cfg_attr(with_graphql, graphql(skip))] // Derived from validator weights.
+    #[allocative(skip)]
     pub fallback_distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
     /// Highest-round authenticated block that we have received, but not necessarily
     /// checked yet. If there are multiple proposals in the same round, this contains only the
