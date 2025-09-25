@@ -11,9 +11,6 @@ services:
       - caddy_config:/config
     environment:
       - DOMAIN=${DOMAIN:-localhost}
-      - EMAIL=${ACME_EMAIL:-admin@example.com}
-    depends_on:
-      - proxy
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
