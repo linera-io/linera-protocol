@@ -36,7 +36,9 @@ use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn};
 
 use crate::{
-    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
+    chain_worker::{
+        BlockOutcome, ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
+    },
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
@@ -600,7 +602,7 @@ where
         &self,
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessConfirmedBlock {
@@ -621,7 +623,7 @@ where
     async fn process_validated_block(
         &self,
         certificate: ValidatedBlockCertificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessValidatedBlock {
@@ -876,37 +878,25 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
         #[cfg(with_metrics)]
-        let metrics_data = if self
-            .chain_state_view(certificate.block().header.chain_id)
-            .await?
-            .tip_state
-            .get()
-            .next_block_height
-            == certificate.block().header.height
-        {
-            Some((
-                certificate.inner().to_log_str(),
-                certificate.round.type_name(),
-                certificate.round.number(),
-                certificate.block().body.transactions.len() as u64,
-                certificate
-                    .signatures()
-                    .iter()
-                    .map(|(validator_name, _)| validator_name.to_string())
-                    .collect::<Vec<_>>(),
-            ))
-        } else {
-            // Block already processed or will only be preprocessed, no metrics to report.
-            None
-        };
+        let metrics_data = (
+            certificate.inner().to_log_str(),
+            certificate.round.type_name(),
+            certificate.round.number(),
+            certificate.block().body.transactions.len() as u64,
+            certificate
+                .signatures()
+                .iter()
+                .map(|(validator_name, _)| validator_name.to_string())
+                .collect::<Vec<_>>(),
+        );
 
-        let result = self
+        let (info, actions, _outcome) = self
             .process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await?;
 
         #[cfg(with_metrics)]
         {
-            if let Some(metrics_data) = metrics_data {
+            if matches!(_outcome, BlockOutcome::Processed) {
                 let (
                     certificate_log_str,
                     round_type,
@@ -931,7 +921,7 @@ where
                 }
             }
         }
-        Ok(result)
+        Ok((info, actions))
     }
 
     /// Processes a validated block certificate.
@@ -951,10 +941,10 @@ where
         #[cfg(with_metrics)]
         let cert_str = certificate.inner().to_log_str();
 
-        let (info, actions, _duplicated) = self.process_validated_block(certificate).await?;
+        let (info, actions, _outcome) = self.process_validated_block(certificate).await?;
         #[cfg(with_metrics)]
         {
-            if !_duplicated {
+            if matches!(_outcome, BlockOutcome::Processed) {
                 metrics::NUM_ROUNDS_IN_CERTIFICATE
                     .with_label_values(&[cert_str, round.type_name()])
                     .observe(round.number() as f64);

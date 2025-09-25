@@ -65,6 +65,13 @@ where
     knows_chain_is_active: bool,
 }
 
+/// Whether the block was processed or skipped. Used for metrics.
+pub enum BlockOutcome {
+    Processed,
+    Preprocessed,
+    Skipped,
+}
+
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
@@ -617,7 +624,7 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
 
         let header = &block.header;
@@ -637,7 +644,11 @@ where
         };
         if already_committed_block || should_skip_validated_block()? {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((self.chain_info_response(), NetworkActions::default(), true));
+            return Ok((
+                self.chain_info_response(),
+                NetworkActions::default(),
+                BlockOutcome::Skipped,
+            ));
         }
 
         self.block_values
@@ -667,7 +678,7 @@ where
         )?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response(), actions, false))
+        Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -680,7 +691,7 @@ where
         &mut self,
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
         let height = block.header.height;
         let chain_id = block.header.chain_id;
@@ -692,7 +703,7 @@ where
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            return Ok((self.chain_info_response(), actions));
+            return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
         }
 
         // We haven't processed the block - verify the certificate first
@@ -771,7 +782,11 @@ where
             trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            return Ok((self.chain_info_response(), actions));
+            return Ok((
+                self.chain_info_response(),
+                actions,
+                BlockOutcome::Preprocessed,
+            ));
         }
 
         // This should always be true for valid certificates.
@@ -878,7 +893,7 @@ where
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
 
-        Ok((self.chain_info_response(), actions))
+        Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
