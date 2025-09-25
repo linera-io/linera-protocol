@@ -10,7 +10,10 @@ use linera_base::{
     time::Duration,
 };
 use linera_core::{
-    client::{BlanketMessagePolicy, ChainClientOptions, MessagePolicy},
+    client::{
+        BlanketMessagePolicy, ChainClientOptions, MessagePolicy,
+        DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+    },
     node::CrossChainMessageDelivery,
     DEFAULT_GRACE_PERIOD,
 };
@@ -130,6 +133,14 @@ pub struct ClientContextOptions {
         value_parser = util::parse_millis
     )]
     pub blob_download_timeout: Duration,
+
+    /// Maximum number of certificates that we download at a time from one validator when
+    /// synchronizing one of our chains.
+    #[arg(
+        long,
+        default_value_t = DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+    )]
+    pub certificate_download_batch_size: u64,
 }
 
 impl ClientContextOptions {
@@ -147,6 +158,7 @@ impl ClientContextOptions {
             cross_chain_message_delivery,
             grace_period: self.grace_period,
             blob_download_timeout: self.blob_download_timeout,
+            certificate_download_batch_size: self.certificate_download_batch_size,
         }
     }
 
