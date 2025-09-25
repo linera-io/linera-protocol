@@ -967,12 +967,10 @@ mod graphql {
     {
         async fn elements(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
             let mut indices = self.indices().await?;
-            Ok(if let Some(count) = count {
+            if let Some(count) = count {
                 indices.truncate(count);
-                indices
-            } else {
-                indices
-            })
+            }
+            Ok(indices)
         }
 
         #[graphql(derived(name = "count"))]
@@ -1000,12 +998,10 @@ mod graphql {
     {
         async fn elements(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
             let mut indices = self.indices().await?;
-            Ok(if let Some(count) = count {
+            if let Some(count) = count {
                 indices.truncate(count);
-                indices
-            } else {
-                indices
-            })
+            }
+            Ok(indices)
         }
 
         #[graphql(derived(name = "count"))]
