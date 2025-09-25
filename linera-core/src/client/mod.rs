@@ -64,7 +64,6 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::{
-    chain_worker::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
@@ -76,6 +75,7 @@ use crate::{
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
+    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
 mod chain_client_state;
