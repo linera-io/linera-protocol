@@ -341,6 +341,7 @@ impl ActiveChain {
                         .await
                         .expect("Failed to query chain state view")
                         .execution_state
+                        .system
                         .stream_event_counts
                         .get(&stream_id)
                         .await
