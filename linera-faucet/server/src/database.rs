@@ -7,20 +7,17 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::Context as _;
 use linera_base::{
-    bcs,
     crypto::CryptoHash,
-    data_types::{BlockHeight, ChainDescription},
+    data_types::BlockHeight,
     identifiers::{AccountOwner, ChainId},
 };
-use linera_chain::{data_types::Transaction, types::ConfirmedBlockCertificate};
 use linera_core::client::ChainClient;
-use linera_execution::{system::SystemOperation, Operation};
 use linera_storage::Storage;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
     Row,
 };
-use tracing::{debug, info};
+use tracing::info;
 
 /// SQLite database for persistent storage of chain assignments.
 pub struct FaucetDatabase {
@@ -131,11 +128,11 @@ impl FaucetDatabase {
             let current_height = certificate.block().header.height;
 
             // Check if this block's chains are already in our database
-            let chains_in_block = self.extract_opened_chains(&certificate).await?;
+            let chains_in_block = super::extract_opened_single_owner_chains(&certificate)?;
 
             if !chains_in_block.is_empty() {
                 let mut all_chains_exist = true;
-                for (owner, _chain_id) in &chains_in_block {
+                for (owner, _description) in &chains_in_block {
                     if self.get_chain_id(owner).await?.is_none() {
                         all_chains_exist = false;
                         break;
@@ -180,7 +177,10 @@ impl FaucetDatabase {
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Certificate not found for hash {}", hash))?;
 
-            let chains_to_store = self.extract_opened_chains(&certificate).await?;
+            let chains_to_store = super::extract_opened_single_owner_chains(&certificate)?
+                .into_iter()
+                .map(|(owner, description)| (owner, description.id()))
+                .collect::<Vec<_>>();
 
             if !chains_to_store.is_empty() {
                 info!(
@@ -192,50 +192,6 @@ impl FaucetDatabase {
         }
 
         Ok(())
-    }
-
-    /// Extracts OpenChain operations from a certificate and returns (owner, chain_id) pairs.
-    async fn extract_opened_chains(
-        &self,
-        certificate: &ConfirmedBlockCertificate,
-    ) -> anyhow::Result<Vec<(AccountOwner, ChainId)>> {
-        let mut chains = Vec::new();
-        let block = certificate.block();
-
-        // Parse chain descriptions from the block's blobs
-        let blobs = block.body.blobs.iter().flatten();
-        let chain_descriptions = blobs
-            .map(|blob| bcs::from_bytes::<ChainDescription>(blob.bytes()))
-            .collect::<Result<Vec<ChainDescription>, _>>()?;
-
-        let mut chain_desc_iter = chain_descriptions.into_iter();
-
-        // Examine each transaction in the block
-        for transaction in &block.body.transactions {
-            if let Transaction::ExecuteOperation(Operation::System(system_op)) = transaction {
-                if let SystemOperation::OpenChain(config) = system_op.as_ref() {
-                    // Extract the owner from the OpenChain operation
-                    // We expect single-owner chains from the faucet
-                    let mut owners = config.ownership.all_owners();
-                    if let Some(owner) = owners.next() {
-                        // Verify it's a single-owner chain (faucet only creates these)
-                        if owners.next().is_none() {
-                            // Get the corresponding chain description from the blobs
-                            if let Some(description) = chain_desc_iter.next() {
-                                chains.push((*owner, description.id()));
-                                debug!(
-                                    "Found OpenChain operation for owner {} creating chain {}",
-                                    owner,
-                                    description.id()
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(chains)
     }
 
     /// Gets the chain ID for an owner if it exists.

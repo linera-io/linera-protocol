@@ -502,7 +502,7 @@ impl Block {
                     && blob_id.hash == self.header.chain_id.0))
     }
 
-    /// Returns all the published blob IDs in this block's operations.
+    /// Returns all the published blob IDs in this block's transactions.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
         self.body
             .operations()
@@ -510,7 +510,7 @@ impl Block {
             .collect()
     }
 
-    /// Returns all the blob IDs created by the block's operations.
+    /// Returns all the blob IDs created by the block's transactions.
     pub fn created_blob_ids(&self) -> BTreeSet<BlobId> {
         self.body
             .blobs
@@ -520,7 +520,7 @@ impl Block {
             .collect()
     }
 
-    /// Returns all the blobs created by the block's operations.
+    /// Returns all the blobs created by the block's transactions.
     pub fn created_blobs(&self) -> BTreeMap<BlobId, Blob> {
         self.body
             .blobs
