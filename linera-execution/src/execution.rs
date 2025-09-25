@@ -12,7 +12,7 @@ use linera_base::{
 use linera_views::{
     context::Context,
     key_value_store_view::KeyValueStoreView,
-    map_view::MapView,
+    map_view::HashedMapView,
     reentrant_collection_view::HashedReentrantCollectionView,
     views::{ClonableView, ReplaceContext, View},
 };
@@ -44,7 +44,7 @@ pub struct ExecutionStateView<C> {
     /// User applications.
     pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
     /// The number of events in the streams that this chain is writing to.
-    pub stream_event_counts: MapView<C, StreamId, u32>,
+    pub stream_event_counts: HashedMapView<C, StreamId, u32>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
