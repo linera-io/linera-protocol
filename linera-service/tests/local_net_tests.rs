@@ -509,7 +509,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 
     let (chain, chain1) = {
         let wallet = client1.load_wallet()?;
-        let chains = wallet.chain_ids();
+        let chains = wallet.owned_chain_ids();
         (chains[0], chains[1])
     };
 
@@ -576,7 +576,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
     let (mut net, client) = config.instantiate().await?;
     let (chain_id, chain1) = {
         let wallet = client.load_wallet()?;
-        let chains = wallet.chain_ids();
+        let chains = wallet.owned_chain_ids();
         (chains[0], chains[1])
     };
     let account = Account::chain(chain_id);
