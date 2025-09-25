@@ -141,6 +141,10 @@ pub struct ClientContextOptions {
         default_value_t = DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     )]
     pub certificate_download_batch_size: u64,
+
+    /// Maximum number of tasks that can are joined concurrently in the client.
+    #[arg(long, default_value = "100")]
+    pub max_joined_tasks: usize,
 }
 
 impl ClientContextOptions {
@@ -159,6 +163,7 @@ impl ClientContextOptions {
             grace_period: self.grace_period,
             blob_download_timeout: self.blob_download_timeout,
             certificate_download_batch_size: self.certificate_download_batch_size,
+            max_joined_tasks: self.max_joined_tasks,
         }
     }
 
