@@ -24,6 +24,8 @@ pub struct ChainWorkerConfig {
     pub grace_period: Duration,
     /// Idle chain workers free their memory after that duration without requests.
     pub ttl: Duration,
+    /// Override the default size to truncate receive log entries in chain info responses.
+    pub override_chain_info_max_received_log_entries: Option<usize>,
 }
 
 impl ChainWorkerConfig {
