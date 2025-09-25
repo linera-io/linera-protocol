@@ -488,6 +488,7 @@ where
             } => {
                 let count = self
                     .state
+                    .system
                     .stream_event_counts
                     .get_mut_or_default(&stream_id)
                     .await?;

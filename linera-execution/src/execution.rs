@@ -6,13 +6,12 @@ use std::{collections::BTreeMap, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{BlobContent, BlockHeight, StreamUpdate},
-    identifiers::{AccountOwner, BlobId, StreamId},
+    identifiers::{AccountOwner, BlobId},
     time::Instant,
 };
 use linera_views::{
     context::Context,
     key_value_store_view::KeyValueStoreView,
-    map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
     views::{ClonableView, ReplaceContext, View},
 };
@@ -43,8 +42,6 @@ pub struct ExecutionStateView<C> {
     pub system: SystemExecutionStateView<C>,
     /// User applications.
     pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
-    /// The number of events in the streams that this chain is writing to.
-    pub stream_event_counts: MapView<C, StreamId, u32>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
@@ -57,7 +54,6 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
         ExecutionStateView {
             system: self.system.with_context(ctx.clone()).await,
             users: self.users.with_context(ctx.clone()).await,
-            stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
         }
     }
 }
