@@ -2,8 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Deref};
 
+use allocative::{Allocative, Key, Visitor};
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
@@ -27,6 +28,18 @@ pub struct LiteCertificate<'a> {
     pub round: Round,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
+}
+
+impl Allocative for LiteCertificate<'_> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_field(Key::new("LiteCertificate_value"), &self.value);
+        visitor.visit_field(Key::new("LiteCertificate_round"), &self.round);
+        let signatures = self.signatures.deref();
+        for (public_key, _) in signatures {
+            visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
+            visitor.visit_simple(Key::new("ValidatorSignature"), 64);
+        }
+    }
 }
 
 impl LiteCertificate<'_> {

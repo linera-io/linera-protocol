@@ -7,6 +7,7 @@ use std::{
     sync::Mutex,
 };
 
+use allocative::{Allocative, Visitor};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -24,6 +25,12 @@ pub struct WrappedHashableContainerView<C, W, O> {
     stored_hash: Option<O>,
     hash: Mutex<Option<O>>,
     inner: W,
+}
+
+impl<C, W: Allocative, O> Allocative for WrappedHashableContainerView<C, W, O> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        self.inner.visit(visitor);
+    }
 }
 
 /// Key tags to create the sub-keys of a `MapView` on top of the base key.

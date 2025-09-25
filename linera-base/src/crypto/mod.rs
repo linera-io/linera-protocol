@@ -11,6 +11,7 @@ mod secp256k1;
 pub mod signer;
 use std::{fmt::Display, io, num::ParseIntError, str::FromStr};
 
+use allocative::{Allocative, Key, Visitor};
 use alloy_primitives::FixedBytes;
 use custom_debug_derive::Debug;
 pub use ed25519::{Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature};
@@ -34,6 +35,14 @@ pub type ValidatorSecretKey = secp256k1::Secp256k1SecretKey;
 pub type ValidatorSignature = secp256k1::Secp256k1Signature;
 /// The key pair of a validator.
 pub type ValidatorKeypair = secp256k1::Secp256k1KeyPair;
+
+/// Size constants for Allocative implementations
+const ED25519_PUBLIC_KEY_SIZE: usize = 32;
+const SECP256K1_PUBLIC_KEY_SIZE: usize = 32;
+const EVM_PUBLIC_KEY_SIZE: usize = 20;
+const ED25519_SIGNATURE_SIZE: usize = 96;
+const SECP256K1_SIGNATURE_SIZE: usize = 97;
+const EVM_SECP256K1_SIGNATURE_SIZE: usize = 85;
 
 /// Signature scheme used for the public key.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
@@ -73,6 +82,22 @@ pub enum AccountPublicKey {
     EvmSecp256k1(secp256k1::evm::EvmPublicKey),
 }
 
+impl Allocative for AccountPublicKey {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        match self {
+            AccountPublicKey::Ed25519(_) => {
+                visitor.visit_simple(Key::new("Ed25519PublicKey"), ED25519_PUBLIC_KEY_SIZE);
+            }
+            AccountPublicKey::Secp256k1(_) => {
+                visitor.visit_simple(Key::new("Secp256k1PublicKey"), SECP256K1_PUBLIC_KEY_SIZE);
+            }
+            AccountPublicKey::EvmSecp256k1(_) => {
+                visitor.visit_simple(Key::new("EvmPublicKey"), EVM_PUBLIC_KEY_SIZE);
+            }
+        }
+    }
+}
+
 /// The private key of a chain owner.
 #[derive(Serialize, Deserialize)]
 pub enum AccountSecretKey {
@@ -109,6 +134,31 @@ pub enum AccountSignature {
         #[debug(with = "hex_debug")]
         address: [u8; 20],
     },
+}
+
+impl Allocative for AccountSignature {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        match self {
+            AccountSignature::Ed25519 {
+                signature: _,
+                public_key: _,
+            } => {
+                visitor.visit_simple(Key::new("Ed25529_signature"), ED25519_SIGNATURE_SIZE);
+            }
+            AccountSignature::Secp256k1 {
+                signature: _,
+                public_key: _,
+            } => {
+                visitor.visit_simple(Key::new("Secp256k1_signature"), SECP256K1_SIGNATURE_SIZE);
+            }
+            AccountSignature::EvmSecp256k1 {
+                signature: _,
+                address: _,
+            } => {
+                visitor.visit_simple(Key::new("EvmSecp256k1_signature"), EVM_SECP256K1_SIGNATURE_SIZE);
+            }
+        }
+    }
 }
 
 impl AccountSecretKey {

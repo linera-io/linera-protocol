@@ -5,6 +5,7 @@
 
 use std::str::FromStr;
 
+use allocative::Allocative;
 use async_graphql::scalar;
 use derive_more::Display;
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -27,6 +28,7 @@ use thiserror::Error;
     WitStore,
     WitLoad,
     Debug,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 /// The virtual machine runtime

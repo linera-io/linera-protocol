@@ -11,6 +11,7 @@
 
 use std::{collections::BTreeSet, fmt};
 
+use allocative::Allocative;
 use linera_base::{
     data_types::{Amount, ArithmeticError, BlobContent, CompressedBytecode, Resources},
     ensure,
@@ -22,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::ExecutionError;
 
 /// A collection of prices and limits associated with block execution.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
 pub struct ResourceControlPolicy {
     /// The price per unit of fuel (aka gas) for Wasm execution.
     pub wasm_fuel_unit: Amount,
