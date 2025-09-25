@@ -14,7 +14,7 @@ use chain_client_state::ChainClientState;
 use custom_debug_derive::Debug;
 use futures::{
     future::{self, Either, FusedFuture, Future},
-    stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt, TryStreamExt},
+    stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -882,8 +882,10 @@ impl<Env: Environment> Client<Env> {
             },
         ))
         .buffer_unordered(self.options.max_joined_tasks)
-        .try_collect::<Vec<_>>()
-        .await?
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
@@ -1232,8 +1234,10 @@ impl<Env: Environment> Client<Env> {
             Err(LocalNodeError::BlobsNotFound(vec![blob_id]).into())
         }))
         .buffer_unordered(self.options.max_joined_tasks)
-        .try_collect()
+        .collect::<Vec<_>>()
         .await
+        .into_iter()
+        .collect()
     }
 
     /// Downloads and processes confirmed block certificates that use the given blobs.
@@ -1884,8 +1888,10 @@ impl<Env: Environment> ChainClient<Env> {
             });
         let updates = futures::stream::iter(futures)
             .buffer_unordered(self.options.max_joined_tasks)
-            .try_collect::<Vec<_>>()
-            .await?
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
@@ -2252,8 +2258,10 @@ impl<Env: Environment> ChainClient<Env> {
                 .map(|chain_id| self.client.synchronize_chain_state(chain_id)),
         )
         .buffer_unordered(self.options.max_joined_tasks)
-        .try_collect::<Vec<_>>()
-        .await?;
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
         Ok(())
     }
 
