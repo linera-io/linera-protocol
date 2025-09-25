@@ -1186,7 +1186,7 @@ where
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is put on the collection. The obtained view can
@@ -1339,7 +1339,7 @@ where
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Load multiple entries for writing at once.
     /// The entries in indices have to be all distinct.
@@ -1485,7 +1485,7 @@ where
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
 {
     /// Returns the list of indices in the collection in an order determined
     /// by serialization.
@@ -1693,7 +1693,7 @@ where
 impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// is absent then a default entry is put in the collection on this index.
@@ -1846,7 +1846,7 @@ where
 
 impl<I, W: View> ReentrantCustomCollectionView<W::Context, I, W>
 where
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Load multiple entries for writing at once.
     /// The entries in indices have to be all distinct.
@@ -1990,7 +1990,7 @@ where
 impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
     W: View,
-    I: Sync + Clone + Send + CustomSerialize,
+    I: Sync + Send + CustomSerialize,
 {
     /// Returns the list of indices in the collection. The order is determined by
     /// the custom serialization.
@@ -2199,6 +2199,11 @@ mod graphql {
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
         }
 
         async fn entry(
