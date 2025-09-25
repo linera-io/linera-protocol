@@ -27,6 +27,8 @@ pub struct ChainWorkerConfig {
     /// TTL for sender chains.
     // We don't want them to keep in memory forever since usually they're short-lived.
     pub sender_chain_ttl: Duration,
+    /// Override the default size to truncate receive log entries in chain info responses.
+    pub override_chain_info_max_received_log_entries: Option<usize>,
 }
 
 impl ChainWorkerConfig {

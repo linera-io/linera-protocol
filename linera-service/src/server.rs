@@ -37,7 +37,7 @@ use linera_base::{
     listen_for_shutdown_signals,
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
-use linera_core::{worker::WorkerState, JoinSetExt as _};
+use linera_core::{worker::WorkerState, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -68,6 +68,7 @@ struct ServerContext {
     shard: Option<usize>,
     grace_period: Duration,
     chain_worker_ttl: Duration,
+    chain_info_max_received_log_entries: usize,
 }
 
 impl ServerContext {
@@ -94,7 +95,8 @@ impl ServerContext {
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
         .with_grace_period(self.grace_period)
-        .with_chain_worker_ttl(self.chain_worker_ttl);
+        .with_chain_worker_ttl(self.chain_worker_ttl)
+        .with_chain_info_max_received_log_entries(self.chain_info_max_received_log_entries);
         (state, shard_id, shard.clone())
     }
 
@@ -380,6 +382,15 @@ enum ServerCommand {
             value_parser = util::parse_millis
         )]
         chain_worker_ttl: Duration,
+
+        /// Maximum size for received_log entries in chain info responses. This should
+        /// generally only be increased from the default value.
+        #[arg(
+            long,
+            default_value_t = CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+            env = "LINERA_SERVER_CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES",
+        )]
+        chain_info_max_received_log_entries: usize,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -492,6 +503,7 @@ async fn run(options: ServerOptions) {
             grace_period,
             wasm_runtime,
             chain_worker_ttl,
+            chain_info_max_received_log_entries,
         } => {
             linera_version::VERSION_INFO.log();
 
@@ -505,6 +517,7 @@ async fn run(options: ServerOptions) {
                 shard,
                 grace_period,
                 chain_worker_ttl,
+                chain_info_max_received_log_entries,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config
