@@ -1152,7 +1152,7 @@ impl<I: DeserializeOwned, W: View> CollectionView<W::Context, I, W> {
 
 impl<I, W: HashableView> HashableView for CollectionView<W::Context, I, W>
 where
-    I: Clone + Send + Sync + Serialize + DeserializeOwned,
+    I: Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -1615,6 +1615,11 @@ mod graphql {
             Ok(self.indices().await?)
         }
 
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
+        }
+
         async fn entry(
             &self,
             key: K,
@@ -1673,6 +1678,11 @@ mod graphql {
     {
         async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
             Ok(self.indices().await?)
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
         }
 
         async fn entry(
