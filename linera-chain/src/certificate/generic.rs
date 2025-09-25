@@ -2,9 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use allocative::{Allocative, Key, Visitor};
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
+    crypto::{
+        CryptoHash, ValidatorPublicKey, ValidatorSignature, SECP256K1_PUBLIC_KEY_SIZE,
+        SECP256K1_SIGNATURE_SIZE,
+    },
     data_types::Round,
 };
 use linera_execution::committee::Committee;
@@ -18,6 +22,17 @@ pub struct GenericCertificate<T: CertificateValue> {
     value: T,
     pub round: Round,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+}
+
+impl<T: Allocative + CertificateValue> Allocative for GenericCertificate<T> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_field(Key::new("GenericCertificate_value"), &self.value);
+        visitor.visit_field(Key::new("GenericCertificate_round"), &self.round);
+        for (_, _) in &self.signatures {
+            visitor.visit_simple(Key::new("ValidatorPublicKey"), SECP256K1_PUBLIC_KEY_SIZE);
+            visitor.visit_simple(Key::new("ValidatorSignature"), SECP256K1_SIGNATURE_SIZE);
+        }
+    }
 }
 
 impl<T: CertificateValue> GenericCertificate<T> {

@@ -8,6 +8,8 @@ use std::{
     fmt::Debug,
 };
 
+use allocative::Allocative;
+
 use crate::{
     self as linera_views,
     bucket_queue_view::BucketQueueView,
@@ -432,7 +434,7 @@ impl TestView for TestQueueView<MemoryContext<()>> {
 }
 
 /// Wrapper to test with a [`BucketQueueView`].
-#[derive(RootView, ClonableView)]
+#[derive(RootView, ClonableView, Allocative)]
 pub struct TestBucketQueueView<C> {
     queue: BucketQueueView<C, u16, 2>,
 }

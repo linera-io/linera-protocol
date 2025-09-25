@@ -156,6 +156,11 @@ pub fn hex_vec_debug(list: &Vec<Vec<u8>>, f: &mut fmt::Formatter) -> fmt::Result
     write!(f, "]")
 }
 
+/// Helper function for allocative.
+pub fn visit_allocative_simple<T>(_: &T, visitor: &mut allocative::Visitor<'_>) {
+    visitor.visit_simple_sized::<T>();
+}
+
 /// Listens for shutdown signals, and notifies the [`CancellationToken`] if one is
 /// received.
 #[cfg(not(target_arch = "wasm32"))]
