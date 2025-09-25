@@ -139,6 +139,29 @@ jobs:
         cd examples
         cargo test --locked
 
+  linera-sdk-tests-fixtures:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run linera-sdk fixtures
+      run: |
+        cd linera-sdk/tests/fixtures
+        cargo test --locked
+    - name: Run linera-sdk tests application lints
+      run: |
+        cd linera-sdk/tests/fixtures
+        cargo fmt -- --check
+        cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
+
   default-features-and-witty-integration-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
