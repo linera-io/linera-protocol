@@ -171,6 +171,7 @@ where
     execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
+    is_tracked: bool,
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
@@ -192,6 +193,7 @@ where
             ChainWorkerRequest<StorageClient::Context>,
             tracing::Span,
         )>,
+        is_tracked: bool,
     ) {
         let actor = ChainWorkerActor {
             config,
@@ -201,6 +203,7 @@ where
             tracked_chains,
             delivery_notifier,
             chain_id,
+            is_tracked,
         };
         if let Err(err) = actor.handle_requests(incoming_requests).await {
             tracing::error!("Chain actor error: {err}");
@@ -238,8 +241,12 @@ where
     /// Sleeps for the configured TTL.
     pub(super) async fn sleep_until_timeout(&self) {
         let now = self.storage.clock().current_time();
-        let ttl =
-            TimeDelta::from_micros(u64::try_from(self.config.ttl.as_micros()).unwrap_or(u64::MAX));
+        let timeout = if self.is_tracked {
+            self.config.sender_chain_ttl
+        } else {
+            self.config.ttl
+        };
+        let ttl = TimeDelta::from_micros(u64::try_from(timeout.as_micros()).unwrap_or(u64::MAX));
         let timeout = now.saturating_add(ttl);
         self.storage.clock().sleep_until(timeout).await
     }

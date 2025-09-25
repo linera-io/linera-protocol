@@ -157,6 +157,7 @@ where
             chain_ids,
             name,
             options.chain_worker_ttl,
+            options.sender_chain_worker_ttl,
             options.to_chain_client_options(),
             block_cache_size,
             execution_state_cache_size,
@@ -195,6 +196,8 @@ where
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
         let max_retries = 10;
+        let chain_worker_ttl = Duration::from_secs(30);
+        let sender_chain_worker_ttl = Duration::from_secs(1);
 
         let node_options = NodeOptions {
             send_timeout: send_recv_timeout,
@@ -218,7 +221,8 @@ where
             false,
             chain_ids,
             name,
-            Duration::from_secs(30),
+            chain_worker_ttl,
+            sender_chain_worker_ttl,
             ChainClientOptions {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
                 ..ChainClientOptions::test_default()
