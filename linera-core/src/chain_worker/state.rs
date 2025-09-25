@@ -65,6 +65,13 @@ where
     knows_chain_is_active: bool,
 }
 
+/// Whether the block was processed or skipped. Used for metrics.
+pub enum BlockOutcome {
+    Processed,
+    Preprocessed,
+    Skipped,
+}
+
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
@@ -530,7 +537,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         let (chain_epoch, committee) = self.chain.current_committee()?;
         ensure!(
             certificate.inner().epoch() == chain_epoch,
@@ -617,14 +624,14 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
 
         let header = &block.header;
         let height = header.height;
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         let (epoch, committee) = self.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -637,7 +644,11 @@ where
         };
         if already_committed_block || should_skip_validated_block()? {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((self.chain_info_response(), NetworkActions::default(), true));
+            return Ok((
+                self.chain_info_response(),
+                NetworkActions::default(),
+                BlockOutcome::Skipped,
+            ));
         }
 
         self.block_values
@@ -667,7 +678,7 @@ where
         )?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response(), actions, false))
+        Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -680,7 +691,7 @@ where
         &mut self,
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
         let height = block.header.height;
         let chain_id = block.header.chain_id;
@@ -692,7 +703,7 @@ where
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            return Ok((self.chain_info_response(), actions));
+            return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
         }
 
         // We haven't processed the block - verify the certificate first
@@ -771,7 +782,11 @@ where
             trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            return Ok((self.chain_info_response(), actions));
+            return Ok((
+                self.chain_info_response(),
+                actions,
+                BlockOutcome::Preprocessed,
+            ));
         }
 
         // This should always be true for valid certificates.
@@ -783,7 +798,7 @@ where
         // If we got here, `height` is equal to `tip.next_block_height` and the block is
         // properly chained. Verify that the chain is active and that the epoch we used for
         // verifying the certificate is actually the active one on the chain.
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         let (epoch, _) = self.chain.current_committee()?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
@@ -799,7 +814,7 @@ where
         // because we already wrote the blob state above, so the client can now upload the
         // blob, which will get accepted, and retry.
         if height == BlockHeight::ZERO {
-            self.ensure_is_active().await?;
+            self.initialize_and_save_if_needed().await?;
             let (epoch, _) = self.chain.current_committee()?;
             check_block_epoch(epoch, chain_id, block.header.epoch)?;
         }
@@ -878,7 +893,7 @@ where
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
 
-        Ok((self.chain_info_response(), actions))
+        Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
@@ -1104,7 +1119,7 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -1126,7 +1141,7 @@ where
         &mut self,
         query: Query,
     ) -> Result<QueryOutcome, WorkerError> {
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let outcome = self
             .chain
@@ -1144,7 +1159,7 @@ where
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         let response = self.chain.describe_application(application_id).await?;
         Ok(response)
     }
@@ -1160,7 +1175,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let (_, committee) = self.chain.current_committee()?;
@@ -1194,7 +1209,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         proposal
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
@@ -1340,7 +1355,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.ensure_is_active().await?;
+        self.initialize_and_save_if_needed().await?;
         let chain = &self.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
@@ -1428,11 +1443,11 @@ where
         Ok(outcome)
     }
 
-    /// Ensures that the current chain is active, returning an error otherwise.
-    async fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
+    /// Initializes and saves the current chain if it is not active yet.
+    async fn initialize_and_save_if_needed(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
             let local_time = self.storage.clock().current_time();
-            self.chain.ensure_is_active(local_time).await?;
+            self.chain.initialize_if_needed(local_time).await?;
             self.save().await?;
             self.knows_chain_is_active = true;
         }

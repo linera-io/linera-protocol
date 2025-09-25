@@ -398,6 +398,11 @@ mod graphql {
     where
         T: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
     {
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count() as u32)
+        }
+
         async fn entries(
             &self,
             start: Option<usize>,

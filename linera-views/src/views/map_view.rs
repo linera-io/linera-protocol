@@ -2083,6 +2083,11 @@ mod graphql {
             })
         }
 
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
+        }
+
         async fn entry(&self, key: I) -> Result<Entry<I, Option<V>>, async_graphql::Error> {
             Ok(Entry {
                 value: self.get(&key).await?,
