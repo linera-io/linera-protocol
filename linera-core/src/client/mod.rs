@@ -56,7 +56,7 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use linera_views::ViewError;
-use rand::distributions::{Distribution, WeightedIndex};
+use rand::prelude::SliceRandom as _;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
@@ -263,19 +263,6 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
-    fn weighted_select(
-        remaining_validators: &mut Vec<RemoteNode<Env::ValidatorNode>>,
-        remaining_weights: &mut Vec<u64>,
-    ) -> Option<RemoteNode<Env::ValidatorNode>> {
-        if remaining_weights.is_empty() {
-            return None;
-        }
-        let dist = WeightedIndex::new(remaining_weights.clone()).unwrap();
-        let idx = dist.sample(&mut rand::thread_rng());
-        remaining_weights.remove(idx);
-        Some(remaining_validators.remove(idx))
-    }
-
     /// Downloads and processes all certificates up to (excluding) the specified height.
     #[instrument(level = "trace", skip(self))]
     async fn download_certificates(
@@ -283,23 +270,11 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let (_, committee) = self.admin_committee().await?;
-        let mut remaining_validators = self.make_nodes(&committee)?;
-        let mut info = self
-            .fetch_chain_info(chain_id, &remaining_validators)
-            .await?;
-        // Determining the weights of the validators
-        let mut remaining_weights = remaining_validators
-            .iter()
-            .map(|validator| {
-                let validator_state = committee.validators.get(&validator.public_key).unwrap();
-                validator_state.votes
-            })
-            .collect::<Vec<_>>();
-
-        while let Some(remote_node) =
-            Self::weighted_select(&mut remaining_validators, &mut remaining_weights)
-        {
+        let mut validators = self.validator_nodes().await?;
+        // Sequentially try each validator in random order.
+        validators.shuffle(&mut rand::thread_rng());
+        let mut info = self.fetch_chain_info(chain_id, &validators).await?;
+        for remote_node in validators {
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
@@ -364,11 +339,11 @@ impl<Env: Environment> Client<Env> {
         }
         // Now download the rest in batches from the remote node.
         while next_height < stop {
-            // TODO(#2045): Analyze network errors instead of guessing the batch size.
+            // TODO(#2045): Analyze network errors instead of using a fixed batch size.
             let limit = u64::from(stop)
                 .checked_sub(u64::from(next_height))
                 .ok_or(ArithmeticError::Overflow)?
-                .min(1000);
+                .min(self.options.certificate_download_batch_size);
             let certificates = remote_node
                 .query_certificates_from(chain_id, next_height, limit)
                 .await?;
@@ -1390,7 +1365,12 @@ pub struct ChainClientOptions {
     pub grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
     pub blob_download_timeout: Duration,
+    /// Maximum number of certificates that we download at a time from one validator when
+    /// synchronizing one of our chains.
+    pub certificate_download_batch_size: u64,
 }
+
+pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 
 #[cfg(with_testing)]
 impl ChainClientOptions {
@@ -1403,6 +1383,7 @@ impl ChainClientOptions {
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             grace_period: DEFAULT_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
+            certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         }
     }
 }
