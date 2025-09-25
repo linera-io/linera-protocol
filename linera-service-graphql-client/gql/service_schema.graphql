@@ -32,6 +32,15 @@ A unique identifier for a user or an application.
 scalar AccountOwner
 
 """
+Admin operation metadata.
+"""
+type AdminOperationMetadata {
+	adminOperationType: String!
+	epoch: Int
+	blobHash: CryptoHash
+}
+
+"""
 A non-negative amount of tokens.
 """
 scalar Amount
@@ -354,7 +363,7 @@ type ChainStateExtendedView {
 	"""
 	Sender chain and height of all certified blocks known as a receiver (local ordering).
 	"""
-	receivedLog: LogView_ChainAndHeight_7af83576!
+	receivedLog: LogView_ChainAndHeight_3fe3c8bf!
 	"""
 	The number of `received_log` entries we have synchronized, for each validator.
 	"""
@@ -435,6 +444,33 @@ type Chains {
 }
 
 """
+Change application permissions operation metadata.
+"""
+type ChangeApplicationPermissionsMetadata {
+	permissionsJson: String!
+}
+
+"""
+Change ownership operation metadata.
+"""
+type ChangeOwnershipOperationMetadata {
+	superOwners: [AccountOwner!]!
+	owners: [OwnerWithWeight!]!
+	multiLeaderRounds: Int!
+	openMultiLeaderRounds: Boolean!
+}
+
+"""
+Claim operation metadata.
+"""
+type ClaimOperationMetadata {
+	owner: AccountOwner!
+	targetId: ChainId!
+	recipient: AccountOutput!
+	amount: Amount!
+}
+
+"""
 A set of validators (identified by their public keys) and their voting rights.
 """
 input Committee {
@@ -464,6 +500,25 @@ type ConfirmedBlock {
 	block: Block!
 	status: String!
 	hash: CryptoHash!
+}
+
+"""
+Create application operation metadata.
+"""
+type CreateApplicationOperationMetadata {
+	moduleId: String!
+	parametersHex: String!
+	instantiationArgumentHex: String!
+	requiredApplicationIds: [ApplicationId!]!
+}
+
+"""
+Credit message metadata.
+"""
+type CreditMessageMetadata {
+	target: AccountOwner!
+	amount: Amount!
+	source: AccountOwner!
 }
 
 """
@@ -614,12 +669,12 @@ type InboxStateView {
 	"""
 	These bundles have been added and are waiting to be removed.
 	"""
-	addedBundles: QueueView_MessageBundle_f4399f0b!
+	addedBundles: QueueView_MessageBundle_53ccd442!
 	"""
 	These bundles have been removed by anticipation and are waiting to be added.
 	At least one of `added_bundles` and `removed_bundles` should be empty.
 	"""
-	removedBundles: QueueView_MessageBundle_f4399f0b!
+	removedBundles: QueueView_MessageBundle_53ccd442!
 }
 
 """
@@ -659,7 +714,7 @@ A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
 
-type LogView_ChainAndHeight_7af83576 {
+type LogView_ChainAndHeight_3fe3c8bf {
 	count: Int!
 	entries(start: Int, end: Int): [ChainAndHeight!]!
 }
@@ -798,6 +853,28 @@ type MessageBundle {
 The kind of outgoing message being sent
 """
 scalar MessageKind
+
+"""
+Structured representation of a message for GraphQL.
+"""
+type MessageMetadata {
+	"""
+	The type of message: "System" or "User"
+	"""
+	messageType: String!
+	"""
+	For user messages, the application ID
+	"""
+	applicationId: ApplicationId
+	"""
+	For user messages, the serialized bytes (as a hex string for GraphQL)
+	"""
+	userBytesHex: String
+	"""
+	For system messages, structured representation
+	"""
+	systemMessage: SystemMessageMetadata
+}
 
 """
 A unique identifier for an application module
@@ -1125,6 +1202,13 @@ Notify that a chain has a new certified block or a new message
 """
 scalar Notification
 
+"""
+Open chain operation metadata.
+"""
+type OpenChainOperationMetadata {
+	balance: Amount!
+}
+
 type Operation {
 	"""
 	The type of operation: "System" or "User"
@@ -1139,9 +1223,9 @@ type Operation {
 	"""
 	userBytesHex: String
 	"""
-	For system operations, the serialized bytes (as a hex string for GraphQL)
+	For system operations, structured representation
 	"""
-	systemBytesHex: String
+	systemOperation: SystemOperationMetadata
 }
 
 """
@@ -1206,6 +1290,14 @@ type OutgoingMessage {
 }
 
 """
+Owner with weight metadata.
+"""
+type OwnerWithWeight {
+	owner: AccountOwner!
+	weight: String!
+}
+
+"""
 The pending blobs belonging to a block that can't be processed without them.
 """
 type PendingBlobsView {
@@ -1255,6 +1347,24 @@ type PostedMessage {
 	The message itself.
 	"""
 	message: Message!
+	"""
+	Structured message metadata for GraphQL.
+	"""
+	messageMetadata: MessageMetadata!
+}
+
+"""
+Publish data blob operation metadata.
+"""
+type PublishDataBlobMetadata {
+	blobHash: CryptoHash!
+}
+
+"""
+Publish module operation metadata.
+"""
+type PublishModuleMetadata {
+	moduleId: String!
 }
 
 type QueryRoot {
@@ -1270,7 +1380,7 @@ type QueryRoot {
 	version: VersionInfo!
 }
 
-type QueueView_MessageBundle_f4399f0b {
+type QueueView_MessageBundle_53ccd442 {
 	count: Int!
 	entries(count: Int): [MessageBundle!]!
 }
@@ -1363,6 +1473,82 @@ type SystemExecutionStateView {
 }
 
 """
+Structured representation of a system message for GraphQL.
+"""
+type SystemMessageMetadata {
+	"""
+	The type of system message
+	"""
+	systemMessageType: String!
+	"""
+	Credit message details
+	"""
+	credit: CreditMessageMetadata
+	"""
+	Withdraw message details
+	"""
+	withdraw: WithdrawMessageMetadata
+}
+
+"""
+Structured representation of a system operation for GraphQL.
+"""
+type SystemOperationMetadata {
+	"""
+	The type of system operation
+	"""
+	systemOperationType: String!
+	"""
+	Transfer operation details
+	"""
+	transfer: TransferOperationMetadata
+	"""
+	Claim operation details
+	"""
+	claim: ClaimOperationMetadata
+	"""
+	Open chain operation details
+	"""
+	openChain: OpenChainOperationMetadata
+	"""
+	Change ownership operation details
+	"""
+	changeOwnership: ChangeOwnershipOperationMetadata
+	"""
+	Change application permissions operation details
+	"""
+	changeApplicationPermissions: ChangeApplicationPermissionsMetadata
+	"""
+	Admin operation details
+	"""
+	admin: AdminOperationMetadata
+	"""
+	Create application operation details
+	"""
+	createApplication: CreateApplicationOperationMetadata
+	"""
+	Publish data blob operation details
+	"""
+	publishDataBlob: PublishDataBlobMetadata
+	"""
+	Verify blob operation details
+	"""
+	verifyBlob: VerifyBlobMetadata
+	"""
+	Publish module operation details
+	"""
+	publishModule: PublishModuleMetadata
+	"""
+	Simple flag operations (CloseChain, ProcessNewEpoch, ProcessRemovedEpoch)
+	"""
+	epoch: Int
+	"""
+	UpdateStreams operation details
+	"""
+	updateStreams: [UpdateStreamMetadata!]
+}
+
+"""
 A timestamp, in microseconds since the Unix epoch
 """
 scalar Timestamp
@@ -1399,9 +1585,43 @@ type TransactionMetadata {
 	operation: Operation
 }
 
+"""
+Transfer operation metadata.
+"""
+type TransferOperationMetadata {
+	owner: AccountOwner!
+	recipient: AccountOutput!
+	amount: Amount!
+}
+
+"""
+Update stream metadata.
+"""
+type UpdateStreamMetadata {
+	chainId: ChainId!
+	streamId: String!
+	nextIndex: Int!
+}
+
+"""
+Verify blob operation metadata.
+"""
+type VerifyBlobMetadata {
+	blobId: String!
+}
+
 scalar VersionInfo
 
 scalar VmRuntime
+
+"""
+Withdraw message metadata.
+"""
+type WithdrawMessageMetadata {
+	owner: AccountOwner!
+	amount: Amount!
+	recipient: AccountOutput!
+}
 
 """
 Directs the executor to include this field or fragment only when the `if` argument is true.

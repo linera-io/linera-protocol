@@ -1,0 +1,547 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! GraphQL-compatible structured metadata representations for operations and messages.
+
+use async_graphql::SimpleObject;
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::Amount,
+    hex,
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+};
+use linera_execution::{
+    system::AdminOperation, Message, Operation, SystemMessage, SystemOperation,
+};
+use serde::{Deserialize, Serialize};
+
+/// Structured representation of a system operation for GraphQL.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct SystemOperationMetadata {
+    /// The type of system operation
+    pub system_operation_type: String,
+    /// Transfer operation details
+    pub transfer: Option<TransferOperationMetadata>,
+    /// Claim operation details
+    pub claim: Option<ClaimOperationMetadata>,
+    /// Open chain operation details
+    pub open_chain: Option<OpenChainOperationMetadata>,
+    /// Change ownership operation details
+    pub change_ownership: Option<ChangeOwnershipOperationMetadata>,
+    /// Change application permissions operation details
+    pub change_application_permissions: Option<ChangeApplicationPermissionsMetadata>,
+    /// Admin operation details
+    pub admin: Option<AdminOperationMetadata>,
+    /// Create application operation details
+    pub create_application: Option<CreateApplicationOperationMetadata>,
+    /// Publish data blob operation details
+    pub publish_data_blob: Option<PublishDataBlobMetadata>,
+    /// Verify blob operation details
+    pub verify_blob: Option<VerifyBlobMetadata>,
+    /// Publish module operation details
+    pub publish_module: Option<PublishModuleMetadata>,
+    /// Simple flag operations (CloseChain, ProcessNewEpoch, ProcessRemovedEpoch)
+    pub epoch: Option<i32>,
+    /// UpdateStreams operation details
+    pub update_streams: Option<Vec<UpdateStreamMetadata>>,
+}
+
+/// Transfer operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct TransferOperationMetadata {
+    pub owner: AccountOwner,
+    pub recipient: Account,
+    pub amount: Amount,
+}
+
+/// Claim operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct ClaimOperationMetadata {
+    pub owner: AccountOwner,
+    pub target_id: ChainId,
+    pub recipient: Account,
+    pub amount: Amount,
+}
+
+/// Open chain operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct OpenChainOperationMetadata {
+    pub balance: Amount,
+}
+
+/// Change ownership operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct ChangeOwnershipOperationMetadata {
+    pub super_owners: Vec<AccountOwner>,
+    pub owners: Vec<OwnerWithWeight>,
+    pub multi_leader_rounds: i32,
+    pub open_multi_leader_rounds: bool,
+}
+
+/// Owner with weight metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct OwnerWithWeight {
+    pub owner: AccountOwner,
+    pub weight: String, // Using String to represent u64 safely in GraphQL
+}
+
+/// Change application permissions operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct ChangeApplicationPermissionsMetadata {
+    pub permissions_json: String, // JSON serialized ApplicationPermissions
+}
+
+/// Admin operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct AdminOperationMetadata {
+    pub admin_operation_type: String,
+    pub epoch: Option<i32>,
+    pub blob_hash: Option<CryptoHash>,
+}
+
+/// Create application operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct CreateApplicationOperationMetadata {
+    pub module_id: String,
+    pub parameters_hex: String,
+    pub instantiation_argument_hex: String,
+    pub required_application_ids: Vec<ApplicationId>,
+}
+
+/// Publish data blob operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct PublishDataBlobMetadata {
+    pub blob_hash: CryptoHash,
+}
+
+/// Verify blob operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct VerifyBlobMetadata {
+    pub blob_id: String,
+}
+
+/// Publish module operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct PublishModuleMetadata {
+    pub module_id: String,
+}
+
+/// Update stream metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct UpdateStreamMetadata {
+    pub chain_id: ChainId,
+    pub stream_id: String,
+    pub next_index: i32,
+}
+
+/// Structured representation of a system message for GraphQL.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct SystemMessageMetadata {
+    /// The type of system message
+    pub system_message_type: String,
+    /// Credit message details
+    pub credit: Option<CreditMessageMetadata>,
+    /// Withdraw message details
+    pub withdraw: Option<WithdrawMessageMetadata>,
+}
+
+/// Credit message metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct CreditMessageMetadata {
+    pub target: AccountOwner,
+    pub amount: Amount,
+    pub source: AccountOwner,
+}
+
+/// Withdraw message metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct WithdrawMessageMetadata {
+    pub owner: AccountOwner,
+    pub amount: Amount,
+    pub recipient: Account,
+}
+
+/// Structured representation of a message for GraphQL.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct MessageMetadata {
+    /// The type of message: "System" or "User"
+    pub message_type: String,
+    /// For user messages, the application ID
+    pub application_id: Option<ApplicationId>,
+    /// For user messages, the serialized bytes (as a hex string for GraphQL)
+    pub user_bytes_hex: Option<String>,
+    /// For system messages, structured representation
+    pub system_message: Option<SystemMessageMetadata>,
+}
+
+impl From<&Operation> for SystemOperationMetadata {
+    fn from(operation: &Operation) -> Self {
+        match operation {
+            Operation::System(sys_op) => SystemOperationMetadata::from(sys_op.as_ref()),
+            Operation::User { .. } => {
+                // This should not be called for user operations
+                unreachable!(
+                    "SystemOperationMetadata should only be created from system operations"
+                )
+            }
+        }
+    }
+}
+
+impl From<&SystemOperation> for SystemOperationMetadata {
+    fn from(sys_op: &SystemOperation) -> Self {
+        match sys_op {
+            SystemOperation::Transfer {
+                owner,
+                recipient,
+                amount,
+            } => SystemOperationMetadata {
+                system_operation_type: "Transfer".to_string(),
+                transfer: Some(TransferOperationMetadata {
+                    owner: *owner,
+                    recipient: *recipient,
+                    amount: *amount,
+                }),
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::Claim {
+                owner,
+                target_id,
+                recipient,
+                amount,
+            } => SystemOperationMetadata {
+                system_operation_type: "Claim".to_string(),
+                transfer: None,
+                claim: Some(ClaimOperationMetadata {
+                    owner: *owner,
+                    target_id: *target_id,
+                    recipient: *recipient,
+                    amount: *amount,
+                }),
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::OpenChain(config) => SystemOperationMetadata {
+                system_operation_type: "OpenChain".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: Some(OpenChainOperationMetadata {
+                    balance: config.balance,
+                }),
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::CloseChain => SystemOperationMetadata {
+                system_operation_type: "CloseChain".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::ChangeOwnership {
+                super_owners,
+                owners,
+                multi_leader_rounds,
+                open_multi_leader_rounds,
+                ..
+            } => SystemOperationMetadata {
+                system_operation_type: "ChangeOwnership".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: Some(ChangeOwnershipOperationMetadata {
+                    super_owners: super_owners.clone(),
+                    owners: owners
+                        .iter()
+                        .map(|(owner, weight)| OwnerWithWeight {
+                            owner: *owner,
+                            weight: weight.to_string(),
+                        })
+                        .collect(),
+                    multi_leader_rounds: *multi_leader_rounds as i32,
+                    open_multi_leader_rounds: *open_multi_leader_rounds,
+                }),
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::ChangeApplicationPermissions(permissions) => SystemOperationMetadata {
+                system_operation_type: "ChangeApplicationPermissions".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: Some(ChangeApplicationPermissionsMetadata {
+                    permissions_json: format!("{:?}", permissions),
+                }),
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::Admin(admin_op) => SystemOperationMetadata {
+                system_operation_type: "Admin".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: Some(AdminOperationMetadata::from(admin_op)),
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::CreateApplication {
+                module_id,
+                parameters,
+                instantiation_argument,
+                required_application_ids,
+            } => SystemOperationMetadata {
+                system_operation_type: "CreateApplication".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: Some(CreateApplicationOperationMetadata {
+                    module_id: format!("{:?}", module_id),
+                    parameters_hex: hex::encode(parameters),
+                    instantiation_argument_hex: hex::encode(instantiation_argument),
+                    required_application_ids: required_application_ids.clone(),
+                }),
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::PublishDataBlob { blob_hash } => SystemOperationMetadata {
+                system_operation_type: "PublishDataBlob".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: Some(PublishDataBlobMetadata {
+                    blob_hash: *blob_hash,
+                }),
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::VerifyBlob { blob_id } => SystemOperationMetadata {
+                system_operation_type: "VerifyBlob".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: Some(VerifyBlobMetadata {
+                    blob_id: format!("{:?}", blob_id),
+                }),
+                publish_module: None,
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::PublishModule { module_id } => SystemOperationMetadata {
+                system_operation_type: "PublishModule".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: Some(PublishModuleMetadata {
+                    module_id: format!("{:?}", module_id),
+                }),
+                epoch: None,
+                update_streams: None,
+            },
+            SystemOperation::ProcessNewEpoch(epoch) => SystemOperationMetadata {
+                system_operation_type: "ProcessNewEpoch".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: Some(epoch.0 as i32),
+                update_streams: None,
+            },
+            SystemOperation::ProcessRemovedEpoch(epoch) => SystemOperationMetadata {
+                system_operation_type: "ProcessRemovedEpoch".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: Some(epoch.0 as i32),
+                update_streams: None,
+            },
+            SystemOperation::UpdateStreams(streams) => SystemOperationMetadata {
+                system_operation_type: "UpdateStreams".to_string(),
+                transfer: None,
+                claim: None,
+                open_chain: None,
+                change_ownership: None,
+                change_application_permissions: None,
+                admin: None,
+                create_application: None,
+                publish_data_blob: None,
+                verify_blob: None,
+                publish_module: None,
+                epoch: None,
+                update_streams: Some(
+                    streams
+                        .iter()
+                        .map(|(chain_id, stream_id, next_index)| UpdateStreamMetadata {
+                            chain_id: *chain_id,
+                            stream_id: format!("{:?}", stream_id),
+                            next_index: *next_index as i32,
+                        })
+                        .collect(),
+                ),
+            },
+        }
+    }
+}
+
+impl From<&AdminOperation> for AdminOperationMetadata {
+    fn from(admin_op: &AdminOperation) -> Self {
+        match admin_op {
+            AdminOperation::PublishCommitteeBlob { blob_hash } => AdminOperationMetadata {
+                admin_operation_type: "PublishCommitteeBlob".to_string(),
+                epoch: None,
+                blob_hash: Some(*blob_hash),
+            },
+            AdminOperation::CreateCommittee { epoch, blob_hash } => AdminOperationMetadata {
+                admin_operation_type: "CreateCommittee".to_string(),
+                epoch: Some(epoch.0 as i32),
+                blob_hash: Some(*blob_hash),
+            },
+            AdminOperation::RemoveCommittee { epoch } => AdminOperationMetadata {
+                admin_operation_type: "RemoveCommittee".to_string(),
+                epoch: Some(epoch.0 as i32),
+                blob_hash: None,
+            },
+        }
+    }
+}
+
+impl From<&Message> for MessageMetadata {
+    fn from(message: &Message) -> Self {
+        match message {
+            Message::System(sys_msg) => MessageMetadata {
+                message_type: "System".to_string(),
+                application_id: None,
+                user_bytes_hex: None,
+                system_message: Some(SystemMessageMetadata::from(sys_msg)),
+            },
+            Message::User {
+                application_id,
+                bytes,
+            } => MessageMetadata {
+                message_type: "User".to_string(),
+                application_id: Some(*application_id),
+                user_bytes_hex: Some(hex::encode(bytes)),
+                system_message: None,
+            },
+        }
+    }
+}
+
+impl From<&SystemMessage> for SystemMessageMetadata {
+    fn from(sys_msg: &SystemMessage) -> Self {
+        match sys_msg {
+            SystemMessage::Credit {
+                target,
+                amount,
+                source,
+            } => SystemMessageMetadata {
+                system_message_type: "Credit".to_string(),
+                credit: Some(CreditMessageMetadata {
+                    target: *target,
+                    amount: *amount,
+                    source: *source,
+                }),
+                withdraw: None,
+            },
+            SystemMessage::Withdraw {
+                owner,
+                amount,
+                recipient,
+            } => SystemMessageMetadata {
+                system_message_type: "Withdraw".to_string(),
+                credit: None,
+                withdraw: Some(WithdrawMessageMetadata {
+                    owner: *owner,
+                    amount: *amount,
+                    recipient: *recipient,
+                }),
+            },
+        }
+    }
+}

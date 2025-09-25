@@ -67,7 +67,13 @@ test('Block mounting', () => {
                     message: { System: { BytecodePublished: { operation_index: 0 } } },
                     grant: "0.01",
                     index: 4,
-                    kind: "Tracked"
+                    kind: "Tracked",
+                    messageMetadata: {
+                      messageType: "System",
+                      applicationId: null,
+                      userBytesHex: null,
+                      systemMessage: null
+                    }
                   }],
                   transactionIndex: 0,
                   timestamp: 1694097510206912
