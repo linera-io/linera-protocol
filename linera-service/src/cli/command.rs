@@ -1138,6 +1138,10 @@ pub enum NetCommand {
         #[arg(long, default_value = "false")]
         with_block_exporter: bool,
 
+        /// The number of block exporters to start.
+        #[arg(long, default_value = "1")]
+        num_block_exporters: usize,
+
         /// The address of the block exporter.
         #[arg(long, default_value = "localhost")]
         exporter_address: String,
@@ -1145,6 +1149,16 @@ pub enum NetCommand {
         /// The port on which to run the block exporter.
         #[arg(long, default_value = "8081")]
         exporter_port: NonZeroU16,
+
+        /// The name of the indexer docker image to use.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "linera-indexer:latest")]
+        indexer_image_name: String,
+
+        /// The name of the explorer docker image to use.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "linera-explorer:latest")]
+        explorer_image_name: String,
 
         /// Use dual store (rocksdb and scylladb) instead of just scylladb. This is exclusive for
         /// kubernetes deployments.
