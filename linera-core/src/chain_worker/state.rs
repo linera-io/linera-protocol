@@ -48,12 +48,6 @@ use crate::{
     worker::{NetworkActions, Notification, Reason, WorkerError},
 };
 
-/// The maximum number of entries in a `received_log` included in a `ChainInfo` response.
-// TODO(#4638): Revisit the number.
-pub const CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES_DEFAULT: usize = 1000;
-pub const CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES_VAR: &str =
-    "LINERA_CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES";
-
 /// The state of the chain worker.
 pub(crate) struct ChainWorkerState<StorageClient>
 where
@@ -1417,11 +1411,10 @@ where
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
-            let max_entries = std::env::var(CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES_VAR)
-                .ok()
-                .and_then(|var| var.parse().ok())
-                .unwrap_or(CHAIN_INFO_RECEIVED_LOG_MAX_ENTRIES_DEFAULT);
-            let end = (start.saturating_add(max_entries)).min(chain.received_log.count());
+            let max_received_log_entries = self.config.chain_info_max_received_log_entries;
+            let end = start
+                .saturating_add(max_received_log_entries)
+                .min(chain.received_log.count());
             info.requested_received_log = chain.received_log.read(start..end).await?;
         }
         if query.request_manager_values {

@@ -43,6 +43,7 @@ use crate::{
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
     value_cache::ValueCache,
+    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
 #[cfg(test)]
@@ -414,6 +415,26 @@ where
     #[instrument(level = "trace", skip(self))]
     pub fn with_chain_worker_ttl(mut self, chain_worker_ttl: Duration) -> Self {
         self.chain_worker_config.ttl = chain_worker_ttl;
+        self
+    }
+
+    /// Returns an instance with the specified maximum size for received_log entries.
+    ///
+    /// Sizes below `CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES` should be avoided.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_chain_info_max_received_log_entries(
+        mut self,
+        chain_info_max_received_log_entries: usize,
+    ) -> Self {
+        if chain_info_max_received_log_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
+            warn!(
+                "The value set for the maximum size of received_log entries \
+                   may not be compatible with the latest clients: {} instead of {}",
+                chain_info_max_received_log_entries, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES
+            );
+        }
+        self.chain_worker_config.chain_info_max_received_log_entries =
+            chain_info_max_received_log_entries;
         self
     }
 
