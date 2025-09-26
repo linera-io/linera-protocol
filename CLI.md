@@ -169,6 +169,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--certificate-download-batch-size <CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of certificates that we download at a time from one validator when synchronizing one of our chains
 
   Default value: `500`
+* `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
+
+  Default value: `100`
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `--storage-max-concurrent-queries <STORAGE_MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
 * `--storage-max-stream-queries <STORAGE_MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database

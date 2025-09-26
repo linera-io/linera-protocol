@@ -14,7 +14,7 @@ use chain_client_state::ChainClientState;
 use custom_debug_derive::Debug;
 use futures::{
     future::{self, Either, FusedFuture, Future},
-    stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
+    stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt, TryStreamExt},
 };
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -451,10 +451,13 @@ impl<Env: Environment> Client<Env> {
             let mut result = self.handle_certificate(certificate.clone()).await;
 
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let blobs = future::join_all(blob_ids.iter().map(|blob_id| async move {
-                    remote_node.try_download_blob(*blob_id).await.unwrap()
-                }))
-                .await;
+                let blobs =
+                    futures::stream::iter(blob_ids.iter().copied().map(|blob_id| async move {
+                        remote_node.try_download_blob(blob_id).await.unwrap()
+                    }))
+                    .buffer_unordered(self.options.max_joined_tasks)
+                    .collect::<Vec<_>>()
+                    .await;
                 self.local_node.store_blobs(&blobs).await?;
                 result = self.handle_certificate(certificate.clone()).await;
             }
@@ -863,7 +866,7 @@ impl<Env: Environment> Client<Env> {
         // put all their sent messages into the inbox.
         let mut other_sender_chains = Vec::new();
 
-        let certificates = future::try_join_all(remote_heights.into_iter().filter_map(
+        let certificates = stream::iter(remote_heights.into_iter().filter_map(
             |(sender_chain_id, remote_heights)| {
                 let local_next = *local_next_heights.get(&sender_chain_id)?;
                 if let Ok(height) = local_next.try_sub_one() {
@@ -888,6 +891,8 @@ impl<Env: Environment> Client<Env> {
                 })
             },
         ))
+        .buffer_unordered(self.options.max_joined_tasks)
+        .try_collect::<Vec<_>>()
         .await?
         .into_iter()
         .flatten()
@@ -1206,7 +1211,7 @@ impl<Env: Environment> Client<Env> {
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<Vec<Blob>, ChainClientError> {
         let timeout = self.options.blob_download_timeout;
-        future::try_join_all(blob_ids.into_iter().map(|blob_id| async move {
+        stream::iter(blob_ids.into_iter().map(|blob_id| async move {
             let mut stream = remote_nodes
                 .iter()
                 .zip(0..)
@@ -1236,7 +1241,11 @@ impl<Env: Environment> Client<Env> {
             }
             Err(LocalNodeError::BlobsNotFound(vec![blob_id]).into())
         }))
+        .buffer_unordered(self.options.max_joined_tasks)
+        .collect::<Vec<_>>()
         .await
+        .into_iter()
+        .collect()
     }
 
     /// Downloads and processes confirmed block certificates that use the given blobs.
@@ -1457,6 +1466,8 @@ pub struct ChainClientOptions {
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
+    /// Maximum number of tasks that can be joined concurrently using buffer_unordered.
+    pub max_joined_tasks: usize,
 }
 
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
@@ -1473,6 +1484,7 @@ impl ChainClientOptions {
             grace_period: DEFAULT_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            max_joined_tasks: 100,
         }
     }
 }
@@ -1882,7 +1894,9 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                 }
             });
-        let updates = future::try_join_all(futures)
+        let updates = futures::stream::iter(futures)
+            .buffer_unordered(self.options.max_joined_tasks)
+            .try_collect::<Vec<_>>()
             .await?
             .into_iter()
             .flatten()
@@ -2244,12 +2258,16 @@ impl<Env: Environment> ChainClient<Env> {
             .chain(iter::once(self.client.admin_id))
             .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
-        future::try_join_all(
+        stream::iter(
             chain_ids
                 .into_iter()
                 .map(|chain_id| self.client.synchronize_chain_state(chain_id)),
         )
-        .await?;
+        .buffer_unordered(self.options.max_joined_tasks)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
         Ok(())
     }
 
