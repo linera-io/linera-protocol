@@ -7,8 +7,10 @@ use std::sync::Arc;
 
 use linera_base::{crypto::ValidatorSecretKey, time::Duration};
 
+use crate::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
+
 /// Configuration parameters for the [`ChainWorkerState`][`super::state::ChainWorkerState`].
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ChainWorkerConfig {
     /// The signature key pair of the validator. The key may be missing for replicas
     /// without voting rights (possibly with a partial view of chains).
@@ -27,8 +29,8 @@ pub struct ChainWorkerConfig {
     /// TTL for sender chains.
     // We don't want them to keep in memory forever since usually they're short-lived.
     pub sender_chain_ttl: Duration,
-    /// Override the default size to truncate receive log entries in chain info responses.
-    pub override_chain_info_max_received_log_entries: Option<usize>,
+    /// The size to truncate receive log entries in chain info responses.
+    pub chain_info_max_received_log_entries: usize,
 }
 
 impl ChainWorkerConfig {
@@ -48,5 +50,20 @@ impl ChainWorkerConfig {
     /// Gets a reference to the [`ValidatorSecretKey`], if available.
     pub fn key_pair(&self) -> Option<&ValidatorSecretKey> {
         self.key_pair.as_ref().map(Arc::as_ref)
+    }
+}
+
+impl Default for ChainWorkerConfig {
+    fn default() -> Self {
+        Self {
+            key_pair: None,
+            allow_inactive_chains: false,
+            allow_messages_from_deprecated_epochs: false,
+            long_lived_services: false,
+            grace_period: Default::default(),
+            ttl: Default::default(),
+            sender_chain_ttl: Default::default(),
+            chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+        }
     }
 }

@@ -437,9 +437,8 @@ where
                 chain_info_max_received_log_entries, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES
             );
         }
-        self.chain_worker_config
-            .override_chain_info_max_received_log_entries =
-            Some(chain_info_max_received_log_entries);
+        self.chain_worker_config.chain_info_max_received_log_entries =
+            chain_info_max_received_log_entries;
         self
     }
 
