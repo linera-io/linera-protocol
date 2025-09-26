@@ -1407,7 +1407,11 @@ where
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
-            info.requested_received_log = chain.received_log.read(start..).await?;
+            let max_received_log_entries = self.config.chain_info_max_received_log_entries;
+            let end = start
+                .saturating_add(max_received_log_entries)
+                .min(chain.received_log.count());
+            info.requested_received_log = chain.received_log.read(start..end).await?;
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);
