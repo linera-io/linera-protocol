@@ -138,7 +138,7 @@ pub enum BenchmarkCommand {
         processes: usize,
 
         /// The faucet (which implicitly defines the network)
-        #[arg(long)]
+        #[arg(long, env = "LINERA_FAUCET_URL")]
         faucet: String,
 
         /// If specified, a directory with a random name will be created in this directory, and the
@@ -1208,7 +1208,7 @@ pub enum WalletCommand {
         genesis_config_path: Option<PathBuf>,
 
         /// The address of a faucet.
-        #[arg(long = "faucet")]
+        #[arg(long, env = "LINERA_FAUCET_URL")]
         faucet: Option<String>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
@@ -1220,7 +1220,7 @@ pub enum WalletCommand {
     /// Request a new chain from a faucet and add it to the wallet.
     RequestChain {
         /// The address of a faucet.
-        #[arg(long)]
+        #[arg(long, env = "LINERA_FAUCET_URL")]
         faucet: String,
 
         /// Whether this chain should become the default chain.

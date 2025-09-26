@@ -571,7 +571,7 @@ impl ClientWrapper {
                 info!("Faucet has started");
                 return Ok(FaucetService::new(port, child, temp_dir));
             } else {
-                warn!("Waiting for faucet to start");
+                tracing::debug!("Waiting for faucet to start");
             }
         }
         bail!("Failed to start faucet");

@@ -318,21 +318,21 @@ async fn print_messages_and_create_faucet(
         "{}",
         format!(
             "export LINERA_WALLET=\"{}\"",
-            client.wallet_path().display()
+            client.wallet_path().display(),
         )
-        .bold()
+        .bold(),
     );
     println!(
         "{}",
         format!(
             "export LINERA_KEYSTORE=\"{}\"",
-            client.keystore_path().display()
+            client.keystore_path().display(),
         )
         .bold()
     );
     println!(
         "{}",
-        format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold()
+        format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold(),
     );
 
     let wallet = client.load_wallet()?;
@@ -344,16 +344,23 @@ async fn print_messages_and_create_faucet(
             assert!(
                 num_other_initial_chains > faucet_chain_idx,
                 "num_other_initial_chains must be strictly greater than the faucet chain index if \
-            with_faucet is true"
+                 with_faucet is true"
             );
+
+            eprintln!("To connect to this network, you can use the following faucet URL:");
+            println!(
+                "\n{}\n",
+                format!("export LINERA_FAUCET_URL=\"http://localhost:{faucet_port}\"").bold(),
+            );
+
             // This picks a lexicographically faucet_chain_idx-th non-admin chain.
             Some(
                 chains
                     .into_iter()
                     .filter(|chain_id| *chain_id != wallet.genesis_admin_chain())
                     .nth(faucet_chain_idx as usize)
-                    .unwrap(),
-            ) // we checked that there are enough chains above, so this should be safe
+                    .expect("there should be at least one non-admin chain"),
+            )
         } else {
             None
         };
