@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
     env,
+    num::NonZeroU16,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -194,11 +195,28 @@ pub struct LocalNetConfig {
 }
 
 /// The setup for the block exporters.
+#[derive(Clone, PartialEq)]
 pub enum ExportersSetup {
     // Block exporters are meant to be started and managed by the testing framework.
     Local(Vec<BlockExporterConfig>),
     // Block exporters are already started and we just need to connect to them.
     Remote(Vec<ExporterServiceConfig>),
+}
+
+impl ExportersSetup {
+    pub fn new(
+        with_block_exporter: bool,
+        block_exporter_address: String,
+        block_exporter_port: NonZeroU16,
+    ) -> ExportersSetup {
+        if with_block_exporter {
+            let exporter_config =
+                ExporterServiceConfig::new(block_exporter_address, block_exporter_port.into());
+            ExportersSetup::Remote(vec![exporter_config])
+        } else {
+            ExportersSetup::Local(vec![])
+        }
+    }
 }
 
 /// A set of Linera validators running locally as native processes.

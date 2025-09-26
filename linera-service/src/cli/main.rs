@@ -2266,6 +2266,10 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                with_block_exporter,
+                num_block_exporters,
+                indexer_image_name,
+                explorer_image_name,
                 dual_store,
                 ..
             } => {
@@ -2285,6 +2289,10 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    *with_block_exporter,
+                    *num_block_exporters,
+                    indexer_image_name.clone(),
+                    explorer_image_name.clone(),
                     *dual_store,
                 )
                 .boxed()
