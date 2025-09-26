@@ -46,7 +46,6 @@ use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
     worker::{NetworkActions, Notification, Reason, WorkerError},
-    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
 /// The state of the chain worker.
@@ -1412,10 +1411,7 @@ where
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
-            let max_received_log_entries = self
-                .config
-                .override_chain_info_max_received_log_entries
-                .unwrap_or(CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES);
+            let max_received_log_entries = self.config.chain_info_max_received_log_entries;
             let end = start
                 .saturating_add(max_received_log_entries)
                 .min(chain.received_log.count());
