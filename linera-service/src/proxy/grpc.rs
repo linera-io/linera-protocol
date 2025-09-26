@@ -265,14 +265,18 @@ where
             .build_v1()?;
         let public_server = join_set.spawn_task(
             self.public_server()?
-                .max_concurrent_streams(Some(u32::MAX - 1)) // we subtract one to make sure
-                // that the value is not
-                // interpreted as "not set"
+                .max_concurrent_streams(
+                    // we subtract one to make sure
+                    // that the value is not
+                    // interpreted as "not set"
+                    Some(u32::MAX - 1),
+                )
                 .layer(
                     ServiceBuilder::new()
                         .layer(PrometheusMetricsMiddlewareLayer)
                         .into_inner(),
                 )
+                .layer(tower_http::cors::CorsLayer::permissive())
                 .layer(GrpcWebLayer::new())
                 .accept_http1(true)
                 .add_service(health_service)
