@@ -412,15 +412,6 @@ where
         self
     }
 
-    /// Returns an instance with the specified sender chain worker TTL.
-    ///
-    /// Idle sender chain workers free their memory after that duration without requests.
-    #[instrument(level = "trace", skip(self))]
-    pub fn with_sender_chain_worker_ttl(mut self, sender_chain_worker_ttl: Duration) -> Self {
-        self.chain_worker_config.sender_chain_ttl = sender_chain_worker_ttl;
-        self
-    }
-
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.nickname
@@ -776,11 +767,6 @@ where
                 .or_default()
                 .clone();
 
-            let is_tracked = self
-                .tracked_chains
-                .as_ref()
-                .is_some_and(|tracked_chains| tracked_chains.read().unwrap().contains(&chain_id));
-
             let actor_task = ChainWorkerActor::run(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
@@ -790,7 +776,6 @@ where
                 delivery_notifier,
                 chain_id,
                 receiver,
-                is_tracked,
             );
 
             self.chain_worker_tasks

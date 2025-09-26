@@ -157,7 +157,6 @@ pub struct Client<Env: Environment> {
 
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
-    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all)]
     pub fn new(
         environment: Env,
@@ -166,7 +165,6 @@ impl<Env: Environment> Client<Env> {
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
         chain_worker_ttl: Duration,
-        sender_chain_worker_ttl: Duration,
         options: ChainClientOptions,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
@@ -178,8 +176,7 @@ impl<Env: Environment> Client<Env> {
         .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)
         .with_allow_messages_from_deprecated_epochs(true)
-        .with_chain_worker_ttl(chain_worker_ttl)
-        .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
+        .with_chain_worker_ttl(chain_worker_ttl);
         let local_node = LocalNodeClient::new(state);
 
         Self {

@@ -76,20 +76,9 @@ pub struct ClientContextOptions {
     #[arg(
         long = "chain-worker-ttl-ms",
         default_value = "30000",
-        env = "LINERA_CHAIN_WORKER_TTL_MS",
         value_parser = util::parse_millis
     )]
     pub chain_worker_ttl: Duration,
-
-    /// The duration, in milliseconds, after which an idle sender chain worker will
-    /// free its memory.
-    #[arg(
-        long = "sender-chain-worker-ttl-ms", 
-        default_value = "1000",
-        env = "LINERA_SENDER_CHAIN_WORKER_TTL_MS",
-        value_parser = util::parse_millis
-    )]
-    pub sender_chain_worker_ttl: Duration,
 
     /// Delay increment for retrying to connect to a validator.
     #[arg(
