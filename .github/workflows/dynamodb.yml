@@ -33,7 +33,7 @@ permissions:
 jobs:
 
   test:
-    runs-on: ubuntu-latest-8-cores
+    runs-on: self-hosted-ovh-k8s-infra
     timeout-minutes: 40
 
     steps:
