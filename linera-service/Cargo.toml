@@ -148,7 +148,6 @@ base64.workspace = true
 call-evm-counter.workspace = true
 counter.workspace = true
 counter-no-graphql.workspace = true
-create-and-call.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
 ethereum-tracker.workspace = true
