@@ -26,7 +26,7 @@ use linera_core::{
 };
 use linera_storage::{Clock as _, Storage as _};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, instrument, warn, Instrument as _};
+use tracing::{debug, instrument, warn, Instrument as _};
 
 use crate::{
     wallet::{UserChain, Wallet},
@@ -541,9 +541,9 @@ impl<C: ClientContext> ChainListener<C> {
                 debug!(%chain_id, "Cannot find key for chain");
             }
             Err(error) => warn!(%error, "Failed to process inbox."),
-            Ok((certs, None)) => info!("Done processing inbox. {} blocks created.", certs.len()),
+            Ok((certs, None)) => debug!("Done processing inbox. {} blocks created.", certs.len()),
             Ok((certs, Some(new_timeout))) => {
-                info!(
+                debug!(
                     "{} blocks created. Will try processing the inbox later based \
                      on the given round timeout: {new_timeout:?}",
                     certs.len(),
