@@ -11,7 +11,7 @@ env:
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted-ovh-k8s-infra
     timeout-minutes: 40
 
     steps:

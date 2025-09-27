@@ -8,7 +8,7 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted-ovh-k8s-infra
     steps:
       - uses: actions/checkout@v4
 

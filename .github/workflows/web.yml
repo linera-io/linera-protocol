@@ -36,7 +36,7 @@ permissions:
 
 jobs:
   changed-files:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted-ovh-k8s-infra
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
@@ -58,7 +58,7 @@ jobs:
   web:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted-ovh-k8s-infra
     timeout-minutes: 20
 
     steps:
