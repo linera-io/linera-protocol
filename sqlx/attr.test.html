@@ -1,0 +1,170 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Mark an `async fn` as a test with SQLx support."><title>test in sqlx - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sqlx" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../sqlx/index.html">sqlx</a><span class="version">0.8.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">test</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#automatic-test-database-management-requires-migrate-feature" title="Automatic Test Database Management (requires `migrate` feature)">Automatic Test Database Management (requires <code>migrate</code> feature)</a><ul><li><a href="#supported-databases" title="Supported Databases">Supported Databases</a></li></ul></li><li><a href="#automatic-migrations-requires-migrate-feature" title="Automatic Migrations (requires `migrate` feature)">Automatic Migrations (requires <code>migrate</code> feature)</a></li><li><a href="#automatic-fixture-application-requires-migrate-feature" title="Automatic Fixture Application (requires `migrate` feature)">Automatic Fixture Application (requires <code>migrate</code> feature)</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate sqlx</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">sqlx</a></div><h1>Attribute Macro <span class="attr">test</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/sqlx_macros/lib.rs.html#87">Source</a> </span></div><pre class="rust item-decl"><code>#[test]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Mark an <code>async fn</code> as a test with SQLx support.</p>
+<p>The test will automatically be executed in the async runtime according to the chosen
+<code>runtime-{async-std, tokio}</code> feature. If more than one runtime feature is enabled, <code>runtime-tokio</code> is preferred.</p>
+<p>By default, this behaves identically to <code>#[tokio::test]</code><sup>1</sup> or <code>#[async_std::test]</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[sqlx::test]
+</span><span class="kw">async fn </span>test_async_fn() {
+    tokio::task::yield_now().<span class="kw">await</span>;
+} </code></pre></div>
+<p>However, several advanced features are also supported as shown in the next section.</p>
+<p><sup>1</sup><code>#[sqlx::test]</code> does not recognize any of the control arguments supported by <code>#[tokio::test]</code>
+as that would have complicated the implementation. If your use case requires any of those, feel free to open an issue.</p>
+<h4 id="automatic-test-database-management-requires-migrate-feature"><a class="doc-anchor" href="#automatic-test-database-management-requires-migrate-feature">§</a>Automatic Test Database Management (requires <code>migrate</code> feature)</h4>
+<p><code>#[sqlx::test]</code> can automatically create test databases for you and provide live connections to your test.</p>
+<p>For every annotated function, a new test database is created so tests can run against a live database
+but are isolated from each other.</p>
+<p>This feature is activated by changing the signature of your test function. The following signatures are supported:</p>
+<ul>
+<li><code>async fn(Pool&lt;DB&gt;) -&gt; Ret</code>
+<ul>
+<li>the <code>Pool</code>s used by all running tests share a single connection limit to avoid exceeding the server’s limit.</li>
+</ul>
+</li>
+<li><code>async fn(PoolConnection&lt;DB&gt;) -&gt; Ret</code>
+<ul>
+<li><code>PoolConnection&lt;Postgres&gt;</code>, etc.</li>
+</ul>
+</li>
+<li><code>async fn(PoolOptions&lt;DB&gt;, impl ConnectOptions&lt;DB&gt;) -&gt; Ret</code>
+<ul>
+<li>Where <code>impl ConnectOptions</code> is, e.g, <code>PgConnectOptions</code>, <code>MySqlConnectOptions</code>, etc.</li>
+<li>If your test wants to create its own <code>Pool</code> (for example, to set pool callbacks or to modify <code>ConnectOptions</code>),
+you can use this signature.</li>
+</ul>
+</li>
+</ul>
+<p>Where <code>DB</code> is a supported <code>Database</code> type and <code>Ret</code> is <code>()</code> or <code>Result&lt;_, _&gt;</code>.</p>
+<h6 id="supported-databases"><a class="doc-anchor" href="#supported-databases">§</a>Supported Databases</h6>
+<p>Most of these will require you to set <code>DATABASE_URL</code> as an environment variable
+or in a <code>.env</code> file like <code>sqlx::query!()</code> <em>et al</em>, to give the test driver a superuser connection with which
+to manage test databases.</p>
+<div><table><thead><tr><th>Database</th><th>Requires <code>DATABASE_URL</code></th></tr></thead><tbody>
+<tr><td>Postgres</td><td>Yes</td></tr>
+<tr><td>MySQL</td><td>Yes</td></tr>
+<tr><td>SQLite</td><td>No<sup>2</sup></td></tr>
+</tbody></table>
+</div>
+<p>Test databases are automatically cleaned up as tests succeed, but failed tests will leave their databases in-place
+to facilitate debugging. Note that to simplify the implementation, panics are <em>always</em> considered to be failures,
+even for <code>#[should_panic]</code> tests.</p>
+<p>To limit disk space usage, any previously created test databases will be deleted the next time a test binary using
+<code>#[sqlx::test]</code> is run.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sqlx::{PgPool, Row};
+
+<span class="attr">#[sqlx::test]
+</span><span class="kw">async fn </span>basic_test(pool: PgPool) -&gt; sqlx::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>conn = pool.acquire().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>foo = sqlx::query(<span class="string">"SELECT * FROM foo"</span>)
+        .fetch_one(<span class="kw-2">&amp;mut </span>conn)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(foo.get::&lt;String, <span class="kw">_</span>&gt;(<span class="string">"bar"</span>), <span class="string">"foobar!"</span>);
+    
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p><sup>2</sup> SQLite defaults to <code>target/sqlx/test-dbs/&lt;path&gt;.sqlite</code> where <code>&lt;path&gt;</code> is the path of the test function
+converted to a filesystem path (<code>::</code> replaced with <code>/</code>).</p>
+<h4 id="automatic-migrations-requires-migrate-feature"><a class="doc-anchor" href="#automatic-migrations-requires-migrate-feature">§</a>Automatic Migrations (requires <code>migrate</code> feature)</h4>
+<p>To ensure a straightforward test implementation against a fresh test database, migrations are automatically applied if a
+<code>migrations</code> folder is found in the same directory as <code>CARGO_MANIFEST_DIR</code> (the directory where the current crate’s
+<code>Cargo.toml</code> resides).</p>
+<p>You can override the resolved path relative to <code>CARGO_MANIFEST_DIR</code> in the attribute (global overrides are not currently
+supported):</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sqlx::{PgPool, Row};
+
+<span class="attr">#[sqlx::test(migrations = <span class="string">"foo_migrations"</span>)]
+</span><span class="kw">async fn </span>basic_test(pool: PgPool) -&gt; sqlx::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>conn = pool.acquire().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>foo = sqlx::query(<span class="string">"SELECT * FROM foo"</span>)
+        .fetch_one(<span class="kw-2">&amp;mut </span>conn)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(foo.get::&lt;String, <span class="kw">_</span>&gt;(<span class="string">"bar"</span>), <span class="string">"foobar!"</span>);
+    
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Or if you’re already embedding migrations in your main crate, you can reference them directly:</p>
+<p><code>foo_crate/lib.rs</code></p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub static </span>MIGRATOR: sqlx::migrate::Migrator = <span class="macro">sqlx::migrate!</span>(<span class="string">"foo_migrations"</span>);</code></pre></div>
+<p><code>foo_crate/tests/foo_test.rs</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sqlx::{PgPool, Row};
+
+
+<span class="comment">// You could also do `use foo_crate::MIGRATOR` and just refer to it as `MIGRATOR` here.
+</span><span class="attr">#[sqlx::test(migrator = <span class="string">"foo_crate::MIGRATOR"</span>)]
+</span><span class="kw">async fn </span>basic_test(pool: PgPool) -&gt; sqlx::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>conn = pool.acquire().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>foo = sqlx::query(<span class="string">"SELECT * FROM foo"</span>)
+        .fetch_one(<span class="kw-2">&amp;mut </span>conn)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(foo.get::&lt;String, <span class="kw">_</span>&gt;(<span class="string">"bar"</span>), <span class="string">"foobar!"</span>);
+    
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Or disable migrations processing entirely:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sqlx::{PgPool, Row};
+
+<span class="attr">#[sqlx::test(migrations = <span class="bool-val">false</span>)]
+</span><span class="kw">async fn </span>basic_test(pool: PgPool) -&gt; sqlx::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>conn = pool.acquire().<span class="kw">await</span><span class="question-mark">?</span>;
+    
+    conn.execute(<span class="string">"CREATE TABLE foo(bar text)"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>foo = sqlx::query(<span class="string">"SELECT * FROM foo"</span>)
+        .fetch_one(<span class="kw-2">&amp;mut </span>conn)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(foo.get::&lt;String, <span class="kw">_</span>&gt;(<span class="string">"bar"</span>), <span class="string">"foobar!"</span>);
+    
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h4 id="automatic-fixture-application-requires-migrate-feature"><a class="doc-anchor" href="#automatic-fixture-application-requires-migrate-feature">§</a>Automatic Fixture Application (requires <code>migrate</code> feature)</h4>
+<p>Since tests are isolated from each other but may require data to already exist in the database to keep from growing
+exponentially in complexity, <code>#[sqlx::test]</code> also supports applying test fixtures, which are SQL scripts that function
+similarly to migrations but are solely intended to insert test data and be arbitrarily composable.</p>
+<p>Imagine a basic social app that has users, posts and comments. To test the comment routes, you’d want
+the database to already have users and posts in it so the comments tests don’t have to duplicate that work.</p>
+<p>You can either pass a list of fixture to the attribute <code>fixtures</code> in three different operating modes:</p>
+<ol>
+<li>Pass a list of references files in <code>./fixtures</code> (resolved as <code>./fixtures/{name}.sql</code>, <code>.sql</code> added only if extension is missing);</li>
+<li>Pass a list of file paths (including associated extension), in which case they can either be absolute, or relative to the current file;</li>
+<li>Pass a <code>path = &lt;path to folder&gt;</code> parameter and a <code>scripts(&lt;filename_1&gt;, &lt;filename_2&gt;, ...)</code> parameter that are relative to the provided path (resolved as <code>{path}/{filename_x}.sql</code>, <code>.sql</code> added only if extension is missing).</li>
+</ol>
+<p>In any case they will be applied in the given order<sup>3</sup>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sqlx::PgPool;
+<span class="kw">use </span>serde_json::json;
+
+<span class="comment">// Alternatives:
+// #[sqlx::test(fixtures("./fixtures/users.sql", "./fixtures/posts.sql"))]
+// or
+// #[sqlx::test(fixtures(path = "./fixtures", scripts("users", "posts")))]
+</span><span class="attr">#[sqlx::test(fixtures(<span class="string">"users"</span>, <span class="string">"posts"</span>))]
+</span><span class="kw">async fn </span>test_create_comment(pool: PgPool) -&gt; sqlx::Result&lt;()&gt; {
+    <span class="comment">// See examples/postgres/social-axum-with-tests for a more in-depth example. 
+    </span><span class="kw">let </span><span class="kw-2">mut </span>app = create_app(pool);     
+    
+    <span class="kw">let </span>comment = test_request(
+        <span class="kw-2">&amp;mut </span>app, <span class="string">"POST"</span>, <span class="string">"/v1/comment"</span>, <span class="macro">json!</span> { <span class="string">"postId"</span>: <span class="string">"1234" </span>}
+    ).<span class="kw">await</span><span class="question-mark">?</span>;
+    
+    <span class="macro">assert_eq!</span>(comment[<span class="string">"postId"</span>], <span class="string">"1234"</span>);
+    
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Multiple <code>fixtures</code> attributes can be used to combine different operating modes.</p>
+<p><sup>3</sup>Ordering for test fixtures is entirely up to the application, and each test may choose which fixtures to
+apply and which to omit. However, since each fixture is applied separately (sent as a single command string, so wrapped
+in an implicit <code>BEGIN</code> and <code>COMMIT</code>), you will want to make sure to order the fixtures such that foreign key
+requirements are always satisfied, or else you might get errors.</p>
+</div></details></section></div></main></body></html>

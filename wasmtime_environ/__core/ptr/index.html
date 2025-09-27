@@ -1,0 +1,348 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Manually manage memory through raw pointers."><title>wasmtime_environ::__core::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module ptr</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#safety" title="Safety">Safety</a><ul><li><a href="#alignment" title="Alignment">Alignment</a></li><li><a href="#pointer-to-reference-conversion" title="Pointer to reference conversion">Pointer to reference conversion</a></li><li><a href="#allocated-object" title="Allocated object">Allocated object</a></li></ul></li><li><a href="#provenance" title="Provenance">Provenance</a><ul><li><a href="#pointers-vs-integers" title="Pointers Vs Integers">Pointers Vs Integers</a></li><li><a href="#strict-provenance" title="Strict Provenance">Strict Provenance</a></li><li><a href="#exposed-provenance" title="Exposed Provenance">Exposed Provenance</a></li></ul></li></ul><h3><a href="#macros">Module Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a></div><h1>Module <span>ptr</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.6.0">1.6.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/lib.rs.html#323">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Manually manage memory through raw pointers.</p>
+<p><em><a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html" title="primitive pointer">See also the pointer primitive types</a>.</em></p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Many functions in this module take raw pointers as arguments and read from or write to them. For
+this to be safe, these pointers must be <em>valid</em> for the given access. Whether a pointer is valid
+depends on the operation it is used for (read or write), and the extent of the memory that is
+accessed (i.e., how many bytes are read/written) – it makes no sense to ask “is this pointer
+valid”; one has to ask “is this pointer valid for a given access”. Most functions use <code>*mut T</code>
+and <code>*const T</code> to access only a single value, in which case the documentation omits the size and
+implicitly assumes it to be <code>size_of::&lt;T&gt;()</code> bytes.</p>
+<p>The precise rules for validity are not determined yet. The guarantees that are
+provided at this point are very minimal:</p>
+<ul>
+<li>For memory accesses of <a href="../../nomicon/exotic-sizes.html#zero-sized-types-zsts">size zero</a>, <em>every</em> pointer is valid, including the <a href="fn.null.html" title="fn wasmtime_environ::__core::ptr::null">null</a>
+pointer. The following points are only concerned with non-zero-sized accesses.</li>
+<li>A <a href="fn.null.html" title="fn wasmtime_environ::__core::ptr::null">null</a> pointer is <em>never</em> valid.</li>
+<li>For a pointer to be valid, it is necessary, but not always sufficient, that the pointer be
+<em>dereferenceable</em>. The <a href="#provenance">provenance</a> of the pointer is used to determine which <a href="#allocated-object">allocated
+object</a> it is derived from; a pointer is dereferenceable if the memory range of the given size
+starting at the pointer is entirely contained within the bounds of that allocated object. Note
+that in Rust, every (stack-allocated) variable is considered a separate allocated object.</li>
+<li>All accesses performed by functions in this module are <em>non-atomic</em> in the sense
+of <a href="../sync/atomic/index.html" title="mod wasmtime_environ::__core::sync::atomic">atomic operations</a> used to synchronize between threads. This means it is
+undefined behavior to perform two concurrent accesses to the same location from different
+threads unless both accesses only read from memory. Notice that this explicitly
+includes <a href="fn.read_volatile.html" title="fn wasmtime_environ::__core::ptr::read_volatile"><code>read_volatile</code></a> and <a href="fn.write_volatile.html" title="fn wasmtime_environ::__core::ptr::write_volatile"><code>write_volatile</code></a>: Volatile accesses cannot
+be used for inter-thread synchronization.</li>
+<li>The result of casting a reference to a pointer is valid for as long as the
+underlying object is live and no reference (just raw pointers) is used to
+access the same memory. That is, reference and pointer accesses cannot be
+interleaved.</li>
+</ul>
+<p>These axioms, along with careful use of <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.offset" title="method pointer::offset"><code>offset</code></a> for pointer arithmetic,
+are enough to correctly implement many useful things in unsafe code. Stronger guarantees
+will be provided eventually, as the <a href="../../nomicon/aliasing.html">aliasing</a> rules are being determined. For more
+information, see the <a href="../../book/ch19-01-unsafe-rust.html#dereferencing-a-raw-pointer">book</a> as well as the section in the reference devoted
+to <a href="../../reference/behavior-considered-undefined.html">undefined behavior</a>.</p>
+<p>We say that a pointer is “dangling” if it is not valid for any non-zero-sized accesses. This
+means out-of-bounds pointers, pointers to freed memory, null pointers, and pointers created with
+<a href="struct.NonNull.html#method.dangling" title="associated function wasmtime_environ::__core::ptr::NonNull::dangling"><code>NonNull::dangling</code></a> are all dangling.</p>
+<h3 id="alignment"><a class="doc-anchor" href="#alignment">§</a>Alignment</h3>
+<p>Valid raw pointers as defined above are not necessarily properly aligned (where
+“proper” alignment is defined by the pointee type, i.e., <code>*const T</code> must be
+aligned to <code>mem::align_of::&lt;T&gt;()</code>). However, most functions require their
+arguments to be properly aligned, and will explicitly state
+this requirement in their documentation. Notable exceptions to this are
+<a href="fn.read_unaligned.html" title="fn wasmtime_environ::__core::ptr::read_unaligned"><code>read_unaligned</code></a> and <a href="fn.write_unaligned.html" title="fn wasmtime_environ::__core::ptr::write_unaligned"><code>write_unaligned</code></a>.</p>
+<p>When a function requires proper alignment, it does so even if the access
+has size 0, i.e., even if memory is not actually touched. Consider using
+<a href="struct.NonNull.html#method.dangling" title="associated function wasmtime_environ::__core::ptr::NonNull::dangling"><code>NonNull::dangling</code></a> in such cases.</p>
+<h3 id="pointer-to-reference-conversion"><a class="doc-anchor" href="#pointer-to-reference-conversion">§</a>Pointer to reference conversion</h3>
+<p>When converting a pointer to a reference (e.g. via <code>&amp;*ptr</code> or <code>&amp;mut *ptr</code>),
+there are several rules that must be followed:</p>
+<ul>
+<li>
+<p>The pointer must be properly aligned.</p>
+</li>
+<li>
+<p>It must be non-null.</p>
+</li>
+<li>
+<p>It must be “dereferenceable” in the sense defined above.</p>
+</li>
+<li>
+<p>The pointer must point to a <a href="../../reference/behavior-considered-undefined.html#invalid-values">valid value</a> of type <code>T</code>.</p>
+</li>
+<li>
+<p>You must enforce Rust’s aliasing rules. The exact aliasing rules are not decided yet, so we
+only give a rough overview here. The rules also depend on whether a mutable or a shared
+reference is being created.</p>
+<ul>
+<li>When creating a mutable reference, then while this reference exists, the memory it points to
+must not get accessed (read or written) through any other pointer or reference not derived
+from this reference.</li>
+<li>When creating a shared reference, then while this reference exists, the memory it points to
+must not get mutated (except inside <code>UnsafeCell</code>).</li>
+</ul>
+</li>
+</ul>
+<p>If a pointer follows all of these rules, it is said to be
+<em>convertible to a (mutable or shared) reference</em>.</p>
+<p>These rules apply even if the result is unused!
+(The part about being initialized is not yet fully decided, but until
+it is, the only safe approach is to ensure that they are indeed initialized.)</p>
+<p>An example of the implications of the above rules is that an expression such
+as <code>unsafe { &amp;*(0 as *const u8) }</code> is Immediate Undefined Behavior.</p>
+<h3 id="allocated-object"><a class="doc-anchor" href="#allocated-object">§</a>Allocated object</h3>
+<p>An <em>allocated object</em> is a subset of program memory which is addressable
+from Rust, and within which pointer arithmetic is possible. Examples of
+allocated objects include heap allocations, stack-allocated variables,
+statics, and consts. The safety preconditions of some Rust operations -
+such as <code>offset</code> and field projections (<code>expr.field</code>) - are defined in
+terms of the allocated objects on which they operate.</p>
+<p>An allocated object has a base address, a size, and a set of memory
+addresses. It is possible for an allocated object to have zero size, but
+such an allocated object will still have a base address. The base address
+of an allocated object is not necessarily unique. While it is currently the
+case that an allocated object always has a set of memory addresses which is
+fully contiguous (i.e., has no “holes”), there is no guarantee that this
+will not change in the future.</p>
+<p>For any allocated object with <code>base</code> address, <code>size</code>, and a set of
+<code>addresses</code>, the following are guaranteed:</p>
+<ul>
+<li>For all addresses <code>a</code> in <code>addresses</code>, <code>a</code> is in the range <code>base .. (base + size)</code> (note that this requires <code>a &lt; base + size</code>, not <code>a &lt;= base + size</code>)</li>
+<li><code>base</code> is not equal to <a href="fn.null.html" title="fn wasmtime_environ::__core::ptr::null"><code>null()</code></a> (i.e., the address with the numerical
+value 0)</li>
+<li><code>base + size &lt;= usize::MAX</code></li>
+<li><code>size &lt;= isize::MAX</code></li>
+</ul>
+<p>As a consequence of these guarantees, given any address <code>a</code> within the set
+of addresses of an allocated object:</p>
+<ul>
+<li>It is guaranteed that <code>a - base</code> does not overflow <code>isize</code></li>
+<li>It is guaranteed that <code>a - base</code> is non-negative</li>
+<li>It is guaranteed that, given <code>o = a - base</code> (i.e., the offset of <code>a</code> within
+the allocated object), <code>base + o</code> will not wrap around the address space (in
+other words, will not overflow <code>usize</code>)</li>
+</ul>
+<h2 id="provenance"><a class="doc-anchor" href="#provenance">§</a>Provenance</h2>
+<p>Pointers are not <em>simply</em> an “integer” or “address”. For instance, it’s uncontroversial
+to say that a Use After Free is clearly Undefined Behavior, even if you “get lucky”
+and the freed memory gets reallocated before your read/write (in fact this is the
+worst-case scenario, UAFs would be much less concerning if this didn’t happen!).
+As another example, consider that <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.wrapping_offset" title="method pointer::wrapping_offset"><code>wrapping_offset</code></a> is documented to “remember”
+the allocated object that the original pointer points to, even if it is offset far
+outside the memory range occupied by that allocated object.
+To rationalize claims like this, pointers need to somehow be <em>more</em> than just their addresses:
+they must have <strong>provenance</strong>.</p>
+<p>A pointer value in Rust semantically contains the following information:</p>
+<ul>
+<li>The <strong>address</strong> it points to, which can be represented by a <code>usize</code>.</li>
+<li>The <strong>provenance</strong> it has, defining the memory it has permission to access. Provenance can be
+absent, in which case the pointer does not have permission to access any memory.</li>
+</ul>
+<p>The exact structure of provenance is not yet specified, but the permission defined by a
+pointer’s provenance have a <em>spatial</em> component, a <em>temporal</em> component, and a <em>mutability</em>
+component:</p>
+<ul>
+<li>Spatial: The set of memory addresses that the pointer is allowed to access.</li>
+<li>Temporal: The timespan during which the pointer is allowed to access those memory addresses.</li>
+<li>Mutability: Whether the pointer may only access the memory for reads, or also access it for
+writes. Note that this can interact with the other components, e.g. a pointer might permit
+mutation only for a subset of addresses, or only for a subset of its maximal timespan.</li>
+</ul>
+<p>When an <a href="#allocated-object">allocated object</a> is created, it has a unique Original Pointer. For alloc
+APIs this is literally the pointer the call returns, and for local variables and statics,
+this is the name of the variable/static. (This is mildly overloading the term “pointer”
+for the sake of brevity/exposition.)</p>
+<p>The Original Pointer for an allocated object has provenance that constrains the <em>spatial</em>
+permissions of this pointer to the memory range of the allocation, and the <em>temporal</em>
+permissions to the lifetime of the allocation. Provenance is implicitly inherited by all
+pointers transitively derived from the Original Pointer through operations like <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.offset" title="method pointer::offset"><code>offset</code></a>,
+borrowing, and pointer casts. Some operations may <em>shrink</em> the permissions of the derived
+provenance, limiting how much memory it can access or how long it’s valid for (i.e. borrowing a
+subfield and subslicing can shrink the spatial component of provenance, and all borrowing can
+shrink the temporal component of provenance). However, no operation can ever <em>grow</em> the
+permissions of the derived provenance: even if you “know” there is a larger allocation, you
+can’t derive a pointer with a larger provenance. Similarly, you cannot “recombine” two
+contiguous provenances back into one (i.e. with a <code>fn merge(&amp;[T], &amp;[T]) -&gt; &amp;[T]</code>).</p>
+<p>A reference to a place always has provenance over at least the memory that place occupies.
+A reference to a slice always has provenance over at least the range that slice describes.
+Whether and when exactly the provenance of a reference gets “shrunk” to <em>exactly</em> fit
+the memory it points to is not yet determined.</p>
+<p>A <em>shared</em> reference only ever has provenance that permits reading from memory,
+and never permits writes, except inside <a href="../cell/struct.UnsafeCell.html" title="struct wasmtime_environ::__core::cell::UnsafeCell"><code>UnsafeCell</code></a>.</p>
+<p>Provenance can affect whether a program has undefined behavior:</p>
+<ul>
+<li>
+<p>It is undefined behavior to access memory through a pointer that does not have provenance over
+that memory. Note that a pointer “at the end” of its provenance is not actually outside its
+provenance, it just has 0 bytes it can load/store. Zero-sized accesses do not require any
+provenance since they access an empty range of memory.</p>
+</li>
+<li>
+<p>It is undefined behavior to <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.offset" title="method pointer::offset"><code>offset</code></a> a pointer across a memory range that is not contained
+in the allocated object it is derived from, or to <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.offset_from" title="method pointer::offset_from"><code>offset_from</code></a> two pointers not derived
+from the same allocated object. Provenance is used to say what exactly “derived from” even
+means: the lineage of a pointer is traced back to the Original Pointer it descends from, and
+that identifies the relevant allocated object. In particular, it’s always UB to offset a
+pointer derived from something that is now deallocated, except if the offset is 0.</p>
+</li>
+</ul>
+<p>But it <em>is</em> still sound to:</p>
+<ul>
+<li>
+<p>Create a pointer without provenance from just an address (see <a href="fn.without_provenance.html" title="fn wasmtime_environ::__core::ptr::without_provenance"><code>without_provenance</code></a>). Such a
+pointer cannot be used for memory accesses (except for zero-sized accesses). This can still be
+useful for sentinel values like <code>null</code> <em>or</em> to represent a tagged pointer that will never be
+dereferenceable. In general, it is always sound for an integer to pretend to be a pointer “for
+fun” as long as you don’t use operations on it which require it to be valid (non-zero-sized
+offset, read, write, etc).</p>
+</li>
+<li>
+<p>Forge an allocation of size zero at any sufficiently aligned non-null address.
+i.e. the usual “ZSTs are fake, do what you want” rules apply.</p>
+</li>
+<li>
+<p><a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.wrapping_offset" title="method pointer::wrapping_offset"><code>wrapping_offset</code></a> a pointer outside its provenance. This includes pointers
+which have “no” provenance. In particular, this makes it sound to do pointer tagging tricks.</p>
+</li>
+<li>
+<p>Compare arbitrary pointers by address. Pointer comparison ignores provenance and addresses
+<em>are</em> just integers, so there is always a coherent answer, even if the pointers are dangling
+or from different provenances. Note that if you get “lucky” and notice that a pointer at the
+end of one allocated object is the “same” address as the start of another allocated object,
+anything you do with that fact is <em>probably</em> going to be gibberish. The scope of that
+gibberish is kept under control by the fact that the two pointers <em>still</em> aren’t allowed to
+access the other’s allocation (bytes), because they still have different provenance.</p>
+</li>
+</ul>
+<p>Note that the full definition of provenance in Rust is not decided yet, as this interacts
+with the as-yet undecided <a href="../../nomicon/aliasing.html">aliasing</a> rules.</p>
+<h3 id="pointers-vs-integers"><a class="doc-anchor" href="#pointers-vs-integers">§</a>Pointers Vs Integers</h3>
+<p>From this discussion, it becomes very clear that a <code>usize</code> <em>cannot</em> accurately represent a pointer,
+and converting from a pointer to a <code>usize</code> is generally an operation which <em>only</em> extracts the
+address. Converting this address back into pointer requires somehow answering the question:
+which provenance should the resulting pointer have?</p>
+<p>Rust provides two ways of dealing with this situation: <em>Strict Provenance</em> and <em>Exposed Provenance</em>.</p>
+<p>Note that a pointer <em>can</em> represent a <code>usize</code> (via <a href="fn.without_provenance.html" title="fn wasmtime_environ::__core::ptr::without_provenance"><code>without_provenance</code></a>), so the right type to
+use in situations where a value is “sometimes a pointer and sometimes a bare <code>usize</code>” is a
+pointer type.</p>
+<h3 id="strict-provenance"><a class="doc-anchor" href="#strict-provenance">§</a>Strict Provenance</h3>
+<p>“Strict Provenance” refers to a set of APIs designed to make working with provenance more
+explicit. They are intended as substitutes for casting a pointer to an integer and back.</p>
+<p>Entirely avoiding integer-to-pointer casts successfully side-steps the inherent ambiguity of
+that operation. This benefits compiler optimizations, and it is pretty much a requirement for
+using tools like <a href="https://github.com/rust-lang/miri">Miri</a> and architectures like <a href="https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/">CHERI</a> that aim to detect and diagnose pointer
+misuse.</p>
+<p>The key insight to making programming without integer-to-pointer casts <em>at all</em> viable is the
+<a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.with_addr" title="method pointer::with_addr"><code>with_addr</code></a> method:</p>
+<div class="example-wrap"><pre class="language-text"><code>    /// Creates a new pointer with the given address.
+    ///
+    /// This performs the same operation as an `addr as ptr` cast, but copies
+    /// the *provenance* of `self` to the new pointer.
+    /// This allows us to dynamically preserve and propagate this important
+    /// information in a way that is otherwise impossible with a unary cast.
+    ///
+    /// This is equivalent to using `wrapping_offset` to offset `self` to the
+    /// given address, and therefore has all the same capabilities and restrictions.
+    pub fn with_addr(self, addr: usize) -&gt; Self;</code></pre></div>
+<p>So you’re still able to drop down to the address representation and do whatever
+clever bit tricks you want <em>as long as</em> you’re able to keep around a pointer
+into the allocation you care about that can “reconstitute” the provenance.
+Usually this is very easy, because you only are taking a pointer, messing with the address,
+and then immediately converting back to a pointer. To make this use case more ergonomic,
+we provide the <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.map_addr" title="method pointer::map_addr"><code>map_addr</code></a> method.</p>
+<p>To help make it clear that code is “following” Strict Provenance semantics, we also provide an
+<a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.addr" title="method pointer::addr"><code>addr</code></a> method which promises that the returned address is not part of a
+pointer-integer-pointer roundtrip. In the future we may provide a lint for pointer&lt;-&gt;integer
+casts to help you audit if your code conforms to strict provenance.</p>
+<h4 id="using-strict-provenance"><a class="doc-anchor" href="#using-strict-provenance">§</a>Using Strict Provenance</h4>
+<p>Most code needs no changes to conform to strict provenance, as the only really concerning
+operation is casts from usize to a pointer. For code which <em>does</em> cast a <code>usize</code> to a pointer,
+the scope of the change depends on exactly what you’re doing.</p>
+<p>In general, you just need to make sure that if you want to convert a <code>usize</code> address to a
+pointer and then use that pointer to read/write memory, you need to keep around a pointer
+that has sufficient provenance to perform that read/write itself. In this way all of your
+casts from an address to a pointer are essentially just applying offsets/indexing.</p>
+<p>This is generally trivial to do for simple cases like tagged pointers <em>as long as you
+represent the tagged pointer as an actual pointer and not a <code>usize</code></em>. For instance:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">unsafe </span>{
+    <span class="comment">// A flag we want to pack into our pointer
+    </span><span class="kw">static </span>HAS_DATA: usize = <span class="number">0x1</span>;
+    <span class="kw">static </span>FLAG_MASK: usize = !HAS_DATA;
+
+    <span class="comment">// Our value, which must have enough alignment to have spare least-significant-bits.
+    </span><span class="kw">let </span>my_precious_data: u32 = <span class="number">17</span>;
+    <span class="macro">assert!</span>(core::mem::align_of::&lt;u32&gt;() &gt; <span class="number">1</span>);
+
+    <span class="comment">// Create a tagged pointer
+    </span><span class="kw">let </span>ptr = <span class="kw-2">&amp;</span>my_precious_data <span class="kw">as </span><span class="kw-2">*const </span>u32;
+    <span class="kw">let </span>tagged = ptr.map_addr(|addr| addr | HAS_DATA);
+
+    <span class="comment">// Check the flag:
+    </span><span class="kw">if </span>tagged.addr() &amp; HAS_DATA != <span class="number">0 </span>{
+        <span class="comment">// Untag and read the pointer
+        </span><span class="kw">let </span>data = <span class="kw-2">*</span>tagged.map_addr(|addr| addr &amp; FLAG_MASK);
+        <span class="macro">assert_eq!</span>(data, <span class="number">17</span>);
+    } <span class="kw">else </span>{
+        <span class="macro">unreachable!</span>()
+    }
+}</code></pre></div>
+<p>(Yes, if you’ve been using <a href="../sync/atomic/struct.AtomicUsize.html" title="struct wasmtime_environ::__core::sync::atomic::AtomicUsize"><code>AtomicUsize</code></a> for pointers in concurrent datastructures, you should
+be using <a href="../sync/atomic/struct.AtomicPtr.html" title="struct wasmtime_environ::__core::sync::atomic::AtomicPtr"><code>AtomicPtr</code></a> instead. If that messes up the way you atomically manipulate pointers,
+we would like to know why, and what needs to be done to fix it.)</p>
+<p>Situations where a valid pointer <em>must</em> be created from just an address, such as baremetal code
+accessing a memory-mapped interface at a fixed address, cannot currently be handled with strict
+provenance APIs and should use <a href="#exposed-provenance">exposed provenance</a>.</p>
+<h3 id="exposed-provenance"><a class="doc-anchor" href="#exposed-provenance">§</a>Exposed Provenance</h3>
+<p>As discussed above, integer-to-pointer casts are not possible with Strict Provenance APIs.
+This is by design: the goal of Strict Provenance is to provide a clear specification that we are
+confident can be formalized unambiguously and can be subject to precise formal reasoning.
+Integer-to-pointer casts do not (currently) have such a clear specification.</p>
+<p>However, there exist situations where integer-to-pointer casts cannot be avoided, or
+where avoiding them would require major refactoring. Legacy platform APIs also regularly assume
+that <code>usize</code> can capture all the information that makes up a pointer.
+Bare-metal platforms can also require the synthesis of a pointer “out of thin air” without
+anywhere to obtain proper provenance from.</p>
+<p>Rust’s model for dealing with integer-to-pointer casts is called <em>Exposed Provenance</em>. However,
+the semantics of Exposed Provenance are on much less solid footing than Strict Provenance, and
+at this point it is not yet clear whether a satisfying unambiguous semantics can be defined for
+Exposed Provenance. (If that sounds bad, be reassured that other popular languages that provide
+integer-to-pointer casts are not faring any better.) Furthermore, Exposed Provenance will not
+work (well) with tools like <a href="https://github.com/rust-lang/miri">Miri</a> and <a href="https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/">CHERI</a>.</p>
+<p>Exposed Provenance is provided by the <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.expose_provenance" title="method pointer::expose_provenance"><code>expose_provenance</code></a> and <a href="fn.with_exposed_provenance.html" title="fn wasmtime_environ::__core::ptr::with_exposed_provenance"><code>with_exposed_provenance</code></a> methods,
+which are equivalent to <code>as</code> casts between pointers and integers.</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.expose_provenance" title="method pointer::expose_provenance"><code>expose_provenance</code></a> is a lot like <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.addr" title="method pointer::addr"><code>addr</code></a>, but additionally adds the provenance of the
+pointer to a global list of ‘exposed’ provenances. (This list is purely conceptual, it exists
+for the purpose of specifying Rust but is not materialized in actual executions, except in
+tools like <a href="https://github.com/rust-lang/miri">Miri</a>.)
+Memory which is outside the control of the Rust abstract machine (MMIO registers, for example)
+is always considered to be exposed, so long as this memory is disjoint from memory that will
+be used by the abstract machine such as the stack, heap, and statics.</li>
+<li><a href="fn.with_exposed_provenance.html" title="fn wasmtime_environ::__core::ptr::with_exposed_provenance"><code>with_exposed_provenance</code></a> can be used to construct a pointer with one of these previously
+‘exposed’ provenances. <a href="fn.with_exposed_provenance.html" title="fn wasmtime_environ::__core::ptr::with_exposed_provenance"><code>with_exposed_provenance</code></a> takes only <code>addr: usize</code> as arguments, so
+unlike in <a href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html#method.with_addr" title="method pointer::with_addr"><code>with_addr</code></a> there is no indication of what the correct provenance for the returned
+pointer is – and that is exactly what makes integer-to-pointer casts so tricky to rigorously
+specify! The compiler will do its best to pick the right provenance for you, but currently we
+cannot provide any guarantees about which provenance the resulting pointer will have. Only one
+thing is clear: if there is <em>no</em> previously ‘exposed’ provenance that justifies the way the
+returned pointer will be used, the program has undefined behavior.</li>
+</ul>
+<p>If at all possible, we encourage code to be ported to <a href="#strict-provenance">Strict Provenance</a> APIs, thus avoiding
+the need for Exposed Provenance. Maximizing the amount of such code is a major win for avoiding
+specification complexity and to facilitate adoption of tools like <a href="https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/">CHERI</a> and <a href="https://github.com/rust-lang/miri">Miri</a> that can be
+a big help in increasing the confidence in (unsafe) Rust code. However, we acknowledge that this
+is not always possible, and offer Exposed Provenance as a way to explicit “opt out” of the
+well-defined semantics of Strict Provenance, and “opt in” to the unclear semantics of
+integer-to-pointer casts.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.addr_of.html" title="macro wasmtime_environ::__core::ptr::addr_of">addr_of</a></dt><dd>Creates a <code>const</code> raw pointer to a place, without creating an intermediate reference.</dd><dt><a class="macro" href="macro.addr_of_mut.html" title="macro wasmtime_environ::__core::ptr::addr_of_mut">addr_<wbr>of_<wbr>mut</a></dt><dd>Creates a <code>mut</code> raw pointer to a place, without creating an intermediate reference.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.NonNull.html" title="struct wasmtime_environ::__core::ptr::NonNull">NonNull</a></dt><dd><code>*mut T</code> but non-zero and <a href="https://doc.rust-lang.org/reference/subtyping.html">covariant</a>.</dd><dt><a class="struct" href="struct.Alignment.html" title="struct wasmtime_environ::__core::ptr::Alignment">Alignment</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>A type storing a <code>usize</code> which is a power of two, and thus
+represents a possible alignment in the Rust abstract machine.</dd><dt><a class="struct" href="struct.DynMetadata.html" title="struct wasmtime_environ::__core::ptr::DynMetadata">DynMetadata</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>The metadata for a <code>Dyn = dyn SomeTrait</code> trait object type.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Pointee.html" title="trait wasmtime_environ::__core::ptr::Pointee">Pointee</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Provides the pointer metadata type of any pointed-to type.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.addr_eq.html" title="fn wasmtime_environ::__core::ptr::addr_eq">addr_eq</a></dt><dd>Compares the <em>addresses</em> of the two pointers for equality,
+ignoring any metadata in fat pointers.</dd><dt><a class="fn" href="fn.copy.html" title="fn wasmtime_environ::__core::ptr::copy">copy</a><sup title="unsafe function">⚠</sup></dt><dd>Copies <code>count * size_of::&lt;T&gt;()</code> bytes from <code>src</code> to <code>dst</code>. The source
+and destination may overlap.</dd><dt><a class="fn" href="fn.copy_nonoverlapping.html" title="fn wasmtime_environ::__core::ptr::copy_nonoverlapping">copy_<wbr>nonoverlapping</a><sup title="unsafe function">⚠</sup></dt><dd>Copies <code>count * size_of::&lt;T&gt;()</code> bytes from <code>src</code> to <code>dst</code>. The source
+and destination must <em>not</em> overlap.</dd><dt><a class="fn" href="fn.dangling.html" title="fn wasmtime_environ::__core::ptr::dangling">dangling</a></dt><dd>Creates a new pointer that is dangling, but non-null and well-aligned.</dd><dt><a class="fn" href="fn.dangling_mut.html" title="fn wasmtime_environ::__core::ptr::dangling_mut">dangling_<wbr>mut</a></dt><dd>Creates a new pointer that is dangling, but non-null and well-aligned.</dd><dt><a class="fn" href="fn.drop_in_place.html" title="fn wasmtime_environ::__core::ptr::drop_in_place">drop_<wbr>in_<wbr>place</a><sup title="unsafe function">⚠</sup></dt><dd>Executes the destructor (if any) of the pointed-to value.</dd><dt><a class="fn" href="fn.eq.html" title="fn wasmtime_environ::__core::ptr::eq">eq</a></dt><dd>Compares raw pointers for equality.</dd><dt><a class="fn" href="fn.fn_addr_eq.html" title="fn wasmtime_environ::__core::ptr::fn_addr_eq">fn_<wbr>addr_<wbr>eq</a></dt><dd>Compares the <em>addresses</em> of the two function pointers for equality.</dd><dt><a class="fn" href="fn.from_mut.html" title="fn wasmtime_environ::__core::ptr::from_mut">from_<wbr>mut</a></dt><dd>Converts a mutable reference to a raw pointer.</dd><dt><a class="fn" href="fn.from_ref.html" title="fn wasmtime_environ::__core::ptr::from_ref">from_<wbr>ref</a></dt><dd>Converts a reference to a raw pointer.</dd><dt><a class="fn" href="fn.hash.html" title="fn wasmtime_environ::__core::ptr::hash">hash</a></dt><dd>Hash a raw pointer.</dd><dt><a class="fn" href="fn.null.html" title="fn wasmtime_environ::__core::ptr::null">null</a></dt><dd>Creates a null raw pointer.</dd><dt><a class="fn" href="fn.null_mut.html" title="fn wasmtime_environ::__core::ptr::null_mut">null_<wbr>mut</a></dt><dd>Creates a null mutable raw pointer.</dd><dt><a class="fn" href="fn.read.html" title="fn wasmtime_environ::__core::ptr::read">read</a><sup title="unsafe function">⚠</sup></dt><dd>Reads the value from <code>src</code> without moving it. This leaves the
+memory in <code>src</code> unchanged.</dd><dt><a class="fn" href="fn.read_unaligned.html" title="fn wasmtime_environ::__core::ptr::read_unaligned">read_<wbr>unaligned</a><sup title="unsafe function">⚠</sup></dt><dd>Reads the value from <code>src</code> without moving it. This leaves the
+memory in <code>src</code> unchanged.</dd><dt><a class="fn" href="fn.read_volatile.html" title="fn wasmtime_environ::__core::ptr::read_volatile">read_<wbr>volatile</a><sup title="unsafe function">⚠</sup></dt><dd>Performs a volatile read of the value from <code>src</code> without moving it. This
+leaves the memory in <code>src</code> unchanged.</dd><dt><a class="fn" href="fn.replace.html" title="fn wasmtime_environ::__core::ptr::replace">replace</a><sup title="unsafe function">⚠</sup></dt><dd>Moves <code>src</code> into the pointed <code>dst</code>, returning the previous <code>dst</code> value.</dd><dt><a class="fn" href="fn.slice_from_raw_parts.html" title="fn wasmtime_environ::__core::ptr::slice_from_raw_parts">slice_<wbr>from_<wbr>raw_<wbr>parts</a></dt><dd>Forms a raw slice from a pointer and a length.</dd><dt><a class="fn" href="fn.slice_from_raw_parts_mut.html" title="fn wasmtime_environ::__core::ptr::slice_from_raw_parts_mut">slice_<wbr>from_<wbr>raw_<wbr>parts_<wbr>mut</a></dt><dd>Forms a raw mutable slice from a pointer and a length.</dd><dt><a class="fn" href="fn.swap.html" title="fn wasmtime_environ::__core::ptr::swap">swap</a><sup title="unsafe function">⚠</sup></dt><dd>Swaps the values at two mutable locations of the same type, without
+deinitializing either.</dd><dt><a class="fn" href="fn.swap_nonoverlapping.html" title="fn wasmtime_environ::__core::ptr::swap_nonoverlapping">swap_<wbr>nonoverlapping</a><sup title="unsafe function">⚠</sup></dt><dd>Swaps <code>count * size_of::&lt;T&gt;()</code> bytes between the two regions of memory
+beginning at <code>x</code> and <code>y</code>. The two regions must <em>not</em> overlap.</dd><dt><a class="fn" href="fn.with_exposed_provenance.html" title="fn wasmtime_environ::__core::ptr::with_exposed_provenance">with_<wbr>exposed_<wbr>provenance</a></dt><dd>Converts an address back to a pointer, picking up some previously ‘exposed’
+<a href="index.html#provenance" title="mod wasmtime_environ::__core::ptr">provenance</a>.</dd><dt><a class="fn" href="fn.with_exposed_provenance_mut.html" title="fn wasmtime_environ::__core::ptr::with_exposed_provenance_mut">with_<wbr>exposed_<wbr>provenance_<wbr>mut</a></dt><dd>Converts an address back to a mutable pointer, picking up some previously ‘exposed’
+<a href="index.html#provenance" title="mod wasmtime_environ::__core::ptr">provenance</a>.</dd><dt><a class="fn" href="fn.without_provenance.html" title="fn wasmtime_environ::__core::ptr::without_provenance">without_<wbr>provenance</a></dt><dd>Creates a pointer with the given address and no <a href="index.html#provenance" title="mod wasmtime_environ::__core::ptr">provenance</a>.</dd><dt><a class="fn" href="fn.without_provenance_mut.html" title="fn wasmtime_environ::__core::ptr::without_provenance_mut">without_<wbr>provenance_<wbr>mut</a></dt><dd>Creates a pointer with the given address and no <a href="index.html#provenance" title="mod wasmtime_environ::__core::ptr">provenance</a>.</dd><dt><a class="fn" href="fn.write.html" title="fn wasmtime_environ::__core::ptr::write">write</a><sup title="unsafe function">⚠</sup></dt><dd>Overwrites a memory location with the given value without reading or
+dropping the old value.</dd><dt><a class="fn" href="fn.write_bytes.html" title="fn wasmtime_environ::__core::ptr::write_bytes">write_<wbr>bytes</a><sup title="unsafe function">⚠</sup></dt><dd>Sets <code>count * size_of::&lt;T&gt;()</code> bytes of memory starting at <code>dst</code> to
+<code>val</code>.</dd><dt><a class="fn" href="fn.write_unaligned.html" title="fn wasmtime_environ::__core::ptr::write_unaligned">write_<wbr>unaligned</a><sup title="unsafe function">⚠</sup></dt><dd>Overwrites a memory location with the given value without reading or
+dropping the old value.</dd><dt><a class="fn" href="fn.write_volatile.html" title="fn wasmtime_environ::__core::ptr::write_volatile">write_<wbr>volatile</a><sup title="unsafe function">⚠</sup></dt><dd>Performs a volatile write of a memory location with the given value without
+reading or dropping the old value.</dd><dt><a class="fn" href="fn.from_raw_parts.html" title="fn wasmtime_environ::__core::ptr::from_raw_parts">from_<wbr>raw_<wbr>parts</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Forms a (possibly-wide) raw pointer from a data pointer and metadata.</dd><dt><a class="fn" href="fn.from_raw_parts_mut.html" title="fn wasmtime_environ::__core::ptr::from_raw_parts_mut">from_<wbr>raw_<wbr>parts_<wbr>mut</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Performs the same functionality as <a href="fn.from_raw_parts.html" title="fn wasmtime_environ::__core::ptr::from_raw_parts"><code>from_raw_parts</code></a>, except that a
+raw <code>*mut</code> pointer is returned, as opposed to a raw <code>*const</code> pointer.</dd><dt><a class="fn" href="fn.metadata.html" title="fn wasmtime_environ::__core::ptr::metadata">metadata</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Extracts the metadata component of a pointer.</dd></dl></section></div></main></body></html>

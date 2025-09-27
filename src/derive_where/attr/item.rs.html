@@ -1,0 +1,355 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive-where-1.6.0/src/attr/item.rs`."><title>item.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="derive_where" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">derive_where/attr/</div>item.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! [`Attribute`] parsing for items.
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span>std::borrow::Cow;
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>proc_macro2::Span;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>syn::{
+<a href=#7 id=7 data-nosnippet>7</a>	parse::{discouraged::Speculative, Parse, ParseStream},
+<a href=#8 id=8 data-nosnippet>8</a>	punctuated::Punctuated,
+<a href=#9 id=9 data-nosnippet>9</a>	spanned::Spanned,
+<a href=#10 id=10 data-nosnippet>10</a>	Attribute, BoundLifetimes, Data, Ident, Meta, Path, PredicateType, <span class="prelude-ty">Result</span>, Token, Type,
+<a href=#11 id=11 data-nosnippet>11</a>	TypePath, WhereClause, WherePredicate,
+<a href=#12 id=12 data-nosnippet>12</a>};
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use crate</span>::{trait_::DeriveTrait, Error, Incomparable, Item, Skip, SkipGroup, Trait, DERIVE_WHERE};
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a><span class="doccomment">/// Attributes on item.
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="attr">#[derive(Default)]
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub struct </span>ItemAttr {
+<a href=#19 id=19 data-nosnippet>19</a>	<span class="doccomment">/// Path to `derive_where` if set by `#[derive_where(crate = ...)]`.
+<a href=#20 id=20 data-nosnippet>20</a>	</span><span class="kw">pub </span>crate_: <span class="prelude-ty">Option</span>&lt;Path&gt;,
+<a href=#21 id=21 data-nosnippet>21</a>	<span class="doccomment">/// [`Trait`]s to skip all fields for.
+<a href=#22 id=22 data-nosnippet>22</a>	</span><span class="kw">pub </span>skip_inner: Skip,
+<a href=#23 id=23 data-nosnippet>23</a>	<span class="doccomment">/// Comparing item will yield `false` for [`PartialEq`] and [`None`] for
+<a href=#24 id=24 data-nosnippet>24</a>	/// [`PartialOrd`].
+<a href=#25 id=25 data-nosnippet>25</a>	</span><span class="kw">pub </span>incomparable: Incomparable,
+<a href=#26 id=26 data-nosnippet>26</a>	<span class="doccomment">/// [`DeriveWhere`]s on this item.
+<a href=#27 id=27 data-nosnippet>27</a>	</span><span class="kw">pub </span>derive_wheres: Vec&lt;DeriveWhere&gt;,
+<a href=#28 id=28 data-nosnippet>28</a>}
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">impl </span>ItemAttr {
+<a href=#31 id=31 data-nosnippet>31</a>	<span class="doccomment">/// Create [`ItemAttr`] from [`Attribute`]s.
+<a href=#32 id=32 data-nosnippet>32</a>	</span><span class="kw">pub fn </span>from_attrs(span: Span, data: <span class="kw-2">&amp;</span>Data, attrs: <span class="kw-2">&amp;</span>[Attribute]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#33 id=33 data-nosnippet>33</a>		<span class="kw">let </span><span class="kw-2">mut </span>self_ = ItemAttr::default();
+<a href=#34 id=34 data-nosnippet>34</a>		<span class="kw">let </span><span class="kw-2">mut </span>skip_inners = Vec::new();
+<a href=#35 id=35 data-nosnippet>35</a>		<span class="kw">let </span><span class="kw-2">mut </span>incomparables = Vec::new();
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a>		<span class="kw">for </span>attr <span class="kw">in </span>attrs {
+<a href=#38 id=38 data-nosnippet>38</a>			<span class="kw">if </span>attr.path().is_ident(DERIVE_WHERE) {
+<a href=#39 id=39 data-nosnippet>39</a>				<span class="kw">if let </span>Meta::List(list) = <span class="kw-2">&amp;</span>attr.meta {
+<a href=#40 id=40 data-nosnippet>40</a>					<span class="kw">if let </span><span class="prelude-val">Ok</span>(nested) =
+<a href=#41 id=41 data-nosnippet>41</a>						list.parse_args_with(Punctuated::&lt;Meta, <span class="macro">Token!</span>[,]&gt;::parse_terminated)
+<a href=#42 id=42 data-nosnippet>42</a>					{
+<a href=#43 id=43 data-nosnippet>43</a>						<span class="kw">match </span>nested.len() {
+<a href=#44 id=44 data-nosnippet>44</a>							<span class="comment">// Don't allow an empty list.
+<a href=#45 id=45 data-nosnippet>45</a>							</span><span class="number">0 </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(Error::empty(list.span())),
+<a href=#46 id=46 data-nosnippet>46</a>							<span class="comment">// Check for `skip_inner` if list only has one item.
+<a href=#47 id=47 data-nosnippet>47</a>							</span><span class="number">1 </span>=&gt; {
+<a href=#48 id=48 data-nosnippet>48</a>								<span class="kw">let </span>meta =
+<a href=#49 id=49 data-nosnippet>49</a>									nested.into_iter().next().expect(<span class="string">"unexpected empty list"</span>);
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a>								<span class="kw">if </span>meta.path().is_ident(Skip::SKIP_INNER) {
+<a href=#52 id=52 data-nosnippet>52</a>									<span class="comment">// Don't allow `skip_inner` on the item level for enums.
+<a href=#53 id=53 data-nosnippet>53</a>									</span><span class="kw">if let </span>Data::Enum(<span class="kw">_</span>) = data {
+<a href=#54 id=54 data-nosnippet>54</a>										<span class="kw">return </span><span class="prelude-val">Err</span>(Error::option_enum_skip_inner(meta.span()));
+<a href=#55 id=55 data-nosnippet>55</a>									}
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a>									<span class="comment">// Don't parse `Skip` yet, because it needs access to all
+<a href=#58 id=58 data-nosnippet>58</a>									// `DeriveWhere`s.
+<a href=#59 id=59 data-nosnippet>59</a>									</span>skip_inners.push(meta);
+<a href=#60 id=60 data-nosnippet>60</a>								} <span class="kw">else if </span>meta.path().is_ident(Incomparable::INCOMPARABLE) {
+<a href=#61 id=61 data-nosnippet>61</a>									<span class="comment">// Needs to be parsed after all traits are known.
+<a href=#62 id=62 data-nosnippet>62</a>									</span>incomparables.push(meta)
+<a href=#63 id=63 data-nosnippet>63</a>								} <span class="kw">else if </span>meta.path().is_ident(<span class="string">"crate"</span>) {
+<a href=#64 id=64 data-nosnippet>64</a>									<span class="kw">let </span>(path, <span class="kw">_</span>) = <span class="kw">super</span>::parse_crate(meta)
+<a href=#65 id=65 data-nosnippet>65</a>										.expect(<span class="string">"failed to parse previously parsed attribute"</span>);
+<a href=#66 id=66 data-nosnippet>66</a>									self_.crate_ = <span class="prelude-val">Some</span>(path);
+<a href=#67 id=67 data-nosnippet>67</a>								}
+<a href=#68 id=68 data-nosnippet>68</a>								<span class="comment">// The list can have one item but still not be the `skip_inner`
+<a href=#69 id=69 data-nosnippet>69</a>								// attribute, continue with parsing `DeriveWhere`.
+<a href=#70 id=70 data-nosnippet>70</a>								</span><span class="kw">else </span>{
+<a href=#71 id=71 data-nosnippet>71</a>									self_
+<a href=#72 id=72 data-nosnippet>72</a>										.derive_wheres
+<a href=#73 id=73 data-nosnippet>73</a>										.push(DeriveWhere::from_attr(attrs, span, data, attr)<span class="question-mark">?</span>);
+<a href=#74 id=74 data-nosnippet>74</a>								}
+<a href=#75 id=75 data-nosnippet>75</a>							}
+<a href=#76 id=76 data-nosnippet>76</a>							<span class="kw">_ </span>=&gt; self_
+<a href=#77 id=77 data-nosnippet>77</a>								.derive_wheres
+<a href=#78 id=78 data-nosnippet>78</a>								.push(DeriveWhere::from_attr(attrs, span, data, attr)<span class="question-mark">?</span>),
+<a href=#79 id=79 data-nosnippet>79</a>						}
+<a href=#80 id=80 data-nosnippet>80</a>					}
+<a href=#81 id=81 data-nosnippet>81</a>					<span class="comment">// Anything list that isn't using `,` as separator, is because we expect
+<a href=#82 id=82 data-nosnippet>82</a>					// `A, B; C`.
+<a href=#83 id=83 data-nosnippet>83</a>					</span><span class="kw">else </span>{
+<a href=#84 id=84 data-nosnippet>84</a>						self_
+<a href=#85 id=85 data-nosnippet>85</a>							.derive_wheres
+<a href=#86 id=86 data-nosnippet>86</a>							.push(DeriveWhere::from_attr(attrs, span, data, attr)<span class="question-mark">?</span>)
+<a href=#87 id=87 data-nosnippet>87</a>					}
+<a href=#88 id=88 data-nosnippet>88</a>				} <span class="kw">else </span>{
+<a href=#89 id=89 data-nosnippet>89</a>					<span class="kw">return </span><span class="prelude-val">Err</span>(Error::option_syntax(attr.meta.span()));
+<a href=#90 id=90 data-nosnippet>90</a>				}
+<a href=#91 id=91 data-nosnippet>91</a>			}
+<a href=#92 id=92 data-nosnippet>92</a>		}
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a>		<span class="comment">// Check that we specified at least one `#[derive_where(..)]` with traits.
+<a href=#95 id=95 data-nosnippet>95</a>		</span><span class="kw">if </span>self_.derive_wheres.is_empty() {
+<a href=#96 id=96 data-nosnippet>96</a>			<span class="kw">return </span><span class="prelude-val">Err</span>(Error::none(span));
+<a href=#97 id=97 data-nosnippet>97</a>		}
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a>		<span class="comment">// Merge `DeriveWhere`s with the same bounds.
+<a href=#100 id=100 data-nosnippet>100</a>		</span>self_
+<a href=#101 id=101 data-nosnippet>101</a>			.derive_wheres
+<a href=#102 id=102 data-nosnippet>102</a>			.dedup_by(|derive_where_1, derive_where_2| {
+<a href=#103 id=103 data-nosnippet>103</a>				<span class="kw">if </span>derive_where_1.generics == derive_where_2.generics {
+<a href=#104 id=104 data-nosnippet>104</a>					derive_where_2.spans.append(<span class="kw-2">&amp;mut </span>derive_where_1.spans);
+<a href=#105 id=105 data-nosnippet>105</a>					derive_where_2.traits.append(<span class="kw-2">&amp;mut </span>derive_where_1.traits);
+<a href=#106 id=106 data-nosnippet>106</a>					<span class="bool-val">true
+<a href=#107 id=107 data-nosnippet>107</a>				</span>} <span class="kw">else </span>{
+<a href=#108 id=108 data-nosnippet>108</a>					<span class="bool-val">false
+<a href=#109 id=109 data-nosnippet>109</a>				</span>}
+<a href=#110 id=110 data-nosnippet>110</a>			});
+<a href=#111 id=111 data-nosnippet>111</a>
+<a href=#112 id=112 data-nosnippet>112</a>		<span class="comment">// Check for duplicate traits in the same `derive_where` after merging with the
+<a href=#113 id=113 data-nosnippet>113</a>		// same bounds.
+<a href=#114 id=114 data-nosnippet>114</a>		</span><span class="kw">for </span>derive_where <span class="kw">in </span><span class="kw-2">&amp;</span>self_.derive_wheres {
+<a href=#115 id=115 data-nosnippet>115</a>			<span class="kw">for </span>(skip, trait_) <span class="kw">in </span>(<span class="number">1</span>..).zip(<span class="kw-2">&amp;</span>derive_where.traits) {
+<a href=#116 id=116 data-nosnippet>116</a>				<span class="kw">if let </span><span class="prelude-val">Some</span>((span, <span class="kw">_</span>)) = derive_where
+<a href=#117 id=117 data-nosnippet>117</a>					.spans
+<a href=#118 id=118 data-nosnippet>118</a>					.iter()
+<a href=#119 id=119 data-nosnippet>119</a>					.zip(<span class="kw-2">&amp;</span>derive_where.traits)
+<a href=#120 id=120 data-nosnippet>120</a>					.skip(skip)
+<a href=#121 id=121 data-nosnippet>121</a>					.find(|(<span class="kw">_</span>, other_trait)| <span class="kw-2">*</span>other_trait == trait_)
+<a href=#122 id=122 data-nosnippet>122</a>				{
+<a href=#123 id=123 data-nosnippet>123</a>					<span class="kw">return </span><span class="prelude-val">Err</span>(Error::trait_duplicate(<span class="kw-2">*</span>span));
+<a href=#124 id=124 data-nosnippet>124</a>				}
+<a href=#125 id=125 data-nosnippet>125</a>			}
+<a href=#126 id=126 data-nosnippet>126</a>		}
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>		<span class="comment">// Delayed parsing of `skip_inner` and `incomparable` to get access to all
+<a href=#129 id=129 data-nosnippet>129</a>		// traits to be implemented.
+<a href=#130 id=130 data-nosnippet>130</a>		</span><span class="kw">for </span>meta <span class="kw">in </span>skip_inners {
+<a href=#131 id=131 data-nosnippet>131</a>			self_
+<a href=#132 id=132 data-nosnippet>132</a>				.skip_inner
+<a href=#133 id=133 data-nosnippet>133</a>				.add_attribute(<span class="kw-2">&amp;</span>self_.derive_wheres, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
+<a href=#134 id=134 data-nosnippet>134</a>		}
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a>		<span class="kw">for </span>meta <span class="kw">in </span>incomparables {
+<a href=#137 id=137 data-nosnippet>137</a>			self_
+<a href=#138 id=138 data-nosnippet>138</a>				.incomparable
+<a href=#139 id=139 data-nosnippet>139</a>				.add_attribute(<span class="kw-2">&amp;</span>meta, <span class="kw-2">&amp;</span>self_.derive_wheres)<span class="question-mark">?</span>;
+<a href=#140 id=140 data-nosnippet>140</a>		}
+<a href=#141 id=141 data-nosnippet>141</a>
+<a href=#142 id=142 data-nosnippet>142</a>		<span class="prelude-val">Ok</span>(self_)
+<a href=#143 id=143 data-nosnippet>143</a>	}
+<a href=#144 id=144 data-nosnippet>144</a>}
+<a href=#145 id=145 data-nosnippet>145</a>
+<a href=#146 id=146 data-nosnippet>146</a><span class="doccomment">/// Holds parsed [generics](Generic) and [traits](crate::Trait).
+<a href=#147 id=147 data-nosnippet>147</a></span><span class="kw">pub struct </span>DeriveWhere {
+<a href=#148 id=148 data-nosnippet>148</a>	<span class="doccomment">/// [`Span`]s for each [trait](DeriveTrait).
+<a href=#149 id=149 data-nosnippet>149</a>	</span><span class="kw">pub </span>spans: Vec&lt;Span&gt;,
+<a href=#150 id=150 data-nosnippet>150</a>	<span class="doccomment">/// [Traits](DeriveTrait) to implement.
+<a href=#151 id=151 data-nosnippet>151</a>	</span><span class="kw">pub </span>traits: Vec&lt;DeriveTrait&gt;,
+<a href=#152 id=152 data-nosnippet>152</a>	<span class="doccomment">/// [Generics](Generic) for where clause.
+<a href=#153 id=153 data-nosnippet>153</a>	</span><span class="kw">pub </span>generics: Vec&lt;Generic&gt;,
+<a href=#154 id=154 data-nosnippet>154</a>}
+<a href=#155 id=155 data-nosnippet>155</a>
+<a href=#156 id=156 data-nosnippet>156</a><span class="kw">impl </span>DeriveWhere {
+<a href=#157 id=157 data-nosnippet>157</a>	<span class="doccomment">/// Create [`DeriveWhere`] from [`Attribute`].
+<a href=#158 id=158 data-nosnippet>158</a>	</span><span class="kw">fn </span>from_attr(attrs: <span class="kw-2">&amp;</span>[Attribute], span: Span, data: <span class="kw-2">&amp;</span>Data, attr: <span class="kw-2">&amp;</span>Attribute) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#159 id=159 data-nosnippet>159</a>		attr.parse_args_with(|input: ParseStream| {
+<a href=#160 id=160 data-nosnippet>160</a>			<span class="comment">// Parse the attribute input, this should either be:
+<a href=#161 id=161 data-nosnippet>161</a>			// - Comma separated traits.
+<a href=#162 id=162 data-nosnippet>162</a>			// - Comma separated traits `;` Comma separated generics.
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a>			</span><span class="kw">let </span><span class="kw-2">mut </span>spans = Vec::new();
+<a href=#165 id=165 data-nosnippet>165</a>			<span class="kw">let </span><span class="kw-2">mut </span>traits = Vec::new();
+<a href=#166 id=166 data-nosnippet>166</a>			<span class="kw">let </span><span class="kw-2">mut </span>generics = Vec::new();
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a>			<span class="comment">// Check for an empty list is already done in `ItemAttr::from_attrs`.
+<a href=#169 id=169 data-nosnippet>169</a>			</span><span class="macro">assert!</span>(!input.is_empty());
+<a href=#170 id=170 data-nosnippet>170</a>
+<a href=#171 id=171 data-nosnippet>171</a>			<span class="kw">while </span>!input.is_empty() {
+<a href=#172 id=172 data-nosnippet>172</a>				<span class="comment">// Start with parsing a trait.
+<a href=#173 id=173 data-nosnippet>173</a>				// Not checking for duplicates here, we do that after merging `derive_where`s
+<a href=#174 id=174 data-nosnippet>174</a>				// with the same bounds.
+<a href=#175 id=175 data-nosnippet>175</a>				</span><span class="kw">let </span>(span, trait_) = DeriveTrait::from_stream(attrs, span, data, input)<span class="question-mark">?</span>;
+<a href=#176 id=176 data-nosnippet>176</a>				spans.push(span);
+<a href=#177 id=177 data-nosnippet>177</a>				traits.push(trait_);
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a>				<span class="kw">if </span>!input.is_empty() {
+<a href=#180 id=180 data-nosnippet>180</a>					<span class="kw">let </span><span class="kw-2">mut </span>fork = input.fork();
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a>					<span class="comment">// Track `Span` of whatever was found instead of a delimiter. We parse the `,`
+<a href=#183 id=183 data-nosnippet>183</a>					// first because it's allowed to be followed by a `;`.
+<a href=#184 id=184 data-nosnippet>184</a>					</span><span class="kw">let </span>no_delimiter_found = <span class="kw">match </span>&lt;<span class="macro">Token!</span>[,]&gt;::parse(<span class="kw-2">&amp;</span>fork) {
+<a href=#185 id=185 data-nosnippet>185</a>						<span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+<a href=#186 id=186 data-nosnippet>186</a>							input.advance_to(<span class="kw-2">&amp;</span>fork);
+<a href=#187 id=187 data-nosnippet>187</a>							<span class="prelude-val">None
+<a href=#188 id=188 data-nosnippet>188</a>						</span>}
+<a href=#189 id=189 data-nosnippet>189</a>						<span class="prelude-val">Err</span>(error) =&gt; {
+<a href=#190 id=190 data-nosnippet>190</a>							<span class="comment">// Reset the fork if we didn't find a `,`.
+<a href=#191 id=191 data-nosnippet>191</a>							</span>fork = input.fork();
+<a href=#192 id=192 data-nosnippet>192</a>							<span class="prelude-val">Some</span>(error.span())
+<a href=#193 id=193 data-nosnippet>193</a>						}
+<a href=#194 id=194 data-nosnippet>194</a>					};
+<a href=#195 id=195 data-nosnippet>195</a>
+<a href=#196 id=196 data-nosnippet>196</a>					<span class="kw">if </span>&lt;<span class="macro">Token!</span>[;]&gt;::parse(<span class="kw-2">&amp;</span>fork).is_ok() {
+<a href=#197 id=197 data-nosnippet>197</a>						input.advance_to(<span class="kw-2">&amp;</span>fork);
+<a href=#198 id=198 data-nosnippet>198</a>
+<a href=#199 id=199 data-nosnippet>199</a>						<span class="comment">// If we found a semi-colon, start parsing generics.
+<a href=#200 id=200 data-nosnippet>200</a>						</span><span class="kw">if </span>!input.is_empty() {
+<a href=#201 id=201 data-nosnippet>201</a>							<span class="comment">// `parse_terminated` parses everything left, which should end the
+<a href=#202 id=202 data-nosnippet>202</a>							// while-loop.
+<a href=#203 id=203 data-nosnippet>203</a>							// Not checking for duplicates here, as even Rust doesn't give a warning
+<a href=#204 id=204 data-nosnippet>204</a>							// for those: `where T: Clone, T: Clone` produces no error or warning.
+<a href=#205 id=205 data-nosnippet>205</a>							</span>generics = Punctuated::&lt;Generic, <span class="macro">Token!</span>[,]&gt;::parse_terminated(input)<span class="question-mark">?
+<a href=#206 id=206 data-nosnippet>206</a>								</span>.into_iter()
+<a href=#207 id=207 data-nosnippet>207</a>								.collect();
+<a href=#208 id=208 data-nosnippet>208</a>						}
+<a href=#209 id=209 data-nosnippet>209</a>					}
+<a href=#210 id=210 data-nosnippet>210</a>					<span class="comment">// We are here because the input isn't empty, but we also found no delimiter,
+<a href=#211 id=211 data-nosnippet>211</a>					// something unexpected is here instead.
+<a href=#212 id=212 data-nosnippet>212</a>					</span><span class="kw">else if let </span><span class="prelude-val">Some</span>(span) = no_delimiter_found {
+<a href=#213 id=213 data-nosnippet>213</a>						<span class="kw">return </span><span class="prelude-val">Err</span>(Error::derive_where_delimiter(span));
+<a href=#214 id=214 data-nosnippet>214</a>					}
+<a href=#215 id=215 data-nosnippet>215</a>				}
+<a href=#216 id=216 data-nosnippet>216</a>			}
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a>			<span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#219 id=219 data-nosnippet>219</a>				generics,
+<a href=#220 id=220 data-nosnippet>220</a>				spans,
+<a href=#221 id=221 data-nosnippet>221</a>				traits,
+<a href=#222 id=222 data-nosnippet>222</a>			})
+<a href=#223 id=223 data-nosnippet>223</a>		})
+<a href=#224 id=224 data-nosnippet>224</a>	}
+<a href=#225 id=225 data-nosnippet>225</a>
+<a href=#226 id=226 data-nosnippet>226</a>	<span class="doccomment">/// Returns `true` if [`Trait`] is present.
+<a href=#227 id=227 data-nosnippet>227</a>	</span><span class="kw">pub fn </span>contains(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_: Trait) -&gt; bool {
+<a href=#228 id=228 data-nosnippet>228</a>		<span class="self">self</span>.traits
+<a href=#229 id=229 data-nosnippet>229</a>			.iter()
+<a href=#230 id=230 data-nosnippet>230</a>			.any(|derive_trait| derive_trait == trait_)
+<a href=#231 id=231 data-nosnippet>231</a>	}
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a>	<span class="doccomment">/// Returns `true` if any [`CustomBound`](Generic::CustomBound) is present.
+<a href=#234 id=234 data-nosnippet>234</a>	</span><span class="kw">pub fn </span>any_custom_bound(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#235 id=235 data-nosnippet>235</a>		<span class="self">self</span>.generics.iter().any(|generic| <span class="kw">match </span>generic {
+<a href=#236 id=236 data-nosnippet>236</a>			Generic::CustomBound(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+<a href=#237 id=237 data-nosnippet>237</a>			Generic::NoBound(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+<a href=#238 id=238 data-nosnippet>238</a>		})
+<a href=#239 id=239 data-nosnippet>239</a>	}
+<a href=#240 id=240 data-nosnippet>240</a>
+<a href=#241 id=241 data-nosnippet>241</a>	<span class="doccomment">/// Returns `true` if the given generic type parameter if present.
+<a href=#242 id=242 data-nosnippet>242</a>	</span><span class="kw">pub fn </span>has_type_param(<span class="kw-2">&amp;</span><span class="self">self</span>, type_param: <span class="kw-2">&amp;</span>Ident) -&gt; bool {
+<a href=#243 id=243 data-nosnippet>243</a>		<span class="self">self</span>.generics.iter().any(|generic| <span class="kw">match </span>generic {
+<a href=#244 id=244 data-nosnippet>244</a>			Generic::NoBound(GenericNoBound {
+<a href=#245 id=245 data-nosnippet>245</a>				lifetimes: <span class="kw">_</span>,
+<a href=#246 id=246 data-nosnippet>246</a>				ty: Type::Path(TypePath { qself: <span class="prelude-val">None</span>, path }),
+<a href=#247 id=247 data-nosnippet>247</a>			}) =&gt; {
+<a href=#248 id=248 data-nosnippet>248</a>				<span class="kw">if let </span><span class="prelude-val">Some</span>(ident) = path.get_ident() {
+<a href=#249 id=249 data-nosnippet>249</a>					ident == type_param
+<a href=#250 id=250 data-nosnippet>250</a>				} <span class="kw">else </span>{
+<a href=#251 id=251 data-nosnippet>251</a>					<span class="bool-val">false
+<a href=#252 id=252 data-nosnippet>252</a>				</span>}
+<a href=#253 id=253 data-nosnippet>253</a>			}
+<a href=#254 id=254 data-nosnippet>254</a>			<span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+<a href=#255 id=255 data-nosnippet>255</a>		})
+<a href=#256 id=256 data-nosnippet>256</a>	}
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a>	<span class="doccomment">/// Returns `true` if any [`Trait`] supports skipping.
+<a href=#259 id=259 data-nosnippet>259</a>	</span><span class="kw">pub fn </span>any_skip(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#260 id=260 data-nosnippet>260</a>		<span class="self">self</span>.traits
+<a href=#261 id=261 data-nosnippet>261</a>			.iter()
+<a href=#262 id=262 data-nosnippet>262</a>			.any(|trait_| SkipGroup::trait_supported_by_skip_all(<span class="kw-2">***</span>trait_))
+<a href=#263 id=263 data-nosnippet>263</a>	}
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a>	<span class="doccomment">/// Create [`WhereClause`] for the given parameters.
+<a href=#266 id=266 data-nosnippet>266</a>	</span><span class="kw">pub fn </span>where_clause(
+<a href=#267 id=267 data-nosnippet>267</a>		<span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#268 id=268 data-nosnippet>268</a>		where_clause: <span class="kw-2">&amp;mut </span><span class="prelude-ty">Option</span>&lt;Cow&lt;WhereClause&gt;&gt;,
+<a href=#269 id=269 data-nosnippet>269</a>		trait_: <span class="kw-2">&amp;</span>DeriveTrait,
+<a href=#270 id=270 data-nosnippet>270</a>		item: <span class="kw-2">&amp;</span>Item,
+<a href=#271 id=271 data-nosnippet>271</a>	) {
+<a href=#272 id=272 data-nosnippet>272</a>		<span class="comment">// Only create a where clause if required
+<a href=#273 id=273 data-nosnippet>273</a>		</span><span class="kw">if </span>!<span class="self">self</span>.generics.is_empty() {
+<a href=#274 id=274 data-nosnippet>274</a>			<span class="comment">// We use the existing where clause or create a new one if required.
+<a href=#275 id=275 data-nosnippet>275</a>			</span><span class="kw">let </span>where_clause = where_clause.get_or_insert(Cow::Owned(WhereClause {
+<a href=#276 id=276 data-nosnippet>276</a>				where_token: &lt;<span class="macro">Token!</span>[<span class="kw">where</span>]&gt;::default(),
+<a href=#277 id=277 data-nosnippet>277</a>				predicates: Punctuated::default(),
+<a href=#278 id=278 data-nosnippet>278</a>			}));
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a>			<span class="comment">// Insert bounds into the `where` clause.
+<a href=#281 id=281 data-nosnippet>281</a>			</span><span class="kw">for </span>generic <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.generics {
+<a href=#282 id=282 data-nosnippet>282</a>				where_clause
+<a href=#283 id=283 data-nosnippet>283</a>					.to_mut()
+<a href=#284 id=284 data-nosnippet>284</a>					.predicates
+<a href=#285 id=285 data-nosnippet>285</a>					.push(WherePredicate::Type(<span class="kw">match </span>generic {
+<a href=#286 id=286 data-nosnippet>286</a>						Generic::CustomBound(type_bound) =&gt; type_bound.clone(),
+<a href=#287 id=287 data-nosnippet>287</a>						Generic::NoBound(GenericNoBound {
+<a href=#288 id=288 data-nosnippet>288</a>							lifetimes: bound_lifetimes,
+<a href=#289 id=289 data-nosnippet>289</a>							ty,
+<a href=#290 id=290 data-nosnippet>290</a>						}) =&gt; PredicateType {
+<a href=#291 id=291 data-nosnippet>291</a>							lifetimes: bound_lifetimes.clone(),
+<a href=#292 id=292 data-nosnippet>292</a>							bounded_ty: ty.clone(),
+<a href=#293 id=293 data-nosnippet>293</a>							colon_token: &lt;<span class="macro">Token!</span>[:]&gt;::default(),
+<a href=#294 id=294 data-nosnippet>294</a>							bounds: trait_.where_bounds(item),
+<a href=#295 id=295 data-nosnippet>295</a>						},
+<a href=#296 id=296 data-nosnippet>296</a>					}));
+<a href=#297 id=297 data-nosnippet>297</a>			}
+<a href=#298 id=298 data-nosnippet>298</a>		}
+<a href=#299 id=299 data-nosnippet>299</a>	}
+<a href=#300 id=300 data-nosnippet>300</a>}
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a><span class="doccomment">/// Holds the first part of a [`PredicateType`] prior to the `:`. Optionally
+<a href=#303 id=303 data-nosnippet>303</a>/// contains lifetime `for` bindings.
+<a href=#304 id=304 data-nosnippet>304</a></span><span class="attr">#[derive(Eq, PartialEq)]
+<a href=#305 id=305 data-nosnippet>305</a></span><span class="kw">pub struct </span>GenericNoBound {
+<a href=#306 id=306 data-nosnippet>306</a>	<span class="doccomment">/// Any `for&lt;'a, 'b, 'etc&gt;` bindings for the type.
+<a href=#307 id=307 data-nosnippet>307</a>	</span>lifetimes: <span class="prelude-ty">Option</span>&lt;BoundLifetimes&gt;,
+<a href=#308 id=308 data-nosnippet>308</a>	<span class="doccomment">/// The type bound to the [`DeriveTrait`].
+<a href=#309 id=309 data-nosnippet>309</a>	</span>ty: Type,
+<a href=#310 id=310 data-nosnippet>310</a>}
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a><span class="kw">impl </span>Parse <span class="kw">for </span>GenericNoBound {
+<a href=#313 id=313 data-nosnippet>313</a>	<span class="kw">fn </span>parse(input: ParseStream) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#314 id=314 data-nosnippet>314</a>		<span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#315 id=315 data-nosnippet>315</a>			lifetimes: input.parse()<span class="question-mark">?</span>,
+<a href=#316 id=316 data-nosnippet>316</a>			ty: input.parse()<span class="question-mark">?</span>,
+<a href=#317 id=317 data-nosnippet>317</a>		})
+<a href=#318 id=318 data-nosnippet>318</a>	}
+<a href=#319 id=319 data-nosnippet>319</a>}
+<a href=#320 id=320 data-nosnippet>320</a>
+<a href=#321 id=321 data-nosnippet>321</a><span class="doccomment">/// Holds a single generic [type](GenericNoBound) with optional lifetime bounds
+<a href=#322 id=322 data-nosnippet>322</a>/// or [type with bound](PredicateType).
+<a href=#323 id=323 data-nosnippet>323</a></span><span class="attr">#[derive(Eq, PartialEq)]
+<a href=#324 id=324 data-nosnippet>324</a></span><span class="kw">pub enum </span>Generic {
+<a href=#325 id=325 data-nosnippet>325</a>	<span class="doccomment">/// Generic type with custom [specified bounds](PredicateType).
+<a href=#326 id=326 data-nosnippet>326</a>	</span>CustomBound(PredicateType),
+<a href=#327 id=327 data-nosnippet>327</a>	<span class="doccomment">/// Generic [type](GenericNoBound) which will be bound to the
+<a href=#328 id=328 data-nosnippet>328</a>	/// [`DeriveTrait`].
+<a href=#329 id=329 data-nosnippet>329</a>	</span>NoBound(GenericNoBound),
+<a href=#330 id=330 data-nosnippet>330</a>}
+<a href=#331 id=331 data-nosnippet>331</a>
+<a href=#332 id=332 data-nosnippet>332</a><span class="kw">impl </span>Parse <span class="kw">for </span>Generic {
+<a href=#333 id=333 data-nosnippet>333</a>	<span class="kw">fn </span>parse(input: ParseStream) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#334 id=334 data-nosnippet>334</a>		<span class="kw">let </span>fork = input.fork();
+<a href=#335 id=335 data-nosnippet>335</a>
+<a href=#336 id=336 data-nosnippet>336</a>		<span class="comment">// Try to parse input as a `WherePredicate`. The problem is, both expressions
+<a href=#337 id=337 data-nosnippet>337</a>		// start with an optional lifetime for bound and then Type, so starting with the
+<a href=#338 id=338 data-nosnippet>338</a>		// `WherePredicate` is the easiest way of differentiating them.
+<a href=#339 id=339 data-nosnippet>339</a>		</span><span class="kw">if let </span><span class="prelude-val">Ok</span>(where_predicate) = WherePredicate::parse(<span class="kw-2">&amp;</span>fork) {
+<a href=#340 id=340 data-nosnippet>340</a>			input.advance_to(<span class="kw-2">&amp;</span>fork);
+<a href=#341 id=341 data-nosnippet>341</a>
+<a href=#342 id=342 data-nosnippet>342</a>			<span class="comment">// Don't allow lifetimes, as it doesn't make sense in the context.
+<a href=#343 id=343 data-nosnippet>343</a>			</span><span class="kw">if let </span>WherePredicate::Type(path) = where_predicate {
+<a href=#344 id=344 data-nosnippet>344</a>				<span class="prelude-val">Ok</span>(Generic::CustomBound(path))
+<a href=#345 id=345 data-nosnippet>345</a>			} <span class="kw">else </span>{
+<a href=#346 id=346 data-nosnippet>346</a>				<span class="prelude-val">Err</span>(Error::generic(where_predicate.span()))
+<a href=#347 id=347 data-nosnippet>347</a>			}
+<a href=#348 id=348 data-nosnippet>348</a>		} <span class="kw">else </span>{
+<a href=#349 id=349 data-nosnippet>349</a>			<span class="kw">match </span>GenericNoBound::parse(input) {
+<a href=#350 id=350 data-nosnippet>350</a>				<span class="prelude-val">Ok</span>(no_bound) =&gt; <span class="prelude-val">Ok</span>(Generic::NoBound(no_bound)),
+<a href=#351 id=351 data-nosnippet>351</a>				<span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(Error::generic_syntax(error.span(), error)),
+<a href=#352 id=352 data-nosnippet>352</a>			}
+<a href=#353 id=353 data-nosnippet>353</a>		}
+<a href=#354 id=354 data-nosnippet>354</a>	}
+<a href=#355 id=355 data-nosnippet>355</a>}</code></pre></div></section></main></body></html>

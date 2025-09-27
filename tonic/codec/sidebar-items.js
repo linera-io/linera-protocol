@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CompressionEncoding"],"struct":["BufferSettings","DecodeBuf","EnabledCompressionEncodings","EncodeBody","EncodeBuf","Streaming"],"trait":["Codec","Decoder","Encoder"]};

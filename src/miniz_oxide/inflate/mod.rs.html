@@ -1,0 +1,364 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/inflate/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="miniz_oxide" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">miniz_oxide/inflate/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! This module contains functionality for decompression.
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="attr">#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span><span class="kw">crate</span>::alloc::{boxed::Box, vec, vec::Vec};
+<a href=#5 id=5 data-nosnippet>5</a><span class="attr">#[cfg(all(feature = <span class="string">"std"</span>, feature = <span class="string">"with-alloc"</span>))]
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span>std::error::Error;
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">pub mod </span>core;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">mod </span>output_buffer;
+<a href=#10 id=10 data-nosnippet>10</a><span class="attr">#[cfg(not(feature = <span class="string">"rustc-dep-of-std"</span>))]
+<a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">pub mod </span>stream;
+<a href=#12 id=12 data-nosnippet>12</a><span class="attr">#[cfg(not(feature = <span class="string">"rustc-dep-of-std"</span>))]
+<a href=#13 id=13 data-nosnippet>13</a></span><span class="kw">use </span><span class="self">self</span>::core::<span class="kw-2">*</span>;
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">const </span>TINFL_STATUS_FAILED_CANNOT_MAKE_PROGRESS: i32 = -<span class="number">4</span>;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">const </span>TINFL_STATUS_BAD_PARAM: i32 = -<span class="number">3</span>;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">const </span>TINFL_STATUS_ADLER32_MISMATCH: i32 = -<span class="number">2</span>;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">const </span>TINFL_STATUS_FAILED: i32 = -<span class="number">1</span>;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">const </span>TINFL_STATUS_DONE: i32 = <span class="number">0</span>;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">const </span>TINFL_STATUS_NEEDS_MORE_INPUT: i32 = <span class="number">1</span>;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">const </span>TINFL_STATUS_HAS_MORE_OUTPUT: i32 = <span class="number">2</span>;
+<a href=#22 id=22 data-nosnippet>22</a><span class="attr">#[cfg(feature = <span class="string">"block-boundary"</span>)]
+<a href=#23 id=23 data-nosnippet>23</a></span><span class="kw">const </span>TINFL_STATUS_BLOCK_BOUNDARY: i32 = <span class="number">3</span>;
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a><span class="doccomment">/// Return status codes.
+<a href=#26 id=26 data-nosnippet>26</a></span><span class="attr">#[repr(i8)]
+<a href=#27 id=27 data-nosnippet>27</a>#[cfg_attr(not(feature = <span class="string">"rustc-dep-of-std"</span>), derive(Hash, Debug))]
+<a href=#28 id=28 data-nosnippet>28</a>#[derive(Copy, Clone, PartialEq, Eq)]
+<a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub enum </span>TINFLStatus {
+<a href=#30 id=30 data-nosnippet>30</a>    <span class="doccomment">/// More input data was expected, but the caller indicated that there was no more data, so the
+<a href=#31 id=31 data-nosnippet>31</a>    /// input stream is likely truncated.
+<a href=#32 id=32 data-nosnippet>32</a>    ///
+<a href=#33 id=33 data-nosnippet>33</a>    /// This can't happen if you have provided the
+<a href=#34 id=34 data-nosnippet>34</a>    /// [`TINFL_FLAG_HAS_MORE_INPUT`][core::inflate_flags::TINFL_FLAG_HAS_MORE_INPUT] flag to the
+<a href=#35 id=35 data-nosnippet>35</a>    /// decompression.  By setting that flag, you indicate more input exists but is not provided,
+<a href=#36 id=36 data-nosnippet>36</a>    /// and so reaching the end of the input data without finding the end of the compressed stream
+<a href=#37 id=37 data-nosnippet>37</a>    /// would instead return a [`NeedsMoreInput`][Self::NeedsMoreInput] status.
+<a href=#38 id=38 data-nosnippet>38</a>    </span>FailedCannotMakeProgress = TINFL_STATUS_FAILED_CANNOT_MAKE_PROGRESS <span class="kw">as </span>i8,
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="doccomment">/// The output buffer is an invalid size; consider the `flags` parameter.
+<a href=#41 id=41 data-nosnippet>41</a>    </span>BadParam = TINFL_STATUS_BAD_PARAM <span class="kw">as </span>i8,
+<a href=#42 id=42 data-nosnippet>42</a>
+<a href=#43 id=43 data-nosnippet>43</a>    <span class="doccomment">/// The decompression went fine, but the adler32 checksum did not match the one
+<a href=#44 id=44 data-nosnippet>44</a>    /// provided in the header.
+<a href=#45 id=45 data-nosnippet>45</a>    </span>Adler32Mismatch = TINFL_STATUS_ADLER32_MISMATCH <span class="kw">as </span>i8,
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a>    <span class="doccomment">/// Failed to decompress due to invalid data.
+<a href=#48 id=48 data-nosnippet>48</a>    </span>Failed = TINFL_STATUS_FAILED <span class="kw">as </span>i8,
+<a href=#49 id=49 data-nosnippet>49</a>
+<a href=#50 id=50 data-nosnippet>50</a>    <span class="doccomment">/// Finished decompression without issues.
+<a href=#51 id=51 data-nosnippet>51</a>    ///
+<a href=#52 id=52 data-nosnippet>52</a>    /// This indicates the end of the compressed stream has been reached.
+<a href=#53 id=53 data-nosnippet>53</a>    </span>Done = TINFL_STATUS_DONE <span class="kw">as </span>i8,
+<a href=#54 id=54 data-nosnippet>54</a>
+<a href=#55 id=55 data-nosnippet>55</a>    <span class="doccomment">/// The decompressor needs more input data to continue decompressing.
+<a href=#56 id=56 data-nosnippet>56</a>    ///
+<a href=#57 id=57 data-nosnippet>57</a>    /// This occurs when there's no more consumable input, but the end of the stream hasn't been
+<a href=#58 id=58 data-nosnippet>58</a>    /// reached, and you have supplied the
+<a href=#59 id=59 data-nosnippet>59</a>    /// [`TINFL_FLAG_HAS_MORE_INPUT`][core::inflate_flags::TINFL_FLAG_HAS_MORE_INPUT] flag to the
+<a href=#60 id=60 data-nosnippet>60</a>    /// decompressor.  Had you not supplied that flag (which would mean you were asserting that you
+<a href=#61 id=61 data-nosnippet>61</a>    /// believed all the data was available) you would have gotten a
+<a href=#62 id=62 data-nosnippet>62</a>    /// [`FailedCannotMakeProcess`][Self::FailedCannotMakeProgress] instead.
+<a href=#63 id=63 data-nosnippet>63</a>    </span>NeedsMoreInput = TINFL_STATUS_NEEDS_MORE_INPUT <span class="kw">as </span>i8,
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="doccomment">/// There is still pending data that didn't fit in the output buffer.
+<a href=#66 id=66 data-nosnippet>66</a>    </span>HasMoreOutput = TINFL_STATUS_HAS_MORE_OUTPUT <span class="kw">as </span>i8,
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="doccomment">/// Reached the end of a deflate block, and the start of the next block.
+<a href=#69 id=69 data-nosnippet>69</a>    ///
+<a href=#70 id=70 data-nosnippet>70</a>    /// At this point, you can suspend decompression and later resume with a new `DecompressorOxide`.
+<a href=#71 id=71 data-nosnippet>71</a>    /// The only state that must be preserved is [`DecompressorOxide::block_boundary_state()`],
+<a href=#72 id=72 data-nosnippet>72</a>    /// plus the last 32KiB of the output buffer (or less if you know the stream was compressed with
+<a href=#73 id=73 data-nosnippet>73</a>    /// a smaller window size).
+<a href=#74 id=74 data-nosnippet>74</a>    ///
+<a href=#75 id=75 data-nosnippet>75</a>    /// This is only returned if you use the
+<a href=#76 id=76 data-nosnippet>76</a>    /// [`TINFL_FLAG_STOP_ON_BLOCK_BOUNDARY`][core::inflate_flags::TINFL_FLAG_STOP_ON_BLOCK_BOUNDARY] flag.
+<a href=#77 id=77 data-nosnippet>77</a>    </span><span class="attr">#[cfg(feature = <span class="string">"block-boundary"</span>)]
+<a href=#78 id=78 data-nosnippet>78</a>    </span>BlockBoundary = TINFL_STATUS_BLOCK_BOUNDARY <span class="kw">as </span>i8,
+<a href=#79 id=79 data-nosnippet>79</a>}
+<a href=#80 id=80 data-nosnippet>80</a>
+<a href=#81 id=81 data-nosnippet>81</a><span class="kw">impl </span>TINFLStatus {
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">pub fn </span>from_i32(value: i32) -&gt; <span class="prelude-ty">Option</span>&lt;TINFLStatus&gt; {
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="kw">use </span><span class="self">self</span>::TINFLStatus::<span class="kw-2">*</span>;
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">match </span>value {
+<a href=#85 id=85 data-nosnippet>85</a>            TINFL_STATUS_FAILED_CANNOT_MAKE_PROGRESS =&gt; <span class="prelude-val">Some</span>(FailedCannotMakeProgress),
+<a href=#86 id=86 data-nosnippet>86</a>            TINFL_STATUS_BAD_PARAM =&gt; <span class="prelude-val">Some</span>(BadParam),
+<a href=#87 id=87 data-nosnippet>87</a>            TINFL_STATUS_ADLER32_MISMATCH =&gt; <span class="prelude-val">Some</span>(Adler32Mismatch),
+<a href=#88 id=88 data-nosnippet>88</a>            TINFL_STATUS_FAILED =&gt; <span class="prelude-val">Some</span>(Failed),
+<a href=#89 id=89 data-nosnippet>89</a>            TINFL_STATUS_DONE =&gt; <span class="prelude-val">Some</span>(Done),
+<a href=#90 id=90 data-nosnippet>90</a>            TINFL_STATUS_NEEDS_MORE_INPUT =&gt; <span class="prelude-val">Some</span>(NeedsMoreInput),
+<a href=#91 id=91 data-nosnippet>91</a>            TINFL_STATUS_HAS_MORE_OUTPUT =&gt; <span class="prelude-val">Some</span>(HasMoreOutput),
+<a href=#92 id=92 data-nosnippet>92</a>            <span class="attr">#[cfg(feature = <span class="string">"block-boundary"</span>)]
+<a href=#93 id=93 data-nosnippet>93</a>            </span>TINFL_STATUS_BLOCK_BOUNDARY =&gt; <span class="prelude-val">Some</span>(BlockBoundary),
+<a href=#94 id=94 data-nosnippet>94</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#95 id=95 data-nosnippet>95</a>        }
+<a href=#96 id=96 data-nosnippet>96</a>    }
+<a href=#97 id=97 data-nosnippet>97</a>}
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a><span class="doccomment">/// Struct return when decompress_to_vec functions fail.
+<a href=#100 id=100 data-nosnippet>100</a></span><span class="attr">#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#101 id=101 data-nosnippet>101</a>#[derive(Debug)]
+<a href=#102 id=102 data-nosnippet>102</a></span><span class="kw">pub struct </span>DecompressError {
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="doccomment">/// Decompressor status on failure. See [TINFLStatus] for details.
+<a href=#104 id=104 data-nosnippet>104</a>    </span><span class="kw">pub </span>status: TINFLStatus,
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="doccomment">/// The currently decompressed data if any.
+<a href=#106 id=106 data-nosnippet>106</a>    </span><span class="kw">pub </span>output: Vec&lt;u8&gt;,
+<a href=#107 id=107 data-nosnippet>107</a>}
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a><span class="attr">#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#110 id=110 data-nosnippet>110</a></span><span class="kw">impl </span>alloc::fmt::Display <span class="kw">for </span>DecompressError {
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="attr">#[cold]
+<a href=#112 id=112 data-nosnippet>112</a>    </span><span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>::core::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; ::core::fmt::Result {
+<a href=#113 id=113 data-nosnippet>113</a>        f.write_str(<span class="kw">match </span><span class="self">self</span>.status {
+<a href=#114 id=114 data-nosnippet>114</a>            TINFLStatus::FailedCannotMakeProgress =&gt; <span class="string">"Truncated input stream"</span>,
+<a href=#115 id=115 data-nosnippet>115</a>            TINFLStatus::BadParam =&gt; <span class="string">"Invalid output buffer size"</span>,
+<a href=#116 id=116 data-nosnippet>116</a>            TINFLStatus::Adler32Mismatch =&gt; <span class="string">"Adler32 checksum mismatch"</span>,
+<a href=#117 id=117 data-nosnippet>117</a>            TINFLStatus::Failed =&gt; <span class="string">"Invalid input data"</span>,
+<a href=#118 id=118 data-nosnippet>118</a>            TINFLStatus::Done =&gt; <span class="string">""</span>, <span class="comment">// Unreachable
+<a href=#119 id=119 data-nosnippet>119</a>            </span>TINFLStatus::NeedsMoreInput =&gt; <span class="string">"Truncated input stream"</span>,
+<a href=#120 id=120 data-nosnippet>120</a>            TINFLStatus::HasMoreOutput =&gt; <span class="string">"Output size exceeded the specified limit"</span>,
+<a href=#121 id=121 data-nosnippet>121</a>            <span class="attr">#[cfg(feature = <span class="string">"block-boundary"</span>)]
+<a href=#122 id=122 data-nosnippet>122</a>            </span>TINFLStatus::BlockBoundary =&gt; <span class="string">"Reached end of a deflate block"</span>,
+<a href=#123 id=123 data-nosnippet>123</a>        })
+<a href=#124 id=124 data-nosnippet>124</a>    }
+<a href=#125 id=125 data-nosnippet>125</a>}
+<a href=#126 id=126 data-nosnippet>126</a>
+<a href=#127 id=127 data-nosnippet>127</a><span class="doccomment">/// Implement Error trait only if std feature is requested as it requires std.
+<a href=#128 id=128 data-nosnippet>128</a></span><span class="attr">#[cfg(all(feature = <span class="string">"std"</span>, feature = <span class="string">"with-alloc"</span>))]
+<a href=#129 id=129 data-nosnippet>129</a></span><span class="kw">impl </span>Error <span class="kw">for </span>DecompressError {}
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a><span class="attr">#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#132 id=132 data-nosnippet>132</a></span><span class="kw">fn </span>decompress_error(status: TINFLStatus, output: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, DecompressError&gt; {
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="prelude-val">Err</span>(DecompressError { status, output })
+<a href=#134 id=134 data-nosnippet>134</a>}
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a><span class="doccomment">/// Decompress the deflate-encoded data in `input` to a vector.
+<a href=#137 id=137 data-nosnippet>137</a>///
+<a href=#138 id=138 data-nosnippet>138</a>/// NOTE: This function will not bound the output, so if the output is large enough it can result in an out of memory error.
+<a href=#139 id=139 data-nosnippet>139</a>/// It is therefore suggested to not use this for anything other than test programs, use the functions with a specified limit, or
+<a href=#140 id=140 data-nosnippet>140</a>/// ideally streaming decompression via the [flate2](https://github.com/alexcrichton/flate2-rs) library instead.
+<a href=#141 id=141 data-nosnippet>141</a>///
+<a href=#142 id=142 data-nosnippet>142</a>/// Returns a [`Result`] containing the [`Vec`] of decompressed data on success, and a [struct][DecompressError] containing the status and so far decompressed data if any on failure.
+<a href=#143 id=143 data-nosnippet>143</a></span><span class="attr">#[inline]
+<a href=#144 id=144 data-nosnippet>144</a>#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#145 id=145 data-nosnippet>145</a></span><span class="kw">pub fn </span>decompress_to_vec(input: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, DecompressError&gt; {
+<a href=#146 id=146 data-nosnippet>146</a>    decompress_to_vec_inner(input, <span class="number">0</span>, usize::MAX)
+<a href=#147 id=147 data-nosnippet>147</a>}
+<a href=#148 id=148 data-nosnippet>148</a>
+<a href=#149 id=149 data-nosnippet>149</a><span class="doccomment">/// Decompress the deflate-encoded data (with a zlib wrapper) in `input` to a vector.
+<a href=#150 id=150 data-nosnippet>150</a>///
+<a href=#151 id=151 data-nosnippet>151</a>/// NOTE: This function will not bound the output, so if the output is large enough it can result in an out of memory error.
+<a href=#152 id=152 data-nosnippet>152</a>/// It is therefore suggested to not use this for anything other than test programs, use the functions with a specified limit, or
+<a href=#153 id=153 data-nosnippet>153</a>/// ideally streaming decompression via the [flate2](https://github.com/alexcrichton/flate2-rs) library instead.
+<a href=#154 id=154 data-nosnippet>154</a>///
+<a href=#155 id=155 data-nosnippet>155</a>/// Returns a [`Result`] containing the [`Vec`] of decompressed data on success, and a [struct][DecompressError] containing the status and so far decompressed data if any on failure.
+<a href=#156 id=156 data-nosnippet>156</a></span><span class="attr">#[inline]
+<a href=#157 id=157 data-nosnippet>157</a>#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#158 id=158 data-nosnippet>158</a></span><span class="kw">pub fn </span>decompress_to_vec_zlib(input: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, DecompressError&gt; {
+<a href=#159 id=159 data-nosnippet>159</a>    decompress_to_vec_inner(
+<a href=#160 id=160 data-nosnippet>160</a>        input,
+<a href=#161 id=161 data-nosnippet>161</a>        inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER,
+<a href=#162 id=162 data-nosnippet>162</a>        usize::MAX,
+<a href=#163 id=163 data-nosnippet>163</a>    )
+<a href=#164 id=164 data-nosnippet>164</a>}
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a><span class="doccomment">/// Decompress the deflate-encoded data in `input` to a vector.
+<a href=#167 id=167 data-nosnippet>167</a>///
+<a href=#168 id=168 data-nosnippet>168</a>/// The vector is grown to at most `max_size` bytes; if the data does not fit in that size,
+<a href=#169 id=169 data-nosnippet>169</a>/// the error [struct][DecompressError] will contain the status [`TINFLStatus::HasMoreOutput`] and the data that was decompressed on failure.
+<a href=#170 id=170 data-nosnippet>170</a>///
+<a href=#171 id=171 data-nosnippet>171</a>/// As this function tries to decompress everything in one go, it's not ideal for general use outside of tests or where the output size is expected to be small.
+<a href=#172 id=172 data-nosnippet>172</a>/// It is suggested to use streaming decompression via the [flate2](https://github.com/alexcrichton/flate2-rs) library instead.
+<a href=#173 id=173 data-nosnippet>173</a>///
+<a href=#174 id=174 data-nosnippet>174</a>/// Returns a [`Result`] containing the [`Vec`] of decompressed data on success, and a [struct][DecompressError] on failure.
+<a href=#175 id=175 data-nosnippet>175</a></span><span class="attr">#[inline]
+<a href=#176 id=176 data-nosnippet>176</a>#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#177 id=177 data-nosnippet>177</a></span><span class="kw">pub fn </span>decompress_to_vec_with_limit(
+<a href=#178 id=178 data-nosnippet>178</a>    input: <span class="kw-2">&amp;</span>[u8],
+<a href=#179 id=179 data-nosnippet>179</a>    max_size: usize,
+<a href=#180 id=180 data-nosnippet>180</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, DecompressError&gt; {
+<a href=#181 id=181 data-nosnippet>181</a>    decompress_to_vec_inner(input, <span class="number">0</span>, max_size)
+<a href=#182 id=182 data-nosnippet>182</a>}
+<a href=#183 id=183 data-nosnippet>183</a>
+<a href=#184 id=184 data-nosnippet>184</a><span class="doccomment">/// Decompress the deflate-encoded data (with a zlib wrapper) in `input` to a vector.
+<a href=#185 id=185 data-nosnippet>185</a>/// The vector is grown to at most `max_size` bytes; if the data does not fit in that size,
+<a href=#186 id=186 data-nosnippet>186</a>/// the error [struct][DecompressError] will contain the status [`TINFLStatus::HasMoreOutput`] and the data that was decompressed on failure.
+<a href=#187 id=187 data-nosnippet>187</a>///
+<a href=#188 id=188 data-nosnippet>188</a>/// As this function tries to decompress everything in one go, it's not ideal for general use outside of tests or where the output size is expected to be small.
+<a href=#189 id=189 data-nosnippet>189</a>/// It is suggested to use streaming decompression via the [flate2](https://github.com/alexcrichton/flate2-rs) library instead.
+<a href=#190 id=190 data-nosnippet>190</a>///
+<a href=#191 id=191 data-nosnippet>191</a>/// Returns a [`Result`] containing the [`Vec`] of decompressed data on success, and a [struct][DecompressError] on failure.
+<a href=#192 id=192 data-nosnippet>192</a></span><span class="attr">#[inline]
+<a href=#193 id=193 data-nosnippet>193</a>#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#194 id=194 data-nosnippet>194</a></span><span class="kw">pub fn </span>decompress_to_vec_zlib_with_limit(
+<a href=#195 id=195 data-nosnippet>195</a>    input: <span class="kw-2">&amp;</span>[u8],
+<a href=#196 id=196 data-nosnippet>196</a>    max_size: usize,
+<a href=#197 id=197 data-nosnippet>197</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, DecompressError&gt; {
+<a href=#198 id=198 data-nosnippet>198</a>    decompress_to_vec_inner(input, inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER, max_size)
+<a href=#199 id=199 data-nosnippet>199</a>}
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a><span class="doccomment">/// Backend of various to-[`Vec`] decompressions.
+<a href=#202 id=202 data-nosnippet>202</a>///
+<a href=#203 id=203 data-nosnippet>203</a>/// Returns [`Vec`] of decompressed data on success and the [error struct][DecompressError] with details on failure.
+<a href=#204 id=204 data-nosnippet>204</a></span><span class="attr">#[cfg(feature = <span class="string">"with-alloc"</span>)]
+<a href=#205 id=205 data-nosnippet>205</a></span><span class="kw">fn </span>decompress_to_vec_inner(
+<a href=#206 id=206 data-nosnippet>206</a>    <span class="kw-2">mut </span>input: <span class="kw-2">&amp;</span>[u8],
+<a href=#207 id=207 data-nosnippet>207</a>    flags: u32,
+<a href=#208 id=208 data-nosnippet>208</a>    max_output_size: usize,
+<a href=#209 id=209 data-nosnippet>209</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, DecompressError&gt; {
+<a href=#210 id=210 data-nosnippet>210</a>    <span class="kw">let </span>flags = flags | inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="kw">let </span><span class="kw-2">mut </span>ret: Vec&lt;u8&gt; = <span class="macro">vec!</span>[<span class="number">0</span>; input.len().saturating_mul(<span class="number">2</span>).min(max_output_size)];
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a>    <span class="kw">let </span><span class="kw-2">mut </span>decomp = Box::&lt;DecompressorOxide&gt;::default();
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a>    <span class="kw">let </span><span class="kw-2">mut </span>out_pos = <span class="number">0</span>;
+<a href=#216 id=216 data-nosnippet>216</a>    <span class="kw">loop </span>{
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="comment">// Wrap the whole output slice so we know we have enough of the
+<a href=#218 id=218 data-nosnippet>218</a>        // decompressed data for matches.
+<a href=#219 id=219 data-nosnippet>219</a>        </span><span class="kw">let </span>(status, in_consumed, out_consumed) =
+<a href=#220 id=220 data-nosnippet>220</a>            decompress(<span class="kw-2">&amp;mut </span>decomp, input, <span class="kw-2">&amp;mut </span>ret, out_pos, flags);
+<a href=#221 id=221 data-nosnippet>221</a>        out_pos += out_consumed;
+<a href=#222 id=222 data-nosnippet>222</a>
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">match </span>status {
+<a href=#224 id=224 data-nosnippet>224</a>            TINFLStatus::Done =&gt; {
+<a href=#225 id=225 data-nosnippet>225</a>                ret.truncate(out_pos);
+<a href=#226 id=226 data-nosnippet>226</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(ret);
+<a href=#227 id=227 data-nosnippet>227</a>            }
+<a href=#228 id=228 data-nosnippet>228</a>
+<a href=#229 id=229 data-nosnippet>229</a>            TINFLStatus::HasMoreOutput =&gt; {
+<a href=#230 id=230 data-nosnippet>230</a>                <span class="comment">// in_consumed is not expected to be out of bounds,
+<a href=#231 id=231 data-nosnippet>231</a>                // but the check eliminates a panicking code path
+<a href=#232 id=232 data-nosnippet>232</a>                </span><span class="kw">if </span>in_consumed &gt; input.len() {
+<a href=#233 id=233 data-nosnippet>233</a>                    <span class="kw">return </span>decompress_error(TINFLStatus::HasMoreOutput, ret);
+<a href=#234 id=234 data-nosnippet>234</a>                }
+<a href=#235 id=235 data-nosnippet>235</a>                input = <span class="kw-2">&amp;</span>input[in_consumed..];
+<a href=#236 id=236 data-nosnippet>236</a>
+<a href=#237 id=237 data-nosnippet>237</a>                <span class="comment">// if the buffer has already reached the size limit, return an error
+<a href=#238 id=238 data-nosnippet>238</a>                </span><span class="kw">if </span>ret.len() &gt;= max_output_size {
+<a href=#239 id=239 data-nosnippet>239</a>                    <span class="kw">return </span>decompress_error(TINFLStatus::HasMoreOutput, ret);
+<a href=#240 id=240 data-nosnippet>240</a>                }
+<a href=#241 id=241 data-nosnippet>241</a>                <span class="comment">// calculate the new length, capped at `max_output_size`
+<a href=#242 id=242 data-nosnippet>242</a>                </span><span class="kw">let </span>new_len = ret.len().saturating_mul(<span class="number">2</span>).min(max_output_size);
+<a href=#243 id=243 data-nosnippet>243</a>                ret.resize(new_len, <span class="number">0</span>);
+<a href=#244 id=244 data-nosnippet>244</a>            }
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a>            <span class="kw">_ </span>=&gt; <span class="kw">return </span>decompress_error(status, ret),
+<a href=#247 id=247 data-nosnippet>247</a>        }
+<a href=#248 id=248 data-nosnippet>248</a>    }
+<a href=#249 id=249 data-nosnippet>249</a>}
+<a href=#250 id=250 data-nosnippet>250</a>
+<a href=#251 id=251 data-nosnippet>251</a><span class="doccomment">/// Decompress one or more source slices from an iterator into the output slice.
+<a href=#252 id=252 data-nosnippet>252</a>///
+<a href=#253 id=253 data-nosnippet>253</a>/// * On success, returns the number of bytes that were written.
+<a href=#254 id=254 data-nosnippet>254</a>/// * On failure, returns the failure status code.
+<a href=#255 id=255 data-nosnippet>255</a>///
+<a href=#256 id=256 data-nosnippet>256</a>/// This will fail if the output buffer is not large enough, but in that case
+<a href=#257 id=257 data-nosnippet>257</a>/// the output buffer will still contain the partial decompression.
+<a href=#258 id=258 data-nosnippet>258</a>///
+<a href=#259 id=259 data-nosnippet>259</a>/// * `out` the output buffer.
+<a href=#260 id=260 data-nosnippet>260</a>/// * `it` the iterator of input slices.
+<a href=#261 id=261 data-nosnippet>261</a>/// * `zlib_header` if the first slice out of the iterator is expected to have a
+<a href=#262 id=262 data-nosnippet>262</a>///   Zlib header. Otherwise the slices are assumed to be the deflate data only.
+<a href=#263 id=263 data-nosnippet>263</a>/// * `ignore_adler32` if the adler32 checksum should be calculated or not.
+<a href=#264 id=264 data-nosnippet>264</a></span><span class="attr">#[cfg(not(feature = <span class="string">"rustc-dep-of-std"</span>))]
+<a href=#265 id=265 data-nosnippet>265</a></span><span class="kw">pub fn </span>decompress_slice_iter_to_slice&lt;<span class="lifetime">'out</span>, <span class="lifetime">'inp</span>&gt;(
+<a href=#266 id=266 data-nosnippet>266</a>    out: <span class="kw-2">&amp;</span><span class="lifetime">'out </span><span class="kw-2">mut </span>[u8],
+<a href=#267 id=267 data-nosnippet>267</a>    it: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'inp </span>[u8]&gt;,
+<a href=#268 id=268 data-nosnippet>268</a>    zlib_header: bool,
+<a href=#269 id=269 data-nosnippet>269</a>    ignore_adler32: bool,
+<a href=#270 id=270 data-nosnippet>270</a>) -&gt; <span class="prelude-ty">Result</span>&lt;usize, TINFLStatus&gt; {
+<a href=#271 id=271 data-nosnippet>271</a>    <span class="kw">use </span><span class="self">self</span>::core::inflate_flags::<span class="kw-2">*</span>;
+<a href=#272 id=272 data-nosnippet>272</a>
+<a href=#273 id=273 data-nosnippet>273</a>    <span class="kw">let </span><span class="kw-2">mut </span>it = it.peekable();
+<a href=#274 id=274 data-nosnippet>274</a>    <span class="kw">let </span>r = <span class="kw-2">&amp;mut </span>DecompressorOxide::new();
+<a href=#275 id=275 data-nosnippet>275</a>    <span class="kw">let </span><span class="kw-2">mut </span>out_pos = <span class="number">0</span>;
+<a href=#276 id=276 data-nosnippet>276</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(in_buf) = it.next() {
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="kw">let </span>has_more = it.peek().is_some();
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="kw">let </span>flags = {
+<a href=#279 id=279 data-nosnippet>279</a>            <span class="kw">let </span><span class="kw-2">mut </span>f = TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+<a href=#280 id=280 data-nosnippet>280</a>            <span class="kw">if </span>zlib_header {
+<a href=#281 id=281 data-nosnippet>281</a>                f |= TINFL_FLAG_PARSE_ZLIB_HEADER;
+<a href=#282 id=282 data-nosnippet>282</a>            }
+<a href=#283 id=283 data-nosnippet>283</a>            <span class="kw">if </span>ignore_adler32 {
+<a href=#284 id=284 data-nosnippet>284</a>                f |= TINFL_FLAG_IGNORE_ADLER32;
+<a href=#285 id=285 data-nosnippet>285</a>            }
+<a href=#286 id=286 data-nosnippet>286</a>            <span class="kw">if </span>has_more {
+<a href=#287 id=287 data-nosnippet>287</a>                f |= TINFL_FLAG_HAS_MORE_INPUT;
+<a href=#288 id=288 data-nosnippet>288</a>            }
+<a href=#289 id=289 data-nosnippet>289</a>            f
+<a href=#290 id=290 data-nosnippet>290</a>        };
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="kw">let </span>(status, _input_read, bytes_written) = decompress(r, in_buf, out, out_pos, flags);
+<a href=#292 id=292 data-nosnippet>292</a>        out_pos += bytes_written;
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="kw">match </span>status {
+<a href=#294 id=294 data-nosnippet>294</a>            TINFLStatus::NeedsMoreInput =&gt; <span class="kw">continue</span>,
+<a href=#295 id=295 data-nosnippet>295</a>            TINFLStatus::Done =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(out_pos),
+<a href=#296 id=296 data-nosnippet>296</a>            e =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
+<a href=#297 id=297 data-nosnippet>297</a>        }
+<a href=#298 id=298 data-nosnippet>298</a>    }
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="comment">// If we ran out of source slices without getting a `Done` from the
+<a href=#300 id=300 data-nosnippet>300</a>    // decompression we can call it a failure.
+<a href=#301 id=301 data-nosnippet>301</a>    </span><span class="prelude-val">Err</span>(TINFLStatus::FailedCannotMakeProgress)
+<a href=#302 id=302 data-nosnippet>302</a>}
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a><span class="attr">#[cfg(all(test, feature = <span class="string">"with-alloc"</span>))]
+<a href=#305 id=305 data-nosnippet>305</a></span><span class="kw">mod </span>test {
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="kw">use super</span>::{
+<a href=#307 id=307 data-nosnippet>307</a>        decompress_slice_iter_to_slice, decompress_to_vec_zlib, decompress_to_vec_zlib_with_limit,
+<a href=#308 id=308 data-nosnippet>308</a>        DecompressError, TINFLStatus,
+<a href=#309 id=309 data-nosnippet>309</a>    };
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="kw">const </span>ENCODED: [u8; <span class="number">20</span>] = [
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="number">120</span>, <span class="number">156</span>, <span class="number">243</span>, <span class="number">72</span>, <span class="number">205</span>, <span class="number">201</span>, <span class="number">201</span>, <span class="number">215</span>, <span class="number">81</span>, <span class="number">168</span>, <span class="number">202</span>, <span class="number">201</span>, <span class="number">76</span>, <span class="number">82</span>, <span class="number">4</span>, <span class="number">0</span>, <span class="number">27</span>, <span class="number">101</span>, <span class="number">4</span>, <span class="number">19</span>,
+<a href=#312 id=312 data-nosnippet>312</a>    ];
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="attr">#[test]
+<a href=#315 id=315 data-nosnippet>315</a>    </span><span class="kw">fn </span>decompress_vec() {
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw">let </span>res = decompress_to_vec_zlib(<span class="kw-2">&amp;</span>ENCODED[..]).unwrap();
+<a href=#317 id=317 data-nosnippet>317</a>        <span class="macro">assert_eq!</span>(res.as_slice(), <span class="kw-2">&amp;</span><span class="string">b"Hello, zlib!"</span>[..]);
+<a href=#318 id=318 data-nosnippet>318</a>    }
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a>    <span class="attr">#[test]
+<a href=#321 id=321 data-nosnippet>321</a>    </span><span class="kw">fn </span>decompress_vec_with_high_limit() {
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw">let </span>res = decompress_to_vec_zlib_with_limit(<span class="kw-2">&amp;</span>ENCODED[..], <span class="number">100_000</span>).unwrap();
+<a href=#323 id=323 data-nosnippet>323</a>        <span class="macro">assert_eq!</span>(res.as_slice(), <span class="kw-2">&amp;</span><span class="string">b"Hello, zlib!"</span>[..]);
+<a href=#324 id=324 data-nosnippet>324</a>    }
+<a href=#325 id=325 data-nosnippet>325</a>
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="attr">#[test]
+<a href=#327 id=327 data-nosnippet>327</a>    </span><span class="kw">fn </span>fail_to_decompress_with_limit() {
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">let </span>res = decompress_to_vec_zlib_with_limit(<span class="kw-2">&amp;</span>ENCODED[..], <span class="number">8</span>);
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">match </span>res {
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="prelude-val">Err</span>(DecompressError {
+<a href=#331 id=331 data-nosnippet>331</a>                status: TINFLStatus::HasMoreOutput,
+<a href=#332 id=332 data-nosnippet>332</a>                ..
+<a href=#333 id=333 data-nosnippet>333</a>            }) =&gt; (), <span class="comment">// expected result
+<a href=#334 id=334 data-nosnippet>334</a>            </span><span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Decompression output size limit was not enforced"</span>),
+<a href=#335 id=335 data-nosnippet>335</a>        }
+<a href=#336 id=336 data-nosnippet>336</a>    }
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="attr">#[test]
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">fn </span>test_decompress_slice_iter_to_slice() {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="comment">// one slice
+<a href=#341 id=341 data-nosnippet>341</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>out = [<span class="number">0_u8</span>; <span class="number">12_usize</span>];
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">let </span>r =
+<a href=#343 id=343 data-nosnippet>343</a>            decompress_slice_iter_to_slice(<span class="kw-2">&amp;mut </span>out, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>ENCODED[..]).into_iter(), <span class="bool-val">true</span>, <span class="bool-val">false</span>);
+<a href=#344 id=344 data-nosnippet>344</a>        <span class="macro">assert_eq!</span>(r, <span class="prelude-val">Ok</span>(<span class="number">12</span>));
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>out[..<span class="number">12</span>], <span class="kw-2">&amp;</span><span class="string">b"Hello, zlib!"</span>[..]);
+<a href=#346 id=346 data-nosnippet>346</a>
+<a href=#347 id=347 data-nosnippet>347</a>        <span class="comment">// some chunks at a time
+<a href=#348 id=348 data-nosnippet>348</a>        </span><span class="kw">for </span>chunk_size <span class="kw">in </span><span class="number">1</span>..<span class="number">13 </span>{
+<a href=#349 id=349 data-nosnippet>349</a>            <span class="comment">// Note: because of https://github.com/Frommi/miniz_oxide/issues/110 our
+<a href=#350 id=350 data-nosnippet>350</a>            // out buffer needs to have +1 byte available when the chunk size cuts
+<a href=#351 id=351 data-nosnippet>351</a>            // the adler32 data off from the last actual data.
+<a href=#352 id=352 data-nosnippet>352</a>            </span><span class="kw">let </span><span class="kw-2">mut </span>out = [<span class="number">0_u8</span>; <span class="number">12_usize </span>+ <span class="number">1</span>];
+<a href=#353 id=353 data-nosnippet>353</a>            <span class="kw">let </span>r =
+<a href=#354 id=354 data-nosnippet>354</a>                decompress_slice_iter_to_slice(<span class="kw-2">&amp;mut </span>out, ENCODED.chunks(chunk_size), <span class="bool-val">true</span>, <span class="bool-val">false</span>);
+<a href=#355 id=355 data-nosnippet>355</a>            <span class="macro">assert_eq!</span>(r, <span class="prelude-val">Ok</span>(<span class="number">12</span>));
+<a href=#356 id=356 data-nosnippet>356</a>            <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>out[..<span class="number">12</span>], <span class="kw-2">&amp;</span><span class="string">b"Hello, zlib!"</span>[..]);
+<a href=#357 id=357 data-nosnippet>357</a>        }
+<a href=#358 id=358 data-nosnippet>358</a>
+<a href=#359 id=359 data-nosnippet>359</a>        <span class="comment">// output buffer too small
+<a href=#360 id=360 data-nosnippet>360</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>out = [<span class="number">0_u8</span>; <span class="number">3_usize</span>];
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="kw">let </span>r = decompress_slice_iter_to_slice(<span class="kw-2">&amp;mut </span>out, ENCODED.chunks(<span class="number">7</span>), <span class="bool-val">true</span>, <span class="bool-val">false</span>);
+<a href=#362 id=362 data-nosnippet>362</a>        <span class="macro">assert!</span>(r.is_err());
+<a href=#363 id=363 data-nosnippet>363</a>    }
+<a href=#364 id=364 data-nosnippet>364</a>}</code></pre></div></section></main></body></html>

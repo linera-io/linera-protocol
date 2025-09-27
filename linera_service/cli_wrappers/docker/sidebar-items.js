@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuildArg","Dockerfile"],"struct":["DockerImage"]};

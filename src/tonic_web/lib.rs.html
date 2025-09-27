@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tonic-web-0.14.2/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tonic_web" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">tonic_web/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! grpc-web protocol translation for [`tonic`] services.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! [`tonic_web`] enables tonic servers to handle requests from [grpc-web] clients directly,
+<a href=#4 id=4 data-nosnippet>4</a>//! without the need of an external proxy. It achieves this by wrapping individual tonic services
+<a href=#5 id=5 data-nosnippet>5</a>//! with a [tower] service that performs the translation between protocols and handles `cors`
+<a href=#6 id=6 data-nosnippet>6</a>//! requests.
+<a href=#7 id=7 data-nosnippet>7</a>//!
+<a href=#8 id=8 data-nosnippet>8</a>//! ## Enabling tonic services
+<a href=#9 id=9 data-nosnippet>9</a>//!
+<a href=#10 id=10 data-nosnippet>10</a>//! You can customize the CORS configuration composing the [`GrpcWebLayer`] with the cors layer of your choice.
+<a href=#11 id=11 data-nosnippet>11</a>//!
+<a href=#12 id=12 data-nosnippet>12</a>//! ```ignore
+<a href=#13 id=13 data-nosnippet>13</a>//! #[tokio::main]
+<a href=#14 id=14 data-nosnippet>14</a>//! async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+<a href=#15 id=15 data-nosnippet>15</a>//!     let addr = "[::1]:50051".parse().unwrap();
+<a href=#16 id=16 data-nosnippet>16</a>//!     let greeter = GreeterServer::new(MyGreeter::default());
+<a href=#17 id=17 data-nosnippet>17</a>//!
+<a href=#18 id=18 data-nosnippet>18</a>//!     Server::builder()
+<a href=#19 id=19 data-nosnippet>19</a>//!        .accept_http1(true)
+<a href=#20 id=20 data-nosnippet>20</a>//!        // This will apply the gRPC-Web translation layer
+<a href=#21 id=21 data-nosnippet>21</a>//!        .layer(GrpcWebLayer::new())
+<a href=#22 id=22 data-nosnippet>22</a>//!        .add_service(greeter)
+<a href=#23 id=23 data-nosnippet>23</a>//!        .serve(addr)
+<a href=#24 id=24 data-nosnippet>24</a>//!        .await?;
+<a href=#25 id=25 data-nosnippet>25</a>//!
+<a href=#26 id=26 data-nosnippet>26</a>//!    Ok(())
+<a href=#27 id=27 data-nosnippet>27</a>//! }
+<a href=#28 id=28 data-nosnippet>28</a>//! ```
+<a href=#29 id=29 data-nosnippet>29</a>//!
+<a href=#30 id=30 data-nosnippet>30</a>//! Alternatively, if you have a tls enabled server, you could skip setting `accept_http1` to `true`.
+<a href=#31 id=31 data-nosnippet>31</a>//! This works because the browser will handle `ALPN`.
+<a href=#32 id=32 data-nosnippet>32</a>//!
+<a href=#33 id=33 data-nosnippet>33</a>//! ```ignore
+<a href=#34 id=34 data-nosnippet>34</a>//! #[tokio::main]
+<a href=#35 id=35 data-nosnippet>35</a>//! async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+<a href=#36 id=36 data-nosnippet>36</a>//!     let cert = tokio::fs::read("server.pem").await?;
+<a href=#37 id=37 data-nosnippet>37</a>//!     let key = tokio::fs::read("server.key").await?;
+<a href=#38 id=38 data-nosnippet>38</a>//!     let identity = Identity::from_pem(cert, key);
+<a href=#39 id=39 data-nosnippet>39</a>//!
+<a href=#40 id=40 data-nosnippet>40</a>//!     let addr = "[::1]:50051".parse().unwrap();
+<a href=#41 id=41 data-nosnippet>41</a>//!     let greeter = GreeterServer::new(MyGreeter::default());
+<a href=#42 id=42 data-nosnippet>42</a>//!
+<a href=#43 id=43 data-nosnippet>43</a>//!     // No need to enable HTTP/1
+<a href=#44 id=44 data-nosnippet>44</a>//!     Server::builder()
+<a href=#45 id=45 data-nosnippet>45</a>//!        .tls_config(ServerTlsConfig::new().identity(identity))?
+<a href=#46 id=46 data-nosnippet>46</a>//!        .layer(GrpcWebLayer::new())
+<a href=#47 id=47 data-nosnippet>47</a>//!        .add_service(greeter)
+<a href=#48 id=48 data-nosnippet>48</a>//!        .serve(addr)
+<a href=#49 id=49 data-nosnippet>49</a>//!        .await?;
+<a href=#50 id=50 data-nosnippet>50</a>//!
+<a href=#51 id=51 data-nosnippet>51</a>//!    Ok(())
+<a href=#52 id=52 data-nosnippet>52</a>//! }
+<a href=#53 id=53 data-nosnippet>53</a>//! ```
+<a href=#54 id=54 data-nosnippet>54</a>//!
+<a href=#55 id=55 data-nosnippet>55</a>//! ## Limitations
+<a href=#56 id=56 data-nosnippet>56</a>//!
+<a href=#57 id=57 data-nosnippet>57</a>//! * `tonic_web` is designed to work with grpc-web-compliant clients only. It is not expected to
+<a href=#58 id=58 data-nosnippet>58</a>//!   handle arbitrary HTTP/x.x requests or bespoke protocols.
+<a href=#59 id=59 data-nosnippet>59</a>//! * Similarly, the cors support implemented  by this crate will *only* handle grpc-web and
+<a href=#60 id=60 data-nosnippet>60</a>//!   grpc-web preflight requests.
+<a href=#61 id=61 data-nosnippet>61</a>//! * Currently, grpc-web clients can only perform `unary` and `server-streaming` calls. These
+<a href=#62 id=62 data-nosnippet>62</a>//!   are the only requests this crate is designed to handle. Support for client and bi-directional
+<a href=#63 id=63 data-nosnippet>63</a>//!   streaming will be officially supported when clients do.
+<a href=#64 id=64 data-nosnippet>64</a>//! * There is no support for web socket transports.
+<a href=#65 id=65 data-nosnippet>65</a>//!
+<a href=#66 id=66 data-nosnippet>66</a>//!
+<a href=#67 id=67 data-nosnippet>67</a>//! [`tonic`]: https://github.com/hyperium/tonic
+<a href=#68 id=68 data-nosnippet>68</a>//! [`tonic_web`]: https://github.com/hyperium/tonic
+<a href=#69 id=69 data-nosnippet>69</a>//! [grpc-web]: https://github.com/grpc/grpc-web
+<a href=#70 id=70 data-nosnippet>70</a>//! [tower]: https://github.com/tower-rs/tower
+<a href=#71 id=71 data-nosnippet>71</a></span><span class="attr">#![doc(issue_tracker_base_url = <span class="string">"https://github.com/hyperium/tonic/issues/"</span>)]
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a></span><span class="kw">pub use </span>call::GrpcWebCall;
+<a href=#74 id=74 data-nosnippet>74</a><span class="kw">pub use </span>client::{GrpcWebClientLayer, GrpcWebClientService};
+<a href=#75 id=75 data-nosnippet>75</a><span class="kw">pub use </span>layer::GrpcWebLayer;
+<a href=#76 id=76 data-nosnippet>76</a><span class="kw">pub use </span>service::{GrpcWebService, ResponseFuture};
+<a href=#77 id=77 data-nosnippet>77</a>
+<a href=#78 id=78 data-nosnippet>78</a><span class="kw">mod </span>call;
+<a href=#79 id=79 data-nosnippet>79</a><span class="kw">mod </span>client;
+<a href=#80 id=80 data-nosnippet>80</a><span class="kw">mod </span>layer;
+<a href=#81 id=81 data-nosnippet>81</a><span class="kw">mod </span>service;
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a><span class="kw">type </span>BoxError = Box&lt;<span class="kw">dyn </span>std::error::Error + Send + Sync&gt;;
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>util {
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>base64 {
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">use </span>base64::{
+<a href=#88 id=88 data-nosnippet>88</a>            alphabet,
+<a href=#89 id=89 data-nosnippet>89</a>            engine::{
+<a href=#90 id=90 data-nosnippet>90</a>                general_purpose::{GeneralPurpose, GeneralPurposeConfig},
+<a href=#91 id=91 data-nosnippet>91</a>                DecodePaddingMode,
+<a href=#92 id=92 data-nosnippet>92</a>            },
+<a href=#93 id=93 data-nosnippet>93</a>        };
+<a href=#94 id=94 data-nosnippet>94</a>
+<a href=#95 id=95 data-nosnippet>95</a>        <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>STANDARD: GeneralPurpose = GeneralPurpose::new(
+<a href=#96 id=96 data-nosnippet>96</a>            <span class="kw-2">&amp;</span>alphabet::STANDARD,
+<a href=#97 id=97 data-nosnippet>97</a>            GeneralPurposeConfig::new()
+<a href=#98 id=98 data-nosnippet>98</a>                .with_encode_padding(<span class="bool-val">true</span>)
+<a href=#99 id=99 data-nosnippet>99</a>                .with_decode_padding_mode(DecodePaddingMode::Indifferent),
+<a href=#100 id=100 data-nosnippet>100</a>        );
+<a href=#101 id=101 data-nosnippet>101</a>    }
+<a href=#102 id=102 data-nosnippet>102</a>}</code></pre></div></section></main></body></html>
