@@ -5,10 +5,21 @@
 {$DOMAIN:localhost} {
     # Automatic HTTPS with Let's Encrypt (or self-signed for localhost)
 
-    # Set gRPC content-type header for all requests
-    header Content-Type application/grpc
+    # Handle OPTIONS preflight requests (let backend handle CORS headers)
+    @options {
+        method OPTIONS
+    }
+    handle @options {
+        reverse_proxy https://proxy:443 {
+            transport http {
+                versions 2
+                tls_insecure_skip_verify
+            }
+        }
+    }
 
-    # Reverse proxy to the Linera proxy container (gRPC over HTTPS)
+    # Simple reverse proxy for all gRPC traffic
+    # Let the backend handle both gRPC and gRPC-Web (including CORS)
     reverse_proxy https://proxy:443 {
         # Configure for gRPC with self-signed certificate
         transport http {
@@ -27,8 +38,6 @@
 
         # Disable buffering for gRPC streaming
         flush_interval -1
-
-        # Don't add extra headers that might interfere with gRPC
     }
 
     # Enable access logs in JSON format
