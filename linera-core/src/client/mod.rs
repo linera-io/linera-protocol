@@ -3023,6 +3023,7 @@ impl<Env: Environment> ChainClient<Env> {
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
         let manager = &info.manager;
+        info!("manager info: {:?}", manager);
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.
@@ -3033,9 +3034,7 @@ impl<Env: Environment> ChainClient<Env> {
             .chain(&manager.requested_proposed)
             .any(|proposal| proposal.content.round == manager.current_round)
             || (manager.current_round.is_fast() && has_oracle_responses);
-        info!("current round: {}", manager.current_round);
         info!("conflict: {}", conflict);
-        info!("ownerskip: {:?}", manager.ownership);
         info!("next candidate round: {:?}", manager.ownership.next_round(manager.current_round));
 
         let round = if !conflict {
@@ -3043,7 +3042,7 @@ impl<Env: Environment> ChainClient<Env> {
         } else if let Some(round) = manager
             .ownership
             .next_round(manager.current_round)
-            .filter(|_| manager.current_round.is_multi_leader() || manager.current_round.is_fast())
+            .filter(|_| manager.current_round.is_multi_leader() || manager.current_round.is_fast() || true) // HACK
         {
             round
         } else if let Some(timeout) = info.round_timeout() {
@@ -3053,6 +3052,7 @@ impl<Env: Environment> ChainClient<Env> {
                 "Conflicting proposal in the current round",
             ));
         };
+        info!("can {} propose in round {}? {}", identity, round, manager.can_propose(identity, round));
         if manager.can_propose(identity, round) {
             return Ok(Either::Left(round));
         }
