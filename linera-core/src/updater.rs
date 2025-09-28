@@ -27,7 +27,7 @@ use linera_chain::{
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{ResultReadCertificates, Storage};
 use thiserror::Error;
-use tracing::{instrument, Level};
+use tracing::{debug, instrument, Level};
 
 use crate::{
     client::ChainClientError,
@@ -315,7 +315,14 @@ where
                 .await
             {
                 Ok(info) => return Ok(info),
-                Err(NodeError::WrongRound(_round)) => {
+                Err(NodeError::WrongRound(round)) => {
+                    debug!(
+                        "Failed to send block proposal to validator {} because it sees chain {} at round {} instead of {}: ",
+                        self.remote_node.public_key,
+                        chain_id,
+                        round,
+                        proposal.content.round,
+                    );
                     // The proposal is for a different round, so we need to update the validator.
                     // TODO: this should probably be more specific as to which rounds are retried.
                     self.send_chain_information(
