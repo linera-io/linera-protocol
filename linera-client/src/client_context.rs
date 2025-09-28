@@ -335,7 +335,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
-            chain_client.synchronize_from_validators().await?;
+            chain_client.maybe_synchronize_from_validators().await?;
             let result = chain_client.process_inbox_without_prepare().await;
             self.update_wallet_from_client(chain_client).await?;
             if result.is_err() {
@@ -412,7 +412,8 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
-        client.prepare_chain().await?;
+        // TODO: this may not work.
+        client.maybe_prepare_chain().await?;
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
         self.update_wallet_from_client(client).await?;
@@ -801,7 +802,7 @@ where
         let mut join_set = task::JoinSet::new();
         for chain_client in chain_clients {
             join_set.spawn(async move {
-                Self::process_inbox_without_updating_wallet(&chain_client)
+                Self::maybe_process_inbox_without_updating_wallet(&chain_client)
                     .await
                     .expect("Processing inbox should not fail!");
                 chain_client
@@ -814,11 +815,11 @@ where
         }
     }
 
-    async fn process_inbox_without_updating_wallet(
+    async fn maybe_process_inbox_without_updating_wallet(
         chain_client: &ChainClient<Env>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, Error> {
         // Try processing the inbox optimistically without waiting for validator notifications.
-        chain_client.synchronize_from_validators().await?;
+        chain_client.maybe_synchronize_from_validators().await?;
         let (certificates, maybe_timeout) = chain_client.process_inbox_without_prepare().await?;
         assert!(
             maybe_timeout.is_none(),

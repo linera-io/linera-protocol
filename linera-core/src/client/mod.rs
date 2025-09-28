@@ -256,7 +256,7 @@ impl<Env: Environment> Client<Env> {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 // Make sure the admin chain is up to date.
-                self.synchronize_chain_state(self.admin_id).await?;
+                self.maybe_synchronize_chain_state(self.admin_id).await?;
                 // If the chain is missing then the error is a WorkerError
                 // and so a BlobsNotFound
                 self.update_local_node_with_blobs_from(blob_ids, validators)
@@ -463,7 +463,7 @@ impl<Env: Environment> Client<Env> {
             return Ok(bcs::from_bytes(blob.bytes())?);
         };
         // Recover history from the current validators, according to the admin chain.
-        self.synchronize_chain_state(self.admin_id).await?;
+        self.maybe_synchronize_chain_state(self.admin_id).await?;
         let nodes = self.validator_nodes().await?;
         let blob = self
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
@@ -935,19 +935,19 @@ impl<Env: Environment> Client<Env> {
 
     /// Downloads and processes any certificates we are missing for the given chain.
     #[instrument(level = "trace", skip_all)]
-    async fn synchronize_chain_state(
+    async fn maybe_synchronize_chain_state(
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let (_, committee) = self.admin_committee().await?;
-        self.synchronize_chain_state_from_committee(chain_id, committee)
+        self.maybe_synchronize_chain_state_from_committee(chain_id, committee)
             .await
     }
 
     /// Downloads and processes any certificates we are missing for the given chain, from the given
     /// committee.
     #[instrument(level = "trace", skip_all)]
-    pub async fn synchronize_chain_state_from_committee(
+    pub async fn maybe_synchronize_chain_state_from_committee(
         &self,
         chain_id: ChainId,
         committee: Committee,
@@ -957,7 +957,7 @@ impl<Env: Environment> Client<Env> {
 
         let validators = self.make_nodes(&committee)?;
         Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
-        communicate_with_quorum(
+        if let Err(e) = communicate_with_quorum(
             &validators,
             &committee,
             |_: &()| (),
@@ -967,7 +967,13 @@ impl<Env: Environment> Client<Env> {
             },
             self.options.grace_period,
         )
-        .await?;
+        .await
+        {
+            warn!(
+                "Failed to synchronize chain state from at least a quorum of nodes: {}",
+                e
+            );
+        }
 
         self.local_node
             .chain_info(chain_id)
@@ -1839,7 +1845,8 @@ impl<Env: Environment> ChainClient<Env> {
         let info = match self.chain_info_with_committees().await {
             Ok(info) => info,
             Err(LocalNodeError::BlobsNotFound(_)) => {
-                self.synchronize_chain_state(self.chain_id).await?;
+                // TODO: Make this case impossible.
+                self.maybe_synchronize_chain_state(self.chain_id).await?;
                 self.chain_info_with_committees().await?
             }
             Err(err) => return Err(err.into()),
@@ -1904,7 +1911,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
     /// its current height and are not missing any received messages from the inbox.
     #[instrument(level = "trace")]
-    pub async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+    pub async fn maybe_prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
@@ -1914,22 +1921,26 @@ impl<Env: Environment> ChainClient<Env> {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
-            info = self.client.synchronize_chain_state(self.chain_id).await?;
+            info = self
+                .client
+                .maybe_synchronize_chain_state(self.chain_id)
+                .await?;
         }
 
         if info.epoch > self.client.admin_committees().await?.0 {
             self.client
-                .synchronize_chain_state(self.client.admin_id)
+                .maybe_synchronize_chain_state(self.client.admin_id)
                 .await?;
         }
 
+        // TODO: This may require many iterations.
         let result = self
             .chain_state_view()
             .await?
             .validate_incoming_bundles()
             .await;
         if matches!(result, Err(ChainError::MissingCrossChainUpdate { .. })) {
-            self.find_received_certificates().await?;
+            self.find_some_received_certificates().await?;
         }
         self.client.update_from_info(&info);
         Ok(info)
@@ -2154,7 +2165,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Synchronizes all chains that any application on this chain subscribes to.
     /// We always consider the admin chain a relevant publishing chain, for new epochs.
-    async fn synchronize_publisher_chains(&self) -> Result<(), ChainClientError> {
+    async fn maybe_synchronize_publisher_chains(&self) -> Result<(), ChainClientError> {
         let chain_ids = self
             .chain_state_view()
             .await?
@@ -2171,7 +2182,7 @@ impl<Env: Environment> ChainClient<Env> {
         stream::iter(
             chain_ids
                 .into_iter()
-                .map(|chain_id| self.client.synchronize_chain_state(chain_id)),
+                .map(|chain_id| self.client.maybe_synchronize_chain_state(chain_id)),
         )
         .buffer_unordered(self.options.max_joined_tasks)
         .collect::<Vec<_>>()
@@ -2190,7 +2201,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     #[instrument(level = "trace")]
-    async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
+    async fn find_some_received_certificates(&self) -> Result<(), ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
 
@@ -2199,34 +2210,32 @@ impl<Env: Environment> ChainClient<Env> {
         let (_, committee) = self.admin_committee().await?;
         let nodes = self.client.make_nodes(&committee)?;
         // Proceed to downloading received certificates.
+        let received_certificate_batches = Arc::new(std::sync::Mutex::new(Vec::new()));
         let result = communicate_with_quorum(
             &nodes,
             &committee,
             |_| (),
             |remote_node| {
                 let client = &self.client;
+                let received_certificate_batches = Arc::clone(&received_certificate_batches);
                 Box::pin(async move {
-                    client
+                    let batch = client
                         .synchronize_received_certificates_from_validator(chain_id, &remote_node)
-                        .await
+                        .await?;
+                    let mut batches = received_certificate_batches.lock().unwrap();
+                    batches.push(batch);
+                    Ok(())
                 })
             },
             self.options.grace_period,
         )
         .await;
-        let received_certificate_batches = match result {
-            Ok(((), received_certificate_batches)) => received_certificate_batches
-                .into_iter()
-                .map(|(_, batch)| batch)
-                .collect(),
-            Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
-                // The chain is visibly not active (yet or any more) so there is no need
-                // to synchronize received certificates.
-                return Ok(());
-            }
-            Err(error) => {
-                return Err(error.into());
-            }
+        if let Err(e) = result {
+            warn!("Failed to synchronize received certificates from at least a quorum of validators: {}", e);
+        }
+        let received_certificate_batches = {
+            let mut received_certificate_batches = received_certificate_batches.lock().unwrap();
+            std::mem::take(received_certificate_batches.as_mut())
         };
         self.receive_certificates_from_validators(received_certificate_batches)
             .await;
@@ -2318,22 +2327,22 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Downloads and processes any certificates we are missing for the given chain.
     #[instrument(level = "trace", skip_all)]
-    pub async fn synchronize_chain_state(
+    pub async fn maybe_synchronize_chain_state(
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        self.client.synchronize_chain_state(chain_id).await
+        self.client.maybe_synchronize_chain_state(chain_id).await
     }
 
     /// Downloads and processes any certificates we are missing for this chain, from the given
     /// committee.
     #[instrument(level = "trace", skip_all)]
-    pub async fn synchronize_chain_state_from_committee(
+    pub async fn maybe_synchronize_chain_state_from_committee(
         &self,
         committee: Committee,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         self.client
-            .synchronize_chain_state_from_committee(self.chain_id, committee)
+            .maybe_synchronize_chain_state_from_committee(self.chain_id, committee)
             .await
     }
 
@@ -2373,7 +2382,8 @@ impl<Env: Environment> ChainClient<Env> {
                         "Local state is outdated; synchronizing chain {:.8}",
                         self.chain_id
                     );
-                    self.synchronize_chain_state(self.chain_id).await?;
+                    // TODO: synchronize from the quorum that just returned UnexpectedBlockHeight.
+                    self.maybe_synchronize_chain_state(self.chain_id).await?;
                 }
                 Err(err) => return Err(err),
             };
@@ -2779,19 +2789,21 @@ impl<Env: Environment> ChainClient<Env> {
     /// To create a block that actually executes the messages in the inbox,
     /// `process_inbox` must be called separately.
     #[instrument(level = "trace")]
-    pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
-        let info = self.prepare_chain().await?;
-        self.synchronize_publisher_chains().await?;
-        self.find_received_certificates().await?;
+    pub async fn maybe_synchronize_from_validators(
+        &self,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        let info = self.maybe_prepare_chain().await?;
+        self.maybe_synchronize_publisher_chains().await?;
+        self.find_some_received_certificates().await?;
         Ok(info)
     }
 
     /// Processes the last pending block
     #[instrument(level = "trace")]
-    pub async fn process_pending_block(
+    pub async fn maybe_process_pending_block(
         &self,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
-        self.synchronize_from_validators().await?;
+        self.maybe_synchronize_from_validators().await?;
         self.process_pending_block_without_prepare().await
     }
 
@@ -3101,7 +3113,7 @@ impl<Env: Environment> ChainClient<Env> {
         new_weight: u64,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
-            let ownership = self.prepare_chain().await?.manager.ownership;
+            let ownership = self.maybe_prepare_chain().await?.manager.ownership;
             ensure!(
                 ownership.is_active(),
                 ChainError::InactiveChain(self.chain_id)
@@ -3393,7 +3405,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn process_inbox(
         &self,
     ) -> Result<(Vec<ConfirmedBlockCertificate>, Option<RoundTimeout>), ChainClientError> {
-        self.prepare_chain().await?;
+        self.maybe_prepare_chain().await?;
         self.process_inbox_without_prepare().await
     }
 
@@ -3505,7 +3517,8 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         revoked_epoch: Epoch,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.prepare_chain().await?;
+        // TODO: should we have a loop like change_ownership.
+        self.maybe_prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees().await?;
         ensure!(
             revoked_epoch < current_epoch,

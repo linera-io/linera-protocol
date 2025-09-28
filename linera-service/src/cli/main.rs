@@ -405,7 +405,7 @@ impl Runnable for Job {
                 info!("Synchronizing chain information and querying the local balance");
                 warn!("This command is deprecated. Use `linera sync && linera query-balance` instead.");
                 let time_start = Instant::now();
-                chain_client.synchronize_from_validators().await?;
+                chain_client.maybe_synchronize_from_validators().await?;
                 let result = chain_client.query_owner_balance(account.owner).await;
                 context.update_wallet_from_client(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
@@ -428,7 +428,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id);
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
-                chain_client.synchronize_from_validators().await?;
+                chain_client.maybe_synchronize_from_validators().await?;
                 context.update_wallet_from_client(&chain_client).await?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -1612,7 +1612,7 @@ impl Runnable for Job {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Committing pending block for chain {}", chain_id);
                 let chain_client = context.make_chain_client(chain_id);
-                match chain_client.process_pending_block().await? {
+                match chain_client.maybe_process_pending_block().await? {
                     ClientOutcome::Committed(Some(certificate)) => {
                         info!("Pending block committed successfully.");
                         println!("{}", certificate.hash());
@@ -1682,7 +1682,7 @@ impl Runnable for Job {
                 let committee = faucet.current_committee().await?;
                 let chain_client = context.make_chain_client(network_description.admin_chain_id);
                 chain_client
-                    .synchronize_chain_state_from_committee(committee)
+                    .maybe_synchronize_chain_state_from_committee(committee)
                     .await?;
                 context.update_wallet_from_client(&chain_client).await?;
             }
@@ -1698,7 +1698,7 @@ impl Runnable for Job {
                 context.client.track_chain(chain_id);
                 let chain_client = context.make_chain_client(chain_id);
                 if sync {
-                    chain_client.synchronize_from_validators().await?;
+                    chain_client.maybe_synchronize_from_validators().await?;
                 } else {
                     chain_client.fetch_chain_info().await?;
                 }

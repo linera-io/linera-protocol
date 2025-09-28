@@ -180,7 +180,7 @@ where
         let mut hashes = Vec::new();
         loop {
             let client = self.context.lock().await.make_chain_client(chain_id);
-            client.synchronize_from_validators().await?;
+            client.maybe_synchronize_from_validators().await?;
             let result = client.process_inbox_without_prepare().await;
             self.context.lock().await.update_wallet(&client).await?;
             let (certificates, maybe_timeout) = result?;
@@ -199,7 +199,7 @@ where
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
         let client = self.context.lock().await.make_chain_client(chain_id);
-        let outcome = client.process_pending_block().await?;
+        let outcome = client.maybe_process_pending_block().await?;
         self.context.lock().await.update_wallet(&client).await?;
         match outcome {
             ClientOutcome::Committed(Some(certificate)) => Ok(Some(certificate.hash())),
