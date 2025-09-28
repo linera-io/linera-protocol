@@ -44,7 +44,7 @@ pub const DEFAULT_GRACE_PERIOD: f64 = 0.2;
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
 /// Used for `communicate_chain_action`
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum CommunicateAction {
     SubmitBlock {
         proposal: Box<BlockProposal>,
