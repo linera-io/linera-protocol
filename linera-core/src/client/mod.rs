@@ -3033,6 +3033,11 @@ impl<Env: Environment> ChainClient<Env> {
             .chain(&manager.requested_proposed)
             .any(|proposal| proposal.content.round == manager.current_round)
             || (manager.current_round.is_fast() && has_oracle_responses);
+        info!("current round: {}", manager.current_round);
+        info!("conflict: {}", conflict);
+        info!("ownerskip: {:?}", manager.ownership);
+        info!("next candidate round: {:?}", manager.ownership.next_round(manager.current_round));
+
         let round = if !conflict {
             manager.current_round
         } else if let Some(round) = manager
