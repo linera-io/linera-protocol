@@ -497,6 +497,8 @@ where
         let Ok(height) = target_block_height.try_sub_one() else {
             if let Some(cert) = self.local_node.chain_info(chain_id).await?.manager.timeout {
                 self.remote_node.handle_timeout_certificate(*cert).await?;
+            } else {
+                tracing::warn!("NOPE 0");
             }
             return Ok(());
         };
@@ -567,8 +569,13 @@ where
         let local_info = self.local_node.chain_info(chain_id).await?;
         if let Some(cert) = local_info.manager.timeout {
             if (local_info.next_block_height, cert.round) >= (remote_height, remote_round) {
+                tracing::debug!("send_chain_information --> {:?}", cert);
                 self.remote_node.handle_timeout_certificate(*cert).await?;
+            } else {
+                tracing::debug!("send_chain_information NOPE 1");
             }
+        } else {
+            tracing::debug!("send_chain_information NOPE 2");
         }
         Ok(())
     }

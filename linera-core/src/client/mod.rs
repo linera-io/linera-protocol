@@ -992,6 +992,9 @@ impl<Env: Environment> Client<Env> {
         let mut local_info = self.local_node.chain_info(chain_id).await?;
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let remote_info = remote_node.handle_chain_info_query(query).await?;
+
+        info!("{:?}", remote_info);
+
         if let Some(new_info) = self
             .download_certificates_from(remote_node, chain_id, remote_info.next_block_height)
             .await?
@@ -1915,17 +1918,17 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
-        let mut info = self.synchronize_to_known_height().await?;
+        self.synchronize_to_known_height().await?;
 
-        if self.has_other_owners(&info.manager.ownership) {
+//        if self.has_other_owners(&info.manager.ownership) {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
-            info = self
-                .client
-                .maybe_synchronize_chain_state(self.chain_id)
-                .await?;
-        }
+        let info = self
+            .client
+            .maybe_synchronize_chain_state(self.chain_id)
+            .await?;
+//        }
 
         if info.epoch > self.client.admin_committees().await?.0 {
             self.client
