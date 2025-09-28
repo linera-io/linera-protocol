@@ -429,55 +429,6 @@ where
         }
     }
 
-    async fn send_request_timeout(
-        &mut self,
-        chain_id: ChainId,
-        height: BlockHeight,
-        local_round: Round,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let query = ChainInfoQuery::new(chain_id).with_timeout(height, local_round);
-        loop {
-            match self
-                .remote_node
-                .handle_chain_info_query(query.clone())
-                .await
-            {
-                Ok(info) => return Ok(info),
-                Err(NodeError::WrongRound(round)) => {
-                    debug!(
-                        "Failed to request timeout from validator {} because it sees chain {} at round {} instead of {}: ",
-                        self.remote_node.public_key,
-                        chain_id,
-                        round,
-                        local_round,
-                    );
-                    // The timeout is for a different round, so we need to update the validator.
-                    // TODO: this should probably be more specific as to which rounds are retried.
-                    self.send_chain_information(
-                        chain_id,
-                        height,
-                        CrossChainMessageDelivery::NonBlocking,
-                    )
-                    .await?;
-                }
-                Err(NodeError::UnexpectedBlockHeight {
-                    expected_block_height,
-                    found_block_height,
-                }) if expected_block_height < found_block_height => {
-                    // The proposal is for a later block height, so we need to update the validator.
-                    self.send_chain_information(
-                        chain_id,
-                        found_block_height,
-                        CrossChainMessageDelivery::NonBlocking,
-                    )
-                    .await?;
-                }
-                // Fail immediately on other errors.
-                Err(err) => return Err(err.into()),
-            }
-        }
-    }
-
     async fn update_admin_chain(&mut self) -> Result<(), ChainClientError> {
         let local_admin_info = self.local_node.chain_info(self.admin_id).await?;
         Box::pin(self.send_chain_information(
@@ -652,8 +603,9 @@ where
                     NodeError::MissingVoteInValidatorResponse("finalize a block".into())
                 })?
             }
-            CommunicateAction::RequestTimeout { height, round, .. } => {
-                let info = self.send_request_timeout(chain_id, height, round).await?;
+            CommunicateAction::RequestTimeout { round, height, .. } => {
+                let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
+                let info = self.remote_node.handle_chain_info_query(query).await?;
                 info.manager.timeout_vote.ok_or_else(|| {
                     NodeError::MissingVoteInValidatorResponse("request a timeout".into())
                 })?
