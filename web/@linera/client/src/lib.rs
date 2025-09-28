@@ -88,6 +88,7 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     certificate_download_batch_size: linera_core::client::DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     chain_worker_ttl: Duration::from_secs(30),
     grace_period: linera_core::DEFAULT_GRACE_PERIOD,
+    max_joined_tasks: 100,
 
     // TODO(linera-protocol#2944): separate these out from the
     // `ClientOptions` struct, since they apply only to the CLI/native
