@@ -2306,6 +2306,7 @@ impl<Env: Environment> ChainClient<Env> {
             round,
             chain_id,
         };
+        info!("{:?}", action);
         let value = Timeout::new(chain_id, height, info.epoch);
         let certificate = Box::new(
             self.client
