@@ -276,7 +276,12 @@ where
                         .layer(PrometheusMetricsMiddlewareLayer)
                         .into_inner(),
                 )
-                .layer(tower_http::cors::CorsLayer::permissive())
+                .layer(
+                    // enable
+                    // [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)
+                    // for the proxy to originate anywhere
+                    tower_http::cors::CorsLayer::permissive(),
+                )
                 .layer(GrpcWebLayer::new())
                 .accept_http1(true)
                 .add_service(health_service)
