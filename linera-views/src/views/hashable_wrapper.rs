@@ -17,7 +17,7 @@ use crate::{
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
-/// A hash for `ContainerView` and storing of the hash for memoization purposes
+/// Wrapping a view to memoize its hash.
 #[derive(Debug)]
 pub struct WrappedHashableContainerView<C, W, O> {
     _phantom: PhantomData<C>,
@@ -26,7 +26,7 @@ pub struct WrappedHashableContainerView<C, W, O> {
     inner: W,
 }
 
-/// Key tags to create the sub-keys of a `MapView` on top of the base key.
+/// Key tags to create the sub-keys of a `WrappedHashableContainerView` on top of the base key.
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view.

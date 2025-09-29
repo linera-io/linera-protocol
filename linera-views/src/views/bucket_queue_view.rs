@@ -12,6 +12,7 @@ use crate::{
     common::{from_bytes_option, from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
@@ -716,6 +717,10 @@ where
 /// Type wrapping `QueueView` while memoizing the hash.
 pub type HashedBucketQueueView<C, T, const N: usize> =
     WrappedHashableContainerView<C, BucketQueueView<C, T, N>, HasherOutput>;
+
+/// Wrapper around `BucketQueueView` to compute hashes based on the history of changes.
+pub type HistoricallyHashedBucketQueueView<C, T, const N: usize> =
+    HistoricallyHashableView<C, BucketQueueView<C, T, N>>;
 
 #[cfg(with_graphql)]
 mod graphql {
