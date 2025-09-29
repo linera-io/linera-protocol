@@ -1045,10 +1045,7 @@ impl<Env: Environment> Client<Env> {
         )
         .await
         {
-            warn!(
-                "Failed to synchronize chain state from at least a quorum of nodes: {}",
-                e
-            );
+            warn!("Failed to synchronize chain state from at least a quorum of nodes: {e}");
         }
 
         self.local_node

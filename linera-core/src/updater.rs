@@ -17,7 +17,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round},
     ensure,
-    identifiers::{BlobId, ChainId, StreamId},
+    identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::{
@@ -561,6 +561,28 @@ where
             }
             info
         } else {
+            // The remote node might not know about the chain yet.
+            let blob_states = self
+                .local_node
+                .read_blob_states_from_storage(&[BlobId::new(
+                    chain_id.0,
+                    BlobType::ChainDescription,
+                )])
+                .await?;
+            let mut chain_heights = BTreeMap::new();
+            for blob_state in blob_states {
+                let block_chain_id = blob_state.chain_id;
+                let block_height = blob_state.block_height.try_add_one()?;
+                chain_heights
+                    .entry(block_chain_id)
+                    .and_modify(|h| *h = block_height.max(*h))
+                    .or_insert(block_height);
+            }
+            self.send_chain_info_up_to_heights(
+                chain_heights,
+                CrossChainMessageDelivery::NonBlocking,
+            )
+            .await?;
             let query = ChainInfoQuery::new(chain_id);
             self.remote_node.handle_chain_info_query(query).await?
         };
