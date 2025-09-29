@@ -3042,7 +3042,7 @@ impl<Env: Environment> ChainClient<Env> {
         } else if let Some(round) = manager
             .ownership
             .next_round(manager.current_round)
-            .filter(|_| manager.current_round.is_multi_leader() || manager.current_round.is_fast() || true) // HACK
+            .filter(|_| manager.current_round.is_multi_leader() || manager.current_round.is_fast())
         {
             round
         } else if let Some(timeout) = info.round_timeout() {
