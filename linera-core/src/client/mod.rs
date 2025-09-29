@@ -1033,7 +1033,7 @@ impl<Env: Environment> Client<Env> {
 
         let validators = self.make_nodes(&committee)?;
         Box::pin(self.fetch_chain_info(chain_id, &validators)).await?;
-        if let Err(e) = communicate_with_quorum(
+        communicate_with_quorum(
             &validators,
             &committee,
             |_: &()| (),
@@ -1043,10 +1043,7 @@ impl<Env: Environment> Client<Env> {
             },
             self.options.grace_period,
         )
-        .await
-        {
-            warn!("Failed to synchronize chain state from at least a quorum of nodes: {e}");
-        }
+        .await?;
 
         self.local_node
             .chain_info(chain_id)
@@ -2298,32 +2295,34 @@ impl<Env: Environment> ChainClient<Env> {
         let (_, committee) = self.admin_committee().await?;
         let nodes = self.client.make_nodes(&committee)?;
         // Proceed to downloading received certificates.
-        let received_certificate_batches = Arc::new(std::sync::Mutex::new(Vec::new()));
         let result = communicate_with_quorum(
             &nodes,
             &committee,
             |_| (),
             |remote_node| {
                 let client = &self.client;
-                let received_certificate_batches = Arc::clone(&received_certificate_batches);
                 Box::pin(async move {
-                    let batch = client
+                    client
                         .synchronize_received_certificates_from_validator(chain_id, &remote_node)
-                        .await?;
-                    let mut batches = received_certificate_batches.lock().unwrap();
-                    batches.push(batch);
-                    Ok(())
+                        .await
                 })
             },
             self.options.grace_period,
         )
         .await;
-        if let Err(e) = result {
-            warn!("Failed to synchronize received certificates from at least a quorum of validators: {e}");
-        }
-        let received_certificate_batches = {
-            let mut received_certificate_batches = received_certificate_batches.lock().unwrap();
-            std::mem::take(received_certificate_batches.as_mut())
+        let received_certificate_batches = match result {
+            Ok(((), received_certificate_batches)) => received_certificate_batches
+                .into_iter()
+                .map(|(_, batch)| batch)
+                .collect(),
+            Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
+                // The chain is visibly not active (yet or any more) so there is no need
+                // to synchronize received certificates.
+                return Ok(());
+            }
+            Err(error) => {
+                return Err(error.into());
+            }
         };
         self.receive_certificates_from_validators(received_certificate_batches)
             .await;
