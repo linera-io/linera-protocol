@@ -27,7 +27,7 @@ use linera_chain::{
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{ResultReadCertificates, Storage};
 use thiserror::Error;
-use tracing::{instrument, Level};
+use tracing::{debug, instrument, Level};
 
 use crate::{
     client::ChainClientError,
@@ -315,7 +315,14 @@ where
                 .await
             {
                 Ok(info) => return Ok(info),
-                Err(NodeError::WrongRound(_round)) => {
+                Err(NodeError::WrongRound(round)) => {
+                    debug!(
+                        "Failed to send block proposal to validator {} because it sees chain {} at round {} instead of {}: ",
+                        self.remote_node.public_key,
+                        chain_id,
+                        round,
+                        proposal.content.round,
+                    );
                     // The proposal is for a different round, so we need to update the validator.
                     // TODO: this should probably be more specific as to which rounds are retried.
                     self.send_chain_information(
@@ -441,6 +448,8 @@ where
         let Ok(height) = target_block_height.try_sub_one() else {
             if let Some(cert) = self.local_node.chain_info(chain_id).await?.manager.timeout {
                 self.remote_node.handle_timeout_certificate(*cert).await?;
+            } else {
+                tracing::warn!("NOPE 0");
             }
             return Ok(());
         };
@@ -511,8 +520,13 @@ where
         let local_info = self.local_node.chain_info(chain_id).await?;
         if let Some(cert) = local_info.manager.timeout {
             if (local_info.next_block_height, cert.round) >= (remote_height, remote_round) {
+                tracing::debug!("send_chain_information --> {:?}", cert);
                 self.remote_node.handle_timeout_certificate(*cert).await?;
+            } else {
+                tracing::debug!("send_chain_information NOPE 1");
             }
+        } else {
+            tracing::debug!("send_chain_information NOPE 2");
         }
         Ok(())
     }

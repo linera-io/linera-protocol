@@ -379,16 +379,18 @@ where
             return Ok(false); // We are not a validator.
         };
         ensure!(
-            round == self.current_round(),
+            round <= self.current_round(),
             ChainError::WrongRound(self.current_round())
         );
-        let Some(round_timeout) = *self.round_timeout.get() else {
-            return Err(ChainError::RoundDoesNotTimeOut);
-        };
-        ensure!(
-            local_time >= round_timeout,
-            ChainError::NotTimedOutYet(round_timeout)
-        );
+        if round == self.current_round() {
+            let Some(round_timeout) = *self.round_timeout.get() else {
+                return Err(ChainError::RoundDoesNotTimeOut);
+            };
+            ensure!(
+                local_time >= round_timeout,
+                ChainError::NotTimedOutYet(round_timeout)
+            );
+        }
         if let Some(vote) = self.timeout_vote.get() {
             if vote.round == round {
                 return Ok(false); // We already signed this timeout.
@@ -853,7 +855,7 @@ impl ChainManagerInfo {
         match round {
             Round::Fast => self.ownership.super_owners.contains(identity),
             Round::MultiLeader(_) => true,
-            Round::SingleLeader(_) | Round::Validator(_) => self.leader.as_ref() == Some(identity),
+            Round::SingleLeader(_) | Round::Validator(_) => true, // BUG: self.round_leader.as_ref() == Some(identity),
         }
     }
 

@@ -295,7 +295,7 @@ where
         sender.local_balance().await.unwrap(),
         Amount::from_millis(4000)
     );
-    sender.synchronize_from_validators().await.unwrap();
+    sender.maybe_synchronize_from_validators().await.unwrap();
     // Can still use the chain.
     sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
@@ -342,7 +342,7 @@ where
         sender.local_balance().await.unwrap(),
         Amount::from_millis(4000)
     );
-    sender.synchronize_from_validators().await.unwrap();
+    sender.maybe_synchronize_from_validators().await.unwrap();
     // Cannot use the chain any more.
     assert_matches!(
         sender
@@ -388,7 +388,7 @@ where
         sender.local_balance().await.unwrap(),
         Amount::from_tokens(4)
     );
-    sender.synchronize_from_validators().await.unwrap();
+    sender.maybe_synchronize_from_validators().await.unwrap();
     // Can still use the chain with the old client.
     sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
@@ -411,7 +411,7 @@ where
         client.local_balance().await,
         Err(ChainClientError::WalletSynchronizationError)
     );
-    client.synchronize_from_validators().await.unwrap();
+    client.maybe_synchronize_from_validators().await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -438,7 +438,7 @@ where
     // Half the validators voted for one block, half for the other. We need to make a proposal in
     // the next round to succeed.
     builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
-    client.synchronize_from_validators().await.unwrap();
+    client.maybe_synchronize_from_validators().await.unwrap();
     client.process_inbox().await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
@@ -452,7 +452,7 @@ where
     assert_eq!(client.local_balance().await.unwrap(), Amount::ONE);
 
     // The other client doesn't know the new round number yet:
-    sender.synchronize_from_validators().await.unwrap();
+    sender.maybe_synchronize_from_validators().await.unwrap();
     sender.process_inbox().await.unwrap();
     assert_eq!(client.chain_info().await?, sender.chain_info().await?);
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
@@ -464,7 +464,7 @@ where
 
     // That's it, we spent all our money on this test!
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
-    client.synchronize_from_validators().await.unwrap();
+    client.maybe_synchronize_from_validators().await.unwrap();
     client.process_inbox().await.unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     Ok(())
@@ -755,7 +755,7 @@ where
         )
         .await
         .unwrap_ok_committed();
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].block();
     assert_eq!(block.body.transactions.len(), 1);
@@ -897,7 +897,7 @@ where
     // Local balance is lagging.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Obtain the certificate but do not process the inbox yet.
-    client2.synchronize_from_validators().await.unwrap();
+    client2.maybe_synchronize_from_validators().await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
@@ -932,7 +932,7 @@ where
         client2.local_balance().await.unwrap(),
         Amount::from_tokens(2)
     );
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     client1.process_inbox().await.unwrap();
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
     // Local balance from client2 is now consolidated.
@@ -1051,12 +1051,12 @@ where
     assert_insufficient_funding(obtained_error, ChainExecutionContext::Operation(0));
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2
-        .process_pending_block()
+        .maybe_process_pending_block()
         .await
         .unwrap_ok_committed()
         .is_none());
     // Retrying the whole command works after synchronization.
-    client2.synchronize_from_validators().await.unwrap();
+    client2.maybe_synchronize_from_validators().await.unwrap();
     let certificate = client2
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -1125,7 +1125,7 @@ where
 
     // Root chain 1 receives the notification about the new epoch.
     // This must happen before the old committee is removed.
-    user.synchronize_from_validators().await.unwrap();
+    user.maybe_synchronize_from_validators().await.unwrap();
     user.process_inbox().await.unwrap();
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
     admin.revoke_epochs(Epoch::ZERO).await.unwrap();
@@ -1166,7 +1166,7 @@ where
         Err(ChainClientError::CommitteeSynchronizationError)
     );
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
-    user.synchronize_from_validators().await.unwrap();
+    user.maybe_synchronize_from_validators().await.unwrap();
 
     user.process_inbox().await.unwrap();
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
@@ -1227,7 +1227,7 @@ where
 
     // Despite the restrictive application permissions, some system operations are still allowed,
     // and the user chain can migrate to the new epoch.
-    user.synchronize_from_validators().await?;
+    user.maybe_synchronize_from_validators().await?;
     user.process_inbox().await?;
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(3));
 
@@ -1421,7 +1421,7 @@ where
     // Try to read the blob. This is a different client but on the same chain, so when we
     // synchronize this with the validators before executing the block, we'll actually download
     // and cache locally the blobs that were published by `client_a`. So this will succeed.
-    client_1b.prepare_chain().await?;
+    client_1b.maybe_prepare_chain().await?;
     let certificate = client_1b
         .execute_operation(SystemOperation::VerifyBlob { blob_id: blob0_id })
         .await?
@@ -1435,7 +1435,7 @@ where
     // locked now, but the validators won't.
     builder.set_fault_type([0, 1, 2], FaultType::DontProcessValidated);
 
-    client_2a.synchronize_from_validators().await.unwrap();
+    client_2a.maybe_synchronize_from_validators().await.unwrap();
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
@@ -1490,7 +1490,7 @@ where
     }
 
     // Client 2B should be able to synchronize the locking block and the blobs from validator 3.
-    client_2b.synchronize_from_validators().await.unwrap();
+    client_2b.maybe_synchronize_from_validators().await.unwrap();
     let info2_b = client_2b.chain_info_with_manager_values().await?;
     assert_eq!(
         LockingBlock::Regular(validated),
@@ -1587,7 +1587,7 @@ where
 
     builder.set_fault_type([0, 1, 2], FaultType::DontProcessValidated);
 
-    client2_a.synchronize_from_validators().await.unwrap();
+    client2_a.maybe_synchronize_from_validators().await.unwrap();
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
@@ -1627,7 +1627,7 @@ where
     builder.set_fault_type([2], FaultType::Offline);
     builder.set_fault_type([0, 1, 3], FaultType::Honest);
 
-    client2_b.prepare_chain().await.unwrap();
+    client2_b.maybe_prepare_chain().await.unwrap();
     let recipient = Account::burn_address(client2_b.chain_id());
     let bt_certificate = client2_b
         .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
@@ -1691,7 +1691,7 @@ where
         )
         .await?;
     client2.set_preferred_owner(owner2);
-    client2.synchronize_from_validators().await.unwrap();
+    client2.maybe_synchronize_from_validators().await.unwrap();
 
     // Client 1 makes a proposal to only validators 0 and 1.
     builder.set_fault_type([2, 3], FaultType::OfflineWithInfo);
@@ -1726,7 +1726,7 @@ where
     // Once all validators are functional again, a new proposal should succeed.
     builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
 
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     client1.publish_data_blob(b"foo".to_vec()).await?;
 
     assert_eq!(
@@ -1789,7 +1789,7 @@ where
     let blob0_bytes = b"blob0".to_vec();
     let blob0_id = Blob::new(BlobContent::new_data(blob0_bytes.clone())).id();
 
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     // Publish blob0 on chain 1
     let publish_certificate0 = client1
         .publish_data_blob(blob0_bytes)
@@ -1802,7 +1802,7 @@ where
     let blob2_bytes = b"blob2".to_vec();
     let blob2_id = Blob::new(BlobContent::new_data(blob2_bytes.clone())).id();
 
-    client2.synchronize_from_validators().await.unwrap();
+    client2.maybe_synchronize_from_validators().await.unwrap();
     // Publish blob2 on chain 2
     let publish_certificate2 = client2
         .publish_data_blob(blob2_bytes)
@@ -1815,7 +1815,7 @@ where
     builder.set_fault_type([0, 1], FaultType::DontProcessValidated);
     builder.set_fault_type([2], FaultType::DontSendConfirmVote);
 
-    client3_a.synchronize_from_validators().await.unwrap();
+    client3_a.maybe_synchronize_from_validators().await.unwrap();
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
@@ -1885,7 +1885,7 @@ where
     builder.set_fault_type([2], FaultType::Offline);
     builder.set_fault_type([3], FaultType::DontSendConfirmVote);
 
-    client3_b.synchronize_from_validators().await.unwrap();
+    client3_b.maybe_synchronize_from_validators().await.unwrap();
     let blob3 = Blob::new_data(b"blob3".to_vec());
     let blob3_hash = blob3.id().hash;
 
@@ -1946,7 +1946,7 @@ where
     builder.set_fault_type([1], FaultType::Offline);
     builder.set_fault_type([0, 2, 3], FaultType::Honest);
 
-    client3_c.synchronize_from_validators().await.unwrap();
+    client3_c.maybe_synchronize_from_validators().await.unwrap();
     let blob4_data = b"blob4".to_vec();
     let blob4 = Blob::new(BlobContent::new_data(blob4_data.clone()));
     let bt_certificate = client3_c
@@ -2008,7 +2008,7 @@ where
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
     client.change_ownership(ownership.clone()).await.unwrap();
 
-    let info = observer.synchronize_chain_state(chain_id).await?;
+    let info = observer.maybe_synchronize_chain_state(chain_id).await?;
     assert_eq!(info.manager.ownership, ownership);
 
     let manager = client.chain_info().await.unwrap().manager;
@@ -2046,7 +2046,7 @@ where
         .await;
 
     // Another client can process the timeout certificate, to arrive at the same round.
-    let info = observer.synchronize_chain_state(chain_id).await?;
+    let info = observer.maybe_synchronize_chain_state(chain_id).await?;
     assert_eq!(info.manager.current_round, expected_round);
 
     let round = loop {
@@ -2163,7 +2163,7 @@ where
     // Client 1 thinks it is madness to burn 3 tokens! They want to publish a blob instead.
     // The validators are still faulty: They validate blocks but don't confirm them.
     builder.set_fault_type([2], FaultType::DontSendConfirmVote);
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     let manager = client1
         .chain_info_with_manager_values()
         .await
@@ -2182,7 +2182,7 @@ where
 
     // Finally, enough validators are online and honest again.
     builder.set_fault_type([2], FaultType::Honest);
-    client0.synchronize_from_validators().await.unwrap();
+    client0.maybe_synchronize_from_validators().await.unwrap();
     let manager = client0
         .chain_info_with_manager_values()
         .await
@@ -2200,7 +2200,7 @@ where
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
         .unwrap();
-    client0.synchronize_from_validators().await.unwrap();
+    client0.maybe_synchronize_from_validators().await.unwrap();
     client0.process_inbox().await.unwrap();
     assert_eq!(
         client0.local_balance().await.unwrap(),
@@ -2209,12 +2209,12 @@ where
     assert!(client0.pending_proposal().is_none());
 
     // Transfer another token so Client 1 sees that the blob is already published
-    client1.prepare_chain().await.unwrap();
+    client1.maybe_prepare_chain().await.unwrap();
     client1
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
         .unwrap();
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     client1.process_inbox().await.unwrap();
     assert_eq!(
         client1.local_balance().await.unwrap(),
@@ -2252,7 +2252,7 @@ where
     // The client tries to burn another token. Before that, they automatically finalize the
     // pending block, which transfers 3 tokens, leaving 10 - 3 - 1 = 6.
     client.burn(AccountOwner::CHAIN, Amount::ONE).await.unwrap();
-    client.synchronize_from_validators().await.unwrap();
+    client.maybe_synchronize_from_validators().await.unwrap();
     client.process_inbox().await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
@@ -2327,7 +2327,7 @@ where
     // proposal in round 1.
     builder.set_fault_type([0], FaultType::Offline);
     builder.set_fault_type([3], FaultType::OfflineWithInfo);
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     let manager = client1
         .chain_info_with_manager_values()
         .await
@@ -2345,7 +2345,7 @@ where
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
     builder.set_fault_type([0, 1, 2], FaultType::Honest);
     builder.set_fault_type([3], FaultType::Offline);
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     let manager = client1
         .chain_info_with_manager_values()
         .await
@@ -2363,7 +2363,7 @@ where
         .unwrap();
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
-    client0.synchronize_from_validators().await.unwrap();
+    client0.maybe_synchronize_from_validators().await.unwrap();
     assert_eq!(
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(3)
@@ -2447,7 +2447,7 @@ where
     clock.add(TimeDelta::from_secs(5));
     builder.set_fault_type([0], FaultType::Offline);
     builder.set_fault_type([1, 2, 3], FaultType::Honest);
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     client1.request_leader_timeout().await.unwrap();
 
     // Client 1 wants to burn 2 tokens. But now validators 0 and 3 is offline, so they don't learn
@@ -2461,7 +2461,7 @@ where
     // Finally, three validators are online and honest again. Client 1 realizes there has been a
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
     builder.set_fault_type([0, 1, 2], FaultType::Honest);
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     assert!(client1.pending_proposal().is_some());
     client1
         .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
@@ -2469,10 +2469,10 @@ where
         .unwrap();
     // Round 0 needs to time out again, so client 1 is actually allowed to propose.
     clock.add(TimeDelta::from_secs(5));
-    client1.process_pending_block().await.unwrap();
+    client1.maybe_process_pending_block().await.unwrap();
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
-    client0.synchronize_from_validators().await.unwrap();
+    client0.maybe_synchronize_from_validators().await.unwrap();
     assert_eq!(
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(1)
@@ -2590,7 +2590,7 @@ where
         )
         .await
         .unwrap_ok_committed();
-    client3.synchronize_from_validators().await.unwrap();
+    client3.maybe_synchronize_from_validators().await.unwrap();
     assert_eq!(certificate.round, Round::Fast);
 
     builder.set_fault_type([2], FaultType::Offline);
@@ -2714,7 +2714,7 @@ where
         .unwrap();
 
     // Process the inbox to migrate the client's chain.
-    client1.synchronize_from_validators().await.unwrap();
+    client1.maybe_synchronize_from_validators().await.unwrap();
     client1.process_inbox().await.unwrap();
 
     // Open a chain
@@ -2735,7 +2735,7 @@ where
         .make_client(new_chain_desc.id(), None, BlockHeight::ZERO)
         .await?;
     client2.set_preferred_owner(new_public_key.into());
-    client2.synchronize_from_validators().await.unwrap();
+    client2.maybe_synchronize_from_validators().await.unwrap();
     client2
         .receive_certificate_and_update_validators(certificate1)
         .await

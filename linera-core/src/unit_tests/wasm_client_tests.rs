@@ -147,7 +147,7 @@ where
         .unwrap_ok_committed();
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
 
-    creator.synchronize_from_validators().await.unwrap();
+    creator.maybe_synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
 
     // No fuel was used so far.
@@ -323,7 +323,7 @@ where
         module_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
 
     // Creator receives the bytecode files then creates the app.
-    creator.synchronize_from_validators().await.unwrap();
+    creator.maybe_synchronize_from_validators().await.unwrap();
     let initial_value = 10_u64;
     let (application_id1, _) = creator
         .create_application(module_id1, &(), &initial_value, vec![])
@@ -368,7 +368,7 @@ where
     let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
     assert_eq!(response_json["data"], json!({"value": 10}));
 
-    receiver.synchronize_from_validators().await.unwrap();
+    receiver.maybe_synchronize_from_validators().await.unwrap();
     receiver
         .receive_certificate_and_update_validators(cert)
         .await
@@ -559,7 +559,7 @@ where
         .await
         .unwrap_ok_committed();
 
-    receiver.synchronize_from_validators().await.unwrap();
+    receiver.maybe_synchronize_from_validators().await.unwrap();
     {
         // The receiver did not execute the sender chain.
         let chain = receiver
@@ -782,7 +782,7 @@ where
         .unwrap_ok_committed();
 
     // Unsubscribe the receiver.
-    sender.synchronize_from_validators().await.unwrap();
+    sender.maybe_synchronize_from_validators().await.unwrap();
     sender
         .receive_certificate_and_update_validators(cert)
         .await
@@ -955,14 +955,14 @@ where
     client_b.set_preferred_owner(owner_b);
 
     // Client A makes the first move, starting the game at time 0.
-    client_a.synchronize_from_validators().await?;
+    client_a.maybe_synchronize_from_validators().await?;
     let move_op = HexOperation::MakeMove { x: 5, y: 5 };
     client_a
         .execute_operation(Operation::user(app_id, &move_op)?)
         .await?;
 
     // Client B tries to make a move but fails: the validators go down after signing to validate.
-    client_b.synchronize_from_validators().await?;
+    client_b.maybe_synchronize_from_validators().await?;
     builder.set_fault_type([0, 1, 2, 3], FaultType::DontProcessValidated);
     let move_op = HexOperation::MakeMove { x: 4, y: 4 };
     let result = client_b
@@ -979,7 +979,7 @@ where
     // Now player A claims victory since B has timed out. This works because it sees the existing
     // block proposal and makes a new proposal in the next round instead.
     let claim_victory_operation = HexOperation::ClaimVictory;
-    client_a.synchronize_from_validators().await?;
+    client_a.maybe_synchronize_from_validators().await?;
     client_a
         .execute_operation(Operation::user(app_id, &claim_victory_operation)?)
         .await?;

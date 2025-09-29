@@ -160,7 +160,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         .transfer(AccountOwner::CHAIN, Amount::ONE, recipient0)
         .await?;
     for i in 0.. {
-        client0.synchronize_from_validators().boxed().await?;
+        client0.maybe_synchronize_from_validators().boxed().await?;
         let balance = client0.local_balance().await?;
         if balance == Amount::from_tokens(2) {
             break;
