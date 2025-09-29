@@ -85,7 +85,7 @@ where
         assert_eq!(chain_id, self.context().extra().chain_id);
         let context = OperationContext {
             chain_id,
-            authenticated_signer: None,
+            authenticated_owner: None,
             height: application_description.block_height,
             round: None,
             timestamp: local_time,
@@ -147,10 +147,10 @@ pub enum UserAction {
 impl UserAction {
     pub(crate) fn signer(&self) -> Option<AccountOwner> {
         match self {
-            UserAction::Instantiate(context, _) => context.authenticated_signer,
-            UserAction::Operation(context, _) => context.authenticated_signer,
+            UserAction::Instantiate(context, _) => context.authenticated_owner,
+            UserAction::Operation(context, _) => context.authenticated_owner,
             UserAction::ProcessStreams(_, _) => None,
-            UserAction::Message(context, _) => context.authenticated_signer,
+            UserAction::Message(context, _) => context.authenticated_owner,
         }
     }
 

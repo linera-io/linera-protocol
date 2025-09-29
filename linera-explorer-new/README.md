@@ -114,7 +114,7 @@ The explorer expects the following SQLite tables:
 - `id` (INTEGER, PRIMARY KEY)
 - `bundle_id` (INTEGER)
 - `message_index` (INTEGER)
-- `authenticated_signer` (BLOB)
+- `authenticated_owner` (BLOB)
 - `grant_amount` (INTEGER)
 - `refund_grant_to` (BLOB)
 - `message_kind` (TEXT)

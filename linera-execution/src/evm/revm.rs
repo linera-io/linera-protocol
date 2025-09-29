@@ -459,7 +459,7 @@ type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<R
 // functionalities accessed from the EVM.
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-// This is the zero address used when no address can be obtained from `authenticated_signer`
+// This is the zero address used when no address can be obtained from `authenticated_owner`
 // and `authenticated_caller_id`. This scenario does not occur if an Address20 user calls or
 // if an EVM contract calls another EVM contract.
 const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
@@ -503,8 +503,8 @@ enum BaseRuntimePrecompile {
 /// Some functionalities from the ContractRuntime not in BaseRuntime
 #[derive(Debug, Serialize, Deserialize)]
 enum ContractRuntimePrecompile {
-    /// Calling `authenticated_signer` of `ContractRuntime`
-    AuthenticatedSigner,
+    /// Calling `authenticated_owner` of `ContractRuntime`
+    AuthenticatedOwner,
     /// Calling `message_origin_chain_id` of `ContractRuntime`
     MessageOriginChainId,
     /// Calling `message_is_bouncing` of `ContractRuntime`
@@ -705,8 +705,8 @@ impl<'a> ContractPrecompile {
     ) -> Result<Vec<u8>, ExecutionError> {
         let mut runtime = context.db().0.runtime.lock().unwrap();
         match request {
-            ContractRuntimePrecompile::AuthenticatedSigner => {
-                let account_owner = runtime.authenticated_signer()?;
+            ContractRuntimePrecompile::AuthenticatedOwner => {
+                let account_owner = runtime.authenticated_owner()?;
                 Ok(bcs::to_bytes(&account_owner)?)
             }
 
@@ -1378,7 +1378,7 @@ where
             PROCESS_STREAMS_SELECTOR,
             "function process_streams(Linera.StreamUpdate[] memory streams)",
         )?;
-        // For process_streams, authenticated_signer and authenticated_called_id are None.
+        // For process_streams, authenticated_owner and authenticated_called_id are None.
         let caller = Address::ZERO;
         self.execute_no_return_operation(operation, "process_streams", caller)
     }
@@ -1501,7 +1501,7 @@ where
                 Address::ZERO
             });
         };
-        let account_owner = runtime.authenticated_signer()?;
+        let account_owner = runtime.authenticated_owner()?;
         if let Some(AccountOwner::Address20(address)) = account_owner {
             return Ok(Address::from(address));
         };

@@ -2081,7 +2081,7 @@ impl<Env: Environment> ChainClient<Env> {
             transactions,
             previous_block_hash: info.block_hash,
             height: info.next_block_height,
-            authenticated_signer: Some(super_owner),
+            authenticated_owner: Some(super_owner),
             timestamp,
         };
         let proposal = Box::new(
@@ -2572,7 +2572,7 @@ impl<Env: Environment> ChainClient<Env> {
             transactions,
             previous_block_hash: info.block_hash,
             height: info.next_block_height,
-            authenticated_signer: Some(identity),
+            authenticated_owner: Some(identity),
             timestamp,
         };
 
@@ -2751,7 +2751,7 @@ impl<Env: Environment> ChainClient<Env> {
             transactions,
             previous_block_hash: info.block_hash,
             height: info.next_block_height,
-            authenticated_signer: if owner == AccountOwner::CHAIN {
+            authenticated_owner: if owner == AccountOwner::CHAIN {
                 None
             } else {
                 Some(owner)

@@ -73,8 +73,8 @@ export class BlockchainAPI {
       ...bundle,
       messages: bundle.messages.map((msg: any) => ({
         ...msg,
-        authenticated_signer: msg.authenticated_signer ? 
-          this.base64ToUint8Array(msg.authenticated_signer) : new Uint8Array(),
+        authenticated_owner: msg.authenticated_owner ?
+          this.base64ToUint8Array(msg.authenticated_owner) : new Uint8Array(),
         refund_grant_to: msg.refund_grant_to ? 
           this.base64ToUint8Array(msg.refund_grant_to) : new Uint8Array(),
         message_data: this.base64ToUint8Array(msg.message_data)
@@ -91,8 +91,8 @@ export class BlockchainAPI {
     const messages = await response.json();
 
     messages.forEach((message: any) => {
-      if (message.authenticated_signer) {
-        message.authenticated_signer = this.base64ToUint8Array(message.authenticated_signer);
+      if (message.authenticated_owner) {
+        message.authenticated_owner = this.base64ToUint8Array(message.authenticated_owner);
       }
       if (message.refund_grant_to) {
         message.refund_grant_to = this.base64ToUint8Array(message.refund_grant_to);

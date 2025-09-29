@@ -134,7 +134,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     caller_application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
-        authenticated_signer: Some(owner),
+        authenticated_owner: Some(owner),
         ..create_dummy_operation_context(chain_id)
     };
     let mut controller = ResourceController::default();
@@ -1168,7 +1168,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
 
     let context = OperationContext {
         height: BlockHeight(1),
-        authenticated_signer: Some(chain_key.into()),
+        authenticated_owner: Some(chain_key.into()),
         ..create_dummy_operation_context(root_description.id())
     };
     let first_message_index = 5;
@@ -1360,7 +1360,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_message_receipt_spending_chain_balance(
     receiving_chain_owner: Option<AccountOwner>,
-    authenticated_signer: Option<AccountOwner>,
+    authenticated_owner: Option<AccountOwner>,
 ) -> anyhow::Result<Result<(), ExecutionError>> {
     let amount = Amount::ONE;
     let super_owners = receiving_chain_owner.into_iter().collect();
@@ -1392,7 +1392,7 @@ async fn test_message_receipt_spending_chain_balance(
     }));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_message_context(chain_id, authenticated_signer);
+    let context = create_dummy_message_context(chain_id, authenticated_owner);
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
 

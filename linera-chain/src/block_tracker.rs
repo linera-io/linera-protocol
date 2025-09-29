@@ -35,7 +35,7 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     chain_id: ChainId,
     block_height: BlockHeight,
     timestamp: Timestamp,
-    authenticated_signer: Option<AccountOwner>,
+    authenticated_owner: Option<AccountOwner>,
     resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
     local_time: Timestamp,
     #[debug(skip_if = Option::is_none)]
@@ -82,7 +82,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             chain_id: proposal.chain_id,
             block_height: proposal.height,
             timestamp: proposal.timestamp,
-            authenticated_signer: proposal.authenticated_signer,
+            authenticated_owner: proposal.authenticated_owner,
             resource_controller,
             local_time,
             replaying_oracle_responses,
@@ -141,7 +141,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     chain_id: self.chain_id,
                     height: self.block_height,
                     round,
-                    authenticated_signer: self.authenticated_signer,
+                    authenticated_owner: self.authenticated_owner,
                     timestamp: self.timestamp,
                 };
                 let mut actor =
@@ -198,7 +198,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             is_bouncing: posted_message.is_bouncing(),
             height: self.block_height,
             round,
-            authenticated_signer: posted_message.authenticated_signer,
+            authenticated_owner: posted_message.authenticated_owner,
             refund_grant_to: posted_message.refund_grant_to,
             timestamp: self.timestamp,
         };

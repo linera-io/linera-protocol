@@ -237,7 +237,7 @@ BlockHeader:
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
-    - authenticated_signer:
+    - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
 BlockHeight:
@@ -873,7 +873,7 @@ OutgoingMessage:
   STRUCT:
     - destination:
         TYPENAME: ChainId
-    - authenticated_signer:
+    - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
     - grant:
@@ -887,7 +887,7 @@ OutgoingMessage:
         TYPENAME: Message
 PostedMessage:
   STRUCT:
-    - authenticated_signer:
+    - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
     - grant:
@@ -922,7 +922,7 @@ ProposedBlock:
         TYPENAME: BlockHeight
     - timestamp:
         TYPENAME: Timestamp
-    - authenticated_signer:
+    - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
     - previous_block_hash:

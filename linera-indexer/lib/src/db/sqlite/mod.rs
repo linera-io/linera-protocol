@@ -187,13 +187,13 @@ impl SqliteDatabase {
         let chain_id_str = chain_id.to_string();
         let state_hash_str = block.header.state_hash.to_string();
         let previous_block_hash_str = block.header.previous_block_hash.map(|h| h.to_string());
-        let authenticated_signer_str = block.header.authenticated_signer.map(|s| s.to_string());
+        let authenticated_owner_str = block.header.authenticated_owner.map(|s| s.to_string());
 
         sqlx::query(
             r#"
             INSERT OR REPLACE INTO blocks 
             (hash, chain_id, height, timestamp, epoch, state_hash, previous_block_hash, 
-             authenticated_signer, operation_count, incoming_bundle_count, message_count, 
+             authenticated_owner, operation_count, incoming_bundle_count, message_count,
              event_count, blob_count, data) 
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
             "#,
@@ -205,7 +205,7 @@ impl SqliteDatabase {
         .bind(block.header.epoch.0 as i64)
         .bind(&state_hash_str)
         .bind(&previous_block_hash_str)
-        .bind(&authenticated_signer_str)
+        .bind(&authenticated_owner_str)
         .bind(operation_count as i64)
         .bind(incoming_bundle_count as i64)
         .bind(message_count as i64)
@@ -224,7 +224,7 @@ impl SqliteDatabase {
                         hash,
                         index,
                         operation,
-                        block.header.authenticated_signer,
+                        block.header.authenticated_owner,
                     )
                     .await?;
                 }
@@ -275,10 +275,10 @@ impl SqliteDatabase {
         block_hash: &CryptoHash,
         operation_index: usize,
         operation: &Operation,
-        authenticated_signer: Option<linera_base::identifiers::AccountOwner>,
+        authenticated_owner: Option<linera_base::identifiers::AccountOwner>,
     ) -> Result<(), SqliteError> {
         let block_hash_str = block_hash.to_string();
-        let authenticated_signer_str = authenticated_signer.map(|s| s.to_string());
+        let authenticated_owner_str = authenticated_owner.map(|s| s.to_string());
 
         let (operation_type, application_id, system_operation_type) = match operation {
             Operation::System(sys_op) => {
@@ -314,7 +314,7 @@ impl SqliteDatabase {
         sqlx::query(
             r#"
             INSERT INTO operations 
-            (block_hash, operation_index, operation_type, application_id, system_operation_type, authenticated_signer, data)
+            (block_hash, operation_index, operation_type, application_id, system_operation_type, authenticated_owner, data)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             "#,
         )
@@ -323,7 +323,7 @@ impl SqliteDatabase {
         .bind(operation_type)
         .bind(application_id)
         .bind(system_operation_type)
-        .bind(&authenticated_signer_str)
+        .bind(&authenticated_owner_str)
         .bind(&data)
         .execute(&mut **tx)
         .await?;
@@ -342,7 +342,7 @@ impl SqliteDatabase {
     ) -> Result<(), SqliteError> {
         let block_hash_str = block_hash.to_string();
         let destination_chain_id_str = message.destination.to_string();
-        let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
+        let authenticated_owner_str = message.authenticated_owner.map(|s| s.to_string());
         let message_kind_str = Self::message_kind_to_string(&message.kind);
 
         let classification = Self::classify_message(&message.message);
@@ -351,7 +351,7 @@ impl SqliteDatabase {
         sqlx::query(
             r#"
             INSERT INTO outgoing_messages 
-            (block_hash, transaction_index, message_index, destination_chain_id, authenticated_signer, 
+            (block_hash, transaction_index, message_index, destination_chain_id, authenticated_owner,
              grant_amount, message_kind, message_type, application_id, system_message_type,
              system_target, system_amount, system_source, system_owner, system_recipient, data)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
@@ -361,7 +361,7 @@ impl SqliteDatabase {
         .bind(transaction_index as i64)
         .bind(message_index as i64)
         .bind(&destination_chain_id_str)
-        .bind(&authenticated_signer_str)
+        .bind(&authenticated_owner_str)
         .bind(message.grant.to_string())
         .bind(&message_kind_str)
         .bind(classification.message_type)
@@ -523,7 +523,7 @@ impl SqliteDatabase {
         bundle_id: i64,
         message: &PostedMessage,
     ) -> Result<(), SqliteError> {
-        let authenticated_signer_str = message.authenticated_signer.map(|s| s.to_string());
+        let authenticated_owner_str = message.authenticated_owner.map(|s| s.to_string());
         let refund_grant_to = message.refund_grant_to.as_ref().map(|s| format!("{s}"));
         let message_kind_str = Self::message_kind_to_string(&message.kind);
 
@@ -533,7 +533,7 @@ impl SqliteDatabase {
         sqlx::query(
             r#"
             INSERT INTO posted_messages 
-            (bundle_id, message_index, authenticated_signer, grant_amount, refund_grant_to, 
+            (bundle_id, message_index, authenticated_owner, grant_amount, refund_grant_to,
              message_kind, message_type, application_id, system_message_type,
              system_target, system_amount, system_source, system_owner, system_recipient, message_data)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
@@ -541,7 +541,7 @@ impl SqliteDatabase {
         )
         .bind(bundle_id)
         .bind(message.index as i64)
-        .bind(authenticated_signer_str)
+        .bind(authenticated_owner_str)
         .bind(message.grant.to_string())
         .bind(refund_grant_to)
         .bind(&message_kind_str)
@@ -718,7 +718,7 @@ impl SqliteDatabase {
     ) -> Result<Vec<PostedMessageInfo>, SqliteError> {
         let rows = sqlx::query(
             r#"
-            SELECT message_index, authenticated_signer, grant_amount, refund_grant_to, 
+            SELECT message_index, authenticated_owner, grant_amount, refund_grant_to,
                    message_kind, message_data
             FROM posted_messages 
             WHERE bundle_id = ?1 
@@ -733,7 +733,7 @@ impl SqliteDatabase {
         for row in rows {
             let message_info = PostedMessageInfo {
                 message_index: row.get::<i64, _>("message_index") as u32,
-                authenticated_signer_data: row.get("authenticated_signer"),
+                authenticated_owner_data: row.get("authenticated_owner"),
                 grant_amount: row.get("grant_amount"),
                 refund_grant_to_data: row.get("refund_grant_to"),
                 message_kind: row.get("message_kind"),
@@ -832,7 +832,7 @@ impl SqliteDatabase {
         let block_hash_str = block_hash.to_string();
         let rows = sqlx::query(
             r#"
-            SELECT destination_chain_id, authenticated_signer, grant_amount, message_kind, data
+            SELECT destination_chain_id, authenticated_owner, grant_amount, message_kind, data
             FROM outgoing_messages 
             WHERE block_hash = ?1 
             ORDER BY transaction_index, message_index ASC
@@ -848,8 +848,8 @@ impl SqliteDatabase {
             let destination = destination_str
                 .parse()
                 .map_err(|_| SqliteError::Serialization("Invalid chain ID".to_string()))?;
-            let authenticated_signer_str: Option<String> = row.get("authenticated_signer");
-            let authenticated_signer = authenticated_signer_str.and_then(|s| s.parse().ok());
+            let authenticated_owner_str: Option<String> = row.get("authenticated_owner");
+            let authenticated_owner = authenticated_owner_str.and_then(|s| s.parse().ok());
             let grant_amount: String = row.get("grant_amount");
             let grant = linera_base::data_types::Amount::from_str(grant_amount.as_str())
                 .map_err(|_| SqliteError::Serialization("Invalid grant amount".to_string()))?;
@@ -860,7 +860,7 @@ impl SqliteDatabase {
 
             messages.push(OutgoingMessage {
                 destination,
-                authenticated_signer,
+                authenticated_owner,
                 grant,
                 refund_grant_to: None, // This would need to be stored separately
                 kind,
@@ -968,7 +968,7 @@ impl SqliteDatabase {
         let row = sqlx::query(
             r#"
             SELECT chain_id, height, timestamp, epoch, state_hash, previous_block_hash,
-                   authenticated_signer, operation_count, incoming_bundle_count, 
+                   authenticated_owner, operation_count, incoming_bundle_count,
                    message_count, event_count, blob_count
             FROM blocks 
             WHERE hash = ?1
@@ -997,7 +997,7 @@ impl SqliteDatabase {
                     previous_block_hash: row
                         .get::<Option<String>, _>("previous_block_hash")
                         .and_then(|s| s.parse().ok()),
-                    authenticated_signer: row.get::<Option<String>, _>("authenticated_signer"),
+                    authenticated_owner: row.get::<Option<String>, _>("authenticated_owner"),
                     operation_count: row.get::<i64, _>("operation_count") as usize,
                     incoming_bundle_count: row.get::<i64, _>("incoming_bundle_count") as usize,
                     message_count: row.get::<i64, _>("message_count") as usize,
@@ -1112,7 +1112,7 @@ pub struct BlockSummary {
     pub epoch: u64,
     pub state_hash: CryptoHash,
     pub previous_block_hash: Option<CryptoHash>,
-    pub authenticated_signer: Option<String>,
+    pub authenticated_owner: Option<String>,
     pub operation_count: usize,
     pub incoming_bundle_count: usize,
     pub message_count: usize,

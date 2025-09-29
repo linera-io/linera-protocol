@@ -67,7 +67,7 @@ impl BlockBuilder {
                 transactions: vec![],
                 previous_block_hash,
                 height,
-                authenticated_signer: Some(owner),
+                authenticated_owner: Some(owner),
                 timestamp: Timestamp::from(0),
             },
             validator,

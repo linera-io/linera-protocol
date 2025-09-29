@@ -18,7 +18,7 @@ async fn new_view_and_context() -> (
     let description = dummy_chain_description(5);
     let context = OperationContext {
         chain_id: ChainId::from(&description),
-        authenticated_signer: None,
+        authenticated_owner: None,
         height: BlockHeight::from(7),
         round: Some(0),
         timestamp: Default::default(),

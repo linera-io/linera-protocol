@@ -78,7 +78,7 @@ async fn test_transfer_system_api(
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
-        authenticated_signer: sender.signer(),
+        authenticated_owner: sender.signer(),
         ..create_dummy_operation_context(chain_id)
     };
     let mut controller = ResourceController::default();
@@ -163,7 +163,7 @@ async fn test_unauthorized_transfer_system_api(
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
-        authenticated_signer: sender.unauthorized_signer(),
+        authenticated_owner: sender.unauthorized_signer(),
         ..create_dummy_operation_context(chain_id)
     };
     let mut controller = ResourceController::default();
@@ -247,7 +247,7 @@ async fn test_claim_system_api(
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
-        authenticated_signer: sender.signer(),
+        authenticated_owner: sender.signer(),
         chain_id: claimer_chain_id,
         ..create_dummy_operation_context(claimer_chain_id)
     };
@@ -376,7 +376,7 @@ async fn test_unauthorized_claims(
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
-        authenticated_signer: sender.unauthorized_signer(),
+        authenticated_owner: sender.unauthorized_signer(),
         ..create_dummy_operation_context(claimer_chain_id)
     };
     let mut controller = ResourceController::default();
@@ -721,7 +721,7 @@ impl TransferTestEndpoint {
         }
     }
 
-    /// Returns the [`AccountOwner`] that should be used as the authenticated signer in the transfer
+    /// Returns the [`AccountOwner`] that should be used as the authenticated owner in the transfer
     /// operation.
     pub fn signer(&self) -> Option<AccountOwner> {
         match self {
@@ -730,7 +730,7 @@ impl TransferTestEndpoint {
         }
     }
 
-    /// Returns the [`AccountOwner`] that should be used as the authenticated signer when testing an
+    /// Returns the [`AccountOwner`] that should be used as the authenticated owner when testing an
     /// unauthorized transfer operation.
     pub fn unauthorized_signer(&self) -> Option<AccountOwner> {
         match self {
@@ -1056,13 +1056,13 @@ async fn test_callee_api_calls() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::execute_operation(move |runtime, argument| {
         assert!(argument.is_empty());
-        assert_eq!(runtime.authenticated_signer().unwrap(), Some(owner));
+        assert_eq!(runtime.authenticated_owner().unwrap(), Some(owner));
         assert_eq!(runtime.authenticated_caller_id().unwrap(), Some(caller_id));
         Ok(vec![])
     }));
     target_application.expect_call(ExpectedCall::execute_operation(move |runtime, argument| {
         assert!(argument.is_empty());
-        assert_eq!(runtime.authenticated_signer().unwrap(), None);
+        assert_eq!(runtime.authenticated_owner().unwrap(), None);
         assert_eq!(runtime.authenticated_caller_id().unwrap(), None);
         Ok(vec![])
     }));
@@ -1071,7 +1071,7 @@ async fn test_callee_api_calls() -> anyhow::Result<()> {
     caller_application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
-        authenticated_signer: Some(owner),
+        authenticated_owner: Some(owner),
         ..create_dummy_operation_context(chain_id)
     };
     let mut controller = ResourceController::default();

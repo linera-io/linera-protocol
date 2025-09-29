@@ -240,7 +240,7 @@ impl Serialize for Block {
             timestamp: self.header.timestamp,
             state_hash: self.header.state_hash,
             previous_block_hash: self.header.previous_block_hash,
-            authenticated_signer: self.header.authenticated_signer,
+            authenticated_owner: self.header.authenticated_owner,
         };
         state.serialize_field("header", &header)?;
         state.serialize_field("body", &self.body)?;
@@ -278,7 +278,7 @@ impl<'de> Deserialize<'de> for Block {
             timestamp: inner.header.timestamp,
             state_hash: inner.header.state_hash,
             previous_block_hash: inner.header.previous_block_hash,
-            authenticated_signer: inner.header.authenticated_signer,
+            authenticated_owner: inner.header.authenticated_owner,
             transactions_hash,
             messages_hash,
             previous_message_blocks_hash,
@@ -317,7 +317,7 @@ pub struct BlockHeader {
     /// fees. If set, this must be the `owner` in the block proposal. `None` means that
     /// the default account of the chain is used. This value is also used as recipient of
     /// potential refunds for the message grants created by the operations.
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
 
     // Inputs to the block, chosen by the block proposer.
     /// Cryptographic hash of all the transactions in the block.
@@ -415,7 +415,7 @@ impl Block {
             timestamp: block.timestamp,
             state_hash: outcome.state_hash,
             previous_block_hash: block.previous_block_hash,
-            authenticated_signer: block.authenticated_signer,
+            authenticated_owner: block.authenticated_owner,
             transactions_hash,
             messages_hash,
             previous_message_blocks_hash,
@@ -574,7 +574,7 @@ impl Block {
             transactions,
             height,
             timestamp,
-            authenticated_signer,
+            authenticated_owner,
             previous_block_hash,
         } = block;
         *chain_id == self.header.chain_id
@@ -582,7 +582,7 @@ impl Block {
             && *transactions == self.body.transactions
             && *height == self.header.height
             && *timestamp == self.header.timestamp
-            && *authenticated_signer == self.header.authenticated_signer
+            && *authenticated_owner == self.header.authenticated_owner
             && *previous_block_hash == self.header.previous_block_hash
     }
 
@@ -593,7 +593,7 @@ impl Block {
             transactions: self.body.transactions,
             height: self.header.height,
             timestamp: self.header.timestamp,
-            authenticated_signer: self.header.authenticated_signer,
+            authenticated_owner: self.header.authenticated_owner,
             previous_block_hash: self.header.previous_block_hash,
         };
         let outcome = BlockExecutionOutcome {
@@ -643,7 +643,7 @@ struct SerializedHeader {
     timestamp: Timestamp,
     state_hash: CryptoHash,
     previous_block_hash: Option<CryptoHash>,
-    authenticated_signer: Option<AccountOwner>,
+    authenticated_owner: Option<AccountOwner>,
 }
 
 mod hashing {

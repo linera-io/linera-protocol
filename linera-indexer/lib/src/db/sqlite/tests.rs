@@ -150,7 +150,7 @@ async fn test_incoming_bundles_storage_and_query() {
 
     let incoming_bundle_message = PostedMessage {
         index: 0,
-        authenticated_signer: None,
+        authenticated_owner: None,
         grant: Amount::from_tokens(100),
         refund_grant_to: None,
         kind: MessageKind::Protected,
@@ -233,7 +233,7 @@ async fn test_incoming_bundles_storage_and_query() {
         message_info.message_kind,
         incoming_bundle_message.kind.to_string()
     );
-    assert!(message_info.authenticated_signer_data.is_none());
+    assert!(message_info.authenticated_owner_data.is_none());
     assert!(message_info.refund_grant_to_data.is_none());
     assert_eq!(
         message_info.message_data,
@@ -265,7 +265,7 @@ fn create_test_block(chain_id: ChainId, height: BlockHeight) -> Block {
             timestamp: Timestamp::now(),
             state_hash: CryptoHash::new(&TestString::new("test_state_hash")),
             previous_block_hash: None,
-            authenticated_signer: None,
+            authenticated_owner: None,
             transactions_hash: CryptoHash::new(&TestString::new("transactions_hash")),
             messages_hash: CryptoHash::new(&TestString::new("messages_hash")),
             previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg_blocks_hash")),

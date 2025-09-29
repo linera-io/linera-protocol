@@ -84,8 +84,8 @@ app.get('/api/blocks/:hash/bundles-with-messages', (req, res) => {
     // Convert binary data to base64 for JSON transport
     bundlesWithMessages.forEach(bundle => {
       bundle.messages.forEach(message => {
-        if (message.authenticated_signer) {
-          message.authenticated_signer = Buffer.from(message.authenticated_signer).toString('base64');
+        if (message.authenticated_owner) {
+          message.authenticated_owner = Buffer.from(message.authenticated_owner).toString('base64');
         }
         if (message.refund_grant_to) {
           message.refund_grant_to = Buffer.from(message.refund_grant_to).toString('base64');
@@ -107,8 +107,8 @@ app.get('/api/bundles/:id/messages', (req, res) => {
     
     // Convert binary data to base64 for JSON transport
     messages.forEach(message => {
-      if (message.authenticated_signer) {
-        message.authenticated_signer = Buffer.from(message.authenticated_signer).toString('base64');
+      if (message.authenticated_owner) {
+        message.authenticated_owner = Buffer.from(message.authenticated_owner).toString('base64');
       }
       if (message.refund_grant_to) {
         message.refund_grant_to = Buffer.from(message.refund_grant_to).toString('base64');

@@ -1181,7 +1181,6 @@ where
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        let signer = block.authenticated_signer;
         let (_, committee) = self.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
@@ -1191,13 +1190,13 @@ where
 
         // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.chain, None);
-        if let Some(signer) = signer {
+        if let Some(owner) = block.authenticated_owner {
             response.info.requested_owner_balance = self
                 .chain
                 .execution_state
                 .system
                 .balances
-                .get(&signer)
+                .get(&owner)
                 .await?;
         }
 
@@ -1239,7 +1238,7 @@ where
         let old_round = self.chain.manager.current_round();
         match original_proposal {
             None => {
-                if let Some(signer) = block.authenticated_signer {
+                if let Some(signer) = block.authenticated_owner {
                     // Check the authentication of the operations in the new block.
                     ensure!(signer == owner, WorkerError::InvalidSigner(owner));
                 }
@@ -1268,7 +1267,7 @@ where
                         .contains(&super_owner),
                     WorkerError::InvalidOwner
                 );
-                if let Some(signer) = block.authenticated_signer {
+                if let Some(signer) = block.authenticated_owner {
                     // Check the authentication of the operations in the new block.
                     ensure!(signer == super_owner, WorkerError::InvalidSigner(signer));
                 }

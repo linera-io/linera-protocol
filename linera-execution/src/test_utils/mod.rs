@@ -111,7 +111,7 @@ pub fn create_dummy_operation_context(chain_id: ChainId) -> OperationContext {
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_signer: None,
+        authenticated_owner: None,
         timestamp: Default::default(),
     }
 }
@@ -119,13 +119,13 @@ pub fn create_dummy_operation_context(chain_id: ChainId) -> OperationContext {
 /// Creates a dummy [`MessageContext`] to use in tests.
 pub fn create_dummy_message_context(
     chain_id: ChainId,
-    authenticated_signer: Option<AccountOwner>,
+    authenticated_owner: Option<AccountOwner>,
 ) -> MessageContext {
     MessageContext {
         chain_id,
         origin: chain_id,
         is_bouncing: false,
-        authenticated_signer,
+        authenticated_owner,
         refund_grant_to: None,
         height: BlockHeight(0),
         round: Some(0),

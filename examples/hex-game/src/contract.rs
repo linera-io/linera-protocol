@@ -109,7 +109,7 @@ impl HexContract {
         let clock = self.state.clock.get_mut();
         let block_time = self.runtime.system_time();
         assert_eq!(
-            self.runtime.authenticated_signer(),
+            self.runtime.authenticated_owner(),
             Some(self.state.owners.get().unwrap()[active.index()]),
             "Move must be signed by the player whose turn it is."
         );
@@ -125,7 +125,7 @@ impl HexContract {
         let clock = self.state.clock.get_mut();
         let block_time = self.runtime.system_time();
         assert_eq!(
-            self.runtime.authenticated_signer(),
+            self.runtime.authenticated_owner(),
             Some(self.state.owners.get().unwrap()[active.other().index()]),
             "Victory can only be claimed by the player whose turn it is not."
         );

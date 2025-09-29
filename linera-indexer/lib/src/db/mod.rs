@@ -140,7 +140,7 @@ pub struct IncomingBundleInfo {
 #[derive(Debug, Clone)]
 pub struct PostedMessageInfo {
     pub message_index: u32,
-    pub authenticated_signer_data: Option<String>,
+    pub authenticated_owner_data: Option<String>,
     pub grant_amount: String,
     pub refund_grant_to_data: Option<String>,
     pub message_kind: String,

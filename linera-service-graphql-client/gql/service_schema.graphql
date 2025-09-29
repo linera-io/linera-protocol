@@ -188,7 +188,7 @@ type BlockHeader {
 	the default account of the chain is used. This value is also used as recipient of
 	potential refunds for the message grants created by the operations.
 	"""
-	authenticatedSigner: AccountOwner
+	authenticatedOwner: AccountOwner
 	"""
 	Cryptographic hash of all the transactions in the block.
 	"""
@@ -1175,7 +1175,7 @@ type OutgoingMessage {
 	"""
 	The user authentication carried by the message, if any.
 	"""
-	authenticatedSigner: AccountOwner
+	authenticatedOwner: AccountOwner
 	"""
 	A grant to pay for the message execution.
 	"""
@@ -1223,7 +1223,7 @@ type PostedMessage {
 	"""
 	The user authentication carried by the message, if any.
 	"""
-	authenticatedSigner: AccountOwner
+	authenticatedOwner: AccountOwner
 	"""
 	A grant to pay for the message execution.
 	"""

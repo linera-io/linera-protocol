@@ -174,7 +174,7 @@ mod from {
                             .messages
                             .into_iter()
                             .map(|msg| linera_chain::data_types::PostedMessage {
-                                authenticated_signer: msg.authenticated_signer,
+                                authenticated_owner: msg.authenticated_owner,
                                 grant: msg.grant,
                                 refund_grant_to: msg.refund_grant_to.map(|rgt| Account {
                                     chain_id: rgt.chain_id,
@@ -274,7 +274,7 @@ mod from {
         fn from(val: block::BlockBlockBlockBodyMessages) -> Self {
             let block::BlockBlockBlockBodyMessages {
                 destination,
-                authenticated_signer,
+                authenticated_owner,
                 grant,
                 refund_grant_to,
                 kind,
@@ -282,7 +282,7 @@ mod from {
             } = val;
             OutgoingMessage {
                 destination,
-                authenticated_signer,
+                authenticated_owner,
                 grant,
                 refund_grant_to: refund_grant_to.map(|rgt| Account {
                     chain_id: rgt.chain_id,
@@ -304,7 +304,7 @@ mod from {
                 epoch,
                 height,
                 timestamp,
-                authenticated_signer,
+                authenticated_owner,
                 previous_block_hash,
                 state_hash,
                 transactions_hash,
@@ -332,7 +332,7 @@ mod from {
                 epoch,
                 height,
                 timestamp,
-                authenticated_signer,
+                authenticated_owner,
                 previous_block_hash,
                 state_hash,
                 transactions_hash,
