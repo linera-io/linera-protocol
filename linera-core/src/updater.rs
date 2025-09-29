@@ -301,6 +301,10 @@ where
         }?)
     }
 
+    /// Requests a vote for a timeout certificate for the given round from the remote node.
+    ///
+    /// If the remote node is not in that round or at that height yet, sends the chain information
+    /// to update it.
     async fn request_timeout(
         &mut self,
         chain_id: ChainId,

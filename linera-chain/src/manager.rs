@@ -559,33 +559,45 @@ where
 
     /// Updates `current_round` and `round_timeout` if necessary.
     ///
-    /// This must be after every change to `timeout`, `locking` or `proposed`.
+    /// This must be after every change to `timeout`, `locking`, `proposed` or `signed_proposal`.
+    ///
+    /// The current round starts at `Fast` if there is a super owner, `MultiLeader(0)` if at least
+    /// one multi-leader round is configured, or otherwise `SingleLeader(0)`.
+    ///
+    /// Single-leader rounds can only be ended by a timeout certificate for that round.
+    ///
+    /// The presence of any validated block certificate is also proof that a quorum of validators
+    /// is already in that round, even if we have not seen the corresponding timeout.
+    ///
+    /// Multi-leader rounds can always be skipped, so any correctly signed block proposal in a
+    /// later round ends a multi-leader round.
+    /// Since we don't accept proposals that violate that rule, we can compute the current round in
+    /// general by taking the maximum of all the above.
     fn update_current_round(&mut self, local_time: Timestamp) {
         let current_round = self
             .timeout
             .get()
             .iter()
+            // A timeout certificate starts the next round.
             .map(|certificate| {
                 self.ownership
                     .get()
                     .next_round(certificate.round)
                     .unwrap_or(Round::Validator(u32::MAX))
             })
+            // A locking block or a proposal is proof we have accepted that we are at least in
+            // this round.
             .chain(self.locking_block.get().as_ref().map(LockingBlock::round))
             .chain(
                 self.proposed
                     .get()
                     .iter()
-                    .map(|proposal| proposal.content.round),
-            )
-            .chain(
-                self.signed_proposal
-                    .get()
-                    .iter()
+                    .chain(self.signed_proposal.get())
                     .map(|proposal| proposal.content.round),
             )
             .max()
             .unwrap_or_default()
+            // Otherwise compute the first round for this chain configuration.
             .max(self.ownership.get().first_round());
         if current_round <= self.current_round() {
             return;
@@ -688,8 +700,11 @@ where
         self.ownership.get().super_owners.contains(owner)
     }
 
-    /// Sets the signed proposal, if it is newer than the known one, and not from a single-leader
-    /// round. Returns whether it was updated.
+    /// Sets the signed proposal, if it is newer than the known one, at most from the first
+    /// single-leader round. Returns whether it was updated.
+    ///
+    /// We don't update the signed proposal for any rounds later than `SingleLeader(0)`,
+    /// because single-leader rounds cannot be skipped without a timeout certificate.
     pub fn update_signed_proposal(&mut self, proposal: &BlockProposal) -> bool {
         if proposal.content.round > Round::SingleLeader(0) {
             return false;
