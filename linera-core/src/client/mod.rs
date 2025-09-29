@@ -1848,7 +1848,7 @@ impl<Env: Environment> ChainClient<Env> {
             .info;
         {
             ensure!(
-                self.has_other_owners(&info.manager.ownership)
+                self.has_other_or_regular_owners(&info.manager.ownership)
                     || info.next_block_height >= self.initial_next_block_height,
                 ChainClientError::WalletSynchronizationError
             );
@@ -2006,7 +2006,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut info = self.synchronize_to_known_height().await?;
 
-        if self.has_other_owners(&info.manager.ownership) {
+        if self.has_other_or_regular_owners(&info.manager.ownership) {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -4136,11 +4136,14 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(())
     }
 
-    /// Returns whether the given ownership includes anyone whose secret key we don't have.
-    fn has_other_owners(&self, ownership: &ChainOwnership) -> bool {
-        ownership
-            .all_owners()
-            .any(|owner| Some(owner) != self.preferred_owner.as_ref())
+    /// Returns whether the given ownership includes anyone whose secret key we don't have, or
+    /// any regular (not super) owners. Returns `false` only if we are the only owner and a super.
+    fn has_other_or_regular_owners(&self, ownership: &ChainOwnership) -> bool {
+        !ownership.owners.is_empty()
+            || ownership
+                .super_owners
+                .iter()
+                .any(|owner| Some(owner) != self.preferred_owner.as_ref())
     }
 }
 
