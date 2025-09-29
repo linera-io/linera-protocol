@@ -22,6 +22,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
+    manager::LockingBlock,
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
@@ -300,6 +301,63 @@ where
         }?)
     }
 
+    async fn request_timeout(
+        &mut self,
+        chain_id: ChainId,
+        round: Round,
+        height: BlockHeight,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
+        let info = match self
+            .remote_node
+            .handle_chain_info_query(query.clone())
+            .await
+        {
+            Ok(info) => info,
+            Err(NodeError::WrongRound(validator_round)) => {
+                tracing::info!(
+                    "Failed to request timeout from validator {} because it sees \
+                            chain {} at round {} instead of {}.",
+                    self.remote_node.public_key,
+                    chain_id,
+                    validator_round,
+                    round
+                );
+                // The timeout is for a different round, so we need to update the validator.
+                self.send_chain_information(
+                    chain_id,
+                    height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
+                self.remote_node.handle_chain_info_query(query).await?
+            }
+            Err(NodeError::UnexpectedBlockHeight {
+                expected_block_height,
+                found_block_height,
+            }) if expected_block_height < found_block_height => {
+                tracing::info!(
+                    "Failed to request timeout from validator {} because it sees \
+                            chain {} at height {} instead of {}.",
+                    self.remote_node.public_key,
+                    chain_id,
+                    expected_block_height,
+                    found_block_height,
+                );
+                // The proposal is for a later block height, so we need to update the validator.
+                self.send_chain_information(
+                    chain_id,
+                    found_block_height,
+                    CrossChainMessageDelivery::NonBlocking,
+                )
+                .await?;
+                self.remote_node.handle_chain_info_query(query).await?
+            }
+            Err(err) => Err(err)?,
+        };
+        Ok(info)
+    }
+
     async fn send_block_proposal(
         &mut self,
         proposal: Box<BlockProposal>,
@@ -438,81 +496,115 @@ where
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let Ok(height) = target_block_height.try_sub_one() else {
-            if let Some(cert) = self.local_node.chain_info(chain_id).await?.manager.timeout {
-                self.remote_node.handle_timeout_certificate(*cert).await?;
-            }
-            return Ok(());
-        };
-        // Figure out which certificates this validator is missing. In many cases, it's just the
-        // last one, so we optimistically send that one right away.
-        let hash = self
-            .local_node
-            .chain_state_view(chain_id)
-            .await?
-            .block_hashes(height..=height)
-            .await?
-            .into_iter()
-            .next()
-            .ok_or_else(|| {
-                ChainClientError::InternalError(
-                    "send_chain_information called with invalid target_block_height",
-                )
-            })?;
-        let certificate = self
-            .local_node
-            .storage_client()
-            .read_certificate(hash)
-            .await?
-            .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
-        let info = match self.send_confirmed_certificate(certificate, delivery).await {
-            Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
-                if event_ids.iter().all(|event_id| {
-                    event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                        && event_id.chain_id == self.admin_id
-                }) =>
-            {
-                // The chain is missing epoch events. Send all blocks.
-                let query = ChainInfoQuery::new(chain_id);
-                self.remote_node.handle_chain_info_query(query).await?
-            }
-            Err(err) => return Err(err),
-            Ok(info) => info,
-        };
-        let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
-        // Obtain the missing blocks and the manager state from the local node.
-        let range = remote_height..target_block_height;
-        let validator_missing_hashes = self
-            .local_node
-            .chain_state_view(chain_id)
-            .await?
-            .block_hashes(range)
-            .await?;
-        if !validator_missing_hashes.is_empty() {
-            // Send the requested certificates in order.
-            let certificates = self
+        let info = if let Ok(height) = target_block_height.try_sub_one() {
+            // Figure out which certificates this validator is missing. In many cases, it's just the
+            // last one, so we optimistically send that one right away.
+            let hash = self
+                .local_node
+                .chain_state_view(chain_id)
+                .await?
+                .block_hashes(height..=height)
+                .await?
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    ChainClientError::InternalError(
+                        "send_chain_information called with invalid target_block_height",
+                    )
+                })?;
+            let certificate = self
                 .local_node
                 .storage_client()
-                .read_certificates(validator_missing_hashes.clone())
+                .read_certificate(hash)
+                .await?
+                .ok_or_else(|| ChainClientError::MissingConfirmedBlock(hash))?;
+            let info = match self.send_confirmed_certificate(certificate, delivery).await {
+                Err(ChainClientError::RemoteNodeError(NodeError::EventsNotFound(event_ids)))
+                    if event_ids.iter().all(|event_id| {
+                        event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
+                            && event_id.chain_id == self.admin_id
+                    }) =>
+                {
+                    // The chain is missing epoch events. Send all blocks.
+                    let query = ChainInfoQuery::new(chain_id);
+                    self.remote_node.handle_chain_info_query(query).await?
+                }
+                Err(err) => return Err(err),
+                Ok(info) => info,
+            };
+            // Obtain the missing blocks and the manager state from the local node.
+            let range = info.next_block_height..target_block_height;
+            let validator_missing_hashes = self
+                .local_node
+                .chain_state_view(chain_id)
+                .await?
+                .block_hashes(range)
                 .await?;
-            let certificates =
-                match ResultReadCertificates::new(certificates, validator_missing_hashes) {
-                    ResultReadCertificates::Certificates(certificates) => certificates,
-                    ResultReadCertificates::InvalidHashes(hashes) => {
-                        return Err(ChainClientError::ReadCertificatesError(hashes))
-                    }
-                };
-            for certificate in certificates {
-                self.send_confirmed_certificate(certificate, delivery)
+            if !validator_missing_hashes.is_empty() {
+                // Send the requested certificates in order.
+                let certificates = self
+                    .local_node
+                    .storage_client()
+                    .read_certificates(validator_missing_hashes.clone())
                     .await?;
+                let certificates =
+                    match ResultReadCertificates::new(certificates, validator_missing_hashes) {
+                        ResultReadCertificates::Certificates(certificates) => certificates,
+                        ResultReadCertificates::InvalidHashes(hashes) => {
+                            return Err(ChainClientError::ReadCertificatesError(hashes))
+                        }
+                    };
+                for certificate in certificates {
+                    self.send_confirmed_certificate(certificate, delivery)
+                        .await?;
+                }
             }
-        }
+            info
+        } else {
+            let query = ChainInfoQuery::new(chain_id);
+            self.remote_node.handle_chain_info_query(query).await?
+        };
+        let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         // If the remote node is missing a timeout certificate, send it as well.
-        let local_info = self.local_node.chain_info(chain_id).await?;
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let local_info = self.local_node.handle_chain_info_query(query).await?.info;
         if let Some(cert) = local_info.manager.timeout {
             if (local_info.next_block_height, cert.round) >= (remote_height, remote_round) {
+                tracing::debug!("Sending timeout for {}", cert.round);
                 self.remote_node.handle_timeout_certificate(*cert).await?;
             }
+        }
+        if let Some(proposal) = local_info.manager.requested_proposed {
+            if let Err(err) = Box::pin(self.send_block_proposal(proposal, vec![])).await {
+                tracing::info!("Failed to send block proposal: {err}");
+            }
+        }
+        if let Some(proposal) = local_info.manager.requested_signed_proposal {
+            if let Err(err) = Box::pin(self.send_block_proposal(proposal, vec![])).await {
+                tracing::info!("Failed to send block proposal: {err}");
+            }
+        }
+        match local_info.manager.requested_locking.map(|b| *b) {
+            Some(LockingBlock::Regular(validated)) => {
+                if let Err(err) = self
+                    .remote_node
+                    .handle_optimized_validated_certificate(
+                        &validated,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await
+                {
+                    tracing::info!("Failed to send locking block: {err}");
+                }
+            }
+            Some(LockingBlock::Fast(proposal)) => {
+                if let Err(err) =
+                    Box::pin(self.send_block_proposal(Box::new(proposal), vec![])).await
+                {
+                    tracing::info!("Failed to send block proposal: {err}");
+                }
+            }
+            None => {}
         }
         Ok(())
     }
@@ -590,8 +682,7 @@ where
                 })?
             }
             CommunicateAction::RequestTimeout { round, height, .. } => {
-                let query = ChainInfoQuery::new(chain_id).with_timeout(height, round);
-                let info = self.remote_node.handle_chain_info_query(query).await?;
+                let info = self.request_timeout(chain_id, round, height).await?;
                 info.manager.timeout_vote.ok_or_else(|| {
                     NodeError::MissingVoteInValidatorResponse("request a timeout".into())
                 })?

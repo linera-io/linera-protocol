@@ -578,6 +578,12 @@ where
                     .iter()
                     .map(|proposal| proposal.content.round),
             )
+            .chain(
+                self.signed_proposal
+                    .get()
+                    .iter()
+                    .map(|proposal| proposal.content.round),
+            )
             .max()
             .unwrap_or_default()
             .max(self.ownership.get().first_round());
@@ -685,7 +691,7 @@ where
     /// Sets the signed proposal, if it is newer than the known one, and not from a single-leader
     /// round. Returns whether it was updated.
     pub fn update_signed_proposal(&mut self, proposal: &BlockProposal) -> bool {
-        if proposal.content.round > Round::MultiLeader(u32::MAX) {
+        if proposal.content.round > Round::SingleLeader(0) {
             return false;
         }
         if let Some(old_proposal) = self.signed_proposal.get() {

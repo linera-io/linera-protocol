@@ -211,7 +211,7 @@ where
         };
 
         if !responded {
-            warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
+            debug!("Callback for `ChainWorkerActor` was dropped before a response was sent");
         }
 
         // Roll back any unsaved changes to the chain state: If there was an error while trying

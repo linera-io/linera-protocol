@@ -22,7 +22,7 @@ use linera_chain::{
     },
 };
 use rand::seq::SliceRandom as _;
-use tracing::{instrument, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
@@ -113,7 +113,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 .await;
             match result {
                 Err(NodeError::MissingCertificateValue) => {
-                    warn!(
+                    debug!(
                         "Validator {} forgot a certificate value that they signed before",
                         self.public_key
                     );
@@ -135,7 +135,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 .await;
             match result {
                 Err(NodeError::MissingCertificateValue) => {
-                    warn!(
+                    debug!(
                         "Validator {} forgot a certificate value that they signed before",
                         self.public_key
                     );
