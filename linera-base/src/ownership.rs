@@ -178,6 +178,11 @@ impl ChainOwnership {
         };
         Some(next_round)
     }
+
+    /// Returns whether the given owner is the only owner, and a super owner.
+    pub fn is_single_super_owner(&self, owner: &AccountOwner) -> bool {
+        self.owners.is_empty() && self.super_owners.len() == 1 && self.super_owners.contains(owner)
+    }
 }
 
 /// Errors that can happen when attempting to close a chain.

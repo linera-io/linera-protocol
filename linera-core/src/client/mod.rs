@@ -1843,10 +1843,13 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(query)
             .await?
             .info;
+        if self
+            .preferred_owner
+            .is_some_and(|owner| info.manager.ownership.is_single_super_owner(&owner))
         {
+            // We are the only owner, so we should be up to date.
             ensure!(
-                self.has_other_or_regular_owners(&info.manager.ownership)
-                    || info.next_block_height >= self.initial_next_block_height,
+                info.next_block_height >= self.initial_next_block_height,
                 ChainClientError::WalletSynchronizationError
             );
         }
@@ -2003,9 +2006,12 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut info = self.synchronize_to_known_height().await?;
 
-        if self.has_other_or_regular_owners(&info.manager.ownership) {
-            // For chains with any owner other than ourselves, we could be missing recent
-            // certificates created by other owners. Further synchronize blocks from the network.
+        if self
+            .preferred_owner
+            .is_none_or(|owner| !info.manager.ownership.is_single_super_owner(&owner))
+        {
+            // If we are not a single super owner, we could be missing recent
+            // certificates created by other clients. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
             info = self.client.synchronize_chain_state(self.chain_id).await?;
         }
@@ -4131,16 +4137,6 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         Ok(())
-    }
-
-    /// Returns whether the given ownership includes anyone whose secret key we don't have, or
-    /// any regular (not super) owners. Returns `false` only if we are the only owner and a super.
-    fn has_other_or_regular_owners(&self, ownership: &ChainOwnership) -> bool {
-        !ownership.owners.is_empty()
-            || ownership
-                .super_owners
-                .iter()
-                .any(|owner| Some(owner) != self.preferred_owner.as_ref())
     }
 }
 
