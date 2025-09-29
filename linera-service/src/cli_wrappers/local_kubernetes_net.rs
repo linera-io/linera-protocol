@@ -561,8 +561,10 @@ impl LocalKubernetesNet {
             let future = async move {
                 let cluster_id = kind_cluster.id();
                 kind_cluster.load_docker_image(&docker_image_name).await?;
-                kind_cluster.load_docker_image(&indexer_image_name).await?;
-                kind_cluster.load_docker_image(&explorer_image_name).await?;
+                if num_block_exporters > 0 {
+                    kind_cluster.load_docker_image(&indexer_image_name).await?;
+                    kind_cluster.load_docker_image(&explorer_image_name).await?;
+                }
 
                 let server_config_filename = format!("server_{}.json", validator_number);
                 fs_err::copy(
