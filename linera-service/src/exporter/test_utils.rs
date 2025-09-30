@@ -214,6 +214,7 @@ impl ValidatorNode for DummyValidator {
             requested_sent_certificate_hashes: vec![],
             count_received_log: 0,
             requested_received_log: vec![],
+            seed: 0,
         };
 
         let response = if missing_blobs.is_empty() {

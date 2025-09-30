@@ -2551,7 +2551,7 @@ impl<Env: Environment> ChainClient<Env> {
                 use the `linera retry-pending-block` command to commit that first"
             )
         );
-        let info = self.chain_info().await?;
+        let info = self.chain_info_with_committees().await?;
         let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
         let transactions = incoming_bundles
             .into_iter()
@@ -3120,7 +3120,7 @@ impl<Env: Environment> ChainClient<Env> {
                 "Conflicting proposal in the current round",
             ));
         };
-        if manager.can_propose(identity, round) {
+        if manager.can_propose(identity, round, info.seed, &info.manager) {
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
