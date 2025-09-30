@@ -24,7 +24,7 @@ use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
         Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse, Round,
-        TimeDelta,
+        TimeDelta, Timestamp,
     },
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
@@ -1199,15 +1199,23 @@ where
     // The operation should return WaitForTimeout because the block expired.
     assert_matches!(result, ClientOutcome::WaitForTimeout(_));
 
-    // Advance the clock by another 20 seconds.
-    clock.add(TimeDelta::from_secs(20));
-
-    // Retry with process_pending_block - should now succeed.
-    let certificate = creator
-        .process_pending_block()
-        .await
-        .unwrap_ok_committed()
-        .unwrap();
+    // Retry to process the pending block a few times. It is not guaranteed in each attempt
+    // that the client successfully updates enough validators before `communicate_with_quorum`
+    // cancels the tasks, but eventually it will succeed and all validators will agree that the
+    // round has timed out.
+    let certificate = loop {
+        clock.add(TimeDelta::from_secs(20));
+        match creator.process_pending_block().await? {
+            ClientOutcome::Committed(Some(cert)) => break cert,
+            ClientOutcome::WaitForTimeout(_)
+                if clock.current_time()
+                    < Timestamp::from(0).saturating_add(TimeDelta::from_secs(200)) =>
+            {
+                continue
+            }
+            outcome => panic!("Failed to commit the block: {outcome:?}"),
+        }
+    };
 
     // Verify the certificate contains the "10 minutes" operation.
     let operations: Vec<_> = certificate.block().body.operations().collect();
