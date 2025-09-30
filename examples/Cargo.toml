@@ -22,6 +22,7 @@ members = [
     "publish-read-data-blob",
     "rfq",
     "social",
+    "time-expiry",
 ]
 
 [workspace.dependencies]
