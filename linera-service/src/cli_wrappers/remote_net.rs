@@ -16,7 +16,7 @@ use super::{
 
 pub struct RemoteNetTestingConfig {
     faucet: Faucet,
-    close_chains: bool,
+    close_chains: OnClientDrop,
 }
 
 impl RemoteNetTestingConfig {
@@ -25,7 +25,7 @@ impl RemoteNetTestingConfig {
     ///
     /// The faucet URL is obtained from the `LINERA_FAUCET_URL` environment variable.
     /// If `close_chains` is true, chains will be closed on drop, otherwise they will be left active.
-    pub fn new(close_chains: bool) -> Self {
+    pub fn new(close_chains: OnClientDrop) -> Self {
         Self {
             faucet: Faucet::new(
                 env::var("LINERA_FAUCET_URL")
@@ -70,7 +70,7 @@ pub struct RemoteNet {
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
     tmp_dir: Arc<TempDir>,
-    close_chains: bool,
+    close_chains: OnClientDrop,
 }
 
 #[async_trait]
@@ -91,11 +91,7 @@ impl LineraNet for RemoteNet {
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
-            if self.close_chains {
-                OnClientDrop::CloseChains
-            } else {
-                OnClientDrop::LeakChains
-            },
+            self.close_chains,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);
@@ -114,7 +110,7 @@ impl RemoteNet {
     async fn new(
         testing_prng_seed: Option<u64>,
         faucet: &Faucet,
-        close_chains: bool,
+        close_chains: OnClientDrop,
     ) -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         // Write json config to disk
