@@ -2,6 +2,8 @@
 
 set -eu
 
+shopt -s extglob
+
 cd $(dirname -- "${BASH_SOURCE[0]}")
 
 export RUST_TOOLCHAIN=nightly
@@ -37,3 +39,4 @@ wasm-bindgen \
     --split-linked-modules
 
 pnpm exec tsc
+pnpm exec tsc-alias

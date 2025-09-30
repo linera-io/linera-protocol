@@ -7,5 +7,8 @@
         "outDir": "dist/",
         "rootDir": "src",
         "declaration": true,
+        "paths": {
+            "@linera-web": ["./dist/linera.js"],
+        },
     }
 }

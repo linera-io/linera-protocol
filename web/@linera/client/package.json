@@ -6,7 +6,7 @@
     "access": "public"
   },
   "exports": {
-    ".": "dist/linera.js",
+    ".": "dist/index.js",
     "./*": "dist/*"
   },
   "types": "dist/index.d.ts",
@@ -39,7 +39,8 @@
   },
   "devDependencies": {
     "prettier": "3.5.3",
+    "tsc-alias": "^1.8.16",
     "typedoc": "^0.28.13",
-    "typedoc-plugin-markdown": "^4.8.1"
+    "typedoc-plugin-markdown": "^4.9.0"
   }
 }
