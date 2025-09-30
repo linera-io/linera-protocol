@@ -586,7 +586,7 @@ where
             .chain(manager.requested_signed_proposal)
         {
             if proposal.content.round == manager.current_round {
-                if let Err(err) = Box::pin(self.send_block_proposal(proposal, vec![])).await {
+                if let Err(err) = self.remote_node.handle_block_proposal(proposal).await {
                     tracing::info!("Failed to send block proposal: {err}");
                 } else {
                     return Ok(());
