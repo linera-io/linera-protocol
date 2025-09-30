@@ -837,17 +837,16 @@ impl ChainManagerInfo {
         identity: &AccountOwner,
         round: Round,
         seed: u64,
-        info: &ChainManagerInfo,
         current_committee: &BTreeMap<AccountOwner, u64>,
     ) -> bool {
         match round {
             Round::Fast => self.ownership.super_owners.contains(identity),
             Round::MultiLeader(_) => true,
             Round::SingleLeader(r) => {
-                if let Some(distribution) = calculate_distribution(info.ownership.owners.iter()) {
+                if let Some(distribution) = calculate_distribution(self.ownership.owners.iter()) {
                     let leader_index = round_leader_index(r, seed, Some(&distribution))
                         .expect("cannot fail if distribution is set");
-                    info.ownership.owners.keys().nth(leader_index) == Some(identity)
+                    self.ownership.owners.keys().nth(leader_index) == Some(identity)
                 } else {
                     tracing::warn!("no owners in chain ownership");
                     false
