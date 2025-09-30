@@ -1150,13 +1150,7 @@ where
     // The proposal should be in round MultiLeader(0).
     let chain_info = creator.chain_info_with_manager_values().await?;
     assert_eq!(
-        chain_info
-            .manager
-            .requested_proposed
-            .as_ref()
-            .unwrap()
-            .content
-            .round,
+        chain_info.manager.requested_proposed.unwrap().content.round,
         Round::MultiLeader(0)
     );
 
@@ -1171,13 +1165,7 @@ where
     // The proposal should now be in round MultiLeader(1).
     let chain_info = creator.chain_info_with_manager_values().await?;
     assert_eq!(
-        chain_info
-            .manager
-            .requested_proposed
-            .as_ref()
-            .unwrap()
-            .content
-            .round,
+        chain_info.manager.requested_proposed.unwrap().content.round,
         Round::MultiLeader(1)
     );
 
@@ -1192,13 +1180,7 @@ where
     // The proposal should now be in round SingleLeader(0).
     let chain_info = creator.chain_info_with_manager_values().await?;
     assert_eq!(
-        chain_info
-            .manager
-            .requested_proposed
-            .as_ref()
-            .unwrap()
-            .content
-            .round,
+        chain_info.manager.requested_proposed.unwrap().content.round,
         Round::SingleLeader(0)
     );
 
@@ -1221,11 +1203,11 @@ where
     clock.add(TimeDelta::from_secs(20));
 
     // Retry with process_pending_block - should now succeed.
-    let outcome = creator.process_pending_block().await?;
-    let certificate = match outcome {
-        ClientOutcome::Committed(Some(cert)) => cert,
-        _ => panic!("Expected a committed certificate"),
-    };
+    let certificate = creator
+        .process_pending_block()
+        .await
+        .unwrap_ok_committed()
+        .unwrap();
 
     // Verify the certificate contains the "10 minutes" operation.
     let operations: Vec<_> = certificate.block().body.operations().collect();
