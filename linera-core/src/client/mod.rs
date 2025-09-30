@@ -1809,7 +1809,9 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
     async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
+        let query = ChainInfoQuery::new(self.chain_id)
+            .with_manager_values()
+            .with_committees();
         let response = self
             .client
             .local_node
