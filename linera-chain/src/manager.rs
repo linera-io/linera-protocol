@@ -231,21 +231,12 @@ where
         local_time: Timestamp,
         fallback_owners: impl Iterator<Item = (AccountPublicKey, u64)> + 'a,
     ) -> Result<(), ChainError> {
-        let distribution = if !ownership.owners.is_empty() {
-            let weights = ownership.owners.values().copied().collect();
-            Some(WeightedAliasIndex::new(weights)?)
-        } else {
-            None
-        };
+        let distribution = calculate_distribution(ownership.owners.iter());
+
         let fallback_owners = fallback_owners
             .map(|(pub_key, weight)| (AccountOwner::from(pub_key), weight))
             .collect::<BTreeMap<_, _>>();
-        let fallback_distribution = if !fallback_owners.is_empty() {
-            let weights = fallback_owners.values().copied().collect();
-            Some(WeightedAliasIndex::new(weights)?)
-        } else {
-            None
-        };
+        let fallback_distribution = calculate_distribution(fallback_owners.iter());
 
         let current_round = ownership.first_round();
         let round_duration = ownership.round_timeout(current_round);
@@ -628,13 +619,19 @@ where
                 ownership.open_multi_leader_rounds || ownership.owners.contains_key(proposal_owner)
             }
             Round::SingleLeader(r) => {
-                let Some(index) = self.round_leader_index(r) else {
+                let Some(index) =
+                    round_leader_index(r, *self.seed.get(), self.distribution.get().as_ref())
+                else {
                     return Ok(false);
                 };
                 self.ownership.get().owners.keys().nth(index) == Some(proposal_owner)
             }
             Round::Validator(r) => {
-                let Some(index) = self.fallback_round_leader_index(r) else {
+                let Some(index) = round_leader_index(
+                    r,
+                    *self.seed.get(),
+                    self.fallback_distribution.get().as_ref(),
+                ) else {
                     return Ok(false);
                 };
                 self.fallback_owners.get().keys().nth(index) == Some(proposal_owner)
@@ -647,34 +644,20 @@ where
     fn round_leader(&self, round: Round) -> Option<&AccountOwner> {
         match round {
             Round::SingleLeader(r) => {
-                let index = self.round_leader_index(r)?;
+                let index =
+                    round_leader_index(r, *self.seed.get(), self.distribution.get().as_ref())?;
                 self.ownership.get().owners.keys().nth(index)
             }
             Round::Validator(r) => {
-                let index = self.fallback_round_leader_index(r)?;
+                let index = round_leader_index(
+                    r,
+                    *self.seed.get(),
+                    self.fallback_distribution.get().as_ref(),
+                )?;
                 self.fallback_owners.get().keys().nth(index)
             }
             Round::Fast | Round::MultiLeader(_) => None,
         }
-    }
-
-    /// Returns the index of the leader who is allowed to propose a block in the given round.
-    fn round_leader_index(&self, round: u32) -> Option<usize> {
-        let seed = u64::from(round)
-            .rotate_left(32)
-            .wrapping_add(*self.seed.get());
-        let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        Some(self.distribution.get().as_ref()?.sample(&mut rng))
-    }
-
-    /// Returns the index of the fallback leader who is allowed to propose a block in the given
-    /// round.
-    fn fallback_round_leader_index(&self, round: u32) -> Option<usize> {
-        let seed = u64::from(round)
-            .rotate_left(32)
-            .wrapping_add(*self.seed.get());
-        let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        Some(self.fallback_distribution.get().as_ref()?.sample(&mut rng))
     }
 
     /// Returns whether the owner is a super owner.
@@ -870,4 +853,27 @@ impl ChainManagerInfo {
             .as_ref()
             .is_some_and(|locking| locking.round() == self.current_round)
     }
+}
+
+/// Calculates a probability distribution from the given weights, or `None` if there are no weights.
+fn calculate_distribution<'a>(
+    weights: impl IntoIterator<Item = (&'a AccountOwner, &'a u64)>,
+) -> Option<WeightedAliasIndex<u64>> {
+    let weights: Vec<_> = weights.into_iter().map(|(_, weight)| *weight).collect();
+    if weights.is_empty() {
+        None
+    } else {
+        Some(WeightedAliasIndex::new(weights).ok()?)
+    }
+}
+
+/// Returns the index of the leader who is allowed to propose a block in the given round.
+fn round_leader_index(
+    round: u32,
+    seed: u64,
+    distribution: Option<&WeightedAliasIndex<u64>>,
+) -> Option<usize> {
+    let seed = u64::from(round).rotate_left(32).wrapping_add(seed);
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    Some(distribution?.sample(&mut rng))
 }
