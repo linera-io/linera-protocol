@@ -2054,10 +2054,16 @@ async fn kill_all_processes(pids: &[u32]) {
     }
 }
 
+fn should_init_opentelemetry(command: &ClientCommand) -> bool {
+    matches!(command, ClientCommand::Faucet { .. })
+}
+
 fn main() -> anyhow::Result<()> {
     let options = ClientOptions::init();
 
-    linera_base::tracing::init(&options.command.log_file_name());
+    if !should_init_opentelemetry(&options.command) {
+        linera_base::tracing::init(&options.command.log_file_name());
+    }
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -2097,6 +2103,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run(options: &ClientOptions) -> Result<i32, Error> {
+    if should_init_opentelemetry(&options.command) {
+        linera_base::tracing::init_with_opentelemetry(&options.command.log_file_name()).await;
+    }
+
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
