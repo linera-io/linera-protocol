@@ -3120,7 +3120,19 @@ impl<Env: Environment> ChainClient<Env> {
                 "Conflicting proposal in the current round",
             ));
         };
-        if manager.can_propose(identity, round, info.seed, &info.manager) {
+        let current_committee = info
+            .current_committee()?
+            .validators
+            .values()
+            .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
+            .collect();
+        if manager.can_propose(
+            identity,
+            round,
+            info.seed,
+            &info.manager,
+            &current_committee,
+        ) {
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {

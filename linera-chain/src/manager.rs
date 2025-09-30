@@ -838,6 +838,7 @@ impl ChainManagerInfo {
         round: Round,
         seed: u64,
         info: &ChainManagerInfo,
+        current_committee: &BTreeMap<AccountOwner, u64>,
     ) -> bool {
         match round {
             Round::Fast => self.ownership.super_owners.contains(identity),
@@ -852,7 +853,16 @@ impl ChainManagerInfo {
                     false
                 }
             }
-            Round::Validator(_) => self.leader.as_ref() == Some(identity),
+            Round::Validator(r) => {
+                if let Some(distribution) = calculate_distribution(current_committee.iter()) {
+                    let leader_index = round_leader_index(r, seed, Some(&distribution))
+                        .expect("cannot fail if distribution is set");
+                    current_committee.keys().nth(leader_index) == Some(identity)
+                } else {
+                    tracing::warn!("no owners in current committee");
+                    false
+                }
+            }
         }
     }
 
@@ -872,8 +882,8 @@ impl ChainManagerInfo {
 }
 
 /// Calculates a probability distribution from the given weights, or `None` if there are no weights.
-fn calculate_distribution<'a>(
-    weights: impl IntoIterator<Item = (&'a AccountOwner, &'a u64)>,
+fn calculate_distribution<'a, T: 'a>(
+    weights: impl IntoIterator<Item = (&'a T, &'a u64)>,
 ) -> Option<WeightedAliasIndex<u64>> {
     let weights: Vec<_> = weights.into_iter().map(|(_, weight)| *weight).collect();
     if weights.is_empty() {
