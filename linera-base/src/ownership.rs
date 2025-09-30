@@ -179,9 +179,9 @@ impl ChainOwnership {
         Some(next_round)
     }
 
-    /// Returns whether the given owner is the only owner, and a super owner.
-    pub fn is_single_super_owner(&self, owner: &AccountOwner) -> bool {
-        self.owners.is_empty() && self.super_owners.len() == 1 && self.super_owners.contains(owner)
+    /// Returns whether the given owner a super owner and there are no regular owners.
+    pub fn is_super_owner_no_regular_owners(&self, owner: &AccountOwner) -> bool {
+        self.owners.is_empty() && self.super_owners.contains(owner)
     }
 }
 
