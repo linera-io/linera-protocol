@@ -1648,6 +1648,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let num_operations = 500;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
@@ -1716,18 +1717,26 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
         to: address2,
         value: transfer1,
     };
-    let mutation = EvmQuery::Mutation(mutation.abi_encode());
-    application1.run_json_query(mutation).await?;
+    let mutations = vec![mutation.abi_encode(); num_operations];
+    let query = EvmQuery::Mutations(mutations);
+    let time_start = Instant::now();
+    application1.run_json_query(query).await?;
+    let average_time = (time_start.elapsed().as_millis() as f64) / (num_operations as f64);
+    tracing::info!("Average runtime for transfer={average_time}");
 
     let query = balanceOfCall { account: address1 };
     let query = EvmQuery::Query(query.abi_encode());
     let result = application1.run_json_query(query).await?;
-    assert_eq!(read_evm_u256_entry(result), the_supply - transfer1);
+    let mut repeated_transfer1 = U256::ZERO;
+    for _ in 0..num_operations {
+        repeated_transfer1 += transfer1;
+    }
+    assert_eq!(read_evm_u256_entry(result), the_supply - repeated_transfer1);
 
     let query = balanceOfCall { account: address2 };
     let query = EvmQuery::Query(query.abi_encode());
     let result = application1.run_json_query(query).await?;
-    assert_eq!(read_evm_u256_entry(result), transfer1);
+    assert_eq!(read_evm_u256_entry(result), repeated_transfer1);
 
     // Transferring to another chain and checking the balances.
 
@@ -1751,7 +1760,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     let result = application1.run_json_query(query.clone()).await?;
     assert_eq!(
         read_evm_u256_entry(result),
-        the_supply - transfer1 - transfer2
+        the_supply - repeated_transfer1 - transfer2
     );
 
     let query = balanceOfCall { account: address2 };
