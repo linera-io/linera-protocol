@@ -23,7 +23,8 @@ use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse,
+        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse, Round,
+        TimeDelta,
     },
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
@@ -51,7 +52,7 @@ use crate::client::client_tests::ServiceStorageBuilder;
 use crate::{
     client::{
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ChainClient, ChainClientError,
+        ChainClient, ChainClientError, ClientOutcome,
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
@@ -1105,6 +1106,145 @@ where
         .unwrap_ok_committed();
     assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
     assert_eq!(certificate.block().body.oracle_responses[1].len(), 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_time_expiry_rounds(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_time_expiry_rounds(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_time_expiry_rounds<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+
+    let creator = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+
+    // Publish and create the time-expiry application.
+    let module_id = creator.publish_wasm_example("time-expiry").await?;
+    let module_id = module_id.with_abi::<time_expiry::TimeExpiryAbi, (), ()>();
+    let (app_id, _) = creator
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Set two validators offline so we can't reach a quorum.
+    builder.set_fault_type([2, 3], FaultType::Offline);
+
+    // Try to commit ExpireAfter(5 seconds) - should fail (no quorum).
+    let op1 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(5));
+    let result = creator
+        .execute_operation(Operation::user(app_id, &op1)?)
+        .await;
+    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+
+    // The proposal should be in round MultiLeader(0).
+    let chain_info = creator.chain_info_with_manager_values().await?;
+    assert_eq!(
+        chain_info
+            .manager
+            .requested_proposed
+            .as_ref()
+            .unwrap()
+            .content
+            .round,
+        Round::MultiLeader(0)
+    );
+
+    // Clear the pending proposal and try again with ExpireAfter(6 seconds).
+    creator.clear_pending_proposal();
+    let op2 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(6));
+    let result = creator
+        .execute_operation(Operation::user(app_id, &op2)?)
+        .await;
+    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+
+    // The proposal should now be in round MultiLeader(1).
+    let chain_info = creator.chain_info_with_manager_values().await?;
+    assert_eq!(
+        chain_info
+            .manager
+            .requested_proposed
+            .as_ref()
+            .unwrap()
+            .content
+            .round,
+        Round::MultiLeader(1)
+    );
+
+    // Clear the pending proposal and try once more with ExpireAfter(7 seconds).
+    creator.clear_pending_proposal();
+    let op3 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(7));
+    let result = creator
+        .execute_operation(Operation::user(app_id, &op3)?)
+        .await;
+    assert_matches!(result, Err(ChainClientError::CommunicationError(_)));
+
+    // The proposal should now be in round SingleLeader(0).
+    let chain_info = creator.chain_info_with_manager_values().await?;
+    assert_eq!(
+        chain_info
+            .manager
+            .requested_proposed
+            .as_ref()
+            .unwrap()
+            .content
+            .round,
+        Round::SingleLeader(0)
+    );
+
+    // Make all validators honest again.
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
+
+    // Advance the clock by 10 seconds.
+    clock.add(TimeDelta::from_secs(10));
+
+    // Clear pending and try to commit ExpireAfter(10 minutes) - should timeout.
+    creator.clear_pending_proposal();
+    let op4 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(600));
+    let result = creator
+        .execute_operation(Operation::user(app_id, &op4)?)
+        .await?;
+    // The operation should return WaitForTimeout because the block expired.
+    assert_matches!(result, ClientOutcome::WaitForTimeout(_));
+
+    // Advance the clock by another 20 seconds.
+    clock.add(TimeDelta::from_secs(20));
+
+    // Retry with process_pending_block - should now succeed.
+    let outcome = creator.process_pending_block().await?;
+    let certificate = match outcome {
+        ClientOutcome::Committed(Some(cert)) => cert,
+        _ => panic!("Expected a committed certificate"),
+    };
+
+    // Verify the certificate contains the "10 minutes" operation.
+    let operations: Vec<_> = certificate.block().body.operations().collect();
+    assert_eq!(operations.len(), 1);
+    let operation = &operations[0];
+    if let Operation::User {
+        application_id,
+        bytes,
+    } = operation
+    {
+        assert_eq!(application_id, &app_id.forget_abi());
+        let decoded_op: time_expiry::TimeExpiryOperation = bcs::from_bytes(bytes)?;
+        assert_matches!(
+            decoded_op,
+            time_expiry::TimeExpiryOperation::ExpireAfter(delta) if delta == TimeDelta::from_secs(600)
+        );
+    } else {
+        panic!("Expected a user operation");
+    }
 
     Ok(())
 }

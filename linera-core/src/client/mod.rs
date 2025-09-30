@@ -3083,7 +3083,9 @@ impl<Env: Environment> ChainClient<Env> {
                 self.update_validators(Some(&committee)).await?;
                 Ok(ClientOutcome::Committed(Some(certificate)))
             }
-            Err(ChainClientError::CommunicationError(error)) => {
+            Err(ChainClientError::CommunicationError(error))
+                if info.manager.current_round >= Round::SingleLeader(0) =>
+            {
                 // Communication errors in this case often mean that someone else already
                 // finalized the block or started another round.
                 let timestamp = info.manager.round_timeout.ok_or(error)?;

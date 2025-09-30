@@ -880,7 +880,10 @@ impl ChainManagerInfo {
         match round {
             Round::Fast => self.ownership.super_owners.contains(identity),
             Round::MultiLeader(_) => true,
-            Round::SingleLeader(_) | Round::Validator(_) => self.leader.as_ref() == Some(identity),
+            Round::SingleLeader(_) | Round::Validator(_) => {
+                // TODO(#4694): Remove `is_none`; use correct leader computation.
+                self.leader.as_ref() == Some(identity) || self.leader.is_none()
+            }
         }
     }
 
