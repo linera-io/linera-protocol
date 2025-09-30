@@ -2580,7 +2580,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Using the round number during execution counts as an oracle.
         // Accessing the round number in single-leader rounds where we are not the leader
         // is not currently supported.
-        let round = match Self::round_for_new_proposal(&info, &identity, true)? {
+        let round = match self.round_for_new_proposal(&info, &identity, true).await? {
             Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
         };
@@ -2947,7 +2947,7 @@ impl<Env: Environment> ChainClient<Env> {
             // Use the round number assuming there are oracle responses.
             // Using the round number during execution counts as an oracle.
             let proposed_block = pending_proposal.block;
-            let round = match Self::round_for_new_proposal(&info, &owner, true)? {
+            let round = match self.round_for_new_proposal(&info, &owner, true).await? {
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
@@ -2963,7 +2963,10 @@ impl<Env: Environment> ChainClient<Env> {
 
         let has_oracle_responses = block.has_oracle_responses();
         let (proposed_block, outcome) = block.into_proposal();
-        let round = match Self::round_for_new_proposal(&info, &owner, has_oracle_responses)? {
+        let round = match self
+            .round_for_new_proposal(&info, &owner, has_oracle_responses)
+            .await?
+        {
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
@@ -3102,11 +3105,13 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns a round in which we can propose a new block or the given one, if possible.
-    fn round_for_new_proposal(
+    async fn round_for_new_proposal(
+        &self,
         info: &ChainInfo,
         identity: &AccountOwner,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
+        let seed = *self.chain_state_view().await?.manager.seed.get();
         let manager = &info.manager;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
@@ -3139,7 +3144,7 @@ impl<Env: Environment> ChainClient<Env> {
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
             .collect();
-        if manager.can_propose(identity, round, info.seed, &current_committee) {
+        if manager.can_propose(identity, round, seed, &current_committee) {
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
