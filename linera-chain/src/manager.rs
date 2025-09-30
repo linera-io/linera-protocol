@@ -706,7 +706,11 @@ where
     ///
     /// We don't update the signed proposal for any rounds later than `SingleLeader(0)`,
     /// because single-leader rounds cannot be skipped without a timeout certificate.
-    pub fn update_signed_proposal(&mut self, proposal: &BlockProposal) -> bool {
+    pub fn update_signed_proposal(
+        &mut self,
+        proposal: &BlockProposal,
+        local_time: Timestamp,
+    ) -> bool {
         if proposal.content.round > Round::SingleLeader(0) {
             return false;
         }
@@ -721,6 +725,7 @@ where
             }
         }
         self.signed_proposal.set(Some(proposal.clone()));
+        self.update_current_round(local_time);
         true
     }
 
