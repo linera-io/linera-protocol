@@ -1623,6 +1623,13 @@ where
                 runtime.schedule_operation(operation)?;
                 return Ok(Vec::new());
             }
+            EvmQuery::Mutations(operations) => {
+                let mut runtime = self.db.runtime.lock().unwrap();
+                for operation in operations {
+                    runtime.schedule_operation(operation)?;
+                }
+                return Ok(Vec::new());
+            }
         };
 
         ensure_message_length(query.len(), 4)?;
