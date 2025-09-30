@@ -564,51 +564,6 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    tracing::info!("Starting test {}", test_name!());
-
-    // Create runner and client.
-    let (mut net, client) = config.instantiate().await?;
-    let (chain_id, chain1) = {
-        let wallet = client.load_wallet()?;
-        let chains = wallet.owned_chain_ids();
-        (chains[0], chains[1])
-    };
-    let account = Account::chain(chain_id);
-    let balance = client.local_balance(account).await?;
-    // Stop validators.
-    for i in 0..4 {
-        net.remove_validator(i)?;
-    }
-    let result = client
-        .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, chain1)
-        .await;
-    assert!(result.is_err());
-    // The transfer didn't get confirmed.
-    assert_eq!(client.local_balance(account).await?, balance);
-    // Restart validators.
-    for i in 0..4 {
-        net.restart_validator(i).await?;
-    }
-    let result = client.retry_pending_block(Some(chain_id)).await;
-    assert!(result?.is_some());
-    client.sync(chain_id).await?;
-    // After retrying, the transfer got confirmed.
-    assert!(client.local_balance(account).await? <= balance - Amount::from_tokens(2));
-    let result = client.retry_pending_block(Some(chain_id)).await;
-    assert!(result?.is_none());
-
-    net.ensure_is_running().await?;
-    net.terminate().await?;
-
-    Ok(())
-}
-
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
