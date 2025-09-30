@@ -339,6 +339,7 @@ ChainInfo:
     - requested_received_log:
         SEQ:
           TYPENAME: ChainAndHeight
+    - seed: U64
 ChainInfoQuery:
   STRUCT:
     - chain_id:
