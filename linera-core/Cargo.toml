@@ -104,6 +104,7 @@ serde_json.workspace = true
 sha3.workspace = true
 social.workspace = true
 test-case.workspace = true
+time-expiry.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

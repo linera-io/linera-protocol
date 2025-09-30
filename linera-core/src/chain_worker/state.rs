@@ -208,7 +208,7 @@ where
         };
 
         if !responded {
-            warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
+            debug!("Callback for `ChainWorkerActor` was dropped before a response was sent");
         }
 
         // Roll back any unsaved changes to the chain state: If there was an error while trying
@@ -1277,10 +1277,15 @@ where
             // We already voted for this block.
             return Ok((self.chain_info_response(), NetworkActions::default()));
         }
+        let local_time = self.storage.clock().current_time();
 
         // Make sure we remember that a proposal was signed, to determine the correct round to
         // propose in.
-        if self.chain.manager.update_signed_proposal(&proposal) {
+        if self
+            .chain
+            .manager
+            .update_signed_proposal(&proposal, local_time)
+        {
             self.save().await?;
         }
 
@@ -1291,7 +1296,6 @@ where
             outcome,
         } = content;
 
-        let local_time = self.storage.clock().current_time();
         ensure!(
             block.timestamp.duration_since(local_time) <= self.config.grace_period,
             WorkerError::InvalidTimestamp

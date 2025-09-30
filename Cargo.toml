@@ -328,6 +328,7 @@ native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
 publish-read-data-blob = { path = "./examples/publish-read-data-blob" }
 social = { path = "./examples/social" }
+time-expiry = { path = "./examples/time-expiry" }
 
 [workspace.dependencies.aws-config]
 default-features = false
