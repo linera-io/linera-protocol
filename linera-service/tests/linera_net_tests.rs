@@ -41,8 +41,6 @@ use linera_sdk::{
     feature = "storage-service",
 ))]
 use linera_service::cli_wrappers::local_net::{Database, LocalNetConfig};
-#[cfg(feature = "remote-net")]
-use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
 #[cfg(any(
     feature = "dynamodb",
     feature = "scylladb",
@@ -54,10 +52,12 @@ use linera_service::cli_wrappers::Network;
 use linera_service::cli_wrappers::{
     docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
 };
+#[cfg(feature = "remote-net")]
+use linera_service::cli_wrappers::{remote_net::RemoteNetTestingConfig, OnClientDrop::*};
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, ProcessInbox},
-        ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, OnClientDrop::*,
+        ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig,
     },
     test_name,
     util::eventually,
