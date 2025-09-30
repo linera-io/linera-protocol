@@ -16,7 +16,7 @@ use super::{
 
 pub struct RemoteNetTestingConfig {
     faucet: Faucet,
-    close_chain: bool,
+    close_chains: bool,
 }
 
 impl RemoteNetTestingConfig {
@@ -24,14 +24,14 @@ impl RemoteNetTestingConfig {
     /// network.
     ///
     /// The faucet URL is obtained from the `LINERA_FAUCET_URL` environment variable.
-    /// If `close_chain` is true, chains will be closed on drop, otherwise they will be left active.
-    pub fn new(close_chain: bool) -> Self {
+    /// If `close_chains` is true, chains will be closed on drop, otherwise they will be left active.
+    pub fn new(close_chains: bool) -> Self {
         Self {
             faucet: Faucet::new(
                 env::var("LINERA_FAUCET_URL")
                     .expect("Missing `LINERA_FAUCET_URL` environment variable"),
             ),
-            close_chain,
+            close_chains,
         }
     }
 }
@@ -41,7 +41,7 @@ impl LineraNetConfig for RemoteNetTestingConfig {
     type Net = RemoteNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let mut net = RemoteNet::new(None, &self.faucet, self.close_chain)
+        let mut net = RemoteNet::new(None, &self.faucet, self.close_chains)
             .await
             .expect("Creating RemoteNet should not fail");
 
@@ -70,7 +70,7 @@ pub struct RemoteNet {
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
     tmp_dir: Arc<TempDir>,
-    close_chain: bool,
+    close_chains: bool,
 }
 
 #[async_trait]
@@ -91,7 +91,7 @@ impl LineraNet for RemoteNet {
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
-            if self.close_chain {
+            if self.close_chains {
                 OnClientDrop::CloseChains
             } else {
                 OnClientDrop::LeakChains
@@ -114,7 +114,7 @@ impl RemoteNet {
     async fn new(
         testing_prng_seed: Option<u64>,
         faucet: &Faucet,
-        close_chain: bool,
+        close_chains: bool,
     ) -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         // Write json config to disk
@@ -129,7 +129,7 @@ impl RemoteNet {
             testing_prng_seed,
             next_client_id: 0,
             tmp_dir,
-            close_chain,
+            close_chains,
         })
     }
 }
