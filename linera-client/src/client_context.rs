@@ -436,7 +436,9 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
-        client.prepare_chain().await?;
+        if let Err(err) = client.prepare_chain().await {
+            tracing::warn!("Failed to synchronize the chain: {err}");
+        }
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
         self.update_wallet_from_client(client).await?;

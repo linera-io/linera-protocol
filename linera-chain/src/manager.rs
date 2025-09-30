@@ -559,7 +559,8 @@ where
 
     /// Updates `current_round` and `round_timeout` if necessary.
     ///
-    /// This must be after every change to `timeout`, `locking`, `proposed` or `signed_proposal`.
+    /// This must be called after every change to `timeout`, `locking`, `proposed` or
+    /// `signed_proposal`.
     ///
     /// The current round starts at `Fast` if there is a super owner, `MultiLeader(0)` if at least
     /// one multi-leader round is configured, or otherwise `SingleLeader(0)`.
