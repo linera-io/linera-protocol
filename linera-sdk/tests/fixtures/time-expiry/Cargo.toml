@@ -1,0 +1,17 @@
+[package]
+name = "time-expiry"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+linera-sdk.workspace = true
+serde.workspace = true
+
+[[bin]]
+name = "time_expiry_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "time_expiry_service"
+path = "src/service.rs"

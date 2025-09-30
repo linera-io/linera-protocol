@@ -1809,7 +1809,9 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
     async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
+        let query = ChainInfoQuery::new(self.chain_id)
+            .with_manager_values()
+            .with_committees();
         let response = self
             .client
             .local_node
@@ -1840,10 +1842,13 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(query)
             .await?
             .info;
+        if self
+            .preferred_owner
+            .is_some_and(|owner| info.manager.ownership.is_single_super_owner(&owner))
         {
+            // We are the only owner, so we should be up to date.
             ensure!(
-                self.has_other_owners(&info.manager.ownership)
-                    || info.next_block_height >= self.initial_next_block_height,
+                info.next_block_height >= self.initial_next_block_height,
                 ChainClientError::WalletSynchronizationError
             );
         }
@@ -2000,9 +2005,12 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut info = self.synchronize_to_known_height().await?;
 
-        if self.has_other_owners(&info.manager.ownership) {
-            // For chains with any owner other than ourselves, we could be missing recent
-            // certificates created by other owners. Further synchronize blocks from the network.
+        if self
+            .preferred_owner
+            .is_none_or(|owner| !info.manager.ownership.is_single_super_owner(&owner))
+        {
+            // If we are not a single super owner, we could be missing recent
+            // certificates created by other clients. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
             info = self.client.synchronize_chain_state(self.chain_id).await?;
         }
@@ -2551,7 +2559,7 @@ impl<Env: Environment> ChainClient<Env> {
                 use the `linera retry-pending-block` command to commit that first"
             )
         );
-        let info = self.chain_info().await?;
+        let info = self.chain_info_with_committees().await?;
         let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
         let transactions = incoming_bundles
             .into_iter()
@@ -2572,7 +2580,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Using the round number during execution counts as an oracle.
         // Accessing the round number in single-leader rounds where we are not the leader
         // is not currently supported.
-        let round = match Self::round_for_new_proposal(&info, &identity, true)? {
+        let round = match self.round_for_new_proposal(&info, &identity, true).await? {
             Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
         };
@@ -2939,7 +2947,7 @@ impl<Env: Environment> ChainClient<Env> {
             // Use the round number assuming there are oracle responses.
             // Using the round number during execution counts as an oracle.
             let proposed_block = pending_proposal.block;
-            let round = match Self::round_for_new_proposal(&info, &owner, true)? {
+            let round = match self.round_for_new_proposal(&info, &owner, true).await? {
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
@@ -2955,7 +2963,10 @@ impl<Env: Environment> ChainClient<Env> {
 
         let has_oracle_responses = block.has_oracle_responses();
         let (proposed_block, outcome) = block.into_proposal();
-        let round = match Self::round_for_new_proposal(&info, &owner, has_oracle_responses)? {
+        let round = match self
+            .round_for_new_proposal(&info, &owner, has_oracle_responses)
+            .await?
+        {
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
@@ -3039,8 +3050,11 @@ impl<Env: Environment> ChainClient<Env> {
         // the next round.
         if let Some(round_timeout) = info.manager.round_timeout {
             if round_timeout <= self.storage_client().clock().current_time() {
-                self.request_leader_timeout().await?;
-                info = self.chain_info_with_manager_values().await?;
+                if let Err(e) = self.request_leader_timeout().await {
+                    warn!("Failed to obtain a timeout certificate: {}", e);
+                } else {
+                    info = self.chain_info_with_manager_values().await?;
+                }
             }
         }
         Ok(info)
@@ -3074,7 +3088,9 @@ impl<Env: Environment> ChainClient<Env> {
                 self.update_validators(Some(&committee)).await?;
                 Ok(ClientOutcome::Committed(Some(certificate)))
             }
-            Err(ChainClientError::CommunicationError(error)) => {
+            Err(ChainClientError::CommunicationError(error))
+                if info.manager.current_round >= Round::SingleLeader(0) =>
+            {
                 // Communication errors in this case often mean that someone else already
                 // finalized the block or started another round.
                 let timestamp = info.manager.round_timeout.ok_or(error)?;
@@ -3089,11 +3105,13 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns a round in which we can propose a new block or the given one, if possible.
-    fn round_for_new_proposal(
+    async fn round_for_new_proposal(
+        &self,
         info: &ChainInfo,
         identity: &AccountOwner,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
+        let seed = *self.chain_state_view().await?.manager.seed.get();
         let manager = &info.manager;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
@@ -3120,7 +3138,13 @@ impl<Env: Environment> ChainClient<Env> {
                 "Conflicting proposal in the current round",
             ));
         };
-        if manager.can_propose(identity, round) {
+        let current_committee = info
+            .current_committee()?
+            .validators
+            .values()
+            .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
+            .collect();
+        if manager.can_propose(identity, round, seed, &current_committee) {
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
@@ -4127,13 +4151,6 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         Ok(())
-    }
-
-    /// Returns whether the given ownership includes anyone whose secret key we don't have.
-    fn has_other_owners(&self, ownership: &ChainOwnership) -> bool {
-        ownership
-            .all_owners()
-            .any(|owner| Some(owner) != self.preferred_owner.as_ref())
     }
 }
 
