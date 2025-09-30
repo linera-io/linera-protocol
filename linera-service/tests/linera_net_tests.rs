@@ -1648,7 +1648,7 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u256_entry};
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let num_operations = 2;
+    let num_operations = 500;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
@@ -1719,7 +1719,10 @@ async fn test_evm_erc20_shared(config: impl LineraNetConfig) -> Result<()> {
     };
     let mutations = vec![mutation.abi_encode(); num_operations];
     let query = EvmQuery::Mutations(mutations);
+    let time_start = Instant::now();
     application1.run_json_query(query).await?;
+    let average_time = (time_start.elapsed().as_millis() as f64) / (num_operations as f64);
+    tracing::info!("Average runtime for transfer={average_time}");
 
     let query = balanceOfCall { account: address1 };
     let query = EvmQuery::Query(query.abi_encode());
