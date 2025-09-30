@@ -1137,7 +1137,6 @@ pub mod tests {
             requested_sent_certificate_hashes: vec![],
             count_received_log: 0,
             requested_received_log: vec![],
-            seed: 0,
         });
 
         let chain_info_response_none = ChainInfoResponse {

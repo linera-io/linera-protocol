@@ -215,8 +215,6 @@ pub struct ChainInfo {
     /// The response to `request_received_certificates_excluding_first_n`
     #[debug(skip_if = Vec::is_empty)]
     pub requested_received_log: Vec<ChainAndHeight>,
-    /// The seed for the pseudo-random number generator that determines the round leaders.
-    pub seed: u64,
 }
 
 impl ChainInfo {
@@ -305,7 +303,6 @@ where
             requested_sent_certificate_hashes: Vec::new(),
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
-            seed: *view.manager.seed.get(),
         }
     }
 }
