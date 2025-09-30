@@ -572,27 +572,29 @@ where
             self.remote_node.handle_chain_info_query(query).await?
         };
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
-        // If the remote node is missing a timeout certificate, send it as well.
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let local_info = self.local_node.handle_chain_info_query(query).await?.info;
-        if let Some(cert) = local_info.manager.timeout {
-            if (local_info.next_block_height, cert.round) >= (remote_height, remote_round) {
-                tracing::debug!("Sending timeout for {}", cert.round);
-                self.remote_node.handle_timeout_certificate(*cert).await?;
+        let manager = local_info.manager;
+        if local_info.next_block_height != remote_height || manager.current_round <= remote_round {
+            return Ok(());
+        }
+        // The remote node is at our height but not at the current round. Send it the proposal,
+        // validated block certificate or timeout certificate that proves the current round.
+        for proposal in manager
+            .requested_proposed
+            .into_iter()
+            .chain(manager.requested_signed_proposal)
+        {
+            if proposal.content.round == manager.current_round {
+                if let Err(err) = Box::pin(self.send_block_proposal(proposal, vec![])).await {
+                    tracing::info!("Failed to send block proposal: {err}");
+                } else {
+                    return Ok(());
+                }
             }
         }
-        if let Some(proposal) = local_info.manager.requested_proposed {
-            if let Err(err) = Box::pin(self.send_block_proposal(proposal, vec![])).await {
-                tracing::info!("Failed to send block proposal: {err}");
-            }
-        }
-        if let Some(proposal) = local_info.manager.requested_signed_proposal {
-            if let Err(err) = Box::pin(self.send_block_proposal(proposal, vec![])).await {
-                tracing::info!("Failed to send block proposal: {err}");
-            }
-        }
-        match local_info.manager.requested_locking.map(|b| *b) {
-            Some(LockingBlock::Regular(validated)) => {
+        if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.map(|b| *b) {
+            if validated.round == manager.current_round {
                 if let Err(err) = self
                     .remote_node
                     .handle_optimized_validated_certificate(
@@ -602,16 +604,16 @@ where
                     .await
                 {
                     tracing::info!("Failed to send locking block: {err}");
+                } else {
+                    return Ok(());
                 }
             }
-            Some(LockingBlock::Fast(proposal)) => {
-                if let Err(err) =
-                    Box::pin(self.send_block_proposal(Box::new(proposal), vec![])).await
-                {
-                    tracing::info!("Failed to send block proposal: {err}");
-                }
+        }
+        if let Some(cert) = manager.timeout {
+            if cert.round >= remote_round {
+                tracing::debug!("Sending timeout for {}", cert.round);
+                self.remote_node.handle_timeout_certificate(*cert).await?;
             }
-            None => {}
         }
         Ok(())
     }
