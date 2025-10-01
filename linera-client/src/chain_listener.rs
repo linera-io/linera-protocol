@@ -187,7 +187,7 @@ pub struct ChainListener<C: ClientContext> {
     cancellation_token: CancellationToken,
 }
 
-impl<C: ClientContext> ChainListener<C> {
+impl<C: ClientContext + 'static> ChainListener<C> {
     /// Creates a new chain listener given client chains.
     pub fn new(
         config: ChainListenerConfig,
@@ -224,6 +224,26 @@ impl<C: ClientContext> ChainListener<C> {
                     .map(|chain_id| (chain_id, ListeningMode::FullChain)),
             )
         };
+
+        // Start background tasks to sync received certificates for each chain.
+        let context = Arc::clone(&self.context);
+        let cancellation_token = self.cancellation_token.clone();
+        for chain_id in chain_ids.keys() {
+            let context = Arc::clone(&context);
+            let cancellation_token = cancellation_token.clone();
+            let chain_id = *chain_id;
+            tokio::spawn(async move {
+                if let Err(e) = Self::background_sync_received_certificates(
+                    context,
+                    chain_id,
+                    cancellation_token,
+                )
+                .await
+                {
+                    warn!("Background sync failed for chain {}: {}", chain_id, e);
+                }
+            });
+        }
 
         Ok(async {
             self.listen_recursively(chain_ids).await?;
@@ -378,6 +398,54 @@ impl<C: ClientContext> ChainListener<C> {
                     Entry::Occupied(mut occupied) => {
                         occupied.get_mut().extend(Some(new_listening_mode));
                     }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Background task that syncs received certificates in small batches.
+    /// This discovers unacknowledged sender blocks gradually without overwhelming the system.
+    #[instrument(skip(context, cancellation_token))]
+    async fn background_sync_received_certificates(
+        context: Arc<Mutex<C>>,
+        chain_id: ChainId,
+        cancellation_token: CancellationToken,
+    ) -> Result<(), Error> {
+        const BATCH_SIZE: usize = 100;
+        const SLEEP_BETWEEN_BATCHES_MS: u64 = 500;
+
+        info!(
+            "Starting background certificate sync for chain {}",
+            chain_id
+        );
+
+        loop {
+            // Check if we should stop.
+            if cancellation_token.is_cancelled() {
+                info!("Background sync cancelled for chain {}", chain_id);
+                break;
+            }
+
+            // Sleep to avoid overwhelming the system.
+            Self::sleep(SLEEP_BETWEEN_BATCHES_MS).await;
+
+            // Sync one batch.
+            let client = context.lock().await.make_chain_client(chain_id);
+            match client.sync_received_certificates_batch(BATCH_SIZE).await {
+                Ok(has_more) => {
+                    if !has_more {
+                        info!("Background sync completed for chain {}", chain_id);
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "Error syncing batch for chain {}: {}. Will retry.",
+                        chain_id, e
+                    );
+                    // Continue trying despite errors - validators might be temporarily unavailable.
                 }
             }
         }
