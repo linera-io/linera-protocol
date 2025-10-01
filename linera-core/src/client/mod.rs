@@ -1623,6 +1623,14 @@ pub enum ChainClientError {
 
     #[error("Epoch is already revoked")]
     EpochAlreadyRevoked,
+
+    #[error(
+        "Failed to download missing sender blocks from chain {chain_id:?} at heights {heights:?}"
+    )]
+    CannotDownloadMissingSenderBlocks {
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    },
 }
 
 impl From<Infallible> for ChainClientError {
@@ -2021,13 +2029,15 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?;
         }
 
-        let result = self
+        // Check if we're missing any sender blocks for cross-chain messages.
+        let missing_blocks = self
             .chain_state_view()
             .await?
-            .validate_incoming_bundles()
-            .await;
-        if matches!(result, Err(ChainError::MissingCrossChainUpdate { .. })) {
-            self.find_received_certificates().await?;
+            .collect_missing_sender_blocks()
+            .await?;
+        if !missing_blocks.is_empty() {
+            // Download only the specific sender blocks we're missing.
+            self.download_missing_sender_blocks(missing_blocks).await?;
         }
         self.client.update_from_info(&info);
         Ok(info)
@@ -2328,6 +2338,76 @@ impl<Env: Environment> ChainClient<Env> {
         };
         self.receive_certificates_from_validators(received_certificate_batches)
             .await;
+        Ok(())
+    }
+
+    /// Downloads only the specific sender blocks needed for missing cross-chain messages.
+    /// This is a targeted alternative to `find_received_certificates` that only downloads
+    /// the exact sender blocks we're missing, rather than searching through all received
+    /// certificates.
+    #[instrument(level = "trace")]
+    async fn download_missing_sender_blocks(
+        &self,
+        missing_blocks: BTreeMap<ChainId, Vec<BlockHeight>>,
+    ) -> Result<(), ChainClientError> {
+        if missing_blocks.is_empty() {
+            return Ok(());
+        }
+
+        let (_, committee) = self.admin_committee().await?;
+        let nodes = self.client.make_nodes(&committee)?;
+        let (max_epoch, committees) = self.client.admin_committees().await?;
+
+        // Download certificates for each sender chain at the specific heights.
+        let certificates = stream::iter(missing_blocks.into_iter())
+            .map(|(sender_chain_id, heights)| {
+                let nodes = nodes.clone();
+                async move {
+                    // Try to download from any node.
+                    for node in &nodes {
+                        if let Ok(certs) = node
+                            .download_certificates_by_heights(sender_chain_id, heights.clone())
+                            .await
+                        {
+                            return Ok::<Vec<_>, ChainClientError>(certs);
+                        }
+                    }
+                    // If all nodes fail, return an error.
+                    Err(ChainClientError::CannotDownloadMissingSenderBlocks {
+                        chain_id: sender_chain_id,
+                        heights,
+                    })
+                }
+            })
+            .buffer_unordered(self.options.max_joined_tasks)
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        // Process and validate the downloaded certificates.
+        let mut valid_certificates = Vec::new();
+        for certificate in certificates.into_iter().flatten() {
+            match Client::<Env>::check_certificate(max_epoch, &committees, &certificate)? {
+                CheckCertificateResult::FutureEpoch | CheckCertificateResult::OldEpoch => {
+                    // Skip certificates from unrecognized epochs.
+                    continue;
+                }
+                CheckCertificateResult::New => {
+                    valid_certificates.push(certificate);
+                }
+            }
+        }
+
+        // Receive and process the certificates.
+        for certificate in valid_certificates {
+            self.client
+                .receive_sender_certificate(
+                    certificate,
+                    ReceiveCertificateMode::AlreadyChecked,
+                    Some(nodes.clone()),
+                )
+                .await?;
+        }
+
         Ok(())
     }
 
