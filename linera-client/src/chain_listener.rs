@@ -58,14 +58,6 @@ pub struct ChainListenerConfig {
         env = "LINERA_LISTENER_DELAY_AFTER"
     )]
     pub delay_after_ms: u64,
-
-    /// Number of certificates to fetch per batch during background synchronization.
-    #[arg(
-        long = "listener-sync-batch-size",
-        default_value = "100",
-        env = "LINERA_LISTENER_SYNC_BATCH_SIZE"
-    )]
-    pub sync_batch_size: usize,
 }
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
@@ -240,17 +232,14 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         // if enabled (sync_sleep_ms is Some).
         if let Some(sync_sleep_ms) = sync_sleep_ms {
             let context = Arc::clone(&self.context);
-            let config = Arc::clone(&self.config);
             let cancellation_token = self.cancellation_token.clone();
             for chain_id in chain_ids.keys() {
                 let context = Arc::clone(&context);
-                let config = Arc::clone(&config);
                 let cancellation_token = cancellation_token.clone();
                 let chain_id = *chain_id;
                 drop(linera_base::task::spawn(async move {
                     if let Err(e) = Self::background_sync_received_certificates(
                         context,
-                        config,
                         sync_sleep_ms,
                         chain_id,
                         cancellation_token,
@@ -425,10 +414,9 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
     /// Background task that syncs received certificates in small batches.
     /// This discovers unacknowledged sender blocks gradually without overwhelming the system.
-    #[instrument(skip(context, config, cancellation_token))]
+    #[instrument(skip(context, cancellation_token))]
     async fn background_sync_received_certificates(
         context: Arc<Mutex<C>>,
-        config: Arc<ChainListenerConfig>,
         sync_sleep_ms: u64,
         chain_id: ChainId,
         cancellation_token: CancellationToken,
@@ -447,10 +435,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
             // Sync one batch.
             let client = context.lock().await.make_chain_client(chain_id);
-            match client
-                .sync_received_certificates_batch(config.sync_batch_size)
-                .await
-            {
+            match client.sync_received_certificates_batch().await {
                 Ok(has_more) => {
                     if !has_more {
                         info!("Background sync completed for chain {chain_id}");

@@ -827,7 +827,6 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
         remote_node: &RemoteNode<Env::ValidatorNode>,
-        max_entries: usize,
     ) -> Result<(ReceivedCertificatesFromValidator, bool), ChainClientError> {
         let mut tracker = self
             .local_node
@@ -841,15 +840,13 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = self.admin_committees().await?;
 
         // Retrieve a limited batch of received certificates from this validator.
-        let mut remote_log = Vec::new();
         let offset = tracker;
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
         let info = remote_node.handle_chain_info_query(query).await?;
         let received_entries = info.requested_received_log.len();
         let has_more = received_entries >= CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
 
-        // Take only up to max_entries.
-        remote_log.extend(info.requested_received_log.into_iter().take(max_entries));
+        let remote_log = info.requested_received_log;
         let remote_heights = Self::heights_per_chain(&remote_log);
 
         // Obtain the next block height we need in the local node, for each chain.
@@ -2304,9 +2301,8 @@ impl<Env: Environment> ChainClient<Env> {
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
 
         // Sync in batches until all received certificates are downloaded.
-        const BATCH_SIZE: usize = 1000;
         loop {
-            let has_more = self.sync_received_certificates_batch(BATCH_SIZE).await?;
+            let has_more = self.sync_received_certificates_batch().await?;
             if !has_more {
                 break;
             }
@@ -2317,10 +2313,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Downloads one batch of received certificates with Byzantine fault tolerance.
     /// Returns true if there are more certificates to fetch.
     #[instrument(level = "trace")]
-    pub async fn sync_received_certificates_batch(
-        &self,
-        batch_size: usize,
-    ) -> Result<bool, ChainClientError> {
+    pub async fn sync_received_certificates_batch(&self) -> Result<bool, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
 
@@ -2341,7 +2334,6 @@ impl<Env: Environment> ChainClient<Env> {
                         .synchronize_received_certificates_batch_from_validator(
                             chain_id,
                             &remote_node,
-                            batch_size,
                         )
                         .await
                 })
