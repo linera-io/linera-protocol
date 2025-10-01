@@ -5,6 +5,7 @@ members = [
     "create-and-call",
     "meta-counter",
     "publish-read-data-blob",
+    "time-expiry",
     "track-instantiation",
 ]
 
@@ -21,6 +22,7 @@ counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
 create-and-call = { path = "./create-and-call" }
 meta-counter = { path = "./meta-counter" }
 publish-read-data-blob = { path = "./publish-read-data-blob" }
+time-expiry = { path = "./time-expiry" }
 track-instantiation = { path = "./track-instantiation" }
 
 [profile.release]

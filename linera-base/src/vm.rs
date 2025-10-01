@@ -64,4 +64,6 @@ pub enum EvmQuery {
     Query(Vec<u8>),
     /// A request to schedule an operation that can mutate the application state.
     Mutation(Vec<u8>),
+    /// A request to schedule operations that can mutate the application state.
+    Mutations(Vec<Vec<u8>>),
 }
