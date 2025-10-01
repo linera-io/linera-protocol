@@ -2799,14 +2799,15 @@ where
 
     // Create sender and receiver chains.
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let receiver = builder.add_root_chain(2, Amount::from_tokens(2)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let sender2 = builder.add_root_chain(3, Amount::from_tokens(2)).await?;
 
     // Both senders transfer to receiver.
+    let amount1 = Amount::from_tokens(2);
     sender
         .transfer_to_account(
             AccountOwner::CHAIN,
-            Amount::from_tokens(2),
+            amount1,
             Account::chain(receiver.chain_id()),
         )
         .await
@@ -2816,23 +2817,21 @@ where
     receiver.synchronize_from_validators().await?;
     receiver.process_inbox().await?;
 
+    let amount2 = Amount::from_tokens(1);
     sender2
         .transfer_to_account(
             AccountOwner::CHAIN,
-            Amount::from_tokens(1),
+            amount2,
             Account::chain(receiver.chain_id()),
         )
         .await
         .unwrap_ok_committed();
 
-    // It does not synchronize the second message.
+    // It does not process the second message.
     receiver.synchronize_from_validators().await?;
 
-    // Verify the balance increased.
-    assert_eq!(
-        receiver.local_balance().await.unwrap(),
-        Amount::from_tokens(4)
-    );
+    // Verify the first message was processed, but not the second.
+    assert_eq!(receiver.local_balance().await.unwrap(), amount1);
 
     // Create a new client for the same chain. This new client will have the processed
     // inbox message (the removed_bundles state), but won't have the sender blocks yet
