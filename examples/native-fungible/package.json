@@ -1,5 +1,5 @@
 {
-  "name": "@linera/examples/hosted-fungible",
+  "name": "@linera/examples/fungible",
   "private": true,
   "author": "Linera <contact@linera.io>",
   "license": "Apache-2.0",
