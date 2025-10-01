@@ -2781,3 +2781,78 @@ where
 
     Ok(())
 }
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_prepare_chain_with_cross_chain_messages<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+
+    // Create sender and receiver chains.
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::from_tokens(2)).await?;
+
+    // Sender transfers to receiver.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Receiver synchronizes and processes the inbox.
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+
+    // Verify the balance increased.
+    assert_eq!(
+        receiver.local_balance().await.unwrap(),
+        Amount::from_tokens(4)
+    );
+
+    // Create a new client for the same chain. This new client will have the processed
+    // inbox message (the removed_bundles state), but won't have the sender blocks yet
+    // because we're creating it fresh.
+    let receiver_info = receiver.chain_info().await?;
+    let receiver2 = builder
+        .make_client(
+            receiver.chain_id(),
+            receiver_info.block_hash,
+            receiver_info.next_block_height,
+        )
+        .await?;
+
+    // Test that prepare_chain downloads the missing sender blocks.
+    // The new client has the inbox state showing that a message was processed,
+    // but needs to download the sender block.
+    let info = receiver2.prepare_chain().await?;
+    assert_eq!(info.next_block_height, BlockHeight::from(1));
+
+    // The new client should now be able to make a transfer successfully.
+    receiver2
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(sender.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    assert_eq!(
+        receiver2.local_balance().await.unwrap(),
+        Amount::from_tokens(3)
+    );
+
+    Ok(())
+}
