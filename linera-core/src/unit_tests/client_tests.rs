@@ -2800,8 +2800,9 @@ where
     // Create sender and receiver chains.
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let receiver = builder.add_root_chain(2, Amount::from_tokens(2)).await?;
+    let sender2 = builder.add_root_chain(3, Amount::from_tokens(2)).await?;
 
-    // Sender transfers to receiver.
+    // Both senders transfer to receiver.
     sender
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -2811,9 +2812,21 @@ where
         .await
         .unwrap_ok_committed();
 
-    // Receiver synchronizes and processes the inbox.
+    // Receiver synchronizes and processes the message.
     receiver.synchronize_from_validators().await?;
     receiver.process_inbox().await?;
+
+    sender2
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(1),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // It does not synchronize the second message.
+    receiver.synchronize_from_validators().await?;
 
     // Verify the balance increased.
     assert_eq!(
@@ -2833,11 +2846,28 @@ where
         )
         .await?;
 
-    // Test that prepare_chain downloads the missing sender blocks.
-    // The new client has the inbox state showing that a message was processed,
-    // but needs to download the sender block.
+    // Test that prepare_chain downloads only the sender blocks for acknowledged messages.
+    // The new client has the inbox state showing that a message from sender was processed,
+    // but needs to download the sender block. The message from sender2 hasn't been
+    // processed yet, so its block should NOT be downloaded.
     let info = receiver2.prepare_chain().await?;
     assert_eq!(info.next_block_height, BlockHeight::from(1));
+
+    // Verify that sender's block WAS downloaded.
+    let local_node = &receiver2.client.local_node;
+    let sender_info = local_node.chain_info(sender.chain_id()).await?;
+    assert_eq!(
+        sender_info.next_block_height,
+        BlockHeight::from(1),
+        "prepare_chain should download acknowledged sender blocks"
+    );
+
+    // Verify that sender2's block was NOT downloaded.
+    let sender2_info = local_node.chain_info(sender2.chain_id()).await;
+    assert!(
+        sender2_info.is_err() || sender2_info.unwrap().next_block_height == BlockHeight::ZERO,
+        "prepare_chain should not download unacknowledged sender blocks"
+    );
 
     // The new client should now be able to make a transfer successfully.
     receiver2
