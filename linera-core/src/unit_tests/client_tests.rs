@@ -2869,19 +2869,17 @@ where
     );
 
     // The new client should now be able to make a transfer successfully.
+    let amount3 = Amount::from_tokens(1);
     receiver2
         .transfer(
             AccountOwner::CHAIN,
-            Amount::from_tokens(1),
+            amount3,
             Account::chain(sender.chain_id()),
         )
         .await
         .unwrap_ok_committed();
 
-    assert_eq!(
-        receiver2.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
+    assert_eq!(receiver2.local_balance().await.unwrap(), amount1 - amount3);
 
     Ok(())
 }
