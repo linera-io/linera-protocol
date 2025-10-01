@@ -14,8 +14,6 @@ use linera_base::{
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
 use tokio::{process::Command, task::JoinSet};
-#[cfg(with_testing)]
-use {linera_base::command::current_binary_parent, tokio::sync::OnceCell};
 
 use crate::cli_wrappers::{
     docker::{BuildArg, DockerImage, Dockerfile},
@@ -26,12 +24,6 @@ use crate::cli_wrappers::{
     util::get_github_root,
     ClientWrapper, LineraNet, LineraNetConfig, Network, OnClientDrop,
 };
-
-#[cfg(with_testing)]
-static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
-    Arc<Mutex<LocalKubernetesNet>>,
-    ClientWrapper,
-)> = OnceCell::const_new();
 
 #[derive(Clone, clap::Parser, clap::ValueEnum, Debug, Default)]
 pub enum BuildMode {
@@ -75,11 +67,6 @@ pub struct LocalKubernetesNetConfig {
     pub path_provider: PathProvider,
 }
 
-/// A wrapper of [`LocalKubernetesNetConfig`] to create a shared local Kubernetes network
-/// or use an existing one.
-#[cfg(with_testing)]
-pub struct SharedLocalKubernetesNetTestingConfig(LocalKubernetesNetConfig);
-
 /// A set of Linera validators running locally as native processes.
 #[derive(Clone)]
 pub struct LocalKubernetesNet {
@@ -100,49 +87,6 @@ pub struct LocalKubernetesNet {
     explorer_image_name: String,
     dual_store: bool,
     path_provider: PathProvider,
-}
-
-#[cfg(with_testing)]
-impl SharedLocalKubernetesNetTestingConfig {
-    // The second argument is sometimes used locally to use specific binaries for tests.
-    pub fn new(network: Network, mut binaries: BuildArg) -> Self {
-        if std::env::var("LINERA_TRY_RELEASE_BINARIES").unwrap_or_default() == "true"
-            && matches!(binaries, BuildArg::Build)
-        {
-            // For cargo test, current binary should be in debug mode
-            let current_binary_parent =
-                current_binary_parent().expect("Fetching current binaries path should not fail");
-            // But binaries for cluster should be release mode
-            let binaries_dir = current_binary_parent
-                .parent()
-                .expect("Getting parent should not fail")
-                .join("release");
-            if binaries_dir.exists() {
-                // If release exists, use those binaries
-                binaries = BuildArg::Directory(binaries_dir);
-            }
-        }
-        Self(LocalKubernetesNetConfig {
-            network,
-            testing_prng_seed: Some(37),
-            num_other_initial_chains: 2,
-            initial_amount: Amount::from_tokens(2000),
-            num_initial_validators: 4,
-            num_proxies: 1,
-            num_shards: 4,
-            binaries,
-            no_build: false,
-            docker_image_name: String::from("linera:latest"),
-            build_mode: BuildMode::Release,
-            policy_config: ResourceControlPolicyConfig::Testnet,
-            num_block_exporters: 0,
-            indexer_image_name: String::from("linera-indexer:latest"),
-            explorer_image_name: String::from("linera-explorer:latest"),
-            dual_store: false,
-            path_provider: PathProvider::create_temporary_directory()
-                .expect("Creating temporary directory should not fail"),
-        })
-    }
 }
 
 #[async_trait]
@@ -193,39 +137,6 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             .await
             .unwrap();
         net.run().await.unwrap();
-
-        Ok((net, client))
-    }
-}
-
-#[cfg(with_testing)]
-#[async_trait]
-impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
-    type Net = Arc<Mutex<LocalKubernetesNet>>;
-
-    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let (net, initial_client) = SHARED_LOCAL_KUBERNETES_TESTING_NET
-            .get_or_init(|| async {
-                let (net, initial_client) = self
-                    .0
-                    .instantiate()
-                    .await
-                    .expect("Instantiating LocalKubernetesNetConfig should not fail");
-                (Arc::new(Mutex::new(net)), initial_client)
-            })
-            .await;
-
-        let mut net = net.clone();
-        let client = net.make_client().await;
-        // The tests assume we've created a genesis config with 2
-        // chains with 10 tokens each.
-        client.wallet_init(None).await.unwrap();
-        for _ in 0..2 {
-            initial_client
-                .open_and_assign(&client, Amount::from_tokens(10))
-                .await
-                .unwrap();
-        }
 
         Ok((net, client))
     }
