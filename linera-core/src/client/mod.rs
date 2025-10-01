@@ -2301,12 +2301,7 @@ impl<Env: Environment> ChainClient<Env> {
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
 
         // Sync in batches until all received certificates are downloaded.
-        loop {
-            let has_more = self.sync_received_certificates_batch().await?;
-            if !has_more {
-                break;
-            }
-        }
+        while self.sync_received_certificates_batch().await? {}
         Ok(())
     }
 
