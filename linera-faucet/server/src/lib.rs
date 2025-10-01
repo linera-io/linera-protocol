@@ -47,6 +47,122 @@ use tracing::info;
 
 use crate::database::FaucetDatabase;
 
+// Prometheus metrics for the faucet
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
+        register_int_gauge_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec, IntGaugeVec};
+
+    pub static CLAIM_REQUESTS_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "faucet_claim_requests_total",
+            "Total number of claim requests by result",
+            &["result"],
+        )
+    });
+
+    pub static CLAIM_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "faucet_claim_latency_ms",
+            "End-to-end latency of claim requests in milliseconds",
+            &["result"],
+            exponential_bucket_interval(0.5, 8000.0),
+        )
+    });
+
+    pub static CHAINS_CREATED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "faucet_chains_created_total",
+            "Total number of chains created by the faucet",
+            &[],
+        )
+    });
+
+    pub static BATCH_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "faucet_batch_size",
+            "Number of chain creation requests per batch",
+            &[],
+            Some(vec![1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]),
+        )
+    });
+
+    pub static BATCH_PROCESSING_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "faucet_batch_processing_latency_ms",
+            "Time to process a batch of chain creation requests in milliseconds",
+            &["result"],
+            exponential_bucket_interval(0.5, 8000.0),
+        )
+    });
+
+    pub static QUEUE_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "faucet_queue_size",
+            "Number of pending claim requests in the queue",
+            &[],
+            Some(vec![
+                0.0, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0,
+            ]),
+        )
+    });
+
+    pub static QUEUE_WAIT_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "faucet_queue_wait_time_ms",
+            "Time a request spends in the queue before processing in milliseconds",
+            &[],
+            exponential_bucket_interval(0.5, 2000.0),
+        )
+    });
+
+    pub static FAUCET_BALANCE: LazyLock<IntGaugeVec> = LazyLock::new(|| {
+        register_int_gauge_vec(
+            "faucet_balance_amount",
+            "Current balance of the faucet chain",
+            &[],
+        )
+    });
+
+    pub static RATE_LIMIT_REJECTIONS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "faucet_rate_limit_rejections_total",
+            "Number of requests rejected due to rate limiting",
+            &[],
+        )
+    });
+
+    pub static INSUFFICIENT_BALANCE_REJECTIONS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "faucet_insufficient_balance_rejections_total",
+            "Number of requests rejected due to insufficient faucet balance",
+            &[],
+        )
+    });
+
+    pub static DATABASE_OPERATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "faucet_database_operation_latency_ms",
+            "Database operation latency in milliseconds",
+            &["operation"],
+            exponential_bucket_interval(0.5, 2000.0),
+        )
+    });
+
+    pub static RETRYABLE_ERRORS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "faucet_retryable_errors_total",
+            "Number of chain execution retryable errors by type",
+            &["error_type"],
+        )
+    });
+}
+
 /// Returns an HTML response constructing the GraphiQL web page for the given URI.
 pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
     axum::response::Html(
@@ -94,6 +210,8 @@ pub struct Validator {
 struct PendingRequest {
     owner: AccountOwner,
     responder: oneshot::Sender<Result<ChainDescription, Error>>,
+    #[cfg(with_metrics)]
+    queued_at: std::time::Instant,
 }
 
 /// Configuration for the batch processor.
@@ -156,7 +274,20 @@ where
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
-        self.do_claim(owner).await
+        #[cfg(with_metrics)]
+        let start_time = std::time::Instant::now();
+
+        let result = self.do_claim(owner).await;
+
+        #[cfg(with_metrics)]
+        {
+            let label = if result.is_ok() { "success" } else { "error" };
+            metrics::CLAIM_LATENCY
+                .with_label_values(&[label])
+                .observe(start_time.elapsed().as_secs_f64() * 1000.0);
+        }
+
+        result
     }
 }
 
@@ -166,12 +297,26 @@ where
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
         // Check if this owner already has a chain.
-        if let Some(existing_chain_id) = self
+        #[cfg(with_metrics)]
+        let db_start_time = std::time::Instant::now();
+
+        let existing_chain_id = self
             .faucet_storage
             .get_chain_id(&owner)
             .await
-            .map_err(|e| Error::new(e.to_string()))?
-        {
+            .map_err(|e| Error::new(e.to_string()))?;
+
+        #[cfg(with_metrics)]
+        metrics::DATABASE_OPERATION_LATENCY
+            .with_label_values(&["get_chain_id"])
+            .observe(db_start_time.elapsed().as_secs_f64() * 1000.0);
+
+        if let Some(existing_chain_id) = existing_chain_id {
+            #[cfg(with_metrics)]
+            metrics::CLAIM_REQUESTS_TOTAL
+                .with_label_values(&["duplicate"])
+                .inc();
+
             // Retrieve the chain description from local storage
             return get_chain_description_from_storage(&self.storage, existing_chain_id).await;
         }
@@ -185,15 +330,33 @@ where
             requests.push_back(PendingRequest {
                 owner,
                 responder: tx,
+                #[cfg(with_metrics)]
+                queued_at: std::time::Instant::now(),
             });
+
+            #[cfg(with_metrics)]
+            metrics::QUEUE_SIZE
+                .with_label_values(&[])
+                .observe(requests.len() as f64);
         }
 
         // Notify the batch processor that there's a new request.
         self.request_notifier.notify_one();
 
         // Wait for the result
-        rx.await
-            .map_err(|_| Error::new("Request processing was cancelled"))?
+        let result = rx
+            .await
+            .map_err(|_| Error::new("Request processing was cancelled"))?;
+
+        #[cfg(with_metrics)]
+        {
+            let label = if result.is_ok() { "success" } else { "error" };
+            metrics::CLAIM_REQUESTS_TOTAL
+                .with_label_values(&[label])
+                .inc();
+        }
+
+        result
     }
 }
 /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
@@ -309,9 +472,37 @@ where
                 return Ok(());
             }
 
-            tracing::info!("Processing batch of {} requests", batch_requests.len());
+            let batch_size = batch_requests.len();
+            tracing::info!("Processing batch of {} requests", batch_size);
 
-            if let Err(err) = self.execute_batch(batch_requests).await {
+            #[cfg(with_metrics)]
+            {
+                metrics::BATCH_SIZE
+                    .with_label_values(&[])
+                    .observe(batch_size as f64);
+
+                metrics::QUEUE_SIZE.with_label_values(&[]).observe(0.0);
+            }
+
+            #[cfg(with_metrics)]
+            let batch_start_time = std::time::Instant::now();
+
+            let batch_result = self.execute_batch(batch_requests).await;
+
+            #[cfg(with_metrics)]
+            {
+                let elapsed_ms = batch_start_time.elapsed().as_secs_f64() * 1000.0;
+                let label = if batch_result.is_ok() {
+                    "success"
+                } else {
+                    "error"
+                };
+                metrics::BATCH_PROCESSING_LATENCY
+                    .with_label_values(&[label])
+                    .observe(elapsed_ms);
+            }
+
+            if let Err(err) = batch_result {
                 tracing::error!("Failed to execute batch: {}", err);
                 return Err(err);
             }
@@ -366,9 +557,18 @@ where
         let remaining_duration = end_timestamp.delta_since(local_time).as_micros();
         let balance = self.client.local_balance().await?;
 
+        #[cfg(with_metrics)]
+        metrics::FAUCET_BALANCE
+            .with_label_values(&[])
+            .set(u128::from(balance) as i64);
+
         let total_amount = self.config.amount.saturating_mul(request_count as u128);
         let Ok(remaining_balance) = balance.try_sub(total_amount) else {
             // Not enough balance - reject all requests
+            #[cfg(with_metrics)]
+            metrics::INSUFFICIENT_BALANCE_REJECTIONS
+                .with_label_values(&[])
+                .inc();
             return Err(Error::new("The faucet is empty."));
         };
 
@@ -377,6 +577,8 @@ where
         if multiply(u128::from(self.config.start_balance), remaining_duration)
             > multiply(u128::from(remaining_balance), full_duration)
         {
+            #[cfg(with_metrics)]
+            metrics::RATE_LIMIT_REJECTIONS.with_label_values(&[]).inc();
             return Err(Error::new("Not enough unlocked balance; try again later."));
         }
         Ok(())
@@ -436,6 +638,23 @@ where
                             ) =>
                     {
                         tracing::error!(%exec_err, "Execution of operation {i} failed; reducing batch size");
+
+                        #[cfg(with_metrics)]
+                        {
+                            let error_type = match *exec_err {
+                                ExecutionError::BlockTooLarge => "block_too_large",
+                                ExecutionError::FeesExceedFunding { .. } => "fees_exceed_funding",
+                                ExecutionError::InsufficientBalance { .. } => {
+                                    "insufficient_balance"
+                                }
+                                ExecutionError::MaximumFuelExceeded(_) => "fuel_exceeded",
+                                _ => "other",
+                            };
+                            metrics::RETRYABLE_ERRORS
+                                .with_label_values(&[error_type])
+                                .inc();
+                        }
+
                         self.config.max_batch_size = i as usize;
                         // Put the valid requests back into the queue.
                         let mut pending_requests = self.pending_requests.lock().await;
@@ -501,7 +720,18 @@ where
         }
 
         // Respond to requests.
+        #[cfg(with_metrics)]
+        let chains_created = chain_descriptions.len();
+
         for (request, (owner, description)) in requests.into_iter().zip(chain_descriptions) {
+            #[cfg(with_metrics)]
+            {
+                let wait_time = request.queued_at.elapsed().as_secs_f64() * 1000.0;
+                metrics::QUEUE_WAIT_TIME
+                    .with_label_values(&[])
+                    .observe(wait_time);
+            }
+
             let response = if request.owner == owner {
                 Ok(description)
             } else {
@@ -516,6 +746,11 @@ where
                 tracing::warn!("Receiver dropped while sending response to {owner}.");
             }
         }
+
+        #[cfg(with_metrics)]
+        metrics::CHAINS_CREATED_TOTAL
+            .with_label_values(&[])
+            .inc_by(chains_created as u64);
 
         Ok(())
     }
