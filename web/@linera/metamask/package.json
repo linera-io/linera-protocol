@@ -1,7 +1,7 @@
 {
-  "name": "@linera/signer",
+  "name": "@linera/metamask",
   "version": "0.1.0",
-  "description": "Implementations of Signer interface for the Linera blockchain",
+  "description": "MetaMask wallet integration for the Linera blockchain",
   "publishConfig": {
     "access": "public"
   },
@@ -26,11 +26,9 @@
   "keywords": [],
   "author": "Linera <contact@linera.io>",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/linera-io/linera-protocol/tree/main/linera-web/signer",
+  "homepage": "https://github.com/linera-io/linera-protocol/tree/main/linera-web/metamask",
   "devDependencies": {
     "@types/jest": "^29.5.14",
-    "@types/node": "^24.0.1",
-    "@types/readable-stream": "^4.0.21",
     "jest": "^29.7.0",
     "ts-jest": "^29.3.4",
     "ts-node": "^10.9.2",
