@@ -2411,6 +2411,88 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(())
     }
 
+    /// Downloads a specific sender block and recursively downloads any previous blocks
+    /// required for preprocessing, based on `previous_message_blocks`.
+    ///
+    /// This ensures that we have all the sender blocks needed to preprocess the target block,
+    /// following the chain of previous message blocks to our chain.
+    #[instrument(level = "trace")]
+    async fn download_sender_block_with_dependencies(
+        &self,
+        sender_chain_id: ChainId,
+        height: BlockHeight,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<(), ChainClientError> {
+        let next_outbox_height = self
+            .client
+            .local_node
+            .next_outbox_heights(&[sender_chain_id], self.chain_id)
+            .await?
+            .get(&sender_chain_id)
+            .copied()
+            .unwrap_or(BlockHeight::ZERO);
+        let (max_epoch, committees) = self.client.admin_committees().await?;
+
+        // Recursively collect all certificates we need, following
+        // the chain of previous_message_blocks back to next_outbox_height.
+        let mut certificates = BTreeMap::new();
+        let mut current_height = height;
+
+        loop {
+            // Stop if we've reached the height we've already processed.
+            if current_height < next_outbox_height {
+                break;
+            }
+
+            // Download the certificate for this height.
+            let downloaded = remote_node
+                .download_certificates_by_heights(sender_chain_id, vec![current_height])
+                .await?;
+            let Some(certificate) = downloaded.into_iter().next() else {
+                return Err(ChainClientError::CannotDownloadMissingSenderBlocks {
+                    chain_id: sender_chain_id,
+                    heights: vec![current_height],
+                });
+            };
+
+            // Validate the certificate.
+            Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
+                .into_result()?;
+
+            // Check if there's a previous message block to our chain.
+            let block = certificate.block();
+            let next_height = block
+                .body
+                .previous_message_blocks
+                .get(&self.chain_id)
+                .map(|(_prev_hash, prev_height)| *prev_height);
+
+            // Store this certificate.
+            certificates.insert(current_height, certificate);
+
+            if let Some(prev_height) = next_height {
+                // Continue with the previous block.
+                current_height = prev_height;
+            } else {
+                // No more dependencies.
+                break;
+            }
+        }
+
+        // Process certificates in ascending block height order (BTreeMap keeps them sorted).
+        for certificate in certificates.into_values() {
+            self.client
+                .receive_sender_certificate(
+                    certificate,
+                    ReceiveCertificateMode::AlreadyChecked,
+                    Some(vec![remote_node.clone()]),
+                )
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Sends money.
     #[instrument(level = "trace")]
     pub async fn transfer(
@@ -3825,7 +3907,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                self.find_received_certificates_from_validator(remote_node)
+                self.download_sender_block_with_dependencies(origin, height, &remote_node)
                     .await?;
                 if self.local_next_height_to_receive(origin).await? <= height {
                     warn!(
@@ -4125,28 +4207,6 @@ impl<Env: Environment> ChainClient<Env> {
             entry.insert(abort);
         }
         Ok(validator_tasks.collect())
-    }
-
-    /// Attempts to download new received certificates from a particular validator.
-    ///
-    /// This is similar to `find_received_certificates` but for only one validator.
-    /// We also don't try to synchronize the admin chain.
-    #[instrument(level = "trace")]
-    async fn find_received_certificates_from_validator(
-        &self,
-        remote_node: RemoteNode<Env::ValidatorNode>,
-    ) -> Result<(), ChainClientError> {
-        let chain_id = self.chain_id;
-        // Proceed to downloading received certificates.
-        let received_certificates = self
-            .client
-            .synchronize_received_certificates_from_validator(chain_id, &remote_node)
-            .await?;
-        // Process received certificates. If the client state has changed during the
-        // network calls, we should still be fine.
-        self.receive_certificates_from_validators(vec![received_certificates])
-            .await;
-        Ok(())
     }
 
     /// Attempts to update a validator with the local information.
