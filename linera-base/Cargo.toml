@@ -18,12 +18,7 @@ workspace = true
 metrics = ["prometheus"]
 reqwest = ["dep:reqwest"]
 revm = []
-tempo = [
-    "opentelemetry",
-    "opentelemetry-otlp",
-    "opentelemetry_sdk",
-    "tracing-opentelemetry",
-]
+tempo = ["opentelemetry-otlp"]
 test = ["test-strategy", "proptest"]
 web = [
     "getrandom/js",
@@ -86,10 +81,11 @@ tracing-web = { optional = true, workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
-opentelemetry = { workspace = true, optional = true }
+opentelemetry.workspace = true
 opentelemetry-otlp = { workspace = true, optional = true }
-opentelemetry_sdk = { workspace = true, optional = true }
-tracing-opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk.workspace = true
+tracing-chrome.workspace = true
+tracing-opentelemetry.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
 tokio = { workspace = true, features = [
     "process",
@@ -107,6 +103,7 @@ assert_matches.workspace = true
 bcs.workspace = true
 linera-base = { path = ".", default-features = false, features = ["test"] }
 linera-witty = { workspace = true, features = ["test"] }
+tempfile.workspace = true
 test-case.workspace = true
 
 [build-dependencies]
