@@ -213,7 +213,7 @@ impl<C: ClientContext> ChainListener<C> {
             let admin_chain_id = guard.wallet().genesis_admin_chain();
             guard
                 .make_chain_client(admin_chain_id)
-                .synchronize_from_validators()
+                .synchronize_chain_state(admin_chain_id)
                 .await?;
             BTreeMap::from_iter(
                 guard

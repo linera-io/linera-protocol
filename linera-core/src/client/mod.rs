@@ -2969,7 +2969,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn process_pending_block(
         &self,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
-        self.synchronize_from_validators().await?;
+        self.prepare_chain().await?;
         self.process_pending_block_without_prepare().await
     }
 
