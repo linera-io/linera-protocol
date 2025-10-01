@@ -85,7 +85,7 @@ jobs:
     - name: Test the npm packages
       run: |
         cd web
-        pnpm install
+        pnpm install --frozen-lockfile
         pnpm -r run ci
     - name: Test `linera-views` on the Web
       run: |

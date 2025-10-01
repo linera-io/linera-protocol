@@ -1,4 +1,4 @@
 {
-    "entryPoints": ["dist/linera_web.d.ts"],
+    "entryPoints": ["src/index.ts"],
     "excludeNotDocumented": true
 }
