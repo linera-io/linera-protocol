@@ -1595,7 +1595,7 @@ pub enum ChainClientError {
 
     #[error(
         "Failed to download certificates and update local node to the next height \
-         {target_next_block_height} of chain {chain_id:?}"
+         {target_next_block_height} of chain {chain_id}"
     )]
     CannotDownloadCertificates {
         chain_id: ChainId,
@@ -1626,7 +1626,7 @@ pub enum ChainClientError {
     EpochAlreadyRevoked,
 
     #[error(
-        "Failed to download missing sender blocks from chain {chain_id:?} at heights {heights:?}"
+        "Failed to download missing sender blocks from chain {chain_id} at heights {heights:?}"
     )]
     CannotDownloadMissingSenderBlocks {
         chain_id: ChainId,

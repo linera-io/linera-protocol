@@ -257,7 +257,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                     )
                     .await
                     {
-                        warn!("Background sync failed for chain {}: {}", chain_id, e);
+                        warn!("Background sync failed for chain {chain_id}: {e}");
                     }
                 }));
             }
@@ -433,15 +433,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         chain_id: ChainId,
         cancellation_token: CancellationToken,
     ) -> Result<(), Error> {
-        info!(
-            "Starting background certificate sync for chain {}",
-            chain_id
-        );
+        info!("Starting background certificate sync for chain {chain_id}");
 
         loop {
             // Check if we should stop.
             if cancellation_token.is_cancelled() {
-                info!("Background sync cancelled for chain {}", chain_id);
+                info!("Background sync cancelled for chain {chain_id}");
                 break;
             }
 
@@ -456,15 +453,12 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             {
                 Ok(has_more) => {
                     if !has_more {
-                        info!("Background sync completed for chain {}", chain_id);
+                        info!("Background sync completed for chain {chain_id}");
                         break;
                     }
                 }
                 Err(e) => {
-                    warn!(
-                        "Error syncing batch for chain {}: {}. Will retry.",
-                        chain_id, e
-                    );
+                    warn!("Error syncing batch for chain {chain_id}: {e}. Will retry.");
                     // Continue trying despite errors - validators might be temporarily unavailable.
                 }
             }
