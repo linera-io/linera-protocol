@@ -263,6 +263,8 @@ async fn test_batch_size_reduction_on_limit_errors() {
             pending_requests_guard.push_back(super::PendingRequest {
                 owner,
                 responder: tx,
+                #[cfg(with_metrics)]
+                queued_at: std::time::Instant::now(),
             });
         }
     }
