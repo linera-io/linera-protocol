@@ -2467,12 +2467,8 @@ impl<Env: Environment> ChainClient<Env> {
         let mut certificates = BTreeMap::new();
         let mut current_height = height;
 
-        loop {
-            // Stop if we've reached the height we've already processed.
-            if current_height < next_outbox_height {
-                break;
-            }
-
+        // Stop if we've reached the height we've already processed.
+        while current_height >= next_outbox_height {
             // Download the certificate for this height.
             let downloaded = remote_node
                 .download_certificates_by_heights(sender_chain_id, vec![current_height])
