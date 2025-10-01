@@ -747,7 +747,13 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
 
   Default value: `0`
+* `--listener-sync-batch-size <SYNC_BATCH_SIZE>` — Number of certificates to fetch per batch during background synchronization
+
+  Default value: `100`
 * `--port <PORT>` — The port on which to run the server
+* `--sync-sleep-ms <SYNC_SLEEP_MS>` — Milliseconds to sleep between batches during background certificate synchronization
+
+  Default value: `500`
 
 
 
@@ -775,6 +781,9 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 * `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
 
   Default value: `0`
+* `--listener-sync-batch-size <SYNC_BATCH_SIZE>` — Number of certificates to fetch per batch during background synchronization
+
+  Default value: `100`
 * `--storage-path <STORAGE_PATH>` — Path to the persistent storage file for faucet mappings
 * `--max-batch-size <MAX_BATCH_SIZE>` — Maximum number of operations to include in a single block (default: 100)
 

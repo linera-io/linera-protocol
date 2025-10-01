@@ -1225,6 +1225,7 @@ impl Runnable for Job {
             Service {
                 config,
                 port,
+                sync_sleep_ms,
                 #[cfg(with_metrics)]
                 metrics_port,
             } => {
@@ -1241,7 +1242,7 @@ impl Runnable for Job {
                 );
                 let cancellation_token = CancellationToken::new();
                 tokio::spawn(listen_for_shutdown_signals(cancellation_token.clone()));
-                service.run(cancellation_token).await?;
+                service.run(cancellation_token, sync_sleep_ms).await?;
             }
 
             Faucet {
