@@ -177,9 +177,15 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
     if let Some(service) = &node_service_2 {
-        service.process_inbox(&chain_2).await?;
+        assert!(
+            eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
+                .await
+        );
         client.revoke_epochs(Epoch(2)).await?;
-        service.process_inbox(&chain_2).await?;
+        assert!(
+            eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
+                .await
+        );
         let committees = service.query_committees(&chain_2).await?;
         let epochs = committees.into_keys().collect::<Vec<_>>();
         assert_eq!(&epochs, &[Epoch(3)]);
@@ -194,9 +200,15 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         let validator_key = net.validator_keys(i).unwrap();
         client.remove_validator(&validator_key.0).await?;
         if let Some(service) = &node_service_2 {
-            service.process_inbox(&chain_2).await?;
+            assert!(
+                eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
+                    .await
+            );
             client.revoke_epochs(Epoch(3 + i as u32)).await?;
-            service.process_inbox(&chain_2).await?;
+            assert!(
+                eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
+                    .await
+            );
             let committees = service.query_committees(&chain_2).await?;
             let epochs = committees.into_keys().collect::<Vec<_>>();
             assert_eq!(&epochs, &[Epoch(4 + i as u32)]);
@@ -220,7 +232,10 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
 
     if let Some(mut service) = node_service_2 {
-        service.process_inbox(&chain_2).await?;
+        assert!(
+            eventually(|| async { !service.process_inbox(&chain_2).await.unwrap().is_empty() })
+                .await
+        );
         let balance = service.balance(&account_recipient).await?;
         assert_eq!(balance, Amount::from_tokens(5));
         let committees = service.query_committees(&chain_2).await?;

@@ -277,7 +277,13 @@ where
     ) -> Result<BTreeMap<ChainId, BlockHeight>, LocalNodeError> {
         let futures =
             FuturesUnordered::from_iter(chain_ids.into_iter().map(|chain_id| async move {
-                let chain = self.chain_state_view(*chain_id).await?;
+                let chain = match self.chain_state_view(*chain_id).await {
+                    Ok(chain) => chain,
+                    Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => {
+                        return Ok((*chain_id, BlockHeight::ZERO))
+                    }
+                    Err(err) => Err(err)?,
+                };
                 let mut next_height = chain.tip_state.get().next_block_height;
                 if let Some(outbox) = chain.outboxes.try_load_entry(&receiver_id).await? {
                     next_height = next_height.max(*outbox.next_height_to_schedule.get());

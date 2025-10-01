@@ -64,7 +64,7 @@ where
     pub fn notify_chain(&self, chain_id: &ChainId, notification: &N) {
         self.inner.pin().compute(*chain_id, |senders| {
             let Some((_key, senders)) = senders else {
-                trace!("Chain {chain_id:?} has no subscribers.");
+                trace!("Chain {chain_id} has no subscribers.");
                 return papaya::Operation::Abort(());
             };
             let live_senders = senders
@@ -73,7 +73,7 @@ where
                 .cloned()
                 .collect::<Vec<_>>();
             if live_senders.is_empty() {
-                trace!("No more subscribers for chain {chain_id:?}. Removing entry.");
+                trace!("No more subscribers for chain {chain_id}. Removing entry.");
                 return papaya::Operation::Remove;
             }
             papaya::Operation::Insert(live_senders)

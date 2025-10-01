@@ -729,6 +729,14 @@ pub enum ClientCommand {
         #[arg(long)]
         port: NonZeroU16,
 
+        /// Milliseconds to sleep between batches during background certificate synchronization.
+        #[arg(
+            long = "sync-sleep-ms",
+            default_value = "500",
+            env = "LINERA_SYNC_SLEEP_MS"
+        )]
+        sync_sleep_ms: u64,
+
         /// The port to expose metrics on.
         #[cfg(with_metrics)]
         #[arg(long)]
