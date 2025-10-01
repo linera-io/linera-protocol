@@ -1614,7 +1614,7 @@ impl Runnable for Job {
                 context.client.track_chain(chain_id);
                 let chain_client = context.make_chain_client(chain_id);
                 if sync {
-                    chain_client.synchronize_from_validators().await?;
+                    chain_client.synchronize_chain_state(chain_id).await?;
                 } else {
                     chain_client.fetch_chain_info().await?;
                 }
