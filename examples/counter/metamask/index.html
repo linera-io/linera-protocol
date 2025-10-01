@@ -54,20 +54,19 @@
     <script type="importmap">
       {
           "imports": {
-              "@linera/client": "./js/@linera/client/linera_web.js",
-              "@linera/signer": "./js/@linera/signer/index.js"
+              "@linera/client": "./js/@linera/client/dist/index.js"
           }
       }
     </script>
 
     <script type="module">
       import * as linera from '@linera/client';
-      import * as linera_signer from '@linera/signer';
+      import * as linera_metamask from '@linera/metamask';
 
       async function run() {
-          await linera.default();
+          await linera.initialize();
           const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
-          const signer = await new linera_signer.MetaMask();
+          const signer = await new linera_metamask.Signer();
           const wallet = await faucet.createWallet();
           const owner = await signer.address();
           document.getElementById('owner').innerText = owner;

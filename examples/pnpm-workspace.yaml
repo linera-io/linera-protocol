@@ -1,6 +1,6 @@
 packages:
 - ../web/@linera/client
-- ../web/@linera/signer
+- ../web/@linera/metamask
 - counter
 - counter/metamask
 - native-fungible
