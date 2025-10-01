@@ -983,7 +983,9 @@ Initialize a wallet from the genesis configuration
 
 ###### **Options:**
 
-* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration for a Linera deployment. Either this or `--faucet` must be specified
+* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration for a Linera deployment. Either this or `--faucet` must be specified.
+
+   Overrides `--faucet` if provided.
 * `--faucet <FAUCET>` — The address of a faucet
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 

@@ -1204,6 +1204,8 @@ pub enum WalletCommand {
     Init {
         /// The path to the genesis configuration for a Linera deployment. Either this or `--faucet`
         /// must be specified.
+        ///
+        /// Overrides `--faucet` if provided.
         #[arg(long = "genesis")]
         genesis_config_path: Option<PathBuf>,
 
