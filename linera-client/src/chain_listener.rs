@@ -608,11 +608,14 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 debug!(%chain_id, "Cannot find key for chain");
             }
             Err(error) => warn!(%error, "Failed to process inbox."),
-            Ok((certs, None)) => info!("Done processing inbox. {} blocks created.", certs.len()),
+            Ok((certs, None)) => info!(
+                "Done processing inbox of chain. {} blocks created on chain {chain_id}.",
+                certs.len()
+            ),
             Ok((certs, Some(new_timeout))) => {
                 info!(
-                    "{} blocks created. Will try processing the inbox later based \
-                     on the given round timeout: {new_timeout:?}",
+                    "{} blocks created on chain {chain_id}. Will try processing the inbox later \
+                    based on the round timeout: {new_timeout:?}",
                     certs.len(),
                 );
                 listening_client.timeout = new_timeout.timestamp;

@@ -19,6 +19,7 @@ use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
+    node::NodeError,
     notifier::ChannelNotifier,
     JoinSetExt as _,
 };
@@ -744,9 +745,12 @@ where
                 chain_info.requested_sent_certificate_hashes
             }
             Some(api::chain_info_result::Inner::Error(error)) => {
+                let error =
+                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
+                        error: format!("failed to unmarshal error message: {}", err),
+                    });
                 return Err(Status::internal(format!(
-                    "Chain info query failed: {:?}",
-                    error
+                    "Chain info query failed: {error}"
                 )));
             }
             None => {
@@ -787,9 +791,12 @@ where
                 chain_info.requested_sent_certificate_hashes
             }
             Some(api::chain_info_result::Inner::Error(error)) => {
+                let error =
+                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
+                        error: format!("failed to unmarshal error message: {}", err),
+                    });
                 return Err(Status::internal(format!(
-                    "Chain info query failed: {:?}",
-                    error
+                    "Chain info query failed: {error}"
                 )));
             }
             None => {
