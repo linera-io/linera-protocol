@@ -15,7 +15,7 @@
 #       3) Load the image into the kind cluster:
 #           kind load docker-image --name 97461 us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest
 #       4) Create a debugging container that shares the same processes as the pod you're interested in debugging, and get a shell into it:
-#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=IfNotPresent --profile=sysadmin -- bash
+#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=IfNotPresent --profile=sysadmin --custom docker/debug/custom-spec.json -- bash
 
 #   * For debugging a GCP cluster:
 #       1) Connect to the cluster:
@@ -23,10 +23,17 @@
 #             in region `us-east1-b`. Run:
 #               gcloud container clusters get-credentials testnet-babbage-validator-1-cluster --region us-east1-b
 #       2) Create a debugging container that shares the same processes as the pod you're interested in debugging, and get a shell into it:
-#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=Always --profile=sysadmin -- bash
-# 
+#           kubectl debug -n default shards-0 -it --image=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-debug:latest --target=linera-server --share-processes --image-pull-policy=Always --profile=sysadmin --custom docker/debug/custom-spec.json -- bash
+#
 # You should now have a shell in this debugging container, with all the different debugging tools
 # installed below, but without bloating the production Docker image.
+#
+# To copy files from the debug container:
+#   * First, note the debug container name from the kubectl debug output (e.g., `debugger-rcg58`)
+#   * Use kubectl cp to copy files:
+#       kubectl cp <namespace>/<pod-name>:/path/in/container /local/path -c <debug-container-name> --context <context-name>
+#   * Example:
+#       kubectl cp default/shards-0:/tmp/cpu-profile.svg ~/cpu-profile.svg -c debugger-rcg58 --context gke_linera-io-dev_us-east1-b_some-cluster
 
 FROM debian:latest
 ENV DEBIAN_FRONTEND=noninteractive
@@ -45,7 +52,8 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/memleak_translate.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/memleak_translate.sh
+COPY scripts/cpu-profile.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/memleak_translate.sh /usr/local/bin/cpu-profile.sh
 
 ARG GRPCURL_VERSION=v1.9.3
 
