@@ -1201,7 +1201,7 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
-    /// Downloads and processes from the specified validator a confirmed block certificates that
+    /// Downloads and processes from the specified validators a confirmed block certificates that
     /// use the given blobs. If this succeeds, the blob will be in our storage.
     async fn update_local_node_with_blobs_from(
         &self,
@@ -1209,6 +1209,8 @@ impl<Env: Environment> Client<Env> {
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<Vec<Blob>, ChainClientError> {
         let timeout = self.options.blob_download_timeout;
+        // Deduplicate IDs.
+        let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
         stream::iter(blob_ids.into_iter().map(|blob_id| async move {
             let mut stream = remote_nodes
                 .iter()
@@ -1216,7 +1218,6 @@ impl<Env: Environment> Client<Env> {
                 .map(|(remote_node, i)| async move {
                     linera_base::time::timer::sleep(timeout * i * i).await;
                     let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
-                    // This will download all ancestors of the certificate and process all of them locally.
                     self.receive_sender_certificate(
                         certificate,
                         ReceiveCertificateMode::NeedsCheck,
@@ -1228,7 +1229,7 @@ impl<Env: Environment> Client<Env> {
                         .storage_client()
                         .read_blob(blob_id)
                         .await?
-                        .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
+                        .ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, ChainClientError>::Ok(blob)
                 })
                 .collect::<FuturesUnordered<_>>();
@@ -1237,60 +1238,13 @@ impl<Env: Environment> Client<Env> {
                     return Ok(blob);
                 }
             }
-            Err(LocalNodeError::BlobsNotFound(vec![blob_id]).into())
+            Err(NodeError::BlobsNotFound(vec![blob_id]).into())
         }))
         .buffer_unordered(self.options.max_joined_tasks)
         .collect::<Vec<_>>()
         .await
         .into_iter()
         .collect()
-    }
-
-    /// Downloads and processes confirmed block certificates that use the given blobs.
-    /// If this succeeds, the blobs will be in our storage.
-    async fn receive_certificates_for_blobs(
-        &self,
-        blob_ids: Vec<BlobId>,
-    ) -> Result<(), ChainClientError> {
-        // Deduplicate IDs.
-        let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
-        let validators = self.validator_nodes().await?;
-
-        let mut missing_blobs = Vec::new();
-        for blob_id in blob_ids {
-            let mut certificate_stream = validators
-                .iter()
-                .map(|remote_node| async move {
-                    let cert = remote_node.download_certificate_for_blob(blob_id).await?;
-                    Ok::<_, NodeError>((remote_node.clone(), cert))
-                })
-                .collect::<FuturesUnordered<_>>();
-            loop {
-                let Some(result) = certificate_stream.next().await else {
-                    missing_blobs.push(blob_id);
-                    break;
-                };
-                if let Ok((remote_node, cert)) = result {
-                    if self
-                        .receive_sender_certificate(
-                            cert,
-                            ReceiveCertificateMode::NeedsCheck,
-                            Some(vec![remote_node]),
-                        )
-                        .await
-                        .is_ok()
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-
-        if missing_blobs.is_empty() {
-            Ok(())
-        } else {
-            Err(NodeError::BlobsNotFound(missing_blobs).into())
-        }
     }
 
     /// Attempts to execute the block locally. If any incoming message execution fails, that
@@ -1363,7 +1317,8 @@ impl<Env: Environment> Client<Env> {
                 .stage_block_execution(block.clone(), round, published_blobs.clone())
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                self.receive_certificates_for_blobs(blob_ids.clone())
+                let validators = self.validator_nodes().await?;
+                self.update_local_node_with_blobs_from(blob_ids.clone(), &validators)
                     .await?;
                 continue; // We found the missing blob: retry.
             }
@@ -2214,28 +2169,10 @@ impl<Env: Environment> ChainClient<Env> {
         let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
             let local_node = self.client.local_node.clone();
             async move {
-                if let Err(error) = match local_node
+                if let Err(error) = local_node
                     .retry_pending_cross_chain_requests(chain_id)
                     .await
                 {
-                    Ok(()) => Ok(()),
-                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        if let Err(error) = self
-                            .client
-                            .receive_certificates_for_blobs(blob_ids.clone())
-                            .await
-                        {
-                            error!(
-                                "Error while attempting to download blobs during retrying outgoing \
-                                messages: {blob_ids:?}: {error}"
-                            );
-                        }
-                        local_node
-                            .retry_pending_cross_chain_requests(chain_id)
-                            .await
-                    }
-                    err => err,
-                } {
                     error!("Failed to retry outgoing messages from {chain_id}: {error}");
                 }
             }
@@ -2810,8 +2747,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .query_application(self.chain_id, query.clone())
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                let validators = self.client.validator_nodes().await?;
                 self.client
-                    .receive_certificates_for_blobs(blob_ids.clone())
+                    .update_local_node_with_blobs_from(blob_ids.clone(), &validators)
                     .await?;
                 continue; // We found the missing blob: retry.
             }
