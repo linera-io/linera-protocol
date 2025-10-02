@@ -838,15 +838,26 @@ impl<Env: Environment> Client<Env> {
         // Retrieve the list of newly received certificates from this validator.
         let mut remote_log = Vec::new();
         loop {
+            debug!("get_received_log_from_validator: looping");
             let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
             let info = remote_node.handle_chain_info_query(query).await?;
             let received_entries = info.requested_received_log.len();
             offset += received_entries as u64;
             remote_log.extend(info.requested_received_log);
+            debug!(
+                "get_received_log_from_validator: received {} entries from {:?}",
+                received_entries, remote_node
+            );
             if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
                 break;
             }
         }
+
+        debug!(
+            "get_received_log_from_validator: returning {} entries from {:?}",
+            remote_log.len(),
+            remote_node
+        );
 
         Ok(remote_log)
     }
@@ -2286,6 +2297,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// is regularly upgraded to new committees.
     #[instrument(level = "trace")]
     async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
+        debug!(chain_id = %self.chain_id, "starting find_received_certificates");
         #[cfg(with_metrics)]
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
         // Use network information from the local chain.
@@ -2302,6 +2314,9 @@ impl<Env: Environment> ChainClient<Env> {
             .get()
             .clone();
 
+        debug!("find_received_certificates: read trackers");
+
+        let received_log_batches = Arc::new(std::sync::Mutex::new(Vec::new()));
         // Proceed to downloading received logs.
         let result = communicate_with_quorum(
             &nodes,
@@ -2310,29 +2325,42 @@ impl<Env: Environment> ChainClient<Env> {
             |remote_node| {
                 let client = &self.client;
                 let trackers_clone = trackers.clone();
+                let received_log_batches = Arc::clone(&received_log_batches);
                 Box::pin(async move {
-                    client
+                    let batch = client
                         .get_received_log_from_validator(&trackers_clone, chain_id, &remote_node)
-                        .await
+                        .await?;
+                    let mut batches = received_log_batches.lock().unwrap();
+                    batches.push((remote_node.public_key.clone(), batch));
+                    Ok(())
                 })
             },
             self.options.grace_period,
         )
         .await;
 
-        let (received_logs, mut validator_trackers) = match result {
-            Ok(((), received_logs)) => (
+        debug!("got result from communicate_with_quorum");
+        debug!(received_log_batches_len=%received_log_batches.lock().unwrap().len());
+
+        if let Err(e) = result {
+            warn!(
+                "Failed to synchronize received_logs from at least a quorum of validators: {}",
+                e
+            );
+        }
+
+        let (received_logs, mut validator_trackers) = {
+            let mut received_log_batches = received_log_batches.lock().unwrap();
+            let received_logs: Vec<_> = std::mem::take(received_log_batches.as_mut());
+            debug!(
+                received_logs_len=%received_logs.len(),
+                received_logs_total=%received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
+                "received_logs length"
+            );
+            (
                 ReceivedLogs::from_received_result(received_logs.clone()),
                 ValidatorTrackers::new(received_logs, &trackers),
-            ),
-            Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
-                // The chain is visibly not active (yet or any more) so there is no need
-                // to synchronize received certificates.
-                return Ok(());
-            }
-            Err(error) => {
-                return Err(error.into());
-            }
+            )
         };
 
         info!(
@@ -2367,6 +2395,11 @@ impl<Env: Environment> ChainClient<Env> {
             }
             remote_heights.retain(|h| *h >= local_next);
         }
+
+        debug!(
+            remaining_total_certificates=%remote_heights.values().map(|h| h.len()).sum::<usize>(),
+            "find_received_certificates: computed remote_heights"
+        );
 
         let mut other_sender_chains = Vec::new();
         let cert_futures =
@@ -2418,6 +2451,16 @@ impl<Env: Environment> ChainClient<Env> {
                     continue;
                 }
             };
+            let chain_id = if certificates.len() > 0 {
+                info!(
+                    "got {} certificates for chain {}",
+                    certificates.len(),
+                    certificates[0].block().header.chain_id
+                );
+                certificates[0].block().header.chain_id
+            } else {
+                continue;
+            };
 
             // Process the certificates sorted by chain and in ascending order of block height.
             for certificate in certificates {
@@ -2435,10 +2478,19 @@ impl<Env: Environment> ChainClient<Env> {
                     validator_trackers.downloaded_cert(ChainAndHeight { chain_id, height });
                 }
             }
+            debug!(
+                "find_received_certificates: finished processing chain {}",
+                chain_id
+            );
         }
 
         // We have to drop explicitly, otherwise the borrow on other_sender_chains won't be released.
         drop(certs_stream);
+
+        debug!(
+            num_other_chains=%other_sender_chains.len(),
+            "find_received_certificates: processing certificates finished"
+        );
 
         // Certificates for these chains were omitted from `certificates` because they were
         // already processed locally. If they were processed in a concurrent task, it is not
@@ -2475,7 +2527,10 @@ impl<Env: Environment> ChainClient<Env> {
         }));
         stream.for_each(future::ready).await;
 
+        debug!("find_received_certificates: finished processing other_sender_chains");
+
         let new_trackers = validator_trackers.into_map();
+        debug!(?new_trackers, "find_received_certificates");
 
         // Update the trackers.
         if let Err(error) = self
@@ -2489,6 +2544,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.chain_id
             );
         }
+        debug!("find_received_certificates: finished updating trackers");
 
         Ok(())
     }
