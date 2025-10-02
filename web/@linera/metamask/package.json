@@ -14,8 +14,7 @@
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
-    "test": "jest",
-    "ci": "pnpm test",
+    "ci": "pnpm run build",
     "prepare": "pnpm run build"
   },
   "dependencies": {
@@ -28,10 +27,6 @@
   "license": "Apache-2.0",
   "homepage": "https://github.com/linera-io/linera-protocol/tree/main/web/@linera/metamask",
   "devDependencies": {
-    "@types/jest": "^29.5.14",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.3.4",
-    "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
 }
