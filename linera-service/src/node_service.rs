@@ -199,6 +199,9 @@ where
     }
 
     /// Synchronizes the chain with the validators. Returns the chain's length.
+    ///
+    /// This is only used for testing, to make sure that a client is up to date.
+    #[cfg(with_testing)] // TODO(#4718): Remove this mutation.
     async fn sync(
         &self,
         #[graphql(desc = "The chain being synchronized.")] chain_id: ChainId,
