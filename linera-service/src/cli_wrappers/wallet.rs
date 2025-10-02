@@ -43,7 +43,6 @@ use tokio::{
     sync::oneshot,
     task::JoinHandle,
 };
-use tracing::{error, info, warn};
 
 use crate::{
     cli::command::BenchmarkCommand,
@@ -486,10 +485,10 @@ impl ClientWrapper {
                 .send()
                 .await;
             if request.is_ok() {
-                info!("Node service has started");
+                tracing::info!("Node service has started");
                 return Ok(NodeService::new(port, child));
             } else {
-                warn!("Waiting for node service to start");
+                tracing::warn!("Waiting for node service to start");
             }
         }
         bail!("Failed to start node service");
@@ -568,7 +567,7 @@ impl ClientWrapper {
                 .send()
                 .await;
             if request.is_ok() {
-                info!("Faucet has started");
+                tracing::info!("Faucet has started");
                 return Ok(FaucetService::new(port, child, temp_dir));
             } else {
                 tracing::debug!("Waiting for faucet to start");
@@ -1120,7 +1119,7 @@ impl ClientWrapper {
 
         let contract_size = fs_err::tokio::metadata(&contract).await?.len();
         let service_size = fs_err::tokio::metadata(&service).await?.len();
-        info!("Done building application {name}: contract_size={contract_size}, service_size={service_size}");
+        tracing::info!("Done building application {name}: contract_size={contract_size}, service_size={service_size}");
 
         Ok((contract, service))
     }
@@ -1135,12 +1134,14 @@ impl Drop for ClientWrapper {
         }
 
         let Ok(binary_path) = self.binary_path.lock() else {
-            error!("Failed to close chains because a thread panicked with a lock to `binary_path`");
+            tracing::error!(
+                "Failed to close chains because a thread panicked with a lock to `binary_path`"
+            );
             return;
         };
 
         let Some(binary_path) = binary_path.as_ref() else {
-            warn!(
+            tracing::warn!(
                 "Assuming no chains need to be closed, because the command binary was never \
                 resolved and therefore presumably never called"
             );
@@ -1159,17 +1160,17 @@ impl Drop for ClientWrapper {
             .args(["wallet", "show", "--short", "--owned"])
             .output()
         else {
-            warn!("Failed to execute `wallet show --short` to list chains to close");
+            tracing::warn!("Failed to execute `wallet show --short` to list chains to close");
             return;
         };
 
         if !wallet_show_output.status.success() {
-            warn!("Failed to list chains in the wallet to close them");
+            tracing::warn!("Failed to list chains in the wallet to close them");
             return;
         }
 
         let Ok(chain_list_string) = String::from_utf8(wallet_show_output.stdout) else {
-            warn!(
+            tracing::warn!(
                 "Failed to close chains because `linera wallet show --short` \
                 returned a non-UTF-8 output"
             );
@@ -1192,8 +1193,8 @@ impl Drop for ClientWrapper {
 
             match close_chain_command.args(["close-chain", chain_id]).status() {
                 Ok(status) if status.success() => (),
-                Ok(failure) => warn!("Failed to close chain {chain_id}: {failure}"),
-                Err(error) => warn!("Failed to close chain {chain_id}: {error}"),
+                Ok(failure) => tracing::warn!("Failed to close chain {chain_id}: {failure}"),
+                Err(error) => tracing::warn!("Failed to close chain {chain_id}: {error}"),
             }
         }
     }
@@ -1406,7 +1407,7 @@ impl NodeService {
                 .send()
                 .await;
             if matches!(result, Err(ref error) if error.is_timeout()) {
-                warn!(
+                tracing::warn!(
                     "Timeout when sending query {} to the node service",
                     truncate_query_output(query)
                 );
@@ -1429,7 +1430,7 @@ impl NodeService {
             );
             let value: Value = response.json().await.context("invalid JSON")?;
             if let Some(errors) = value.get("errors") {
-                warn!(
+                tracing::warn!(
                     "Query \"{}\" failed: {}",
                     truncate_query_output(query),
                     errors
@@ -1611,7 +1612,7 @@ impl<A> ApplicationWrapper<A> {
             let response = match result {
                 Ok(response) => response,
                 Err(error) if i < MAX_RETRIES => {
-                    warn!(
+                    tracing::warn!(
                         "Failed to post query \"{}\": {error}; retrying",
                         truncate_query_output_serialize(&query),
                     );
