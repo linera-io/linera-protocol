@@ -40,7 +40,7 @@ export interface PostedMessage {
   id: number;
   bundle_id: number;
   message_index: number;
-  authenticated_signer: Uint8Array | null;
+  authenticated_owner: Uint8Array | null;
   grant_amount: string;
   refund_grant_to: Uint8Array | null;
   message_kind: string;
@@ -75,7 +75,7 @@ export interface Operation {
   operation_type: 'System' | 'User';
   application_id?: string;
   system_operation_type?: string;
-  authenticated_signer?: string;
+  authenticated_owner?: string;
   data: Uint8Array;
   created_at: string;
 }
@@ -86,7 +86,7 @@ export interface Message {
   transaction_index: number;
   message_index: number;
   destination_chain_id: string;
-  authenticated_signer?: string;
+  authenticated_owner?: string;
   grant_amount: string;
   message_kind: string; // 'Simple', 'Tracked', 'Bouncing', 'Protected'
   message_type: 'System' | 'User';

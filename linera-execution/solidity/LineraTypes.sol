@@ -565,7 +565,7 @@ library LineraTypes {
 
     struct ContractRuntimePrecompile {
         uint8 choice;
-        // choice=0 corresponds to AuthenticatedSigner
+        // choice=0 corresponds to AuthenticatedOwner
         // choice=1 corresponds to MessageOriginChainId
         // choice=2 corresponds to MessageIsBouncing
         // choice=3 corresponds to AuthenticatedCallerId
@@ -586,7 +586,7 @@ library LineraTypes {
         // choice=11 corresponds to ValidationRound
     }
 
-    function ContractRuntimePrecompile_case_authenticated_signer()
+    function ContractRuntimePrecompile_case_authenticated_owner()
         internal
         pure
         returns (ContractRuntimePrecompile memory)

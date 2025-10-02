@@ -406,9 +406,9 @@ library Linera {
 
     // ContractRuntime functions
 
-    function authenticated_signer() internal returns (Linera.opt_AccountOwner memory) {
+    function authenticated_owner() internal returns (Linera.opt_AccountOwner memory) {
         address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_authenticated_signer();
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_authenticated_owner();
         LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output1) = precompile.call(input2);

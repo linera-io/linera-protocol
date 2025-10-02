@@ -805,7 +805,7 @@ where
         let mut resource_controller = ResourceController::new(
             Arc::new(policy),
             ResourceTracker::default(),
-            block.authenticated_signer,
+            block.authenticated_owner,
         );
 
         for blob in published_blobs {

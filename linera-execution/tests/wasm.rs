@@ -72,7 +72,7 @@ async fn test_fuel_for_counter_wasm_application(
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_signer: None,
+        authenticated_owner: None,
         timestamp: Default::default(),
     };
     let increments = [2_u64, 9, 7, 1000];

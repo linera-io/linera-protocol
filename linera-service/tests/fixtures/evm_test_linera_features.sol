@@ -26,8 +26,8 @@ contract ExampleLineraFeatures {
         require(chain_ownership.owners.length == 1);
     }
 
-    function test_authenticated_signer_caller_id() external {
-        Linera.opt_AccountOwner memory signer = Linera.authenticated_signer();
+    function test_authenticated_owner_caller_id() external {
+        Linera.opt_AccountOwner memory signer = Linera.authenticated_owner();
         require(signer.has_value);
         require(signer.value.choice == 2);
         address signer_address = address(signer.value.address20);

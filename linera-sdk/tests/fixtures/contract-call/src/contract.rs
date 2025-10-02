@@ -73,22 +73,22 @@ impl Contract for ContractTransferContract {
                 self.runtime.transfer(source, app_account, amount);
 
                 // Authenticated calls should be fully visible.
-                let operation = Operation::TestSomeAuthenticatedSignerCaller;
+                let operation = Operation::TestSomeAuthenticatedOwnerCaller;
                 self.runtime
                     .call_application(true, application_id, &operation);
 
                 // Non-authenticated calls should be fully non-visible
-                let operation = Operation::TestNoneAuthenticatedSignerCaller;
+                let operation = Operation::TestNoneAuthenticatedOwnerCaller;
                 self.runtime
                     .call_application(false, application_id, &operation);
 
                 // Non-authenticated calls should be fully non-visible
-                let operation = Operation::TestNoneAuthenticatedSignerCaller;
+                let operation = Operation::TestNoneAuthenticatedOwnerCaller;
                 self.runtime
                     .call_application(false, application_id, &operation);
 
                 // Authenticated calls should be fully visible.
-                let operation = Operation::TestSomeAuthenticatedSignerCaller;
+                let operation = Operation::TestSomeAuthenticatedOwnerCaller;
                 self.runtime
                     .call_application(true, application_id, &operation);
 
@@ -103,12 +103,12 @@ impl Contract for ContractTransferContract {
                 self.runtime
                     .call_application(false, application_id, &operation);
             }
-            Operation::TestNoneAuthenticatedSignerCaller => {
-                assert!(self.runtime.authenticated_signer().is_none());
+            Operation::TestNoneAuthenticatedOwnerCaller => {
+                assert!(self.runtime.authenticated_owner().is_none());
                 assert!(self.runtime.authenticated_caller_id().is_none());
             }
-            Operation::TestSomeAuthenticatedSignerCaller => {
-                assert!(self.runtime.authenticated_signer().is_some());
+            Operation::TestSomeAuthenticatedOwnerCaller => {
+                assert!(self.runtime.authenticated_owner().is_some());
                 assert!(self.runtime.authenticated_caller_id().is_some());
             }
         }

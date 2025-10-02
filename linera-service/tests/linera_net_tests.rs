@@ -1470,7 +1470,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         function test_read_data_blob(bytes32 hash, uint32 len);
         function test_assert_data_blob_exists(bytes32 hash);
         function test_chain_ownership();
-        function test_authenticated_signer_caller_id();
+        function test_authenticated_owner_caller_id();
         function test_chain_balance(uint256 expected_balance);
         function test_read_owners();
     }
@@ -1527,9 +1527,9 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let query = EvmQuery::Query(query.abi_encode());
     application.run_json_query(query).await?;
 
-    // Checking authenticated signer/caller_id
+    // Checking authenticated owner/caller_id
 
-    let mutation = test_authenticated_signer_caller_idCall {};
+    let mutation = test_authenticated_owner_caller_idCall {};
     let mutation = EvmQuery::Mutation(mutation.abi_encode());
     application.run_json_query(mutation).await?;
 

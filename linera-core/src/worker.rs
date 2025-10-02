@@ -173,7 +173,7 @@ pub enum WorkerError {
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
 
-    #[error("Operations in the block are not authenticated by the proper signer: {0}")]
+    #[error("Operations in the block are not authenticated by the proper owner: {0}")]
     InvalidSigner(AccountOwner),
 
     // Chaining

@@ -62,7 +62,7 @@ impl LoggingExporter {
                 let inner = block.inner();
                 writeln!(
                     self.file,
-                    "Block ID: {}, Chain: {}, Height: {}, State Hash: {}, Authenticated Signer: {}",
+                    "Block ID: {}, Chain: {}, Height: {}, State Hash: {}, Authenticated Owner: {}",
                     inner.hash(),
                     inner.chain_id(),
                     inner.height(),
@@ -70,7 +70,7 @@ impl LoggingExporter {
                     inner
                         .block()
                         .header
-                        .authenticated_signer
+                        .authenticated_owner
                         .map_or_else(|| "N/A".into(), |signer| signer.to_string()),
                 )?;
                 for blob in blobs {

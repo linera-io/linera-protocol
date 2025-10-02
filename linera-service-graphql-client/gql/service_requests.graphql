@@ -42,7 +42,7 @@ query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
               certificateHash
               transactionIndex
               messages {
-                authenticatedSigner
+                authenticatedOwner
                 grant
                 refundGrantTo {
                   chainId
@@ -61,7 +61,7 @@ query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
               certificateHash
               transactionIndex
               messages {
-                authenticatedSigner
+                authenticatedOwner
                 grant
                 refundGrantTo {
                   chainId
@@ -142,7 +142,7 @@ query Chain(
               certificateHash
               transactionIndex
               messages {
-                authenticatedSigner
+                authenticatedOwner
                 grant
                 refundGrantTo {
                   chainId
@@ -161,7 +161,7 @@ query Chain(
               certificateHash
               transactionIndex
               messages {
-                authenticatedSigner
+                authenticatedOwner
                 grant
                 refundGrantTo {
                   chainId
@@ -232,7 +232,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
         timestamp
         stateHash
         previousBlockHash
-        authenticatedSigner
+        authenticatedOwner
         transactionsHash
         messagesHash
         previousMessageBlocksHash
@@ -245,7 +245,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
       body {
         messages {
           destination
-          authenticatedSigner
+          authenticatedOwner
           grant
           refundGrantTo {
             chainId
@@ -277,7 +277,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
               certificateHash
               transactionIndex
               messages {
-                authenticatedSigner
+                authenticatedOwner
                 grant
                 refundGrantTo {
                   chainId
@@ -314,7 +314,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
         timestamp
         stateHash
         previousBlockHash
-        authenticatedSigner
+        authenticatedOwner
         transactionsHash
         messagesHash
         previousMessageBlocksHash
@@ -327,7 +327,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
       body {
         messages {
           destination
-          authenticatedSigner
+          authenticatedOwner
           grant
           refundGrantTo {
             chainId
@@ -359,7 +359,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
               certificateHash
               transactionIndex
               messages {
-                authenticatedSigner
+                authenticatedOwner
                 grant
                 refundGrantTo {
                   chainId

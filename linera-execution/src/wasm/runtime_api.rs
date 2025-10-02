@@ -392,12 +392,12 @@ where
     Caller: Instance<UserData = RuntimeApiData<Runtime>>,
     Runtime: ContractRuntime + 'static,
 {
-    /// Returns the authenticated signer for this execution, if there is one.
-    fn authenticated_signer(caller: &mut Caller) -> Result<Option<AccountOwner>, RuntimeError> {
+    /// Returns the authenticated owner for this execution, if there is one.
+    fn authenticated_owner(caller: &mut Caller) -> Result<Option<AccountOwner>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .authenticated_signer()
+            .authenticated_owner()
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

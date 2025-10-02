@@ -48,7 +48,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_signer: Some(owner),
+        authenticated_owner: Some(owner),
         timestamp: Default::default(),
     };
     let mut controller = ResourceController::default();
@@ -80,7 +80,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         is_bouncing: false,
         height: BlockHeight(0),
         round: Some(0),
-        authenticated_signer: None,
+        authenticated_owner: None,
         refund_grant_to: None,
         timestamp: Default::default(),
     };

@@ -195,7 +195,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
     chain.initialize_if_needed(time).await.unwrap();
 
     let valid_block = make_first_block(chain_id)
-        .with_authenticated_signer(Some(owner))
+        .with_authenticated_owner(Some(owner))
         .with_operation(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
             recipient: Account::chain(env.admin_id()),

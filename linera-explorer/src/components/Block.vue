@@ -52,7 +52,7 @@ const incomingBundles = computed(() => getIncomingBundles(props.block.block.body
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Signer</strong></span>
-          <span>{{ block.block.header.authenticatedSigner }}</span>
+          <span>{{ block.block.header.authenticatedOwner }}</span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Previous Block</strong></span>

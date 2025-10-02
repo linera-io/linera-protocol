@@ -248,7 +248,7 @@ async fn test_fee_consumption(
             sum.saturating_add(spent_fees)
         });
 
-    let authenticated_signer = if owner_balance.is_some() {
+    let authenticated_owner = if owner_balance.is_some() {
         Some(signer)
     } else {
         None
@@ -256,7 +256,7 @@ async fn test_fee_consumption(
     let mut controller = ResourceController::new(
         Arc::new(prices),
         ResourceTracker::default(),
-        authenticated_signer,
+        authenticated_owner,
     );
 
     for spend in &spends {
@@ -271,14 +271,14 @@ async fn test_fee_consumption(
     }));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let refund_grant_to = authenticated_signer
+    let refund_grant_to = authenticated_owner
         .map(|owner| Account { chain_id, owner })
         .or(None);
     let context = MessageContext {
         chain_id,
         origin: chain_id,
         is_bouncing: false,
-        authenticated_signer,
+        authenticated_owner,
         refund_grant_to,
         height: BlockHeight(0),
         round: Some(0),

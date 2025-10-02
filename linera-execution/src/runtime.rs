@@ -135,7 +135,7 @@ struct ApplicationStatus {
     id: ApplicationId,
     /// The application description.
     description: ApplicationDescription,
-    /// The authenticated signer for the execution thread, if any.
+    /// The authenticated owner for the execution thread, if any.
     signer: Option<AccountOwner>,
 }
 
@@ -442,7 +442,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         let caller_id = caller.id;
         let caller_signer = caller.signer;
         // Make the call to user code.
-        let authenticated_signer = match caller_signer {
+        let authenticated_owner = match caller_signer {
             Some(signer) if authenticated => Some(signer),
             _ => None,
         };
@@ -452,7 +452,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             id: callee_id,
             description: application.description,
             // Allow further nested calls to be authenticated if this one is.
-            signer: authenticated_signer,
+            signer: authenticated_owner,
         });
         Ok(application.instance)
     }
@@ -1001,7 +1001,7 @@ impl ContractSyncRuntimeHandle {
         action: UserAction,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
         let finalize_context = FinalizeContext {
-            authenticated_signer: action.signer(),
+            authenticated_owner: action.signer(),
             chain_id,
             height: action.height(),
             round: action.round(),
@@ -1041,7 +1041,7 @@ impl ContractSyncRuntimeHandle {
         self.inner().is_finalizing = true;
 
         for application in applications {
-            self.execute(application, context.authenticated_signer, |contract| {
+            self.execute(application, context.authenticated_owner, |contract| {
                 contract.finalize().map(|_| None)
             })?;
             self.inner().loaded_applications.remove(&application);
@@ -1093,7 +1093,7 @@ impl ContractSyncRuntimeHandle {
 }
 
 impl ContractRuntime for ContractSyncRuntimeHandle {
-    fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError> {
+    fn authenticated_owner(&mut self) -> Result<Option<AccountOwner>, ExecutionError> {
         let this = self.inner();
         Ok(this.current_application().signer)
     }
@@ -1150,7 +1150,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let mut this = self.inner();
         let application = this.current_application();
         let application_id = application.id;
-        let authenticated_signer = application.signer;
+        let authenticated_owner = application.signer;
         let mut refund_grant_to = this.refund_grant_to;
 
         let grant = this
@@ -1172,7 +1172,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .send_request(|callback| ExecutionRequest::AddOutgoingMessage {
                 message: OutgoingMessage {
                     destination: message.destination,
-                    authenticated_signer,
+                    authenticated_owner,
                     refund_grant_to,
                     grant,
                     kind,
