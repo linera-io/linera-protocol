@@ -1579,12 +1579,10 @@ pub enum ChainClientError {
     #[error("Epoch is already revoked")]
     EpochAlreadyRevoked,
 
-    #[error(
-        "Failed to download missing sender blocks from chain {chain_id} at heights {heights:?}"
-    )]
-    CannotDownloadMissingSenderBlocks {
+    #[error("Failed to download missing sender blocks from chain {chain_id} at height {height}")]
+    CannotDownloadMissingSenderBlock {
         chain_id: ChainId,
-        heights: Vec<BlockHeight>,
+        height: BlockHeight,
     },
 }
 
@@ -2320,58 +2318,48 @@ impl<Env: Environment> ChainClient<Env> {
 
         let (_, committee) = self.admin_committee().await?;
         let nodes = self.client.make_nodes(&committee)?;
-        let (max_epoch, committees) = self.client.admin_committees().await?;
 
         // Download certificates for each sender chain at the specific heights.
-        let certificates = stream::iter(missing_blocks.into_iter())
+        stream::iter(missing_blocks.into_iter())
             .map(|(sender_chain_id, heights)| {
+                let height = heights.into_iter().max();
                 let nodes = nodes.clone();
+                let this = self.clone();
                 async move {
+                    let Some(height) = height else {
+                        return Ok(());
+                    };
                     // Try to download from any node.
                     for node in &nodes {
-                        if let Ok(certs) = node
-                            .download_certificates_by_heights(sender_chain_id, heights.clone())
+                        if let Err(err) = this
+                            .download_sender_block_with_sending_ancestors(
+                                sender_chain_id,
+                                height,
+                                node,
+                            )
                             .await
                         {
-                            return Ok::<Vec<_>, ChainClientError>(certs);
+                            tracing::debug!(
+                                %height,
+                                %sender_chain_id,
+                                %err,
+                                validator = %node.public_key,
+                                "Failed to fetch sender block",
+                            );
+                        } else {
+                            return Ok::<_, ChainClientError>(());
                         }
                     }
                     // If all nodes fail, return an error.
-                    Err(ChainClientError::CannotDownloadMissingSenderBlocks {
+                    Err(ChainClientError::CannotDownloadMissingSenderBlock {
                         chain_id: sender_chain_id,
-                        heights,
+                        height,
                     })
                 }
             })
             .buffer_unordered(self.options.max_joined_tasks)
             .try_collect::<Vec<_>>()
             .await?;
-
-        // Process and validate the downloaded certificates.
-        let mut valid_certificates = Vec::new();
-        for certificate in certificates.into_iter().flatten() {
-            match Client::<Env>::check_certificate(max_epoch, &committees, &certificate)? {
-                CheckCertificateResult::FutureEpoch | CheckCertificateResult::OldEpoch => {
-                    // Skip certificates from unrecognized epochs.
-                    continue;
-                }
-                CheckCertificateResult::New => {
-                    valid_certificates.push(certificate);
-                }
-            }
-        }
-
-        // Receive and process the certificates.
-        for certificate in valid_certificates {
-            self.client
-                .receive_sender_certificate(
-                    certificate,
-                    ReceiveCertificateMode::AlreadyChecked,
-                    Some(nodes.clone()),
-                )
-                .await?;
-        }
-
         Ok(())
     }
 
@@ -2409,9 +2397,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .download_certificates_by_heights(sender_chain_id, vec![current_height])
                 .await?;
             let Some(certificate) = downloaded.into_iter().next() else {
-                return Err(ChainClientError::CannotDownloadMissingSenderBlocks {
+                return Err(ChainClientError::CannotDownloadMissingSenderBlock {
                     chain_id: sender_chain_id,
-                    heights: vec![current_height],
+                    height: current_height,
                 });
             };
 
