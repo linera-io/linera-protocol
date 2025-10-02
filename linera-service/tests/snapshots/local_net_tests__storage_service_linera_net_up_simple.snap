@@ -1,0 +1,8 @@
+---
+source: linera-service/tests/local_net_tests.rs
+expression: "stdout.lines().map_while(|line|\n{\n    println!(\"{line:?}\");\n    line.unwrap().split_once(\"=\").map(|x|\n    x.0.to_owned()).filter(|line| line.starts_with(\"export\"))\n}).collect::<Vec<_>>().join(\"\\n\")"
+---
+export LINERA_WALLET
+export LINERA_KEYSTORE
+export LINERA_STORAGE
+export LINERA_FAUCET_URL

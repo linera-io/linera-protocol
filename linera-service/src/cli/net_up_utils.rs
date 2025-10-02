@@ -332,7 +332,7 @@ async fn print_messages_and_create_faucet(
     );
     println!(
         "{}",
-        format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold(),
+        format!("export LINERA_STORAGE=\"{}\"", client.storage_path()).bold(),
     );
 
     let wallet = client.load_wallet()?;
@@ -349,7 +349,7 @@ async fn print_messages_and_create_faucet(
 
             eprintln!("To connect to this network, you can use the following faucet URL:");
             println!(
-                "\n{}\n",
+                "{}",
                 format!("export LINERA_FAUCET_URL=\"http://localhost:{faucet_port}\"").bold(),
             );
 
@@ -371,6 +371,8 @@ async fn print_messages_and_create_faucet(
     } else {
         None
     };
+
+    println!();
 
     eprintln!(
         "\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory."
