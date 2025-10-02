@@ -182,7 +182,7 @@ pub struct ChainListener<C: ClientContext> {
     cancellation_token: CancellationToken,
 }
 
-impl<C: ClientContext> ChainListener<C> {
+impl<C: ClientContext + 'static> ChainListener<C> {
     /// Creates a new chain listener given client chains.
     pub fn new(
         config: ChainListenerConfig,
@@ -202,13 +202,16 @@ impl<C: ClientContext> ChainListener<C> {
 
     /// Runs the chain listener.
     #[instrument(skip(self))]
-    pub async fn run(mut self) -> Result<impl Future<Output = Result<(), Error>>, Error> {
+    pub async fn run(
+        mut self,
+        sync_sleep_ms: Option<u64>,
+    ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
             let admin_chain_id = guard.wallet().genesis_admin_chain();
             guard
                 .make_chain_client(admin_chain_id)
-                .synchronize_from_validators()
+                .synchronize_chain_state(admin_chain_id)
                 .await?;
             BTreeSet::from_iter(
                 guard
@@ -218,6 +221,30 @@ impl<C: ClientContext> ChainListener<C> {
                     .chain([admin_chain_id]),
             )
         };
+
+        // Start background tasks to sync received certificates for each chain,
+        // if enabled (sync_sleep_ms is Some).
+        if let Some(sync_sleep_ms) = sync_sleep_ms {
+            let context = Arc::clone(&self.context);
+            let cancellation_token = self.cancellation_token.clone();
+            for chain_id in &chain_ids {
+                let context = Arc::clone(&context);
+                let cancellation_token = cancellation_token.clone();
+                let chain_id = *chain_id;
+                drop(linera_base::task::spawn(async move {
+                    if let Err(e) = Self::background_sync_received_certificates(
+                        context,
+                        sync_sleep_ms,
+                        chain_id,
+                        cancellation_token,
+                    )
+                    .await
+                    {
+                        warn!("Background sync failed for chain {chain_id}: {e}");
+                    }
+                }));
+            }
+        }
 
         Ok(async {
             self.listen_recursively(chain_ids).await?;
@@ -328,6 +355,46 @@ impl<C: ClientContext> ChainListener<C> {
     async fn listen_recursively(&mut self, mut chain_ids: BTreeSet<ChainId>) -> Result<(), Error> {
         while let Some(chain_id) = chain_ids.pop_first() {
             chain_ids.extend(self.listen(chain_id).await?);
+        }
+
+        Ok(())
+    }
+
+    /// Background task that syncs received certificates in small batches.
+    /// This discovers unacknowledged sender blocks gradually without overwhelming the system.
+    #[instrument(skip(context, cancellation_token))]
+    async fn background_sync_received_certificates(
+        context: Arc<Mutex<C>>,
+        sync_sleep_ms: u64,
+        chain_id: ChainId,
+        cancellation_token: CancellationToken,
+    ) -> Result<(), Error> {
+        info!("Starting background certificate sync for chain {chain_id}");
+        let client = context.lock().await.make_chain_client(chain_id);
+
+        loop {
+            // Check if we should stop.
+            if cancellation_token.is_cancelled() {
+                info!("Background sync cancelled for chain {chain_id}");
+                break;
+            }
+
+            // Sleep to avoid overwhelming the system.
+            Self::sleep(sync_sleep_ms).await;
+
+            // Sync one batch.
+            match client.sync_received_certificates_batch().await {
+                Ok(has_more) => {
+                    if !has_more {
+                        info!("Background sync completed for chain {chain_id}");
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!("Error syncing batch for chain {chain_id}: {e}. Will retry.");
+                    // Continue trying despite errors - validators might be temporarily unavailable.
+                }
+            }
         }
 
         Ok(())
