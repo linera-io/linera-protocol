@@ -2956,8 +2956,11 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
+
+    // We let the admin chain automatically process its inbox, since that always creates a
+    // response to the other chains.
     let mut node_service_admin = client_admin
-        .run_node_service(port1, ProcessInbox::Skip)
+        .run_node_service(port1, ProcessInbox::Automatic)
         .await?;
     let mut node_service_a = client_a.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service_b = client_b.run_node_service(port3, ProcessInbox::Skip).await?;
@@ -3056,17 +3059,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     // rerouted to the admin chain for processing. This leads
     // to order being sent to chain_a / chain_b.
     assert!(
-        eventually(|| async {
-            node_service_admin
-                .process_inbox(&chain_admin)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
-    assert!(
         eventually(|| async { node_service_a.process_inbox(&chain_a).await.unwrap().len() == 1 })
             .await
     );
@@ -3101,17 +3093,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     }
 
     // Same logic as for the insertion of orders.
-    assert!(
-        eventually(|| async {
-            node_service_admin
-                .process_inbox(&chain_admin)
-                .await
-                .unwrap()
-                .len()
-                == 1
-        })
-        .await
-    );
     assert!(
         eventually(|| async { node_service_a.process_inbox(&chain_a).await.unwrap().len() == 1 })
             .await
