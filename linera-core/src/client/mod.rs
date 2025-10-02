@@ -774,7 +774,7 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Processes the confirmed block in the local node without executing it.
+    /// Processes the confirmed block in the local node, possibly without executing it.
     #[instrument(level = "trace", skip_all)]
     #[allow(dead_code)] // Otherwise CI fails when built for docker.
     async fn receive_sender_certificate(
@@ -2033,10 +2033,8 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
             .collect_missing_sender_blocks()
             .await?;
-        if !missing_blocks.is_empty() {
-            // Download only the specific sender blocks we're missing.
-            self.download_missing_sender_blocks(missing_blocks).await?;
-        }
+        // Download any sender blocks we're missing.
+        self.download_missing_sender_blocks(missing_blocks).await?;
         self.client.update_from_info(&info);
         Ok(info)
     }
@@ -2435,13 +2433,13 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(())
     }
 
-    /// Downloads a specific sender block and recursively downloads any previous blocks
-    /// required for preprocessing, based on `previous_message_blocks`.
+    /// Downloads a specific sender block and recursively downloads any earlier blocks
+    /// that also sent a message to our chain, based on `previous_message_blocks`.
     ///
-    /// This ensures that we have all the sender blocks needed to preprocess the target block,
-    /// following the chain of previous message blocks to our chain.
+    /// This ensures that we have all the sender blocks needed to preprocess the target block
+    /// and put the messages to our chain into the outbox.
     #[instrument(level = "trace")]
-    async fn download_sender_block_with_dependencies(
+    async fn download_sender_block_with_sending_ancestors(
         &self,
         sender_chain_id: ChainId,
         height: BlockHeight,
@@ -3927,7 +3925,7 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                self.download_sender_block_with_dependencies(origin, height, &remote_node)
+                self.download_sender_block_with_sending_ancestors(origin, height, &remote_node)
                     .await?;
                 if self.local_next_height_to_receive(origin).await? <= height {
                     warn!(
