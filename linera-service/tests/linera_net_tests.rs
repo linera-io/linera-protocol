@@ -2119,7 +2119,6 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
         .await;
 
-    // Call process inbox in order to synchronize from validators.
     assert!(
         eventually(|| async {
             app2.get_allowance(&owner1, &owner2).await == Amount::from_tokens(93)
