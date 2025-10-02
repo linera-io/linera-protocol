@@ -1589,8 +1589,12 @@ impl Runnable for Job {
                 );
             }
 
-            Wallet(WalletCommand::Init { faucet, .. }) => {
-                let Some(faucet_url) = faucet else {
+            Wallet(WalletCommand::Init {
+                faucet,
+                genesis_config_path,
+                ..
+            }) => {
+                let (Some(faucet_url), None) = (faucet, genesis_config_path) else {
                     return Ok(());
                 };
                 let Some(network_description) = storage.read_network_description().await? else {
@@ -2448,7 +2452,10 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             } => {
                 let start_time = Instant::now();
                 let genesis_config: GenesisConfig = match (genesis_config_path, faucet) {
-                    (Some(genesis_config_path), None) => util::read_json(genesis_config_path)?,
+                    (None, None) => {
+                        anyhow::bail!("please specify one of `--faucet` or `--genesis`.")
+                    }
+                    (Some(genesis_config_path), _) => util::read_json(genesis_config_path)?,
                     (None, Some(url)) => {
                         let faucet = cli_wrappers::Faucet::new(url.clone());
                         let version_info = faucet
@@ -2474,7 +2481,6 @@ Make sure to use a Linera client compatible with this network.
                             .await
                             .context("Failed to obtain the genesis configuration from the faucet")?
                     }
-                    (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let mut keystore = options.create_keystore(*testing_prng_seed)?;
                 keystore.persist().await?;

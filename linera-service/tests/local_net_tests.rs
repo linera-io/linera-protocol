@@ -712,37 +712,40 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     let mut lines = stderr.lines();
 
     let mut is_ready = false;
+    eprintln!("waiting for network to be ready");
     for line in &mut lines {
         let line = line?;
+        eprintln!("[net up]: {line}");
         if line.starts_with("READY!") {
             is_ready = true;
             break;
         }
     }
-    assert!(is_ready, "Unexpected EOF for stderr");
+
+    if !is_ready {
+        assert!(is_ready, "unexpected EOF for stderr");
+    } else {
+        eprintln!("network is ready");
+    }
 
     // Echo faucet stderr for debugging and to empty the buffer.
     std::thread::spawn(move || {
         for line in lines {
-            let line = line.unwrap();
-            eprintln!("{}", line);
+            eprintln!("[net up] {}", line.unwrap());
         }
     });
 
-    let mut exports = stdout.lines();
-    assert!(exports
-        .next()
-        .unwrap()?
-        .starts_with("export LINERA_WALLET="));
-    assert!(exports
-        .next()
-        .unwrap()?
-        .starts_with("export LINERA_KEYSTORE="));
-    assert!(exports
-        .next()
-        .unwrap()?
-        .starts_with("export LINERA_STORAGE="));
-    assert_eq!(exports.next().unwrap()?, "");
+    insta::assert_snapshot!(stdout
+        .lines()
+        .map_while(|line| {
+            println!("{line:?}");
+            line.unwrap()
+                .split_once("=")
+                .map(|x| x.0.to_owned())
+                .filter(|line| line.starts_with("export"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n"));
 
     // Test faucet.
     let faucet = Faucet::new(format!("http://localhost:{}/", port));
@@ -753,7 +756,6 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
         .args(["-s", "INT", &child.id().to_string()])
         .output()?;
 
-    assert!(exports.next().is_none());
     assert!(child.wait()?.success());
     return Ok(());
 }
