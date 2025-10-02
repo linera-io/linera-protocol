@@ -727,6 +727,10 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
         .next()
         .unwrap()?
         .starts_with("export LINERA_STORAGE="));
+    assert!(exports
+        .next()
+        .unwrap()?
+        .starts_with("export LINERA_FAUCET_URL="));
     assert_eq!(exports.next().unwrap()?, "");
 
     // Test faucet.
