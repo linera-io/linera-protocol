@@ -2112,28 +2112,22 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     app2.assert_balances(expected_balances).await;
     app3.assert_balances(expected_balances).await;
 
-    // Approving a transfer
+    // Approving a transfer.
     app1.approve(&owner1, &owner2, Amount::from_tokens(93))
         .await;
 
     app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
         .await;
 
-    // Call process inbox in order to synchronize from validators
+    // Call process inbox in order to synchronize from validators.
     assert!(
         eventually(|| async {
-            !node_service2
-                .process_inbox(&chain2)
-                .await
-                .unwrap()
-                .is_empty()
+            app2.get_allowance(&owner1, &owner2).await == Amount::from_tokens(93)
         })
         .await
     );
-    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
-        .await;
 
-    // Doing the transfer from
+    // Doing the transfer from owner 1.
     app2.transfer_from(
         &owner1,
         &owner2,
