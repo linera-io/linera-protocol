@@ -166,7 +166,13 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--storage-max-cache-size <STORAGE_MAX_CACHE_SIZE>` — The maximal memory used in the storage cache
 
   Default value: `10000000`
-* `--storage-max-entry-size <STORAGE_MAX_ENTRY_SIZE>` — The maximal size of an entry in the storage cache
+* `--storage-max-value-entry-size <STORAGE_MAX_VALUE_ENTRY_SIZE>` — The maximal size of a value entry in the storage cache
+
+  Default value: `1000000`
+* `--storage-max-find-keys-entry-size <STORAGE_MAX_FIND_KEYS_ENTRY_SIZE>` — The maximal size of a find-keys entry in the storage cache
+
+  Default value: `1000000`
+* `--storage-max-find-key-values-entry-size <STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE>` — The maximal size of a find-key-values entry in the storage cache
 
   Default value: `1000000`
 * `--storage-max-cache-entries <STORAGE_MAX_CACHE_ENTRIES>` — The maximal number of entries in the storage cache

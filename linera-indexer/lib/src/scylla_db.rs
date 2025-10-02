@@ -34,9 +34,17 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "10000000")]
     pub max_cache_size: usize,
 
-    /// The maximal size of an entry in the storage cache in bytes.
+    /// The maximal size of a value entry in the storage cache in bytes.
     #[arg(long, default_value = "1000000")]
-    pub max_entry_size: usize,
+    pub max_value_entry_size: usize,
+
+    /// The maximal size of a find-keys entry in the storage cache in bytes.
+    #[arg(long, default_value = "1000000")]
+    pub max_find_keys_entry_size: usize,
+
+    /// The maximal size of a find-key-values entry in the storage cache in bytes.
+    #[arg(long, default_value = "1000000")]
+    pub max_find_key_values_entry_size: usize,
 
     /// The maximal number of entries in the storage cache.
     #[arg(long, default_value = "1000")]
@@ -66,7 +74,9 @@ impl ScyllaDbRunner {
         let config = <IndexerConfig<ScyllaDbConfig> as clap::Parser>::parse();
         let storage_cache_config = StorageCacheConfig {
             max_cache_size: config.client.max_cache_size,
-            max_entry_size: config.client.max_entry_size,
+            max_value_entry_size: config.client.max_value_entry_size,
+            max_findkeys_entry_size: config.client.max_find_keys_entry_size,
+            max_findkeyvalues_entry_size: config.client.max_find_key_values_entry_size,
             max_cache_entries: config.client.max_cache_entries,
             max_cache_value_size: config.client.max_cache_value_size,
             max_cache_find_keys_size: config.client.max_cache_find_keys_size,

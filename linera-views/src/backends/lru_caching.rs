@@ -105,7 +105,9 @@ mod metrics {
 /// become the limiting factor.
 pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig {
     max_cache_size: 10000000,
-    max_entry_size: 1000000,
+    max_value_entry_size: 1000000,
+    max_findkeys_entry_size: 1000000,
+    max_findkeyvalues_entry_size: 1000000,
     max_cache_entries: 1000,
     max_cache_value_size: 10000000,
     max_cache_find_keys_size: 10000000,

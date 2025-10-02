@@ -282,9 +282,15 @@ enum StorageServerOptions {
         /// The maximum size of the cache, in bytes (keys size + value sizes)
         #[arg(long, default_value = "10000000")]
         max_cache_size: usize,
-        /// The maximum size of an entry size, in bytes
+        /// The maximum size of a value entry size, in bytes
         #[arg(long, default_value = "1000000")]
-        max_entry_size: usize,
+        max_value_entry_size: usize,
+        /// The maximum size of a findkeys entry size, in bytes
+        #[arg(long, default_value = "1000000")]
+        max_findkeys_entry_size: usize,
+        /// The maximum size of a findkeyvalues entry size, in bytes
+        #[arg(long, default_value = "1000000")]
+        max_findkeyvalues_entry_size: usize,
         /// The maximum number of entries in the cache.
         #[arg(long, default_value = "1000")]
         max_cache_entries: usize,
@@ -656,7 +662,9 @@ async fn main() {
             path,
             max_stream_queries,
             max_cache_size,
-            max_entry_size,
+            max_value_entry_size,
+            max_findkeys_entry_size,
+            max_findkeyvalues_entry_size,
             max_cache_entries,
             max_cache_value_size,
             max_cache_find_keys_size,
@@ -672,7 +680,9 @@ async fn main() {
             };
             let storage_cache_config = StorageCacheConfig {
                 max_cache_size,
-                max_entry_size,
+                max_value_entry_size,
+                max_findkeys_entry_size,
+                max_findkeyvalues_entry_size,
                 max_cache_entries,
                 max_cache_value_size,
                 max_cache_find_keys_size,
