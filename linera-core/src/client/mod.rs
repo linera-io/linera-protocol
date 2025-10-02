@@ -1842,11 +1842,12 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(query)
             .await?
             .info;
-        if self
-            .preferred_owner
-            .is_some_and(|owner| info.manager.ownership.is_single_super_owner(&owner))
-        {
-            // We are the only owner, so we should be up to date.
+        if self.preferred_owner.is_some_and(|owner| {
+            info.manager
+                .ownership
+                .is_super_owner_no_regular_owners(&owner)
+        }) {
+            // There are only super owners; they are expected to sync manually.
             ensure!(
                 info.next_block_height >= self.initial_next_block_height,
                 ChainClientError::WalletSynchronizationError
@@ -2005,11 +2006,13 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut info = self.synchronize_to_known_height().await?;
 
-        if self
-            .preferred_owner
-            .is_none_or(|owner| !info.manager.ownership.is_single_super_owner(&owner))
-        {
-            // If we are not a single super owner, we could be missing recent
+        if self.preferred_owner.is_none_or(|owner| {
+            !info
+                .manager
+                .ownership
+                .is_super_owner_no_regular_owners(&owner)
+        }) {
+            // If we are not a super owner or there are regular owners, we could be missing recent
             // certificates created by other clients. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
             info = self.client.synchronize_chain_state(self.chain_id).await?;
