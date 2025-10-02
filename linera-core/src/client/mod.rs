@@ -3844,7 +3844,7 @@ impl<Env: Environment> ChainClient<Env> {
                 if let Err(error) = &result {
                     warn!(?error, "Could not connect to validator {public_key}");
                 } else {
-                    info!("Connected to validator {public_key}");
+                    debug!("Connected to validator {public_key}");
                 }
                 result.ok()
             })
