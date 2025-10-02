@@ -36,7 +36,7 @@ pub struct Entry<
     V: async_graphql::OutputType + Send + Sync,
 > {
     pub key: K,
-    pub value: V,
+    pub value: Option<V>,
 }
 
 impl<K: async_graphql::OutputType, V: async_graphql::OutputType> async_graphql::TypeName
@@ -219,10 +219,3 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
     }
 }
 
-pub(crate) fn missing_key_error(key: &impl std::fmt::Debug) -> async_graphql::Error {
-    async_graphql::Error {
-        message: format!("The key={:?} is missing in collection", key),
-        source: None,
-        extensions: None,
-    }
-}
