@@ -56,7 +56,7 @@ pub enum ChainError {
         height: BlockHeight,
     },
     #[error(
-        "Message in block proposed to {chain_id:?} does not match the previously received messages from \
+        "Message in block proposed to {chain_id} does not match the previously received messages from \
         origin {origin:?}: was {bundle:?} instead of {previous_bundle:?}"
     )]
     UnexpectedMessage {
@@ -66,7 +66,7 @@ pub enum ChainError {
         previous_bundle: Box<MessageBundle>,
     },
     #[error(
-        "Message in block proposed to {chain_id:?} is out of order compared to previous messages \
+        "Message in block proposed to {chain_id} is out of order compared to previous messages \
          from origin {origin:?}: {bundle:?}. Block and height should be at least: \
          {next_height}, {next_index}"
     )]
@@ -78,7 +78,7 @@ pub enum ChainError {
         next_index: u32,
     },
     #[error(
-        "Block proposed to {chain_id:?} is attempting to reject protected message \
+        "Block proposed to {chain_id} is attempting to reject protected message \
         {posted_message:?}"
     )]
     CannotRejectMessage {
@@ -87,7 +87,7 @@ pub enum ChainError {
         posted_message: Box<PostedMessage>,
     },
     #[error(
-        "Block proposed to {chain_id:?} is attempting to skip a message bundle \
+        "Block proposed to {chain_id} is attempting to skip a message bundle \
          that cannot be skipped: {bundle:?}"
     )]
     CannotSkipMessage {
@@ -96,7 +96,7 @@ pub enum ChainError {
         bundle: Box<MessageBundle>,
     },
     #[error(
-        "Incoming message bundle in block proposed to {chain_id:?} has timestamp \
+        "Incoming message bundle in block proposed to {chain_id} has timestamp \
         {bundle_timestamp:}, which is later than the block timestamp {block_timestamp:}."
     )]
     IncorrectBundleTimestamp {

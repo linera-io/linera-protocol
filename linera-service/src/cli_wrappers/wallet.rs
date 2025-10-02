@@ -1259,6 +1259,12 @@ impl NodeService {
         Ok(serde_json::from_value(data["processInbox"].take())?)
     }
 
+    pub async fn sync(&self, chain_id: &ChainId) -> Result<u64> {
+        let query = format!("mutation {{ sync(chainId: \"{chain_id}\") }}");
+        let mut data = self.query_node(query).await?;
+        Ok(serde_json::from_value(data["sync"].take())?)
+    }
+
     pub async fn transfer(
         &self,
         chain_id: ChainId,

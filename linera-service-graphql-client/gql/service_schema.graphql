@@ -815,6 +815,17 @@ type MutationRoot {
 		chainId: ChainId!
 	): [CryptoHash!]!
 	"""
+	Synchronizes the chain with the validators. Returns the chain's length.
+	
+	This is only used for testing, to make sure that a client is up to date.
+	"""
+	sync(
+		"""
+		The chain being synchronized.
+		"""
+		chainId: ChainId!
+	): Int!
+	"""
 	Retries the pending block that was unsuccessfully proposed earlier.
 	"""
 	retryPendingBlock(

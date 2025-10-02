@@ -243,7 +243,7 @@ impl Client {
             storage,
             tokio_util::sync::CancellationToken::new(),
         )
-        .run()
+        .run(Some(500)) // Enable background sync with 500ms sleep
         .boxed_local()
         .await?
         .boxed_local();

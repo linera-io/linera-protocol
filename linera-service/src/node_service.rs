@@ -183,8 +183,7 @@ where
         let mut hashes = Vec::new();
         loop {
             let client = self.context.lock().await.make_chain_client(chain_id);
-            client.synchronize_from_validators().await?;
-            let result = client.process_inbox_without_prepare().await;
+            let result = client.process_inbox().await;
             self.context.lock().await.update_wallet(&client).await?;
             let (certificates, maybe_timeout) = result?;
             hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
@@ -197,6 +196,20 @@ where
                 }
             }
         }
+    }
+
+    /// Synchronizes the chain with the validators. Returns the chain's length.
+    ///
+    /// This is only used for testing, to make sure that a client is up to date.
+    // TODO(#4718): Remove this mutation.
+    async fn sync(
+        &self,
+        #[graphql(desc = "The chain being synchronized.")] chain_id: ChainId,
+    ) -> Result<u64, Error> {
+        let client = self.context.lock().await.make_chain_client(chain_id);
+        let info = client.synchronize_from_validators().await?;
+        self.context.lock().await.update_wallet(&client).await?;
+        Ok(info.next_block_height.0)
     }
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
@@ -886,7 +899,11 @@ where
 
     /// Runs the node service.
     #[instrument(name = "node_service", level = "info", skip_all, fields(port = ?self.port))]
-    pub async fn run(self, cancellation_token: CancellationToken) -> Result<(), anyhow::Error> {
+    pub async fn run(
+        self,
+        cancellation_token: CancellationToken,
+        sync_sleep_ms: u64,
+    ) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
@@ -917,7 +934,7 @@ where
             storage,
             cancellation_token.clone(),
         )
-        .run()
+        .run(Some(sync_sleep_ms))
         .await?;
         let mut chain_listener = Box::pin(chain_listener).fuse();
         let tcp_listener =
