@@ -2228,14 +2228,15 @@ impl<Env: Environment> ChainClient<Env> {
         stream::iter(missing_blocks.into_iter())
             .map(|(sender_chain_id, heights)| {
                 let height = heights.into_iter().max();
-                let nodes = nodes.clone();
                 let this = self.clone();
+                let mut shuffled_nodes = nodes.clone();
+                shuffled_nodes.shuffle(&mut rand::thread_rng());
                 async move {
                     let Some(height) = height else {
                         return Ok(());
                     };
                     // Try to download from any node.
-                    for node in &nodes {
+                    for node in &shuffled_nodes {
                         if let Err(err) = this
                             .download_sender_block_with_sending_ancestors(
                                 sender_chain_id,
