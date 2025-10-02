@@ -19,6 +19,7 @@ use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
+    node::NodeError,
     notifier::ChannelNotifier,
     JoinSetExt as _,
 };
@@ -265,13 +266,22 @@ where
             .build_v1()?;
         let public_server = join_set.spawn_task(
             self.public_server()?
-                .max_concurrent_streams(Some(u32::MAX - 1)) // we subtract one to make sure
-                // that the value is not
-                // interpreted as "not set"
+                .max_concurrent_streams(
+                    // we subtract one to make sure
+                    // that the value is not
+                    // interpreted as "not set"
+                    Some(u32::MAX - 1),
+                )
                 .layer(
                     ServiceBuilder::new()
                         .layer(PrometheusMetricsMiddlewareLayer)
                         .into_inner(),
+                )
+                .layer(
+                    // enable
+                    // [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)
+                    // for the proxy to originate anywhere
+                    tower_http::cors::CorsLayer::permissive(),
                 )
                 .layer(GrpcWebLayer::new())
                 .accept_http1(true)
@@ -735,9 +745,12 @@ where
                 chain_info.requested_sent_certificate_hashes
             }
             Some(api::chain_info_result::Inner::Error(error)) => {
+                let error =
+                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
+                        error: format!("failed to unmarshal error message: {}", err),
+                    });
                 return Err(Status::internal(format!(
-                    "Chain info query failed: {:?}",
-                    error
+                    "Chain info query failed: {error}"
                 )));
             }
             None => {
@@ -778,9 +791,12 @@ where
                 chain_info.requested_sent_certificate_hashes
             }
             Some(api::chain_info_result::Inner::Error(error)) => {
+                let error =
+                    bincode::deserialize(&error).unwrap_or_else(|err| NodeError::GrpcError {
+                        error: format!("failed to unmarshal error message: {}", err),
+                    });
                 return Err(Status::internal(format!(
-                    "Chain info query failed: {:?}",
-                    error
+                    "Chain info query failed: {error}"
                 )));
             }
             None => {

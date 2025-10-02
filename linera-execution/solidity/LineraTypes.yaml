@@ -137,7 +137,7 @@ BaseRuntimePrecompile:
 ContractRuntimePrecompile:
   ENUM:
     0:
-      AuthenticatedSigner: UNIT
+      AuthenticatedOwner: UNIT
     1:
       MessageOriginChainId: UNIT
     2:

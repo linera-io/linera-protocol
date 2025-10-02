@@ -873,7 +873,7 @@ where
         assert_eq!(context.chain_id, self.state.context().extra().chain_id());
         self.txn_tracker.add_outgoing_message(OutgoingMessage {
             destination: context.origin,
-            authenticated_signer: context.authenticated_signer,
+            authenticated_owner: context.authenticated_owner,
             refund_grant_to: context.refund_grant_to.filter(|_| !grant.is_zero()),
             grant,
             kind: MessageKind::Bouncing,
@@ -898,7 +898,7 @@ where
         };
         let message = SystemMessage::Credit {
             amount,
-            source: context.authenticated_signer.unwrap_or(AccountOwner::CHAIN),
+            source: context.authenticated_owner.unwrap_or(AccountOwner::CHAIN),
             target: account.owner,
         };
         self.txn_tracker.add_outgoing_message(

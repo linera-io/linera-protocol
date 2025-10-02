@@ -293,7 +293,7 @@ pub enum ExecutionError {
     InvalidEpoch { chain_id: ChainId, epoch: Epoch },
     #[error("Transfer must have positive amount")]
     IncorrectTransferAmount,
-    #[error("Transfer from owned account must be authenticated by the right signer")]
+    #[error("Transfer from owned account must be authenticated by the right owner")]
     UnauthenticatedTransferOwner,
     #[error("The transferred amount must not exceed the balance of the current account {account}: {balance}")]
     InsufficientBalance {
@@ -304,7 +304,7 @@ pub enum ExecutionError {
     FeesExceedFunding { fees: Amount, balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
-    #[error("Claim must be authenticated by the right signer")]
+    #[error("Claim must be authenticated by the right owner")]
     UnauthenticatedClaimOwner,
     #[error("Admin operations are only allowed on the admin chain.")]
     AdminOperationOnNonAdminChain,
@@ -407,9 +407,9 @@ pub trait ExecutionRuntimeContext {
 pub struct OperationContext {
     /// The current chain ID.
     pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
+    /// The authenticated owner of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -426,9 +426,9 @@ pub struct MessageContext {
     pub origin: ChainId,
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
-    /// The authenticated signer of the operation that created the message, if any.
+    /// The authenticated owner of the operation that created the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
@@ -478,9 +478,9 @@ impl From<OperationContext> for ProcessStreamsContext {
 pub struct FinalizeContext {
     /// The current chain ID.
     pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
+    /// The authenticated owner of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -684,8 +684,8 @@ pub trait ServiceRuntime: BaseRuntime {
 }
 
 pub trait ContractRuntime: BaseRuntime {
-    /// The authenticated signer for this execution, if there is one.
-    fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
+    /// The authenticated owner for this execution, if there is one.
+    fn authenticated_owner(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
 
     /// If the current message (if there is one) was rejected by its destination and is now
     /// bouncing back.
@@ -940,7 +940,7 @@ pub struct OutgoingMessage {
     pub destination: ChainId,
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// A grant to pay for the message execution.
     #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,
@@ -956,11 +956,11 @@ pub struct OutgoingMessage {
 impl BcsHashable<'_> for OutgoingMessage {}
 
 impl OutgoingMessage {
-    /// Creates a new simple outgoing message with no grant and no authenticated signer.
+    /// Creates a new simple outgoing message with no grant and no authenticated owner.
     pub fn new(recipient: ChainId, message: impl Into<Message>) -> Self {
         OutgoingMessage {
             destination: recipient,
-            authenticated_signer: None,
+            authenticated_owner: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Simple,
@@ -974,18 +974,18 @@ impl OutgoingMessage {
         self
     }
 
-    /// Returns the same message, with the specified authenticated signer.
-    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<AccountOwner>) -> Self {
-        self.authenticated_signer = authenticated_signer;
+    /// Returns the same message, with the specified authenticated owner.
+    pub fn with_authenticated_owner(mut self, authenticated_owner: Option<AccountOwner>) -> Self {
+        self.authenticated_owner = authenticated_owner;
         self
     }
 }
 
 impl OperationContext {
     /// Returns an account for the refund.
-    /// Returns `None` if there is no authenticated signer of the [`OperationContext`].
+    /// Returns `None` if there is no authenticated owner of the [`OperationContext`].
     fn refund_grant_to(&self) -> Option<Account> {
-        self.authenticated_signer.map(|owner| Account {
+        self.authenticated_owner.map(|owner| Account {
             chain_id: self.chain_id,
             owner,
         })

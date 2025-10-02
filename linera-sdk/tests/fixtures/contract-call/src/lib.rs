@@ -30,8 +30,8 @@ pub enum Operation {
         destination: Account,
         amount: Amount,
     },
-    TestNoneAuthenticatedSignerCaller,
-    TestSomeAuthenticatedSignerCaller,
+    TestNoneAuthenticatedOwnerCaller,
+    TestSomeAuthenticatedOwnerCaller,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

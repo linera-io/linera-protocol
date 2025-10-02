@@ -1991,10 +1991,16 @@ async fn kill_all_processes(pids: &[u32]) {
     }
 }
 
+fn should_init_opentelemetry(command: &ClientCommand) -> bool {
+    matches!(command, ClientCommand::Faucet { .. })
+}
+
 fn main() -> anyhow::Result<()> {
     let options = ClientOptions::init();
 
-    linera_base::tracing::init(&options.command.log_file_name());
+    if !should_init_opentelemetry(&options.command) {
+        linera_base::tracing::init(&options.command.log_file_name());
+    }
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -2034,6 +2040,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run(options: &ClientOptions) -> Result<i32, Error> {
+    if should_init_opentelemetry(&options.command) {
+        linera_base::tracing::init_with_opentelemetry(&options.command.log_file_name()).await;
+    }
+
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
@@ -2266,7 +2276,12 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                with_block_exporter,
+                num_block_exporters,
+                indexer_image_name,
+                explorer_image_name,
                 dual_store,
+                path,
                 ..
             } => {
                 net_up_utils::handle_net_up_kubernetes(
@@ -2285,7 +2300,12 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    *with_block_exporter,
+                    *num_block_exporters,
+                    indexer_image_name.clone(),
+                    explorer_image_name.clone(),
                     *dual_store,
+                    path,
                 )
                 .boxed()
                 .await?;

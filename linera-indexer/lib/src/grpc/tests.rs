@@ -54,7 +54,7 @@ fn valid_block_element_with_chain_id(chain_suffix: &str) -> Element {
         transactions: vec![],
         previous_block_hash: None,
         height: BlockHeight::ZERO,
-        authenticated_signer: None,
+        authenticated_owner: None,
         timestamp: Timestamp::default(),
     };
 

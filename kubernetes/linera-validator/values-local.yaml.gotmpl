@@ -17,6 +17,41 @@ usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
 gcpRun: {{ env "LINERA_HELMFILE_SET_GCP_RUN" | default "false" }}
 storageReplicationFactor: {{ env "LINERA_HELMFILE_SET_STORAGE_REPLICATION_FACTOR" | default 1 }}
 
+# Explorer Services (Indexer, Block Exporter, Web Explorer)
+blockExporter:
+  enabled: {{ env "LINERA_HELMFILE_SET_EXPLORER_ENABLED" | default "false" }}
+  replicas: {{ env "LINERA_HELMFILE_NUM_BLOCK_EXPORTERS" | default "1" }}
+  port: {{ env "LINERA_HELMFILE_BLOCK_EXPORTER_PORT" | default "8882" }}
+  metricsPort: 9091
+  storageSize: 1Gi
+  logLevel: {{ env "LINERA_HELMFILE_SET_BLOCK_EXPORTER_LOG_LEVEL" | default "info" }}
+  serviceMonitor:
+    enabled: true
+
+indexer:
+  enabled: {{ env "LINERA_HELMFILE_SET_EXPLORER_ENABLED" | default "false" }}
+  image: {{ env "LINERA_HELMFILE_INDEXER_IMAGE" | default "linera-indexer:latest" }}
+  imagePullPolicy: Never
+  port: 8081
+  databasePath: /data/indexer.db
+  storageSize: 2Gi
+  logLevel: {{ env "LINERA_HELMFILE_SET_INDEXER_LOG_LEVEL" | default "info" }}
+
+explorer:
+  enabled: {{ env "LINERA_HELMFILE_SET_EXPLORER_ENABLED" | default "false" }}
+  image: {{ env "LINERA_HELMFILE_EXPLORER_IMAGE" | default "linera-explorer:latest" }}
+  imagePullPolicy: Never
+  frontendPort: 3001
+  apiPort: 3002
+  logLevel: {{ env "LINERA_HELMFILE_SET_EXPLORER_LOG_LEVEL" | default "info" }}
+  ingress:
+    enabled: {{ env "LINERA_HELMFILE_SET_EXPLORER_ENABLED" | default "false" }}
+    hosts:
+      - host: linera-explorer.local
+        paths:
+          - path: /
+            pathType: Prefix
+
 # Loki
 loki-stack:
   loki:

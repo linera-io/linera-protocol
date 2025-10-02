@@ -211,7 +211,7 @@ where
         };
 
         if !responded {
-            warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
+            debug!("Callback for `ChainWorkerActor` was dropped before a response was sent");
         }
 
         // Roll back any unsaved changes to the chain state: If there was an error while trying
@@ -1181,7 +1181,6 @@ where
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        let signer = block.authenticated_signer;
         let (_, committee) = self.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
@@ -1191,13 +1190,13 @@ where
 
         // No need to sign: only used internally.
         let mut response = ChainInfoResponse::new(&self.chain, None);
-        if let Some(signer) = signer {
+        if let Some(owner) = block.authenticated_owner {
             response.info.requested_owner_balance = self
                 .chain
                 .execution_state
                 .system
                 .balances
-                .get(&signer)
+                .get(&owner)
                 .await?;
         }
 
@@ -1239,7 +1238,7 @@ where
         let old_round = self.chain.manager.current_round();
         match original_proposal {
             None => {
-                if let Some(signer) = block.authenticated_signer {
+                if let Some(signer) = block.authenticated_owner {
                     // Check the authentication of the operations in the new block.
                     ensure!(signer == owner, WorkerError::InvalidSigner(owner));
                 }
@@ -1268,7 +1267,7 @@ where
                         .contains(&super_owner),
                     WorkerError::InvalidOwner
                 );
-                if let Some(signer) = block.authenticated_signer {
+                if let Some(signer) = block.authenticated_owner {
                     // Check the authentication of the operations in the new block.
                     ensure!(signer == super_owner, WorkerError::InvalidSigner(signer));
                 }
@@ -1281,10 +1280,15 @@ where
             // We already voted for this block.
             return Ok((self.chain_info_response(), NetworkActions::default()));
         }
+        let local_time = self.storage.clock().current_time();
 
         // Make sure we remember that a proposal was signed, to determine the correct round to
         // propose in.
-        if self.chain.manager.update_signed_proposal(&proposal) {
+        if self
+            .chain
+            .manager
+            .update_signed_proposal(&proposal, local_time)
+        {
             self.save().await?;
         }
 
@@ -1295,7 +1299,6 @@ where
             outcome,
         } = content;
 
-        let local_time = self.storage.clock().current_time();
         ensure!(
             block.timestamp.duration_since(local_time) <= self.config.grace_period,
             WorkerError::InvalidTimestamp
@@ -1411,7 +1414,11 @@ where
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
-            info.requested_received_log = chain.received_log.read(start..).await?;
+            let max_received_log_entries = self.config.chain_info_max_received_log_entries;
+            let end = start
+                .saturating_add(max_received_log_entries)
+                .min(chain.received_log.count());
+            info.requested_received_log = chain.received_log.read(start..end).await?;
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);

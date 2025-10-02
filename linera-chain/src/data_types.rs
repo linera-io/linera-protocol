@@ -61,7 +61,7 @@ pub struct ProposedBlock {
     /// the default account of the chain is used. This value is also used as recipient of
     /// potential refunds for the message grants created by the operations.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
     pub previous_block_hash: Option<CryptoHash>,
@@ -300,7 +300,7 @@ pub struct BlockProposal {
 pub struct PostedMessage {
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// A grant to pay for the message execution.
     #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,
@@ -325,14 +325,14 @@ impl OutgoingMessageExt for OutgoingMessage {
     fn into_posted(self, index: u32) -> PostedMessage {
         let OutgoingMessage {
             destination: _,
-            authenticated_signer,
+            authenticated_owner,
             grant,
             refund_grant_to,
             kind,
             message,
         } = self;
         PostedMessage {
-            authenticated_signer,
+            authenticated_owner,
             grant,
             refund_grant_to,
             kind,
@@ -824,7 +824,7 @@ mod signing {
             transactions: vec![],
             height: BlockHeight(11),
             timestamp: 190000000u64.into(),
-            authenticated_signer: None,
+            authenticated_owner: None,
             previous_block_hash: None,
         };
 

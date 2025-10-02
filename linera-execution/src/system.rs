@@ -389,7 +389,7 @@ where
                 recipient,
             } => {
                 let maybe_message = self
-                    .transfer(context.authenticated_signer, None, owner, recipient, amount)
+                    .transfer(context.authenticated_owner, None, owner, recipient, amount)
                     .await?;
                 txn_tracker.add_outgoing_messages(maybe_message);
             }
@@ -401,7 +401,7 @@ where
             } => {
                 let maybe_message = self
                     .claim(
-                        context.authenticated_signer,
+                        context.authenticated_owner,
                         None,
                         owner,
                         target_id,
@@ -627,7 +627,7 @@ where
 
     pub async fn transfer(
         &mut self,
-        authenticated_signer: Option<AccountOwner>,
+        authenticated_owner: Option<AccountOwner>,
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
         recipient: Account,
@@ -635,16 +635,16 @@ where
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         if source == AccountOwner::CHAIN {
             ensure!(
-                authenticated_signer.is_some()
+                authenticated_owner.is_some()
                     && self
                         .ownership
                         .get()
-                        .verify_owner(&authenticated_signer.unwrap()),
+                        .verify_owner(&authenticated_owner.unwrap()),
                 ExecutionError::UnauthenticatedTransferOwner
             );
         } else {
             ensure!(
-                authenticated_signer == Some(source)
+                authenticated_owner == Some(source)
                     || authenticated_application_id.map(AccountOwner::from) == Some(source),
                 ExecutionError::UnauthenticatedTransferOwner
             );
@@ -659,7 +659,7 @@ where
 
     pub async fn claim(
         &mut self,
-        authenticated_signer: Option<AccountOwner>,
+        authenticated_owner: Option<AccountOwner>,
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
         target_id: ChainId,
@@ -667,7 +667,7 @@ where
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         ensure!(
-            authenticated_signer == Some(source)
+            authenticated_owner == Some(source)
                 || authenticated_application_id.map(AccountOwner::from) == Some(source),
             ExecutionError::UnauthenticatedClaimOwner
         );
@@ -687,7 +687,7 @@ where
             };
             Ok(Some(
                 OutgoingMessage::new(target_id, message)
-                    .with_authenticated_signer(authenticated_signer),
+                    .with_authenticated_owner(authenticated_owner),
             ))
         }
     }
