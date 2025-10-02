@@ -1229,7 +1229,7 @@ impl<Env: Environment> Client<Env> {
                         .storage_client()
                         .read_blob(blob_id)
                         .await?
-                        .ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id]))?;
+                        .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, ChainClientError>::Ok(blob)
                 })
                 .collect::<FuturesUnordered<_>>();

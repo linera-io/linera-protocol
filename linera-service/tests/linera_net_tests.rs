@@ -2956,11 +2956,8 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let port3 = get_node_port().await;
-
-    // We let the admin chain automatically process its inbox, since that always creates a
-    // response to the other chains.
     let mut node_service_admin = client_admin
-        .run_node_service(port1, ProcessInbox::Automatic)
+        .run_node_service(port1, ProcessInbox::Skip)
         .await?;
     let mut node_service_a = client_a.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service_b = client_b.run_node_service(port3, ProcessInbox::Skip).await?;
@@ -3058,14 +3055,15 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     // The orders are sent on chain_a / chain_b. First they are
     // rerouted to the admin chain for processing. This leads
     // to order being sent to chain_a / chain_b.
-    assert!(
-        eventually(|| async { node_service_a.process_inbox(&chain_a).await.unwrap().len() == 1 })
-            .await
+    node_service_admin.sync(&chain_admin).await?;
+    assert_eq!(
+        node_service_admin.process_inbox(&chain_admin).await?.len(),
+        1
     );
-    assert!(
-        eventually(|| async { node_service_b.process_inbox(&chain_b).await.unwrap().len() == 1 })
-            .await
-    );
+    node_service_a.sync(&chain_a).await?;
+    assert_eq!(node_service_a.process_inbox(&chain_a).await?.len(), 1);
+    node_service_b.sync(&chain_b).await?;
+    assert_eq!(node_service_b.process_inbox(&chain_b).await?.len(), 1);
 
     // Now reading the order_ids
     let order_ids_a = app_matching_admin.get_account_info(&owner_a).await;
@@ -3092,15 +3090,16 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             .await;
     }
 
+    node_service_admin.sync(&chain_admin).await?;
     // Same logic as for the insertion of orders.
-    assert!(
-        eventually(|| async { node_service_a.process_inbox(&chain_a).await.unwrap().len() == 1 })
-            .await
+    assert_eq!(
+        node_service_admin.process_inbox(&chain_admin).await?.len(),
+        1
     );
-    assert!(
-        eventually(|| async { node_service_b.process_inbox(&chain_b).await.unwrap().len() == 1 })
-            .await
-    );
+    node_service_a.sync(&chain_a).await?;
+    assert_eq!(node_service_a.process_inbox(&chain_a).await?.len(), 1);
+    node_service_b.sync(&chain_b).await?;
+    assert_eq!(node_service_b.process_inbox(&chain_b).await?.len(), 1);
 
     // Check balances
     app_fungible0_a

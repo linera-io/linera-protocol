@@ -198,6 +198,17 @@ where
         }
     }
 
+    /// Synchronizes the chain with the validators. Returns the chain's length.
+    async fn sync(
+        &self,
+        #[graphql(desc = "The chain being synchronized.")] chain_id: ChainId,
+    ) -> Result<u64, Error> {
+        let client = self.context.lock().await.make_chain_client(chain_id);
+        let info = client.synchronize_from_validators().await?;
+        self.context.lock().await.update_wallet(&client).await?;
+        Ok(info.next_block_height.0)
+    }
+
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(
         &self,
