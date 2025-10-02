@@ -216,6 +216,7 @@ impl<Env: Environment> Client<Env> {
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
         chain_worker_ttl: Duration,
+        sender_chain_worker_ttl: Duration,
         options: ChainClientOptions,
         block_cache_size: usize,
         execution_state_cache_size: usize,
@@ -231,7 +232,8 @@ impl<Env: Environment> Client<Env> {
         .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)
         .with_allow_messages_from_deprecated_epochs(true)
-        .with_chain_worker_ttl(chain_worker_ttl);
+        .with_chain_worker_ttl(chain_worker_ttl)
+        .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
         let local_node = LocalNodeClient::new(state);
 
         Self {

@@ -26,6 +26,9 @@ pub struct ChainWorkerConfig {
     pub grace_period: Duration,
     /// Idle chain workers free their memory after that duration without requests.
     pub ttl: Duration,
+    /// TTL for sender chains.
+    // We don't want them to keep in memory forever since usually they're short-lived.
+    pub sender_chain_ttl: Duration,
     /// The size to truncate receive log entries in chain info responses.
     pub chain_info_max_received_log_entries: usize,
 }
@@ -59,6 +62,7 @@ impl Default for ChainWorkerConfig {
             long_lived_services: false,
             grace_period: Default::default(),
             ttl: Default::default(),
+            sender_chain_ttl: Duration::from_secs(1),
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
         }
     }
