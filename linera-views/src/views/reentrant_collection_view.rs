@@ -539,9 +539,11 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             }
         }
         let values = self.context.store().read_multi_values_bytes(keys).await?;
-        for (loaded_values, short_key) in values
-            .chunks_exact(W::NUM_INIT_KEYS)
-            .zip(short_keys_to_load)
+        for (loaded_values, short_key) in if W::NUM_INIT_KEYS == 0 {
+                Vec::new().into_iter()
+            } else {
+                values.chunks_exact(W::NUM_INIT_KEYS).collect::<Vec<_>>().into_iter()
+            }.zip(short_keys_to_load)
         {
             let key = self
                 .context
@@ -638,7 +640,11 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 .read_multi_values_bytes(keys_to_load)
                 .await?;
             for (loaded_values, (position, short_key, context)) in
-                values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
+                if W::NUM_INIT_KEYS == 0 {
+                    Vec::new().into_iter()
+                } else {
+                    values.chunks_exact(W::NUM_INIT_KEYS).collect::<Vec<_>>().into_iter()
+                }.zip(entries_to_load)
             {
                 let view = W::post_load(context, loaded_values)?;
                 let wrapped_view = Arc::new(RwLock::new(view));
@@ -697,9 +703,11 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 }
             }
             let values = self.context.store().read_multi_values_bytes(keys).await?;
-            for (loaded_values, (short_key, index)) in values
-                .chunks_exact(W::NUM_INIT_KEYS)
-                .zip(short_keys_and_indexes)
+            for (loaded_values, (short_key, index)) in if W::NUM_INIT_KEYS == 0 {
+                    Vec::new().into_iter()
+                } else {
+                    values.chunks_exact(W::NUM_INIT_KEYS).collect::<Vec<_>>().into_iter()
+                }.zip(short_keys_and_indexes)
             {
                 let key = self
                     .context
@@ -771,9 +779,11 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             }
 
             let values = self.context.store().read_multi_values_bytes(keys).await?;
-            for (loaded_values, short_key) in values
-                .chunks_exact(W::NUM_INIT_KEYS)
-                .zip(short_keys_to_load)
+            for (loaded_values, short_key) in if W::NUM_INIT_KEYS == 0 {
+                    Vec::new().into_iter()
+                } else {
+                    values.chunks_exact(W::NUM_INIT_KEYS).collect::<Vec<_>>().into_iter()
+                }.zip(short_keys_to_load)
             {
                 let key = self
                     .context

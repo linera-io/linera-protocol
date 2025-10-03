@@ -397,7 +397,11 @@ impl<W: View> ByteCollectionView<W::Context, W> {
             .await?;
 
         for (loaded_values, (position, context)) in
-            values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
+            if W::NUM_INIT_KEYS == 0 {
+                Vec::new().into_iter()
+            } else {
+                values.chunks_exact(W::NUM_INIT_KEYS).collect::<Vec<_>>().into_iter()
+            }.zip(entries_to_load)
         {
             let view = W::post_load(context, loaded_values)?;
             let updates = self.updates.read().await;
