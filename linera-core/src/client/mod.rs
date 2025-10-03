@@ -4,7 +4,7 @@
 
 use std::{
     cmp::{Ordering, PartialOrd},
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     convert::Infallible,
     iter,
     sync::{Arc, RwLock},
@@ -823,6 +823,32 @@ impl<Env: Environment> Client<Env> {
         }
 
         Ok(())
+    }
+
+    /// Downloads the log of received messages for a chain from a validator.
+    #[instrument(level = "trace", skip(self))]
+    async fn get_received_log_from_validator(
+        &self,
+        trackers: &HashMap<ValidatorPublicKey, u64>,
+        chain_id: ChainId,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<Vec<ChainAndHeight>, ChainClientError> {
+        let mut offset = trackers.get(&remote_node.public_key).copied().unwrap_or(0);
+
+        // Retrieve the list of newly received certificates from this validator.
+        let mut remote_log = Vec::new();
+        loop {
+            let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
+            let info = remote_node.handle_chain_info_query(query).await?;
+            let received_entries = info.requested_received_log.len();
+            offset += received_entries as u64;
+            remote_log.extend(info.requested_received_log);
+            if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
+                break;
+            }
+        }
+
+        Ok(remote_log)
     }
 
     /// Downloads a limited batch of received certificates from a validator.
@@ -2129,7 +2155,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn receive_certificates_from_validators(
         &self,
         received_certificates_batches: Vec<ReceivedCertificatesFromValidator>,
-    ) {
+    ) -> Result<(), ChainClientError> {
         let validator_count = received_certificates_batches.len();
         let mut other_sender_chains = BTreeSet::new();
         let mut certificates =
@@ -2172,13 +2198,33 @@ impl<Env: Environment> ChainClient<Env> {
         // Certificates for these chains were omitted from `certificates` because they were
         // already processed locally. If they were processed in a concurrent task, it is not
         // guaranteed that their cross-chain messages were already handled.
+        let validators = self.client.validator_nodes().await?;
         let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
             let local_node = self.client.local_node.clone();
+            let validators = validators.clone();
             async move {
-                if let Err(error) = local_node
+                if let Err(error) = match local_node
                     .retry_pending_cross_chain_requests(chain_id)
                     .await
                 {
+                    Ok(()) => Ok(()),
+                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                        if let Err(error) = self
+                            .client
+                            .update_local_node_with_blobs_from(blob_ids.clone(), &validators)
+                            .await
+                        {
+                            error!(
+                                "Error while attempting to download blobs during retrying outgoing \
+                                messages: {blob_ids:?}: {error}"
+                            );
+                        }
+                        local_node
+                            .retry_pending_cross_chain_requests(chain_id)
+                            .await
+                    }
+                    err => err,
+                } {
                     error!("Failed to retry outgoing messages from {chain_id}: {error}");
                 }
             }
@@ -2197,6 +2243,8 @@ impl<Env: Environment> ChainClient<Env> {
                 self.chain_id
             );
         }
+
+        Ok(())
     }
 
     /// Synchronizes all chains that any application on this chain subscribes to.
@@ -2240,9 +2288,208 @@ impl<Env: Environment> ChainClient<Env> {
     async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
+        // Use network information from the local chain.
+        let chain_id = self.chain_id;
+        let (_, committee) = self.admin_committee().await?;
+        let nodes = self.client.make_nodes(&committee)?;
 
-        // Sync in batches until all received certificates are downloaded.
-        while self.sync_received_certificates_batch().await? {}
+        let trackers = self
+            .client
+            .local_node
+            .chain_state_view(chain_id)
+            .await?
+            .received_certificate_trackers
+            .get()
+            .clone();
+
+        // Proceed to downloading received logs.
+        let result = communicate_with_quorum(
+            &nodes,
+            &committee,
+            |_| (),
+            |remote_node| {
+                let client = &self.client;
+                let trackers_clone = trackers.clone();
+                Box::pin(async move {
+                    client
+                        .get_received_log_from_validator(&trackers_clone, chain_id, &remote_node)
+                        .await
+                })
+            },
+            self.options.grace_period,
+        )
+        .await;
+
+        let (received_logs, mut validator_trackers) = match result {
+            Ok(((), received_logs)) => (
+                ReceivedLogs::from_received_result(received_logs.clone()),
+                ValidatorTrackers::new(received_logs, &trackers),
+            ),
+            Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
+                // The chain is visibly not active (yet or any more) so there is no need
+                // to synchronize received certificates.
+                return Ok(());
+            }
+            Err(error) => {
+                return Err(error.into());
+            }
+        };
+
+        info!(
+            "find_received_certificates: {} chains to sync with {} certificates in total",
+            received_logs.num_chains(),
+            received_logs.num_certs()
+        );
+
+        let mut remote_heights = received_logs.heights_per_chain();
+
+        // Obtain the next block height we need in the local node, for each chain.
+        let local_next_heights = self
+            .client
+            .local_node
+            .next_outbox_heights(remote_heights.keys(), chain_id)
+            .await?;
+
+        for (sender_chain_id, remote_heights) in remote_heights.iter_mut() {
+            let local_next = *local_next_heights
+                .get(sender_chain_id)
+                .unwrap_or(&BlockHeight(0));
+            for height in &*remote_heights {
+                if *height < local_next {
+                    // we consider all of the heights below our local next height
+                    // to have been already downloaded, so we will increase the
+                    // validators' trackers accordingly
+                    validator_trackers.downloaded_cert(ChainAndHeight {
+                        chain_id: *sender_chain_id,
+                        height: *height,
+                    });
+                }
+            }
+            remote_heights.retain(|h| *h >= local_next);
+        }
+
+        let mut other_sender_chains = Vec::new();
+        let cert_futures =
+            remote_heights
+                .into_iter()
+                .filter_map(|(sender_chain_id, remote_heights)| {
+                    let remote_heights = remote_heights.into_iter().collect::<Vec<_>>();
+                    if remote_heights.is_empty() {
+                        // Our highest, locally executed block is higher than any block height
+                        // from the current batch. Skip this batch, but remember to wait for
+                        // the messages to be delivered to the inboxes.
+                        other_sender_chains.push(sender_chain_id);
+                        return None;
+                    };
+                    let mut nodes = nodes.clone();
+                    nodes.shuffle(&mut rand::thread_rng());
+                    Some(async move {
+                        let certificates = loop {
+                            let remote_node = nodes.pop().ok_or(
+                                ChainClientError::CannotDownloadCertificates {
+                                    chain_id: sender_chain_id,
+                                    target_next_block_height: remote_heights[0],
+                                },
+                            )?;
+                            if let Ok(certificates) = remote_node
+                                .download_certificates_by_heights(
+                                    sender_chain_id,
+                                    remote_heights.clone(),
+                                )
+                                .await
+                            {
+                                break certificates;
+                            }
+                        };
+
+                        Ok::<Vec<_>, ChainClientError>(certificates)
+                    })
+                });
+        let mut certs_stream =
+            stream::iter(cert_futures).buffer_unordered(self.options.max_joined_tasks);
+
+        while let Some(maybe_certificates) = certs_stream.next().await {
+            let certificates = match maybe_certificates {
+                Ok(certificates) => certificates,
+                Err(error) => {
+                    error!(?error, "error while downloading sender certificates");
+                    // we might still be able to download certificates for other sender
+                    // chains
+                    continue;
+                }
+            };
+
+            // Process the certificates sorted by chain and in ascending order of block height.
+            for certificate in certificates {
+                let hash = certificate.hash();
+                let chain_id = certificate.block().header.chain_id;
+                let height = certificate.block().header.height;
+                let mode = ReceiveCertificateMode::NeedsCheck;
+                if let Err(err) = self
+                    .client
+                    .receive_sender_certificate(certificate, mode, None)
+                    .await
+                {
+                    error!("Received invalid certificate {hash}: {err}");
+                } else {
+                    validator_trackers.downloaded_cert(ChainAndHeight { chain_id, height });
+                }
+            }
+        }
+
+        // We have to drop explicitly, otherwise the borrow on other_sender_chains won't be released.
+        drop(certs_stream);
+
+        // Certificates for these chains were omitted from `certificates` because they were
+        // already processed locally. If they were processed in a concurrent task, it is not
+        // guaranteed that their cross-chain messages were already handled.
+        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
+            let local_node = self.client.local_node.clone();
+            let validators = nodes.clone();
+            async move {
+                if let Err(error) = match local_node
+                    .retry_pending_cross_chain_requests(chain_id)
+                    .await
+                {
+                    Ok(()) => Ok(()),
+                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                        if let Err(error) = self
+                            .client
+                            .update_local_node_with_blobs_from(blob_ids.clone(), &validators)
+                            .await
+                        {
+                            error!(
+                                "Error while attempting to download blobs during retrying outgoing \
+                                messages: {blob_ids:?}: {error}"
+                            );
+                        }
+                        local_node
+                            .retry_pending_cross_chain_requests(chain_id)
+                            .await
+                    }
+                    err => err,
+                } {
+                    error!("Failed to retry outgoing messages from {chain_id}: {error}");
+                }
+            }
+        }));
+        stream.for_each(future::ready).await;
+
+        let new_trackers = validator_trackers.into_map();
+
+        // Update the trackers.
+        if let Err(error) = self
+            .client
+            .local_node
+            .update_received_certificate_trackers(self.chain_id, new_trackers)
+            .await
+        {
+            error!(
+                "Failed to update the certificate trackers for chain {:.8}: {error}",
+                self.chain_id
+            );
+        }
+
         Ok(())
     }
 
@@ -2301,7 +2548,7 @@ impl<Env: Environment> ChainClient<Env> {
             .collect();
 
         self.receive_certificates_from_validators(received_certificate_batches)
-            .await;
+            .await?;
 
         Ok(has_more)
     }
@@ -4294,6 +4541,125 @@ impl Drop for AbortOnDrop {
     #[instrument(level = "trace", skip(self))]
     fn drop(&mut self) {
         self.0.abort();
+    }
+}
+
+struct ReceivedLogs(BTreeMap<ChainId, BTreeMap<BlockHeight, Vec<(ValidatorPublicKey, usize)>>>);
+
+impl ReceivedLogs {
+    fn new() -> Self {
+        ReceivedLogs(BTreeMap::new())
+    }
+
+    fn from_received_result(result: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>) -> Self {
+        result
+            .into_iter()
+            .flat_map(|(validator, received_log)| {
+                received_log
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(index, chain_and_height)| (validator, index, chain_and_height))
+            })
+            .fold(
+                Self::new(),
+                |mut acc, (validator, index, chain_and_height)| {
+                    acc.0
+                        .entry(chain_and_height.chain_id)
+                        .or_default()
+                        .entry(chain_and_height.height)
+                        .or_default()
+                        .push((validator, index));
+                    acc
+                },
+            )
+    }
+
+    /// Returns a map that assigns to each chain ID the set of heights. The returned map contains
+    /// no empty values.
+    fn heights_per_chain(&self) -> BTreeMap<ChainId, BTreeSet<BlockHeight>> {
+        self.0
+            .iter()
+            .fold(BTreeMap::new(), |mut acc, (chain_id, heights)| {
+                acc.entry(*chain_id)
+                    .or_default()
+                    .extend(heights.keys().copied());
+                acc
+            })
+    }
+
+    fn num_chains(&self) -> usize {
+        self.0.len()
+    }
+
+    fn num_certs(&self) -> usize {
+        self.0.values().map(|heights| heights.len()).sum()
+    }
+}
+
+struct ValidatorTracker {
+    current_tracker_value: u64,
+    to_be_downloaded: VecDeque<ChainAndHeight>,
+    already_downloaded: BTreeSet<ChainAndHeight>,
+}
+
+impl ValidatorTracker {
+    fn new(tracker: u64, validator_log: Vec<ChainAndHeight>) -> Self {
+        Self {
+            current_tracker_value: tracker,
+            to_be_downloaded: validator_log.into_iter().collect(),
+            already_downloaded: BTreeSet::new(),
+        }
+    }
+
+    fn downloaded_cert(&mut self, chain_and_height: ChainAndHeight) {
+        self.already_downloaded.insert(chain_and_height);
+        self.maximize_tracker();
+    }
+
+    fn maximize_tracker(&mut self) {
+        while self
+            .to_be_downloaded
+            .front()
+            .is_some_and(|first_cert| self.already_downloaded.contains(first_cert))
+        {
+            let first_cert = self.to_be_downloaded.pop_front().unwrap();
+            self.already_downloaded.remove(&first_cert);
+            self.current_tracker_value += 1;
+        }
+    }
+}
+
+struct ValidatorTrackers(BTreeMap<ValidatorPublicKey, ValidatorTracker>);
+
+impl ValidatorTrackers {
+    fn new(
+        received_logs: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
+        trackers: &HashMap<ValidatorPublicKey, u64>,
+    ) -> Self {
+        Self(
+            received_logs
+                .into_iter()
+                .map(|(validator, log)| {
+                    (
+                        validator,
+                        ValidatorTracker::new(*trackers.get(&validator).unwrap_or(&0), log),
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    fn downloaded_cert(&mut self, chain_and_height: ChainAndHeight) {
+        for tracker in self.0.values_mut() {
+            tracker.downloaded_cert(chain_and_height);
+        }
+    }
+
+    fn into_map(self) -> BTreeMap<ValidatorPublicKey, u64> {
+        self.0
+            .into_iter()
+            .map(|(validator, tracker)| (validator, tracker.current_tracker_value))
+            .collect()
     }
 }
 
