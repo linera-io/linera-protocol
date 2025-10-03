@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["print_bytes","print_file"],"struct":["Config","PrintFmtWrite","PrintIoWrite","PrintTermcolor"],"trait":["Print"]};

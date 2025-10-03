@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Reference","Sort","Type"],"mod":["forks","release_assets"],"struct":["Commitish"]};

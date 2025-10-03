@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Appends an error if more than one given attribute is present, automatically casting and stringifying field names."><title>only_one in deluxe_core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="deluxe_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../deluxe_core/index.html">deluxe_<wbr>core</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">only_<wbr>one</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate deluxe_<wbr>core</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">deluxe_core</a></div><h1>Macro <span class="macro">only_one</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/deluxe_core/validations.rs.html#128-132">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! only_one {
+    ($prefix:expr, $errors:expr $(, $fields:tt)* $(,)?) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Appends an error if more than one given attribute is present, automatically casting and
+stringifying field names.</p>
+<p>Convenience macro for <a href="validations/fn.only_one.html" title="fn deluxe_core::validations::only_one"><code>only_one</code></a>. The first argument is a <code>&amp;<a href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html" title="primitive str">str</a></code>
+prefix to prepend onto the names in the event of an error. The second argument is an
+<code>&amp;<a href="struct.Errors.html" title="struct deluxe_core::Errors">Errors</a></code> to add any errors into.</p>
+<p>The rest of the arguments are either identifiers or 2-element tuples. Identifiers must be an
+<code>Option&lt;T&gt;</code> and tuples must be <code>(&amp;str, Option&lt;&amp;T&gt;)</code>, where <code>&amp;T</code> is castable to <code>&amp;dyn
+<a href="https://docs.rs/syn/2.0.105/syn/spanned/trait.Spanned.html" title="trait syn::spanned::Spanned">syn::spanned::Spanned</a></code>. Identifiers will automatically <a href="https://doc.rust-lang.org/1.86.0/core/macro.stringify.html" title="macro core::stringify"><code>stringify</code></a> the identifier
+name to use in the error message, and so should used when the field name is the same as the
+variable name. The tuple form can be used to specify a different field name from the name of
+the variable. The identifier form is intended to make it easier to do validations by
+destructuring a data type after it has been parsed.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Default)]
+</span><span class="kw">struct </span>MyStruct {
+    my_bool: <span class="prelude-ty">Option</span>&lt;syn::LitBool&gt;,
+    path: <span class="prelude-ty">Option</span>&lt;syn::Path&gt;,
+    <span class="comment">// #[deluxe(rename = "ty")]
+    </span>field3: <span class="prelude-ty">Option</span>&lt;syn::Type&gt;,
+}
+<span class="kw">let </span>errors = deluxe_core::Errors::new();
+<span class="kw">let </span>s = MyStruct::default();
+
+<span class="comment">// ... parsing omitted ...
+
+</span><span class="kw">let </span>MyStruct { my_bool, path, field3 } = <span class="kw-2">&amp;</span>s;
+<span class="comment">// only one of `my_bool`, `path`, `ty` is allowed
+</span><span class="macro">deluxe_core::only_one!</span>(<span class="string">""</span>, <span class="kw-2">&amp;</span>errors, my_bool, path, (<span class="string">"ty"</span>, field3.as_ref()));</code></pre></div>
+</div></details></section></div></main></body></html>

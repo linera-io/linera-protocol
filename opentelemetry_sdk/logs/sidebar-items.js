@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BatchConfig","BatchConfigBuilder","BatchLogProcessor","BatchLogProcessorBuilder","LogBatch","LoggerProviderBuilder","SdkLogRecord","SdkLogger","SdkLoggerProvider","SimpleLogProcessor","TraceContext"],"trait":["LogExporter","LogProcessor"]};

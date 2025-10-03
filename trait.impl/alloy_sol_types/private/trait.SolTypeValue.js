@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["alloy_provider",[["impl SolTypeValue&lt;<a class=\"struct\" href=\"alloy_provider/bindings/IMulticall3/struct.Call.html\" title=\"struct alloy_provider::bindings::IMulticall3::Call\">Call</a>&gt; for <a class=\"struct\" href=\"alloy_provider/bindings/IMulticall3/struct.Call.html\" title=\"struct alloy_provider::bindings::IMulticall3::Call\">Call</a>"],["impl SolTypeValue&lt;<a class=\"struct\" href=\"alloy_provider/bindings/IMulticall3/struct.Call3.html\" title=\"struct alloy_provider::bindings::IMulticall3::Call3\">Call3</a>&gt; for <a class=\"struct\" href=\"alloy_provider/bindings/IMulticall3/struct.Call3.html\" title=\"struct alloy_provider::bindings::IMulticall3::Call3\">Call3</a>"],["impl SolTypeValue&lt;<a class=\"struct\" href=\"alloy_provider/bindings/IMulticall3/struct.Call3Value.html\" title=\"struct alloy_provider::bindings::IMulticall3::Call3Value\">Call3Value</a>&gt; for <a class=\"struct\" href=\"alloy_provider/bindings/IMulticall3/struct.Call3Value.html\" title=\"struct alloy_provider::bindings::IMulticall3::Call3Value\">Call3Value</a>"],["impl SolTypeValue&lt;<a class=\"struct\" href=\"alloy_provider/bindings/IMulticall3/struct.Result.html\" title=\"struct alloy_provider::bindings::IMulticall3::Result\">Result</a>&gt; for <a class=\"struct\" href=\"alloy_provider/bindings/IMulticall3/struct.Result.html\" title=\"struct alloy_provider::bindings::IMulticall3::Result\">Result</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1422]}

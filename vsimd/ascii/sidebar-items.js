@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AsciiCase"],"fn":["to_ascii_lowercase","to_ascii_uppercase"]};

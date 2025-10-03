@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["kill_all_processes","main","read_json","run","should_init_opentelemetry"],"static":["ALLOC","malloc_conf"],"struct":["ClientOptions","DatabaseToolJob","Job"]};
