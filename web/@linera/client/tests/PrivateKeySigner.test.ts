@@ -23,7 +23,7 @@ test("signs message correctly", async () => {
   const cryptoHash =
     "c520e2b24b05e70c39c36d4aa98e9129ac0079ea002d4c382e6996ea11946d1e";
   const owner = signer.address().toLowerCase();
-  const signature = await signer.sign(owner, Buffer.from(cryptoHash, "hex"));
+  const signature = await signer.sign(owner, Uint8Array.from(cryptoHash.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))));
   expect(signature).toBe(
     "0xe257048813b851f812ba6e508e972d8bb09504824692b027ca95d31301dbe8c7103a2f35ce9950d031d260f412dcba09c24027288872a67abe261c0a3e55c9121b",
   );

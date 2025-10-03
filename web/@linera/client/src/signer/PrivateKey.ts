@@ -22,6 +22,11 @@ export default class PrivateKey implements Signer {
     this.wallet = new Wallet(privateKeyHex);
   }
 
+  static createRandom(): PrivateKey {
+    const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
+    return PrivateKey.fromMnemonic(mnemonic);
+  }
+
   static fromMnemonic(mnemonic: string): PrivateKey {
     const wallet = ethers.Wallet.fromPhrase(mnemonic);
     return new PrivateKey(wallet.privateKey);
