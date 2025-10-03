@@ -17,7 +17,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
-    common::{CustomSerialize, HasherOutput, Update},
+    common::{CustomSerialize, HasherOutput, SliceExt as _, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     store::ReadableKeyValueStore as _,
@@ -539,10 +539,8 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             }
         }
         let values = self.context.store().read_multi_values_bytes(keys).await?;
-        for (loaded_values, short_key) in values
-            .chunks_exact(W::NUM_INIT_KEYS)
-            .zip(short_keys_to_load)
-        {
+        let chunks = values.chunks_exact_or_repeat(W::NUM_INIT_KEYS);
+        for (short_key, loaded_values) in short_keys_to_load.into_iter().zip(chunks) {
             let key = self
                 .context
                 .base_key()
@@ -637,8 +635,9 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 .store()
                 .read_multi_values_bytes(keys_to_load)
                 .await?;
-            for (loaded_values, (position, short_key, context)) in
-                values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
+            let chunks = values.chunks_exact_or_repeat(W::NUM_INIT_KEYS);
+            for ((position, short_key, context), loaded_values) in
+                entries_to_load.into_iter().zip(chunks)
             {
                 let view = W::post_load(context, loaded_values)?;
                 let wrapped_view = Arc::new(RwLock::new(view));
@@ -697,9 +696,9 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 }
             }
             let values = self.context.store().read_multi_values_bytes(keys).await?;
-            for (loaded_values, (short_key, index)) in values
-                .chunks_exact(W::NUM_INIT_KEYS)
-                .zip(short_keys_and_indexes)
+            let chunks = values.chunks_exact_or_repeat(W::NUM_INIT_KEYS);
+            for ((short_key, index), loaded_values) in
+                short_keys_and_indexes.into_iter().zip(chunks)
             {
                 let key = self
                     .context
@@ -771,10 +770,8 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             }
 
             let values = self.context.store().read_multi_values_bytes(keys).await?;
-            for (loaded_values, short_key) in values
-                .chunks_exact(W::NUM_INIT_KEYS)
-                .zip(short_keys_to_load)
-            {
+            let chunks = values.chunks_exact_or_repeat(W::NUM_INIT_KEYS);
+            for (short_key, loaded_values) in short_keys_to_load.into_iter().zip(chunks) {
                 let key = self
                     .context
                     .base_key()
