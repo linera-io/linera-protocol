@@ -20,7 +20,8 @@
     "build": "bash build.bash --release",
     "prepare": "pnpm build",
     "lint": "pnpm build && pnpm exec tsc && cargo fmt --check && cargo clippy",
-    "ci": "pnpm lint && pnpm doc",
+    "test": "pnpm exec vitest",
+    "ci": "pnpm lint && pnpm test && pnpm doc",
     "format": "pnpm exec prettier . --write",
     "doc": "pnpm exec typedoc"
   },
@@ -42,6 +43,7 @@
     "prettier": "3.5.3",
     "tsc-alias": "^1.8.16",
     "typedoc": "^0.28.13",
-    "typedoc-plugin-markdown": "^4.9.0"
+    "typedoc-plugin-markdown": "^4.9.0",
+    "vitest": "^3.2.4"
   }
 }
