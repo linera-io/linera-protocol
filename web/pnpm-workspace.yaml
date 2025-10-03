@@ -1,3 +1,3 @@
 packages:
 - '@linera/client'
-- '@linera/signer'
+- '@linera/metamask'

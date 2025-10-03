@@ -61,10 +61,6 @@ impl From<JsValue> for JsSignerError {
 
 impl std::error::Error for JsSignerError {}
 
-// An interface that will be compiled to TypeScript and exported for use in the browser.
-#[wasm_bindgen(typescript_custom_section)]
-const SIGNER_INTERFACE: &'static str = include_str!("signer.d.ts");
-
 #[wasm_bindgen]
 extern "C" {
     // We refer to the interface defined above.
@@ -73,9 +69,6 @@ extern "C" {
 
     #[wasm_bindgen(catch, method)]
     async fn sign(this: &JsSigner, owner: JsValue, value: Vec<u8>) -> Result<JsValue, JsValue>;
-
-    #[wasm_bindgen(catch, method, js_name = "getPublicKey")]
-    async fn get_public_key(this: &JsSigner, owner: JsValue) -> Result<JsValue, JsValue>;
 
     #[wasm_bindgen(catch, method, js_name = "containsKey")]
     async fn contains_key(this: &JsSigner, owner: JsValue) -> Result<JsValue, JsValue>;
