@@ -1,5 +1,5 @@
 {
-  "name": "@linera/examples/hosted-counter-metamask",
+  "name": "@linera/examples/metamask",
   "private": true,
   "author": "Linera <contact@linera.io>",
   "license": "Apache-2.0",
@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@linera/client": "workspace:*",
-    "@linera/signer": "workspace:*"
+    "@linera/metamask": "workspace:*"
   },
   "devDependencies": {
     "vite": "^5.4.11"

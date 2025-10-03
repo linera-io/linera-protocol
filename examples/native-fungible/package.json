@@ -1,5 +1,5 @@
 {
-  "name": "@linera/examples/hosted-fungible",
+  "name": "@linera/examples/fungible",
   "private": true,
   "author": "Linera <contact@linera.io>",
   "license": "Apache-2.0",
@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@linera/client": "workspace:*",
-    "@linera/signer": "workspace:*",
     "ethers": "^6.14.3"
   },
   "devDependencies": {
