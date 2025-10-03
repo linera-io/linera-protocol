@@ -85,7 +85,10 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     restrict_chain_ids_to: None,
     long_lived_services: false,
     blob_download_timeout: linera_base::time::Duration::from_millis(1000),
+    certificate_batch_download_timeout: linera_base::time::Duration::from_millis(1000),
     certificate_download_batch_size: linera_core::client::DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+    sender_certificate_download_batch_size:
+        linera_core::client::DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     chain_worker_ttl: Duration::from_secs(30),
     sender_chain_worker_ttl: Duration::from_millis(200),
     grace_period: linera_core::DEFAULT_GRACE_PERIOD,
@@ -237,7 +240,7 @@ impl Client {
             storage,
             tokio_util::sync::CancellationToken::new(),
         )
-        .run(Some(500)) // Enable background sync with 500ms sleep
+        .run(true) // Enable background sync
         .boxed_local()
         .await?
         .boxed_local();
