@@ -86,6 +86,7 @@ jobs:
       run: |
         cd web
         pnpm install --frozen-lockfile
+        pnpm exec playwright install
         pnpm -r run ci
     - name: Test `linera-views` on the Web
       run: |

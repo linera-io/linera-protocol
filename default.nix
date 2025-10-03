@@ -1,4 +1,4 @@
-{ crane, pkgs, rust-toolchain, libclang, rocksdb, git, system, nix-gitignore }:
+{ crane, pkgs, rust-toolchain, libclang, rocksdb, git, system, nix-gitignore, playwright-driver }:
 ((crane.mkLib pkgs).overrideToolchain rust-toolchain).buildPackage {
   pname = "linera";
   src = nix-gitignore.gitignoreSource [] (builtins.path {
@@ -38,4 +38,5 @@
   RUST_SRC_PATH = rust-toolchain.availableComponents.rust-src;
   LIBCLANG_PATH = "${libclang.lib}/lib";
   ROCKSDB_LIB_DIR = "${rocksdb}/lib";
+  PLAYWRIGHT_BROWSERS_PATH = "${playwright-driver.browsers}";
 }

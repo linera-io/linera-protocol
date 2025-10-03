@@ -64,8 +64,7 @@
          console.log(linera);
           await linera.initialize();
           const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
-          const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
-          const signer = linera.PrivateKeySigner.fromMnemonic(mnemonic);
+          const signer = linera.PrivateKeySigner.createRandom();
           const wallet = await faucet.createWallet();
           const owner = await signer.address();
           document.getElementById('owner').innerText = owner;

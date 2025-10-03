@@ -62,6 +62,7 @@
             export RUST_SRC_PATH="${linera.RUST_SRC_PATH}"
             export LIBCLANG_PATH="${linera.LIBCLANG_PATH}"
             export ROCKSDB_LIB_DIR="${linera.ROCKSDB_LIB_DIR}"
+            export PLAYWRIGHT_BROWSERS_PATH="${linera.PLAYWRIGHT_BROWSERS_PATH}"
           '';
           nativeBuildInputs = [ pkgs.rust-analyzer ];
         };
