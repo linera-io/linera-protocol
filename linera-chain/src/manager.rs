@@ -699,6 +699,16 @@ where
         }
         if let Some(old_proposal) = self.signed_proposal.get() {
             if old_proposal.content.round >= proposal.content.round {
+                if *self.current_round.get() < old_proposal.content.round {
+                    tracing::warn!(
+                        chain_id = %proposal.content.block.chain_id,
+                        current_round = ?self.current_round.get(),
+                        proposal_round = ?old_proposal.content.round,
+                        "Proposal round is greater than current round. Updating."
+                    );
+                    self.update_current_round(local_time);
+                    return true;
+                }
                 return false;
             }
         }
