@@ -424,32 +424,9 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         info!("Starting background certificate sync for chain {chain_id}");
         let client = context.lock().await.make_chain_client(chain_id);
 
-        loop {
-            // Check if we should stop.
-            if cancellation_token.is_cancelled() {
-                info!("Background sync cancelled for chain {chain_id}");
-                break;
-            }
-
-            // Sleep to avoid overwhelming the system.
-            Self::sleep(sync_sleep_ms).await;
-
-            // Sync one batch.
-            match client.sync_received_certificates_batch().await {
-                Ok(has_more) => {
-                    if !has_more {
-                        info!("Background sync completed for chain {chain_id}");
-                        break;
-                    }
-                }
-                Err(e) => {
-                    warn!("Error syncing batch for chain {chain_id}: {e}. Will retry.");
-                    // Continue trying despite errors - validators might be temporarily unavailable.
-                }
-            }
-        }
-
-        Ok(())
+        Ok(client
+            .find_received_certificates(Some(cancellation_token))
+            .await?)
     }
 
     /// Starts listening for notifications about the given chain.
