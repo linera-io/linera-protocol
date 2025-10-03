@@ -2058,7 +2058,7 @@ impl<Env: Environment> ChainClient<Env> {
             .get()
             .clone();
 
-        debug!("find_received_certificates: read trackers");
+        trace!("find_received_certificates: read trackers");
 
         let received_log_batches = Arc::new(std::sync::Mutex::new(Vec::new()));
         // Proceed to downloading received logs.
@@ -2083,8 +2083,8 @@ impl<Env: Environment> ChainClient<Env> {
         )
         .await;
 
-        debug!("got result from communicate_with_quorum");
-        debug!(received_log_batches_len=%received_log_batches.lock().unwrap().len());
+        trace!("got result from communicate_with_quorum");
+        trace!(received_log_batches_len=%received_log_batches.lock().unwrap().len());
 
         if let Err(e) = result {
             warn!(
@@ -2182,7 +2182,7 @@ impl<Env: Environment> ChainClient<Env> {
                         };
 
                         if !certificates.is_empty() {
-                            debug!(
+                            trace!(
                                 "got {} certificates for chain {}",
                                 certificates.len(),
                                 sender_chain_id
@@ -2210,7 +2210,7 @@ impl<Env: Environment> ChainClient<Env> {
                                 );
                             }
                         }
-                        debug!(
+                        trace!(
                             "find_received_certificates: finished processing chain {}",
                             sender_chain_id
                         );
@@ -2278,7 +2278,7 @@ impl<Env: Environment> ChainClient<Env> {
         debug!("find_received_certificates: finished processing other_sender_chains");
 
         let new_trackers = validator_trackers.into_map();
-        debug!(?new_trackers, "find_received_certificates");
+        trace!(?new_trackers, "find_received_certificates");
 
         // Update the trackers.
         if let Err(error) = self
@@ -2292,7 +2292,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.chain_id
             );
         }
-        debug!("find_received_certificates: finished updating trackers");
+        debug!("find_received_certificates finished");
 
         Ok(())
     }
