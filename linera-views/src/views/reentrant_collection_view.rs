@@ -20,8 +20,12 @@ use crate::{
     common::{CustomSerialize, HasherOutput, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
+    historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
+    views::{
+        ClonableView, HashableView, Hasher, PreFlushView, ReplaceContext, View, ViewError,
+        MIN_VIEW_TAG,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -233,6 +237,36 @@ impl<W: ClonableView> ClonableView for ReentrantByteCollectionView<W::Context, W
             delete_storage_first: self.delete_storage_first,
             updates: cloned_updates,
         }
+    }
+}
+
+impl<W: ClonableView> PreFlushView for ReentrantByteCollectionView<W::Context, W> {
+    fn pre_flush_unchecked(&self, batch: &mut Batch) -> Result<(), ViewError> {
+        let cloned_updates = self
+            .updates
+            .iter()
+            .map(|(key, value)| {
+                let cloned_value = match value {
+                    Update::Removed => Update::Removed,
+                    Update::Set(view_lock) => {
+                        let mut view = view_lock
+                            .try_write()
+                            .expect("Unable to acquire write lock during clone_unchecked");
+
+                        Update::Set(Arc::new(RwLock::new(view.clone_unchecked())))
+                    }
+                };
+                (key.clone(), cloned_value)
+            })
+            .collect();
+
+        let mut view = ReentrantByteCollectionView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: cloned_updates,
+        };
+        view.flush(batch)?;
+        Ok(())
     }
 }
 
@@ -1109,6 +1143,15 @@ where
     }
 }
 
+impl<I, W: ClonableView> PreFlushView for ReentrantCollectionView<W::Context, I, W>
+where
+    I: Send + Sync + Serialize + DeserializeOwned,
+{
+    fn pre_flush_unchecked(&self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.collection.pre_flush_unchecked(batch)
+    }
+}
+
 impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
     W: View,
@@ -1616,6 +1659,15 @@ where
     }
 }
 
+impl<I, W: ClonableView> PreFlushView for ReentrantCustomCollectionView<W::Context, I, W>
+where
+    I: Send + Sync + CustomSerialize,
+{
+    fn pre_flush_unchecked(&self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.collection.pre_flush_unchecked(batch)
+    }
+}
+
 impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
     W: View,
@@ -2055,16 +2107,25 @@ where
 }
 
 /// Type wrapping `ReentrantByteCollectionView` while memoizing the hash.
-pub type HashedReentrantByteCollectionView<C, W> =
-    WrappedHashableContainerView<C, ReentrantByteCollectionView<C, W>, HasherOutput>;
+pub type HashedReentrantByteCollectionView<C, W> = WrappedHashableContainerView<
+    C,
+    HistoricallyHashableView<C, ReentrantByteCollectionView<C, W>>,
+    HasherOutput,
+>;
 
 /// Type wrapping `ReentrantCollectionView` while memoizing the hash.
-pub type HashedReentrantCollectionView<C, I, W> =
-    WrappedHashableContainerView<C, ReentrantCollectionView<C, I, W>, HasherOutput>;
+pub type HashedReentrantCollectionView<C, I, W> = WrappedHashableContainerView<
+    C,
+    HistoricallyHashableView<C, ReentrantCollectionView<C, I, W>>,
+    HasherOutput,
+>;
 
 /// Type wrapping `ReentrantCustomCollectionView` while memoizing the hash.
-pub type HashedReentrantCustomCollectionView<C, I, W> =
-    WrappedHashableContainerView<C, ReentrantCustomCollectionView<C, I, W>, HasherOutput>;
+pub type HashedReentrantCustomCollectionView<C, I, W> = WrappedHashableContainerView<
+    C,
+    HistoricallyHashableView<C, ReentrantCustomCollectionView<C, I, W>>,
+    HasherOutput,
+>;
 
 #[cfg(with_graphql)]
 mod graphql {
