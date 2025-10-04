@@ -386,32 +386,36 @@ impl<W: View> ByteCollectionView<W::Context, W> {
             .filter_map(|(metadata, found)| found.then_some(metadata))
             .collect::<Vec<_>>();
 
-        let mut keys_to_load = Vec::with_capacity(entries_to_load.len() * W::NUM_INIT_KEYS);
-        for (_, context) in &entries_to_load {
-            keys_to_load.extend(W::pre_load(context)?);
-        }
-        let values = self
-            .context
-            .store()
-            .read_multi_values_bytes(keys_to_load)
-            .await?;
-
-        for (loaded_values, (position, context)) in if W::NUM_INIT_KEYS == 0 {
-            Vec::new().into_iter()
+        if W::NUM_INIT_KEYS == 0 {
+            for (position, context) in entries_to_load {
+                let view = W::post_load(context, &[])?;
+                let updates = self.updates.read().await;
+                results[position] = Some(ReadGuardedView::NotLoaded {
+                    _updates: updates,
+                    view,
+                });
+            }
         } else {
-            values
-                .chunks_exact(W::NUM_INIT_KEYS)
-                .collect::<Vec<_>>()
-                .into_iter()
-        }
-        .zip(entries_to_load)
-        {
-            let view = W::post_load(context, loaded_values)?;
-            let updates = self.updates.read().await;
-            results[position] = Some(ReadGuardedView::NotLoaded {
-                _updates: updates,
-                view,
-            });
+            let mut keys_to_load = Vec::with_capacity(entries_to_load.len() * W::NUM_INIT_KEYS);
+            for (_, context) in &entries_to_load {
+                keys_to_load.extend(W::pre_load(context)?);
+            }
+            let values = self
+                .context
+                .store()
+                .read_multi_values_bytes(keys_to_load)
+                .await?;
+
+            for (loaded_values, (position, context)) in
+                values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
+            {
+                let view = W::post_load(context, loaded_values)?;
+                let updates = self.updates.read().await;
+                results[position] = Some(ReadGuardedView::NotLoaded {
+                    _updates: updates,
+                    view,
+                });
+            }
         }
 
         Ok(results)
