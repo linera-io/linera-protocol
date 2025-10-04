@@ -619,13 +619,15 @@ pub struct NestedCollectionMapView<C> {
     pub map: CollectionView<C, String, MapView<C, String, u64>>,
 }
 
+// This test exercise the case W::NUM_INIT_KEYS == 0
+// in CollectionView.
 #[tokio::test]
 async fn test_nested_collection_map_view() -> anyhow::Result<()> {
     let context = MemoryContext::new_for_testing(());
     {
         let mut view = NestedCollectionMapView::load(context.clone()).await?;
-        let mut subview = view.map.load_entry_mut("Bonjour").await?;
-        subview.insert("Abientot", 49);
+        let subview = view.map.load_entry_mut("Bonjour").await?;
+        subview.insert("Abientot", 49)?;
         view.save().await?;
     }
     let view = NestedCollectionMapView::load(context).await?;
