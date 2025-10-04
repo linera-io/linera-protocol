@@ -15,12 +15,12 @@ use linera_views::{
         Batch, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
-    collection_view::HashedCollectionView,
+    collection_view::{CollectionView, HashedCollectionView},
     context::{Context, MemoryContext, ViewContext},
     key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
     lru_caching::LruCachingMemoryDatabase,
-    map_view::{ByteMapView, HashedMapView},
+    map_view::{ByteMapView, HashedMapView, MapView},
     memory::MemoryDatabase,
     queue_view::HashedQueueView,
     random::make_deterministic_rng,
@@ -612,6 +612,27 @@ where
         Ok(staged_hash)
     })
     .await
+}
+
+#[derive(RootView)]
+pub struct NestedCollectionMapView<C> {
+    pub map: CollectionView<C, String, MapView<C, String, u64>>,
+}
+
+#[tokio::test]
+async fn test_nested_collection_map_view() -> anyhow::Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    {
+        let mut view = NestedCollectionMapView::load(context.clone()).await?;
+        let mut subview = view.map.load_entry_mut("Bonjour").await?;
+        subview.insert("Abientot", 49);
+        view.save().await?;
+    }
+    let view = NestedCollectionMapView::load(context).await?;
+    let keys = vec!["Bonjour".to_string()];
+    let subviews = view.map.try_load_entries(&keys).await?;
+    assert!(subviews[0].is_some());
+    Ok(())
 }
 
 #[derive(CryptoHashRootView)]
