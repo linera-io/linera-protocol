@@ -10,6 +10,7 @@ mod validated;
 
 use std::collections::BTreeSet;
 
+use allocative::Allocative;
 pub use generic::GenericCertificate;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
@@ -84,7 +85,7 @@ impl Certificate {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Allocative)]
 #[repr(u8)]
 pub enum CertificateKind {
     Timeout = 0,

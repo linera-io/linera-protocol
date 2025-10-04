@@ -11,6 +11,7 @@ mod secp256k1;
 pub mod signer;
 use std::{fmt::Display, io, num::ParseIntError, str::FromStr};
 
+use allocative::{Allocative, Key, Visitor};
 use alloy_primitives::FixedBytes;
 use custom_debug_derive::Debug;
 pub use ed25519::{Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature};
@@ -73,6 +74,22 @@ pub enum AccountPublicKey {
     EvmSecp256k1(secp256k1::evm::EvmPublicKey),
 }
 
+impl Allocative for AccountPublicKey {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        match self {
+            AccountPublicKey::Ed25519(_) => {
+                visitor.visit_simple(Key::new("Ed25519PublicKey"), 32);
+            }
+            AccountPublicKey::Secp256k1(_) => {
+                visitor.visit_simple(Key::new("Secp256k1PublicKey"), 32);
+            }
+            AccountPublicKey::EvmSecp256k1(_) => {
+                visitor.visit_simple(Key::new("EvmPublicKey"), 20);
+            }
+        }
+    }
+}
+
 /// The private key of a chain owner.
 #[derive(Serialize, Deserialize)]
 pub enum AccountSecretKey {
@@ -109,6 +126,31 @@ pub enum AccountSignature {
         #[debug(with = "hex_debug")]
         address: [u8; 20],
     },
+}
+
+impl Allocative for AccountSignature {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        match self {
+            AccountSignature::Ed25519 {
+                signature: _,
+                public_key: _,
+            } => {
+                visitor.visit_simple(Key::new("Ed25529_signature"), 96);
+            }
+            AccountSignature::Secp256k1 {
+                signature: _,
+                public_key: _,
+            } => {
+                visitor.visit_simple(Key::new("Secp256k1_signature"), 97);
+            }
+            AccountSignature::EvmSecp256k1 {
+                signature: _,
+                address: _,
+            } => {
+                visitor.visit_simple(Key::new("EvmSecp256k1_signature"), 85);
+            }
+        }
+    }
 }
 
 impl AccountSecretKey {

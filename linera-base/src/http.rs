@@ -3,6 +3,7 @@
 
 //! Types used when performing HTTP requests.
 
+use allocative::Allocative;
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
@@ -119,7 +120,19 @@ impl From<Method> for reqwest::Method {
 }
 
 /// A response for an HTTP request.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, WitLoad, WitStore, WitType)]
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    Hash,
+    PartialEq,
+    Serialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    Allocative,
+)]
 #[witty(name = "http-response")]
 pub struct Response {
     /// The status code of the HTTP response.
@@ -170,7 +183,19 @@ impl Response {
 }
 
 /// A header for an HTTP request or response.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, WitLoad, WitStore, WitType)]
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    Hash,
+    PartialEq,
+    Serialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    Allocative,
+)]
 #[witty(name = "http-header")]
 pub struct Header {
     /// The header name.

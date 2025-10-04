@@ -18,6 +18,7 @@ use std::{
     sync::Arc,
 };
 
+use allocative::{Allocative, Visitor};
 use alloy_primitives::U256;
 use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
@@ -52,6 +53,12 @@ use crate::{
     derive(test_strategy::Arbitrary)
 )]
 pub struct Amount(u128);
+
+impl Allocative for Amount {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Amount")]
@@ -104,13 +111,25 @@ impl From<Amount> for U256 {
     WitType,
     WitLoad,
     WitStore,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub struct BlockHeight(pub u64);
 
 /// An identifier for successive attempts to decide a value in a consensus protocol.
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Default,
+    Debug,
+    Serialize,
+    Deserialize,
+    Allocative,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum Round {
@@ -141,6 +160,7 @@ pub enum Round {
     WitType,
     WitLoad,
     WitStore,
+    Allocative,
 )]
 pub struct TimeDelta(u64);
 
@@ -193,6 +213,7 @@ impl TimeDelta {
     WitType,
     WitLoad,
     WitStore,
+    Allocative,
 )]
 pub struct Timestamp(u64);
 
@@ -730,7 +751,9 @@ impl Amount {
 }
 
 /// What created a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize, Allocative,
+)]
 pub enum ChainOrigin {
     /// The chain was created by the genesis configuration.
     Root(u32),
@@ -762,7 +785,7 @@ impl ChainOrigin {
 }
 
 /// A number identifying the configuration of the chain (aka the committee).
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Allocative)]
 pub struct Epoch(pub u32);
 
 impl Epoch {
@@ -847,7 +870,7 @@ impl Epoch {
 }
 
 /// The initial configuration for a new chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub struct InitialChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
@@ -864,7 +887,7 @@ pub struct InitialChainConfig {
 }
 
 /// Initial chain configuration and chain origin.
-#[derive(Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize, Allocative)]
 pub struct ChainDescription {
     origin: ChainOrigin,
     timestamp: Timestamp,
@@ -940,6 +963,7 @@ pub struct NetworkDescription {
     WitLoad,
     WitStore,
     InputObject,
+    Allocative,
 )]
 pub struct ApplicationPermissions {
     /// If this is `None`, all system operations and application operations are allowed.
@@ -1033,7 +1057,7 @@ impl ApplicationPermissions {
 }
 
 /// A record of a single oracle response.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub enum OracleResponse {
     /// The response from a service query.
     Service(
@@ -1266,7 +1290,7 @@ impl BcsHashable<'_> for BlobContent {}
 
 /// A blob of binary data.
 #[serde_as]
-#[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Allocative)]
 pub struct BlobContent {
     /// The type of data represented by the bytes.
     blob_type: BlobType,
@@ -1362,7 +1386,7 @@ impl From<Blob> for BlobContent {
 }
 
 /// A blob of binary data, with its hash.
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Allocative)]
 pub struct Blob {
     /// ID of the blob.
     hash: CryptoHash,
@@ -1511,7 +1535,7 @@ impl<'a> Deserialize<'a> for Blob {
 impl BcsHashable<'_> for Blob {}
 
 /// An event recorded in a block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 pub struct Event {
     /// The ID of the stream this event belongs to.
     pub stream_id: StreamId,
