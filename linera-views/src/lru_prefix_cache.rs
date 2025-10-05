@@ -454,6 +454,7 @@ impl LruPrefixCache {
             return;
         }
         let size = key.len() + cache_entry.size();
+        println!("insert_value size={size}");
         if (matches!(cache_entry, ValueEntry::DoesNotExist) && !self.has_exclusive_access)
             || size > self.config.max_value_entry_size
         {
@@ -859,68 +860,6 @@ impl LruPrefixCache {
         self.move_cache_key_on_top(cache_key);
         Some(result)
     }
-
-    #[cfg(with_testing)]
-    pub(crate) fn testing_cache_coherency(&self) {
-        let value_map_set = self
-            .value_map
-            .keys()
-            .cloned()
-            .collect::<BTreeSet<Vec<u8>>>();
-        let find_keys_map_set = self
-            .find_keys_map
-            .keys()
-            .cloned()
-            .collect::<BTreeSet<Vec<u8>>>();
-        let find_key_values_map_set = self
-            .find_key_values_map
-            .keys()
-            .cloned()
-            .collect::<BTreeSet<Vec<u8>>>();
-        let mut value_queue_set = BTreeSet::new();
-        let mut find_keys_queue_set = BTreeSet::new();
-        let mut find_key_values_queue_set = BTreeSet::new();
-        let mut total_size = 0;
-        let mut total_value_size = 0;
-        let mut total_find_keys_size = 0;
-        let mut total_find_key_values_size = 0;
-        for (cache_key, size) in &self.queue {
-            let queue_size = *size;
-            match cache_key {
-                CacheKey::Value(key) => {
-                    let value = self.value_map.get(key).unwrap();
-                    let map_size = key.len() + value.size();
-                    assert_eq!(map_size, queue_size, "Incoherence in value size");
-                    value_queue_set.insert(key.clone());
-                    total_value_size += queue_size;
-                }
-                CacheKey::FindKeys(key) => {
-                    let value = self.find_keys_map.get(key).unwrap();
-                    let map_size = key.len() + value.size();
-                    assert_eq!(map_size, queue_size, "Incoherence in find-keys size");
-                    find_keys_queue_set.insert(key.clone());
-                    total_find_keys_size += queue_size;
-                }
-                CacheKey::FindKeyValues(key) => {
-                    let value = self.find_key_values_map.get(key).unwrap();
-                    let map_size = key.len() + value.size();
-                    assert_eq!(map_size, queue_size, "Incoherence in find-keys size");
-                    find_key_values_queue_set.insert(key.clone());
-                    total_find_key_values_size += queue_size;
-                }
-            }
-            total_size += queue_size;
-        }
-        assert_eq!(value_queue_set, value_map_set, "Incoherence in value_map keys");
-        assert_eq!(find_keys_queue_set, find_keys_map_set, "Incoherence in find_keys_map keys");
-        assert_eq!(find_key_values_queue_set, find_key_values_map_set, "Incoherence in find_key_values_map keys");
-        assert_eq!(total_size, self.total_size, "The total_size are incoherent");
-        assert_eq!(total_value_size, self.total_value_size, "The total_value_size are incoherent");
-        assert_eq!(total_find_keys_size, self.total_find_keys_size, "The total_find_keys_size are incoherent");
-        assert_eq!(total_find_key_values_size, self.total_value_size, "The total_find_key_values_size are incoherent");
-    }
-
-
 }
 
 #[cfg(test)]
@@ -929,6 +868,68 @@ mod tests {
     use rand::Rng;
 
     use super::*;
+
+
+    impl LruPrefixCache {
+        fn check_coherence(&self) {
+            let value_map_set = self
+                .value_map
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<Vec<u8>>>();
+            let find_keys_map_set = self
+                .find_keys_map
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<Vec<u8>>>();
+            let find_key_values_map_set = self
+                .find_key_values_map
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<Vec<u8>>>();
+            let mut value_queue_set = BTreeSet::new();
+            let mut find_keys_queue_set = BTreeSet::new();
+            let mut find_key_values_queue_set = BTreeSet::new();
+            let mut total_size = 0;
+            let mut total_value_size = 0;
+            let mut total_find_keys_size = 0;
+            let mut total_find_key_values_size = 0;
+            for (cache_key, size) in &self.queue {
+                let queue_size = *size;
+                match cache_key {
+                    CacheKey::Value(key) => {
+                        let value = self.value_map.get(key).unwrap();
+                        let map_size = key.len() + value.size();
+                        assert_eq!(map_size, queue_size, "Incoherence in value size");
+                        value_queue_set.insert(key.clone());
+                        total_value_size += queue_size;
+                    }
+                    CacheKey::FindKeys(key) => {
+                        let value = self.find_keys_map.get(key).unwrap();
+                        let map_size = key.len() + value.size();
+                        assert_eq!(map_size, queue_size, "Incoherence in find-keys size");
+                        find_keys_queue_set.insert(key.clone());
+                        total_find_keys_size += queue_size;
+                    }
+                    CacheKey::FindKeyValues(key) => {
+                        let value = self.find_key_values_map.get(key).unwrap();
+                        let map_size = key.len() + value.size();
+                        assert_eq!(map_size, queue_size, "Incoherence in find-keys size");
+                        find_key_values_queue_set.insert(key.clone());
+                        total_find_key_values_size += queue_size;
+                    }
+                }
+                total_size += queue_size;
+            }
+            assert_eq!(value_queue_set, value_map_set, "Incoherence in value_map keys");
+            assert_eq!(find_keys_queue_set, find_keys_map_set, "Incoherence in find_keys_map keys");
+            assert_eq!(find_key_values_queue_set, find_key_values_map_set, "Incoherence in find_key_values_map keys");
+            assert_eq!(total_size, self.total_size, "The total_size are incoherent");
+            assert_eq!(total_value_size, self.total_value_size, "The total_value_size are incoherent");
+            assert_eq!(total_find_keys_size, self.total_find_keys_size, "The total_find_keys_size are incoherent");
+            assert_eq!(total_find_key_values_size, self.total_find_key_values_size, "The total_find_key_values_size are incoherent");
+        }
+    }
 
     fn create_test_cache(has_exclusive_access: bool) -> LruPrefixCache {
         let config = StorageCacheConfig {
@@ -966,6 +967,7 @@ mod tests {
 
         // Insert a value
         cache.insert_read_value(&key, &Some(value.clone()));
+        cache.check_coherence();
 
         // Query the value
         let result = cache.query_read_value(&key);
@@ -983,6 +985,7 @@ mod tests {
 
         // Insert a key that exists
         cache.insert_contains_key(&key, true);
+        cache.check_coherence();
 
         // Query the key
         let result = cache.query_contains_key(&key);
@@ -1004,6 +1007,7 @@ mod tests {
 
         // Insert find_keys entry
         cache.insert_find_keys(prefix.clone(), &keys);
+        cache.check_coherence();
 
         // Query with exact prefix
         let result = cache.query_find_keys(&prefix);
@@ -1027,6 +1031,7 @@ mod tests {
 
         // Insert find_key_values entry
         cache.insert_find_key_values(prefix.clone(), &key_values);
+        cache.check_coherence();
 
         // Query with exact prefix
         let result = cache.query_find_key_values(&prefix);
@@ -1046,6 +1051,7 @@ mod tests {
             let key = vec![i];
             let value = vec![0; 100]; // Large value to trigger size-based eviction
             cache.insert_read_value(&key, &Some(value));
+            cache.check_coherence();
         }
 
         // Should have evicted some entries to stay within limits
@@ -1062,6 +1068,7 @@ mod tests {
             let key = vec![i];
             let value = vec![i]; // Small values
             cache.insert_read_value(&key, &Some(value));
+            cache.check_coherence();
         }
 
         // Should have evicted entries to stay within max_cache_entries
@@ -1078,7 +1085,9 @@ mod tests {
 
         // Insert two entries
         cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.check_coherence();
         cache.insert_read_value(&key2, &Some(value.clone()));
+        cache.check_coherence();
 
         // Access key1 to promote it
         assert_eq!(Some(Some(value)), cache.query_read_value(&key1));
@@ -1100,6 +1109,7 @@ mod tests {
 
         // Insert find_keys entry
         cache.insert_find_keys(prefix.clone(), &original_keys);
+        cache.check_coherence();
 
         // Update an entry
         cache.update_find_entries(&key, Some(vec![42]));
@@ -1122,8 +1132,11 @@ mod tests {
 
         // Insert some values
         cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.check_coherence();
         cache.insert_read_value(&key2, &Some(value.clone()));
+        cache.check_coherence();
         cache.insert_read_value(&key3, &Some(value.clone()));
+        cache.check_coherence();
 
         // Delete prefix [1]
         cache.delete_prefix(&prefix);
@@ -1150,7 +1163,9 @@ mod tests {
 
         // Insert some values
         cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.check_coherence();
         cache.insert_read_value(&key2, &Some(value.clone()));
+        cache.check_coherence();
 
         // Delete prefix [1]
         cache.delete_prefix(&prefix);
@@ -1173,6 +1188,7 @@ mod tests {
         // Insert value larger than max_value_entry_size
         // This is because the entry size is the key size + the value size
         cache.insert_read_value(&key, &Some(large_value));
+        cache.check_coherence();
 
         // Should not be cached
         let result = cache.query_read_value(&key);
@@ -1192,6 +1208,7 @@ mod tests {
         // Insert value larger than max_entry_size
         // This is because the entry size is the key size + the value size
         cache.insert_find_keys(key_prefix.clone(), &keys);
+        cache.check_coherence();
 
         // Should not be cached
         let result = cache.query_find_keys(&key_prefix);
@@ -1214,6 +1231,7 @@ mod tests {
 
         // Insert value larger than max_entry_size
         cache.insert_find_key_values(key_prefix.clone(), &key_values);
+        cache.check_coherence();
 
         // Should not be cached
         let result = cache.query_find_key_values(&key_prefix);
@@ -1227,6 +1245,7 @@ mod tests {
 
         // Insert DoesNotExist entry without exclusive access
         cache.insert_read_value(&key, &None);
+        cache.check_coherence();
 
         // Should not be cached due to lack of exclusive access
         let result = cache.query_read_value(&key);
@@ -1303,6 +1322,7 @@ mod tests {
         let key = vec![1, 2, 3];
         let value = vec![4, 5, 6];
         cache.insert_read_value(&key, &Some(value.clone()));
+        cache.check_coherence();
 
         // Size should increase
         assert!(cache.total_size > initial_size);
@@ -1312,6 +1332,7 @@ mod tests {
 
         // Insert DoesNotExist entry (None value)
         cache.insert_read_value(&key, &None);
+        cache.check_coherence();
 
         // Value size should be less than when we had a real value,
         // since DoesNotExist entries have size 0 for the value part
@@ -1339,6 +1360,7 @@ mod tests {
             let key = vec![i];
             let value = vec![0; 20]; // Each entry ~20 bytes
             cache.insert_read_value(&key, &Some(value));
+            cache.check_coherence();
         }
 
         // Should have trimmed to stay within value cache limit
@@ -1355,7 +1377,9 @@ mod tests {
 
         // Insert entries with different prefixes
         cache.insert_find_keys(prefix1.clone(), &keys1);
+        cache.check_coherence();
         cache.insert_find_keys(prefix2.clone(), &keys2);
+        cache.check_coherence();
 
         // Query with exact prefix1 - should return the keys we inserted
         let result = cache.query_find_keys(&prefix1);
