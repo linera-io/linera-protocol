@@ -1998,4 +1998,94 @@ mod tests {
         // Verify we have fewer find_keys entries than we inserted
         assert!(cache.find_keys_map.len() < 3);
     }
+
+    #[test]
+    fn test_find_keys_removal_from_map() {
+        let mut cache = LruPrefixCache::new(
+            StorageCacheConfig {
+                max_cache_size: 100, // Small cache to trigger eviction
+                max_value_entry_size: 50,
+                max_find_keys_entry_size: 1000,
+                max_find_key_values_entry_size: 2000,
+                max_cache_entries: 2, // Very small to force eviction
+                max_cache_value_size: 500,
+                max_cache_find_keys_size: 500,
+                max_cache_find_key_values_size: 500,
+            },
+            true,
+        );
+
+        let prefix1 = vec![1];
+        let prefix2 = vec![2];
+        let prefix3 = vec![3];
+        let keys = vec![vec![1], vec![2]];
+
+        // Insert find_keys entries to fill the cache
+        cache.insert_find_keys(prefix1.clone(), &keys);
+        cache.check_coherence();
+        cache.insert_find_keys(prefix2.clone(), &keys);
+        cache.check_coherence();
+
+        // Verify both entries are present
+        assert!(cache.find_keys_map.contains_key(&prefix1));
+        assert!(cache.find_keys_map.contains_key(&prefix2));
+
+        // Insert third entry that should trigger eviction and call remove_cache_key_from_map for FindKeys
+        cache.insert_find_keys(prefix3.clone(), &keys);
+        cache.check_coherence();
+
+        // The first entry should have been evicted (line 258: FindKeys removal from map)
+        assert!(!cache.find_keys_map.contains_key(&prefix1));
+        // The newer entries should still be present
+        assert!(cache.find_keys_map.contains_key(&prefix2));
+        assert!(cache.find_keys_map.contains_key(&prefix3));
+
+        // Verify cache constraints are maintained
+        assert!(cache.queue.len() <= cache.config.max_cache_entries);
+    }
+
+    #[test]
+    fn test_find_key_values_removal_from_map() {
+        let mut cache = LruPrefixCache::new(
+            StorageCacheConfig {
+                max_cache_size: 100, // Small cache to trigger eviction
+                max_value_entry_size: 50,
+                max_find_keys_entry_size: 1000,
+                max_find_key_values_entry_size: 2000,
+                max_cache_entries: 2, // Very small to force eviction
+                max_cache_value_size: 500,
+                max_cache_find_keys_size: 500,
+                max_cache_find_key_values_size: 500,
+            },
+            true,
+        );
+
+        let prefix1 = vec![1];
+        let prefix2 = vec![2];
+        let prefix3 = vec![3];
+        let key_values = vec![(vec![1], vec![10]), (vec![2], vec![20])];
+
+        // Insert find_key_values entries to fill the cache
+        cache.insert_find_key_values(prefix1.clone(), &key_values);
+        cache.check_coherence();
+        cache.insert_find_key_values(prefix2.clone(), &key_values);
+        cache.check_coherence();
+
+        // Verify both entries are present
+        assert!(cache.find_key_values_map.contains_key(&prefix1));
+        assert!(cache.find_key_values_map.contains_key(&prefix2));
+
+        // Insert third entry that should trigger eviction and call remove_cache_key_from_map for FindKeyValues
+        cache.insert_find_key_values(prefix3.clone(), &key_values);
+        cache.check_coherence();
+
+        // The first entry should have been evicted (line 261: FindKeyValues removal from map)
+        assert!(!cache.find_key_values_map.contains_key(&prefix1));
+        // The newer entries should still be present
+        assert!(cache.find_key_values_map.contains_key(&prefix2));
+        assert!(cache.find_key_values_map.contains_key(&prefix3));
+
+        // Verify cache constraints are maintained
+        assert!(cache.queue.len() <= cache.config.max_cache_entries);
+    }
 }
