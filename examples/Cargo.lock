@@ -3870,6 +3870,7 @@ dependencies = [
  "futures",
  "generic-array",
  "hex",
+ "itertools 0.14.0",
  "linera-base",
  "linera-views-derive",
  "linera-witty",

@@ -16,7 +16,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
-    common::{CustomSerialize, HasherOutput, Update},
+    common::{CustomSerialize, HasherOutput, SliceExt as _, Update},
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     store::ReadableKeyValueStore as _,
@@ -396,8 +396,9 @@ impl<W: View> ByteCollectionView<W::Context, W> {
             .read_multi_values_bytes(keys_to_load)
             .await?;
 
-        for (loaded_values, (position, context)) in
-            values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
+        for (loaded_values, (position, context)) in values
+            .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
+            .zip(entries_to_load)
         {
             let view = W::post_load(context, loaded_values)?;
             let updates = self.updates.read().await;

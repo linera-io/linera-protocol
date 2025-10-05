@@ -9,8 +9,10 @@ use std::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
     },
+    slice::ChunksExact,
 };
 
+use itertools::Either;
 use serde::de::DeserializeOwned;
 
 use crate::ViewError;
@@ -311,6 +313,30 @@ pub(crate) const fn get_uleb128_size(len: usize) -> usize {
         expo += 1;
     }
     expo
+}
+
+/// Extention trait for slices.
+pub trait SliceExt<T> {
+    /// Same as `chunks_exact` but we allow the `chunk_size` to be zero when the slice is empty.
+    fn chunks_exact_or_repeat(
+        &self,
+        chunk_size: usize,
+    ) -> Either<ChunksExact<'_, T>, std::iter::Repeat<&[T]>>;
+}
+
+impl<T> SliceExt<T> for [T] {
+    fn chunks_exact_or_repeat(
+        &self,
+        chunk_size: usize,
+    ) -> Either<ChunksExact<'_, T>, std::iter::Repeat<&[T]>> {
+        if chunk_size > 0 {
+            Either::Left(self.chunks_exact(chunk_size))
+        } else if self.is_empty() {
+            Either::Right(std::iter::repeat(&[]))
+        } else {
+            panic!("chunk_size must be nonzero unless the slice is empty")
+        }
+    }
 }
 
 #[cfg(test)]
