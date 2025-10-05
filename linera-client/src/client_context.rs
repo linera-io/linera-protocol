@@ -466,6 +466,13 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         }
     }
 
+    pub async fn ownership(&mut self, chain_id: Option<ChainId>) -> Result<ChainOwnership, Error> {
+        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
+        let client = self.make_chain_client(chain_id);
+        let info = client.chain_info().await?;
+        Ok(info.manager.ownership)
+    }
+
     pub async fn change_ownership(
         &mut self,
         chain_id: Option<ChainId>,

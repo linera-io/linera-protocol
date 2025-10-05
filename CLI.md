@@ -8,6 +8,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera transfer`↴](#linera-transfer)
 * [`linera open-chain`↴](#linera-open-chain)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
+* [`linera show-ownership`↴](#linera-show-ownership)
 * [`linera change-ownership`↴](#linera-change-ownership)
 * [`linera set-preferred-owner`↴](#linera-set-preferred-owner)
 * [`linera change-application-permissions`↴](#linera-change-application-permissions)
@@ -80,6 +81,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `transfer` — Transfer funds
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
+* `show-ownership` — Display who owns the chain, and how the owners work together proposing blocks
 * `change-ownership` — Change who owns the chain, and how the owners work together proposing blocks
 * `set-preferred-owner` — Change the preferred owner of a chain
 * `change-application-permissions` — Changes the application permissions configuration
@@ -273,6 +275,18 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+
+
+
+## `linera show-ownership`
+
+Display who owns the chain, and how the owners work together proposing blocks
+
+**Usage:** `linera show-ownership [OPTIONS]`
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
 
 
 
