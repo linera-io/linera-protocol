@@ -68,12 +68,10 @@ fn reqwest_client() -> reqwest::Client {
 pub struct ClientWrapper {
     binary_path: sync::Mutex<Option<PathBuf>>,
     testing_prng_seed: Option<u64>,
-    storage: String,
-    wallet: String,
-    keystore: String,
     max_pending_message_bundles: usize,
     network: Network,
     pub path_provider: PathProvider,
+    wallet_id: usize,
     on_drop: OnClientDrop,
     extra_args: Vec<String>,
 }
@@ -92,14 +90,14 @@ impl ClientWrapper {
         path_provider: PathProvider,
         network: Network,
         testing_prng_seed: Option<u64>,
-        id: usize,
+        wallet_id: usize,
         on_drop: OnClientDrop,
     ) -> Self {
         Self::new_with_extra_args(
             path_provider,
             network,
             testing_prng_seed,
-            id,
+            wallet_id,
             on_drop,
             vec!["--wait-for-outgoing-messages".to_string()],
         )
@@ -109,26 +107,17 @@ impl ClientWrapper {
         path_provider: PathProvider,
         network: Network,
         testing_prng_seed: Option<u64>,
-        id: usize,
+        wallet_id: usize,
         on_drop: OnClientDrop,
         extra_args: Vec<String>,
     ) -> Self {
-        let storage = format!(
-            "rocksdb:{}/client_{}.db",
-            path_provider.path().display(),
-            id
-        );
-        let wallet = format!("wallet_{}.json", id);
-        let keystore = format!("keystore_{}.json", id);
         Self {
             binary_path: sync::Mutex::new(None),
             testing_prng_seed,
-            storage,
-            wallet,
-            keystore,
             max_pending_message_bundles: 10_000,
             network,
             path_provider,
+            wallet_id,
             on_drop,
             extra_args,
         }
@@ -234,12 +223,10 @@ impl ClientWrapper {
 
     fn required_command_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> + '_ {
         [
-            "--wallet".into(),
-            self.wallet.as_str().into(),
-            "--keystore".into(),
-            self.keystore.as_str().into(),
-            "--storage".into(),
-            self.storage.as_str().into(),
+            "--home-directory".into(),
+            self.path_provider.path().display().to_string().into(),
+            "--with-wallet".into(),
+            self.wallet_id.to_string().into(),
             "--send-timeout-ms".into(),
             "500000".into(),
             "--recv-timeout-ms".into(),
@@ -982,15 +969,17 @@ impl ClientWrapper {
     }
 
     pub fn wallet_path(&self) -> PathBuf {
-        self.path_provider.path().join(&self.wallet)
+        self.path_provider
+            .path()
+            .join(self.wallet_id.to_string())
+            .join("wallet.json")
     }
 
     pub fn keystore_path(&self) -> PathBuf {
-        self.path_provider.path().join(&self.keystore)
-    }
-
-    pub fn storage_path(&self) -> &str {
-        &self.storage
+        self.path_provider
+            .path()
+            .join(self.wallet_id.to_string())
+            .join("keystore.json")
     }
 
     pub fn get_owner(&self) -> Option<AccountOwner> {
