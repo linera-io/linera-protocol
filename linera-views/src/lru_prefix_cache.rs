@@ -72,7 +72,7 @@ impl FindKeysEntry {
         self.0.contains(key)
     }
 
-    fn update_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
+    fn update_entry(&mut self, key: &[u8], new_value: &Option<Vec<u8>>) {
         match new_value {
             None => {
                 self.0.remove(key);
@@ -483,7 +483,7 @@ impl LruPrefixCache {
         let lower_bound = self.get_existing_keys_entry_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
-            cache_entry.update_entry(key_red, new_value.clone());
+            cache_entry.update_entry(key_red, &new_value);
         }
         let lower_bound = self.get_existing_find_key_values_entry_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
@@ -1161,8 +1161,8 @@ mod tests {
         let key3 = vec![1, 3, 4];
 
         // Add keys
-        find_entry.update_entry(&key1, Some(vec![42]));
-        find_entry.update_entry(&key2, Some(vec![43]));
+        find_entry.update_entry(&key1, &Some(vec![42]));
+        find_entry.update_entry(&key2, &Some(vec![43]));
 
         // Test contains_key
         assert!(find_entry.contains_key(&key1));
@@ -1177,7 +1177,7 @@ mod tests {
         assert!(keys.contains(&vec![3]));
 
         // Remove a key
-        find_entry.update_entry(&key1, None);
+        find_entry.update_entry(&key1, &None);
         assert!(!find_entry.contains_key(&key1));
         assert!(find_entry.contains_key(&key2));
     }

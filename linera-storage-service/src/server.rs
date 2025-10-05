@@ -282,13 +282,13 @@ enum StorageServerOptions {
         /// The maximum size of the cache, in bytes (keys size + value sizes)
         #[arg(long, default_value = "10000000")]
         max_cache_size: usize,
-        /// The maximum size of a value entry size, in bytes
+        /// The maximum size of a value entry, in bytes
         #[arg(long, default_value = "1000000")]
         max_value_entry_size: usize,
-        /// The maximum size of a findkeys entry size, in bytes
+        /// The maximum size of a find-keys entry, in bytes
         #[arg(long, default_value = "1000000")]
         max_find_keys_entry_size: usize,
-        /// The maximum size of a findkeyvalues entry size, in bytes
+        /// The maximum size of a find-key-values entry, in bytes
         #[arg(long, default_value = "1000000")]
         max_find_key_values_entry_size: usize,
         /// The maximum number of entries in the cache.
