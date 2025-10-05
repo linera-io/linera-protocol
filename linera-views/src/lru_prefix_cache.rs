@@ -244,7 +244,7 @@ impl LruPrefixCache {
     }
 
     /// Update the cache size to the new size without changing position.
-    fn update_cache_key_size(&mut self, cache_key: &CacheKey, new_size: usize) {
+    fn update_cache_key_sizes(&mut self, cache_key: &CacheKey, new_size: usize) {
         let size = self
             .queue
             .get_mut(cache_key)
@@ -335,18 +335,18 @@ impl LruPrefixCache {
     /// Trim value cache so that it fits within bounds.
     fn trim_value_cache(&mut self) {
         let mut keys = Vec::new();
-        let mut total_size = self.total_value_size;
+        let mut control_size = self.total_value_size;
         let mut iter = self.queue.iter();
         loop {
             let value = iter.next();
             let Some((cache_key, size)) = value else {
                 break;
             };
-            if total_size < self.config.max_cache_value_size {
+            if control_size < self.config.max_cache_value_size {
                 break;
             }
             if let CacheKey::Value(key) = cache_key {
-                total_size -= size;
+                control_size -= size;
                 keys.push(key.to_vec());
             }
         }
@@ -360,18 +360,18 @@ impl LruPrefixCache {
     /// Trim `find_keys_by_prefix` cache so that it fits within bounds.
     fn trim_find_keys_cache(&mut self) {
         let mut prefixes = Vec::new();
-        let mut total_size = self.total_find_keys_size;
+        let mut control_size = self.total_find_keys_size;
         let mut iter = self.queue.iter();
         loop {
             let value = iter.next();
             let Some((cache_key, size)) = value else {
                 break;
             };
-            if total_size < self.config.max_cache_find_keys_size {
+            if control_size < self.config.max_cache_find_keys_size {
                 break;
             }
             if let CacheKey::FindKeys(prefix) = cache_key {
-                total_size -= size;
+                control_size -= size;
                 prefixes.push(prefix.to_vec());
             }
         }
@@ -385,18 +385,18 @@ impl LruPrefixCache {
     /// Trim `find_key_values_by_prefix` cache so that it fits within bounds.
     fn trim_find_key_values_cache(&mut self) {
         let mut prefixes = Vec::new();
-        let mut total_size = self.total_find_key_values_size;
+        let mut control_size = self.total_find_key_values_size;
         let mut iter = self.queue.iter();
         loop {
             let value = iter.next();
             let Some((cache_key, size)) = value else {
                 break;
             };
-            if total_size < self.config.max_cache_find_key_values_size {
+            if control_size < self.config.max_cache_find_key_values_size {
                 break;
             }
             if let CacheKey::FindKeyValues(prefix) = cache_key {
-                total_size -= size;
+                control_size -= size;
                 prefixes.push(prefix.to_vec());
             }
         }
@@ -503,9 +503,10 @@ impl LruPrefixCache {
 
     /// Inserts a contains_key result into the cache.
     pub(crate) fn insert_contains_key(&mut self, key: &[u8], result: bool) {
-        let cache_entry = match result {
-            false => ValueEntry::DoesNotExist,
-            true => ValueEntry::Exists,
+        let cache_entry = if result {
+            ValueEntry::Exists
+        } else {
+            ValueEntry::DoesNotExist
         };
         self.insert_value(key, cache_entry)
     }
@@ -674,7 +675,7 @@ impl LruPrefixCache {
             if let Some((new_cache_size, lower_bound)) = result {
                 // Update the size without changing the position.
                 let cache_key = CacheKey::FindKeys(lower_bound.clone());
-                self.update_cache_key_size(&cache_key, new_cache_size);
+                self.update_cache_key_sizes(&cache_key, new_cache_size);
             }
             // Finding a containing FindKeyValues. If existing update, if not insert.
             let lower_bound = self.get_existing_find_key_values_entry_mut(key_prefix);
@@ -690,7 +691,7 @@ impl LruPrefixCache {
             if let Some((new_cache_size, lower_bound)) = result {
                 // Update the size without changing the position.
                 let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
-                self.update_cache_key_size(&cache_key, new_cache_size);
+                self.update_cache_key_sizes(&cache_key, new_cache_size);
             } else {
                 // There is no lower bound. Therefore we can insert
                 // the deleted prefix as a FindKeyValues.
