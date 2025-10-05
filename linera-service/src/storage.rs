@@ -92,8 +92,8 @@ impl CommonStorageOptions {
         StorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
             max_value_entry_size: self.storage_max_value_entry_size,
-            max_findkeys_entry_size: self.storage_max_find_keys_entry_size,
-            max_findkeyvalues_entry_size: self.storage_max_find_key_values_entry_size,
+            max_find_keys_entry_size: self.storage_max_find_keys_entry_size,
+            max_find_key_values_entry_size: self.storage_max_find_key_values_entry_size,
             max_cache_entries: self.storage_max_cache_entries,
             max_cache_value_size: self.storage_max_cache_value_size,
             max_cache_find_keys_size: self.storage_max_cache_find_keys_size,

@@ -77,8 +77,8 @@ impl RocksDbRunner {
         let storage_cache_config = StorageCacheConfig {
             max_cache_size: config.client.max_cache_size,
             max_value_entry_size: config.client.max_value_entry_size,
-            max_findkeys_entry_size: config.client.max_find_keys_entry_size,
-            max_findkeyvalues_entry_size: config.client.max_find_key_values_entry_size,
+            max_find_keys_entry_size: config.client.max_find_keys_entry_size,
+            max_find_key_values_entry_size: config.client.max_find_key_values_entry_size,
             max_cache_entries: config.client.max_cache_entries,
             max_cache_value_size: config.client.max_cache_value_size,
             max_cache_find_keys_size: config.client.max_cache_find_keys_size,

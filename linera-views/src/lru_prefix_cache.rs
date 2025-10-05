@@ -18,9 +18,9 @@ pub struct StorageCacheConfig {
     /// The maximum size of a value entry size, in bytes.
     pub max_value_entry_size: usize,
     /// The maximum size of a find-keys entry size, in bytes.
-    pub max_findkeys_entry_size: usize,
+    pub max_find_keys_entry_size: usize,
     /// The maximum size of a find-key-values entry size, in bytes.
-    pub max_findkeyvalues_entry_size: usize,
+    pub max_find_key_values_entry_size: usize,
     /// The maximum number of entries in the cache.
     pub max_cache_entries: usize,
     /// The maximum size of cached values.
@@ -260,7 +260,7 @@ impl LruPrefixCache {
 
     /// If the FindKeys map contain a prefix that is a prefix of key in argument,
     /// then returns it and the corresponding FindKeys. Otherwise `None`.
-    fn get_find_keys_lower_bound(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
+    fn get_existing_find_keys_entry(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
         match self.find_keys_map.range(..=key.to_vec()).next_back() {
             None => None,
             Some((key_store, value)) => {
@@ -274,7 +274,7 @@ impl LruPrefixCache {
     }
 
     /// Same as above but returns a mutable reference.
-    fn get_find_keys_lower_bound_mut(
+    fn get_existing_keys_entry_mut(
         &mut self,
         key: &[u8],
     ) -> Option<(&Vec<u8>, &mut FindKeysEntry)> {
@@ -292,7 +292,7 @@ impl LruPrefixCache {
 
     /// If the FindKeyValues map contain a prefix that is a prefix of key in argument,
     /// then returns it and the corresponding FindKeyValues. Otherwise `None`.
-    fn get_find_key_values_lower_bound(
+    fn get_existing_find_key_values_entry(
         &self,
         key: &[u8],
     ) -> Option<(&Vec<u8>, &FindKeyValuesEntry)> {
@@ -309,7 +309,7 @@ impl LruPrefixCache {
     }
 
     /// Same as above but returns a mutable reference.
-    fn get_find_key_values_lower_bound_mut(
+    fn get_existing_find_key_values_entry_mut(
         &mut self,
         key: &[u8],
     ) -> Option<(&Vec<u8>, &mut FindKeyValuesEntry)> {
@@ -477,12 +477,12 @@ impl LruPrefixCache {
 
     /// Updates the find entries.
     fn update_find_entries(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
-        let lower_bound = self.get_find_keys_lower_bound_mut(key);
+        let lower_bound = self.get_existing_keys_entry_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
             cache_entry.update_entry(key_red, new_value.clone());
         }
-        let lower_bound = self.get_find_key_values_lower_bound_mut(key);
+        let lower_bound = self.get_existing_find_key_values_entry_mut(key);
         if let Some((lower_bound, cache_entry)) = lower_bound {
             let key_red = &key[lower_bound.len()..];
             cache_entry.update_entry(key_red, new_value);
@@ -509,12 +509,12 @@ impl LruPrefixCache {
 
     /// Inserts the result of `find_keys_by_prefix` in the cache.
     pub(crate) fn insert_find_keys(&mut self, key_prefix: Vec<u8>, keys: &[Vec<u8>]) {
-        if self.config.max_findkeys_entry_size == 0 {
+        if self.config.max_find_keys_entry_size == 0 {
             // zero max size, exit from the start
             return;
         }
         let size = key_prefix.len() + keys.iter().map(Vec::len).sum::<usize>();
-        if size > self.config.max_findkeys_entry_size {
+        if size > self.config.max_find_keys_entry_size {
             // The entry is too large, we do not insert it,
             return;
         }
@@ -560,7 +560,7 @@ impl LruPrefixCache {
         key_prefix: Vec<u8>,
         key_values: &[(Vec<u8>, Vec<u8>)],
     ) {
-        if self.config.max_findkeyvalues_entry_size == 0 {
+        if self.config.max_find_key_values_entry_size == 0 {
             // Zero, maximum size, exit from the start
             return;
         }
@@ -569,7 +569,7 @@ impl LruPrefixCache {
                 .iter()
                 .map(|(k, v)| k.len() + v.len())
                 .sum::<usize>();
-        if size > self.config.max_findkeyvalues_entry_size {
+        if size > self.config.max_find_key_values_entry_size {
             // The entry is too large, we do not insert it,
             return;
         }
@@ -658,7 +658,7 @@ impl LruPrefixCache {
                 self.remove_cache_key(&cache_key);
             }
             // Finding a containing FindKeys. If existing update.
-            let lower_bound = self.get_find_keys_lower_bound_mut(key_prefix);
+            let lower_bound = self.get_existing_keys_entry_mut(key_prefix);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 // Delete the keys in the entry
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
@@ -674,7 +674,7 @@ impl LruPrefixCache {
                 self.update_cache_key_size(&cache_key, new_cache_size);
             }
             // Finding a containing FindKeyValues. If existing update, if not insert.
-            let lower_bound = self.get_find_key_values_lower_bound_mut(key_prefix);
+            let lower_bound = self.get_existing_find_key_values_entry_mut(key_prefix);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 // Delete the keys (or key/values) in the entry
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
@@ -737,7 +737,7 @@ impl LruPrefixCache {
         }
         if self.has_exclusive_access {
             // Now trying the FindKeyValues map.
-            let lower_bound = self.get_find_key_values_lower_bound(key);
+            let lower_bound = self.get_existing_find_key_values_entry(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
                 (lower_bound, find_entry.get_read_value(key_red))
@@ -766,7 +766,7 @@ impl LruPrefixCache {
         }
         if self.has_exclusive_access {
             // Now trying the FindKeys map.
-            let lower_bound = self.get_find_keys_lower_bound(key);
+            let lower_bound = self.get_existing_find_keys_entry(key);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
                 Some((lower_bound, find_entry.contains_key(key_red)))
@@ -779,7 +779,7 @@ impl LruPrefixCache {
                 return Some(result);
             }
             // Now trying the FindKeyValues map.
-            let lower_bound = self.get_find_key_values_lower_bound(key);
+            let lower_bound = self.get_existing_find_key_values_entry(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
                 (lower_bound, find_entry.contains_key(key_red))
@@ -796,7 +796,7 @@ impl LruPrefixCache {
     /// Gets the find_keys entry from the key prefix. Returns `None` if absent from the cache.
     pub(crate) fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
         // Trying first the FindKeys cache.
-        let result = match self.get_find_keys_lower_bound(key_prefix) {
+        let result = match self.get_existing_find_keys_entry(key_prefix) {
             None => None,
             Some((lower_bound, cache_entry)) => {
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
@@ -809,7 +809,7 @@ impl LruPrefixCache {
             return Some(keys);
         }
         // Then with the FindKeyValues cache.
-        let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
+        let (lower_bound, result) = match self.get_existing_find_key_values_entry(key_prefix) {
             None => {
                 return None;
             }
@@ -825,7 +825,7 @@ impl LruPrefixCache {
 
     /// Gets the find key values entry from the key prefix. Returns `None` if absent from the cache.
     pub(crate) fn query_find_key_values(&mut self, key_prefix: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
-        let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
+        let (lower_bound, result) = match self.get_existing_find_key_values_entry(key_prefix) {
             None => {
                 return None;
             }
@@ -850,8 +850,8 @@ mod tests {
         let config = StorageCacheConfig {
             max_cache_size: 1000,
             max_value_entry_size: 50,
-            max_findkeys_entry_size: 100,
-            max_findkeyvalues_entry_size: 200,
+            max_find_keys_entry_size: 100,
+            max_find_key_values_entry_size: 200,
             max_cache_entries: 10,
             max_cache_value_size: 500,
             max_cache_find_keys_size: 500,
@@ -1100,11 +1100,11 @@ mod tests {
         let mut cache = create_test_cache(true);
         let key_prefix = vec![1];
         let mut keys = Vec::new();
-        for i in 0..cache.config.max_findkeys_entry_size {
+        for i in 0..cache.config.max_find_keys_entry_size {
             keys.push(vec![i as u8]);
         }
         let size = keys.iter().map(Vec::len).sum::<usize>();
-        assert_eq!(cache.config.max_findkeys_entry_size, size);
+        assert_eq!(cache.config.max_find_keys_entry_size, size);
         // Insert value larger than max_entry_size
         // This is because the entry size is the key size + the value size
         cache.insert_find_keys(key_prefix.clone(), &keys);
@@ -1119,14 +1119,14 @@ mod tests {
         let mut cache = create_test_cache(true);
         let key_prefix = vec![1];
         let mut key_values = Vec::new();
-        for i in 0..cache.config.max_findkeyvalues_entry_size / 2 {
+        for i in 0..cache.config.max_find_key_values_entry_size / 2 {
             key_values.push((vec![i as u8], vec![i as u8]));
         }
         let size = key_values
             .iter()
             .map(|(k, v)| k.len() + v.len())
             .sum::<usize>();
-        assert_eq!(cache.config.max_findkeyvalues_entry_size, size);
+        assert_eq!(cache.config.max_find_key_values_entry_size, size);
 
         // Insert value larger than max_entry_size
         cache.insert_find_key_values(key_prefix.clone(), &key_values);
@@ -1240,8 +1240,8 @@ mod tests {
             StorageCacheConfig {
                 max_cache_size: 10000,
                 max_value_entry_size: 500,
-                max_findkeys_entry_size: 1000,
-                max_findkeyvalues_entry_size: 2000,
+                max_find_keys_entry_size: 1000,
+                max_find_key_values_entry_size: 2000,
                 max_cache_entries: 100,
                 max_cache_value_size: 50, // Small limit to trigger trimming
                 max_cache_find_keys_size: 1000,
