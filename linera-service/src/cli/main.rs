@@ -371,7 +371,8 @@ impl Runnable for Job {
 
             ShowNetworkDescription => {
                 let network_description = storage.read_network_description().await?;
-                println!("Network description: \n{:#?}", network_description);
+                let json = serde_json::to_string_pretty(&network_description)?;
+                println!("{}", json);
             }
 
             LocalBalance { account } => {
