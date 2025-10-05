@@ -202,36 +202,54 @@ impl LruPrefixCache {
         self.queue.insert(cache_key, size);
     }
 
-    /// Decrease the sizes of the keys.
-    fn decrease_sizes(&mut self, cache_key: &CacheKey, size: usize) {
-        self.total_size -= size;
-        match cache_key {
-            CacheKey::Value(_) => {
-                self.total_value_size -= size;
+    /// Update sizes by decreasing and increasing.
+    fn update_sizes(&mut self, cache_key: &CacheKey, old_size: usize, new_size: usize) {
+        use std::cmp::Ordering;
+        match new_size.cmp(&old_size) {
+            Ordering::Greater => {
+                let increase_size = new_size - old_size;
+                self.total_size += increase_size;
+                match cache_key {
+                    CacheKey::Value(_) => {
+                        self.total_value_size += increase_size;
+                    }
+                    CacheKey::FindKeys(_) => {
+                        self.total_find_keys_size += increase_size;
+                    }
+                    CacheKey::FindKeyValues(_) => {
+                        self.total_find_key_values_size += increase_size;
+                    }
+                }
             }
-            CacheKey::FindKeys(_) => {
-                self.total_find_keys_size -= size;
+            Ordering::Less => {
+                let decrease_size = old_size - new_size;
+                self.total_size -= decrease_size;
+                match cache_key {
+                    CacheKey::Value(_) => {
+                        self.total_value_size -= decrease_size;
+                    }
+                    CacheKey::FindKeys(_) => {
+                        self.total_find_keys_size -= decrease_size;
+                    }
+                    CacheKey::FindKeyValues(_) => {
+                        self.total_find_key_values_size -= decrease_size;
+                    }
+                }
             }
-            CacheKey::FindKeyValues(_) => {
-                self.total_find_key_values_size -= size;
+            Ordering::Equal => {
+                // Nothing to be done
             }
         }
     }
 
     /// Increase the sizes of the keys.
     fn increase_sizes(&mut self, cache_key: &CacheKey, size: usize) {
-        self.total_size += size;
-        match cache_key {
-            CacheKey::Value(_) => {
-                self.total_value_size += size;
-            }
-            CacheKey::FindKeys(_) => {
-                self.total_find_keys_size += size;
-            }
-            CacheKey::FindKeyValues(_) => {
-                self.total_find_key_values_size += size;
-            }
-        }
+        self.update_sizes(cache_key, 0, size);
+    }
+
+    /// Decrease the sizes of the keys.
+    fn decrease_sizes(&mut self, cache_key: &CacheKey, size: usize) {
+        self.update_sizes(cache_key, size, 0);
     }
 
     /// Remove an entry from the queue and update the sizes.
@@ -251,8 +269,7 @@ impl LruPrefixCache {
             .expect("cache_key should be present");
         let old_size = *size;
         *size = new_size;
-        self.decrease_sizes(cache_key, old_size);
-        self.increase_sizes(cache_key, new_size);
+        self.update_sizes(cache_key, old_size, new_size);
     }
 
     /// Insert a cache_key into the queue and update sizes.
