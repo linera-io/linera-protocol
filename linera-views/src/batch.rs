@@ -28,7 +28,7 @@ use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    common::{get_interval, get_uleb128_size},
+    common::{get_key_range_for_prefix, get_uleb128_size},
     ViewError,
 };
 
@@ -132,7 +132,7 @@ impl UnorderedBatch {
         let mut key_prefix_deletions = Vec::new();
         for key_prefix in &self.key_prefix_deletions {
             if inserted_keys
-                .range(get_interval(key_prefix.clone()))
+                .range(get_key_range_for_prefix(key_prefix.clone()))
                 .next()
                 .is_some()
             {
@@ -254,7 +254,7 @@ impl Batch {
                 WriteOperation::DeletePrefix { key_prefix } => {
                     // Remove the previous deletions and insertions covered by `key_prefix`.
                     let keys = delete_and_insert_map
-                        .range(get_interval(key_prefix.clone()))
+                        .range(get_key_range_for_prefix(key_prefix.clone()))
                         .map(|x| x.0.to_vec())
                         .collect::<Vec<_>>();
                     for key in keys {
@@ -267,7 +267,7 @@ impl Batch {
                     // Otherwise, find the prefixes that are covered by the new key
                     // prefix.
                     let key_prefixes = delete_prefix_set
-                        .range(get_interval(key_prefix.clone()))
+                        .range(get_key_range_for_prefix(key_prefix.clone()))
                         .map(|x: &Vec<u8>| x.to_vec())
                         .collect::<Vec<_>>();
                     // Delete them.

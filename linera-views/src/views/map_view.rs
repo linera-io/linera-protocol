@@ -49,7 +49,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::{
-        from_bytes_option, get_interval, CustomSerialize, DeletionSet, HasherOutput,
+        from_bytes_option, get_key_range_for_prefix, CustomSerialize, DeletionSet, HasherOutput,
         SuffixClosedSetIterator, Update,
     },
     context::{BaseKey, Context},
@@ -262,7 +262,7 @@ where
     pub fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) {
         let key_list = self
             .updates
-            .range(get_interval(key_prefix.clone()))
+            .range(get_key_range_for_prefix(key_prefix.clone()))
             .map(|x| x.0.to_vec())
             .collect::<Vec<_>>();
         for key in key_list {
@@ -449,13 +449,13 @@ where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_interval(prefix.clone()));
+        let mut updates = self.updates.range(get_key_range_for_prefix(prefix.clone()));
         let mut update = updates.next();
         if !self.deletion_set.contains_prefix_of(&prefix) {
             let iter = self
                 .deletion_set
                 .deleted_prefixes
-                .range(get_interval(prefix.clone()));
+                .range(get_key_range_for_prefix(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_key().base_index(&prefix);
             for index in self.context.store().find_keys_by_prefix(&base).await? {
@@ -640,13 +640,13 @@ where
         F: FnMut(&[u8], ValueOrBytes<'a, V>) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_interval(prefix.clone()));
+        let mut updates = self.updates.range(get_key_range_for_prefix(prefix.clone()));
         let mut update = updates.next();
         if !self.deletion_set.contains_prefix_of(&prefix) {
             let iter = self
                 .deletion_set
                 .deleted_prefixes
-                .range(get_interval(prefix.clone()));
+                .range(get_key_range_for_prefix(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_key().base_index(&prefix);
             for (index, bytes) in self

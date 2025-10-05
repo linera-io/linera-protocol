@@ -8,7 +8,7 @@ use std::collections::{btree_map::Entry, hash_map::RandomState, BTreeMap, BTreeS
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::common::get_interval;
+use crate::common::get_key_range_for_prefix;
 
 /// The parametrization of the cache.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -64,7 +64,7 @@ impl FindKeysEntry {
         let key_prefix = key_prefix.to_vec();
         let prefix_len = key_prefix.len();
         self.0
-            .range(get_interval(key_prefix))
+            .range(get_key_range_for_prefix(key_prefix))
             .map(|key| key[prefix_len..].to_vec())
             .collect()
     }
@@ -87,7 +87,7 @@ impl FindKeysEntry {
     fn delete_prefix(&mut self, key_prefix: &[u8]) {
         let keys = self
             .0
-            .range(get_interval(key_prefix.to_vec()))
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
             .cloned()
             .collect::<Vec<_>>();
         for key in keys {
@@ -110,7 +110,7 @@ impl FindKeyValuesEntry {
         let key_prefix = key_prefix.to_vec();
         let prefix_len = key_prefix.len();
         self.0
-            .range(get_interval(key_prefix))
+            .range(get_key_range_for_prefix(key_prefix))
             .map(|(key, _)| key[prefix_len..].to_vec())
             .collect()
     }
@@ -119,7 +119,7 @@ impl FindKeyValuesEntry {
         let key_prefix = key_prefix.to_vec();
         let prefix_len = key_prefix.len();
         self.0
-            .range(get_interval(key_prefix))
+            .range(get_key_range_for_prefix(key_prefix))
             .map(|(key, value)| (key[prefix_len..].to_vec(), value.to_vec()))
             .collect()
     }
@@ -146,7 +146,7 @@ impl FindKeyValuesEntry {
     fn delete_prefix(&mut self, key_prefix: &[u8]) {
         let keys = self
             .0
-            .range(get_interval(key_prefix.to_vec()))
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
             .map(|(key, _)| key.clone())
             .collect::<Vec<_>>();
         for key in keys {
@@ -170,7 +170,7 @@ pub(crate) struct LruPrefixCache {
     total_find_keys_size: usize,
     total_find_key_values_size: usize,
     /// Whether we have exclusive R/W access to the keys under the root key of the store.
-    pub has_exclusive_access: bool,
+    has_exclusive_access: bool,
 }
 
 impl LruPrefixCache {
@@ -188,6 +188,11 @@ impl LruPrefixCache {
             total_find_key_values_size: 0,
             has_exclusive_access,
         }
+    }
+
+    /// Gets the `has_exclusive_access`.
+    pub(crate) fn has_exclusive_access(&self) -> bool {
+        self.has_exclusive_access
     }
 
     /// A used key needs to be put on top.
@@ -255,7 +260,7 @@ impl LruPrefixCache {
     /// Insert a cache_key into the queue and update sizes.
     fn insert_cache_key(&mut self, cache_key: CacheKey, size: usize) {
         self.increase_sizes(&cache_key, size);
-        self.queue.insert(cache_key, size);
+        assert!(self.queue.insert(cache_key, size).is_none());
     }
 
     /// If the FindKeys map contain a prefix that is a prefix of key in argument,
@@ -522,7 +527,7 @@ impl LruPrefixCache {
         // Clearing up the FindKeys entries that are covered by the new FindKeys.
         let keys = self
             .find_keys_map
-            .range(get_interval(key_prefix.clone()))
+            .range(get_key_range_for_prefix(key_prefix.clone()))
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for key in keys {
@@ -534,7 +539,7 @@ impl LruPrefixCache {
         // That is the `Exists` and `DoesNotExist`. The Value entries are not covered by FindKeys.
         let keys = self
             .value_map
-            .range(get_interval(key_prefix.clone()))
+            .range(get_key_range_for_prefix(key_prefix.clone()))
             .filter_map(|(key, value)| match value {
                 ValueEntry::DoesNotExist => Some(key.to_vec()),
                 ValueEntry::Exists => Some(key.to_vec()),
@@ -582,7 +587,7 @@ impl LruPrefixCache {
         // Clearing up the FindKeys entries that are covered by the new FindKeyValues.
         let prefixes = self
             .find_keys_map
-            .range(get_interval(key_prefix.clone()))
+            .range(get_key_range_for_prefix(key_prefix.clone()))
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for prefix in prefixes {
@@ -593,7 +598,7 @@ impl LruPrefixCache {
         // Clearing up the FindKeyValues entries that are covered by the new FindKeyValues.
         let prefixes = self
             .find_key_values_map
-            .range(get_interval(key_prefix.clone()))
+            .range(get_key_range_for_prefix(key_prefix.clone()))
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for prefix in prefixes {
@@ -604,7 +609,7 @@ impl LruPrefixCache {
         // Clearing up the value entries as they are covered by the new FindKeyValues.
         let keys = self
             .value_map
-            .range(get_interval(key_prefix.clone()))
+            .range(get_key_range_for_prefix(key_prefix.clone()))
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for key in keys {
@@ -627,7 +632,7 @@ impl LruPrefixCache {
     /// create new entries in the cache.
     pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
-            for (key, value) in self.value_map.range_mut(get_interval(key_prefix.to_vec())) {
+            for (key, value) in self.value_map.range_mut(get_key_range_for_prefix(key_prefix.to_vec())) {
                 let cache_key = CacheKey::Value(key.to_vec());
                 *self.queue.get_mut(&cache_key).unwrap() = key.len();
                 self.total_size -= value.size();
@@ -636,7 +641,7 @@ impl LruPrefixCache {
             }
             // Remove the FindKeys that are covered by key_prefix.
             let mut prefixes = Vec::new();
-            for (prefix, _) in self.find_keys_map.range(get_interval(key_prefix.to_vec())) {
+            for (prefix, _) in self.find_keys_map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
                 prefixes.push(prefix.to_vec());
             }
             for prefix in prefixes {
@@ -648,7 +653,7 @@ impl LruPrefixCache {
             let mut prefixes = Vec::new();
             for (prefix, _) in self
                 .find_key_values_map
-                .range(get_interval(key_prefix.to_vec()))
+                .range(get_key_range_for_prefix(key_prefix.to_vec()))
             {
                 prefixes.push(prefix.to_vec());
             }
@@ -701,7 +706,7 @@ impl LruPrefixCache {
         } else {
             // Just forget about the entries in the value map.
             let mut keys = Vec::new();
-            for (key, _) in self.value_map.range(get_interval(key_prefix.to_vec())) {
+            for (key, _) in self.value_map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
                 keys.push(key.to_vec());
             }
             for key in keys {

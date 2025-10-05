@@ -480,7 +480,7 @@ impl<S> LruCachingStore<S> {
         };
         let has_exclusive_access = {
             let cache = cache.lock().unwrap();
-            cache.has_exclusive_access
+            cache.has_exclusive_access()
         };
         if has_exclusive_access {
             Some(cache)
