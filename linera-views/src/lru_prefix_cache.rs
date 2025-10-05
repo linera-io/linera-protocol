@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A prefix based cache for the key/value store.
+//! An LRU cache that supports prefix-search APIs.
 
 use std::collections::{btree_map::Entry, hash_map::RandomState, BTreeMap, BTreeSet};
 
@@ -38,16 +38,16 @@ enum CacheKey {
     FindKeyValues(Vec<u8>),
 }
 
-pub(crate) enum ValueCacheEntry {
+enum ValueEntry {
     DoesNotExist,
     Exists,
     Value(Vec<u8>),
 }
 
-impl ValueCacheEntry {
+impl ValueEntry {
     fn size(&self) -> usize {
         match self {
-            ValueCacheEntry::Value(vec) => vec.len(),
+            ValueEntry::Value(vec) => vec.len(),
             _ => 0,
         }
     }
@@ -160,7 +160,7 @@ impl FindKeyValuesEntry {
 /// This data structure is inspired by the crate `lru-cache` but was modified to support
 /// range deletions.
 pub(crate) struct LruPrefixCache {
-    value_map: BTreeMap<Vec<u8>, ValueCacheEntry>,
+    value_map: BTreeMap<Vec<u8>, ValueEntry>,
     find_keys_map: BTreeMap<Vec<u8>, FindKeysEntry>,
     find_key_values_map: BTreeMap<Vec<u8>, FindKeyValuesEntry>,
     queue: LinkedHashMap<CacheKey, usize, RandomState>,
@@ -175,7 +175,7 @@ pub(crate) struct LruPrefixCache {
 
 impl LruPrefixCache {
     /// Creates an `LruPrefixCache`.
-    pub fn new(config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
+    pub(crate) fn new(config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
         Self {
             value_map: BTreeMap::new(),
             find_keys_map: BTreeMap::new(),
@@ -428,13 +428,13 @@ impl LruPrefixCache {
     }
 
     /// Inserts an entry into the cache.
-    fn insert_value(&mut self, key: &[u8], cache_entry: ValueCacheEntry) {
+    fn insert_value(&mut self, key: &[u8], cache_entry: ValueEntry) {
         if self.config.max_value_entry_size == 0 {
             // If the maximum size of an entry is zero, then we do not insert
             return;
         }
         let size = key.len() + cache_entry.size();
-        if (matches!(cache_entry, ValueCacheEntry::DoesNotExist) && !self.has_exclusive_access)
+        if (matches!(cache_entry, ValueEntry::DoesNotExist) && !self.has_exclusive_access)
             || size > self.config.max_value_entry_size
         {
             if self.value_map.remove(key).is_some() {
@@ -462,16 +462,16 @@ impl LruPrefixCache {
     }
 
     /// Puts a key/value in the cache.
-    pub fn put_key_value(&mut self, key: &[u8], value: &[u8]) {
+    pub(crate) fn put_key_value(&mut self, key: &[u8], value: &[u8]) {
         self.update_find_entries(key, Some(value.to_vec()));
-        let cache_entry = ValueCacheEntry::Value(value.to_vec());
+        let cache_entry = ValueEntry::Value(value.to_vec());
         self.insert_value(key, cache_entry);
     }
 
     /// Deletes a key from the cache.
-    pub fn delete_key(&mut self, key: &[u8]) {
+    pub(crate) fn delete_key(&mut self, key: &[u8]) {
         self.update_find_entries(key, None);
-        let cache_entry = ValueCacheEntry::DoesNotExist;
+        let cache_entry = ValueEntry::DoesNotExist;
         self.insert_value(key, cache_entry);
     }
 
@@ -490,25 +490,25 @@ impl LruPrefixCache {
     }
 
     /// Inserts a read_value result into the cache.
-    pub fn insert_read_value(&mut self, key: &[u8], value: &Option<Vec<u8>>) {
+    pub(crate) fn insert_read_value(&mut self, key: &[u8], value: &Option<Vec<u8>>) {
         let cache_entry = match value {
-            None => ValueCacheEntry::DoesNotExist,
-            Some(vec) => ValueCacheEntry::Value(vec.to_vec()),
+            None => ValueEntry::DoesNotExist,
+            Some(vec) => ValueEntry::Value(vec.to_vec()),
         };
         self.insert_value(key, cache_entry)
     }
 
     /// Inserts a contains_key result into the cache.
-    pub fn insert_contains_key(&mut self, key: &[u8], result: bool) {
+    pub(crate) fn insert_contains_key(&mut self, key: &[u8], result: bool) {
         let cache_entry = match result {
-            false => ValueCacheEntry::DoesNotExist,
-            true => ValueCacheEntry::Exists,
+            false => ValueEntry::DoesNotExist,
+            true => ValueEntry::Exists,
         };
         self.insert_value(key, cache_entry)
     }
 
     /// Inserts the result of `find_keys_by_prefix` in the cache.
-    pub fn insert_find_keys(&mut self, key_prefix: Vec<u8>, keys: &[Vec<u8>]) {
+    pub(crate) fn insert_find_keys(&mut self, key_prefix: Vec<u8>, keys: &[Vec<u8>]) {
         if self.config.max_findkeys_entry_size == 0 {
             // zero max size, exit from the start
             return;
@@ -536,9 +536,9 @@ impl LruPrefixCache {
             .value_map
             .range(get_interval(key_prefix.clone()))
             .filter_map(|(key, value)| match value {
-                ValueCacheEntry::DoesNotExist => Some(key.to_vec()),
-                ValueCacheEntry::Exists => Some(key.to_vec()),
-                ValueCacheEntry::Value(_) => None,
+                ValueEntry::DoesNotExist => Some(key.to_vec()),
+                ValueEntry::Exists => Some(key.to_vec()),
+                ValueEntry::Value(_) => None,
             })
             .collect::<Vec<_>>();
         for key in keys {
@@ -555,7 +555,7 @@ impl LruPrefixCache {
     }
 
     /// Inserts the result of `find_key_values_by_prefix` in the cache.
-    pub fn insert_find_key_values(
+    pub(crate) fn insert_find_key_values(
         &mut self,
         key_prefix: Vec<u8>,
         key_values: &[(Vec<u8>, Vec<u8>)],
@@ -625,14 +625,14 @@ impl LruPrefixCache {
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not
     /// create new entries in the cache.
-    pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
+    pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
             for (key, value) in self.value_map.range_mut(get_interval(key_prefix.to_vec())) {
                 let cache_key = CacheKey::Value(key.to_vec());
                 *self.queue.get_mut(&cache_key).unwrap() = key.len();
                 self.total_size -= value.size();
                 self.total_value_size -= value.size();
-                *value = ValueCacheEntry::DoesNotExist;
+                *value = ValueEntry::DoesNotExist;
             }
             // Remove the FindKeys that are covered by key_prefix.
             let mut prefixes = Vec::new();
@@ -720,14 +720,14 @@ impl LruPrefixCache {
     /// Returns the cached value, or `Some(None)` if the entry does not exist in the
     /// database. If `None` is returned, the entry might exist in the database but is
     /// not in the cache.
-    pub fn query_read_value(&mut self, key: &[u8]) -> Option<Option<Vec<u8>>> {
+    pub(crate) fn query_read_value(&mut self, key: &[u8]) -> Option<Option<Vec<u8>>> {
         // First querying the value_map
         let result = match self.value_map.get(key) {
             None => None,
             Some(entry) => match entry {
-                ValueCacheEntry::DoesNotExist => Some(None),
-                ValueCacheEntry::Exists => None,
-                ValueCacheEntry::Value(vec) => Some(Some(vec.clone())),
+                ValueEntry::DoesNotExist => Some(None),
+                ValueEntry::Exists => None,
+                ValueEntry::Value(vec) => Some(Some(vec.clone())),
             },
         };
         if result.is_some() {
@@ -753,12 +753,12 @@ impl LruPrefixCache {
 
     /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
     /// exist in the database. Returns `None` if that information is not in the cache.
-    pub fn query_contains_key(&mut self, key: &[u8]) -> Option<bool> {
+    pub(crate) fn query_contains_key(&mut self, key: &[u8]) -> Option<bool> {
         // First try on the value_map
         let result = self
             .value_map
             .get(key)
-            .map(|entry| !matches!(entry, ValueCacheEntry::DoesNotExist));
+            .map(|entry| !matches!(entry, ValueEntry::DoesNotExist));
         if result.is_some() {
             let cache_key = CacheKey::Value(key.to_vec());
             self.put_cache_key_on_top(cache_key);
@@ -794,7 +794,7 @@ impl LruPrefixCache {
     }
 
     /// Gets the find_keys entry from the key prefix. Returns `None` if absent from the cache.
-    pub fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
+    pub(crate) fn query_find_keys(&mut self, key_prefix: &[u8]) -> Option<Vec<Vec<u8>>> {
         // Trying first the FindKeys cache.
         let result = match self.get_find_keys_lower_bound(key_prefix) {
             None => None,
@@ -824,7 +824,7 @@ impl LruPrefixCache {
     }
 
     /// Gets the find key values entry from the key prefix. Returns `None` if absent from the cache.
-    pub fn query_find_key_values(&mut self, key_prefix: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
+    pub(crate) fn query_find_key_values(&mut self, key_prefix: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
         let (lower_bound, result) = match self.get_find_key_values_lower_bound(key_prefix) {
             None => {
                 return None;
