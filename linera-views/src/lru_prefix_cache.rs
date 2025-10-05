@@ -1648,4 +1648,95 @@ mod tests {
         assert_eq!(cache.query_read_value(&key1), None);
         assert_eq!(cache.total_size, 0);
     }
+
+    #[test]
+    fn test_key_value_replacement_same_length() {
+        let mut cache = create_test_cache(true);
+        let key = vec![1, 2, 3];
+        let value1 = vec![42, 43, 44]; // 3 bytes
+        let value2 = vec![99, 98, 97]; // 3 bytes - same length as value1
+
+        // Insert initial value
+        cache.put_key_value(&key, &value1);
+        cache.check_coherence();
+
+        // Verify initial value is present
+        assert_eq!(cache.query_read_value(&key), Some(Some(value1.clone())));
+
+        let initial_size = cache.total_size;
+        let initial_value_size = cache.total_value_size;
+
+        // Replace with value of same length
+        cache.put_key_value(&key, &value2);
+        cache.check_coherence();
+
+        // Verify new value is present
+        assert_eq!(cache.query_read_value(&key), Some(Some(value2.clone())));
+
+        // Size should remain the same since values have same length
+        assert_eq!(cache.total_size, initial_size);
+        assert_eq!(cache.total_value_size, initial_value_size);
+
+        // Cache should still contain exactly one entry
+        assert_eq!(cache.value_map.len(), 1);
+        assert_eq!(cache.queue.len(), 1);
+
+        // Test replacement with insert_read_value as well
+        let value3 = vec![11, 22, 33]; // 3 bytes - same length
+        cache.insert_read_value(&key, &Some(value3.clone()));
+        cache.check_coherence();
+
+        // Verify replacement worked
+        assert_eq!(cache.query_read_value(&key), Some(Some(value3)));
+
+        // Size should still be the same
+        assert_eq!(cache.total_size, initial_size);
+        assert_eq!(cache.total_value_size, initial_value_size);
+    }
+
+    #[test]
+    fn test_max_find_keys_entry_size_zero_early_termination() {
+        let mut cache = LruPrefixCache::new(
+            StorageCacheConfig {
+                max_cache_size: 1000,
+                max_value_entry_size: 100,
+                max_find_keys_entry_size: 0, // Zero size - should cause early termination
+                max_find_key_values_entry_size: 200,
+                max_cache_entries: 10,
+                max_cache_value_size: 500,
+                max_cache_find_keys_size: 500,
+                max_cache_find_key_values_size: 500,
+            },
+            true,
+        );
+
+        let prefix = vec![1, 2];
+        let keys = vec![vec![3], vec![4], vec![5]];
+
+        // Insert find_keys entry - should be terminated early due to max_find_keys_entry_size == 0
+        cache.insert_find_keys(prefix.clone(), &keys);
+        cache.check_coherence();
+
+        // Find keys should not be cached due to early termination
+        assert_eq!(cache.query_find_keys(&prefix), None);
+
+        // Cache should remain empty for find_keys
+        assert_eq!(cache.total_find_keys_size, 0);
+        assert!(cache.find_keys_map.is_empty());
+
+        // Verify no find_keys entries in the queue
+        for (cache_key, _) in &cache.queue {
+            assert!(!matches!(cache_key, CacheKey::FindKeys(_)));
+        }
+
+        // Test with different prefix and keys to ensure consistent behavior
+        let prefix2 = vec![9];
+        let keys2 = vec![vec![1]];
+        cache.insert_find_keys(prefix2.clone(), &keys2);
+        cache.check_coherence();
+
+        assert_eq!(cache.query_find_keys(&prefix2), None);
+        assert_eq!(cache.total_find_keys_size, 0);
+        assert!(cache.find_keys_map.is_empty());
+    }
 }
