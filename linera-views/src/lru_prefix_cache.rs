@@ -864,6 +864,7 @@ impl LruPrefixCache {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+    use rand::Rng;
 
     use super::*;
 
@@ -1306,5 +1307,77 @@ mod tests {
         let query_key = vec![9];
         let result = cache.query_find_keys(&query_key);
         assert_eq!(result, None);
+    }
+
+
+    fn has_a_prefix_slow_method(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
+        for prefix in prefixes {
+            if key.starts_with(prefix) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn has_a_prefix_fast_method(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
+        match prefixes.range(..=key.to_vec()).next_back() {
+            None => false,
+            Some(prefix) => {
+                key.starts_with(prefix)
+            }
+        }
+    }
+
+    fn has_a_prefix(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
+        let test1 = has_a_prefix_slow_method(prefixes, key);
+        let test2 = has_a_prefix_fast_method(prefixes, key);
+        assert_eq!(test1, test2, "The methods for testing prefix return different results");
+        test1
+    }
+
+    fn get_prefix<R: Rng>(rng: &mut R, max_len: usize, entry_size: usize) -> Vec<u8> {
+        let len = rng.gen_range(1..max_len+1);
+        let mut prefix = Vec::new();
+        for _ in 0..len {
+            let entry = rng.gen_range(0..entry_size);
+            prefix.push(entry as u8);
+        }
+        prefix
+    }
+
+    fn insert_into_prefix_set(prefixes: &mut BTreeSet<Vec<u8>>, new_prefix: Vec<u8>) {
+        if has_a_prefix(prefixes, &new_prefix) {
+            return;
+        }
+        let removed_keys1 = prefixes
+            .range(get_key_range_for_prefix(new_prefix.clone())).cloned()
+            .collect::<BTreeSet<Vec<u8>>>();
+        let mut removed_keys2 = BTreeSet::new();
+        for prefix in prefixes.clone() {
+            if prefix.starts_with(&new_prefix) {
+                removed_keys2.insert(prefix);
+            }
+        }
+        assert_eq!(removed_keys1, removed_keys2, "Inconsistent result of the computation of the intervals");
+        for prefix in removed_keys2 {
+            prefixes.remove(&prefix);
+        }
+        prefixes.insert(new_prefix);
+    }
+
+    fn test_prefix_free_set(max_len: usize, num_gen: usize, key_size: usize) {
+        let mut rng = crate::random::make_deterministic_rng();
+        let mut prefixes = BTreeSet::new();
+        for _ in 0..num_gen {
+            let new_prefix = get_prefix(&mut rng, max_len, key_size);
+            insert_into_prefix_set(&mut prefixes, new_prefix);
+        }
+    }
+
+    #[test]
+    fn test_lower_bounds() {
+        test_prefix_free_set(10, 500, 2);
+        test_prefix_free_set(6, 500, 3);
+        test_prefix_free_set(5, 500, 4);
     }
 }
