@@ -60,8 +60,7 @@ impl FindKeysEntry {
         self.0.iter().map(Vec::len).sum()
     }
 
-    fn get_keys_by_prefix(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
-        let key_prefix = key_prefix.to_vec();
+    fn get_keys_by_prefix(&self, key_prefix: Vec<u8>) -> Vec<Vec<u8>> {
         let prefix_len = key_prefix.len();
         self.0
             .range(get_key_range_for_prefix(key_prefix))
@@ -106,8 +105,7 @@ impl FindKeyValuesEntry {
             .sum()
     }
 
-    fn get_keys_by_prefix(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
-        let key_prefix = key_prefix.to_vec();
+    fn get_keys_by_prefix(&self, key_prefix: Vec<u8>) -> Vec<Vec<u8>> {
         let prefix_len = key_prefix.len();
         self.0
             .range(get_key_range_for_prefix(key_prefix))
@@ -804,7 +802,7 @@ impl LruPrefixCache {
         let result = match self.get_existing_find_keys_entry(key_prefix) {
             None => None,
             Some((lower_bound, cache_entry)) => {
-                let key_prefix_red = &key_prefix[lower_bound.len()..];
+                let key_prefix_red = key_prefix[lower_bound.len()..].to_vec();
                 Some((lower_bound, cache_entry.get_keys_by_prefix(key_prefix_red)))
             }
         };
@@ -819,7 +817,7 @@ impl LruPrefixCache {
                 return None;
             }
             Some((lower_bound, cache_entry)) => {
-                let key_prefix_red = &key_prefix[lower_bound.len()..];
+                let key_prefix_red = key_prefix[lower_bound.len()..].to_vec();
                 (lower_bound, cache_entry.get_keys_by_prefix(key_prefix_red))
             }
         };
@@ -1172,7 +1170,7 @@ mod tests {
         assert!(!find_entry.contains_key(&[9, 9]));
 
         // Test get_keys_by_prefix
-        let keys = find_entry.get_keys_by_prefix(&[1]);
+        let keys = find_entry.get_keys_by_prefix(vec![1]);
         assert_eq!(keys.len(), 2);
         assert!(keys.contains(&vec![2]));
         assert!(keys.contains(&vec![3]));
