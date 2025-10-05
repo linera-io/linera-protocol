@@ -62,10 +62,10 @@ impl FindKeysEntry {
 
     fn get_keys_by_prefix(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let key_prefix = key_prefix.to_vec();
-        let delta = key_prefix.len();
+        let prefix_len = key_prefix.len();
         self.0
             .range(get_interval(key_prefix))
-            .map(|key| key[delta..].to_vec())
+            .map(|key| key[prefix_len..].to_vec())
             .collect()
     }
 
@@ -108,19 +108,19 @@ impl FindKeyValuesEntry {
 
     fn get_keys_by_prefix(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let key_prefix = key_prefix.to_vec();
-        let delta = key_prefix.len();
+        let prefix_len = key_prefix.len();
         self.0
             .range(get_interval(key_prefix))
-            .map(|(key, _)| key[delta..].to_vec())
+            .map(|(key, _)| key[prefix_len..].to_vec())
             .collect()
     }
 
     fn get_find_key_values(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
         let key_prefix = key_prefix.to_vec();
-        let delta = key_prefix.len();
+        let prefix_len = key_prefix.len();
         self.0
             .range(get_interval(key_prefix))
-            .map(|(key, value)| (key[delta..].to_vec(), value.to_vec()))
+            .map(|(key, value)| (key[prefix_len..].to_vec(), value.to_vec()))
             .collect()
     }
 
@@ -191,7 +191,7 @@ impl LruPrefixCache {
     }
 
     /// A used key needs to be put on top.
-    fn put_cache_key_on_top(&mut self, cache_key: CacheKey) {
+    fn move_cache_key_on_top(&mut self, cache_key: CacheKey) {
         let size = self
             .queue
             .remove(&cache_key)
@@ -732,7 +732,7 @@ impl LruPrefixCache {
         };
         if result.is_some() {
             let cache_key = CacheKey::Value(key.to_vec());
-            self.put_cache_key_on_top(cache_key);
+            self.move_cache_key_on_top(cache_key);
             return result;
         }
         if self.has_exclusive_access {
@@ -745,7 +745,7 @@ impl LruPrefixCache {
                 return None;
             };
             let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
-            self.put_cache_key_on_top(cache_key);
+            self.move_cache_key_on_top(cache_key);
             return Some(result);
         }
         result
@@ -761,7 +761,7 @@ impl LruPrefixCache {
             .map(|entry| !matches!(entry, ValueEntry::DoesNotExist));
         if result.is_some() {
             let cache_key = CacheKey::Value(key.to_vec());
-            self.put_cache_key_on_top(cache_key);
+            self.move_cache_key_on_top(cache_key);
             return result;
         }
         if self.has_exclusive_access {
@@ -775,7 +775,7 @@ impl LruPrefixCache {
             };
             if let Some((lower_bound, result)) = result {
                 let cache_key = CacheKey::FindKeys(lower_bound.clone());
-                self.put_cache_key_on_top(cache_key);
+                self.move_cache_key_on_top(cache_key);
                 return Some(result);
             }
             // Now trying the FindKeyValues map.
@@ -787,7 +787,7 @@ impl LruPrefixCache {
                 return None;
             };
             let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
-            self.put_cache_key_on_top(cache_key);
+            self.move_cache_key_on_top(cache_key);
             return Some(result);
         }
         result
@@ -805,7 +805,7 @@ impl LruPrefixCache {
         };
         if let Some((lower_bound, keys)) = result {
             let cache_key = CacheKey::FindKeys(lower_bound.clone());
-            self.put_cache_key_on_top(cache_key);
+            self.move_cache_key_on_top(cache_key);
             return Some(keys);
         }
         // Then with the FindKeyValues cache.
@@ -819,7 +819,7 @@ impl LruPrefixCache {
             }
         };
         let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
-        self.put_cache_key_on_top(cache_key);
+        self.move_cache_key_on_top(cache_key);
         Some(result)
     }
 
@@ -835,7 +835,7 @@ impl LruPrefixCache {
             }
         };
         let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
-        self.put_cache_key_on_top(cache_key);
+        self.move_cache_key_on_top(cache_key);
         Some(result)
     }
 }

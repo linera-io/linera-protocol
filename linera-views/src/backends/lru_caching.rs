@@ -490,7 +490,7 @@ impl<S> LruCachingStore<S> {
     }
 }
 
-/// A memory darabase with caching.
+/// A memory database with caching.
 #[cfg(with_testing)]
 pub type LruCachingMemoryDatabase = LruCachingDatabase<MemoryDatabase>;
 
