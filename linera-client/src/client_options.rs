@@ -192,33 +192,33 @@ impl ClientContextOptions {
 pub struct ChainOwnershipConfig {
     /// The new super owners.
     #[arg(long, num_args(0..))]
-    super_owners: Vec<AccountOwner>,
+    pub super_owners: Vec<AccountOwner>,
 
     /// The new regular owners.
     #[arg(long, num_args(0..))]
-    owners: Vec<AccountOwner>,
+    pub owners: Vec<AccountOwner>,
 
     /// Weights for the new owners.
     ///
     /// If they are specified there must be exactly one weight for each owner.
     /// If no weights are given, every owner will have weight 100.
     #[arg(long, num_args(0..))]
-    owner_weights: Vec<u64>,
+    pub owner_weights: Vec<u64>,
 
     /// The number of rounds in which every owner can propose blocks, i.e. the first round
     /// number in which only a single designated leader is allowed to propose blocks.
     #[arg(long)]
-    multi_leader_rounds: Option<u32>,
+    pub multi_leader_rounds: Option<u32>,
 
     /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
     /// This should only be `true` on chains with restrictive application permissions and an
     /// application-based mechanism to select block proposers.
     #[arg(long)]
-    open_multi_leader_rounds: bool,
+    pub open_multi_leader_rounds: bool,
 
     /// The duration of the fast round, in milliseconds.
     #[arg(long = "fast-round-ms", value_parser = util::parse_millis_delta)]
-    fast_round_duration: Option<TimeDelta>,
+    pub fast_round_duration: Option<TimeDelta>,
 
     /// The duration of the first single-leader and all multi-leader rounds.
     #[arg(
@@ -226,7 +226,7 @@ pub struct ChainOwnershipConfig {
         default_value = "10000",
         value_parser = util::parse_millis_delta
     )]
-    base_timeout: TimeDelta,
+    pub base_timeout: TimeDelta,
 
     /// The number of milliseconds by which the timeout increases after each
     /// single-leader round.
@@ -235,7 +235,7 @@ pub struct ChainOwnershipConfig {
         default_value = "1000",
         value_parser = util::parse_millis_delta
     )]
-    timeout_increment: TimeDelta,
+    pub timeout_increment: TimeDelta,
 
     /// The age of an incoming tracked or protected message after which the validators start
     /// transitioning the chain to fallback mode, in milliseconds.
