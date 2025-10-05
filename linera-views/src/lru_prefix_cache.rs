@@ -1739,4 +1739,86 @@ mod tests {
         assert_eq!(cache.total_find_keys_size, 0);
         assert!(cache.find_keys_map.is_empty());
     }
+
+    #[test]
+    fn test_max_find_key_values_entry_size_zero_early_termination() {
+        let mut cache = LruPrefixCache::new(
+            StorageCacheConfig {
+                max_cache_size: 1000,
+                max_value_entry_size: 100,
+                max_find_keys_entry_size: 100,
+                max_find_key_values_entry_size: 0, // Zero size - should cause early termination
+                max_cache_entries: 10,
+                max_cache_value_size: 500,
+                max_cache_find_keys_size: 500,
+                max_cache_find_key_values_size: 500,
+            },
+            true,
+        );
+
+        let prefix = vec![1, 2];
+        let key_values = vec![(vec![3], vec![10]), (vec![4], vec![20])];
+
+        // Insert find_key_values entry - should be terminated early due to max_find_key_values_entry_size == 0
+        cache.insert_find_key_values(prefix.clone(), &key_values);
+        cache.check_coherence();
+
+        // Find key values should not be cached due to early termination
+        assert_eq!(cache.query_find_key_values(&prefix), None);
+
+        // Cache should remain empty for find_key_values
+        assert_eq!(cache.total_find_key_values_size, 0);
+        assert!(cache.find_key_values_map.is_empty());
+
+        // Verify no find_key_values entries in the queue
+        for (cache_key, _) in &cache.queue {
+            assert!(!matches!(cache_key, CacheKey::FindKeyValues(_)));
+        }
+
+        // Test with different data to ensure consistent behavior
+        let prefix2 = vec![9];
+        let key_values2 = vec![(vec![1], vec![100])];
+        cache.insert_find_key_values(prefix2.clone(), &key_values2);
+        cache.check_coherence();
+
+        assert_eq!(cache.query_find_key_values(&prefix2), None);
+        assert_eq!(cache.total_find_key_values_size, 0);
+        assert!(cache.find_key_values_map.is_empty());
+    }
+
+    #[test]
+    fn test_value_entry_exists_returns_none() {
+        let mut cache = create_test_cache(true);
+        let key = vec![1, 2, 3];
+
+        // Insert a ValueEntry::Exists (this happens when we cache that a key exists but not its value)
+        cache.insert_contains_key(&key, true);
+        cache.check_coherence();
+
+        // Verify that contains_key query returns Some(true)
+        assert_eq!(cache.query_contains_key(&key), Some(true));
+
+        // When querying for the actual value with ValueEntry::Exists, it should return None
+        // because we only know the key exists but don't have the actual value cached
+        assert_eq!(cache.query_read_value(&key), None);
+
+        // Test with a key that doesn't exist
+        let key2 = vec![4, 5, 6];
+        cache.insert_contains_key(&key2, false);
+        cache.check_coherence();
+
+        // This should return Some(false) for contains_key
+        assert_eq!(cache.query_contains_key(&key2), Some(false));
+
+        // And Some(None) for read_value since we cached that it doesn't exist
+        assert_eq!(cache.query_read_value(&key2), Some(None));
+
+        // Verify the cache state - we should have both entries
+        assert_eq!(cache.value_map.len(), 2);
+        assert_eq!(cache.queue.len(), 2);
+
+        // Both entries should be ValueEntry::Exists and ValueEntry::DoesNotExist respectively
+        assert!(matches!(cache.value_map.get(&key), Some(ValueEntry::Exists)));
+        assert!(matches!(cache.value_map.get(&key2), Some(ValueEntry::DoesNotExist)));
+    }
 }
