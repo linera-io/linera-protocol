@@ -395,8 +395,11 @@ impl<W: View> ByteCollectionView<W::Context, W> {
             .store()
             .read_multi_values_bytes(keys_to_load)
             .await?;
-        let chunks = values.chunks_exact_or_repeat(W::NUM_INIT_KEYS);
-        for ((position, context), loaded_values) in entries_to_load.into_iter().zip(chunks) {
+
+        for (loaded_values, (position, context)) in values
+            .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
+            .zip(entries_to_load)
+        {
             let view = W::post_load(context, loaded_values)?;
             let updates = self.updates.read().await;
             results[position] = Some(ReadGuardedView::NotLoaded {
