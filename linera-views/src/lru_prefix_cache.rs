@@ -859,6 +859,68 @@ impl LruPrefixCache {
         self.move_cache_key_on_top(cache_key);
         Some(result)
     }
+
+    #[cfg(with_testing)]
+    pub(crate) fn testing_cache_coherency(&self) {
+        let value_map_set = self
+            .value_map
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<Vec<u8>>>();
+        let find_keys_map_set = self
+            .find_keys_map
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<Vec<u8>>>();
+        let find_key_values_map_set = self
+            .find_key_values_map
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<Vec<u8>>>();
+        let mut value_queue_set = BTreeSet::new();
+        let mut find_keys_queue_set = BTreeSet::new();
+        let mut find_key_values_queue_set = BTreeSet::new();
+        let mut total_size = 0;
+        let mut total_value_size = 0;
+        let mut total_find_keys_size = 0;
+        let mut total_find_key_values_size = 0;
+        for (cache_key, size) in &self.queue {
+            let queue_size = *size;
+            match cache_key {
+                CacheKey::Value(key) => {
+                    let value = self.value_map.get(key).unwrap();
+                    let map_size = key.len() + value.size();
+                    assert_eq!(map_size, queue_size, "Incoherence in value size");
+                    value_queue_set.insert(key.clone());
+                    total_value_size += queue_size;
+                }
+                CacheKey::FindKeys(key) => {
+                    let value = self.find_keys_map.get(key).unwrap();
+                    let map_size = key.len() + value.size();
+                    assert_eq!(map_size, queue_size, "Incoherence in find-keys size");
+                    find_keys_queue_set.insert(key.clone());
+                    total_find_keys_size += queue_size;
+                }
+                CacheKey::FindKeyValues(key) => {
+                    let value = self.find_key_values_map.get(key).unwrap();
+                    let map_size = key.len() + value.size();
+                    assert_eq!(map_size, queue_size, "Incoherence in find-keys size");
+                    find_key_values_queue_set.insert(key.clone());
+                    total_find_key_values_size += queue_size;
+                }
+            }
+            total_size += queue_size;
+        }
+        assert_eq!(value_queue_set, value_map_set, "Incoherence in value_map keys");
+        assert_eq!(find_keys_queue_set, find_keys_map_set, "Incoherence in find_keys_map keys");
+        assert_eq!(find_key_values_queue_set, find_key_values_map_set, "Incoherence in find_key_values_map keys");
+        assert_eq!(total_size, self.total_size, "The total_size are incoherent");
+        assert_eq!(total_value_size, self.total_value_size, "The total_value_size are incoherent");
+        assert_eq!(total_find_keys_size, self.total_find_keys_size, "The total_find_keys_size are incoherent");
+        assert_eq!(total_find_key_values_size, self.total_value_size, "The total_find_key_values_size are incoherent");
+    }
+
+
 }
 
 #[cfg(test)]
@@ -1374,6 +1436,10 @@ mod tests {
         }
     }
 
+    // The functions `get_existing_find_{keys,key_values}_entry(_mut)`
+    // need to be tested. The following test does some random tests
+    // on the generated prefix free sets. Two methods are used and
+    // their consistency are checked.
     #[test]
     fn test_lower_bounds() {
         test_prefix_free_set(10, 500, 2);
