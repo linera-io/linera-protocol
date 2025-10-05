@@ -260,10 +260,28 @@ impl Runnable for Job {
                 println!("{}", id);
             }
 
+            ShowOwnership { chain_id } => {
+                let mut context = ClientContext::new(
+                    storage,
+                    options.context_options.clone(),
+                    wallet,
+                    signer.into_value(),
+                );
+                let ownership = context.ownership(chain_id).await?;
+                let json = serde_json::to_string_pretty(&ownership)?;
+                println!("{}", json);
+            }
+
             ChangeOwnership {
                 chain_id,
                 ownership_config,
             } => {
+                ensure!(
+                    !ownership_config.super_owners.is_empty()
+                        || !ownership_config.owners.is_empty(),
+                    "This command requires at least one owner or super owner to be set. \
+                     To close a chain, use `close-chain`. To show the current config, use `show-ownership`."
+                );
                 let mut context = ClientContext::new(
                     storage,
                     options.context_options.clone(),
@@ -353,7 +371,8 @@ impl Runnable for Job {
 
             ShowNetworkDescription => {
                 let network_description = storage.read_network_description().await?;
-                println!("Network description: \n{:#?}", network_description);
+                let json = serde_json::to_string_pretty(&network_description)?;
+                println!("{}", json);
             }
 
             LocalBalance { account } => {
