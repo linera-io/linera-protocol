@@ -57,7 +57,7 @@ struct FindKeysEntry(BTreeSet<Vec<u8>>);
 
 impl FindKeysEntry {
     fn size(&self) -> usize {
-        self.0.iter().map(|key| key.len()).sum()
+        self.0.iter().map(Vec::len).sum()
     }
 
     fn get_keys_by_prefix(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -513,7 +513,7 @@ impl LruPrefixCache {
             // zero max size, exit from the start
             return;
         }
-        let size = key_prefix.len() + keys.iter().map(|k| k.len()).sum::<usize>();
+        let size = key_prefix.len() + keys.iter().map(Vec::len).sum::<usize>();
         if size > self.config.max_findkeys_entry_size {
             // The entry is too large, we do not insert it,
             return;
@@ -531,7 +531,7 @@ impl LruPrefixCache {
             self.remove_cache_key(&cache_key);
         }
         // Clearing up the value entries as they are covered by the new FindKeys.
-        // That is the exists or not. The Value entries are not covered by FindKeys.
+        // That is the `Exists` and `DoesNotExist`. The Value entries are not covered by FindKeys.
         let keys = self
             .value_map
             .range(get_interval(key_prefix.clone()))
@@ -699,7 +699,7 @@ impl LruPrefixCache {
                 self.insert_cache_key(cache_key, size);
             }
         } else {
-            // Just forget about the entries.
+            // Just forget about the entries in the value map.
             let mut keys = Vec::new();
             for (key, _) in self.value_map.range(get_interval(key_prefix.to_vec())) {
                 keys.push(key.to_vec());
@@ -721,7 +721,7 @@ impl LruPrefixCache {
     /// database. If `None` is returned, the entry might exist in the database but is
     /// not in the cache.
     pub(crate) fn query_read_value(&mut self, key: &[u8]) -> Option<Option<Vec<u8>>> {
-        // First querying the value_map
+        // First, query the value map
         let result = match self.value_map.get(key) {
             None => None,
             Some(entry) => match entry {
@@ -1103,7 +1103,7 @@ mod tests {
         for i in 0..cache.config.max_findkeys_entry_size {
             keys.push(vec![i as u8]);
         }
-        let size = keys.iter().map(|k| k.len()).sum::<usize>();
+        let size = keys.iter().map(Vec::len).sum::<usize>();
         assert_eq!(cache.config.max_findkeys_entry_size, size);
         // Insert value larger than max_entry_size
         // This is because the entry size is the key size + the value size
