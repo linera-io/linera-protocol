@@ -454,7 +454,6 @@ impl LruPrefixCache {
             return;
         }
         let size = key.len() + cache_entry.size();
-        println!("insert_value size={size}");
         if (matches!(cache_entry, ValueEntry::DoesNotExist) && !self.has_exclusive_access)
             || size > self.config.max_value_entry_size
         {
@@ -540,7 +539,7 @@ impl LruPrefixCache {
             // The entry is too large, we do not insert it,
             return;
         }
-        let find_entry = FindKeysEntry(keys.iter().map(|x| x.to_vec()).collect());
+        let find_entry = FindKeysEntry(keys.iter().cloned().collect());
         // Clearing up the FindKeys entries that are covered by the new FindKeys.
         let keys = self
             .find_keys_map
@@ -973,7 +972,7 @@ mod tests {
         let result = cache.query_read_value(&key);
         assert_eq!(result, Some(Some(value)));
 
-        // Query non-existent key
+        // Query non-existent key in the cache
         let result = cache.query_read_value(&[9, 9, 9]);
         assert_eq!(result, None);
     }
@@ -1140,6 +1139,7 @@ mod tests {
 
         // Delete prefix [1]
         cache.delete_prefix(&prefix);
+        cache.check_coherence();
 
         // Keys with prefix [1] should be marked as DoesNotExist
         let result1 = cache.query_read_value(&key1);
@@ -1469,5 +1469,183 @@ mod tests {
         test_prefix_free_set(10, 500, 2);
         test_prefix_free_set(6, 500, 3);
         test_prefix_free_set(5, 500, 4);
+    }
+
+    #[test]
+    fn test_delete_key_operations() {
+        let mut cache = create_test_cache(true);
+        let key1 = vec![1, 2, 3];
+        let key2 = vec![1, 2, 4];
+        let key3 = vec![2, 3, 4];
+        let value = vec![42, 43, 44];
+
+        // Insert some values
+        cache.put_key_value(&key1, &value);
+        cache.check_coherence();
+        cache.put_key_value(&key2, &value);
+        cache.check_coherence();
+        cache.put_key_value(&key3, &value);
+        cache.check_coherence();
+
+        // Verify values are present
+        assert_eq!(cache.query_read_value(&key1), Some(Some(value.clone())));
+        assert_eq!(cache.query_read_value(&key2), Some(Some(value.clone())));
+        assert_eq!(cache.query_read_value(&key3), Some(Some(value.clone())));
+
+        // Delete key1
+        cache.delete_key(&key1);
+        cache.check_coherence();
+
+        // Check that key1 is now marked as DoesNotExist
+        assert_eq!(cache.query_read_value(&key1), Some(None));
+        // Other keys should remain unchanged
+        assert_eq!(cache.query_read_value(&key2), Some(Some(value.clone())));
+        assert_eq!(cache.query_read_value(&key3), Some(Some(value.clone())));
+
+        // Delete key2
+        cache.delete_key(&key2);
+        cache.check_coherence();
+
+        // Check that key2 is now marked as DoesNotExist
+        assert_eq!(cache.query_read_value(&key2), Some(None));
+        // key3 should remain unchanged
+        assert_eq!(cache.query_read_value(&key3), Some(Some(value)));
+    }
+
+    #[test]
+    fn test_find_key_values_entry_delete_prefix() {
+        let mut find_entry = FindKeyValuesEntry(BTreeMap::new());
+        
+        // Add some key-value pairs
+        let key1 = vec![1, 2, 3];
+        let key2 = vec![1, 2, 4];
+        let key3 = vec![1, 3, 5];
+        let key4 = vec![2, 4, 6];
+        let value = vec![42];
+
+        find_entry.update_entry(&key1, Some(value.clone()));
+        find_entry.update_entry(&key2, Some(value.clone()));
+        find_entry.update_entry(&key3, Some(value.clone()));
+        find_entry.update_entry(&key4, Some(value.clone()));
+
+        // Verify all keys are present
+        assert!(find_entry.contains_key(&key1));
+        assert!(find_entry.contains_key(&key2));
+        assert!(find_entry.contains_key(&key3));
+        assert!(find_entry.contains_key(&key4));
+
+        // Delete prefix [1, 2] - should remove key1 and key2
+        find_entry.delete_prefix(&[1, 2]);
+
+        // Check that keys with prefix [1, 2] are removed
+        assert!(!find_entry.contains_key(&key1));
+        assert!(!find_entry.contains_key(&key2));
+        // Keys with different prefixes should remain
+        assert!(find_entry.contains_key(&key3));
+        assert!(find_entry.contains_key(&key4));
+
+        // Delete prefix [1] - should remove key3
+        find_entry.delete_prefix(&[1]);
+
+        // Check that key3 is now removed
+        assert!(!find_entry.contains_key(&key3));
+        // key4 with different prefix should remain
+        assert!(find_entry.contains_key(&key4));
+    }
+
+    #[test]
+    fn test_trim_value_cache_removes_entries() {
+        let mut cache = LruPrefixCache::new(
+            StorageCacheConfig {
+                max_cache_size: 10000,
+                max_value_entry_size: 500,
+                max_find_keys_entry_size: 1000,
+                max_find_key_values_entry_size: 2000,
+                max_cache_entries: 100,
+                max_cache_value_size: 30, // Very small limit to force removal
+                max_cache_find_keys_size: 1000,
+                max_cache_find_key_values_size: 1000,
+            },
+            true,
+        );
+
+        // Insert multiple values that exceed the max_cache_value_size
+        let mut inserted_keys = Vec::new();
+        for i in 0..6 {
+            let key = vec![i];
+            let value = vec![0; 10]; // Each entry ~10 bytes + key = ~11 bytes
+            cache.insert_read_value(&key, &Some(value));
+            cache.check_coherence();
+            inserted_keys.push(key);
+        }
+
+        // After trimming, total value size should be within limit
+        assert!(cache.total_value_size <= cache.config.max_cache_value_size);
+
+        // Some entries should have been removed (LRU eviction)
+        let mut remaining_count = 0;
+        for key in &inserted_keys {
+            if cache.query_read_value(key).is_some() {
+                remaining_count += 1;
+            }
+        }
+        
+        // We should have fewer entries than we inserted due to trimming
+        assert!(remaining_count < inserted_keys.len());
+        
+        // The most recently inserted entries should still be present
+        let last_key = &inserted_keys[inserted_keys.len() - 1];
+        assert!(cache.query_read_value(last_key).is_some());
+    }
+
+    #[test]
+    fn test_max_value_entry_size_zero_early_termination() {
+        let mut cache = LruPrefixCache::new(
+            StorageCacheConfig {
+                max_cache_size: 1000,
+                max_value_entry_size: 0, // Zero size - should cause early termination
+                max_find_keys_entry_size: 100,
+                max_find_key_values_entry_size: 200,
+                max_cache_entries: 10,
+                max_cache_value_size: 500,
+                max_cache_find_keys_size: 500,
+                max_cache_find_key_values_size: 500,
+            },
+            true,
+        );
+
+        let key1 = vec![1, 2, 3];
+        let key2 = vec![4, 5, 6];
+        let value = vec![42, 43, 44];
+
+        // Insert values - should be terminated early due to max_value_entry_size == 0
+        cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.check_coherence();
+        cache.insert_read_value(&key2, &None);
+        cache.check_coherence();
+
+        // Values should not be cached due to early termination
+        assert_eq!(cache.query_read_value(&key1), None);
+        assert_eq!(cache.query_read_value(&key2), None);
+
+        // Cache should remain empty
+        assert_eq!(cache.total_size, 0);
+        assert_eq!(cache.total_value_size, 0);
+        assert!(cache.value_map.is_empty());
+        assert!(cache.queue.is_empty());
+
+        // Test put_key_value also respects the early termination
+        cache.put_key_value(&key1, &value);
+        cache.check_coherence();
+        
+        assert_eq!(cache.query_read_value(&key1), None);
+        assert_eq!(cache.total_size, 0);
+
+        // Test delete_key also respects the early termination
+        cache.delete_key(&key1);
+        cache.check_coherence();
+        
+        assert_eq!(cache.query_read_value(&key1), None);
+        assert_eq!(cache.total_size, 0);
     }
 }
