@@ -833,48 +833,53 @@ impl<Env: Environment> Client<Env> {
         &self,
         sender_chain_id: ChainId,
         mut nodes: Vec<RemoteNode<Env::ValidatorNode>>,
-        remote_heights: Vec<BlockHeight>,
+        mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
-        let certificates = loop {
-            let Some(remote_node) = nodes.pop() else {
-                error!("could not download certificates for {}", sender_chain_id);
-                return;
+        while !remote_heights.is_empty() {
+            let certificates = loop {
+                let Some(remote_node) = nodes.pop() else {
+                    error!("could not download certificates for {}", sender_chain_id);
+                    return;
+                };
+                if let Ok(certificates) = remote_node
+                    .download_certificates_by_heights(sender_chain_id, remote_heights.clone())
+                    .await
+                {
+                    break certificates;
+                }
             };
-            if let Ok(certificates) = remote_node
-                .download_certificates_by_heights(sender_chain_id, remote_heights.clone())
-                .await
-            {
-                break certificates;
-            }
-        };
 
-        if !certificates.is_empty() {
             trace!(
                 "got {} certificates for chain {}",
                 certificates.len(),
                 sender_chain_id
             );
-        } else {
-            return;
-        };
 
-        for certificate in certificates {
-            let hash = certificate.hash();
-            let chain_id = certificate.block().header.chain_id;
-            let height = certificate.block().header.height;
-            let mode = ReceiveCertificateMode::NeedsCheck;
-            if let Err(err) = self
-                .receive_sender_certificate(certificate, mode, None)
-                .await
-            {
-                error!("Received invalid certificate {hash}: {err}");
-            } else if let Err(err) = sender.send(ChainAndHeight { chain_id, height }) {
-                error!(
-                    "failed to send chain and height over the channel: {}:{}: {}",
-                    chain_id, height, err
-                );
+            let mut processed_correctly = BTreeSet::new();
+
+            for certificate in certificates {
+                let hash = certificate.hash();
+                let chain_id = certificate.block().header.chain_id;
+                let height = certificate.block().header.height;
+                let mode = ReceiveCertificateMode::NeedsCheck;
+                if let Err(err) = self
+                    .receive_sender_certificate(certificate, mode, None)
+                    .await
+                {
+                    error!("Received invalid certificate {hash}: {err}");
+                } else {
+                    processed_correctly.insert(height);
+                    if let Err(err) = sender.send(ChainAndHeight { chain_id, height }) {
+                        error!(
+                            "failed to send chain and height over the channel: {}:{}: {}",
+                            chain_id, height, err
+                        );
+                    }
+                }
             }
+
+            remote_heights.retain(|height| !processed_correctly.contains(height));
         }
         trace!(
             "find_received_certificates: finished processing chain {}",
