@@ -59,7 +59,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       # Install dependencies
@@ -84,6 +84,10 @@ jobs:
         version: 10.17
 
     # Setup fixtures
+    - name: Put nightly toolchain file in place
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
+
     - name: Run the storage-service instance
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
