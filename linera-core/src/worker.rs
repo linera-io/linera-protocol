@@ -177,13 +177,14 @@ pub enum WorkerError {
 
     // Chaining
     #[error(
-        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
+        "Chain is expecting a next block at height {expected_block_height} but the given block \
+        is at height {found_block_height} instead"
     )]
     UnexpectedBlockHeight {
         expected_block_height: BlockHeight,
         found_block_height: BlockHeight,
     },
-    #[error("Unexpected epoch {epoch:}: chain {chain_id:} is at {chain_epoch:}")]
+    #[error("Unexpected epoch {epoch}: chain {chain_id} is at {chain_epoch}")]
     InvalidEpoch {
         chain_id: ChainId,
         chain_epoch: Epoch,
