@@ -893,8 +893,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_contains_blobs[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_contains_blobs[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -988,8 +988,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_contains_blob_state[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_contains_blob_state[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1084,7 +1084,7 @@
           },
           "editorMode": "code",
           "expr": "rate(linera_write_event[1m])",
-          "legendFormat": "__auto",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1178,8 +1178,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_read_event[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_read_event[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1380,8 +1380,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_read_certificate[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_read_certificate[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1475,8 +1475,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_read_blob_states[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_read_blob_states[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1570,8 +1570,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_read_blob_state[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_read_blob_state[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1665,8 +1665,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_write_blob[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_write_blob[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1760,8 +1760,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_read_blob[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_read_blob[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1962,8 +1962,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_read_confirmed_block[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_read_confirmed_block[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -2057,8 +2057,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_contains_blob[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_contains_blob[1m])) by (pod)",
+          "legendFormat": "{{[pod}}",
           "range": true,
           "refId": "A"
         }
@@ -2152,8 +2152,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_contains_certificate[1m])",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_contains_certificate[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
