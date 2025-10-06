@@ -9,9 +9,7 @@ members = [
 ]
 
 [workspace.dependencies]
-assert_matches = "1.5"
 async-graphql = { version = "=7.0.17", default-features = false }
-futures = "0.3"
 linera-sdk = { path = "../../../linera-sdk" }
 log = "0.4.20"
 serde = { version = "1.0.152", features = ["derive"] }

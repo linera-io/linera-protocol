@@ -143,12 +143,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71938f30533e4d95a6d17aa530939da3842c2ab6f4f84b9dae68447e4129f74a"
 
 [[package]]
-name = "assert_matches"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
-
-[[package]]
 name = "async-graphql"
 version = "7.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -813,7 +807,6 @@ checksum = "393bc73c451830ff8dbb3a07f61843d6cb41a084f9996319917c0b291ed785bb"
 name = "create-and-call"
 version = "0.1.0"
 dependencies = [
- "assert_matches",
  "counter-no-graphql",
  "linera-sdk",
  "serde",
@@ -3267,7 +3260,6 @@ dependencies = [
 name = "publish-read-data-blob"
 version = "0.1.0"
 dependencies = [
- "assert_matches",
  "linera-sdk",
  "serde",
  "tokio",
