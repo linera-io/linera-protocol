@@ -1,0 +1,23 @@
+[package]
+name = "meta-counter"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-graphql.workspace = true
+counter.workspace = true
+linera-sdk.workspace = true
+log.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+linera-sdk = { workspace = true, features = ["test"] }
+
+[[bin]]
+name = "meta_counter_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "meta_counter_service"
+path = "src/service.rs"
