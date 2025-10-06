@@ -275,9 +275,7 @@ impl LruPrefixCache {
 
     /// Remove an entry from the queue if it exists.
     fn remove_cache_key_if_exists(&mut self, cache_key: &CacheKey) {
-        let size = self
-            .queue
-            .remove(cache_key);
+        let size = self.queue.remove(cache_key);
         if let Some(size) = size {
             self.decrease_sizes(cache_key, size);
             self.remove_cache_key_from_map(cache_key);
@@ -542,7 +540,7 @@ impl LruPrefixCache {
                     self.update_cache_key_sizes(&cache_key, new_size);
                     let cache_key = CacheKey::Value(key.to_vec());
                     self.remove_cache_key_if_exists(&cache_key);
-                },
+                }
                 None => {
                     let cache_entry = ValueEntry::Value(value.to_vec());
                     self.insert_value(key, cache_entry);
@@ -591,6 +589,8 @@ impl LruPrefixCache {
 
     /// Inserts a read_value result into the cache.
     pub(crate) fn insert_read_value(&mut self, key: &[u8], value: &Option<Vec<u8>>) {
+        // We do not check for the find-key-values to update. Because we would have
+        // matched if existing.
         let cache_entry = match value {
             None => ValueEntry::DoesNotExist,
             Some(vec) => ValueEntry::Value(vec.to_vec()),
@@ -600,6 +600,8 @@ impl LruPrefixCache {
 
     /// Inserts a contains_key result into the cache.
     pub(crate) fn insert_contains_key(&mut self, key: &[u8], result: bool) {
+        // We do not check for the find-keys / find-key-values to update.
+        // Because we would have matched if existing.
         let cache_entry = if result {
             ValueEntry::Exists
         } else {
@@ -733,7 +735,10 @@ impl LruPrefixCache {
         // * In non-exclusive access, this could be added by another user.
         // * In exclusive access, we do this via the `FindKeyValues`.
         let mut keys = Vec::new();
-        for (key, _) in self.value_map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
+        for (key, _) in self
+            .value_map
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
+        {
             keys.push(key.to_vec());
         }
         for key in keys {
@@ -744,7 +749,10 @@ impl LruPrefixCache {
         if self.has_exclusive_access {
             // Remove the FindKeys that are covered by key_prefix.
             let mut prefixes = Vec::new();
-            for (prefix, _) in self.find_keys_map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
+            for (prefix, _) in self
+                .find_keys_map
+                .range(get_key_range_for_prefix(key_prefix.to_vec()))
+            {
                 prefixes.push(prefix.to_vec());
             }
             for prefix in prefixes {
@@ -917,7 +925,10 @@ impl LruPrefixCache {
     }
 
     /// Gets the find key values entry from the key prefix. Returns `None` if absent from the cache.
-    pub(crate) fn query_find_key_values(&mut self, key_prefix: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
+    pub(crate) fn query_find_key_values(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
         let (lower_bound, result) = match self.get_existing_find_key_values_entry(key_prefix) {
             None => {
                 return None;
@@ -936,6 +947,7 @@ impl LruPrefixCache {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+
     use rand::Rng;
 
     use super::*;
@@ -1009,32 +1021,68 @@ mod tests {
                 }
                 total_size += queue_size;
             }
-            assert_eq!(value_queue_set, value_map_set, "Incoherence in value_map keys");
-            assert_eq!(find_keys_queue_set, find_keys_map_set, "Incoherence in find_keys_map keys");
-            assert_eq!(find_key_values_queue_set, find_key_values_map_set, "Incoherence in find_key_values_map keys");
+            assert_eq!(
+                value_queue_set, value_map_set,
+                "Incoherence in value_map keys"
+            );
+            assert_eq!(
+                find_keys_queue_set, find_keys_map_set,
+                "Incoherence in find_keys_map keys"
+            );
+            assert_eq!(
+                find_key_values_queue_set, find_key_values_map_set,
+                "Incoherence in find_key_values_map keys"
+            );
             assert_eq!(total_size, self.total_size, "The total_size are incoherent");
-            assert_eq!(total_value_size, self.total_value_size, "The total_value_size are incoherent");
-            assert_eq!(total_find_keys_size, self.total_find_keys_size, "The total_find_keys_size are incoherent");
-            assert_eq!(total_find_key_values_size, self.total_find_key_values_size, "The total_find_key_values_size are incoherent");
+            assert_eq!(
+                total_value_size, self.total_value_size,
+                "The total_value_size are incoherent"
+            );
+            assert_eq!(
+                total_find_keys_size, self.total_find_keys_size,
+                "The total_find_keys_size are incoherent"
+            );
+            assert_eq!(
+                total_find_key_values_size, self.total_find_key_values_size,
+                "The total_find_key_values_size are incoherent"
+            );
             if self.config.max_cache_size > 0 {
-                assert!(total_size < self.config.max_cache_size, "The total_size is too large");
+                assert!(
+                    total_size < self.config.max_cache_size,
+                    "The total_size is too large"
+                );
             } else {
                 assert!(total_size == 0, "The total_size should be 0");
             }
             if self.config.max_cache_value_size > 0 {
-                assert!(total_value_size < self.config.max_cache_value_size, "The total_value_size is too large");
+                assert!(
+                    total_value_size < self.config.max_cache_value_size,
+                    "The total_value_size is too large"
+                );
             } else {
                 assert!(total_value_size == 0, "The total_value_size should be 0");
             }
             if self.config.max_cache_find_keys_size > 0 {
-                assert!(total_find_keys_size < self.config.max_cache_find_keys_size, "The total_value_size is too large");
+                assert!(
+                    total_find_keys_size < self.config.max_cache_find_keys_size,
+                    "The total_value_size is too large"
+                );
             } else {
-                assert!(total_find_keys_size == 0, "The total_find_keys_size should be 0");
+                assert!(
+                    total_find_keys_size == 0,
+                    "The total_find_keys_size should be 0"
+                );
             }
             if self.config.max_cache_find_key_values_size > 0 {
-                assert!(total_find_key_values_size < self.config.max_cache_find_key_values_size, "The total_find_key_values_size is too large");
+                assert!(
+                    total_find_key_values_size < self.config.max_cache_find_key_values_size,
+                    "The total_find_key_values_size is too large"
+                );
             } else {
-                assert!(total_find_key_values_size == 0, "The total_find_key_values_size should be 0");
+                assert!(
+                    total_find_key_values_size == 0,
+                    "The total_find_key_values_size should be 0"
+                );
             }
         }
     }
@@ -1463,21 +1511,22 @@ mod tests {
     fn has_a_prefix_fast_method(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
         match prefixes.range(..=key.to_vec()).next_back() {
             None => false,
-            Some(prefix) => {
-                key.starts_with(prefix)
-            }
+            Some(prefix) => key.starts_with(prefix),
         }
     }
 
     fn has_a_prefix(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
         let test1 = has_a_prefix_slow_method(prefixes, key);
         let test2 = has_a_prefix_fast_method(prefixes, key);
-        assert_eq!(test1, test2, "The methods for testing prefix return different results");
+        assert_eq!(
+            test1, test2,
+            "The methods for testing prefix return different results"
+        );
         test1
     }
 
     fn get_prefix<R: Rng>(rng: &mut R, max_len: usize, entry_size: usize) -> Vec<u8> {
-        let len = rng.gen_range(1..max_len+1);
+        let len = rng.gen_range(1..=max_len);
         let mut prefix = Vec::new();
         for _ in 0..len {
             let entry = rng.gen_range(0..entry_size);
@@ -1491,7 +1540,8 @@ mod tests {
             return;
         }
         let removed_keys1 = prefixes
-            .range(get_key_range_for_prefix(new_prefix.clone())).cloned()
+            .range(get_key_range_for_prefix(new_prefix.clone()))
+            .cloned()
             .collect::<BTreeSet<Vec<u8>>>();
         let mut removed_keys2 = BTreeSet::new();
         for prefix in prefixes.clone() {
@@ -1499,7 +1549,10 @@ mod tests {
                 removed_keys2.insert(prefix);
             }
         }
-        assert_eq!(removed_keys1, removed_keys2, "Inconsistent result of the computation of the intervals");
+        assert_eq!(
+            removed_keys1, removed_keys2,
+            "Inconsistent result of the computation of the intervals"
+        );
         for prefix in removed_keys2 {
             prefixes.remove(&prefix);
         }
@@ -1873,8 +1926,14 @@ mod tests {
         assert_eq!(cache.queue.len(), 2);
 
         // Both entries should be ValueEntry::Exists and ValueEntry::DoesNotExist respectively
-        assert!(matches!(cache.value_map.get(&key), Some(ValueEntry::Exists)));
-        assert!(matches!(cache.value_map.get(&key2), Some(ValueEntry::DoesNotExist)));
+        assert!(matches!(
+            cache.value_map.get(&key),
+            Some(ValueEntry::Exists)
+        ));
+        assert!(matches!(
+            cache.value_map.get(&key2),
+            Some(ValueEntry::DoesNotExist)
+        ));
     }
 
     #[test]
@@ -2169,7 +2228,7 @@ mod tests {
 
         // Insert a FindKeys entry
         let find_keys_prefix = vec![1, 2, 3];
-        let keys = vec![vec![4,6], vec![4,7], vec![5]];
+        let keys = vec![vec![4, 6], vec![4, 7], vec![5]];
         cache.insert_find_keys(find_keys_prefix.clone(), &keys);
         cache.check_coherence();
 
@@ -2180,12 +2239,17 @@ mod tests {
         cache.check_coherence();
 
         // Inserts a Value
-        cache.put_key_value(&[1,2,8,9], &[254]);
+        cache.put_key_value(&[1, 2, 8, 9], &[254]);
         cache.check_coherence();
 
         // Now insert a broader FindKeyValues entry that overlaps with both previous entries
         let broad_prefix = vec![1, 2];
-        let key_values2 = vec![(vec![3,4,6], vec![10]), (vec![3,4,7], vec![20]), (vec![3,5], vec![34]), (vec![8, 9], vec![254])];
+        let key_values2 = vec![
+            (vec![3, 4, 6], vec![10]),
+            (vec![3, 4, 7], vec![20]),
+            (vec![3, 5], vec![34]),
+            (vec![8, 9], vec![254]),
+        ];
         cache.insert_find_key_values(broad_prefix.clone(), &key_values2);
         cache.check_coherence();
 
@@ -2193,15 +2257,17 @@ mod tests {
         assert!(!cache.find_keys_map.contains_key(&find_keys_prefix));
 
         // The broader FindKeyValues should have removed the overlapping FindKeyValues entry.
-        assert!(!cache.find_key_values_map.contains_key(&find_key_values_prefix));
+        assert!(!cache
+            .find_key_values_map
+            .contains_key(&find_key_values_prefix));
 
         // The new broad FindKeyValues entry should exist
         assert!(cache.find_key_values_map.contains_key(&broad_prefix));
 
         // Verify the new entry has the expected key-values
         let key_values = cache.query_find_key_values(&broad_prefix).unwrap();
-        assert!(key_values.contains(&(vec![3,4,6], vec![10])));
-        assert!(key_values.contains(&(vec![3,4,7], vec![20])));
+        assert!(key_values.contains(&(vec![3, 4, 6], vec![10])));
+        assert!(key_values.contains(&(vec![3, 4, 7], vec![20])));
         assert!(key_values.contains(&(vec![8, 9], vec![254])));
 
         // Test that we can still query for keys under the broad prefix
@@ -2271,8 +2337,8 @@ mod tests {
         let remaining_keys = cache.query_find_keys(&find_keys_prefix).unwrap();
         assert!(!remaining_keys.contains(&vec![2, 3, 4])); // Should be removed
         assert!(!remaining_keys.contains(&vec![2, 3, 5])); // Should be removed
-        assert!(remaining_keys.contains(&vec![2, 4, 6]));  // Should remain
-        assert!(remaining_keys.contains(&vec![3, 7, 8]));  // Should remain
+        assert!(remaining_keys.contains(&vec![2, 4, 6])); // Should remain
+        assert!(remaining_keys.contains(&vec![3, 7, 8])); // Should remain
 
         // The cache size should have decreased due to the removed keys
         assert!(cache.total_find_keys_size < initial_size);
@@ -2285,7 +2351,7 @@ mod tests {
         // Check the remaining keys
         let final_keys = cache.query_find_keys(&find_keys_prefix).unwrap();
         assert!(!final_keys.contains(&vec![2, 4, 6])); // Should now be removed
-        assert!(final_keys.contains(&vec![3, 7, 8]));  // Should still remain
+        assert!(final_keys.contains(&vec![3, 7, 8])); // Should still remain
     }
 
     #[test]
@@ -2361,9 +2427,10 @@ mod tests {
         assert_eq!(cache.query_read_value(&key), None);
 
         // Verify the cache key is removed from the queue
-        let queue_contains_key = cache.queue.iter().any(|(cache_key, _)| {
-            matches!(cache_key, CacheKey::Value(k) if k == &key)
-        });
+        let queue_contains_key = cache
+            .queue
+            .iter()
+            .any(|(cache_key, _)| matches!(cache_key, CacheKey::Value(k) if k == &key));
         assert!(!queue_contains_key);
     }
 
@@ -2491,7 +2558,7 @@ mod tests {
     fn test_trim_cache_breaks_on_empty_queue() {
         let mut cache = LruPrefixCache::new(
             StorageCacheConfig {
-                max_cache_size: 10000, // to make irrelevant
+                max_cache_size: 10000,       // to make irrelevant
                 max_value_entry_size: 10000, // to make irrelevant
                 max_find_keys_entry_size: 10000,
                 max_find_key_values_entry_size: 10000,
@@ -2514,6 +2581,7 @@ mod tests {
         // Manually manipulate total_size so that the cache gets emptied.
         cache.config.max_cache_size = 0;
 
+        // Inserting something that triggers the whole cache being emptied.
         let key = vec![1, 2];
         let value = vec![100];
         cache.insert_read_value(&key, &Some(value));
