@@ -2172,4 +2172,91 @@ mod tests {
         let result = cache.query_contains_key(&unmatched_key);
         assert_eq!(result, None); // No matching prefix found
     }
+
+    #[test]
+    fn test_find_keys_removal_when_inserting_broader_find_keys() {
+        let mut cache = create_test_cache(true);
+        
+        // Insert a FindKeys entry with a specific prefix
+        let narrow_prefix = vec![1, 2, 3];
+        let keys1 = vec![vec![4], vec![5]];
+        cache.insert_find_keys(narrow_prefix.clone(), &keys1);
+        cache.check_coherence();
+
+        // Insert another FindKeys entry with a more specific prefix
+        let more_specific_prefix = vec![1, 2, 3, 4];
+        let keys2 = vec![vec![6], vec![7]];
+        cache.insert_find_keys(more_specific_prefix.clone(), &keys2);
+        cache.check_coherence();
+
+        // Verify both entries exist
+        assert!(cache.find_keys_map.contains_key(&narrow_prefix));
+        assert!(cache.find_keys_map.contains_key(&more_specific_prefix));
+
+        // Now insert a broader FindKeys entry that contains the previous ones
+        let broad_prefix = vec![1, 2];
+        let keys3 = vec![vec![3, 4], vec![3, 5], vec![8, 9]];
+        cache.insert_find_keys(broad_prefix.clone(), &keys3);
+        cache.check_coherence();
+
+        // The broader prefix should have caused removal of the narrower ones (line 620)
+        assert!(!cache.find_keys_map.contains_key(&narrow_prefix));
+        assert!(!cache.find_keys_map.contains_key(&more_specific_prefix));
+        // The new broad prefix should exist
+        assert!(cache.find_keys_map.contains_key(&broad_prefix));
+
+        // Verify the new entry has the expected keys
+        let result = cache.query_find_keys(&broad_prefix);
+        assert!(result.is_some());
+        let found_keys = result.unwrap();
+        assert!(found_keys.contains(&vec![3, 4]));
+        assert!(found_keys.contains(&vec![3, 5]));
+        assert!(found_keys.contains(&vec![8, 9]));
+    }
+
+    #[test]
+    fn test_overlapping_find_key_values_removes_find_keys_and_find_key_values() {
+        let mut cache = create_test_cache(true);
+        
+        // Insert a FindKeys entry
+        let find_keys_prefix = vec![1, 2, 3];
+        let keys = vec![vec![4,6], vec![4,7], vec![5]];
+        cache.insert_find_keys(find_keys_prefix.clone(), &keys);
+        cache.check_coherence();
+
+        // Insert a FindKeyValues entry with a different but overlapping prefix
+        let find_key_values_prefix = vec![1, 2, 3, 4];
+        let key_values1 = vec![(vec![6], vec![10]), (vec![7], vec![20])];
+        cache.insert_find_key_values(find_key_values_prefix.clone(), &key_values1);
+        cache.check_coherence();
+
+        // Inserts a Value
+        cache.put_key_value(&vec![1,2,8,9], &vec![254]);
+        cache.check_coherence();
+
+        // Now insert a broader FindKeyValues entry that overlaps with both previous entries
+        let broad_prefix = vec![1, 2];
+        let key_values2 = vec![(vec![3,4,6], vec![10]), (vec![3,4,7], vec![20]), (vec![3,5], vec![34]), (vec![8, 9], vec![254])];
+        cache.insert_find_key_values(broad_prefix.clone(), &key_values2);
+        cache.check_coherence();
+
+        // The broader FindKeyValues should have removed the overlapping FindKeys entry.
+        assert!(!cache.find_keys_map.contains_key(&find_keys_prefix));
+        
+        // The broader FindKeyValues should have removed the overlapping FindKeyValues entry.
+        assert!(!cache.find_key_values_map.contains_key(&find_key_values_prefix));
+        
+        // The new broad FindKeyValues entry should exist
+        assert!(cache.find_key_values_map.contains_key(&broad_prefix));
+
+        // Verify the new entry has the expected key-values
+        let key_values = cache.query_find_key_values(&broad_prefix).unwrap();
+        assert!(key_values.contains(&(vec![3,4,6], vec![10])));
+        assert!(key_values.contains(&(vec![3,4,7], vec![20])));
+        assert!(key_values.contains(&(vec![8, 9], vec![254])));
+
+        // Test that we can still query for keys under the broad prefix
+        let query_result = cache.query_contains_key(&[1, 2, 3, 1]);
+        assert_eq!(query_result, Some(false)); // Should find it in the new FindKeyValues entry
+    }
 }
