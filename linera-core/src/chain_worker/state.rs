@@ -1038,8 +1038,8 @@ where
         ensure!(
             height == chain.tip_state.get().next_block_height,
             WorkerError::UnexpectedBlockHeight {
-                chain_tip_height: chain.tip_state.get().next_block_height,
-                block_height: height
+                expected_block_height: chain.tip_state.get().next_block_height,
+                found_block_height: height
             }
         );
         let epoch = chain.execution_state.system.epoch.get();
@@ -1383,8 +1383,8 @@ where
             ensure!(
                 chain.tip_state.get().next_block_height == next_block_height,
                 WorkerError::UnexpectedBlockHeight {
-                    chain_tip_height: chain.tip_state.get().next_block_height,
-                    block_height: next_block_height,
+                    expected_block_height: chain.tip_state.get().next_block_height,
+                    found_block_height: next_block_height,
                 }
             );
         }

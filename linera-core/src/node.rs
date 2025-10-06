@@ -229,10 +229,13 @@ pub enum NodeError {
     #[error("Round number should be {0:?}")]
     WrongRound(Round),
 
-    #[error("Chain is at height {chain_tip_height} but block is at {block_height}")]
+    #[error(
+        "Chain is expecting a next block at height {expected_block_height} but the given block \
+        is at height {found_block_height} instead"
+    )]
     UnexpectedBlockHeight {
-        chain_tip_height: BlockHeight,
-        block_height: BlockHeight,
+        expected_block_height: BlockHeight,
+        found_block_height: BlockHeight,
     },
 
     // This error must be normalized during conversions.
@@ -383,11 +386,11 @@ impl From<ChainError> for NodeError {
                 },
             },
             ChainError::UnexpectedBlockHeight {
-                chain_tip_height,
-                block_height,
+                expected_block_height,
+                found_block_height,
             } => Self::UnexpectedBlockHeight {
-                chain_tip_height,
-                block_height,
+                expected_block_height,
+                found_block_height,
             },
             ChainError::WrongRound(round) => Self::WrongRound(round),
             error => Self::ChainError {
@@ -405,11 +408,11 @@ impl From<WorkerError> for NodeError {
             WorkerError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             WorkerError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
             WorkerError::UnexpectedBlockHeight {
-                chain_tip_height,
-                block_height,
+                expected_block_height,
+                found_block_height,
             } => NodeError::UnexpectedBlockHeight {
-                chain_tip_height,
-                block_height,
+                expected_block_height,
+                found_block_height,
             },
             error => Self::WorkerError {
                 error: error.to_string(),

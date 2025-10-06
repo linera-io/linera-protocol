@@ -325,8 +325,8 @@ where
                 );
             }
             Err(NodeError::UnexpectedBlockHeight {
-                chain_tip_height: expected_block_height,
-                block_height: found_block_height,
+                expected_block_height,
+                found_block_height,
             }) if expected_block_height < found_block_height => {
                 tracing::info!(
                     validator = ?self.remote_node.public_key,
@@ -369,8 +369,8 @@ where
                     .await?;
                 }
                 Err(NodeError::UnexpectedBlockHeight {
-                    chain_tip_height: expected_block_height,
-                    block_height: found_block_height,
+                    expected_block_height,
+                    found_block_height,
                 }) if expected_block_height < found_block_height => {
                     // The proposal is for a later block height, so we need to update the validator.
                     self.send_chain_information(

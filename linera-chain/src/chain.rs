@@ -314,8 +314,8 @@ impl ChainTipState {
         ensure!(
             new_block.height == self.next_block_height,
             ChainError::UnexpectedBlockHeight {
-                chain_tip_height: self.next_block_height,
-                block_height: new_block.height
+                expected_block_height: self.next_block_height,
+                found_block_height: new_block.height
             }
         );
         ensure!(

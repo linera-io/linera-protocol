@@ -813,8 +813,8 @@ where
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
-                chain_tip_height: BlockHeight(0),
-                block_height: BlockHeight(1)
+                expected_block_height: BlockHeight(0),
+                found_block_height: BlockHeight(1)
             })
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
@@ -866,8 +866,8 @@ where
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
-                chain_tip_height: BlockHeight(1),
-                block_height: BlockHeight(0),
+                expected_block_height: BlockHeight(1),
+                found_block_height: BlockHeight(0),
             })
     );
     Ok(())
@@ -962,8 +962,8 @@ where
     assert_matches!(
         proposal_result,
         Err(WorkerError::ChainError(err)) if matches!(*err, ChainError::UnexpectedBlockHeight {
-            chain_tip_height: BlockHeight(1),
-            block_height: BlockHeight(3)
+            expected_block_height: BlockHeight(1),
+            found_block_height: BlockHeight(3)
         })
     );
 
