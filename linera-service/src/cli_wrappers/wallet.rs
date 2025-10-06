@@ -499,9 +499,15 @@ impl ClientWrapper {
         let mut command = self.command().await?;
         command.arg("query-validator").arg(address);
         let stdout = command.spawn_and_wait_for_stdout().await?;
+
+        // Parse the genesis config hash from the output.
+        // It's on a line like "Genesis config hash: <hash>"
         let hash = stdout
-            .trim()
-            .parse()
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("Genesis config hash: ")
+                    .and_then(|hash_str| hash_str.trim().parse().ok())
+            })
             .context("error while parsing the result of `linera query-validator`")?;
         Ok(hash)
     }

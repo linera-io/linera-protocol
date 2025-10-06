@@ -435,37 +435,19 @@ impl Runnable for Job {
             } => {
                 let context = options.create_client_context(storage, wallet, signer.into_value());
                 let node = context.make_node_provider().make_node(&address)?;
-                let mut has_errors = false;
-                if let Err(e) = context.check_compatible_version_info(&address, &node).await {
-                    error!("{}", e);
-                    has_errors = true;
-                }
-                match context
-                    .check_matching_network_description(&address, &node)
-                    .await
-                {
-                    Ok(genesis_config_hash) => {
-                        println!("{}", genesis_config_hash);
-                    }
-                    Err(e) => {
-                        error!("{}", e);
-                        has_errors = true;
-                    }
-                }
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                if let Err(e) = context
-                    .check_validator_chain_info_response(
-                        public_key.as_ref(),
-                        &address,
-                        &node,
-                        chain_id,
-                    )
-                    .await
-                {
-                    error!("{}", e);
-                    has_errors = true;
+                println!("Querying validator about chain {chain_id}.\n");
+                let results = context
+                    .query_validator(&address, &node, chain_id, public_key.as_ref())
+                    .await;
+
+                for error in results.errors() {
+                    error!("{}", error);
                 }
-                if has_errors {
+
+                results.print(public_key.as_ref(), Some(&address), None, None);
+
+                if !results.errors().is_empty() {
                     bail!("Found one or several issue(s) while querying validator {address}");
                 }
             }
@@ -474,6 +456,8 @@ impl Runnable for Job {
                 let mut context =
                     options.create_client_context(storage, wallet, signer.into_value());
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                println!("Querying validators about chain {chain_id}.\n");
+                let local_results = context.query_local_node(chain_id).await;
                 let chain_client = context.make_chain_client(chain_id);
                 info!("Querying validators about chain {}", chain_id);
                 let result = chain_client.local_committee().await;
@@ -484,38 +468,43 @@ impl Runnable for Job {
                     committee.validators()
                 );
                 let node_provider = context.make_node_provider();
-                let mut faulty_validators = BTreeMap::<_, Vec<_>>::new();
+                let mut validator_results = Vec::new();
                 for (name, state) in committee.validators() {
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
-                    if let Err(e) = context.check_compatible_version_info(address, &node).await {
-                        error!("{}", e);
+                    let results = context
+                        .query_validator(address, &node, chain_id, Some(name))
+                        .await;
+                    validator_results.push((name, address, state.votes, results));
+                }
+
+                let mut faulty_validators = BTreeMap::<_, Vec<_>>::new();
+                for (name, address, _votes, results) in &validator_results {
+                    for error in results.errors() {
+                        error!("{}", error);
                         faulty_validators
-                            .entry((name, address))
+                            .entry((*name, *address))
                             .or_default()
-                            .push(e);
-                    }
-                    if let Err(e) = context
-                        .check_matching_network_description(address, &node)
-                        .await
-                    {
-                        error!("{}", e);
-                        faulty_validators
-                            .entry((name, address))
-                            .or_default()
-                            .push(e);
-                    }
-                    if let Err(e) = context
-                        .check_validator_chain_info_response(Some(name), address, &node, chain_id)
-                        .await
-                    {
-                        error!("{}", e);
-                        faulty_validators
-                            .entry((name, address))
-                            .or_default()
-                            .push(e);
+                            .push(error);
                     }
                 }
+
+                // Print local node results first (everything)
+                println!("Local Node:");
+                local_results.print(None, None, None, None);
+                println!();
+
+                // Print validator results (only differences from local node)
+                for (name, address, votes, results) in &validator_results {
+                    results.print(
+                        Some(name),
+                        Some(address),
+                        Some(*votes),
+                        Some(&local_results),
+                    );
+                    println!();
+                }
+
                 let num_ok_validators = committee.validators().len() - faulty_validators.len();
                 if !faulty_validators.is_empty() {
                     println!("{:#?}", faulty_validators);
