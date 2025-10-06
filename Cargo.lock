@@ -5335,6 +5335,7 @@ dependencies = [
  "papaya",
  "prometheus",
  "proptest",
+ "publish-read-data-blob",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -7717,6 +7718,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "publish-read-data-blob"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "linera-sdk",
+ "serde",
+ "tokio",
 ]
 
 [[package]]

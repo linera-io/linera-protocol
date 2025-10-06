@@ -100,6 +100,7 @@ hex-game.workspace = true
 linera-core = { path = ".", default-features = false, features = ["test"] }
 linera-views.workspace = true
 meta-counter.workspace = true
+publish-read-data-blob.workspace = true
 serde_json.workspace = true
 sha3.workspace = true
 social.workspace = true
