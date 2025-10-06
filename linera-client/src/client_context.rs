@@ -14,7 +14,7 @@ use linera_base::{
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{ChainClient, Client},
-    data_types::{ChainInfoQuery, ClientOutcome},
+    data_types::{ChainInfo, ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::ValidatorNode,
     Environment, JoinSetExt as _,
@@ -62,6 +62,128 @@ use crate::{
     wallet::{UserChain, Wallet},
     Error,
 };
+
+/// Results from querying a validator about version, network description, and chain info.
+pub struct ValidatorQueryResults {
+    /// The validator's version information.
+    pub version_info: Result<VersionInfo, Error>,
+    /// The validator's genesis config hash.
+    pub genesis_config_hash: Result<CryptoHash, Error>,
+    /// The validator's chain info (if valid and signature check passed).
+    pub chain_info: Result<ChainInfo, Error>,
+}
+
+impl ValidatorQueryResults {
+    /// Returns a vector of references to all errors in the query results.
+    pub fn errors(&self) -> Vec<&Error> {
+        let mut errors = Vec::new();
+        if let Err(e) = &self.version_info {
+            errors.push(e);
+        }
+        if let Err(e) = &self.genesis_config_hash {
+            errors.push(e);
+        }
+        if let Err(e) = &self.chain_info {
+            errors.push(e);
+        }
+        errors
+    }
+
+    /// Prints validator information to stdout.
+    ///
+    /// Prints public key, address, and optionally weight, version info, and chain info.
+    /// If `reference` is provided, only prints fields that differ from the reference.
+    pub fn print(
+        &self,
+        public_key: Option<&ValidatorPublicKey>,
+        address: Option<&str>,
+        weight: Option<u64>,
+        reference: Option<&ValidatorQueryResults>,
+    ) {
+        if let Some(key) = public_key {
+            println!("Public key: {}", key);
+        }
+        if let Some(address) = address {
+            println!("Address: {}", address);
+        }
+        if let Some(w) = weight {
+            println!("Weight: {}", w);
+        }
+
+        let ref_version = reference.and_then(|ref_results| ref_results.version_info.as_ref().ok());
+        match &self.version_info {
+            Ok(version_info) => {
+                if ref_version.is_none_or(|ref_v| ref_v.crate_version != version_info.crate_version)
+                {
+                    println!("Linera protocol: v{}", version_info.crate_version);
+                }
+                if ref_version.is_none_or(|ref_v| ref_v.rpc_hash != version_info.rpc_hash) {
+                    println!("RPC API hash: {}", version_info.rpc_hash);
+                }
+                if ref_version.is_none_or(|ref_v| ref_v.graphql_hash != version_info.graphql_hash) {
+                    println!("GraphQL API hash: {}", version_info.graphql_hash);
+                }
+                if ref_version.is_none_or(|ref_v| ref_v.wit_hash != version_info.wit_hash) {
+                    println!("WIT API hash: v{}", version_info.wit_hash);
+                }
+                if ref_version.is_none_or(|ref_v| {
+                    (&ref_v.git_commit, ref_v.git_dirty)
+                        != (&version_info.git_commit, version_info.git_dirty)
+                }) {
+                    println!(
+                        "Source code: {}/tree/{}{}",
+                        env!("CARGO_PKG_REPOSITORY"),
+                        version_info.git_commit,
+                        if version_info.git_dirty {
+                            " (dirty)"
+                        } else {
+                            ""
+                        }
+                    );
+                }
+            }
+            Err(err) => println!("Error getting version info: {err}"),
+        }
+
+        let ref_genesis_hash =
+            reference.and_then(|ref_results| ref_results.genesis_config_hash.as_ref().ok());
+        match &self.genesis_config_hash {
+            Ok(hash) if ref_genesis_hash.is_some_and(|ref_hash| ref_hash == hash) => {}
+            Ok(hash) => println!("Genesis config hash: {hash}"),
+            Err(err) => println!("Error getting genesis config: {err}"),
+        }
+
+        let ref_info = reference.and_then(|ref_results| ref_results.chain_info.as_ref().ok());
+        match &self.chain_info {
+            Ok(info) => {
+                if ref_info.is_none_or(|ref_info| info.block_hash != ref_info.block_hash) {
+                    if let Some(hash) = info.block_hash {
+                        println!("Block hash: {}", hash);
+                    } else {
+                        println!("Block hash: None");
+                    }
+                }
+                if ref_info
+                    .is_none_or(|ref_info| info.next_block_height != ref_info.next_block_height)
+                {
+                    println!("Next height: {}", info.next_block_height);
+                }
+                if ref_info.is_none_or(|ref_info| info.timestamp != ref_info.timestamp) {
+                    println!("Timestamp: {}", info.timestamp);
+                }
+                if ref_info.is_none_or(|ref_info| info.epoch != ref_info.epoch) {
+                    println!("Epoch: {}", info.epoch);
+                }
+                if ref_info.is_none_or(|ref_info| {
+                    info.manager.current_round != ref_info.manager.current_round
+                }) {
+                    println!("Round: {}", info.manager.current_round);
+                }
+            }
+            Err(err) => println!("Error getting chain info: {err}"),
+        }
+    }
+}
 
 pub struct ClientContext<Env: Environment, W> {
     pub wallet: W,
@@ -499,7 +621,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
     ) -> Result<VersionInfo, Error> {
         match node.get_version_info().await {
             Ok(version_info) if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {
-                info!(
+                debug!(
                     "Version information for validator {address}: {}",
                     version_info
                 );
@@ -550,17 +672,17 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         address: &str,
         node: &impl ValidatorNode,
         chain_id: ChainId,
-    ) -> Result<(), Error> {
+    ) -> Result<ChainInfo, Error> {
         let query = ChainInfoQuery::new(chain_id);
         match node.handle_chain_info_query(query).await {
             Ok(response) => {
-                info!(
+                debug!(
                     "Validator {address} sees chain {chain_id} at block height {} and epoch {:?}",
                     response.info.next_block_height, response.info.epoch,
                 );
                 if let Some(public_key) = public_key {
                     if response.check(*public_key).is_ok() {
-                        info!("Signature for public key {public_key} is OK.");
+                        debug!("Signature for public key {public_key} is OK.");
                     } else {
                         return Err(error::Inner::InvalidSignature {
                             public_key: *public_key,
@@ -570,7 +692,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
                 } else {
                     warn!("Not checking signature as public key was not given");
                 }
-                Ok(())
+                Ok(*response.info)
             }
             Err(error) => Err(error::Inner::UnavailableChainInfo {
                 address: address.to_string(),
@@ -578,6 +700,53 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
                 error: Box::new(error),
             }
             .into()),
+        }
+    }
+
+    /// Query a validator for version info, network description, and chain info.
+    ///
+    /// Returns a `ValidatorQueryResults` struct with the results of all three queries.
+    pub async fn query_validator(
+        &self,
+        address: &str,
+        node: &impl ValidatorNode,
+        chain_id: ChainId,
+        public_key: Option<&ValidatorPublicKey>,
+    ) -> ValidatorQueryResults {
+        let version_info = self.check_compatible_version_info(address, node).await;
+        let genesis_config_hash = self.check_matching_network_description(address, node).await;
+        let chain_info = self
+            .check_validator_chain_info_response(public_key, address, node, chain_id)
+            .await;
+
+        ValidatorQueryResults {
+            version_info,
+            genesis_config_hash,
+            chain_info,
+        }
+    }
+
+    /// Query the local node for version info, network description, and chain info.
+    ///
+    /// Returns a `ValidatorQueryResults` struct with the local node's information.
+    pub async fn query_local_node(&self, chain_id: ChainId) -> ValidatorQueryResults {
+        let version_info = Ok(linera_version::VERSION_INFO.clone());
+        let genesis_config_hash = Ok(self
+            .wallet()
+            .genesis_config()
+            .network_description()
+            .genesis_config_hash);
+        let chain_info = self
+            .make_chain_client(chain_id)
+            .chain_info()
+            .await
+            .map(|info| *info)
+            .map_err(|e| e.into());
+
+        ValidatorQueryResults {
+            version_info,
+            genesis_config_hash,
+            chain_info,
         }
     }
 }
