@@ -2426,4 +2426,95 @@ mod tests {
         // Verify the FindKeys entry was created
         assert_eq!(cache.query_find_keys(&prefix), Some(find_keys_result));
     }
+
+    #[test]
+    fn test_trim_value_cache_complete_iteration() {
+        let mut cache = create_test_cache(true);
+
+        // Insert some value entries to populate the cache
+        let key1 = vec![1, 2, 3];
+        let key2 = vec![4, 5, 6];
+        let value1 = vec![100, 200];
+        let value2 = vec![203, 177];
+
+        cache.insert_read_value(&key1, &Some(value1));
+        cache.insert_read_value(&key2, &Some(value2));
+        cache.check_coherence();
+
+        // Set cache size to 0 to force trimming but ensure queue is not empty
+        let original_max_size = cache.config.max_cache_value_size;
+        cache.config.max_cache_value_size = 0;
+
+        // Call trim_value_cache - this should iterate through entire queue
+        // and hit line 411 (break when iter.next() returns None)
+        cache.trim_value_cache();
+        cache.check_coherence();
+
+        // All value entries should be removed since max_cache_value_size = 0
+        assert!(!cache.value_map.contains_key(&key1));
+        assert!(!cache.value_map.contains_key(&key2));
+
+        // Restore original config
+        cache.config.max_cache_value_size = original_max_size;
+    }
+
+    #[test]
+    fn test_trim_find_keys_cache_complete_iteration() {
+        let mut cache = create_test_cache(true);
+
+        // Insert some FindKeys entries to populate the cache
+        let prefix1 = vec![1, 2];
+        let prefix2 = vec![3, 4];
+        let keys1 = vec![vec![1, 2, 3], vec![1, 2, 4]];
+        let keys2 = vec![vec![3, 4, 5], vec![3, 4, 6]];
+
+        cache.insert_find_keys(prefix1, &keys1);
+        cache.insert_find_keys(prefix2, &keys2);
+        cache.check_coherence();
+
+        // Set cache size to 0 to force trimming but ensure queue is not empty
+        let original_max_size = cache.config.max_cache_find_keys_size;
+        cache.config.max_cache_find_keys_size = 0;
+
+        // Call trim_find_keys_cache - this should iterate through entire queue
+        // and hit line 436 (break when iter.next() returns None)
+        cache.trim_find_keys_cache();
+        cache.check_coherence();
+
+        // All FindKeys entries should be removed since max_cache_find_keys_size = 0
+        assert!(cache.find_keys_map.is_empty());
+
+        // Restore original config
+        cache.config.max_cache_find_keys_size = original_max_size;
+    }
+
+    #[test]
+    fn test_trim_find_key_values_cache_complete_iteration() {
+        let mut cache = create_test_cache(true);
+
+        // Insert some FindKeyValues entries to populate the cache
+        let prefix1 = vec![1, 2];
+        let prefix2 = vec![3, 4];
+        let key_values1 = vec![(vec![1, 2, 3], vec![100]), (vec![1, 2, 4], vec![200])];
+        let key_values2 = vec![(vec![3, 4, 5], vec![203]), (vec![3, 4, 6], vec![177])];
+
+        cache.insert_find_key_values(prefix1, &key_values1);
+        cache.insert_find_key_values(prefix2, &key_values2);
+        cache.check_coherence();
+
+        // Set cache size to 0 to force trimming but ensure queue is not empty
+        let original_max_size = cache.config.max_cache_find_key_values_size;
+        cache.config.max_cache_find_key_values_size = 0;
+
+        // Call trim_find_key_values_cache - this should iterate through entire queue
+        // and hit line 461 (break when iter.next() returns None)
+        cache.trim_find_key_values_cache();
+        cache.check_coherence();
+
+        // All FindKeyValues entries should be removed since max_cache_find_key_values_size = 0
+        assert!(cache.find_key_values_map.is_empty());
+
+        // Restore original config
+        cache.config.max_cache_find_key_values_size = original_max_size;
+    }
 }
