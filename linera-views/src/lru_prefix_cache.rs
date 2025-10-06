@@ -303,6 +303,34 @@ impl LruPrefixCache {
 
     /// If the FindKeys map contain a prefix that is a prefix of key in argument,
     /// then returns it and the corresponding FindKeys. Otherwise `None`.
+    ///
+    /// The algorithm of this function is tested in `test_lower_bounds`.
+    /// However, due to its importance we provide here a proof of correctness.
+    /// What makes this functionality work is that the set of keys of the `find_keys_map`
+    /// is prefix free.
+    ///
+    /// For one of the map in question, let us define `set` to be the `BTreeSet` of the keys
+    /// of the map.
+    /// Then define `S = { s in set | s <= key }` for the lexicographic ordering.
+    /// First of all the expression `self.find_keys_map.range(..=key.to_vec())` corresponds
+    /// to S and `self.find_keys_map.range(..=key.to_vec()).next_back()` is
+    /// * None if S is empty.
+    /// * Some(M) with M the maximum of S if S is non-empty.
+    ///
+    /// If there is a prefix `p` of `key` in `S` then we have `p <= key` in the lexicographic
+    /// ordering. So, S is non-empty. That prefix `p` is the highest element of `S`. If that
+    /// were not the case, we would have for another `q in S` the inequality `p < q <= key`.
+    /// This forces `q` to be a prefix of `key` and `p` to be a prefix of `q`. This breaks
+    /// the prefix-free property.
+    ///
+    /// If there is no prefix `p` of `key` in `S` then if `S` is empty the code is correct.
+    /// If it is not empty, then it has a maximum element M. That highest element cannot
+    /// be a prefix of `key` and that is checked in the code (named `key_store` there).
+    /// If there were an element `h` of `S` that would be a prefix, then the inequality
+    /// `h <= M <= key` would force `M` to also be a prefix of `key`.
+    ///
+    /// Therefore the code does return an `Some(p)` if and only if there is a prefix `p`
+    /// in the map of find-keys prefixes.
     fn get_existing_find_keys_entry(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
         match self.find_keys_map.range(..=key.to_vec()).next_back() {
             None => None,
@@ -2087,5 +2115,61 @@ mod tests {
 
         // Verify cache constraints are maintained
         assert!(cache.queue.len() <= cache.config.max_cache_entries);
+    }
+
+    #[test]
+    fn test_contains_key_failing_without_exclusive_access() {
+        let mut cache = create_test_cache(false); // has_exclusive_access = false
+        let key = vec![1, 2, 3];
+
+        // With has_exclusive_access = false, query_contains_key should only check value_map
+        // Since the key is not in value_map, it should return None (line 856)
+        let result = cache.query_contains_key(&key);
+        assert_eq!(result, None);
+
+        // Even if we manually insert a FindKeys entry (which normally wouldn't happen without exclusive access),
+        // the query should still return None because it doesn't check FindKeys/FindKeyValues without exclusive access
+        let prefix = vec![1];
+        let keys = vec![vec![2, 3]];
+        cache.insert_find_keys(prefix, &keys);
+        cache.check_coherence();
+
+        // Should still return None because has_exclusive_access = false (hits line 856)
+        let result = cache.query_contains_key(&key);
+        assert_eq!(result, None);
+
+        // Verify that only value_map is checked by inserting directly into value_map
+        cache.insert_contains_key(&key, true);
+        cache.check_coherence();
+        
+        // Now it should return Some(true) because it's found in value_map
+        let result = cache.query_contains_key(&key);
+        assert_eq!(result, Some(true));
+    }
+
+    #[test]
+    fn test_contains_key_found_in_find_key_values() {
+        let mut cache = create_test_cache(true); // has_exclusive_access = true
+        let prefix = vec![1, 2];
+        let key = vec![1, 2, 3, 4];
+        let key_values = vec![(vec![3, 4], vec![100]), (vec![5, 6], vec![200])];
+
+        // Insert a FindKeyValues entry that contains the key we'll query
+        cache.insert_find_key_values(prefix.clone(), &key_values);
+        cache.check_coherence();
+
+        // Query for the key - this should find it in FindKeyValues (lines 852-854)
+        let result = cache.query_contains_key(&key);
+        assert_eq!(result, Some(true));
+
+        // Test with a key that doesn't exist in the FindKeyValues
+        let non_existent_key = vec![1, 2, 7, 8];
+        let result = cache.query_contains_key(&non_existent_key);
+        assert_eq!(result, Some(false)); // Found the prefix but key doesn't exist in the entry
+
+        // Test with a key that doesn't match any prefix
+        let unmatched_key = vec![9, 9, 9];
+        let result = cache.query_contains_key(&unmatched_key);
+        assert_eq!(result, None); // No matching prefix found
     }
 }
