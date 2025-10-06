@@ -827,6 +827,61 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
+    /// Downloads and processes certificates for sender chain blocks.
+    #[instrument(level = "trace", skip_all)]
+    async fn download_and_process_sender_chain(
+        &self,
+        sender_chain_id: ChainId,
+        mut nodes: Vec<RemoteNode<Env::ValidatorNode>>,
+        remote_heights: Vec<BlockHeight>,
+        sender: mpsc::UnboundedSender<ChainAndHeight>,
+    ) {
+        let certificates = loop {
+            let Some(remote_node) = nodes.pop() else {
+                error!("could not download certificates for {}", sender_chain_id);
+                return;
+            };
+            if let Ok(certificates) = remote_node
+                .download_certificates_by_heights(sender_chain_id, remote_heights.clone())
+                .await
+            {
+                break certificates;
+            }
+        };
+
+        if !certificates.is_empty() {
+            trace!(
+                "got {} certificates for chain {}",
+                certificates.len(),
+                sender_chain_id
+            );
+        } else {
+            return;
+        };
+
+        for certificate in certificates {
+            let hash = certificate.hash();
+            let chain_id = certificate.block().header.chain_id;
+            let height = certificate.block().header.height;
+            let mode = ReceiveCertificateMode::NeedsCheck;
+            if let Err(err) = self
+                .receive_sender_certificate(certificate, mode, None)
+                .await
+            {
+                error!("Received invalid certificate {hash}: {err}");
+            } else if let Err(err) = sender.send(ChainAndHeight { chain_id, height }) {
+                error!(
+                    "failed to send chain and height over the channel: {}:{}: {}",
+                    chain_id, height, err
+                );
+            }
+        }
+        trace!(
+            "find_received_certificates: finished processing chain {}",
+            sender_chain_id
+        );
+    }
+
     /// Downloads the log of received messages for a chain from a validator.
     #[instrument(level = "trace", skip(self))]
     async fn get_received_log_from_validator(
@@ -2094,33 +2149,39 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
-        let (received_logs, mut validator_trackers) = {
+        let received_logs: Vec<_> = {
             let mut received_log_batches = received_log_batches.lock().unwrap();
-            let received_logs: Vec<_> = std::mem::take(received_log_batches.as_mut());
-            debug!(
-                received_logs_len=%received_logs.len(),
-                received_logs_total=%received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
-                "received_logs length"
-            );
-            (
-                ReceivedLogs::from_received_result(received_logs.clone()),
-                ValidatorTrackers::new(received_logs, &trackers),
-            )
+            std::mem::take(received_log_batches.as_mut())
         };
 
-        info!(
-            "find_received_certificates: {} chains to sync with {} certificates in total",
-            received_logs.num_chains(),
-            received_logs.num_certs()
+        debug!(
+            received_logs_len=%received_logs.len(),
+            received_logs_total=%received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
+            "find_received_certificates: received_logs length"
         );
 
+        self.download_sender_certificates(received_logs, trackers, nodes, cancellation_token)
+            .await?;
+
+        info!("find_received_certificates finished");
+
+        Ok(())
+    }
+
+    /// Computes the heights of the blocks in the sender chains we need to download the
+    /// certificates for.
+    async fn prepare_remote_heights(
+        &self,
+        received_logs: &ReceivedLogs,
+        validator_trackers: &mut ValidatorTrackers,
+    ) -> Result<BTreeMap<ChainId, BTreeSet<BlockHeight>>, ChainClientError> {
         let mut remote_heights = received_logs.heights_per_chain();
 
         // Obtain the next block height we need in the local node, for each chain.
         let local_next_heights = self
             .client
             .local_node
-            .next_outbox_heights(remote_heights.keys(), chain_id)
+            .next_outbox_heights(remote_heights.keys(), self.chain_id)
             .await?;
 
         for (sender_chain_id, remote_heights) in remote_heights.iter_mut() {
@@ -2141,9 +2202,77 @@ impl<Env: Environment> ChainClient<Env> {
             remote_heights.retain(|h| *h >= local_next);
         }
 
+        Ok(remote_heights)
+    }
+
+    /// Retries cross chain requests on the chains which may have been processed on
+    /// another task without the messages being correctly handled.
+    async fn retry_pending_cross_chain_requests(
+        &self,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
+        other_sender_chains: Vec<ChainId>,
+    ) {
+        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
+            let local_node = self.client.local_node.clone();
+            async move {
+                if let Err(error) = match local_node
+                    .retry_pending_cross_chain_requests(chain_id)
+                    .await
+                {
+                    Ok(()) => Ok(()),
+                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                        if let Err(error) = self
+                            .client
+                            .update_local_node_with_blobs_from(blob_ids.clone(), nodes)
+                            .await
+                        {
+                            error!(
+                                "Error while attempting to download blobs during retrying outgoing \
+                                messages: {blob_ids:?}: {error}"
+                            );
+                        }
+                        local_node
+                            .retry_pending_cross_chain_requests(chain_id)
+                            .await
+                    }
+                    err => err,
+                } {
+                    error!("Failed to retry outgoing messages from {chain_id}: {error}");
+                }
+            }
+        }));
+        stream.for_each(future::ready).await;
+    }
+
+    /// Downloads the certificates for blocks sending messages to this chain that we are
+    /// still missing.
+    async fn download_sender_certificates(
+        &self,
+        received_logs: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
+        trackers: HashMap<ValidatorPublicKey, u64>,
+        nodes: Vec<RemoteNode<Env::ValidatorNode>>,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Result<(), ChainClientError> {
+        let (received_logs, mut validator_trackers) = {
+            (
+                ReceivedLogs::from_received_result(received_logs.clone()),
+                ValidatorTrackers::new(received_logs, &trackers),
+            )
+        };
+
+        debug!(
+            "download_sender_certificates: {} chains to sync with {} certificates in total",
+            received_logs.num_chains(),
+            received_logs.num_certs()
+        );
+
+        let remote_heights = self
+            .prepare_remote_heights(&received_logs, &mut validator_trackers)
+            .await?;
+
         debug!(
             remaining_total_certificates=%remote_heights.values().map(|h| h.len()).sum::<usize>(),
-            "find_received_certificates: computed remote_heights"
+            "download_sender_certificates: computed remote_heights"
         );
 
         let mut other_sender_chains = Vec::new();
@@ -2166,55 +2295,14 @@ impl<Env: Environment> ChainClient<Env> {
                     let client = self.client.clone();
                     nodes.shuffle(&mut rand::thread_rng());
                     Some(async move {
-                        let certificates = loop {
-                            let Some(remote_node) = nodes.pop() else {
-                                error!("could not download certificates for {}", sender_chain_id);
-                                return;
-                            };
-                            if let Ok(certificates) = remote_node
-                                .download_certificates_by_heights(
-                                    sender_chain_id,
-                                    remote_heights.clone(),
-                                )
-                                .await
-                            {
-                                break certificates;
-                            }
-                        };
-
-                        if !certificates.is_empty() {
-                            trace!(
-                                "got {} certificates for chain {}",
-                                certificates.len(),
-                                sender_chain_id
-                            );
-                        } else {
-                            return;
-                        };
-
-                        for certificate in certificates {
-                            let hash = certificate.hash();
-                            let chain_id = certificate.block().header.chain_id;
-                            let height = certificate.block().header.height;
-                            let mode = ReceiveCertificateMode::NeedsCheck;
-                            if let Err(err) = client
-                                .receive_sender_certificate(certificate, mode, None)
-                                .await
-                            {
-                                error!("Received invalid certificate {hash}: {err}");
-                            } else if let Err(err) =
-                                sender.send(ChainAndHeight { chain_id, height })
-                            {
-                                error!(
-                                    "failed to send chain and height over the channel: {}:{}: {}",
-                                    chain_id, height, err
-                                );
-                            }
-                        }
-                        trace!(
-                            "find_received_certificates: finished processing chain {}",
-                            sender_chain_id
-                        );
+                        client
+                            .download_and_process_sender_chain(
+                                sender_chain_id,
+                                nodes,
+                                remote_heights,
+                                sender,
+                            )
+                            .await
                     })
                 });
 
@@ -2252,48 +2340,19 @@ impl<Env: Environment> ChainClient<Env> {
 
         debug!(
             num_other_chains=%other_sender_chains.len(),
-            "find_received_certificates: processing certificates finished"
+            "download_sender_certificates: processing certificates finished"
         );
 
         // Certificates for these chains were omitted from `certificates` because they were
         // already processed locally. If they were processed in a concurrent task, it is not
         // guaranteed that their cross-chain messages were already handled.
-        let stream = FuturesUnordered::from_iter(other_sender_chains.into_iter().map(|chain_id| {
-            let local_node = self.client.local_node.clone();
-            let validators = nodes.clone();
-            async move {
-                if let Err(error) = match local_node
-                    .retry_pending_cross_chain_requests(chain_id)
-                    .await
-                {
-                    Ok(()) => Ok(()),
-                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        if let Err(error) = self
-                            .client
-                            .update_local_node_with_blobs_from(blob_ids.clone(), &validators)
-                            .await
-                        {
-                            error!(
-                                "Error while attempting to download blobs during retrying outgoing \
-                                messages: {blob_ids:?}: {error}"
-                            );
-                        }
-                        local_node
-                            .retry_pending_cross_chain_requests(chain_id)
-                            .await
-                    }
-                    err => err,
-                } {
-                    error!("Failed to retry outgoing messages from {chain_id}: {error}");
-                }
-            }
-        }));
-        stream.for_each(future::ready).await;
+        self.retry_pending_cross_chain_requests(&nodes, other_sender_chains)
+            .await;
 
-        debug!("find_received_certificates: finished processing other_sender_chains");
+        debug!("download_sender_certificates: finished processing other_sender_chains");
 
         let new_trackers = validator_trackers.into_map();
-        trace!(?new_trackers, "find_received_certificates");
+        trace!(?new_trackers, "download_sender_certificates");
 
         // Update the trackers.
         if let Err(error) = self
@@ -2307,7 +2366,6 @@ impl<Env: Environment> ChainClient<Env> {
                 self.chain_id
             );
         }
-        debug!("find_received_certificates finished");
 
         Ok(())
     }
