@@ -7,7 +7,9 @@ use linera_base::{crypto::ValidatorPublicKey, data_types::BlockHeight, identifie
 use linera_chain::data_types::ChainAndHeight;
 
 /// Struct keeping track of the blocks sending messages to a particular chain.
-pub(super) struct ReceivedLogs(BTreeMap<ChainId, BTreeSet<BlockHeight>>);
+pub(super) struct ReceivedLogs(
+    BTreeMap<ChainId, BTreeMap<BlockHeight, BTreeSet<ValidatorPublicKey>>>,
+);
 
 impl ReceivedLogs {
     /// Creates a new instance of `ReceivedLogs`.
@@ -19,17 +21,34 @@ impl ReceivedLogs {
     pub(super) fn from_received_result(
         result: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
     ) -> Self {
-        Self::from_iterator(
-            result
+        Self::from_iterator(result.into_iter().flat_map(|(validator, received_log)| {
+            received_log
                 .into_iter()
-                .flat_map(|(_, received_log)| received_log),
-        )
+                .map(move |chain_and_height| (chain_and_height, validator))
+        }))
     }
 
     /// Returns a map that assigns to each chain ID the set of heights. The returned map contains
     /// no empty values.
-    pub(super) fn heights_per_chain(&self) -> &BTreeMap<ChainId, BTreeSet<BlockHeight>> {
-        &self.0
+    pub(super) fn heights_per_chain(&self) -> BTreeMap<ChainId, BTreeSet<BlockHeight>> {
+        self.0
+            .iter()
+            .map(|(chain_id, heights)| (*chain_id, heights.keys().cloned().collect()))
+            .collect()
+    }
+
+    /// Returns whether a given validator should have a block at the given chain and
+    /// height, according to this log.
+    pub(super) fn validator_has_block(
+        &self,
+        validator: &ValidatorPublicKey,
+        chain_id: ChainId,
+        height: BlockHeight,
+    ) -> bool {
+        self.0
+            .get(&chain_id)
+            .and_then(|heights| heights.get(&height))
+            .is_some_and(|validators| validators.contains(validator))
     }
 
     /// Returns the number of chains that sent messages according to this log.
@@ -47,33 +66,41 @@ impl ReceivedLogs {
     pub(super) fn into_batches(self, batch_size: usize) -> impl Iterator<Item = ReceivedLogs> {
         LazyBatch {
             iterator: self.0.into_iter().flat_map(|(chain_id, heights)| {
-                heights
-                    .into_iter()
-                    .map(move |height| ChainAndHeight { chain_id, height })
+                heights.into_iter().flat_map(move |(height, validators)| {
+                    validators
+                        .into_iter()
+                        .map(move |validator| (ChainAndHeight { chain_id, height }, validator))
+                })
             }),
             batch_size,
         }
     }
 
-    fn from_iterator<I: IntoIterator<Item = ChainAndHeight>>(iterator: I) -> Self {
+    fn from_iterator<I: IntoIterator<Item = (ChainAndHeight, ValidatorPublicKey)>>(
+        iterator: I,
+    ) -> Self {
         iterator
             .into_iter()
-            .fold(Self::new(), |mut acc, chain_and_height| {
+            .fold(Self::new(), |mut acc, (chain_and_height, validator)| {
                 acc.0
                     .entry(chain_and_height.chain_id)
                     .or_default()
-                    .insert(chain_and_height.height);
+                    .entry(chain_and_height.height)
+                    .or_default()
+                    .insert(validator);
                 acc
             })
     }
 }
 
-pub(super) struct LazyBatch<I: Iterator<Item = ChainAndHeight>> {
+/// Iterator adapter lazily yielding batches of size `self.batch_size` from
+/// `self.iterator`.
+pub(super) struct LazyBatch<I: Iterator<Item = (ChainAndHeight, ValidatorPublicKey)>> {
     iterator: I,
     batch_size: usize,
 }
 
-impl<I: Iterator<Item = ChainAndHeight>> Iterator for LazyBatch<I> {
+impl<I: Iterator<Item = (ChainAndHeight, ValidatorPublicKey)>> Iterator for LazyBatch<I> {
     type Item = ReceivedLogs;
 
     fn next(&mut self) -> Option<Self::Item> {

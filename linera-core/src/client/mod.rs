@@ -837,17 +837,34 @@ impl<Env: Environment> Client<Env> {
         &self,
         sender_chain_id: ChainId,
         nodes: &[RemoteNode<Env::ValidatorNode>],
+        received_log: &ReceivedLogs,
         mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
         while !remote_heights.is_empty() {
-            let remote_heights_clone = remote_heights.clone();
+            let mut remote_heights_clone = remote_heights.clone();
             let certificates = match communicate_in_parallel(
                 nodes,
                 async move |remote_node| {
-                    Ok(remote_node
-                        .download_certificates_by_heights(sender_chain_id, remote_heights_clone)
-                        .await?)
+                    // No need trying to download certificates the validator didn't have in their
+                    // log - we'll retry downloading the remaining ones next time we loop.
+                    remote_heights_clone.retain(|height| {
+                        received_log.validator_has_block(
+                            &remote_node.public_key,
+                            sender_chain_id,
+                            *height,
+                        )
+                    });
+                    if remote_heights_clone.is_empty() {
+                        // It makes no sense to return `Ok(_)` if we aren't going to try downloading
+                        // anything from the validator - let the function try the other validators
+                        Err(())
+                    } else {
+                        remote_node
+                            .download_certificates_by_heights(sender_chain_id, remote_heights_clone)
+                            .await
+                            .map_err(|_| ())
+                    }
                 },
                 || (),
                 self.options.certificate_batch_download_timeout,
@@ -2219,7 +2236,7 @@ impl<Env: Environment> ChainClient<Env> {
         received_logs: &ReceivedLogs,
         validator_trackers: &mut ValidatorTrackers,
     ) -> Result<BTreeMap<ChainId, BTreeSet<BlockHeight>>, ChainClientError> {
-        let mut remote_heights = received_logs.heights_per_chain().clone();
+        let mut remote_heights = received_logs.heights_per_chain();
 
         // Obtain the next block height we need in the local node, for each chain.
         let local_next_heights = self
@@ -2331,11 +2348,13 @@ impl<Env: Environment> ChainClient<Env> {
                     let client = self.client.clone();
                     let mut nodes = nodes.clone();
                     nodes.shuffle(&mut rand::thread_rng());
+                    let received_logs_ref = &received_logs;
                     Some(async move {
                         client
                             .download_and_process_sender_chain(
                                 sender_chain_id,
                                 &nodes,
+                                received_logs_ref,
                                 remote_heights,
                                 sender,
                             )
@@ -4334,17 +4353,17 @@ impl<Env: Environment> ChainClient<Env> {
 
 /// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay on
 /// each subsequent node. Returns error `err` is all of the nodes fail.
-async fn communicate_in_parallel<'a, A, E, F, G, R, V>(
+async fn communicate_in_parallel<'a, A, E1, E2, F, G, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
     err: G,
     timeout: Duration,
-) -> Result<V, E>
+) -> Result<V, E2>
 where
     F: Clone + FnOnce(RemoteNode<A>) -> R,
     RemoteNode<A>: Clone,
-    G: FnOnce() -> E,
-    R: Future<Output = Result<V, ChainClientError>> + 'a,
+    G: FnOnce() -> E2,
+    R: Future<Output = Result<V, E1>> + 'a,
 {
     let mut stream = nodes
         .iter()
