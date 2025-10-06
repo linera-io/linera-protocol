@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cmp::{Ordering, PartialOrd},
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    cmp::Ordering,
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     sync::{Arc, RwLock},
@@ -62,12 +62,14 @@ use rand::{
     distributions::{Distribution, WeightedIndex},
     seq::SliceRandom,
 };
+use received_log::ReceivedLogs;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
+use validator_trackers::ValidatorTrackers;
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
@@ -88,6 +90,8 @@ mod chain_client_state;
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
+mod received_log;
+mod validator_trackers;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -2180,7 +2184,7 @@ impl<Env: Environment> ChainClient<Env> {
         received_logs: &ReceivedLogs,
         validator_trackers: &mut ValidatorTrackers,
     ) -> Result<BTreeMap<ChainId, BTreeSet<BlockHeight>>, ChainClientError> {
-        let mut remote_heights = received_logs.heights_per_chain();
+        let mut remote_heights = received_logs.heights_per_chain().clone();
 
         // Obtain the next block height we need in the local node, for each chain.
         let local_next_heights = self
@@ -4363,125 +4367,6 @@ impl Drop for AbortOnDrop {
     #[instrument(level = "trace", skip(self))]
     fn drop(&mut self) {
         self.0.abort();
-    }
-}
-
-struct ReceivedLogs(BTreeMap<ChainId, BTreeMap<BlockHeight, Vec<(ValidatorPublicKey, usize)>>>);
-
-impl ReceivedLogs {
-    fn new() -> Self {
-        ReceivedLogs(BTreeMap::new())
-    }
-
-    fn from_received_result(result: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>) -> Self {
-        result
-            .into_iter()
-            .flat_map(|(validator, received_log)| {
-                received_log
-                    .into_iter()
-                    .enumerate()
-                    .map(move |(index, chain_and_height)| (validator, index, chain_and_height))
-            })
-            .fold(
-                Self::new(),
-                |mut acc, (validator, index, chain_and_height)| {
-                    acc.0
-                        .entry(chain_and_height.chain_id)
-                        .or_default()
-                        .entry(chain_and_height.height)
-                        .or_default()
-                        .push((validator, index));
-                    acc
-                },
-            )
-    }
-
-    /// Returns a map that assigns to each chain ID the set of heights. The returned map contains
-    /// no empty values.
-    fn heights_per_chain(&self) -> BTreeMap<ChainId, BTreeSet<BlockHeight>> {
-        self.0
-            .iter()
-            .fold(BTreeMap::new(), |mut acc, (chain_id, heights)| {
-                acc.entry(*chain_id)
-                    .or_default()
-                    .extend(heights.keys().copied());
-                acc
-            })
-    }
-
-    fn num_chains(&self) -> usize {
-        self.0.len()
-    }
-
-    fn num_certs(&self) -> usize {
-        self.0.values().map(|heights| heights.len()).sum()
-    }
-}
-
-struct ValidatorTracker {
-    current_tracker_value: u64,
-    to_be_downloaded: VecDeque<ChainAndHeight>,
-    already_downloaded: BTreeSet<ChainAndHeight>,
-}
-
-impl ValidatorTracker {
-    fn new(tracker: u64, validator_log: Vec<ChainAndHeight>) -> Self {
-        Self {
-            current_tracker_value: tracker,
-            to_be_downloaded: validator_log.into_iter().collect(),
-            already_downloaded: BTreeSet::new(),
-        }
-    }
-
-    fn downloaded_cert(&mut self, chain_and_height: ChainAndHeight) {
-        self.already_downloaded.insert(chain_and_height);
-        self.maximize_tracker();
-    }
-
-    fn maximize_tracker(&mut self) {
-        while self
-            .to_be_downloaded
-            .front()
-            .is_some_and(|first_cert| self.already_downloaded.contains(first_cert))
-        {
-            let first_cert = self.to_be_downloaded.pop_front().unwrap();
-            self.already_downloaded.remove(&first_cert);
-            self.current_tracker_value += 1;
-        }
-    }
-}
-
-struct ValidatorTrackers(BTreeMap<ValidatorPublicKey, ValidatorTracker>);
-
-impl ValidatorTrackers {
-    fn new(
-        received_logs: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
-        trackers: &HashMap<ValidatorPublicKey, u64>,
-    ) -> Self {
-        Self(
-            received_logs
-                .into_iter()
-                .map(|(validator, log)| {
-                    (
-                        validator,
-                        ValidatorTracker::new(*trackers.get(&validator).unwrap_or(&0), log),
-                    )
-                })
-                .collect(),
-        )
-    }
-
-    fn downloaded_cert(&mut self, chain_and_height: ChainAndHeight) {
-        for tracker in self.0.values_mut() {
-            tracker.downloaded_cert(chain_and_height);
-        }
-    }
-
-    fn into_map(self) -> BTreeMap<ValidatorPublicKey, u64> {
-        self.0
-            .into_iter()
-            .map(|(validator, tracker)| (validator, tracker.current_tracker_value))
-            .collect()
     }
 }
 
