@@ -709,9 +709,9 @@ NodeError:
     7:
       UnexpectedBlockHeight:
         STRUCT:
-          - expected_block_height:
+          - chain_tip_height:
               TYPENAME: BlockHeight
-          - found_block_height:
+          - block_height:
               TYPENAME: BlockHeight
     8:
       MissingCrossChainUpdate:

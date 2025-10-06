@@ -106,12 +106,10 @@ pub enum ChainError {
     },
     #[error("The signature was not created by a valid entity")]
     InvalidSigner,
-    #[error(
-        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
-    )]
+    #[error("Chain is at height {chain_tip_height} but block is at {block_height}")]
     UnexpectedBlockHeight {
-        expected_block_height: BlockHeight,
-        found_block_height: BlockHeight,
+        chain_tip_height: BlockHeight,
+        block_height: BlockHeight,
     },
     #[error("The previous block hash of a new block should match the last block of the chain")]
     UnexpectedPreviousBlockHash,

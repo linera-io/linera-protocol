@@ -2577,10 +2577,10 @@ impl<Env: Environment> ChainClient<Env> {
                 }
                 Err(ChainClientError::CommunicationError(CommunicationError::Trusted(
                     NodeError::UnexpectedBlockHeight {
-                        expected_block_height,
-                        found_block_height,
+                        chain_tip_height,
+                        block_height,
                     },
-                ))) if expected_block_height > found_block_height => {
+                ))) if chain_tip_height > block_height => {
                     tracing::info!(
                         "Local state is outdated; synchronizing chain {:.8}",
                         self.chain_id

@@ -177,14 +177,12 @@ pub enum WorkerError {
     InvalidSigner(AccountOwner),
 
     // Chaining
-    #[error(
-        "Was expecting block height {expected_block_height} but found {found_block_height} instead"
-    )]
+    #[error("Chain is at height {chain_tip_height} but block is at {block_height}")]
     UnexpectedBlockHeight {
-        expected_block_height: BlockHeight,
-        found_block_height: BlockHeight,
+        chain_tip_height: BlockHeight,
+        block_height: BlockHeight,
     },
-    #[error("Unexpected epoch {epoch:}: chain {chain_id:} is at {chain_epoch:}")]
+    #[error("Unexpected epoch {epoch}: chain {chain_id} is at {chain_epoch}")]
     InvalidEpoch {
         chain_id: ChainId,
         chain_epoch: Epoch,
