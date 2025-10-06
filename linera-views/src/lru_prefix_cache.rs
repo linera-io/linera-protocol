@@ -477,8 +477,8 @@ impl LruPrefixCache {
 
     /// Trim the cache so that it fits within the constraints.
     fn trim_cache(&mut self) {
-        while self.total_size > self.config.max_cache_size
-            || self.queue.len() > self.config.max_cache_entries
+        while self.total_size >= self.config.max_cache_size
+            || self.queue.len() >= self.config.max_cache_entries
         {
             let Some((cache_key, size)) = self.queue.pop_front() else {
                 break;
@@ -2011,7 +2011,7 @@ mod tests {
                 max_value_entry_size: 50,
                 max_find_keys_entry_size: 1000,
                 max_find_key_values_entry_size: 2000,
-                max_cache_entries: 2, // Very small to force eviction
+                max_cache_entries: 3, // Very small to force eviction
                 max_cache_value_size: 500,
                 max_cache_find_keys_size: 500,
                 max_cache_find_key_values_size: 500,
@@ -2056,7 +2056,7 @@ mod tests {
                 max_value_entry_size: 50,
                 max_find_keys_entry_size: 1000,
                 max_find_key_values_entry_size: 2000,
-                max_cache_entries: 2, // Very small to force eviction
+                max_cache_entries: 3, // Very small to force eviction
                 max_cache_value_size: 500,
                 max_cache_find_keys_size: 500,
                 max_cache_find_key_values_size: 500,
@@ -2264,7 +2264,6 @@ mod tests {
         let keys = vec![vec![2, 3, 4], vec![2, 3, 5], vec![2, 4, 6], vec![3, 7, 8]];
         cache.insert_find_keys(find_keys_prefix.clone(), &keys);
         cache.check_coherence();
-        println!("test_delete_prefix_removes_keys_within_find_keys_entry, step 1");
 
         // Verify the FindKeys entry exists and contains all keys
         assert!(cache.find_keys_map.contains_key(&find_keys_prefix));
@@ -2280,7 +2279,6 @@ mod tests {
         let delete_prefix = vec![1, 2, 3]; // This should only affect keys [2,3,4] and [2,3,5]
         cache.delete_prefix(&delete_prefix);
         cache.check_coherence();
-        println!("test_delete_prefix_removes_keys_within_find_keys_entry, step 2");
 
         // The FindKeys entry should still exist but with fewer keys
         assert!(cache.find_keys_map.contains_key(&find_keys_prefix));
@@ -2299,7 +2297,6 @@ mod tests {
         let delete_prefix2 = vec![1, 2]; // This should affect key [2,4,6]
         cache.delete_prefix(&delete_prefix2);
         cache.check_coherence();
-        println!("test_delete_prefix_removes_keys_within_find_keys_entry, step 3");
 
         // Check the remaining keys
         let final_keys = cache.query_find_keys(&find_keys_prefix).unwrap();
@@ -2442,7 +2439,6 @@ mod tests {
         cache.check_coherence();
 
         // Set cache size to 0 to force trimming but ensure queue is not empty
-        let original_max_size = cache.config.max_cache_value_size;
         cache.config.max_cache_value_size = 0;
 
         // Call trim_value_cache - this should iterate through entire queue
@@ -2453,9 +2449,6 @@ mod tests {
         // All value entries should be removed since max_cache_value_size = 0
         assert!(!cache.value_map.contains_key(&key1));
         assert!(!cache.value_map.contains_key(&key2));
-
-        // Restore original config
-        cache.config.max_cache_value_size = original_max_size;
     }
 
     #[test]
@@ -2473,7 +2466,6 @@ mod tests {
         cache.check_coherence();
 
         // Set cache size to 0 to force trimming but ensure queue is not empty
-        let original_max_size = cache.config.max_cache_find_keys_size;
         cache.config.max_cache_find_keys_size = 0;
 
         // Call trim_find_keys_cache - this should iterate through entire queue
@@ -2483,9 +2475,6 @@ mod tests {
 
         // All FindKeys entries should be removed since max_cache_find_keys_size = 0
         assert!(cache.find_keys_map.is_empty());
-
-        // Restore original config
-        cache.config.max_cache_find_keys_size = original_max_size;
     }
 
     #[test]
@@ -2503,7 +2492,6 @@ mod tests {
         cache.check_coherence();
 
         // Set cache size to 0 to force trimming but ensure queue is not empty
-        let original_max_size = cache.config.max_cache_find_key_values_size;
         cache.config.max_cache_find_key_values_size = 0;
 
         // Call trim_find_key_values_cache - this should iterate through entire queue
@@ -2513,8 +2501,38 @@ mod tests {
 
         // All FindKeyValues entries should be removed since max_cache_find_key_values_size = 0
         assert!(cache.find_key_values_map.is_empty());
+    }
 
-        // Restore original config
-        cache.config.max_cache_find_key_values_size = original_max_size;
+    #[test]
+    fn test_line_484_trim_cache_breaks_on_empty_queue() {
+        let mut cache = LruPrefixCache::new(
+            StorageCacheConfig {
+                max_cache_size: 10000, // to make irrelevant
+                max_value_entry_size: 10000, // to make irrelevant
+                max_find_keys_entry_size: 10000,
+                max_find_key_values_entry_size: 10000,
+                max_cache_entries: 10,
+                max_cache_value_size: 500,
+                max_cache_find_keys_size: 500,
+                max_cache_find_key_values_size: 500,
+            },
+            true,
+        );
+
+        // Insert some entries to populate the cache
+        for i in 0..10 {
+            let key = vec![1, 2, i];
+            let value = vec![100 + i];
+            cache.insert_read_value(&key, &Some(value));
+            cache.check_coherence();
+        }
+
+        // Manually manipulate total_size so that the cache gets emptied.
+        cache.config.max_cache_size = 0;
+
+        let key = vec![1, 2];
+        let value = vec![100];
+        cache.insert_read_value(&key, &Some(value));
+        cache.check_coherence();
     }
 }
