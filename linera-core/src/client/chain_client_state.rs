@@ -68,8 +68,8 @@ impl ChainClientState {
     pub(super) fn update_from_info(&mut self, info: &ChainInfo) {
         if let Some(pending) = &self.pending_proposal {
             if pending.block.height < info.next_block_height {
-                tracing::info!(
-                    "Clearing pending proposal: another block was committed at height {}",
+                tracing::debug!(
+                    "Clearing pending proposal: a block was committed at height {}",
                     pending.block.height
                 );
                 self.clear_pending_proposal();

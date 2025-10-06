@@ -1379,11 +1379,12 @@ where
                 .await?;
         }
         if let Some(next_block_height) = query.test_next_block_height {
+            // If not, send the same error as if a block with next_block_height was proposed.
             ensure!(
                 chain.tip_state.get().next_block_height == next_block_height,
                 WorkerError::UnexpectedBlockHeight {
-                    expected_block_height: next_block_height,
-                    found_block_height: chain.tip_state.get().next_block_height
+                    expected_block_height: chain.tip_state.get().next_block_height,
+                    found_block_height: next_block_height,
                 }
             );
         }
