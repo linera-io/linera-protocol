@@ -873,15 +873,18 @@ impl<Env: Environment> Client<Env> {
             {
                 Ok(certificates) => certificates,
                 Err(_) => {
-                    error!("could not download certificates for {}", sender_chain_id);
+                    error!(
+                        chain_id = %sender_chain_id,
+                        "could not download certificates for chain"
+                    );
                     return;
                 }
             };
 
             trace!(
-                "got {} certificates for chain {}",
-                certificates.len(),
-                sender_chain_id
+                chain_id = %sender_chain_id,
+                num_certificates = %certificates.len(),
+                "received certificates",
             );
 
             let mut processed_correctly = BTreeSet::new();
@@ -895,13 +898,19 @@ impl<Env: Environment> Client<Env> {
                     .receive_sender_certificate(certificate, mode, None)
                     .await
                 {
-                    error!("Received invalid certificate {hash}: {err}");
+                    error!(
+                        error = %err,
+                        %hash,
+                        "Received invalid certificate"
+                    );
                 } else {
                     processed_correctly.insert(height);
                     if let Err(err) = sender.send(ChainAndHeight { chain_id, height }) {
                         error!(
-                            "failed to send chain and height over the channel: {}:{}: {}",
-                            chain_id, height, err
+                            %chain_id,
+                            %height,
+                            error = %err,
+                            "failed to send chain and height over the channel",
                         );
                     }
                 }
@@ -910,8 +919,8 @@ impl<Env: Environment> Client<Env> {
             remote_heights.retain(|height| !processed_correctly.contains(height));
         }
         trace!(
-            "find_received_certificates: finished processing chain {}",
-            sender_chain_id
+            chain_id = %sender_chain_id,
+            "find_received_certificates: finished processing chain",
         );
     }
 
@@ -928,25 +937,26 @@ impl<Env: Environment> Client<Env> {
         // Retrieve the list of newly received certificates from this validator.
         let mut remote_log = Vec::new();
         loop {
-            debug!("get_received_log_from_validator: looping");
+            trace!("get_received_log_from_validator: looping");
             let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
             let info = remote_node.handle_chain_info_query(query).await?;
             let received_entries = info.requested_received_log.len();
             offset += received_entries as u64;
             remote_log.extend(info.requested_received_log);
-            debug!(
-                "get_received_log_from_validator: received {} entries from {:?}",
-                received_entries, remote_node
+            trace!(
+                ?remote_node,
+                %received_entries,
+                "get_received_log_from_validator: received log batch",
             );
             if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
                 break;
             }
         }
 
-        debug!(
-            "get_received_log_from_validator: returning {} entries from {:?}",
-            remote_log.len(),
-            remote_node
+        trace!(
+            ?remote_node,
+            num_entries = %remote_log.len(),
+            "get_received_log_from_validator: returning downloaded log",
         );
 
         Ok(remote_log)
@@ -2174,8 +2184,8 @@ impl<Env: Environment> ChainClient<Env> {
 
         if let Err(e) = result {
             warn!(
-                "Failed to synchronize received_logs from at least a quorum of validators: {}",
-                e
+                error = %e,
+                "Failed to synchronize received_logs from at least a quorum of validators",
             );
         }
 
@@ -2218,8 +2228,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .await
             {
                 error!(
-                    "Failed to update the certificate trackers for chain {:.8}: {error}",
-                    self.chain_id
+                    chain_id = %self.chain_id,
+                    %error,
+                    "Failed to update the certificate trackers for chain",
                 );
             }
         }
@@ -2288,8 +2299,10 @@ impl<Env: Environment> ChainClient<Env> {
                             .await
                         {
                             error!(
+                                ?blob_ids,
+                                %error,
                                 "Error while attempting to download blobs during retrying outgoing \
-                                messages: {blob_ids:?}: {error}"
+                                messages"
                             );
                         }
                         local_node
@@ -2298,7 +2311,11 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                     err => err,
                 } {
-                    error!("Failed to retry outgoing messages from {chain_id}: {error}");
+                    error!(
+                        %chain_id,
+                        %error,
+                        "Failed to retry outgoing messages from chain"
+                    );
                 }
             }
         }));
@@ -2315,9 +2332,9 @@ impl<Env: Environment> ChainClient<Env> {
         cancellation_token: Option<CancellationToken>,
     ) -> Result<ValidatorTrackers, ChainClientError> {
         debug!(
-            "download_sender_certificates: {} chains to sync with {} certificates in total",
-            received_logs.num_chains(),
-            received_logs.num_certs()
+            num_chains = %received_logs.num_chains(),
+            num_certs = %received_logs.num_certs(),
+            "download_sender_certificates: number of chains and certificates to sync",
         );
 
         let remote_heights = self
