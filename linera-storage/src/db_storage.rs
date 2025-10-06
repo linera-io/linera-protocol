@@ -595,6 +595,7 @@ where
         Ok(missing_blobs)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let store = self.database.open_shared(&[])?;
         let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
@@ -631,6 +632,7 @@ where
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
@@ -655,6 +657,7 @@ where
             .collect())
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
         let store = self.database.open_shared(&[])?;
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
@@ -666,6 +669,7 @@ where
         Ok(blob_state)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn read_blob_states(
         &self,
         blob_ids: &[BlobId],
@@ -696,6 +700,7 @@ where
         Ok(())
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blob_ids_len = %blob_ids.len()))]
     async fn maybe_write_blob_states(
         &self,
         blob_ids: &[BlobId],
@@ -732,6 +737,7 @@ where
         Ok(())
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blobs_len = %blobs.len()))]
     async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError> {
         if blobs.is_empty() {
             return Ok(Vec::new());
@@ -752,6 +758,7 @@ where
         Ok(blob_states)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blobs_len = %blobs.len()))]
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
         if blobs.is_empty() {
             return Ok(());
@@ -763,6 +770,7 @@ where
         self.write_batch(batch).await
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(blobs_len = %blobs.len()))]
     async fn write_blobs_and_certificate(
         &self,
         blobs: &[Blob],
@@ -776,6 +784,7 @@ where
         self.write_batch(batch).await
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(hash = %hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let keys = Self::get_keys_for_certificates(&[hash])?;
         let store = self.database.open_shared(&[])?;
@@ -787,6 +796,7 @@ where
         Ok(results[0] && results[1])
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(hash = %hash))]
     async fn read_certificate(
         &self,
         hash: CryptoHash,
@@ -804,6 +814,7 @@ where
         Self::deserialize_certificate(&values, hash)
     }
 
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
@@ -836,6 +847,7 @@ where
     /// and the second element is confirmed block.
     ///
     /// It does not check if all hashes all returned.
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn read_certificates_raw<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
@@ -861,6 +873,7 @@ where
             .collect())
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(event_id = ?event_id))]
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         let store = self.database.open_shared(&[])?;
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
@@ -870,6 +883,7 @@ where
         Ok(event)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(event_id = ?event_id))]
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
         let store = self.database.open_shared(&[])?;
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
@@ -879,6 +893,7 @@ where
         Ok(exists)
     }
 
+    #[instrument(target = "telemetry_only", skip_all, fields(chain_id = %chain_id, stream_id = %stream_id, start_index = %start_index))]
     async fn read_events_from_index(
         &self,
         chain_id: &ChainId,
@@ -909,6 +924,7 @@ where
         Ok(returned_values)
     }
 
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn write_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
@@ -920,6 +936,7 @@ where
         self.write_batch(batch).await
     }
 
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         let store = self.database.open_shared(&[])?;
         let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
@@ -931,6 +948,7 @@ where
         Ok(maybe_value)
     }
 
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn write_network_description(
         &self,
         information: &NetworkDescription,
@@ -945,6 +963,7 @@ where
         self.wasm_runtime
     }
 
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn block_exporter_context(
         &self,
         block_exporter_id: u32,
@@ -962,6 +981,7 @@ where
     C: Clock,
     Database::Error: Send + Sync,
 {
+    #[instrument(target = "telemetry_only", skip_all)]
     fn get_keys_for_certificates(hashes: &[CryptoHash]) -> Result<Vec<Vec<u8>>, ViewError> {
         Ok(hashes
             .iter()
@@ -973,6 +993,7 @@ where
             .collect::<Result<_, _>>()?)
     }
 
+    #[instrument(target = "telemetry_only", skip_all)]
     fn deserialize_certificate(
         pair: &[Option<Vec<u8>>],
         hash: CryptoHash,
@@ -992,6 +1013,7 @@ where
         Ok(Some(certificate))
     }
 
+    #[instrument(target = "telemetry_only", skip_all)]
     async fn write_entry(
         store: &Database::Store,
         key: Vec<u8>,
