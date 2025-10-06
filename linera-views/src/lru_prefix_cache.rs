@@ -627,7 +627,7 @@ impl LruPrefixCache {
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for key in keys {
-            self.find_keys_map.remove(&key);
+            assert!(self.find_keys_map.remove(&key).is_some());
             let cache_key = CacheKey::FindKeys(key);
             self.remove_cache_key(&cache_key);
         }
@@ -643,7 +643,7 @@ impl LruPrefixCache {
             })
             .collect::<Vec<_>>();
         for key in keys {
-            self.value_map.remove(&key);
+            assert!(self.value_map.remove(&key).is_some());
             let cache_key = CacheKey::Value(key);
             self.remove_cache_key(&cache_key);
         }
@@ -687,7 +687,7 @@ impl LruPrefixCache {
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for prefix in prefixes {
-            self.find_keys_map.remove(&prefix);
+            assert!(self.find_keys_map.remove(&prefix).is_some());
             let cache_key = CacheKey::FindKeys(prefix);
             self.remove_cache_key(&cache_key);
         }
@@ -698,7 +698,7 @@ impl LruPrefixCache {
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for prefix in prefixes {
-            self.find_key_values_map.remove(&prefix);
+            assert!(self.find_key_values_map.remove(&prefix).is_some());
             let cache_key = CacheKey::FindKeyValues(prefix);
             self.remove_cache_key(&cache_key);
         }
@@ -709,7 +709,7 @@ impl LruPrefixCache {
             .map(|(x, _)| x.clone())
             .collect::<Vec<_>>();
         for key in keys {
-            self.value_map.remove(&key);
+            assert!(self.value_map.remove(&key).is_some());
             let cache_key = CacheKey::Value(key);
             self.remove_cache_key(&cache_key);
         }
@@ -727,8 +727,8 @@ impl LruPrefixCache {
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not
     /// create new entries in the cache.
     pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
-        // When using delete_prefix, we do not insert `ValueEntry::DoesNotExist` and instead drop
-        // the entries from cache
+        // When using delete_prefix, we do not insert `ValueEntry::DoesNotExist`
+        // and instead drop the entries from the value-cache
         // This is because:
         // * In non-exclusive access, this could be added by another user.
         // * In exclusive access, we do this via the `FindKeyValues`.
@@ -748,7 +748,7 @@ impl LruPrefixCache {
                 prefixes.push(prefix.to_vec());
             }
             for prefix in prefixes {
-                self.find_keys_map.remove(&prefix);
+                assert!(self.find_keys_map.remove(&prefix).is_some());
                 let cache_key = CacheKey::FindKeys(prefix);
                 self.remove_cache_key(&cache_key);
             }
@@ -761,7 +761,7 @@ impl LruPrefixCache {
                 prefixes.push(prefix.to_vec());
             }
             for prefix in prefixes {
-                self.find_key_values_map.remove(&prefix);
+                assert!(self.find_key_values_map.remove(&prefix).is_some());
                 let cache_key = CacheKey::FindKeyValues(prefix);
                 self.remove_cache_key(&cache_key);
             }
@@ -771,7 +771,7 @@ impl LruPrefixCache {
                 // Delete the keys in the entry
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
                 find_entry.delete_prefix(key_prefix_red);
-                let new_cache_size = find_entry.size() + key_prefix.len();
+                let new_cache_size = find_entry.size() + lower_bound.len();
                 Some((new_cache_size, lower_bound.clone()))
             } else {
                 None
@@ -787,7 +787,7 @@ impl LruPrefixCache {
                 // Delete the keys (or key/values) in the entry
                 let key_prefix_red = &key_prefix[lower_bound.len()..];
                 find_entry.delete_prefix(key_prefix_red);
-                let new_cache_size = find_entry.size() + key_prefix.len();
+                let new_cache_size = find_entry.size() + lower_bound.len();
                 Some((new_cache_size, lower_bound.clone()))
             } else {
                 None
@@ -1561,7 +1561,7 @@ mod tests {
     #[test]
     fn test_find_key_values_entry_delete_prefix() {
         let mut find_entry = FindKeyValuesEntry(BTreeMap::new());
-        
+
         // Add some key-value pairs
         let key1 = vec![1, 2, 3];
         let key2 = vec![1, 2, 4];
@@ -1635,10 +1635,10 @@ mod tests {
                 remaining_count += 1;
             }
         }
-        
+
         // We should have fewer entries than we inserted due to trimming
         assert!(remaining_count < inserted_keys.len());
-        
+
         // The most recently inserted entries should still be present
         let last_key = &inserted_keys[inserted_keys.len() - 1];
         assert!(cache.query_read_value(last_key).is_some());
@@ -1683,14 +1683,14 @@ mod tests {
         // Test put_key_value also respects the early termination
         cache.put_key_value(&key1, &value);
         cache.check_coherence();
-        
+
         assert_eq!(cache.query_read_value(&key1), None);
         assert_eq!(cache.total_size, 0);
 
         // Test delete_key also respects the early termination
         cache.delete_key(&key1);
         cache.check_coherence();
-        
+
         assert_eq!(cache.query_read_value(&key1), None);
         assert_eq!(cache.total_size, 0);
     }
@@ -1871,7 +1871,7 @@ mod tests {
     #[test]
     fn test_find_keys_entry_delete_prefix_function() {
         let mut find_entry = FindKeysEntry(BTreeSet::new());
-        
+
         // Add some keys
         let key1 = vec![1, 2, 3];
         let key2 = vec![1, 2, 4];
@@ -1993,7 +1993,7 @@ mod tests {
 
         // The least recently used entry (prefix1) should have been evicted
         assert_eq!(cache.query_find_keys(&prefix1), None);
-        
+
         // The more recent entries should still be present
         assert!(cache.query_find_keys(&prefix2).is_some());
         assert!(cache.query_find_keys(&prefix3).is_some());
@@ -2105,7 +2105,7 @@ mod tests {
         // Verify that only value_map is checked by inserting directly into value_map
         cache.insert_contains_key(&key, true);
         cache.check_coherence();
-        
+
         // Now it should return Some(true) because it's found in value_map
         let result = cache.query_contains_key(&key);
         assert_eq!(result, Some(true));
@@ -2140,7 +2140,7 @@ mod tests {
     #[test]
     fn test_find_keys_removal_when_inserting_broader_find_keys() {
         let mut cache = create_test_cache(true);
-        
+
         // Insert a FindKeys entry with a specific prefix
         let narrow_prefix = vec![1, 2, 3];
         let keys1 = vec![vec![4], vec![5]];
@@ -2181,7 +2181,7 @@ mod tests {
     #[test]
     fn test_overlapping_find_key_values_removes_find_keys_and_find_key_values() {
         let mut cache = create_test_cache(true);
-        
+
         // Insert a FindKeys entry
         let find_keys_prefix = vec![1, 2, 3];
         let keys = vec![vec![4,6], vec![4,7], vec![5]];
@@ -2206,10 +2206,10 @@ mod tests {
 
         // The broader FindKeyValues should have removed the overlapping FindKeys entry.
         assert!(!cache.find_keys_map.contains_key(&find_keys_prefix));
-        
+
         // The broader FindKeyValues should have removed the overlapping FindKeyValues entry.
         assert!(!cache.find_key_values_map.contains_key(&find_key_values_prefix));
-        
+
         // The new broad FindKeyValues entry should exist
         assert!(cache.find_key_values_map.contains_key(&broad_prefix));
 
@@ -2222,5 +2222,87 @@ mod tests {
         // Test that we can still query for keys under the broad prefix
         let query_result = cache.query_contains_key(&[1, 2, 3, 1]);
         assert_eq!(query_result, Some(false)); // Should find it in the new FindKeyValues entry
+    }
+
+    #[test]
+    fn test_delete_prefix_removes_entire_find_keys_entry() {
+        let mut cache = create_test_cache(true); // has_exclusive_access = true
+
+        // Insert a FindKeys entry
+        let prefix = vec![1, 2, 3];
+        let keys = vec![vec![4], vec![5], vec![6]];
+        cache.insert_find_keys(prefix.clone(), &keys);
+        cache.check_coherence();
+
+        // Verify the FindKeys entry exists
+        assert!(cache.find_keys_map.contains_key(&prefix));
+        let result = cache.query_find_keys(&prefix);
+        assert!(result.is_some());
+
+        // Delete a prefix that covers the entire FindKeys entry
+        let delete_prefix = vec![1, 2]; // This covers [1, 2, 3]
+        cache.delete_prefix(&delete_prefix);
+        cache.check_coherence();
+
+        // Verify the entry is no longer queryable
+        let result = cache.query_find_keys(&prefix);
+        assert_eq!(result, Some(vec![]));
+
+        // Verify the queue no longer contains the FindKeys entry
+        for (cache_key, _) in &cache.queue {
+            assert!(!matches!(cache_key, CacheKey::FindKeys(key) if key == &prefix));
+        }
+    }
+
+    #[test]
+    fn test_delete_prefix_removes_keys_within_find_keys_entry() {
+        let mut cache = create_test_cache(true); // has_exclusive_access = true
+
+        // Insert a FindKeys entry with a broader prefix
+        let find_keys_prefix = vec![1];
+        let keys = vec![vec![2, 3, 4], vec![2, 3, 5], vec![2, 4, 6], vec![3, 7, 8]];
+        cache.insert_find_keys(find_keys_prefix.clone(), &keys);
+        cache.check_coherence();
+        println!("test_delete_prefix_removes_keys_within_find_keys_entry, step 1");
+
+        // Verify the FindKeys entry exists and contains all keys
+        assert!(cache.find_keys_map.contains_key(&find_keys_prefix));
+        let initial_keys = cache.query_find_keys(&find_keys_prefix).unwrap();
+        assert!(initial_keys.contains(&vec![2, 3, 4]));
+        assert!(initial_keys.contains(&vec![2, 3, 5]));
+        assert!(initial_keys.contains(&vec![2, 4, 6]));
+        assert!(initial_keys.contains(&vec![3, 7, 8]));
+
+        let initial_size = cache.total_find_keys_size;
+
+        // Delete a prefix that only affects some keys within the FindKeys entry
+        let delete_prefix = vec![1, 2, 3]; // This should only affect keys [2,3,4] and [2,3,5]
+        cache.delete_prefix(&delete_prefix);
+        cache.check_coherence();
+        println!("test_delete_prefix_removes_keys_within_find_keys_entry, step 2");
+
+        // The FindKeys entry should still exist but with fewer keys (line 772: delete_prefix called on the entry)
+        assert!(cache.find_keys_map.contains_key(&find_keys_prefix));
+
+        // Verify that only the keys with prefix [2,3] were removed
+        let remaining_keys = cache.query_find_keys(&find_keys_prefix).unwrap();
+        assert!(!remaining_keys.contains(&vec![2, 3, 4])); // Should be removed
+        assert!(!remaining_keys.contains(&vec![2, 3, 5])); // Should be removed
+        assert!(remaining_keys.contains(&vec![2, 4, 6]));  // Should remain
+        assert!(remaining_keys.contains(&vec![3, 7, 8]));  // Should remain
+
+        // The cache size should have decreased due to the removed keys
+        assert!(cache.total_find_keys_size < initial_size);
+
+        // Test another delete that removes more keys
+        let delete_prefix2 = vec![1, 2]; // This should affect key [2,4,6]
+        cache.delete_prefix(&delete_prefix2);
+        cache.check_coherence();
+        println!("test_delete_prefix_removes_keys_within_find_keys_entry, step 3");
+
+        // Check the remaining keys
+        let final_keys = cache.query_find_keys(&find_keys_prefix).unwrap();
+        assert!(!final_keys.contains(&vec![2, 4, 6])); // Should now be removed
+        assert!(final_keys.contains(&vec![3, 7, 8]));  // Should still remain
     }
 }
