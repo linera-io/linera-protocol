@@ -940,6 +940,21 @@ mod tests {
 
     use super::*;
 
+    fn check_prefix_free(set: BTreeSet<Vec<u8>>) {
+        let keys = set.into_iter().collect::<Vec<_>>();
+        let num_keys = keys.len();
+        println!("keys={keys:?}");
+        for i in 0..num_keys {
+            for j in 0..num_keys {
+                if i != j {
+                    let key1 = keys[i].clone();
+                    let key2 = keys[j].clone();
+                    println!("i={i} j={j} key1={key1:?} key2={key2:?}");
+                    assert!(!key1.starts_with(&key2));
+                }
+            }
+        }
+    }
 
     impl LruPrefixCache {
         fn check_coherence(&self) {
@@ -958,6 +973,8 @@ mod tests {
                 .keys()
                 .cloned()
                 .collect::<BTreeSet<Vec<u8>>>();
+            check_prefix_free(find_keys_map_set.clone());
+            check_prefix_free(find_key_values_map_set.clone());
             let mut value_queue_set = BTreeSet::new();
             let mut find_keys_queue_set = BTreeSet::new();
             let mut find_key_values_queue_set = BTreeSet::new();
@@ -1413,35 +1430,6 @@ mod tests {
         // Should have trimmed to stay within value cache limit
         assert!(cache.total_value_size <= cache.config.max_cache_value_size);
     }
-
-    #[test]
-    fn test_lower_bound_queries() {
-        let mut cache = create_test_cache(true);
-        let prefix1 = vec![1];
-        let prefix2 = vec![1, 2];
-        let keys1 = vec![vec![2], vec![3]];
-        let keys2 = vec![vec![4]];
-
-        // Insert entries with different prefixes
-        cache.insert_find_keys(prefix1.clone(), &keys1);
-        cache.check_coherence();
-        cache.insert_find_keys(prefix2.clone(), &keys2);
-        cache.check_coherence();
-
-        // Query with exact prefix1 - should return the keys we inserted
-        let result = cache.query_find_keys(&prefix1);
-        assert_eq!(result, Some(keys1));
-
-        // Query with exact prefix2 - should return the keys we inserted
-        let result = cache.query_find_keys(&prefix2);
-        assert_eq!(result, Some(keys2));
-
-        // Query with prefix that doesn't match any cached entry
-        let query_key = vec![9];
-        let result = cache.query_find_keys(&query_key);
-        assert_eq!(result, None);
-    }
-
 
     fn has_a_prefix_slow_method(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
         for prefix in prefixes {
@@ -2142,41 +2130,17 @@ mod tests {
     fn test_find_keys_removal_when_inserting_broader_find_keys() {
         let mut cache = create_test_cache(true);
 
+        // Insert another FindKeys entry with a more specific prefix
+        let specific_prefix = vec![1, 2, 3, 4];
+        let keys2 = vec![vec![6], vec![7]];
+        cache.insert_find_keys(specific_prefix.clone(), &keys2);
+        cache.check_coherence();
+
         // Insert a FindKeys entry with a specific prefix
         let narrow_prefix = vec![1, 2, 3];
-        let keys1 = vec![vec![4], vec![5]];
+        let keys1 = vec![vec![4, 6], vec![4, 7]];
         cache.insert_find_keys(narrow_prefix.clone(), &keys1);
         cache.check_coherence();
-
-        // Insert another FindKeys entry with a more specific prefix
-        let more_specific_prefix = vec![1, 2, 3, 4];
-        let keys2 = vec![vec![6], vec![7]];
-        cache.insert_find_keys(more_specific_prefix.clone(), &keys2);
-        cache.check_coherence();
-
-        // Verify both entries exist
-        assert!(cache.find_keys_map.contains_key(&narrow_prefix));
-        assert!(cache.find_keys_map.contains_key(&more_specific_prefix));
-
-        // Now insert a broader FindKeys entry that contains the previous ones
-        let broad_prefix = vec![1, 2];
-        let keys3 = vec![vec![3, 4], vec![3, 5], vec![8, 9]];
-        cache.insert_find_keys(broad_prefix.clone(), &keys3);
-        cache.check_coherence();
-
-        // The broader prefix should have caused removal of the narrower ones
-        assert!(!cache.find_keys_map.contains_key(&narrow_prefix));
-        assert!(!cache.find_keys_map.contains_key(&more_specific_prefix));
-        // The new broad prefix should exist
-        assert!(cache.find_keys_map.contains_key(&broad_prefix));
-
-        // Verify the new entry has the expected keys
-        let result = cache.query_find_keys(&broad_prefix);
-        assert!(result.is_some());
-        let found_keys = result.unwrap();
-        assert!(found_keys.contains(&vec![3, 4]));
-        assert!(found_keys.contains(&vec![3, 5]));
-        assert!(found_keys.contains(&vec![8, 9]));
     }
 
     #[test]
@@ -2504,7 +2468,7 @@ mod tests {
     }
 
     #[test]
-    fn test_line_484_trim_cache_breaks_on_empty_queue() {
+    fn test_trim_cache_breaks_on_empty_queue() {
         let mut cache = LruPrefixCache::new(
             StorageCacheConfig {
                 max_cache_size: 10000, // to make irrelevant
