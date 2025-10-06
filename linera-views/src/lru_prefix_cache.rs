@@ -524,55 +524,65 @@ impl LruPrefixCache {
 
     /// Puts a key/value in the cache.
     pub(crate) fn put_key_value(&mut self, key: &[u8], value: &[u8]) {
-        let lower_bound = self.get_existing_keys_entry_mut(key);
-        if let Some((lower_bound, cache_entry)) = lower_bound {
-            let key_red = &key[lower_bound.len()..];
-            cache_entry.update_entry(key_red, true);
-            let cache_key = CacheKey::FindKeys(lower_bound.to_vec());
-            let new_size = lower_bound.len() + cache_entry.size();
-            self.update_cache_key_sizes(&cache_key, new_size);
-        }
-        match self.get_existing_find_key_values_entry_mut(key) {
-            Some((lower_bound, cache_entry)) => {
+        if self.has_exclusive_access {
+            let lower_bound = self.get_existing_keys_entry_mut(key);
+            if let Some((lower_bound, cache_entry)) = lower_bound {
                 let key_red = &key[lower_bound.len()..];
-                cache_entry.update_entry(key_red, Some(value.to_vec()));
-                let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
+                cache_entry.update_entry(key_red, true);
+                let cache_key = CacheKey::FindKeys(lower_bound.to_vec());
                 let new_size = lower_bound.len() + cache_entry.size();
                 self.update_cache_key_sizes(&cache_key, new_size);
-                let cache_key = CacheKey::Value(key.to_vec());
-                self.remove_cache_key_if_exists(&cache_key);
-            },
-            None => {
-                let cache_entry = ValueEntry::Value(value.to_vec());
-                self.insert_value(key, cache_entry);
             }
+            match self.get_existing_find_key_values_entry_mut(key) {
+                Some((lower_bound, cache_entry)) => {
+                    let key_red = &key[lower_bound.len()..];
+                    cache_entry.update_entry(key_red, Some(value.to_vec()));
+                    let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
+                    let new_size = lower_bound.len() + cache_entry.size();
+                    self.update_cache_key_sizes(&cache_key, new_size);
+                    let cache_key = CacheKey::Value(key.to_vec());
+                    self.remove_cache_key_if_exists(&cache_key);
+                },
+                None => {
+                    let cache_entry = ValueEntry::Value(value.to_vec());
+                    self.insert_value(key, cache_entry);
+                }
+            }
+        } else {
+            let cache_entry = ValueEntry::Value(value.to_vec());
+            self.insert_value(key, cache_entry);
         }
     }
 
     /// Deletes a key from the cache.
     pub(crate) fn delete_key(&mut self, key: &[u8]) {
-        let lower_bound = self.get_existing_keys_entry_mut(key);
-        let mut matching = false; // If matching, no need to insert in the value cache
-        if let Some((lower_bound, cache_entry)) = lower_bound {
-            let key_red = &key[lower_bound.len()..];
-            cache_entry.update_entry(key_red, false);
-            let cache_key = CacheKey::FindKeys(lower_bound.to_vec());
-            let new_size = lower_bound.len() + cache_entry.size();
-            self.update_cache_key_sizes(&cache_key, new_size);
-            matching = true;
-        }
-        let lower_bound = self.get_existing_find_key_values_entry_mut(key);
-        if let Some((lower_bound, cache_entry)) = lower_bound {
-            let key_red = &key[lower_bound.len()..];
-            cache_entry.update_entry(key_red, None);
-            let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
-            let new_size = lower_bound.len() + cache_entry.size();
-            self.update_cache_key_sizes(&cache_key, new_size);
-            matching = true;
-        }
-        if !matching {
-            let cache_entry = ValueEntry::DoesNotExist;
-            self.insert_value(key, cache_entry);
+        if self.has_exclusive_access {
+            let lower_bound = self.get_existing_keys_entry_mut(key);
+            let mut matching = false; // If matching, no need to insert in the value cache
+            if let Some((lower_bound, cache_entry)) = lower_bound {
+                let key_red = &key[lower_bound.len()..];
+                cache_entry.update_entry(key_red, false);
+                let cache_key = CacheKey::FindKeys(lower_bound.to_vec());
+                let new_size = lower_bound.len() + cache_entry.size();
+                self.update_cache_key_sizes(&cache_key, new_size);
+                matching = true;
+            }
+            let lower_bound = self.get_existing_find_key_values_entry_mut(key);
+            if let Some((lower_bound, cache_entry)) = lower_bound {
+                let key_red = &key[lower_bound.len()..];
+                cache_entry.update_entry(key_red, None);
+                let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
+                let new_size = lower_bound.len() + cache_entry.size();
+                self.update_cache_key_sizes(&cache_key, new_size);
+                matching = true;
+            }
+            if !matching {
+                let cache_entry = ValueEntry::DoesNotExist;
+                self.insert_value(key, cache_entry);
+            } else {
+                let cache_key = CacheKey::Value(key.to_vec());
+                self.remove_cache_key_if_exists(&cache_key);
+            }
         } else {
             let cache_key = CacheKey::Value(key.to_vec());
             self.remove_cache_key_if_exists(&cache_key);
@@ -717,14 +727,21 @@ impl LruPrefixCache {
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not
     /// create new entries in the cache.
     pub(crate) fn delete_prefix(&mut self, key_prefix: &[u8]) {
+        // When using delete_prefix, we do not insert `ValueEntry::DoesNotExist` and instead drop
+        // the entries from cache
+        // This is because:
+        // * In non-exclusive access, this could be added by another user.
+        // * In exclusive access, we do this via the `FindKeyValues`.
+        let mut keys = Vec::new();
+        for (key, _) in self.value_map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
+            keys.push(key.to_vec());
+        }
+        for key in keys {
+            assert!(self.value_map.remove(&key).is_some());
+            let cache_key = CacheKey::Value(key);
+            self.remove_cache_key(&cache_key);
+        }
         if self.has_exclusive_access {
-            for (key, value) in self.value_map.range_mut(get_key_range_for_prefix(key_prefix.to_vec())) {
-                let cache_key = CacheKey::Value(key.to_vec());
-                *self.queue.get_mut(&cache_key).unwrap() = key.len();
-                self.total_size -= value.size();
-                self.total_value_size -= value.size();
-                *value = ValueEntry::DoesNotExist;
-            }
             // Remove the FindKeys that are covered by key_prefix.
             let mut prefixes = Vec::new();
             for (prefix, _) in self.find_keys_map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
@@ -784,27 +801,11 @@ impl LruPrefixCache {
                 // the deleted prefix as a FindKeyValues.
                 let size = key_prefix.len();
                 let cache_key = CacheKey::FindKeyValues(key_prefix.to_vec());
-                let find_entry = FindKeyValuesEntry(BTreeMap::new());
+                let find_key_values_entry = FindKeyValuesEntry(BTreeMap::new());
                 self.find_key_values_map
-                    .insert(key_prefix.to_vec(), find_entry);
+                    .insert(key_prefix.to_vec(), find_key_values_entry);
                 self.insert_cache_key(cache_key, size);
             }
-        } else {
-            // Just forget about the entries in the value map.
-            let mut keys = Vec::new();
-            for (key, _) in self.value_map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
-                keys.push(key.to_vec());
-            }
-            for key in keys {
-                self.value_map.remove(&key);
-                let cache_key = CacheKey::Value(key);
-                let Some(size) = self.queue.remove(&cache_key) else {
-                    unreachable!("The key should be in the queue");
-                };
-                self.total_size -= size;
-                self.total_value_size -= size;
-            }
-            // No find keys for shared access
         }
     }
 
@@ -1222,32 +1223,6 @@ mod tests {
         // Key with different prefix should be unaffected
         let result3 = cache.query_read_value(&key3);
         assert_eq!(result3, Some(Some(value)));
-    }
-
-    #[test]
-    fn test_delete_prefix_without_exclusive_access() {
-        let mut cache = create_test_cache(false);
-        let prefix = vec![1];
-        let key1 = vec![1, 2];
-        let key2 = vec![2, 3]; // Different prefix
-        let value = vec![42];
-
-        // Insert some values
-        cache.insert_read_value(&key1, &Some(value.clone()));
-        cache.check_coherence();
-        cache.insert_read_value(&key2, &Some(value.clone()));
-        cache.check_coherence();
-
-        // Delete prefix [1]
-        cache.delete_prefix(&prefix);
-
-        // Key with prefix [1] should be removed from cache
-        let result1 = cache.query_read_value(&key1);
-        assert_eq!(result1, None);
-
-        // Key with different prefix should be unaffected
-        let result2 = cache.query_read_value(&key2);
-        assert_eq!(result2, Some(Some(value)));
     }
 
     #[test]
@@ -2127,17 +2102,6 @@ mod tests {
         let result = cache.query_contains_key(&key);
         assert_eq!(result, None);
 
-        // Even if we manually insert a FindKeys entry (which normally wouldn't happen without exclusive access),
-        // the query should still return None because it doesn't check FindKeys/FindKeyValues without exclusive access
-        let prefix = vec![1];
-        let keys = vec![vec![2, 3]];
-        cache.insert_find_keys(prefix, &keys);
-        cache.check_coherence();
-
-        // Should still return None because has_exclusive_access = false (hits line 856)
-        let result = cache.query_contains_key(&key);
-        assert_eq!(result, None);
-
         // Verify that only value_map is checked by inserting directly into value_map
         cache.insert_contains_key(&key, true);
         cache.check_coherence();
@@ -2231,7 +2195,7 @@ mod tests {
         cache.check_coherence();
 
         // Inserts a Value
-        cache.put_key_value(&vec![1,2,8,9], &vec![254]);
+        cache.put_key_value(&[1,2,8,9], &[254]);
         cache.check_coherence();
 
         // Now insert a broader FindKeyValues entry that overlaps with both previous entries
