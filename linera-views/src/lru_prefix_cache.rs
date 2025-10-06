@@ -838,9 +838,10 @@ impl LruPrefixCache {
             };
             let cache_key = CacheKey::FindKeyValues(lower_bound.clone());
             self.move_cache_key_on_top(cache_key);
-            return Some(result);
+            Some(result)
+        } else {
+            None
         }
-        result
     }
 
     /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
@@ -2383,5 +2384,46 @@ mod tests {
             matches!(cache_key, CacheKey::Value(k) if k == &key)
         });
         assert!(!queue_contains_key);
+    }
+
+    #[test]
+    fn test_does_not_exist_removal_during_insert_find_keys() {
+        let mut cache = create_test_cache(true); // has_exclusive_access = true
+        let prefix = vec![1, 2];
+        let key1 = vec![1, 2, 3];
+        let key2 = vec![1, 2, 4];
+        let key3 = vec![1, 2, 5];
+
+        // Insert DoesNotExist entries for keys that will be covered by the FindKeys
+        cache.insert_read_value(&key1, &None); // Creates DoesNotExist entry
+        cache.insert_read_value(&key2, &None); // Creates DoesNotExist entry
+        cache.insert_read_value(&key3, &Some(vec![100])); // Creates Value entry (should not be removed)
+        cache.check_coherence();
+
+        // Verify the DoesNotExist entries are cached
+        assert_eq!(cache.query_read_value(&key1), Some(None));
+        assert_eq!(cache.query_read_value(&key2), Some(None));
+        assert_eq!(cache.query_read_value(&key3), Some(Some(vec![100])));
+        assert!(cache.value_map.contains_key(&key1));
+        assert!(cache.value_map.contains_key(&key2));
+        assert!(cache.value_map.contains_key(&key3));
+
+        // Insert a FindKeys entry that covers the prefix - this should trigger line 640
+        // Line 640 filters DoesNotExist entries for removal, but not Value entries
+        let find_keys_result = vec![key1.clone(), key2.clone(), key3.clone()];
+        cache.insert_find_keys(prefix.clone(), &find_keys_result);
+        cache.check_coherence();
+
+        // After insert_find_keys, the DoesNotExist entries should be removed (line 640)
+        // but the Value entry should remain (line 642 returns None for Value entries)
+        assert_eq!(cache.query_read_value(&key1), None); // DoesNotExist removed
+        assert_eq!(cache.query_read_value(&key2), None); // DoesNotExist removed
+        assert_eq!(cache.query_read_value(&key3), Some(Some(vec![100]))); // Value entry kept
+        assert!(!cache.value_map.contains_key(&key1));
+        assert!(!cache.value_map.contains_key(&key2));
+        assert!(cache.value_map.contains_key(&key3)); // Value entry remains
+
+        // Verify the FindKeys entry was created
+        assert_eq!(cache.query_find_keys(&prefix), Some(find_keys_result));
     }
 }
