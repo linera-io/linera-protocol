@@ -1016,6 +1016,26 @@ mod tests {
             assert_eq!(total_value_size, self.total_value_size, "The total_value_size are incoherent");
             assert_eq!(total_find_keys_size, self.total_find_keys_size, "The total_find_keys_size are incoherent");
             assert_eq!(total_find_key_values_size, self.total_find_key_values_size, "The total_find_key_values_size are incoherent");
+            if self.config.max_cache_size > 0 {
+                assert!(total_size < self.config.max_cache_size, "The total_size is too large");
+            } else {
+                assert!(total_size == 0, "The total_size should be 0");
+            }
+            if self.config.max_cache_value_size > 0 {
+                assert!(total_value_size < self.config.max_cache_value_size, "The total_value_size is too large");
+            } else {
+                assert!(total_value_size == 0, "The total_value_size should be 0");
+            }
+            if self.config.max_cache_find_keys_size > 0 {
+                assert!(total_find_keys_size < self.config.max_cache_find_keys_size, "The total_value_size is too large");
+            } else {
+                assert!(total_find_keys_size == 0, "The total_find_keys_size should be 0");
+            }
+            if self.config.max_cache_find_key_values_size > 0 {
+                assert!(total_find_key_values_size < self.config.max_cache_find_key_values_size, "The total_find_key_values_size is too large");
+            } else {
+                assert!(total_find_key_values_size == 0, "The total_find_key_values_size should be 0");
+            }
         }
     }
 
