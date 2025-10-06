@@ -2354,4 +2354,34 @@ mod tests {
         cache.delete_key(&non_existent_key); // Should not crash
         cache.check_coherence();
     }
+
+    #[test]
+    fn test_line_502_insert_then_delete_without_exclusive_access() {
+        let mut cache = create_test_cache(false); // has_exclusive_access = false
+        let key = vec![1, 2, 3, 4];
+        let value = vec![100, 200, 201];
+
+        // First insert a value entry
+        cache.insert_read_value(&key, &Some(value.clone()));
+        cache.check_coherence();
+
+        // Verify the value is cached
+        assert_eq!(cache.query_read_value(&key), Some(Some(value)));
+        assert!(cache.value_map.contains_key(&key));
+
+        // Now insert a DoesNotExist entry (simulating a delete) without exclusive access
+        // This should trigger line 502: removal due to !has_exclusive_access
+        cache.insert_read_value(&key, &None);
+        cache.check_coherence();
+
+        // The entry should be completely removed from the cache (line 502)
+        assert!(!cache.value_map.contains_key(&key));
+        assert_eq!(cache.query_read_value(&key), None);
+
+        // Verify the cache key is removed from the queue
+        let queue_contains_key = cache.queue.iter().any(|(cache_key, _)| {
+            matches!(cache_key, CacheKey::Value(k) if k == &key)
+        });
+        assert!(!queue_contains_key);
+    }
 }
