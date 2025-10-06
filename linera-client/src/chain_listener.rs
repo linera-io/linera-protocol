@@ -209,7 +209,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     #[instrument(skip(self))]
     pub async fn run(
         mut self,
-        sync_sleep_ms: Option<u64>,
+        enable_background_sync: bool,
     ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
@@ -229,8 +229,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         };
 
         // Start background tasks to sync received certificates for each chain,
-        // if enabled (sync_sleep_ms is Some).
-        if let Some(sync_sleep_ms) = sync_sleep_ms {
+        // if enabled.
+        if enable_background_sync {
             let context = Arc::clone(&self.context);
             let cancellation_token = self.cancellation_token.clone();
             for chain_id in chain_ids.keys() {
@@ -240,7 +240,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 drop(linera_base::task::spawn(async move {
                     if let Err(e) = Self::background_sync_received_certificates(
                         context,
-                        sync_sleep_ms,
                         chain_id,
                         cancellation_token,
                     )
@@ -417,7 +416,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     #[instrument(skip(context, cancellation_token))]
     async fn background_sync_received_certificates(
         context: Arc<Mutex<C>>,
-        sync_sleep_ms: u64,
         chain_id: ChainId,
         cancellation_token: CancellationToken,
     ) -> Result<(), Error> {

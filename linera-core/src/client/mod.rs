@@ -13,7 +13,8 @@ use std::{
 use chain_client_state::ChainClientState;
 use custom_debug_derive::Debug;
 use futures::{
-    future::{self, Either, FusedFuture, Future},
+    future::{self, Either, FusedFuture, Future, FutureExt},
+    select,
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt, TryStreamExt},
 };
 #[cfg(with_metrics)]
@@ -2224,10 +2225,24 @@ impl<Env: Environment> ChainClient<Env> {
             validator_trackers
         });
 
-        stream::iter(cert_futures)
+        let mut cancellation_future = Box::pin(
+            async move {
+                if let Some(token) = cancellation_token {
+                    token.cancelled().await
+                } else {
+                    future::pending().await
+                }
+            }
+            .fuse(),
+        );
+
+        select! {
+            _ = stream::iter(cert_futures)
             .buffer_unordered(self.options.max_joined_tasks)
             .for_each(future::ready)
-            .await;
+            => (),
+            _ = cancellation_future => ()
+        };
 
         drop(sender);
 

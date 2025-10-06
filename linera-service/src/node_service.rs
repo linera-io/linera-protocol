@@ -899,11 +899,7 @@ where
 
     /// Runs the node service.
     #[instrument(name = "node_service", level = "info", skip_all, fields(port = ?self.port))]
-    pub async fn run(
-        self,
-        cancellation_token: CancellationToken,
-        sync_sleep_ms: u64,
-    ) -> Result<(), anyhow::Error> {
+    pub async fn run(self, cancellation_token: CancellationToken) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
@@ -934,7 +930,7 @@ where
             storage,
             cancellation_token.clone(),
         )
-        .run(Some(sync_sleep_ms))
+        .run(true)
         .await?;
         let mut chain_listener = Box::pin(chain_listener).fuse();
         let tcp_listener =
