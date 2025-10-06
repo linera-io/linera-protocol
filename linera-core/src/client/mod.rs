@@ -836,21 +836,28 @@ impl<Env: Environment> Client<Env> {
     async fn download_and_process_sender_chain(
         &self,
         sender_chain_id: ChainId,
-        mut nodes: Vec<RemoteNode<Env::ValidatorNode>>,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
         mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
         while !remote_heights.is_empty() {
-            let certificates = loop {
-                let Some(remote_node) = nodes.pop() else {
+            let remote_heights_clone = remote_heights.clone();
+            let certificates = match communicate_in_parallel(
+                nodes,
+                async move |remote_node| {
+                    Ok(remote_node
+                        .download_certificates_by_heights(sender_chain_id, remote_heights_clone)
+                        .await?)
+                },
+                || (),
+                self.options.certificate_batch_download_timeout,
+            )
+            .await
+            {
+                Ok(certificates) => certificates,
+                Err(_) => {
                     error!("could not download certificates for {}", sender_chain_id);
                     return;
-                };
-                if let Ok(certificates) = remote_node
-                    .download_certificates_by_heights(sender_chain_id, remote_heights.clone())
-                    .await
-                {
-                    break certificates;
                 }
             };
 
@@ -1157,12 +1164,10 @@ impl<Env: Environment> Client<Env> {
         let timeout = self.options.blob_download_timeout;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
-        stream::iter(blob_ids.into_iter().map(|blob_id| async move {
-            let mut stream = remote_nodes
-                .iter()
-                .zip(0..)
-                .map(|(remote_node, i)| async move {
-                    linera_base::time::timer::sleep(timeout * i * i).await;
+        stream::iter(blob_ids.into_iter().map(|blob_id| {
+            communicate_in_parallel(
+                remote_nodes,
+                async move |remote_node| {
                     let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
                     self.receive_sender_certificate(
                         certificate,
@@ -1177,14 +1182,10 @@ impl<Env: Environment> Client<Env> {
                         .await?
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, ChainClientError>::Ok(blob)
-                })
-                .collect::<FuturesUnordered<_>>();
-            while let Some(maybe_blob) = stream.next().await {
-                if let Ok(blob) = maybe_blob {
-                    return Ok(blob);
-                }
-            }
-            Err(NodeError::BlobsNotFound(vec![blob_id]).into())
+                },
+                move || ChainClientError::from(NodeError::BlobsNotFound(vec![blob_id])),
+                timeout,
+            )
         }))
         .buffer_unordered(self.options.max_joined_tasks)
         .collect::<Vec<_>>()
@@ -1362,6 +1363,8 @@ pub struct ChainClientOptions {
     pub grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
     pub blob_download_timeout: Duration,
+    /// The delay when downloading a batch of certificates, after which we try a second validator.
+    pub certificate_batch_download_timeout: Duration,
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
@@ -1382,6 +1385,7 @@ impl ChainClientOptions {
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             grace_period: DEFAULT_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
+            certificate_batch_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
         }
@@ -2323,15 +2327,15 @@ impl<Env: Environment> ChainClient<Env> {
                         other_sender_chains.push(sender_chain_id);
                         return None;
                     };
-                    let mut nodes = nodes.clone();
                     let sender = sender.clone();
                     let client = self.client.clone();
+                    let mut nodes = nodes.clone();
                     nodes.shuffle(&mut rand::thread_rng());
                     Some(async move {
                         client
                             .download_and_process_sender_chain(
                                 sender_chain_id,
-                                nodes,
+                                &nodes,
                                 remote_heights,
                                 sender,
                             )
@@ -4326,6 +4330,40 @@ impl<Env: Environment> ChainClient<Env> {
 
         Ok(())
     }
+}
+
+/// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay on
+/// each subsequent node. Returns error `err` is all of the nodes fail.
+async fn communicate_in_parallel<'a, A, E, F, G, R, V>(
+    nodes: &[RemoteNode<A>],
+    f: F,
+    err: G,
+    timeout: Duration,
+) -> Result<V, E>
+where
+    F: Clone + FnOnce(RemoteNode<A>) -> R,
+    RemoteNode<A>: Clone,
+    G: FnOnce() -> E,
+    R: Future<Output = Result<V, ChainClientError>> + 'a,
+{
+    let mut stream = nodes
+        .iter()
+        .zip(0..)
+        .map(|(remote_node, i)| {
+            let fun = f.clone();
+            let node = remote_node.clone();
+            async move {
+                linera_base::time::timer::sleep(timeout * i * i).await;
+                fun(node).await
+            }
+        })
+        .collect::<FuturesUnordered<_>>();
+    while let Some(maybe_result) = stream.next().await {
+        if let Ok(result) = maybe_result {
+            return Ok(result);
+        }
+    }
+    Err(err())
 }
 
 #[cfg(with_testing)]

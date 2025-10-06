@@ -84,7 +84,7 @@ pub struct ClientContextOptions {
     /// The duration, in milliseconds, after which an idle sender chain worker will
     /// free its memory.
     #[arg(
-        long = "sender-chain-worker-ttl-ms", 
+        long = "sender-chain-worker-ttl-ms",
         default_value = "1000",
         env = "LINERA_SENDER_CHAIN_WORKER_TTL_MS",
         value_parser = util::parse_millis
@@ -145,6 +145,15 @@ pub struct ClientContextOptions {
     )]
     pub blob_download_timeout: Duration,
 
+    /// The delay when downloading a batch of certificates, after which we try a second validator,
+    /// in milliseconds.
+    #[arg(
+        long = "cert-batch-download-timeout-ms",
+        default_value = "1000",
+        value_parser = util::parse_millis
+    )]
+    pub certificate_batch_download_timeout: Duration,
+
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     #[arg(
@@ -173,6 +182,7 @@ impl ClientContextOptions {
             cross_chain_message_delivery,
             grace_period: self.grace_period,
             blob_download_timeout: self.blob_download_timeout,
+            certificate_batch_download_timeout: self.certificate_batch_download_timeout,
             certificate_download_batch_size: self.certificate_download_batch_size,
             max_joined_tasks: self.max_joined_tasks,
         }
