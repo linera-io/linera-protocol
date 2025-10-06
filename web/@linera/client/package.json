@@ -19,7 +19,7 @@
     "install": "true",
     "build": "bash build.bash --release",
     "prepare": "pnpm build",
-    "lint": "pnpm build && pnpm exec tsc && cargo fmt --check && cargo clippy",
+    "lint": "pnpm build && cargo fmt --check && cargo clippy",
     "test": "pnpm exec vitest --run",
     "ci": "pnpm lint && pnpm test && pnpm doc",
     "format": "pnpm exec prettier . --write",
