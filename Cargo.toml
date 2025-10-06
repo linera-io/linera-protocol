@@ -317,16 +317,14 @@ amm = { path = "./examples/amm" }
 call-evm-counter = { path = "./examples/call-evm-counter" }
 counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
-create-and-call = { path = "./examples/create-and-call" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
 hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
-meta-counter = { path = "./examples/meta-counter" }
+meta-counter = { path = "./linera-sdk/tests/fixtures/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
-publish-read-data-blob = { path = "./examples/publish-read-data-blob" }
 social = { path = "./examples/social" }
 time-expiry = { path = "./examples/time-expiry" }
 

@@ -1615,15 +1615,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
-name = "contract-call"
-version = "0.1.0"
-dependencies = [
- "linera-sdk",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "convert_case"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1798,17 +1789,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "create-and-call"
-version = "0.1.0"
-dependencies = [
- "assert_matches",
- "counter-no-graphql",
- "linera-sdk",
- "serde",
- "tokio",
 ]
 
 [[package]]
@@ -4348,17 +4328,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "meta-counter"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "counter",
- "linera-sdk",
- "log",
- "serde",
-]
-
-[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5033,16 +5002,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "publish-read-data-blob"
-version = "0.1.0"
-dependencies = [
- "assert_matches",
- "linera-sdk",
- "serde",
- "tokio",
 ]
 
 [[package]]

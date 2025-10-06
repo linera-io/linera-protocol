@@ -3,10 +3,8 @@ resolver = "2"
 members = [
     "amm",
     "call-evm-counter",
-    "contract-call",
     "counter",
     "counter-no-graphql",
-    "create-and-call",
     "crowd-funding",
     "ethereum-tracker",
     "fungible",
@@ -16,10 +14,8 @@ members = [
     "how-to/perform-http-requests",
     "llm",
     "matching-engine",
-    "meta-counter",
     "native-fungible",
     "non-fungible",
-    "publish-read-data-blob",
     "rfq",
     "social",
     "time-expiry",
@@ -62,7 +58,6 @@ tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
 amm = { path = "./amm" }
 counter = { path = "./counter" }
-create-and-call = { path = "./create-and-call" }
 crowd-funding = { path = "./crowd-funding" }
 ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
 fungible = { path = "./fungible" }
