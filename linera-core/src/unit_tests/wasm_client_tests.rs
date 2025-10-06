@@ -21,12 +21,14 @@ use counter::CounterAbi;
 use fungible::{FungibleOperation, InitialState, Parameters};
 use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
-    crypto::InMemorySigner,
+    crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse, Round, TimeDelta,
+        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse, Round, TimeDelta,
         Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, BlobType, ModuleId, StreamId, StreamName},
+    identifiers::{
+        ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -986,6 +988,123 @@ where
     client_a
         .execute_operation(Operation::user(app_id, &claim_victory_operation)?)
         .await?;
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_publish_read_data_blob(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[ignore]
+#[cfg(feature = "storage-service")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_service_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_publish_read_data_blob(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[ignore]
+#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_rocks_db_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_publish_read_data_blob(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+	.await
+}
+
+#[ignore]
+#[cfg(feature = "dynamodb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_dynamo_db_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_publish_read_data_blob(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_scylla_db_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_publish_read_data_blob(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_publish_read_data_blob<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use publish_read_data_blob::PublishReadDataBlobAbi;
+
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+    let client = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+
+    let module_id = client
+        .publish_wasm_example("publish-read-data-blob")
+        .await?;
+    let module_id = module_id.with_abi::<PublishReadDataBlobAbi, (), ()>();
+
+    let (application_id, _) = client
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Method 1: Publishing and reading in different blocks.
+    let test_data = b"This is test data for method 1.".to_vec();
+
+    // publishing the data.
+    let publish_op = publish_read_data_blob::Operation::CreateDataBlob(test_data.clone());
+    let certificate = client
+        .execute_operation(Operation::user(application_id, &publish_op)?)
+        .await
+        .unwrap_ok_committed();
+
+    // getting the hash
+    let content = BlobContent::new_data(test_data.clone());
+    let hash = DataBlobHash(CryptoHash::new(&content));
+
+    // reading and checking
+    let read_op = publish_read_data_blob::Operation::ReadDataBlob(hash, test_data);
+    client
+        .execute_operation(Operation::user(application_id, &read_op)?)
+        .await
+        .unwrap_ok_committed();
+    // None of the following blocks should have oracle responses: all read blobs were created
+    // on the same chain, so no oracle is needed.
+    assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
+
+    // Method 2: Publishing and reading in the same transaction
+    let test_data = b"This is test data for method 2.".to_vec();
+    let combined_op = publish_read_data_blob::Operation::CreateAndReadDataBlob(test_data);
+    let certificate = client
+        .execute_operation(Operation::user(application_id, &combined_op)?)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
+
+    // Method 3: Publishing and reading in the same block but different transactions
+    let test_data = b"This is test data for method 3.".to_vec();
+    let publish_op = publish_read_data_blob::Operation::CreateDataBlob(test_data.clone());
+    let content = BlobContent::new_data(test_data.clone());
+    let hash = DataBlobHash(CryptoHash::new(&content));
+    let read_op = publish_read_data_blob::Operation::ReadDataBlob(hash, test_data);
+    let op1 = Operation::user(application_id, &publish_op)?;
+    let op2 = Operation::user(application_id, &read_op)?;
+    let certificate = client
+        .execute_operations(vec![op1, op2], vec![])
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().body.oracle_responses[0].len(), 0);
+    assert_eq!(certificate.block().body.oracle_responses[1].len(), 0);
+
     Ok(())
 }
 
