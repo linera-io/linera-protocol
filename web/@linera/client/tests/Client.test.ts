@@ -4,7 +4,7 @@ import * as linera from "../dist";
 
 async function getWallet() {
   await linera.initialize();
-  const faucet = await new linera.Faucet("http://localhost:8080");
+  const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
   return await faucet.createWallet();
 }
 
