@@ -44,6 +44,7 @@ derive_more = { workspace = true, features = ["from"] }
 futures.workspace = true
 generic-array.workspace = true
 hex = { workspace = true, optional = true }
+itertools.workspace = true
 linera-base.workspace = true
 linera-views-derive.workspace = true
 linera-witty.workspace = true

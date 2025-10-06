@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { Signer } from "@linera/client";
+import { Signer as SignerInterface } from "@linera/client";
 
 import type { MetaMaskInpageProvider } from "@metamask/providers";
 
@@ -26,7 +26,7 @@ declare global {
  * 
  * Suitable for production use where MetaMask is the expected signer interface.
  */
-export class MetaMask implements Signer {
+export default class Signer implements SignerInterface {
   private provider: ethers.BrowserProvider;
 
   constructor() {

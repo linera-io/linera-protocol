@@ -2393,6 +2393,7 @@ dependencies = [
  "futures",
  "generic-array",
  "hex",
+ "itertools",
  "linera-base",
  "linera-views-derive",
  "linera-witty",

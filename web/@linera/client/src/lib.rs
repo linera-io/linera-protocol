@@ -188,15 +188,6 @@ pub struct Client {
     client_context: Arc<AsyncMutex<ClientContext>>,
 }
 
-/// The subset of the client API that should be exposed to application
-/// frontends. Any function exported here with `wasm_bindgen` can be
-/// called by untrusted Web pages, and so inputs must be verified and
-/// outputs must not leak sensitive information without user
-/// confirmation.
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct Frontend(Client);
-
 #[derive(serde::Deserialize)]
 struct TransferParams {
     donor: Option<AccountOwner>,
@@ -374,28 +365,6 @@ impl Client {
         )?)
     }
 
-    /// Gets an object implementing the API for Web frontends.
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn frontend(&self) -> Frontend {
-        Frontend(self.clone())
-    }
-}
-
-// A serializer suitable for serializing responses to JavaScript to be
-// sent using `postMessage`.
-static RESPONSE_SERIALIZER: serde_wasm_bindgen::Serializer = serde_wasm_bindgen::Serializer::new()
-    .serialize_large_number_types_as_bigints(true)
-    .serialize_maps_as_objects(true);
-
-#[wasm_bindgen]
-pub struct Application {
-    client: Client,
-    id: ApplicationId,
-}
-
-#[wasm_bindgen]
-impl Frontend {
     /// Gets the version information of the validators of the current network.
     ///
     /// # Errors
@@ -405,7 +374,7 @@ impl Frontend {
     /// If no default chain is set for the current wallet.
     #[wasm_bindgen(js_name = validatorVersionInfo)]
     pub async fn validator_version_info(&self) -> JsResult<JsValue> {
-        let mut client_context = self.0.client_context.lock().await;
+        let mut client_context = self.client_context.lock().await;
         let chain_id = client_context
             .wallet()
             .default_chain()
@@ -451,10 +420,22 @@ impl Frontend {
     #[wasm_bindgen]
     pub async fn application(&self, id: &str) -> JsResult<Application> {
         Ok(Application {
-            client: self.0.clone(),
+            client: self.clone(),
             id: id.parse()?,
         })
     }
+}
+
+// A serializer suitable for serializing responses to JavaScript to be
+// sent using `postMessage`.
+static RESPONSE_SERIALIZER: serde_wasm_bindgen::Serializer = serde_wasm_bindgen::Serializer::new()
+    .serialize_large_number_types_as_bigints(true)
+    .serialize_maps_as_objects(true);
+
+#[wasm_bindgen]
+pub struct Application {
+    client: Client,
+    id: ApplicationId,
 }
 
 #[wasm_bindgen]

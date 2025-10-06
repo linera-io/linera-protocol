@@ -5897,6 +5897,7 @@ dependencies = [
  "gloo-utils",
  "hex",
  "indexed_db_futures",
+ "itertools 0.14.0",
  "linera-base",
  "linera-views",
  "linera-views-derive",
