@@ -2037,7 +2037,7 @@ mod tests {
         cache.insert_find_keys(prefix3.clone(), &keys);
         cache.check_coherence();
 
-        // The first entry should have been evicted (line 258: FindKeys removal from map)
+        // The first entry should have been evicted
         assert!(!cache.find_keys_map.contains_key(&prefix1));
         // The newer entries should still be present
         assert!(cache.find_keys_map.contains_key(&prefix2));
@@ -2082,7 +2082,7 @@ mod tests {
         cache.insert_find_key_values(prefix3.clone(), &key_values);
         cache.check_coherence();
 
-        // The first entry should have been evicted (line 261: FindKeyValues removal from map)
+        // The first entry should have been evicted
         assert!(!cache.find_key_values_map.contains_key(&prefix1));
         // The newer entries should still be present
         assert!(cache.find_key_values_map.contains_key(&prefix2));
@@ -2098,7 +2098,7 @@ mod tests {
         let key = vec![1, 2, 3];
 
         // With has_exclusive_access = false, query_contains_key should only check value_map
-        // Since the key is not in value_map, it should return None (line 856)
+        // Since the key is not in value_map, it should return None
         let result = cache.query_contains_key(&key);
         assert_eq!(result, None);
 
@@ -2163,7 +2163,7 @@ mod tests {
         cache.insert_find_keys(broad_prefix.clone(), &keys3);
         cache.check_coherence();
 
-        // The broader prefix should have caused removal of the narrower ones (line 620)
+        // The broader prefix should have caused removal of the narrower ones
         assert!(!cache.find_keys_map.contains_key(&narrow_prefix));
         assert!(!cache.find_keys_map.contains_key(&more_specific_prefix));
         // The new broad prefix should exist
@@ -2281,7 +2281,7 @@ mod tests {
         cache.check_coherence();
         println!("test_delete_prefix_removes_keys_within_find_keys_entry, step 2");
 
-        // The FindKeys entry should still exist but with fewer keys (line 772: delete_prefix called on the entry)
+        // The FindKeys entry should still exist but with fewer keys
         assert!(cache.find_keys_map.contains_key(&find_keys_prefix));
 
         // Verify that only the keys with prefix [2,3] were removed
@@ -2304,5 +2304,54 @@ mod tests {
         let final_keys = cache.query_find_keys(&find_keys_prefix).unwrap();
         assert!(!final_keys.contains(&vec![2, 4, 6])); // Should now be removed
         assert!(final_keys.contains(&vec![3, 7, 8]));  // Should still remain
+    }
+
+    #[test]
+    fn test_put_key_value_without_find_key_values_match() {
+        let mut cache = create_test_cache(false); // has_exclusive_access = true
+        let key = vec![1, 2, 3, 4];
+        let value = vec![100, 200];
+
+        // The value should be inserted without accessing the FindKeys / FindKeyValues.
+        cache.put_key_value(&key, &value);
+        cache.check_coherence();
+
+        // Testing the reading of value.
+        assert_eq!(cache.query_read_value(&key), Some(Some(value.clone())));
+        assert!(cache.value_map.contains_key(&key));
+    }
+
+    #[test]
+    fn test_delete_key_without_exclusive_access() {
+        let mut cache = create_test_cache(false); // has_exclusive_access = false
+        let key = vec![1, 2, 3];
+        let value = vec![42, 43, 44];
+
+        // Insert a value first
+        cache.insert_read_value(&key, &Some(value.clone()));
+        cache.check_coherence();
+
+        // Verify the value is cached
+        assert_eq!(cache.query_read_value(&key), Some(Some(value)));
+        assert!(cache.value_map.contains_key(&key));
+
+        // Delete the key without exclusive access. So, do not use the
+        // FindKeys/FindKeyValues.
+        cache.delete_key(&key);
+        cache.check_coherence();
+
+        // The entry should be removed from the cache.
+        assert!(!cache.value_map.contains_key(&key));
+        assert_eq!(cache.query_read_value(&key), None);
+
+        // Verify the queue no longer contains the entry
+        for (cache_key, _) in &cache.queue {
+            assert!(!matches!(cache_key, CacheKey::Value(k) if k == &key));
+        }
+
+        // Test deleting a key that doesn't exist
+        let non_existent_key = vec![9, 9, 9];
+        cache.delete_key(&non_existent_key); // Should not crash
+        cache.check_coherence();
     }
 }
