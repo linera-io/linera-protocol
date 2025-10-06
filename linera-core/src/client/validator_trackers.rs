@@ -85,10 +85,10 @@ impl ValidatorTrackers {
 
     /// Converts the `ValidatorTrackers` into a map of per-validator tracker values
     /// (indices into the validators' received logs).
-    pub(super) fn into_map(self) -> BTreeMap<ValidatorPublicKey, u64> {
+    pub(super) fn to_map(&self) -> BTreeMap<ValidatorPublicKey, u64> {
         self.0
-            .into_iter()
-            .map(|(validator, tracker)| (validator, tracker.current_tracker_value))
+            .iter()
+            .map(|(validator, tracker)| (*validator, tracker.current_tracker_value))
             .collect()
     }
 }

@@ -2169,8 +2169,39 @@ impl<Env: Environment> ChainClient<Env> {
             "find_received_certificates: received_logs length"
         );
 
-        self.download_sender_certificates(received_logs, trackers, nodes, cancellation_token)
-            .await?;
+        let (received_logs, mut validator_trackers) = {
+            (
+                ReceivedLogs::from_received_result(received_logs.clone()),
+                ValidatorTrackers::new(received_logs, &trackers),
+            )
+        };
+
+        for received_log in received_logs.into_batches(CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES) {
+            validator_trackers = self
+                .download_sender_certificates(
+                    received_log,
+                    validator_trackers,
+                    nodes.clone(),
+                    cancellation_token.clone(),
+                )
+                .await?;
+
+            let new_trackers = validator_trackers.to_map();
+            trace!(?new_trackers, "download_sender_certificates");
+
+            // Update the trackers.
+            if let Err(error) = self
+                .client
+                .local_node
+                .update_received_certificate_trackers(self.chain_id, new_trackers)
+                .await
+            {
+                error!(
+                    "Failed to update the certificate trackers for chain {:.8}: {error}",
+                    self.chain_id
+                );
+            }
+        }
 
         info!("find_received_certificates finished");
 
@@ -2257,18 +2288,11 @@ impl<Env: Environment> ChainClient<Env> {
     /// still missing.
     async fn download_sender_certificates(
         &self,
-        received_logs: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
-        trackers: HashMap<ValidatorPublicKey, u64>,
+        received_logs: ReceivedLogs,
+        mut validator_trackers: ValidatorTrackers,
         nodes: Vec<RemoteNode<Env::ValidatorNode>>,
         cancellation_token: Option<CancellationToken>,
-    ) -> Result<(), ChainClientError> {
-        let (received_logs, mut validator_trackers) = {
-            (
-                ReceivedLogs::from_received_result(received_logs.clone()),
-                ValidatorTrackers::new(received_logs, &trackers),
-            )
-        };
-
+    ) -> Result<ValidatorTrackers, ChainClientError> {
         debug!(
             "download_sender_certificates: {} chains to sync with {} certificates in total",
             received_logs.num_chains(),
@@ -2360,23 +2384,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         debug!("download_sender_certificates: finished processing other_sender_chains");
 
-        let new_trackers = validator_trackers.into_map();
-        trace!(?new_trackers, "download_sender_certificates");
-
-        // Update the trackers.
-        if let Err(error) = self
-            .client
-            .local_node
-            .update_received_certificate_trackers(self.chain_id, new_trackers)
-            .await
-        {
-            error!(
-                "Failed to update the certificate trackers for chain {:.8}: {error}",
-                self.chain_id
-            );
-        }
-
-        Ok(())
+        Ok(validator_trackers)
     }
 
     /// Downloads only the specific sender blocks needed for missing cross-chain messages.

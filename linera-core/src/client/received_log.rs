@@ -19,16 +19,11 @@ impl ReceivedLogs {
     pub(super) fn from_received_result(
         result: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
     ) -> Self {
-        result
-            .into_iter()
-            .flat_map(|(_, received_log)| received_log)
-            .fold(Self::new(), |mut acc, chain_and_height| {
-                acc.0
-                    .entry(chain_and_height.chain_id)
-                    .or_default()
-                    .insert(chain_and_height.height);
-                acc
-            })
+        Self::from_iterator(
+            result
+                .into_iter()
+                .flat_map(|(_, received_log)| received_log),
+        )
     }
 
     /// Returns a map that assigns to each chain ID the set of heights. The returned map contains
@@ -45,5 +40,48 @@ impl ReceivedLogs {
     /// Returns the total number of certificates recorded in this log.
     pub(super) fn num_certs(&self) -> usize {
         self.0.values().map(|heights| heights.len()).sum()
+    }
+
+    /// Splits this `ReceivedLogs` into batches of size `batch_size`. Batches are sorted
+    /// by chain ID and height.
+    pub(super) fn into_batches(self, batch_size: usize) -> impl Iterator<Item = ReceivedLogs> {
+        LazyBatch {
+            iterator: self.0.into_iter().flat_map(|(chain_id, heights)| {
+                heights
+                    .into_iter()
+                    .map(move |height| ChainAndHeight { chain_id, height })
+            }),
+            batch_size,
+        }
+    }
+
+    fn from_iterator<I: IntoIterator<Item = ChainAndHeight>>(iterator: I) -> Self {
+        iterator
+            .into_iter()
+            .fold(Self::new(), |mut acc, chain_and_height| {
+                acc.0
+                    .entry(chain_and_height.chain_id)
+                    .or_default()
+                    .insert(chain_and_height.height);
+                acc
+            })
+    }
+}
+
+pub(super) struct LazyBatch<I: Iterator<Item = ChainAndHeight>> {
+    iterator: I,
+    batch_size: usize,
+}
+
+impl<I: Iterator<Item = ChainAndHeight>> Iterator for LazyBatch<I> {
+    type Item = ReceivedLogs;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iterator.next().map(|next_item| {
+            ReceivedLogs::from_iterator(
+                std::iter::once(next_item)
+                    .chain((&mut self.iterator).take(self.batch_size.saturating_sub(1))),
+            )
+        })
     }
 }
