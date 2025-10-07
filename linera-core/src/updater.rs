@@ -393,8 +393,9 @@ where
                     // Some received certificates may be missing for this validator
                     // (e.g. to create the chain or make the balance sufficient) so we are going to
                     // synchronize them now and retry.
-                    self.send_chain_info_up_to_heights(
-                        vec![(origin, height.try_add_one()?)],
+                    self.send_chain_information(
+                        origin,
+                        height.try_add_one()?,
                         CrossChainMessageDelivery::Blocking,
                     )
                     .await?;
