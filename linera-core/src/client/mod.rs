@@ -82,6 +82,9 @@ mod chain_client_state;
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
+mod validator_manager;
+
+pub use validator_manager::{ScoringWeights, ValidatorManager};
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -143,6 +146,8 @@ pub struct Client<Env: Environment> {
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     local_node: LocalNodeClient<Env::Storage>,
+    /// Remote nodes to communicate with.
+    remote_nodes: ValidatorManager<Env>,
     /// The admin chain ID.
     admin_id: ChainId,
     /// Chains that should be tracked by the client.
@@ -182,10 +187,12 @@ impl<Env: Environment> Client<Env> {
         .with_chain_worker_ttl(chain_worker_ttl)
         .with_sender_chain_worker_ttl(sender_chain_worker_ttl);
         let local_node = LocalNodeClient::new(state);
+        let remote_nodes = ValidatorManager::new(vec![]);
 
         Self {
             environment,
             local_node,
+            remote_nodes,
             chains: papaya::HashMap::new(),
             admin_id,
             tracked_chains,
@@ -348,8 +355,11 @@ impl<Env: Environment> Client<Env> {
                 .checked_sub(u64::from(next_height))
                 .ok_or(ArithmeticError::Overflow)?
                 .min(self.options.certificate_download_batch_size);
-            let certificates = remote_node
-                .query_certificates_from(chain_id, next_height, limit)
+
+            self.remote_nodes.add_peer(remote_node.clone()).await;
+            let certificates = self
+                .remote_nodes
+                .download_certificates(chain_id, next_height, limit)
                 .await?;
             let Some(info) = self.process_certificates(remote_node, certificates).await? else {
                 break;
@@ -366,7 +376,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn process_certificates(
         &self,
-        remote_node: &RemoteNode<impl ValidatorNode>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
         certificates: Vec<ConfirmedBlockCertificate>,
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
         let mut info = None;
@@ -375,9 +385,10 @@ impl<Env: Environment> Client<Env> {
             let mut result = self.handle_certificate(certificate.clone()).await;
 
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                self.remote_nodes.add_peer(remote_node.clone()).await;
                 let blobs =
                     futures::stream::iter(blob_ids.iter().copied().map(|blob_id| async move {
-                        remote_node.try_download_blob(blob_id).await.unwrap()
+                        self.remote_nodes.try_download_blob(blob_id).await.unwrap()
                     }))
                     .buffer_unordered(self.options.max_joined_tasks)
                     .collect::<Vec<_>>()
@@ -677,13 +688,11 @@ impl<Env: Environment> Client<Env> {
         if let Err(err) = self.process_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs = RemoteNode::download_blobs(
-                        blob_ids,
-                        &self.validator_nodes().await?,
-                        self.options.blob_download_timeout,
-                    )
-                    .await
-                    .ok_or(err)?;
+                    let blobs = self
+                        .remote_nodes
+                        .download_blobs(blob_ids, self.options.blob_download_timeout)
+                        .await
+                        .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
                     self.process_certificate(certificate).await?;
                 }
@@ -720,16 +729,16 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
+        self.remote_nodes.add_peers(nodes).await;
         if let Err(err) = self.handle_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs = RemoteNode::download_blobs(
-                        blob_ids,
-                        &nodes,
-                        self.options.blob_download_timeout,
-                    )
-                    .await
-                    .ok_or(err)?;
+                    let blobs = self
+                        .remote_nodes
+                        .download_blobs(blob_ids, self.options.blob_download_timeout)
+                        .await
+                        .ok_or(err)?;
+
                     self.local_node.store_blobs(&blobs).await?;
                     self.handle_certificate(certificate.clone()).await?;
                 }
@@ -803,7 +812,9 @@ impl<Env: Environment> Client<Env> {
                     return None;
                 };
                 Some(async move {
-                    let certificates = remote_node
+                    self.remote_nodes.add_peer(remote_node.clone()).await;
+                    let certificates = self
+                        .remote_nodes
                         .download_certificates_by_heights(sender_chain_id, remote_heights)
                         .await?;
                     Ok::<Vec<_>, ChainClientError>(certificates)
@@ -1036,10 +1047,11 @@ impl<Env: Environment> Client<Env> {
                 if let LocalNodeError::BlobsNotFound(_) = &err {
                     let required_blob_ids = proposal.required_blob_ids().collect::<Vec<_>>();
                     if !required_blob_ids.is_empty() {
+                        self.remote_nodes.add_peer(remote_node.clone()).await;
                         let mut blobs = Vec::new();
                         for blob_id in required_blob_ids {
-                            let blob_content = match remote_node
-                                .node
+                            let blob_content = match self
+                                .remote_nodes
                                 .download_pending_blob(chain_id, blob_id)
                                 .await
                             {
@@ -1106,10 +1118,11 @@ impl<Env: Environment> Client<Env> {
         let certificate = Box::new(certificate);
         match self.process_certificate(certificate.clone()).await {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                self.remote_nodes.add_peer(remote_node.clone()).await;
                 let mut blobs = Vec::new();
                 for blob_id in blob_ids {
-                    let blob_content = remote_node
-                        .node
+                    let blob_content = self
+                        .remote_nodes
                         .download_pending_blob(chain_id, blob_id)
                         .await?;
                     blobs.push(Blob::new(blob_content));
@@ -1141,7 +1154,11 @@ impl<Env: Environment> Client<Env> {
                 .zip(0..)
                 .map(|(remote_node, i)| async move {
                     linera_base::time::timer::sleep(timeout * i * i).await;
-                    let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
+                    self.remote_nodes.add_peer(remote_node.clone()).await;
+                    let certificate = self
+                        .remote_nodes
+                        .download_certificate_for_blob(blob_id)
+                        .await?;
                     self.receive_sender_certificate(
                         certificate,
                         ReceiveCertificateMode::NeedsCheck,
@@ -2323,7 +2340,10 @@ impl<Env: Environment> ChainClient<Env> {
         // Stop if we've reached the height we've already processed.
         while current_height >= next_outbox_height {
             // Download the certificate for this height.
-            let downloaded = remote_node
+            self.client.remote_nodes.add_peer(remote_node.clone()).await;
+            let downloaded = self
+                .client
+                .remote_nodes
                 .download_certificates_by_heights(sender_chain_id, vec![current_height])
                 .await?;
             let Some(certificate) = downloaded.into_iter().next() else {
