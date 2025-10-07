@@ -23,12 +23,10 @@ use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse, Round, TimeDelta,
-        Timestamp,
+        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Event, OracleResponse, Round,
+        TimeDelta, Timestamp,
     },
-    identifiers::{
-        ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
-    },
+    identifiers::{ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -1014,7 +1012,7 @@ async fn test_service_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyho
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
     run_test_publish_read_data_blob(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await)
-	.await
+        .await
 }
 
 #[ignore]
