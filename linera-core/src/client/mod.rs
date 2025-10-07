@@ -876,7 +876,7 @@ impl<Env: Environment> Client<Env> {
                             .await
                             .map_err(|_| ())?;
                         certificates.retain(|cert| {
-                            Self::check_certificate(max_epoch, committees_ref, &cert)
+                            Self::check_certificate(max_epoch, committees_ref, cert)
                                 .ok()
                                 .is_some_and(|check_result| check_result.into_result().is_ok())
                         });
