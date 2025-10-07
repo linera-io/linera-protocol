@@ -6,7 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use linera_base::{crypto::ValidatorPublicKey, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::ChainAndHeight;
 
-/// Struct keeping track of the blocks sending messages to a particular chain.
+/// Struct keeping track of the blocks sending messages to some chain, from chains identified by
+/// the keys in the map.
 pub(super) struct ReceivedLogs(
     BTreeMap<ChainId, BTreeMap<BlockHeight, BTreeSet<ValidatorPublicKey>>>,
 );
