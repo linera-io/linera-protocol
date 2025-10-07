@@ -112,12 +112,13 @@ impl<I: Iterator<Item = (ChainAndHeight, ValidatorPublicKey)>> Iterator for Lazy
 
 #[cfg(test)]
 mod tests {
-    use super::LazyBatch;
     use linera_base::{
         crypto::{CryptoHash, ValidatorKeypair},
         identifiers::ChainId,
     };
     use linera_chain::data_types::ChainAndHeight;
+
+    use super::LazyBatch;
 
     #[test]
     fn test_lazy_batch() {
