@@ -109,3 +109,54 @@ impl<I: Iterator<Item = (ChainAndHeight, ValidatorPublicKey)>> Iterator for Lazy
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LazyBatch;
+    use linera_base::{
+        crypto::{CryptoHash, ValidatorKeypair},
+        identifiers::ChainId,
+    };
+    use linera_chain::data_types::ChainAndHeight;
+
+    #[test]
+    fn test_lazy_batch() {
+        let chain_id = ChainId(CryptoHash::test_hash("chain"));
+        let validator = ValidatorKeypair::generate().public_key;
+        let test_log = vec![1, 2, 3, 4, 5, 6, 7]
+            .into_iter()
+            .map(|height| {
+                (
+                    ChainAndHeight {
+                        chain_id,
+                        height: height.into(),
+                    },
+                    validator,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let batches = LazyBatch {
+            iterator: test_log.into_iter(),
+            batch_size: 2,
+        }
+        .collect::<Vec<_>>();
+
+        assert_eq!(batches.len(), 4);
+        assert!(batches.iter().all(|batch| batch.num_chains() == 1));
+
+        let heights = batches
+            .into_iter()
+            .map(|batch| {
+                batch
+                    .heights_per_chain()
+                    .values()
+                    .flatten()
+                    .map(|height| height.0)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(heights, vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7]]);
+    }
+}
