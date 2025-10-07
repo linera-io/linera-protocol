@@ -836,7 +836,7 @@ impl<Env: Environment> Client<Env> {
     async fn download_and_process_sender_chain(
         &self,
         sender_chain_id: ChainId,
-        nodes: &[RemoteNode<Env::ValidatorNode>],
+        nodes: &mut [RemoteNode<Env::ValidatorNode>],
         received_log: &ReceivedLogs,
         mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
@@ -852,6 +852,7 @@ impl<Env: Environment> Client<Env> {
         let committees_ref = &committees;
         while !remote_heights.is_empty() {
             let remote_heights_ref = &remote_heights;
+            nodes.shuffle(&mut rand::thread_rng());
             let certificates = match communicate_in_parallel(
                 nodes,
                 async move |remote_node| {
@@ -2306,7 +2307,7 @@ impl<Env: Environment> ChainClient<Env> {
                         client
                             .download_and_process_sender_chain(
                                 sender_chain_id,
-                                &nodes,
+                                &mut nodes,
                                 received_logs_ref,
                                 remote_heights,
                                 sender,
