@@ -349,7 +349,7 @@ where
         mut blob_ids: Vec<BlobId>,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let chain_id = proposal.content.block.chain_id;
-        let mut sent_cross_chain_updates = false;
+        let mut sent_cross_chain_updates = BTreeMap::new();
         let mut publisher_chain_ids_sent = BTreeSet::new();
         loop {
             match self
@@ -380,12 +380,25 @@ where
                     )
                     .await?;
                 }
-                Err(NodeError::MissingCrossChainUpdate { .. }) if !sent_cross_chain_updates => {
+                Err(NodeError::MissingCrossChainUpdate {
+                    chain_id,
+                    origin,
+                    height,
+                }) if chain_id == proposal.content.block.chain_id
+                    && sent_cross_chain_updates
+                        .get(&origin)
+                        .is_none_or(|h| *h < height) =>
+                {
+                    sent_cross_chain_updates.insert(origin, height);
                     // Some received certificates may be missing for this validator
                     // (e.g. to create the chain or make the balance sufficient) so we are going to
                     // synchronize them now and retry.
-                    self.send_chain_information_for_senders(chain_id).await?;
-                    sent_cross_chain_updates = true;
+                    self.send_chain_information(
+                        origin,
+                        height.try_add_one()?,
+                        CrossChainMessageDelivery::Blocking,
+                    )
+                    .await?;
                 }
                 Err(NodeError::EventsNotFound(event_ids)) => {
                     let mut publisher_heights = BTreeMap::new();
@@ -633,30 +646,6 @@ where
         }))
         .try_collect::<Vec<_>>()
         .await?;
-        Ok(())
-    }
-
-    /// Updates validator with certificates for all chains that have sent messages to `chain_id`.
-    async fn send_chain_information_for_senders(
-        &mut self,
-        chain_id: ChainId,
-    ) -> Result<(), ChainClientError> {
-        let sender_heights = self
-            .local_node
-            .chain_state_view(chain_id)
-            .await?
-            .inboxes
-            .try_load_all_entries()
-            .await?
-            .iter()
-            .map(|(origin, inbox)| {
-                let next_height = inbox.next_block_height_to_receive()?;
-                Ok((*origin, next_height))
-            })
-            .collect::<Result<Vec<(ChainId, BlockHeight)>, ChainClientError>>()?;
-
-        self.send_chain_info_up_to_heights(sender_heights, CrossChainMessageDelivery::Blocking)
-            .await?;
         Ok(())
     }
 
