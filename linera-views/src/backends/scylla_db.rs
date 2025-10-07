@@ -123,70 +123,70 @@ impl ScyllaDbClient {
         let namespace = namespace.to_string();
         let read_value = session
             .prepare(format!(
-                "SELECT v FROM {}.{} WHERE root_key = ? AND k = ?",
+                "SELECT v FROM {}.\"{}\" WHERE root_key = ? AND k = ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let contains_key = session
             .prepare(format!(
-                "SELECT root_key FROM {}.{} WHERE root_key = ? AND k = ?",
+                "SELECT root_key FROM {}.\"{}\" WHERE root_key = ? AND k = ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let write_batch_delete_prefix_unbounded = session
             .prepare(format!(
-                "DELETE FROM {}.{} WHERE root_key = ? AND k >= ?",
+                "DELETE FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let write_batch_delete_prefix_bounded = session
             .prepare(format!(
-                "DELETE FROM {}.{} WHERE root_key = ? AND k >= ? AND k < ?",
+                "DELETE FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let write_batch_deletion = session
             .prepare(format!(
-                "DELETE FROM {}.{} WHERE root_key = ? AND k = ?",
+                "DELETE FROM {}.\"{}\" WHERE root_key = ? AND k = ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let write_batch_insertion = session
             .prepare(format!(
-                "INSERT INTO {}.{} (root_key, k, v) VALUES (?, ?, ?)",
+                "INSERT INTO {}.\"{}\" (root_key, k, v) VALUES (?, ?, ?)",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let find_keys_by_prefix_unbounded = session
             .prepare(format!(
-                "SELECT k FROM {}.{} WHERE root_key = ? AND k >= ?",
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let find_keys_by_prefix_bounded = session
             .prepare(format!(
-                "SELECT k FROM {}.{} WHERE root_key = ? AND k >= ? AND k < ?",
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let find_key_values_by_prefix_unbounded = session
             .prepare(format!(
-                "SELECT k,v FROM {}.{} WHERE root_key = ? AND k >= ?",
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
                 KEYSPACE, namespace
             ))
             .await?;
 
         let find_key_values_by_prefix_bounded = session
             .prepare(format!(
-                "SELECT k,v FROM {}.{} WHERE root_key = ? AND k >= ? AND k < ?",
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
                 KEYSPACE, namespace
             ))
             .await?;
@@ -251,7 +251,7 @@ impl ScyllaDbClient {
         let prepared_statement = self
             .session
             .prepare(format!(
-                "SELECT k,v FROM {}.{} WHERE root_key = ? AND k IN ({})",
+                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k IN ({})",
                 KEYSPACE, self.namespace, markers
             ))
             .await?;
@@ -274,7 +274,7 @@ impl ScyllaDbClient {
         let prepared_statement = self
             .session
             .prepare(format!(
-                "SELECT k FROM {}.{} WHERE root_key = ? AND k IN ({})",
+                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k IN ({})",
                 KEYSPACE, self.namespace, markers
             ))
             .await?;
@@ -826,7 +826,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         let session = ScyllaDbClient::build_default_session(&config.uri).await?;
         let statement = session
             .prepare(format!(
-                "SELECT root_key FROM {}.{} ALLOW FILTERING",
+                "SELECT root_key FROM {}.\"{}\" ALLOW FILTERING",
                 KEYSPACE, namespace
             ))
             .await?;
@@ -865,7 +865,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         // We check the way the test can fail. It can fail in different ways.
         let result = session
             .prepare(format!(
-                "SELECT root_key FROM {}.{} LIMIT 1 ALLOW FILTERING",
+                "SELECT root_key FROM {}.\"{}\" LIMIT 1 ALLOW FILTERING",
                 KEYSPACE, namespace
             ))
             .await;
@@ -925,7 +925,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         // changes easier.
         let statement = session
             .prepare(format!(
-                "CREATE TABLE {}.{} (\
+                "CREATE TABLE {}.\"{}\" (\
                     root_key blob, \
                     k blob, \
                     v blob, \
@@ -962,7 +962,10 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         Self::check_namespace(namespace)?;
         let session = ScyllaDbClient::build_default_session(&config.uri).await?;
         let statement = session
-            .prepare(format!("DROP TABLE IF EXISTS {}.{};", KEYSPACE, namespace))
+            .prepare(format!(
+                "DROP TABLE IF EXISTS {}.\"{}\";",
+                KEYSPACE, namespace
+            ))
             .await?;
         session
             .execute_single_page(&statement, &[], PagingState::start())
