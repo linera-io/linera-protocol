@@ -36,14 +36,23 @@ pub type ValidatorSignature = secp256k1::Secp256k1Signature;
 /// The key pair of a validator.
 pub type ValidatorKeypair = secp256k1::Secp256k1KeyPair;
 
-/// Size constants for Allocative implementations
+/// Size constants for Allocative implementations. First the ED25519.
 const ED25519_PUBLIC_KEY_SIZE: usize = std::mem::size_of::<ed25519::Ed25519PublicKey>();
-const SECP256K1_PUBLIC_KEY_SIZE: usize = std::mem::size_of::<secp256k1::Secp256k1PublicKey>();
-const EVM_PUBLIC_KEY_SIZE: usize = std::mem::size_of::<secp256k1::evm::EvmPublicKey>();
+const ED25519_SIGNATURE_SIZE: usize = std::mem::size_of::<ed25519::Ed25519Signature>();
+const ED25519_ACCOUNT_SIGNATURE_SIZE: usize = ED25519_PUBLIC_KEY_SIZE + ED25519_SIGNATURE_SIZE;
 
-const ED25519_ACCOUNT_SIGNATURE_SIZE: usize = ED25519_PUBLIC_KEY_SIZE + std::mem::size_of::<ed25519::Ed25519Signature>();
-const SECP256K1_ACCOUNT_SIGNATURE_SIZE: usize = SECP256K1_PUBLIC_KEY_SIZE + std::mem::size_of::<secp256k1::Secp256k1Signature>();
-const EVM_SECP256K1_ACCOUNT_SIGNATURE_SIZE: usize = EVM_PUBLIC_KEY_SIZE + std::mem::size_of::<secp256k1::evm::EvmSignature>();
+/// The SECP256k1 public key sizes also used for validators.
+pub const SECP256K1_PUBLIC_KEY_SIZE: usize = std::mem::size_of::<secp256k1::Secp256k1PublicKey>();
+/// The SECP256k1 signature sizes also used for validators.
+pub const SECP256K1_SIGNATURE_SIZE: usize = std::mem::size_of::<secp256k1::Secp256k1Signature>();
+const SECP256K1_ACCOUNT_SIGNATURE_SIZE: usize =
+    SECP256K1_PUBLIC_KEY_SIZE + SECP256K1_SIGNATURE_SIZE;
+
+/// The EVM keys used for the AVM accounts.
+const EVM_PUBLIC_KEY_SIZE: usize = std::mem::size_of::<secp256k1::evm::EvmPublicKey>();
+const EVM_SECP256K1_SIGNATURE_SIZE: usize = std::mem::size_of::<secp256k1::evm::EvmSignature>();
+const EVM_SECP256K1_ACCOUNT_SIGNATURE_SIZE: usize =
+    EVM_PUBLIC_KEY_SIZE + EVM_SECP256K1_SIGNATURE_SIZE;
 
 /// Signature scheme used for the public key.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
@@ -144,19 +153,28 @@ impl Allocative for AccountSignature {
                 signature: _,
                 public_key: _,
             } => {
-                visitor.visit_simple(Key::new("Ed25529_signature"), ED25519_ACCOUNT_SIGNATURE_SIZE);
+                visitor.visit_simple(
+                    Key::new("Ed25529_signature"),
+                    ED25519_ACCOUNT_SIGNATURE_SIZE,
+                );
             }
             AccountSignature::Secp256k1 {
                 signature: _,
                 public_key: _,
             } => {
-                visitor.visit_simple(Key::new("Secp256k1_signature"), SECP256K1_ACCOUNT_SIGNATURE_SIZE);
+                visitor.visit_simple(
+                    Key::new("Secp256k1_signature"),
+                    SECP256K1_ACCOUNT_SIGNATURE_SIZE,
+                );
             }
             AccountSignature::EvmSecp256k1 {
                 signature: _,
                 address: _,
             } => {
-                visitor.visit_simple(Key::new("EvmSecp256k1_signature"), EVM_SECP256K1_ACCOUNT_SIGNATURE_SIZE);
+                visitor.visit_simple(
+                    Key::new("EvmSecp256k1_signature"),
+                    EVM_SECP256K1_ACCOUNT_SIGNATURE_SIZE,
+                );
             }
         }
     }
