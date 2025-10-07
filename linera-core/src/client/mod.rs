@@ -914,7 +914,8 @@ impl<Env: Environment> Client<Env> {
                 let hash = certificate.hash();
                 let chain_id = certificate.block().header.chain_id;
                 let height = certificate.block().header.height;
-                let mode = ReceiveCertificateMode::NeedsCheck;
+                // We checked the certificates right after downloading them.
+                let mode = ReceiveCertificateMode::AlreadyChecked;
                 if let Err(error) = self
                     .receive_sender_certificate(certificate, mode, None)
                     .await
