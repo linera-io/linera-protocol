@@ -5335,6 +5335,7 @@ dependencies = [
  "papaya",
  "prometheus",
  "proptest",
+ "publish-read-data-blob",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -5809,7 +5810,6 @@ dependencies = [
  "prometheus",
  "proptest",
  "prost",
- "publish-read-data-blob",
  "quick_cache",
  "rand 0.8.5",
  "reqwest 0.11.27",
@@ -7726,6 +7726,7 @@ version = "0.1.0"
 dependencies = [
  "linera-sdk",
  "serde",
+ "tokio",
 ]
 
 [[package]]

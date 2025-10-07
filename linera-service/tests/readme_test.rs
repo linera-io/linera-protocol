@@ -32,7 +32,7 @@ use tokio::process::Command;
 #[test_case::test_case("../examples/native-fungible" ; "native-fungible")]
 #[test_case::test_case("../examples/non-fungible" ; "non-fungible")]
 #[test_case::test_case("../examples/matching-engine" ; "matching engine")]
-#[test_case::test_case("../examples/meta-counter" ; "meta counter")]
+#[test_case::test_case("../linera-sdk/tests/fixtures/meta-counter" ; "meta counter")]
 #[test_case::test_case("../examples/rfq" ; "requests for quotes")]
 #[test_case::test_case("../examples/social" ; "social")]
 #[test_log::test(tokio::test)]

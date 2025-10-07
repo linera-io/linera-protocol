@@ -177,7 +177,7 @@ proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
 prost = "0.13.2"
 quick_cache = "0.6.13"
 quote = "1.0"
-rand = { version = "0.8.5", default-features = false }
+rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 rand_chacha = { version = "0.3.1", default-features = false }
 rand_distr = { version = "0.4.3", default-features = false }
 rcgen = "0.12.1"
@@ -317,16 +317,15 @@ amm = { path = "./examples/amm" }
 call-evm-counter = { path = "./examples/call-evm-counter" }
 counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
-create-and-call = { path = "./examples/create-and-call" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
 hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
-meta-counter = { path = "./examples/meta-counter" }
+meta-counter = { path = "./linera-sdk/tests/fixtures/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
-publish-read-data-blob = { path = "./examples/publish-read-data-blob" }
+publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data-blob" }
 social = { path = "./examples/social" }
 time-expiry = { path = "./examples/time-expiry" }
 

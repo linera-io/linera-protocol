@@ -5,12 +5,16 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-linera-sdk = { path = "../../linera-sdk" }
+linera-sdk.workspace = true
 serde = { version = "1.0.152", features = ["derive"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio.workspace = true
+
+[dev-dependencies]
+linera-sdk = { workspace = true, features = ["test"] }
+
 
 [[bin]]
 name = "contract_call_contract"

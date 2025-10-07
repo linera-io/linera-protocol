@@ -19,6 +19,9 @@ mod wasmer;
 #[cfg(with_wasmtime)]
 mod wasmtime;
 
+#[cfg(with_fs)]
+use std::path::Path;
+
 use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -94,7 +97,7 @@ impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using the WebAssembly module in `contract_bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
-        contract_bytecode_file: impl AsRef<std::path::Path>,
+        contract_bytecode_file: impl AsRef<Path>,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
         Self::new(
@@ -156,7 +159,7 @@ impl WasmServiceModule {
     /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `service_bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
-        service_bytecode_file: impl AsRef<std::path::Path>,
+        service_bytecode_file: impl AsRef<Path>,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
         Self::new(
@@ -339,25 +342,32 @@ impl From<::wasmer::InstantiationError> for WasmExecutionError {
 /// This assumes that the current directory is one of the crates.
 #[cfg(with_testing)]
 pub mod test {
-    use std::sync::LazyLock;
+    use std::{path::Path, sync::LazyLock};
 
     #[cfg(with_fs)]
     use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
 
-    fn build_applications() -> Result<(), std::io::Error> {
-        tracing::info!("Building example applications with cargo");
+    fn build_applications_in_directory(dir: &str) -> Result<(), std::io::Error> {
         let output = std::process::Command::new("cargo")
-            .current_dir("../examples")
+            .current_dir(dir)
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .output()?;
-        assert!(
-            output.status.success(),
-            "Failed to build example applications.\n\n\
-                stdout:\n-------\n{}\n\n\
-                stderr:\n-------\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
+        if !output.status.success() {
+            panic!(
+                "Failed to build applications in directory {dir}.\n\n\
+                 stdout:\n-------\n{}\n\n\
+                 stderr:\n-------\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
+        Ok(())
+    }
+
+    fn build_applications() -> Result<(), std::io::Error> {
+        for dir in ["../examples", "../linera-sdk/tests/fixtures"] {
+            build_applications_in_directory(dir)?;
+        }
         Ok(())
     }
 
@@ -365,10 +375,15 @@ pub mod test {
         let name = name.replace('-', "_");
         static INSTANCE: LazyLock<()> = LazyLock::new(|| build_applications().unwrap());
         LazyLock::force(&INSTANCE);
-        Ok((
-            format!("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
-            format!("../examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
-        ))
+        for dir in ["../examples", "../linera-sdk/tests/fixtures"] {
+            let prefix = format!("{dir}/target/wasm32-unknown-unknown/release");
+            let file_contract = format!("{prefix}/{name}_contract.wasm");
+            let file_service = format!("{prefix}/{name}_service.wasm");
+            if Path::new(&file_contract).exists() && Path::new(&file_service).exists() {
+                return Ok((file_contract, file_service));
+            }
+        }
+        Err(std::io::Error::last_os_error())
     }
 
     #[cfg(with_fs)]

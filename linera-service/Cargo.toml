@@ -168,7 +168,6 @@ native-fungible.workspace = true
 non-fungible.workspace = true
 prometheus.workspace = true
 proptest.workspace = true
-publish-read-data-blob.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 social.workspace = true
 test-case.workspace = true
