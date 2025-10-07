@@ -13,11 +13,6 @@ pub(super) struct ReceivedLogs(
 );
 
 impl ReceivedLogs {
-    /// Creates a new instance of `ReceivedLogs`.
-    pub(super) fn new() -> Self {
-        ReceivedLogs(BTreeMap::new())
-    }
-
     /// Converts a set of logs received from validators into a single log.
     pub(super) fn from_received_result(
         result: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
@@ -80,9 +75,9 @@ impl ReceivedLogs {
     fn from_iterator<I: IntoIterator<Item = (ChainAndHeight, ValidatorPublicKey)>>(
         iterator: I,
     ) -> Self {
-        iterator
-            .into_iter()
-            .fold(Self::new(), |mut acc, (chain_and_height, validator)| {
+        iterator.into_iter().fold(
+            Self(BTreeMap::new()),
+            |mut acc, (chain_and_height, validator)| {
                 acc.0
                     .entry(chain_and_height.chain_id)
                     .or_default()
@@ -90,13 +85,14 @@ impl ReceivedLogs {
                     .or_default()
                     .insert(validator);
                 acc
-            })
+            },
+        )
     }
 }
 
 /// Iterator adapter lazily yielding batches of size `self.batch_size` from
 /// `self.iterator`.
-pub(super) struct LazyBatch<I: Iterator<Item = (ChainAndHeight, ValidatorPublicKey)>> {
+struct LazyBatch<I: Iterator<Item = (ChainAndHeight, ValidatorPublicKey)>> {
     iterator: I,
     batch_size: usize,
 }

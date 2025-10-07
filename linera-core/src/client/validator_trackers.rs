@@ -15,7 +15,7 @@ use linera_chain::data_types::ChainAndHeight;
 /// certificates we have already downloaded. Whenever we download a certificate corresponding to
 /// the first block in the log, we increase the tracker and pop the blocks off the log,
 /// until we hit one we haven't downloaded yet.
-pub(super) struct ValidatorTracker {
+struct ValidatorTracker {
     current_tracker_value: u64,
     to_be_downloaded: VecDeque<ChainAndHeight>,
     already_downloaded: BTreeSet<ChainAndHeight>,
@@ -23,7 +23,7 @@ pub(super) struct ValidatorTracker {
 
 impl ValidatorTracker {
     /// Creates a new `ValidatorTracker`.
-    pub(super) fn new(tracker: u64, validator_log: Vec<ChainAndHeight>) -> Self {
+    fn new(tracker: u64, validator_log: Vec<ChainAndHeight>) -> Self {
         Self {
             current_tracker_value: tracker,
             to_be_downloaded: validator_log.into_iter().collect(),
@@ -33,14 +33,14 @@ impl ValidatorTracker {
 
     /// Marks a certificate at a particular height in a particular chain as downloaded,
     /// and updates the tracker accordingly.
-    pub(super) fn downloaded_cert(&mut self, chain_and_height: ChainAndHeight) {
+    fn downloaded_cert(&mut self, chain_and_height: ChainAndHeight) {
         self.already_downloaded.insert(chain_and_height);
         self.maximize_tracker();
     }
 
     /// Matches the downloaded certificates with the log and increases the tracker value
     /// to the first index that hasn't been downloaded yet.
-    pub(super) fn maximize_tracker(&mut self) {
+    fn maximize_tracker(&mut self) {
         while self
             .to_be_downloaded
             .front()
