@@ -841,29 +841,49 @@ impl<Env: Environment> Client<Env> {
         mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
+        // Verify the certificate before doing any expensive networking.
+        let (max_epoch, committees) = match self.admin_committees().await {
+            Ok(result) => result,
+            Err(error) => {
+                error!(%error, %sender_chain_id, "could not read admin committees");
+                return;
+            }
+        };
+        let committees_ref = &committees;
         while !remote_heights.is_empty() {
-            let mut remote_heights_clone = remote_heights.clone();
+            let remote_heights_ref = &remote_heights;
             let certificates = match communicate_in_parallel(
                 nodes,
                 async move |remote_node| {
+                    let mut remote_heights = remote_heights_ref.clone();
                     // No need trying to download certificates the validator didn't have in their
                     // log - we'll retry downloading the remaining ones next time we loop.
-                    remote_heights_clone.retain(|height| {
+                    remote_heights.retain(|height| {
                         received_log.validator_has_block(
                             &remote_node.public_key,
                             sender_chain_id,
                             *height,
                         )
                     });
-                    if remote_heights_clone.is_empty() {
+                    if remote_heights.is_empty() {
                         // It makes no sense to return `Ok(_)` if we aren't going to try downloading
                         // anything from the validator - let the function try the other validators
                         Err(())
                     } else {
-                        remote_node
-                            .download_certificates_by_heights(sender_chain_id, remote_heights_clone)
+                        let mut certificates = remote_node
+                            .download_certificates_by_heights(sender_chain_id, remote_heights)
                             .await
-                            .map_err(|_| ())
+                            .map_err(|_| ())?;
+                        certificates.retain(|cert| {
+                            Self::check_certificate(max_epoch, committees_ref, &cert)
+                                .ok()
+                                .is_some_and(|check_result| check_result.into_result().is_ok())
+                        });
+                        if !certificates.is_empty() {
+                            Ok(certificates)
+                        } else {
+                            Err(())
+                        }
                     }
                 },
                 || (),
@@ -873,7 +893,7 @@ impl<Env: Environment> Client<Env> {
             {
                 Ok(certificates) => certificates,
                 Err(_) => {
-                    error!(
+                    info!(
                         chain_id = %sender_chain_id,
                         "could not download certificates for chain"
                     );
@@ -894,15 +914,11 @@ impl<Env: Environment> Client<Env> {
                 let chain_id = certificate.block().header.chain_id;
                 let height = certificate.block().header.height;
                 let mode = ReceiveCertificateMode::NeedsCheck;
-                if let Err(err) = self
+                if let Err(error) = self
                     .receive_sender_certificate(certificate, mode, None)
                     .await
                 {
-                    error!(
-                        error = %err,
-                        %hash,
-                        "Received invalid certificate"
-                    );
+                    error!(%error, %hash, "Received invalid certificate");
                 } else {
                     processed_correctly.insert(height);
                     if let Err(err) = sender.send(ChainAndHeight { chain_id, height }) {
@@ -2179,8 +2195,10 @@ impl<Env: Environment> ChainClient<Env> {
         )
         .await;
 
-        trace!("got result from communicate_with_quorum");
-        trace!(received_log_batches_len=%received_log_batches.lock().unwrap().len());
+        trace!(
+            received_log_batches_len = %received_log_batches.lock().unwrap().len(),
+            "got result from communicate_with_quorum"
+        );
 
         if let Err(e) = result {
             warn!(
@@ -2260,7 +2278,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?;
 
         debug!(
-            remaining_total_certificates=%remote_heights.values().map(|h| h.len()).sum::<usize>(),
+            remaining_total_certificates = %remote_heights.values().map(|h| h.len()).sum::<usize>(),
             "download_sender_certificates: computed remote_heights"
         );
 
