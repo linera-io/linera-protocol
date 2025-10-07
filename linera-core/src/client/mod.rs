@@ -836,7 +836,7 @@ impl<Env: Environment> Client<Env> {
     async fn download_and_process_sender_chain(
         &self,
         sender_chain_id: ChainId,
-        nodes: &mut [RemoteNode<Env::ValidatorNode>],
+        nodes: &[RemoteNode<Env::ValidatorNode>],
         received_log: &ReceivedLogs,
         mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
@@ -850,11 +850,12 @@ impl<Env: Environment> Client<Env> {
             }
         };
         let committees_ref = &committees;
+        let mut nodes = nodes.to_vec();
         while !remote_heights.is_empty() {
             let remote_heights_ref = &remote_heights;
             nodes.shuffle(&mut rand::thread_rng());
             let certificates = match communicate_in_parallel(
-                nodes,
+                &nodes,
                 async move |remote_node| {
                     let mut remote_heights = remote_heights_ref.clone();
                     // No need trying to download certificates the validator didn't have in their
@@ -887,18 +888,28 @@ impl<Env: Environment> Client<Env> {
                         }
                     }
                 },
-                || (),
+                |errors| {
+                    errors
+                        .into_iter()
+                        .map(|(validator, _error)| validator)
+                        .collect::<BTreeSet<_>>()
+                },
                 self.options.certificate_batch_download_timeout,
             )
             .await
             {
                 Ok(certificates) => certificates,
-                Err(_) => {
-                    info!(
-                        chain_id = %sender_chain_id,
-                        "could not download certificates for chain"
-                    );
-                    return;
+                Err(faulty_validators) => {
+                    // filter out faulty validators and retry if any are left
+                    nodes.retain(|node| !faulty_validators.contains(&node.public_key));
+                    if nodes.is_empty() {
+                        info!(
+                            chain_id = %sender_chain_id,
+                            "could not download certificates for chain - no more correct validators left"
+                        );
+                        return;
+                    }
+                    continue;
                 }
             };
 
@@ -1228,7 +1239,7 @@ impl<Env: Environment> Client<Env> {
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, ChainClientError>::Ok(blob)
                 },
-                move || ChainClientError::from(NodeError::BlobsNotFound(vec![blob_id])),
+                move |_| ChainClientError::from(NodeError::BlobsNotFound(vec![blob_id])),
                 timeout,
             )
         }))
@@ -2308,7 +2319,7 @@ impl<Env: Environment> ChainClient<Env> {
                         client
                             .download_and_process_sender_chain(
                                 sender_chain_id,
-                                &mut nodes,
+                                &nodes,
                                 received_logs_ref,
                                 remote_heights,
                                 sender,
@@ -4399,7 +4410,7 @@ async fn communicate_in_parallel<'a, A, E1, E2, F, G, R, V>(
 where
     F: Clone + FnOnce(RemoteNode<A>) -> R,
     RemoteNode<A>: Clone,
-    G: FnOnce() -> E2,
+    G: FnOnce(Vec<(ValidatorPublicKey, E1)>) -> E2,
     R: Future<Output = Result<V, E1>> + 'a,
 {
     let mut stream = nodes
@@ -4410,16 +4421,18 @@ where
             let node = remote_node.clone();
             async move {
                 linera_base::time::timer::sleep(timeout * i * i).await;
-                fun(node).await
+                fun(node).await.map_err(|err| (remote_node.public_key, err))
             }
         })
         .collect::<FuturesUnordered<_>>();
+    let mut errors = vec![];
     while let Some(maybe_result) = stream.next().await {
-        if let Ok(result) = maybe_result {
-            return Ok(result);
-        }
+        match maybe_result {
+            Ok(result) => return Ok(result),
+            Err(error) => errors.push(error),
+        };
     }
-    Err(err())
+    Err(err(errors))
 }
 
 #[cfg(with_testing)]
