@@ -247,6 +247,9 @@ where
     /// That means that when this function returns, no readers will be waiting to acquire
     /// the lock and it is safe to write the chain state to storage without any readers
     /// having a stale view of it.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     pub(super) async fn clear_shared_chain_view(&mut self) {
         if let Some(shared_chain_view) = self.shared_chain_view.take() {
             let _: RwLockWriteGuard<_> = shared_chain_view.write().await;
@@ -1456,6 +1459,9 @@ where
     }
 
     /// Initializes and saves the current chain if it is not active yet.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
     async fn initialize_and_save_if_needed(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
             let local_time = self.storage.clock().current_time();

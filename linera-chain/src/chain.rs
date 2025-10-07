@@ -1094,7 +1094,9 @@ where
     /// Returns the hashes of all blocks we have in the given range.
     #[instrument(target = "telemetry_only", skip_all, fields(
         chain_id = %self.chain_id(),
-        next_block_height = %self.tip_state.get().next_block_height
+        next_block_height = %self.tip_state.get().next_block_height,
+        start_height = ?range.start_bound(),
+        end_height = ?range.end_bound()
     ))]
     pub async fn block_hashes(
         &self,

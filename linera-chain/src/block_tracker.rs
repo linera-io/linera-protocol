@@ -17,6 +17,7 @@ use linera_execution::{
     SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
+use tracing::instrument;
 
 #[cfg(with_metrics)]
 use crate::chain::metrics;
@@ -100,6 +101,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Executes a transaction in the context of the block.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id,
+        block_height = %self.block_height,
+    ))]
     pub async fn execute_transaction<C>(
         &mut self,
         transaction: &Transaction,
