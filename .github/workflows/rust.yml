@@ -72,8 +72,7 @@ jobs:
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
     - name: Wait for storage service to be ready
-      run: |
-        until nc -z 127.0.0.1 1235; do sleep 1; done
+      run: until nc -z ${LINERA_STORAGE_SERVICE/:/ }; do sleep 1; done
     - name: Build binaries
       run: |
         cargo build --features storage-service --bin linera-server --bin linera-proxy --bin linera
