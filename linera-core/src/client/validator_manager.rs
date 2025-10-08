@@ -28,8 +28,10 @@ use crate::{
     remote_node::RemoteNode,
 };
 
-const MAX_IN_FLIGHT_REQUESTS: usize = 1000;
-const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0; // 5 seconds
+const MAX_IN_FLIGHT_REQUESTS: usize = 100;
+const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0;
+const CACHE_TTL_SEC: u64 = 2;
+const CACHE_MAX_SIZE: usize = 1000;
 
 /// Unique identifier for different types of download requests.
 ///
@@ -56,7 +58,7 @@ enum RequestKey {
 }
 
 /// Result types that can be shared across deduplicated requests
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum RequestResult {
     Certificates(Result<Vec<ConfirmedBlockCertificate>, NodeError>),
     Blob(Option<Blob>),
@@ -124,6 +126,13 @@ impl From<Result<ConfirmedBlockCertificate, NodeError>> for RequestResult {
     }
 }
 
+/// Cached result entry with timestamp for TTL expiration
+#[derive(Debug, Clone)]
+struct CacheEntry {
+    result: Arc<RequestResult>,
+    cached_at: Instant,
+}
+
 /// Manages a pool of validator nodes with intelligent load balancing and performance tracking.
 ///
 /// The `ValidatorManager` maintains performance metrics for each validator node using
@@ -145,11 +154,12 @@ impl From<Result<ConfirmedBlockCertificate, NodeError>> for RequestResult {
 /// };
 /// let manager = ValidatorManager::with_config(
 ///     validator_nodes,
-///     15,              // max 15 concurrent requests per node
-///     latency_weights, // custom scoring weights
-///     0.2,             // higher alpha for faster adaptation
-///     3000.0,          // max expected latency (3 seconds)
-///     15.0,            // max expected in-flight requests
+///     15,                      // max 15 concurrent requests per node
+///     latency_weights,         // custom scoring weights
+///     0.2,                     // higher alpha for faster adaptation
+///     3000.0,                  // max expected latency (3 seconds)
+///     Duration::from_secs(60), // 60 second cache TTL
+///     200,                     // cache up to 200 entries
 /// );
 /// ```
 #[derive(Debug, Clone)]
@@ -170,6 +180,13 @@ pub struct ValidatorManager<Env: Environment> {
     /// Maps request keys to broadcast senders that notify all waiters when the request completes.
     in_flight_requests:
         Arc<tokio::sync::RwLock<HashMap<RequestKey, broadcast::Sender<Arc<RequestResult>>>>>,
+    /// Cache of recently completed requests with their results and timestamps.
+    /// Used to avoid re-executing requests for the same data within the TTL window.
+    cache: Arc<tokio::sync::RwLock<HashMap<RequestKey, CacheEntry>>>,
+    /// Time-to-live for cached entries. Entries older than this duration are considered expired.
+    cache_ttl: Duration,
+    /// Maximum number of entries to store in the cache. When exceeded, oldest entries are evicted (LRU).
+    max_cache_size: usize,
 }
 
 impl<Env: Environment> ValidatorManager<Env> {
@@ -181,6 +198,8 @@ impl<Env: Environment> ValidatorManager<Env> {
             ScoringWeights::default(),
             0.1,
             MAX_ACCEPTED_LATENCY_MS,
+            Duration::from_secs(CACHE_TTL_SEC), // 60 second cache TTL
+            CACHE_MAX_SIZE,                     // cache up to 100 entries
         )
     }
 
@@ -192,13 +211,16 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// - `weights`: Scoring weights for performance metrics
     /// - `alpha`: EMA smoothing factor (0 < alpha < 1)
     /// - `max_expected_latency_ms`: Maximum expected latency for score normalization
-    /// - `max_in_flight`: Maximum expected in-flight requests for score normalization
+    /// - `cache_ttl`: Time-to-live for cached responses
+    /// - `max_cache_size`: Maximum number of entries in the cache
     pub fn with_config(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
         max_requests_per_node: usize,
         weights: ScoringWeights,
         alpha: f64,
         max_expected_latency_ms: f64,
+        cache_ttl: Duration,
+        max_cache_size: usize,
     ) -> Self {
         assert!(alpha > 0.0 && alpha < 1.0, "Alpha must be in (0, 1) range");
         Self {
@@ -225,6 +247,9 @@ impl<Env: Environment> ValidatorManager<Env> {
             default_alpha: alpha,
             default_max_expected_latency_ms: max_expected_latency_ms,
             in_flight_requests: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            cache_ttl,
+            max_cache_size,
         }
     }
 
@@ -345,6 +370,43 @@ impl<Env: Environment> ValidatorManager<Env> {
         result
     }
 
+    /// Stores a result in the cache with LRU eviction if cache is full.
+    ///
+    /// If the cache is at capacity, this method removes the oldest entry before
+    /// inserting the new one. Entries are considered "oldest" based on their cached_at timestamp.
+    async fn store_in_cache(&self, key: RequestKey, result: Arc<RequestResult>) {
+        let mut cache = self.cache.write().await;
+
+        // If cache is at capacity, remove the oldest entry (LRU eviction)
+        if cache.len() >= self.max_cache_size {
+            if let Some(oldest_key) = cache
+                .iter()
+                .min_by_key(|(_, entry)| entry.cached_at)
+                .map(|(k, _)| k.clone())
+            {
+                cache.remove(&oldest_key);
+                tracing::info!(
+                    evicted_key = ?oldest_key,
+                    "Evicted oldest cache entry due to capacity limit"
+                );
+            }
+        }
+
+        // Insert new entry
+        cache.insert(
+            key.clone(),
+            CacheEntry {
+                result,
+                cached_at: Instant::now(),
+            },
+        );
+        tracing::trace!(
+            key = ?key,
+            cache_size = cache.len(),
+            "Stored result in cache"
+        );
+    }
+
     /// Deduplicates concurrent requests for the same data.
     ///
     /// If a request for the same key is already in-flight, this method waits for
@@ -363,9 +425,21 @@ impl<Env: Environment> ValidatorManager<Env> {
         F: FnOnce() -> Fut,
         Fut: Future<Output = T>,
     {
+        // Check cache first
+        {
+            let cache = self.cache.read().await;
+            if let Some(entry) = cache.get(&key) {
+                tracing::trace!(
+                    key = ?key,
+                    "Cache hit - returning cached result"
+                );
+                return T::from((*entry.result).clone());
+            }
+        }
+
         // Check if request is already in-flight
         loop {
-            let mut receiver_opt = None;
+            let receiver_opt;
 
             {
                 let mut in_flight = self.in_flight_requests.write().await;
@@ -373,13 +447,13 @@ impl<Env: Environment> ValidatorManager<Env> {
                 if let Some(sender) = in_flight.get(&key) {
                     // Request already in-flight, subscribe to result
                     receiver_opt = Some(sender.subscribe());
-                    tracing::info!(
+                    tracing::trace!(
                         key = ?key,
                         "Deduplicating request - joining existing in-flight request"
                     );
                 } else {
                     // Create new broadcast channel for this request
-                    let (sender, receiver) = broadcast::channel(1);
+                    let (sender, _receiver) = broadcast::channel(1);
                     in_flight.insert(key.clone(), sender);
                     break;
                 }
@@ -391,7 +465,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                     Ok(result) => return T::from((*result).clone()),
                     Err(_) => {
                         // Sender dropped, retry
-                        tracing::info!(
+                        tracing::trace!(
                             key = ?key,
                             "In-flight request sender dropped, retrying"
                         );
@@ -402,7 +476,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         }
 
         // Execute the actual request
-        tracing::info!(key = ?key, "Executing new request");
+        tracing::trace!(key = ?key, "Executing new request");
         let result = operation().await;
         let result_for_broadcast: RequestResult = result.clone().into();
         let shared_result = Arc::new(result_for_broadcast);
@@ -411,9 +485,12 @@ impl<Env: Environment> ValidatorManager<Env> {
         {
             let mut in_flight = self.in_flight_requests.write().await;
             if let Some(sender) = in_flight.remove(&key) {
-                let _ = sender.send(shared_result);
+                let _ = sender.send(shared_result.clone());
             }
         }
+
+        // Store in cache
+        self.store_in_cache(key, shared_result).await;
 
         result
     }
