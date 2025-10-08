@@ -118,15 +118,27 @@ mod tests {
     };
     use linera_chain::data_types::ChainAndHeight;
 
-    use super::LazyBatch;
+    use super::ReceivedLogs;
 
     #[test]
-    fn test_lazy_batch() {
-        let chain_id = ChainId(CryptoHash::test_hash("chain"));
+    fn test_received_log_batching() {
+        let chain1 = ChainId(CryptoHash::test_hash("chain1"));
+        let chain2 = ChainId(CryptoHash::test_hash("chain2"));
         let validator = ValidatorKeypair::generate().public_key;
-        let test_log = vec![1, 2, 3, 4, 5, 6, 7]
+        let test_log = ReceivedLogs::from_iterator(
+            vec![
+                (chain1, 1),
+                (chain1, 2),
+                (chain2, 1),
+                (chain1, 3),
+                (chain2, 2),
+                (chain2, 3),
+                (chain1, 4),
+                (chain2, 4),
+                (chain1, 5),
+            ]
             .into_iter()
-            .map(|height| {
+            .map(|(chain_id, height)| {
                 (
                     ChainAndHeight {
                         chain_id,
@@ -134,30 +146,42 @@ mod tests {
                     },
                     validator,
                 )
-            })
-            .collect::<Vec<_>>();
+            }),
+        );
 
-        let batches = LazyBatch {
-            iterator: test_log.into_iter(),
-            batch_size: 2,
-        }
-        .collect::<Vec<_>>();
+        let batches = test_log.into_batches(2).collect::<Vec<_>>();
 
-        assert_eq!(batches.len(), 4);
-        assert!(batches.iter().all(|batch| batch.num_chains() == 1));
+        assert_eq!(batches.len(), 5);
+        assert_eq!(
+            batches
+                .iter()
+                .map(|batch| batch.num_chains())
+                .collect::<Vec<_>>(),
+            vec![1, 2, 1, 2, 1]
+        );
 
-        let heights = batches
+        let chains_heights = batches
             .into_iter()
             .map(|batch| {
                 batch
                     .heights_per_chain()
-                    .values()
-                    .flatten()
-                    .map(|height| height.0)
+                    .into_iter()
+                    .flat_map(|(chain_id, heights)| {
+                        heights.into_iter().map(move |height| (chain_id, height.0))
+                    })
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(heights, vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7]]);
+        assert_eq!(
+            chains_heights,
+            vec![
+                vec![(chain1, 1), (chain1, 2)],
+                vec![(chain2, 1), (chain2, 2)],
+                vec![(chain2, 2), (chain2, 3)],
+                vec![(chain1, 4), (chain2, 4)],
+                vec![(chain1, 5)]
+            ]
+        );
     }
 }
