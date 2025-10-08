@@ -6,15 +6,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::Result;
 use linera_views::{
     bucket_queue_view::HashedBucketQueueView,
-    collection_view::HashedCollectionView,
+    collection_view::{CollectionView, HashedCollectionView},
     context::{Context, MemoryContext},
     key_value_store_view::{KeyValueStoreView, SizeData},
-    map_view::HashedByteMapView,
+    map_view::{HashedByteMapView, MapView},
     queue_view::HashedQueueView,
     random::make_deterministic_rng,
-    reentrant_collection_view::HashedReentrantCollectionView,
+    reentrant_collection_view::{ReentrantCollectionView, HashedReentrantCollectionView},
     register_view::RegisterView,
-    views::{CryptoHashRootView, CryptoHashView, RootView, View},
+    views::{CryptoHashRootView, CryptoHashView, HashableView as _, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, RngCore};
 
@@ -502,6 +502,118 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             view.save().await?;
             let new_elements = view.queue.elements().await?;
             assert_eq!(new_elements, new_vector);
+            assert!(!view.has_pending_changes().await);
+        }
+    }
+    Ok(())
+}
+
+
+#[derive(CryptoHashRootView)]
+pub struct NestedCollectionMapView<C> {
+    pub map1: CollectionView<C, String, MapView<C, String, u64>>,
+    pub map2: ReentrantCollectionView<C, String, MapView<C, String, u64>>,
+}
+
+impl<C: Context> NestedCollectionMapView<C> {
+    async fn read_maps_nested_collection_map_view(&self) -> Result<BTreeMap<String, BTreeMap<String, u64>>> {
+        let indices1 = self.map1.indices().await?;
+        let indices2 = self.map2.indices().await?;
+        assert_eq!(indices1, indices2, "Different set of indices");
+        let mut state_map = BTreeMap::new();
+        for index in indices1 {
+            let subview1 = self.map1.try_load_entry(&index).await?.unwrap();
+            let subview2 = self.map2.try_load_entry(&index).await?.unwrap();
+            let key_values1 = subview1.index_values().await?;
+            let key_values2 = subview2.index_values().await?;
+            assert_eq!(key_values1, key_values2, "key-values should be equal");
+            let key_values = key_values1
+                .into_iter()
+                .collect::<BTreeMap<String,u64>>();
+            state_map.insert(index, key_values);
+        }
+        Ok(state_map)
+    }
+}
+
+#[tokio::test]
+async fn nested_collection_map_view_check() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    let mut rng = make_deterministic_rng();
+    let mut state_map: BTreeMap<String,BTreeMap<String,u64>> = BTreeMap::new();
+    let n = 20;
+    for _ in 0..n {
+        let mut view = NestedCollectionMapView::load(context.clone()).await?;
+        let hash = view.crypto_hash().await?;
+        let save = rng.gen::<bool>();
+
+        let count_oper = rng.gen_range(0..25);
+        let mut new_state_map = state_map.clone();
+        for _ in 0..count_oper {
+            let keys: Vec<String> = new_state_map.iter().map(|(key,_)| key.clone()).collect::<Vec<_>>();
+            let count = new_state_map.len();
+            let choice = rng.gen_range(0..5);
+            if choice >= 2 {
+                let key1 = rng.gen_range::<u8, _>(0..10);
+                let key1 = format!("key1_{key1}");
+                let key2 = rng.gen_range::<u8, _>(0..10);
+                let key2 = format!("key2_{key2}");
+                let value = rng.gen_range::<u64, _>(0..100);
+                // insert into maps.
+                let subview1 = view.map1.load_entry_mut(&key1).await?;
+                subview1.insert(&key2, value)?;
+                let mut subview2 = view.map2.try_load_entry_mut(&key1).await?;
+                subview2.insert(&key2, value)?;
+                // insert into control
+                let mut map = new_state_map.get(&key1).cloned().unwrap_or_default();
+                map.insert(key2, value);
+                new_state_map.insert(key1, map);
+            }
+            if choice == 1 && count > 0 {
+                let pos = rng.gen_range(0..count) as usize;
+                let key = keys[pos].clone();
+                view.map1.remove_entry(&key)?;
+                view.map2.remove_entry(&key)?;
+                new_state_map.remove(&key);
+            }
+            if choice == 2 && count > 0 {
+                let pos = rng.gen_range(0..count);
+                let key1 = keys[pos].clone();
+                let submap = new_state_map.get_mut(&key1).unwrap();
+                let count = submap.len();
+                if count > 0 {
+                    let subkeys = submap.iter().map(|(key,_)| key.clone()).collect::<Vec<_>>();
+                    let pos = rng.gen_range(0..count);
+                    let key2 = subkeys[pos].clone();
+                    submap.remove(&key2);
+                    // Removing some entries from the view
+                    let subview1 = view.map1.load_entry_mut(&key1).await?;
+                    subview1.remove(&key2)?;
+                    let mut subview2 = view.map2.try_load_entry_mut(&key1).await?;
+                    subview2.remove(&key2)?;
+                }
+            }
+            let state_view = view.read_maps_nested_collection_map_view().await?;
+            assert_eq!(state_view, new_state_map, "state_view should match new_state_map");
+            let new_hash = view.crypto_hash().await?;
+            if state_map == new_state_map {
+                assert_eq!(new_hash, hash);
+            } else {
+                // If equal it is a bug or a hash collision (unlikely)
+                assert_ne!(new_hash, hash);
+            }
+            let hash1 = view.map1.hash().await?;
+            let hash2 = view.map2.hash().await?;
+            assert_eq!(hash1, hash2, "hash for CollectionView / ReentrantCollectionView should match");
+
+
+        }
+        if save {
+            if state_map != new_state_map {
+                assert!(view.has_pending_changes().await);
+            }
+            state_map.clone_from(&new_state_map);
+            view.save().await?;
             assert!(!view.has_pending_changes().await);
         }
     }
