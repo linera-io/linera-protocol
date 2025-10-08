@@ -11,7 +11,7 @@ use linera_base::{
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
-use linera_chain::types::ConfirmedBlockCertificate;
+use linera_chain::{manager::LockingBlock, types::ConfirmedBlockCertificate};
 use linera_core::{
     client::{ChainClient, Client},
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome},
@@ -178,6 +178,24 @@ impl ValidatorQueryResults {
                     info.manager.current_round != ref_info.manager.current_round
                 }) {
                     println!("Round: {}", info.manager.current_round);
+                }
+                if let Some(locking) = &info.manager.requested_locking {
+                    match &**locking {
+                        LockingBlock::Fast(proposal) => {
+                            println!(
+                                "Locking fast block from {}",
+                                proposal.content.block.timestamp
+                            );
+                        }
+                        LockingBlock::Regular(validated) => {
+                            println!(
+                                "Locking block {} in {} from {}",
+                                validated.hash(),
+                                validated.round,
+                                validated.block().header.timestamp
+                            );
+                        }
+                    }
                 }
             }
             Err(err) => println!("Error getting chain info: {err}"),
@@ -673,7 +691,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         node: &impl ValidatorNode,
         chain_id: ChainId,
     ) -> Result<ChainInfo, Error> {
-        let query = ChainInfoQuery::new(chain_id);
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
         match node.handle_chain_info_query(query).await {
             Ok(response) => {
                 debug!(
