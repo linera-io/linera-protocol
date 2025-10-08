@@ -64,7 +64,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> Result<TokenStream2, Err
     } = Constraints::get(&input);
 
     let attrs: StructAttrs = deluxe::parse_attributes(&input)
-        .map_err(|e| Error::new_spanned(&input, format!("Failed to parse attributes: {}", e)))?;
+        .map_err(|e| Error::new_spanned(&input, format!("Failed to parse attributes: {e}")))?;
     let context = attrs.context.or_else(|| {
         input.generics.type_params().next().map(|param| {
             let ident = &param.ident;
