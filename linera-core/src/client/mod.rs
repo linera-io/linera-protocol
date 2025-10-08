@@ -451,23 +451,27 @@ impl<Env: Environment> Client<Env> {
         certificates: Vec<ConfirmedBlockCertificate>,
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
         let mut info = None;
-        for certificate in certificates {
-            let certificate = Box::new(certificate);
-            let mut result = self.handle_certificate(certificate.clone()).await;
+        let required_blob_ids: Vec<_> = certificates
+            .iter()
+            .flat_map(|certificate| certificate.value().required_blob_ids())
+            .collect();
 
-            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let blobs =
-                    futures::stream::iter(blob_ids.iter().copied().map(|blob_id| async move {
+        match self.local_node.read_blob_states_from_storage(&required_blob_ids).await {
+            Ok(_) => (),
+            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                self.local_node.store_blobs(
+                    &futures::stream::iter(blob_ids.iter().copied().map(|blob_id| async move {
                         remote_node.try_download_blob(blob_id).await.unwrap()
                     }))
                     .buffer_unordered(self.options.max_joined_tasks)
                     .collect::<Vec<_>>()
-                    .await;
-                self.local_node.store_blobs(&blobs).await?;
-                result = self.handle_certificate(certificate.clone()).await;
-            }
-
-            info = Some(result?.info);
+                        .await,
+                ).await?;
+            },
+            Err(e) => Err(e)?,
+        }
+        for certificate in certificates {
+            info = Some(self.handle_certificate(Box::new(certificate)).await?.info);
         }
         // Done with all certificates.
         Ok(info)
