@@ -968,6 +968,14 @@ mod tests {
         }
     }
 
+    fn check_intersection(keys: Vec<Vec<u8>>, prefixes: &BTreeSet<Vec<u8>>) {
+        for key in keys {
+            for prefix in prefixes {
+                assert!(!key.starts_with(prefix), "key matches a prefix");
+            }
+        }
+    }
+
     impl LruPrefixCache {
         fn check_coherence(&self) {
             let value_map_set = self
@@ -985,8 +993,11 @@ mod tests {
                 .keys()
                 .cloned()
                 .collect::<BTreeSet<Vec<u8>>>();
+            // Checking prefix-free ness of the find-keys-map / find-key-values-map
             check_prefix_free(find_keys_map_set.clone());
             check_prefix_free(find_key_values_map_set.clone());
+            // Building the data set and sizes.
+            // Also checking that the sizes are coherent.
             let mut value_queue_set = BTreeSet::new();
             let mut find_keys_queue_set = BTreeSet::new();
             let mut find_key_values_queue_set = BTreeSet::new();
@@ -1021,6 +1032,20 @@ mod tests {
                 }
                 total_size += queue_size;
             }
+            // Checking that there is no overlap between the maps.
+            let value_map_vect = self.value_map.keys().cloned().collect::<Vec<_>>();
+            check_intersection(value_map_vect, &find_key_values_map_set);
+            let value_existence_map_vect = self
+                .value_map
+                .iter()
+                .filter_map(|(key, value)| match value {
+                    ValueEntry::DoesNotExist => Some(key.to_vec()),
+                    ValueEntry::Exists => Some(key.to_vec()),
+                    ValueEntry::Value(_) => None,
+                })
+                .collect::<Vec<_>>();
+            check_intersection(value_existence_map_vect, &find_keys_map_set);
+            // Checking that the set of keys are coherent between the queues and the maps.
             assert_eq!(
                 value_queue_set, value_map_set,
                 "Incoherence in value_map keys"
@@ -1033,6 +1058,7 @@ mod tests {
                 find_key_values_queue_set, find_key_values_map_set,
                 "Incoherence in find_key_values_map keys"
             );
+            // Checking that the total sizes are coherent.
             assert_eq!(total_size, self.total_size, "The total_size are incoherent");
             assert_eq!(
                 total_value_size, self.total_value_size,
@@ -1046,6 +1072,7 @@ mod tests {
                 total_find_key_values_size, self.total_find_key_values_size,
                 "The total_find_key_values_size are incoherent"
             );
+            // Checking that the size are within the allowed bounds.
             if self.config.max_cache_size > 0 {
                 assert!(
                     total_size < self.config.max_cache_size,
