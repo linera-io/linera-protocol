@@ -12,7 +12,7 @@ use linera_views::{
     map_view::{HashedByteMapView, MapView},
     queue_view::HashedQueueView,
     random::make_deterministic_rng,
-    reentrant_collection_view::{ReentrantCollectionView, HashedReentrantCollectionView},
+    reentrant_collection_view::{HashedReentrantCollectionView, ReentrantCollectionView},
     register_view::RegisterView,
     views::{CryptoHashRootView, CryptoHashView, HashableView as _, RootView, View},
 };
@@ -508,7 +508,6 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
     Ok(())
 }
 
-
 #[derive(CryptoHashRootView)]
 pub struct NestedCollectionMapView<C> {
     pub map1: CollectionView<C, String, MapView<C, String, u64>>,
@@ -516,20 +515,21 @@ pub struct NestedCollectionMapView<C> {
 }
 
 impl<C: Context> NestedCollectionMapView<C> {
-    async fn read_maps_nested_collection_map_view(&self) -> Result<BTreeMap<String, BTreeMap<String, u64>>> {
+    async fn read_maps_nested_collection_map_view(
+        &self,
+    ) -> Result<BTreeMap<String, BTreeMap<String, u64>>> {
         let indices1 = self.map1.indices().await?;
         let indices2 = self.map2.indices().await?;
         assert_eq!(indices1, indices2, "Different set of indices");
+
+        let subviews1 = self.map1.try_load_entries(&indices1).await?;
+        let subviews2 = self.map2.try_load_entries(&indices1).await?;
         let mut state_map = BTreeMap::new();
-        for index in indices1 {
-            let subview1 = self.map1.try_load_entry(&index).await?.unwrap();
-            let subview2 = self.map2.try_load_entry(&index).await?.unwrap();
-            let key_values1 = subview1.index_values().await?;
-            let key_values2 = subview2.index_values().await?;
+        for ((subview1, subview2), index) in subviews1.into_iter().zip(subviews2).zip(indices1) {
+            let key_values1 = subview1.unwrap().index_values().await?;
+            let key_values2 = subview2.unwrap().index_values().await?;
             assert_eq!(key_values1, key_values2, "key-values should be equal");
-            let key_values = key_values1
-                .into_iter()
-                .collect::<BTreeMap<String,u64>>();
+            let key_values = key_values1.into_iter().collect::<BTreeMap<String, u64>>();
             state_map.insert(index, key_values);
         }
         Ok(state_map)
@@ -540,7 +540,7 @@ impl<C: Context> NestedCollectionMapView<C> {
 async fn nested_collection_map_view_check() -> Result<()> {
     let context = MemoryContext::new_for_testing(());
     let mut rng = make_deterministic_rng();
-    let mut state_map: BTreeMap<String,BTreeMap<String,u64>> = BTreeMap::new();
+    let mut state_map: BTreeMap<String, BTreeMap<String, u64>> = BTreeMap::new();
     let n = 20;
     for _ in 0..n {
         let mut view = NestedCollectionMapView::load(context.clone()).await?;
@@ -550,7 +550,7 @@ async fn nested_collection_map_view_check() -> Result<()> {
         let count_oper = rng.gen_range(0..25);
         let mut new_state_map = state_map.clone();
         for _ in 0..count_oper {
-            let keys: Vec<String> = new_state_map.iter().map(|(key,_)| key.clone()).collect::<Vec<_>>();
+            let keys: Vec<String> = new_state_map.keys().cloned().collect::<Vec<_>>();
             let count = new_state_map.len();
             let choice = rng.gen_range(0..5);
             if choice >= 2 {
@@ -582,7 +582,10 @@ async fn nested_collection_map_view_check() -> Result<()> {
                 let submap = new_state_map.get_mut(&key1).unwrap();
                 let count = submap.len();
                 if count > 0 {
-                    let subkeys = submap.iter().map(|(key,_)| key.clone()).collect::<Vec<_>>();
+                    let subkeys = submap
+                        .iter()
+                        .map(|(key, _)| key.clone())
+                        .collect::<Vec<_>>();
                     let pos = rng.gen_range(0..count);
                     let key2 = subkeys[pos].clone();
                     submap.remove(&key2);
@@ -594,7 +597,10 @@ async fn nested_collection_map_view_check() -> Result<()> {
                 }
             }
             let state_view = view.read_maps_nested_collection_map_view().await?;
-            assert_eq!(state_view, new_state_map, "state_view should match new_state_map");
+            assert_eq!(
+                state_view, new_state_map,
+                "state_view should match new_state_map"
+            );
             let new_hash = view.crypto_hash().await?;
             if state_map == new_state_map {
                 assert_eq!(new_hash, hash);
@@ -604,9 +610,10 @@ async fn nested_collection_map_view_check() -> Result<()> {
             }
             let hash1 = view.map1.hash().await?;
             let hash2 = view.map2.hash().await?;
-            assert_eq!(hash1, hash2, "hash for CollectionView / ReentrantCollectionView should match");
-
-
+            assert_eq!(
+                hash1, hash2,
+                "hash for CollectionView / ReentrantCollectionView should match"
+            );
         }
         if save {
             if state_map != new_state_map {
