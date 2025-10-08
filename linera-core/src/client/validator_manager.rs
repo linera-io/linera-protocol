@@ -2,7 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp::Ordering, collections::BTreeMap, future::Future, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, HashMap},
+    future::Future,
+    sync::Arc,
+};
 
 use custom_debug_derive::Debug;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -14,6 +19,7 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use rand::distributions::{Distribution, WeightedIndex};
+use tokio::sync::broadcast;
 use tracing::instrument;
 
 use crate::{
@@ -24,6 +30,99 @@ use crate::{
 
 const MAX_IN_FLIGHT_REQUESTS: usize = 1000;
 const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0; // 5 seconds
+
+/// Unique identifier for different types of download requests.
+///
+/// Used for request deduplication to avoid redundant downloads of the same data.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum RequestKey {
+    /// Download certificates from a starting height
+    Certificates {
+        chain_id: ChainId,
+        start: BlockHeight,
+        limit: u64,
+    },
+    /// Download certificates by specific heights
+    CertificatesByHeights {
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    },
+    /// Download a blob by ID
+    Blob { blob_id: BlobId },
+    /// Download a pending blob
+    PendingBlob { chain_id: ChainId, blob_id: BlobId },
+    /// Download certificate for a specific blob
+    CertificateForBlob { blob_id: BlobId },
+}
+
+/// Result types that can be shared across deduplicated requests
+#[derive(Clone)]
+enum RequestResult {
+    Certificates(Result<Vec<ConfirmedBlockCertificate>, NodeError>),
+    Blob(Option<Blob>),
+    BlobContent(Result<BlobContent, NodeError>),
+    Certificate(Box<Result<ConfirmedBlockCertificate, NodeError>>),
+}
+
+impl From<RequestResult> for Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+    fn from(result: RequestResult) -> Self {
+        match result {
+            RequestResult::Certificates(r) => r,
+            _ => panic!("Invalid RequestResult variant"),
+        }
+    }
+}
+
+impl From<Result<Vec<ConfirmedBlockCertificate>, NodeError>> for RequestResult {
+    fn from(result: Result<Vec<ConfirmedBlockCertificate>, NodeError>) -> Self {
+        RequestResult::Certificates(result)
+    }
+}
+
+impl From<RequestResult> for Option<Blob> {
+    fn from(result: RequestResult) -> Self {
+        match result {
+            RequestResult::Blob(r) => r,
+            _ => panic!("Invalid RequestResult variant"),
+        }
+    }
+}
+
+impl From<Option<Blob>> for RequestResult {
+    fn from(result: Option<Blob>) -> Self {
+        RequestResult::Blob(result)
+    }
+}
+
+impl From<RequestResult> for Result<BlobContent, NodeError> {
+    fn from(result: RequestResult) -> Self {
+        match result {
+            RequestResult::BlobContent(r) => r,
+            _ => panic!("Invalid RequestResult variant"),
+        }
+    }
+}
+
+impl From<Result<BlobContent, NodeError>> for RequestResult {
+    fn from(result: Result<BlobContent, NodeError>) -> Self {
+        RequestResult::BlobContent(result)
+    }
+}
+
+impl From<RequestResult> for Result<ConfirmedBlockCertificate, NodeError> {
+    fn from(result: RequestResult) -> Self {
+        match result {
+            RequestResult::Certificate(r) => *r,
+            _ => panic!("Invalid RequestResult variant"),
+        }
+    }
+}
+
+impl From<Result<ConfirmedBlockCertificate, NodeError>> for RequestResult {
+    fn from(result: Result<ConfirmedBlockCertificate, NodeError>) -> Self {
+        RequestResult::Certificate(Box::new(result))
+    }
+}
 
 /// Manages a pool of validator nodes with intelligent load balancing and performance tracking.
 ///
@@ -67,6 +166,10 @@ pub struct ValidatorManager<Env: Environment> {
     default_alpha: f64,
     /// Default maximum expected latency in milliseconds for score normalization.
     default_max_expected_latency_ms: f64,
+    /// Tracks in-flight requests to deduplicate concurrent requests for the same data.
+    /// Maps request keys to broadcast senders that notify all waiters when the request completes.
+    in_flight_requests:
+        Arc<tokio::sync::RwLock<HashMap<RequestKey, broadcast::Sender<Arc<RequestResult>>>>>,
 }
 
 impl<Env: Environment> ValidatorManager<Env> {
@@ -121,6 +224,7 @@ impl<Env: Environment> ValidatorManager<Env> {
             default_weights: weights,
             default_alpha: alpha,
             default_max_expected_latency_ms: max_expected_latency_ms,
+            in_flight_requests: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
 
@@ -227,7 +331,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                 info.update_metrics(result.is_ok(), response_time_ms);
                 info.release_request_slot().await;
                 let score = info.calculate_score().await;
-                tracing::trace!(
+                tracing::info!(
                     node = %public_key,
                     success = %result.is_ok(),
                     response_time_ms = %response_time_ms,
@@ -241,6 +345,79 @@ impl<Env: Environment> ValidatorManager<Env> {
         result
     }
 
+    /// Deduplicates concurrent requests for the same data.
+    ///
+    /// If a request for the same key is already in-flight, this method waits for
+    /// the existing request to complete and returns its result. Otherwise, it
+    /// executes the operation and broadcasts the result to all waiting callers.
+    ///
+    /// # Arguments
+    /// - `key`: Unique identifier for the request
+    /// - `operation`: Async closure that performs the actual request
+    ///
+    /// # Returns
+    /// The result from either the in-flight request or the newly executed operation
+    async fn deduplicated_request<T, F, Fut>(&self, key: RequestKey, operation: F) -> T
+    where
+        T: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = T>,
+    {
+        // Check if request is already in-flight
+        loop {
+            let mut receiver_opt = None;
+
+            {
+                let mut in_flight = self.in_flight_requests.write().await;
+
+                if let Some(sender) = in_flight.get(&key) {
+                    // Request already in-flight, subscribe to result
+                    receiver_opt = Some(sender.subscribe());
+                    tracing::info!(
+                        key = ?key,
+                        "Deduplicating request - joining existing in-flight request"
+                    );
+                } else {
+                    // Create new broadcast channel for this request
+                    let (sender, receiver) = broadcast::channel(1);
+                    in_flight.insert(key.clone(), sender);
+                    break;
+                }
+            }
+
+            // Wait for result from existing request
+            if let Some(mut receiver) = receiver_opt {
+                match receiver.recv().await {
+                    Ok(result) => return T::from((*result).clone()),
+                    Err(_) => {
+                        // Sender dropped, retry
+                        tracing::info!(
+                            key = ?key,
+                            "In-flight request sender dropped, retrying"
+                        );
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Execute the actual request
+        tracing::info!(key = ?key, "Executing new request");
+        let result = operation().await;
+        let result_for_broadcast: RequestResult = result.clone().into();
+        let shared_result = Arc::new(result_for_broadcast);
+
+        // Broadcast result and clean up
+        {
+            let mut in_flight = self.in_flight_requests.write().await;
+            if let Some(sender) = in_flight.remove(&key) {
+                let _ = sender.send(shared_result);
+            }
+        }
+
+        result
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub async fn download_certificates(
         &self,
@@ -248,18 +425,30 @@ impl<Env: Environment> ValidatorManager<Env> {
         start: BlockHeight,
         limit: u64,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        self.track_request(|peer| async move {
-            peer.download_certificates_from(chain_id, start, limit)
-                .await
+        let key = RequestKey::Certificates {
+            chain_id,
+            start,
+            limit,
+        };
+        self.deduplicated_request(key, || async {
+            self.track_request(|peer| async move {
+                peer.download_certificates_from(chain_id, start, limit)
+                    .await
+            })
+            .await
         })
         .await
     }
 
     #[instrument(level = "trace", skip_all)]
     pub async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
-        self.track_request(|peer| async move { Ok(peer.try_download_blob(blob_id).await) })
-            .await
-            .unwrap_or(None)
+        let key = RequestKey::Blob { blob_id };
+        self.deduplicated_request(key, || async {
+            self.track_request(|peer| async move { Ok(peer.try_download_blob(blob_id).await) })
+                .await
+                .unwrap_or(None)
+        })
+        .await
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -268,9 +457,16 @@ impl<Env: Environment> ValidatorManager<Env> {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        self.track_request(|peer| async move {
-            peer.download_certificates_by_heights(chain_id, heights)
-                .await
+        let key = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: heights.clone(),
+        };
+        self.deduplicated_request(key, || async {
+            self.track_request(|peer| async move {
+                peer.download_certificates_by_heights(chain_id, heights)
+                    .await
+            })
+            .await
         })
         .await
     }
@@ -281,8 +477,12 @@ impl<Env: Environment> ValidatorManager<Env> {
         chain_id: ChainId,
         blob_id: BlobId,
     ) -> Result<BlobContent, NodeError> {
-        self.track_request(|peer| async move {
-            peer.node.download_pending_blob(chain_id, blob_id).await
+        let key = RequestKey::PendingBlob { chain_id, blob_id };
+        self.deduplicated_request(key, || async {
+            self.track_request(|peer| async move {
+                peer.node.download_pending_blob(chain_id, blob_id).await
+            })
+            .await
         })
         .await
     }
@@ -292,8 +492,14 @@ impl<Env: Environment> ValidatorManager<Env> {
         &self,
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        self.track_request(|peer| async move { peer.download_certificate_for_blob(blob_id).await })
+        let key = RequestKey::CertificateForBlob { blob_id };
+        self.deduplicated_request(key, || async {
+            self.track_request(
+                |peer| async move { peer.download_certificate_for_blob(blob_id).await },
+            )
             .await
+        })
+        .await
     }
 
     /// Downloads the blobs with the given IDs. This is done in one concurrent task per blob.
