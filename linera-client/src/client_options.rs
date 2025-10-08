@@ -103,6 +103,19 @@ pub struct ClientContextOptions {
     #[arg(long, default_value = "10")]
     pub max_retries: u32,
 
+    /// Enable OpenTelemetry Chrome JSON exporter for trace data analysis.
+    #[arg(long)]
+    pub chrome_trace_exporter: bool,
+
+    /// Output file path for Chrome trace JSON format.
+    /// Can be visualized in chrome://tracing or Perfetto UI.
+    #[arg(long, env = "LINERA_OTEL_TRACE_FILE")]
+    pub otel_trace_file: Option<String>,
+
+    /// OpenTelemetry OTLP exporter endpoint (requires tempo feature).
+    #[arg(long, env = "LINERA_OTEL_EXPORTER_OTLP_ENDPOINT")]
+    pub otel_exporter_otlp_endpoint: Option<String>,
+
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
     #[arg(long)]

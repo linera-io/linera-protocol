@@ -508,7 +508,7 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
 }
 
 async fn run(options: ServerOptions) {
-    linera_base::tracing::init_with_opentelemetry(&log_file_name_for(&options.command)).await;
+    linera_base::tracing::init_with_opentelemetry(&log_file_name_for(&options.command), None);
 
     match options.command {
         ServerCommand::Run {
