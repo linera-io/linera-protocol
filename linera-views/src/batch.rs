@@ -37,7 +37,7 @@ use crate::{
 /// * Deletion of a specific key.
 /// * Deletion of all keys matching a specific prefix.
 /// * Insertion or replacement of a key with a value.
-#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore, Serialize)]
 pub enum WriteOperation {
     /// Delete the given key.
     Delete {
@@ -59,7 +59,7 @@ pub enum WriteOperation {
 }
 
 /// A batch of write operations.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
 pub struct Batch {
     /// The write operations.
     pub operations: Vec<WriteOperation>,

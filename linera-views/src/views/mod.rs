@@ -42,8 +42,11 @@ pub mod reentrant_collection_view;
 /// The implementation of a key-value store view.
 pub mod key_value_store_view;
 
-/// Wrapping a view to compute a hash.
+/// Wrapping a view to memoize a hash.
 pub mod hashable_wrapper;
+
+/// Wrapping a view to compute a hash.
+pub mod historical_hash_wrapper;
 
 /// The minimum value for the view tags. Values in `0..MIN_VIEW_TAG` are used for other purposes.
 pub const MIN_VIEW_TAG: u8 = 1;
@@ -188,4 +191,10 @@ pub trait ClonableView: View {
     /// Creates a clone of this view, sharing the underlying storage context but prone to
     /// data races which can corrupt the view state.
     fn clone_unchecked(&mut self) -> Self;
+}
+
+/// A [`PreFlushView`] supports being shared (unsafely) by cloning it.
+pub trait PreFlushView: View {
+    /// Same as calling `flush` but does not modify the underlying view.
+    fn pre_flush_unchecked(&self, batch: &mut Batch) -> Result<(), ViewError>;
 }
