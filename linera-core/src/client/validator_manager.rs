@@ -358,6 +358,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                 let score = info.calculate_score().await;
                 tracing::info!(
                     node = %public_key,
+                    address = %info.node.node.address(),
                     success = %result.is_ok(),
                     response_time_ms = %response_time_ms,
                     score = %score,

@@ -188,6 +188,10 @@ macro_rules! client_delegate {
 impl ValidatorNode for GrpcClient {
     type NotificationStream = NotificationStream;
 
+    fn address(&self) -> String {
+        self.address.clone()
+    }
+
     #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
     async fn handle_block_proposal(
         &self,

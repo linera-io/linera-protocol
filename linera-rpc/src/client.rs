@@ -44,6 +44,14 @@ impl From<SimpleClient> for Client {
 impl ValidatorNode for Client {
     type NotificationStream = NotificationStream;
 
+    fn address(&self) -> String {
+        match self {
+            Client::Grpc(grpc_client) => grpc_client.address().to_string(),
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.address(),
+        }
+    }
+
     async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,

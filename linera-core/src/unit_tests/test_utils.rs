@@ -99,6 +99,10 @@ where
 {
     type NotificationStream = NotificationStream;
 
+    fn address(&self) -> String {
+        format!("local:{}", self.public_key)
+    }
+
     async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
