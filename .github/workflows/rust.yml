@@ -72,10 +72,7 @@ jobs:
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
     - name: Wait for storage service to be ready
-      run: |
-        STORAGE_HOST=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f1)
-        STORAGE_PORT=$(echo "$LINERA_STORAGE_SERVICE" | cut -d: -f2)
-        until nc -z "$STORAGE_HOST" "$STORAGE_PORT"; do sleep 1; done
+      run: until nc -z ${LINERA_STORAGE_SERVICE/:/ }; do sleep 1; done
     - name: Build binaries
       run: |
         cargo build --features storage-service --bin linera-server --bin linera-proxy --bin linera
