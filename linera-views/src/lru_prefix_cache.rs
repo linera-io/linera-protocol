@@ -299,7 +299,7 @@ impl LruPrefixCache {
         assert!(self.queue.insert(cache_key, size).is_none());
     }
 
-    /// If the FindKeys map contain a prefix that is a prefix of key in argument,
+    /// If the FindKeys map contains a prefix that is a prefix of key in argument,
     /// then returns it and the corresponding FindKeys. Otherwise `None`.
     ///
     /// The algorithm of this function is tested in `test_lower_bounds`.
@@ -307,34 +307,37 @@ impl LruPrefixCache {
     /// What makes this functionality work is that the set of keys of the `find_keys_map`
     /// is prefix free.
     ///
-    /// For one of the map in question, let us define `set` to be the `BTreeSet` of the keys
-    /// of the map.
+    /// Claim: `self.get_existing_find_keys_entry(key)` finds a prefix of key in `self.find_keys_map.keys()` iff such prefix exists.
+    ///
+    /// Note that when it exists, such a prefix is unique because `self.find_keys_map.keys()` is prefix-free.
+    ///
+    /// Proof: For the map `find_keys_map` in question, let us define `set` to be the `BTreeSet` of
+    /// the keys of the map.
     /// Then define `S = { s in set | s <= key }` for the lexicographic ordering.
     /// First of all the expression `self.find_keys_map.range(..=key.to_vec())` corresponds
     /// to S and `self.find_keys_map.range(..=key.to_vec()).next_back()` is
     /// * None if S is empty.
     /// * Some(M) with M the maximum of S if S is non-empty.
     ///
-    /// If there is a prefix `p` of `key` in `S` then we have `p <= key` in the lexicographic
-    /// ordering. So, S is non-empty. That prefix `p` is the highest element of `S`. If that
-    /// were not the case, we would have for another `q in S` the inequality `p < q <= key`.
-    /// This forces `q` to be a prefix of `key` and `p` to be a prefix of `q`. This breaks
-    /// the prefix-free property.
+    /// First, if `self.get_existing_find_keys_entry(key) == Some(stored_key)` then given the code,
+    /// clearly `stored_key` is a prefix of key.
     ///
-    /// If there is no prefix `p` of `key` in `S` then if `S` is empty the code is correct.
-    /// If it is not empty, then it has a maximum element M. That highest element cannot
-    /// be a prefix of `key` and that is checked in the code (named `key_store` there).
-    /// If there were an element `h` of `S` that would be a prefix, then the inequality
-    /// `h <= M <= key` would force `M` to also be a prefix of `key`.
+    /// Conversely, let us assume that `self.find_keys_map.keys()` contains a certain prefix `p` of key.
+    /// Because in particular `p <= key`, we have `self.find_keys_map.range(..=key.to_vec()).next_back() == Some((stored_key, _))`
+    /// for some value `stored_key` such that `p <= stored_key <= key`.
     ///
-    /// Therefore the code does return an `Some(p)` if and only if there is a prefix `p`
-    /// in the map of find-keys prefixes.
+    /// Next, let us prove that `p` is a prefix of `stored_key`. (This will entail `stored_key == p` due to
+    /// the prefix-free property of `self.find_keys_map`, therefore the algorithm's answer is correct.)
+    ///
+    /// By contradiction. Let `w` be the longest common prefix between `p` and `stored_key`. If `p = w p2` and
+    /// `stored_key = w s2` with `p2` non-empty, then `p <= stored_key` implies `s2 > p2`. But `p` is also a
+    /// prefix of `key` therefore `stored_key > key`, contradiction.
     fn get_existing_find_keys_entry(&self, key: &[u8]) -> Option<(&Vec<u8>, &FindKeysEntry)> {
         match self.find_keys_map.range(..=key.to_vec()).next_back() {
             None => None,
-            Some((key_store, value)) => {
-                if key.starts_with(key_store) {
-                    Some((key_store, value))
+            Some((stored_key, value)) => {
+                if key.starts_with(stored_key) {
+                    Some((stored_key, value))
                 } else {
                     None
                 }
@@ -349,9 +352,9 @@ impl LruPrefixCache {
     ) -> Option<(&Vec<u8>, &mut FindKeysEntry)> {
         match self.find_keys_map.range_mut(..=key.to_vec()).next_back() {
             None => None,
-            Some((key_store, value)) => {
-                if key.starts_with(key_store) {
-                    Some((key_store, value))
+            Some((stored_key, value)) => {
+                if key.starts_with(stored_key) {
+                    Some((stored_key, value))
                 } else {
                     None
                 }
@@ -367,9 +370,9 @@ impl LruPrefixCache {
     ) -> Option<(&Vec<u8>, &FindKeyValuesEntry)> {
         match self.find_key_values_map.range(..=key.to_vec()).next_back() {
             None => None,
-            Some((key_store, value)) => {
-                if key.starts_with(key_store) {
-                    Some((key_store, value))
+            Some((stored_key, value)) => {
+                if key.starts_with(stored_key) {
+                    Some((stored_key, value))
                 } else {
                     None
                 }
@@ -388,9 +391,9 @@ impl LruPrefixCache {
             .next_back()
         {
             None => None,
-            Some((key_store, value)) => {
-                if key.starts_with(key_store) {
-                    Some((key_store, value))
+            Some((stored_key, value)) => {
+                if key.starts_with(stored_key) {
+                    Some((stored_key, value))
                 } else {
                     None
                 }
@@ -525,16 +528,16 @@ impl LruPrefixCache {
         if self.has_exclusive_access {
             let lower_bound = self.get_existing_keys_entry_mut(key);
             if let Some((lower_bound, cache_entry)) = lower_bound {
-                let key_red = &key[lower_bound.len()..];
-                cache_entry.update_entry(key_red, true);
+                let reduced_key = &key[lower_bound.len()..];
+                cache_entry.update_entry(reduced_key, true);
                 let cache_key = CacheKey::FindKeys(lower_bound.to_vec());
                 let new_size = lower_bound.len() + cache_entry.size();
                 self.update_cache_key_sizes(&cache_key, new_size);
             }
             match self.get_existing_find_key_values_entry_mut(key) {
                 Some((lower_bound, cache_entry)) => {
-                    let key_red = &key[lower_bound.len()..];
-                    cache_entry.update_entry(key_red, Some(value.to_vec()));
+                    let reduced_key = &key[lower_bound.len()..];
+                    cache_entry.update_entry(reduced_key, Some(value.to_vec()));
                     let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
                     let new_size = lower_bound.len() + cache_entry.size();
                     self.update_cache_key_sizes(&cache_key, new_size);
@@ -558,8 +561,8 @@ impl LruPrefixCache {
             let lower_bound = self.get_existing_keys_entry_mut(key);
             let mut matching = false; // If matching, no need to insert in the value cache
             if let Some((lower_bound, cache_entry)) = lower_bound {
-                let key_red = &key[lower_bound.len()..];
-                cache_entry.update_entry(key_red, false);
+                let reduced_key = &key[lower_bound.len()..];
+                cache_entry.update_entry(reduced_key, false);
                 let cache_key = CacheKey::FindKeys(lower_bound.to_vec());
                 let new_size = lower_bound.len() + cache_entry.size();
                 self.update_cache_key_sizes(&cache_key, new_size);
@@ -567,8 +570,8 @@ impl LruPrefixCache {
             }
             let lower_bound = self.get_existing_find_key_values_entry_mut(key);
             if let Some((lower_bound, cache_entry)) = lower_bound {
-                let key_red = &key[lower_bound.len()..];
-                cache_entry.update_entry(key_red, None);
+                let reduced_key = &key[lower_bound.len()..];
+                cache_entry.update_entry(reduced_key, None);
                 let cache_key = CacheKey::FindKeyValues(lower_bound.to_vec());
                 let new_size = lower_bound.len() + cache_entry.size();
                 self.update_cache_key_sizes(&cache_key, new_size);
@@ -839,8 +842,8 @@ impl LruPrefixCache {
             // Now trying the FindKeyValues map.
             let lower_bound = self.get_existing_find_key_values_entry(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
-                let key_red = &key[lower_bound.len()..];
-                (lower_bound, find_entry.get_read_value(key_red))
+                let reduced_key = &key[lower_bound.len()..];
+                (lower_bound, find_entry.get_read_value(reduced_key))
             } else {
                 return None;
             };
@@ -869,8 +872,8 @@ impl LruPrefixCache {
             // Now trying the FindKeys map.
             let lower_bound = self.get_existing_find_keys_entry(key);
             let result = if let Some((lower_bound, find_entry)) = lower_bound {
-                let key_red = &key[lower_bound.len()..];
-                Some((lower_bound, find_entry.contains_key(key_red)))
+                let reduced_key = &key[lower_bound.len()..];
+                Some((lower_bound, find_entry.contains_key(reduced_key)))
             } else {
                 None
             };
@@ -882,8 +885,8 @@ impl LruPrefixCache {
             // Now trying the FindKeyValues map.
             let lower_bound = self.get_existing_find_key_values_entry(key);
             let (lower_bound, result) = if let Some((lower_bound, find_entry)) = lower_bound {
-                let key_red = &key[lower_bound.len()..];
-                (lower_bound, find_entry.contains_key(key_red))
+                let reduced_key = &key[lower_bound.len()..];
+                (lower_bound, find_entry.contains_key(reduced_key))
             } else {
                 return None;
             };
