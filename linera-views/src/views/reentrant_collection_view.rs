@@ -1356,13 +1356,9 @@ where
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries_mut<'a, Q>(
-        &'a mut self,
-    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + 'a,
-    {
+    pub async fn try_load_all_entries_mut(
+        &mut self,
+    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError> {
         let results = self.collection.try_load_all_entries_mut().await?;
         results
             .into_iter()
@@ -1391,13 +1387,7 @@ where
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries<'a, Q>(
-        &'a self,
-    ) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + 'a,
-    {
+    pub async fn try_load_all_entries(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError> {
         let results = self.collection.try_load_all_entries().await?;
         results
             .into_iter()
@@ -1861,13 +1851,9 @@ where
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries_mut<Q>(
+    pub async fn try_load_all_entries_mut(
         &mut self,
-    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: CustomSerialize,
-    {
+    ) -> Result<Vec<(I, WriteGuardedView<W>)>, ViewError> {
         let results = self.collection.try_load_all_entries_mut().await?;
         results
             .into_iter()
@@ -1896,11 +1882,7 @@ where
     /// assert_eq!(subviews.len(), 1);
     /// # })
     /// ```
-    pub async fn try_load_all_entries<Q>(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: CustomSerialize,
-    {
+    pub async fn try_load_all_entries(&self) -> Result<Vec<(I, ReadGuardedView<W>)>, ViewError> {
         let results = self.collection.try_load_all_entries().await?;
         results
             .into_iter()
