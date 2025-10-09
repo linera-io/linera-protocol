@@ -12,7 +12,7 @@ use linera_views::{
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
-    lru_caching::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig,
     rocks_db::{
         PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
@@ -282,12 +282,27 @@ enum StorageServerOptions {
         /// The maximum size of the cache, in bytes (keys size + value sizes)
         #[arg(long, default_value = "10000000")]
         max_cache_size: usize,
-        /// The maximum size of an entry size, in bytes
+        /// The maximum size of a value entry, in bytes
         #[arg(long, default_value = "1000000")]
-        max_entry_size: usize,
+        max_value_entry_size: usize,
+        /// The maximum size of a find-keys entry, in bytes
+        #[arg(long, default_value = "1000000")]
+        max_find_keys_entry_size: usize,
+        /// The maximum size of a find-key-values entry, in bytes
+        #[arg(long, default_value = "1000000")]
+        max_find_key_values_entry_size: usize,
         /// The maximum number of entries in the cache.
         #[arg(long, default_value = "1000")]
         max_cache_entries: usize,
+        /// The maximum value size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_value_size: usize,
+        /// The maximum find_keys_by_prefix size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_find_keys_size: usize,
+        /// The maximum find_key_values_by_prefix size of the cache, in bytes
+        #[arg(long, default_value = "10000000")]
+        max_cache_find_key_values_size: usize,
     },
 }
 
@@ -647,8 +662,13 @@ async fn main() {
             path,
             max_stream_queries,
             max_cache_size,
-            max_entry_size,
+            max_value_entry_size,
+            max_find_keys_entry_size,
+            max_find_key_values_entry_size,
             max_cache_entries,
+            max_cache_value_size,
+            max_cache_find_keys_size,
+            max_cache_find_key_values_size,
         } => {
             let path_buf = path.into();
             let path_with_guard = PathWithGuard::new(path_buf);
@@ -660,8 +680,13 @@ async fn main() {
             };
             let storage_cache_config = StorageCacheConfig {
                 max_cache_size,
-                max_entry_size,
+                max_value_entry_size,
+                max_find_keys_entry_size,
+                max_find_key_values_entry_size,
                 max_cache_entries,
+                max_cache_value_size,
+                max_cache_find_keys_size,
+                max_cache_find_key_values_size,
             };
             let config = RocksDbStoreConfig {
                 inner_config,
