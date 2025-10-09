@@ -14,8 +14,16 @@ pub struct GraphQlQueriesAbi;
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum GraphQlQueriesOperation {
-    /// Field4 operation
-    InsertField4 { key1: String, key2: String, value: u64 },
+    /// Set the register
+    SetRegister { value: u64 },
+    /// Insert in MapView
+    InsertMapString { key: String, value: u8 },
+    /// Insert in CollectionView
+    InsertCollString { key: String, value: u8 },
+    /// Insert in CollectionView / LogView
+    InsertCollLog { keys: Vec<String>, value: u16 },
+    /// Insertion in the CollectionView / MapView
+    InsertCollMap { key1: String, key2: String, value: u64 },
 }
 
 impl ContractAbi for GraphQlQueriesAbi {

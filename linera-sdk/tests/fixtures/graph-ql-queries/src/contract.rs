@@ -43,7 +43,21 @@ impl Contract for GraphQlQueriesContract {
 
     async fn execute_operation(&mut self, operation: GraphQlQueriesOperation) {
         match operation {
-            InsertField4 { key1, key2, value } => {
+            SetRegister { value } => {
+                self.state.reg.set(value);
+            },
+            InsertMapString { key, value } => {
+                self.state.map_s.insert(&key, value).unwrap();
+            },
+            InsertCollString { key, value } => {
+                let subview = self.state.coll_s.load_entry_mut(&key).await.unwrap();
+                subview.set(value);
+            },
+            InsertCollLog { keys, value } => {
+                let subview = self.state.coll_log.load_entry_mut(&keys).await.unwrap();
+                subview.push(value);
+            },
+            InsertCollMap { key1, key2, value } => {
                 let subview = self.state.coll_map.load_entry_mut(&key1).await.unwrap();
                 subview.insert(&key2, value).unwrap();
             },

@@ -23,7 +23,7 @@ async fn test_queries() {
         .await;
 
 
-    let operation = GraphQlQueriesOperation::InsertField4 { key1: "A".into(), key2: "X".into(), value: 49 };
+    let operation = GraphQlQueriesOperation::InsertCollMap { key1: "A".into(), key2: "X".into(), value: 49 };
 
     chain
         .add_block(|block| {
