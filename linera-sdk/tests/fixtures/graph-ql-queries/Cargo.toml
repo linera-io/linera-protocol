@@ -1,0 +1,28 @@
+[package]
+name = "complex-data-contract"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-graphql.workspace = true
+futures.workspace = true
+linera-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
+
+[dev-dependencies]
+assert_matches.workspace = true
+linera-sdk = { workspace = true, features = ["test"] }
+
+[[bin]]
+name = "complex_data_contract_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "complex_data_contract_service"
+path = "src/service.rs"
