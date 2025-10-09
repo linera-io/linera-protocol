@@ -20,8 +20,6 @@ pub enum GraphQlQueriesOperation {
     InsertMapString { key: String, value: u8 },
     /// Insert in CollectionView
     InsertCollString { key: String, value: u8 },
-    /// Insert in CollectionView / LogView
-    InsertCollLog { keys: Vec<String>, value: u16 },
     /// Insertion in the CollectionView / MapView
     InsertCollMap { key1: String, key2: String, value: u64 },
 }

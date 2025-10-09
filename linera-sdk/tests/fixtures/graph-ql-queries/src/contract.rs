@@ -53,10 +53,6 @@ impl Contract for GraphQlQueriesContract {
                 let subview = self.state.coll_s.load_entry_mut(&key).await.unwrap();
                 subview.set(value);
             },
-            InsertCollLog { keys, value } => {
-                let subview = self.state.coll_log.load_entry_mut(&keys).await.unwrap();
-                subview.push(value);
-            },
             InsertCollMap { key1, key2, value } => {
                 let subview = self.state.coll_map.load_entry_mut(&key1).await.unwrap();
                 subview.insert(&key2, value).unwrap();
