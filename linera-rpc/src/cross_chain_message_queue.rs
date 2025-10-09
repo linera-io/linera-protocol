@@ -60,7 +60,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                     if let Err(error) = run_task(state.task).await {
                         warn!(
                             nickname = state.nickname,
-                            %error,
+                            ?error,
                             retry = state.retries,
                             from_shard = this_shard,
                             to_shard,
