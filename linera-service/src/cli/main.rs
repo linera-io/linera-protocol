@@ -452,7 +452,10 @@ impl Runnable for Job {
                 }
             }
 
-            QueryValidators { chain_id } => {
+            QueryValidators {
+                chain_id,
+                min_votes,
+            } => {
                 let mut context =
                     options.create_client_context(storage, wallet, signer.into_value());
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
@@ -470,6 +473,9 @@ impl Runnable for Job {
                 let node_provider = context.make_node_provider();
                 let mut validator_results = Vec::new();
                 for (name, state) in committee.validators() {
+                    if min_votes.is_some_and(|votes| state.votes < votes) {
+                        continue; // Skip validator with little voting weight.
+                    }
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
                     let results = context

@@ -479,11 +479,12 @@ Show the version and genesis config hash of a new validator, and print a warning
 
 Show the current set of validators for a chain. Also print some information about the given chain while we are at it
 
-**Usage:** `linera query-validators [CHAIN_ID]`
+**Usage:** `linera query-validators [CHAIN_ID] [MIN_VOTES]`
 
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
+* `<MIN_VOTES>` — Skip validators with less voting weight that this
 
 
 
