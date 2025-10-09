@@ -343,6 +343,8 @@ pub enum ClientCommand {
     QueryValidators {
         /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,
+        /// Skip validators with less voting weight that this.
+        min_votes: Option<u64>,
     },
 
     /// Synchronizes a validator with the local state of chains.
