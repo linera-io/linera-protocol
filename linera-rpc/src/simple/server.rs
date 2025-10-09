@@ -15,7 +15,7 @@ use linera_core::{
 use linera_storage::Storage;
 use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
 
 use super::transport::{MessageHandler, ServerHandle, TransportProtocol};
 use crate::{
@@ -189,7 +189,11 @@ where
                     }
                     Err(error) => {
                         let nickname = self.server.state.nickname();
-                        warn!(nickname, %error, "Failed to handle block proposal");
+                        if error.is_local() {
+                            debug!(nickname, %error, "Failed to handle block proposal");
+                        } else {
+                            error!(nickname, %error, "Failed to handle block proposal");
+                        }
                         Err(error.into())
                     }
                 }
@@ -243,7 +247,11 @@ where
                     }
                     Err(error) => {
                         let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle timeout certificate");
+                        if error.is_local() {
+                            error!(nickname, %error, "Failed to handle timeout certificate");
+                        } else {
+                            debug!(nickname, %error, "Failed to handle timeout certificate");
+                        }
                         Err(error.into())
                     }
                 }
@@ -262,10 +270,12 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        error!(
-                            nickname = self.server.state.nickname(), %error,
-                            "Failed to handle validated certificate"
-                        );
+                        let nickname = self.server.state.nickname();
+                        if error.is_local() {
+                            error!(nickname, %error, "Failed to handle validated certificate");
+                        } else {
+                            debug!(nickname, %error, "Failed to handle validated certificate");
+                        }
                         Err(error.into())
                     }
                 }
@@ -294,7 +304,11 @@ where
                     }
                     Err(error) => {
                         let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle confirmed certificate");
+                        if error.is_local() {
+                            error!(nickname, %error, "Failed to handle confirmed certificate");
+                        } else {
+                            debug!(nickname, %error, "Failed to handle confirmed certificate");
+                        }
                         Err(error.into())
                     }
                 }
@@ -309,7 +323,11 @@ where
                     }
                     Err(error) => {
                         let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle chain info query");
+                        if error.is_local() {
+                            error!(nickname, %error, "Failed to handle chain info query");
+                        } else {
+                            debug!(nickname, %error, "Failed to handle chain info query");
+                        }
                         Err(error.into())
                     }
                 }
@@ -321,7 +339,11 @@ where
                     }
                     Err(error) => {
                         let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle cross-chain request");
+                        if error.is_local() {
+                            error!(nickname, %error, "Failed to handle cross-chain request");
+                        } else {
+                            debug!(nickname, %error, "Failed to handle cross-chain request");
+                        }
                     }
                 }
                 // No user to respond to.
@@ -340,7 +362,11 @@ where
                     )))),
                     Err(error) => {
                         let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle pending blob request");
+                        if error.is_local() {
+                            error!(nickname, %error, "Failed to handle pending blob request");
+                        } else {
+                            debug!(nickname, %error, "Failed to handle pending blob request");
+                        }
                         Err(error.into())
                     }
                 }
@@ -356,7 +382,11 @@ where
                     Ok(info) => Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info)))),
                     Err(error) => {
                         let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle pending blob");
+                        if error.is_local() {
+                            error!(nickname, %error, "Failed to handle pending blob");
+                        } else {
+                            debug!(nickname, %error, "Failed to handle pending blob");
+                        }
                         Err(error.into())
                     }
                 }

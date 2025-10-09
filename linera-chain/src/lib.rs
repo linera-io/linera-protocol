@@ -30,7 +30,6 @@ use linera_base::{
 };
 use linera_execution::ExecutionError;
 use linera_views::ViewError;
-use rand_distr::WeightedError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -144,8 +143,6 @@ pub enum ChainError {
     BlockProposalTooLarge(usize),
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
-    #[error("Invalid owner weights: {0}")]
-    OwnerWeightError(#[from] WeightedError),
     #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
     ClosedChain,
     #[error("Empty blocks are not allowed")]
@@ -160,6 +157,51 @@ pub enum ChainError {
     RoundDoesNotTimeOut,
     #[error("Not signing timeout certificate; current round times out at time {0}")]
     NotTimedOutYet(Timestamp),
+}
+
+impl ChainError {
+    /// Returns whether this error is caused by an issue in the local node.
+    ///
+    /// Returns `false` whenever the error could be caused by a bad message from a peer.
+    pub fn is_local(&self) -> bool {
+        match self {
+            ChainError::CryptoError(_)
+            | ChainError::ArithmeticError(_)
+            | ChainError::ViewError(ViewError::NotFound(_))
+            | ChainError::InactiveChain(_)
+            | ChainError::IncorrectMessageOrder { .. }
+            | ChainError::CannotRejectMessage { .. }
+            | ChainError::CannotSkipMessage { .. }
+            | ChainError::IncorrectBundleTimestamp { .. }
+            | ChainError::InvalidSigner
+            | ChainError::UnexpectedBlockHeight { .. }
+            | ChainError::UnexpectedPreviousBlockHash
+            | ChainError::BlockHeightOverflow
+            | ChainError::InvalidBlockTimestamp { .. }
+            | ChainError::InsufficientRound(_)
+            | ChainError::InsufficientRoundStrict(_)
+            | ChainError::WrongRound(_)
+            | ChainError::HasIncompatibleConfirmedVote(..)
+            | ChainError::MustBeNewerThanLockingBlock(..)
+            | ChainError::MissingEarlierBlocks { .. }
+            | ChainError::CertificateValidatorReuse
+            | ChainError::CertificateRequiresQuorum
+            | ChainError::BlockProposalTooLarge(_)
+            | ChainError::ClosedChain
+            | ChainError::EmptyBlock
+            | ChainError::AuthorizedApplications(_)
+            | ChainError::MissingMandatoryApplications(_)
+            | ChainError::MissingOracleResponseList
+            | ChainError::RoundDoesNotTimeOut
+            | ChainError::NotTimedOutYet(_)
+            | ChainError::MissingCrossChainUpdate { .. } => false,
+            ChainError::ViewError(_)
+            | ChainError::UnexpectedMessage { .. }
+            | ChainError::InternalError(_)
+            | ChainError::BcsError(_) => true,
+            ChainError::ExecutionError(_execution_error, _) => true, // TODO: execution_error.is_local()
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
