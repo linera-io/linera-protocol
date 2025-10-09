@@ -762,8 +762,12 @@ where
             oneshot::Sender<Result<Response, WorkerError>>,
         ) -> ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<Response, WorkerError> {
-        let (response, new_receiver) =
-            self.call_and_maybe_create_chain_worker_endpoint(chain_id, request_builder)?;
+        // Build the request.
+        let (callback, response) = oneshot::channel();
+        let request = request_builder(callback);
+
+        // Call the endpoint, possibly a new one.
+        let new_receiver = self.call_and_maybe_create_chain_worker_endpoint(chain_id, request)?;
 
         // We just created an endpoint: spawn the actor.
         if let Some(receiver) = new_receiver {
@@ -812,27 +816,19 @@ where
     }
 
     /// Find an endpoint and call it. Create the endpoint if necessary.
-    #[instrument(level = "trace", target = "telemetry_only", skip(self, request_builder), fields(
+    #[instrument(level = "trace", target = "telemetry_only", skip(self), fields(
         nickname = %self.nickname,
         chain_id = %chain_id
     ))]
     #[expect(clippy::type_complexity)]
-    fn call_and_maybe_create_chain_worker_endpoint<Response>(
+    fn call_and_maybe_create_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
-        request_builder: impl FnOnce(
-            oneshot::Sender<Result<Response, WorkerError>>,
-        ) -> ChainWorkerRequest<StorageClient::Context>,
+        request: ChainWorkerRequest<StorageClient::Context>,
     ) -> Result<
-        (
-            oneshot::Receiver<Result<Response, WorkerError>>,
-            Option<
-                mpsc::UnboundedReceiver<(
-                    ChainWorkerRequest<StorageClient::Context>,
-                    tracing::Span,
-                )>,
-            >,
-        ),
+        Option<
+            mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
+        >,
         WorkerError,
     > {
         let mut chain_workers = self.chain_workers.lock().unwrap();
@@ -844,9 +840,7 @@ where
             (sender, Some(receiver))
         };
 
-        let (callback, response) = oneshot::channel();
-
-        if let Err(e) = sender.send((request_builder(callback), tracing::Span::current())) {
+        if let Err(e) = sender.send((request, tracing::Span::current())) {
             // The actor was dropped. Give up without (re-)inserting the endpoint in the cache.
             return Err(WorkerError::ChainActorSendError {
                 chain_id,
@@ -857,7 +851,7 @@ where
         // Put back the sender in the cache for next time.
         chain_workers.insert(chain_id, sender);
 
-        Ok((response, new_receiver))
+        Ok(new_receiver)
     }
 
     #[instrument(skip_all, fields(
