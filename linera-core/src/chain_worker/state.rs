@@ -1386,7 +1386,7 @@ where
             );
         }
         if query.request_pending_message_bundles {
-            let mut messages = Vec::new();
+            let mut bundles = Vec::new();
             let pairs = chain.inboxes.try_load_all_entries().await?;
             let action = if *chain.execution_state.system.closed.get() {
                 MessageAction::Reject
@@ -1395,15 +1395,15 @@ where
             };
             for (origin, inbox) in pairs {
                 for bundle in inbox.added_bundles.elements().await? {
-                    messages.push(IncomingBundle {
+                    bundles.push(IncomingBundle {
                         origin,
                         bundle,
                         action,
                     });
                 }
             }
-
-            info.requested_pending_message_bundles = messages;
+            bundles.sort_by_key(|b| b.bundle.timestamp);
+            info.requested_pending_message_bundles = bundles;
         }
         let mut hashes = Vec::new();
         for height in query.request_sent_certificate_hashes_by_heights {
