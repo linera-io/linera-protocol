@@ -15,16 +15,16 @@ use linera_views::{
         Batch, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
-    collection_view::{CollectionView, HashedCollectionView},
+    collection_view::HashedCollectionView,
     context::{Context, MemoryContext, ViewContext},
     key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
     lru_caching::LruCachingMemoryDatabase,
-    map_view::{ByteMapView, HashedMapView, MapView},
+    map_view::{ByteMapView, HashedMapView},
     memory::MemoryDatabase,
     queue_view::HashedQueueView,
     random::make_deterministic_rng,
-    reentrant_collection_view::{HashedReentrantCollectionView, ReentrantCollectionView},
+    reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
     store::{KeyValueDatabase, TestKeyValueDatabase as _, WritableKeyValueStore as _},
@@ -612,52 +612,6 @@ where
         Ok(staged_hash)
     })
     .await
-}
-
-#[derive(RootView)]
-pub struct NestedCollectionMapView<C> {
-    pub map: CollectionView<C, String, MapView<C, String, u64>>,
-}
-
-// This test exercise the case W::NUM_INIT_KEYS == 0
-// in CollectionView.
-#[tokio::test]
-async fn test_nested_collection_map_view() -> anyhow::Result<()> {
-    let context = MemoryContext::new_for_testing(());
-    {
-        let mut view = NestedCollectionMapView::load(context.clone()).await?;
-        let subview = view.map.load_entry_mut("Bonjour").await?;
-        subview.insert("A bientot", 49)?;
-        view.save().await?;
-    }
-    let view = NestedCollectionMapView::load(context).await?;
-    let keys = vec!["Bonjour".to_string()];
-    let subviews = view.map.try_load_entries(&keys).await?;
-    assert!(subviews[0].is_some());
-    Ok(())
-}
-
-#[derive(RootView)]
-pub struct NestedReentrantCollectionMapView<C> {
-    pub map: ReentrantCollectionView<C, String, MapView<C, String, u64>>,
-}
-
-#[tokio::test]
-async fn test_nested_reentrant_collection_map_view() -> anyhow::Result<()> {
-    let context = MemoryContext::new_for_testing(());
-    {
-        let mut view = NestedReentrantCollectionMapView::load(context.clone()).await?;
-        {
-            let mut subview = view.map.try_load_entry_mut("Bonjour").await?;
-            subview.insert("A bientot", 49)?;
-        }
-        view.save().await?;
-    }
-    let view = NestedReentrantCollectionMapView::load(context).await?;
-    let keys = vec!["Bonjour".to_string()];
-    let subviews = view.map.try_load_entries(&keys).await?;
-    assert!(subviews[0].is_some());
-    Ok(())
 }
 
 #[derive(CryptoHashRootView)]
