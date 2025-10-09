@@ -935,6 +935,207 @@ pub type HashedSetView<C, I> = WrappedHashableContainerView<C, SetView<C, I>, Ha
 pub type HashedCustomSetView<C, I> =
     WrappedHashableContainerView<C, CustomSetView<C, I>, HasherOutput>;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        context::MemoryContext,
+        store::{WritableKeyValueStore as _},
+    };
+
+    #[tokio::test]
+    async fn test_byte_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // First, add some initial data to storage
+        set.insert(vec![1, 2, 3]);
+        set.insert(vec![4, 5, 6]);
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Now clear the set (this sets delete_storage_first = true)
+        set.clear();
+
+        // Add new items after clearing - this creates Update::Set entries
+        set.insert(vec![7, 8, 9]);
+        set.insert(vec![10, 11, 12]);
+
+        // Create a new batch and flush
+        let mut batch = Batch::new();
+        let delete_view = set.flush(&mut batch)?;
+
+        // The key assertion: delete_view should be false because we had Update::Set entries
+        // This tests line 103: if let Update::Set(_) = update { ... delete_view = false; }
+        assert!(!delete_view);
+
+        // Verify the batch contains the expected operations
+        assert!(!batch.operations.is_empty());
+
+        // Write the batch and verify the final state
+        set.context().store().write_batch(batch).await?;
+
+        // Reload and verify only the new items exist
+        let new_set = ByteSetView::load(set.context().clone()).await?;
+        assert!(new_set.contains(&[7, 8, 9]).await?);
+        assert!(new_set.contains(&[10, 11, 12]).await?);
+        assert!(!new_set.contains(&[1, 2, 3]).await?);
+        assert!(!new_set.contains(&[4, 5, 6]).await?);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_byte_set_view_flush_with_delete_storage_first_no_set_updates() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Add some initial data
+        set.insert(vec![1, 2, 3]);
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Clear the set and flush without adding anything back
+        set.clear();
+        let mut batch = Batch::new();
+        let delete_view = set.flush(&mut batch)?;
+
+        // When there are no Update::Set entries after clear, delete_view should be true
+        assert!(delete_view);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_byte_set_view_flush_with_delete_storage_first_mixed_updates() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Add initial data
+        set.insert(vec![1, 2, 3]);
+        set.insert(vec![4, 5, 6]);
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Clear the set
+        set.clear();
+
+        // Add some items back and remove others
+        set.insert(vec![7, 8, 9]);  // This creates Update::Set
+        set.remove(vec![10, 11, 12]); // This creates Update::Removed (but gets optimized away due to delete_storage_first)
+
+        let mut batch = Batch::new();
+        let delete_view = set.flush(&mut batch)?;
+
+        // Should be false because we have Update::Set entries (line 103 logic)
+        assert!(!delete_view);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: SetView<_, u32> = SetView::load(context).await?;
+
+        // Add initial data
+        set.insert(&42)?;
+        set.insert(&84)?;
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Clear the set
+        set.clear();
+
+        // Add new items - this should trigger the Update::Set branch in line 103
+        set.insert(&123)?;
+        set.insert(&456)?;
+
+        let mut batch = Batch::new();
+        let delete_view = set.flush(&mut batch)?;
+
+        // Should be false due to Update::Set entries
+        assert!(!delete_view);
+
+        // Verify final state
+        set.context().store().write_batch(batch).await?;
+        let new_set: SetView<_, u32> = SetView::load(set.context().clone()).await?;
+        assert!(new_set.contains(&123).await?);
+        assert!(new_set.contains(&456).await?);
+        assert!(!new_set.contains(&42).await?);
+        assert!(!new_set.contains(&84).await?);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_byte_set_view_keys_initialization() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Add several keys to test line 223: let mut keys = Vec::new();
+        set.insert(vec![1, 2]);
+        set.insert(vec![3, 4]);
+        set.insert(vec![5, 6]);
+
+        // Call keys() method which executes line 223
+        let keys = set.keys().await?;
+
+        // Verify the Vec::new() initialization worked and keys were collected
+        assert_eq!(keys.len(), 3);
+        assert!(keys.contains(&vec![1, 2]));
+        assert!(keys.contains(&vec![3, 4]));
+        assert!(keys.contains(&vec![5, 6]));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_byte_set_view_count_initialization() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Test with empty set first - count should start at 0 (line 245)
+        let count = set.count().await?;
+        assert_eq!(count, 0);
+
+        // Add items and verify count increments from 0 (line 245: let mut count = 0;)
+        set.insert(vec![1]);
+        set.insert(vec![2]);
+        set.insert(vec![3]);
+
+        let count = set.count().await?;
+        assert_eq!(count, 3);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_set_view_count_delegation() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: SetView<_, u32> = SetView::load(context).await?;
+
+        // Test line 557: self.set.count().await - SetView delegates to ByteSetView
+        let count = set.count().await?;
+        assert_eq!(count, 0);
+
+        // Add items and verify delegation works
+        set.insert(&42)?;
+        set.insert(&84)?;
+        set.insert(&126)?;
+
+        // This calls line 557 which delegates to the underlying ByteSetView
+        let count = set.count().await?;
+        assert_eq!(count, 3);
+
+        Ok(())
+    }
+}
+
 #[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
