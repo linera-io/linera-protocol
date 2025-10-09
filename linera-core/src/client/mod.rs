@@ -889,6 +889,144 @@ impl<Env: Environment> Client<Env> {
         ))
     }
 
+    /// Downloads only the specific sender blocks needed for missing cross-chain messages.
+    /// This is a targeted alternative to `find_received_certificates` that only downloads
+    /// the exact sender blocks we're missing, rather than searching through all received
+    /// certificates.
+    async fn download_missing_sender_blocks(
+        &self,
+        receiver_chain_id: ChainId,
+        missing_blocks: BTreeMap<ChainId, Vec<BlockHeight>>,
+    ) -> Result<(), ChainClientError> {
+        if missing_blocks.is_empty() {
+            return Ok(());
+        }
+
+        let (_, committee) = self.admin_committee().await?;
+        let nodes = self.make_nodes(&committee)?;
+
+        // Download certificates for each sender chain at the specific heights.
+        stream::iter(missing_blocks.into_iter())
+            .map(|(sender_chain_id, heights)| {
+                let height = heights.into_iter().max();
+                let mut shuffled_nodes = nodes.clone();
+                shuffled_nodes.shuffle(&mut rand::thread_rng());
+                async move {
+                    let Some(height) = height else {
+                        return Ok(());
+                    };
+                    // Try to download from any node.
+                    for node in &shuffled_nodes {
+                        if let Err(err) = self
+                            .download_sender_block_with_sending_ancestors(
+                                receiver_chain_id,
+                                sender_chain_id,
+                                height,
+                                node,
+                            )
+                            .await
+                        {
+                            tracing::debug!(
+                                %height,
+                                %receiver_chain_id,
+                                %sender_chain_id,
+                                %err,
+                                validator = %node.public_key,
+                                "Failed to fetch sender block",
+                            );
+                        } else {
+                            return Ok::<_, ChainClientError>(());
+                        }
+                    }
+                    // If all nodes fail, return an error.
+                    Err(ChainClientError::CannotDownloadMissingSenderBlock {
+                        chain_id: sender_chain_id,
+                        height,
+                    })
+                }
+            })
+            .buffer_unordered(self.options.max_joined_tasks)
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok(())
+    }
+
+    /// Downloads a specific sender block and recursively downloads any earlier blocks
+    /// that also sent a message to our chain, based on `previous_message_blocks`.
+    ///
+    /// This ensures that we have all the sender blocks needed to preprocess the target block
+    /// and put the messages to our chain into the outbox.
+    async fn download_sender_block_with_sending_ancestors(
+        &self,
+        receiver_chain_id: ChainId,
+        sender_chain_id: ChainId,
+        height: BlockHeight,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<(), ChainClientError> {
+        let next_outbox_height = self
+            .local_node
+            .next_outbox_heights(&[sender_chain_id], receiver_chain_id)
+            .await?
+            .get(&sender_chain_id)
+            .copied()
+            .unwrap_or(BlockHeight::ZERO);
+        let (max_epoch, committees) = self.admin_committees().await?;
+
+        // Recursively collect all certificates we need, following
+        // the chain of previous_message_blocks back to next_outbox_height.
+        let mut certificates = BTreeMap::new();
+        let mut current_height = height;
+
+        // Stop if we've reached the height we've already processed.
+        while current_height >= next_outbox_height {
+            // Download the certificate for this height.
+            let downloaded = remote_node
+                .download_certificates_by_heights(sender_chain_id, vec![current_height])
+                .await?;
+            let Some(certificate) = downloaded.into_iter().next() else {
+                return Err(ChainClientError::CannotDownloadMissingSenderBlock {
+                    chain_id: sender_chain_id,
+                    height: current_height,
+                });
+            };
+
+            // Validate the certificate.
+            Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
+                .into_result()?;
+
+            // Check if there's a previous message block to our chain.
+            let block = certificate.block();
+            let next_height = block
+                .body
+                .previous_message_blocks
+                .get(&receiver_chain_id)
+                .map(|(_prev_hash, prev_height)| *prev_height);
+
+            // Store this certificate.
+            certificates.insert(current_height, certificate);
+
+            if let Some(prev_height) = next_height {
+                // Continue with the previous block.
+                current_height = prev_height;
+            } else {
+                // No more dependencies.
+                break;
+            }
+        }
+
+        // Process certificates in ascending block height order (BTreeMap keeps them sorted).
+        for certificate in certificates.into_values() {
+            self.receive_sender_certificate(
+                certificate,
+                ReceiveCertificateMode::AlreadyChecked,
+                Some(vec![remote_node.clone()]),
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
     #[instrument(
         level = "trace", skip_all,
         fields(certificate_hash = ?incoming_certificate.hash()),
@@ -1076,6 +1214,32 @@ impl<Env: Environment> Client<Env> {
                         )
                         .await?;
                         // We found the missing blobs: retry.
+                        if let Err(new_err) = self
+                            .local_node
+                            .handle_block_proposal(proposal.clone())
+                            .await
+                        {
+                            err = new_err;
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+                if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
+                    if let ChainError::MissingCrossChainUpdate {
+                        chain_id,
+                        origin,
+                        height,
+                    } = &**chain_err
+                    {
+                        self.download_sender_block_with_sending_ancestors(
+                            *chain_id,
+                            *origin,
+                            *height,
+                            remote_node,
+                        )
+                        .await?;
+                        // Retry
                         if let Err(new_err) = self
                             .local_node
                             .handle_block_proposal(proposal.clone())
@@ -1897,7 +2061,9 @@ impl<Env: Environment> ChainClient<Env> {
             .collect_missing_sender_blocks()
             .await?;
         // Download any sender blocks we're missing.
-        self.download_missing_sender_blocks(missing_blocks).await?;
+        self.client
+            .download_missing_sender_blocks(self.chain_id, missing_blocks)
+            .await?;
         self.client.update_from_info(&info);
         Ok(info)
     }
@@ -2230,145 +2396,6 @@ impl<Env: Environment> ChainClient<Env> {
             .await;
 
         Ok(has_more)
-    }
-
-    /// Downloads only the specific sender blocks needed for missing cross-chain messages.
-    /// This is a targeted alternative to `find_received_certificates` that only downloads
-    /// the exact sender blocks we're missing, rather than searching through all received
-    /// certificates.
-    #[instrument(level = "trace")]
-    async fn download_missing_sender_blocks(
-        &self,
-        missing_blocks: BTreeMap<ChainId, Vec<BlockHeight>>,
-    ) -> Result<(), ChainClientError> {
-        if missing_blocks.is_empty() {
-            return Ok(());
-        }
-
-        let (_, committee) = self.admin_committee().await?;
-        let nodes = self.client.make_nodes(&committee)?;
-
-        // Download certificates for each sender chain at the specific heights.
-        stream::iter(missing_blocks.into_iter())
-            .map(|(sender_chain_id, heights)| {
-                let height = heights.into_iter().max();
-                let this = self.clone();
-                let mut shuffled_nodes = nodes.clone();
-                shuffled_nodes.shuffle(&mut rand::thread_rng());
-                async move {
-                    let Some(height) = height else {
-                        return Ok(());
-                    };
-                    // Try to download from any node.
-                    for node in &shuffled_nodes {
-                        if let Err(err) = this
-                            .download_sender_block_with_sending_ancestors(
-                                sender_chain_id,
-                                height,
-                                node,
-                            )
-                            .await
-                        {
-                            tracing::debug!(
-                                %height,
-                                %sender_chain_id,
-                                %err,
-                                validator = %node.public_key,
-                                "Failed to fetch sender block",
-                            );
-                        } else {
-                            return Ok::<_, ChainClientError>(());
-                        }
-                    }
-                    // If all nodes fail, return an error.
-                    Err(ChainClientError::CannotDownloadMissingSenderBlock {
-                        chain_id: sender_chain_id,
-                        height,
-                    })
-                }
-            })
-            .buffer_unordered(self.options.max_joined_tasks)
-            .try_collect::<Vec<_>>()
-            .await?;
-        Ok(())
-    }
-
-    /// Downloads a specific sender block and recursively downloads any earlier blocks
-    /// that also sent a message to our chain, based on `previous_message_blocks`.
-    ///
-    /// This ensures that we have all the sender blocks needed to preprocess the target block
-    /// and put the messages to our chain into the outbox.
-    #[instrument(level = "trace")]
-    async fn download_sender_block_with_sending_ancestors(
-        &self,
-        sender_chain_id: ChainId,
-        height: BlockHeight,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
-    ) -> Result<(), ChainClientError> {
-        let next_outbox_height = self
-            .client
-            .local_node
-            .next_outbox_heights(&[sender_chain_id], self.chain_id)
-            .await?
-            .get(&sender_chain_id)
-            .copied()
-            .unwrap_or(BlockHeight::ZERO);
-        let (max_epoch, committees) = self.client.admin_committees().await?;
-
-        // Recursively collect all certificates we need, following
-        // the chain of previous_message_blocks back to next_outbox_height.
-        let mut certificates = BTreeMap::new();
-        let mut current_height = height;
-
-        // Stop if we've reached the height we've already processed.
-        while current_height >= next_outbox_height {
-            // Download the certificate for this height.
-            let downloaded = remote_node
-                .download_certificates_by_heights(sender_chain_id, vec![current_height])
-                .await?;
-            let Some(certificate) = downloaded.into_iter().next() else {
-                return Err(ChainClientError::CannotDownloadMissingSenderBlock {
-                    chain_id: sender_chain_id,
-                    height: current_height,
-                });
-            };
-
-            // Validate the certificate.
-            Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
-                .into_result()?;
-
-            // Check if there's a previous message block to our chain.
-            let block = certificate.block();
-            let next_height = block
-                .body
-                .previous_message_blocks
-                .get(&self.chain_id)
-                .map(|(_prev_hash, prev_height)| *prev_height);
-
-            // Store this certificate.
-            certificates.insert(current_height, certificate);
-
-            if let Some(prev_height) = next_height {
-                // Continue with the previous block.
-                current_height = prev_height;
-            } else {
-                // No more dependencies.
-                break;
-            }
-        }
-
-        // Process certificates in ascending block height order (BTreeMap keeps them sorted).
-        for certificate in certificates.into_values() {
-            self.client
-                .receive_sender_certificate(
-                    certificate,
-                    ReceiveCertificateMode::AlreadyChecked,
-                    Some(vec![remote_node.clone()]),
-                )
-                .await?;
-        }
-
-        Ok(())
     }
 
     /// Sends money.
@@ -3785,7 +3812,13 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     return Ok(());
                 }
-                self.download_sender_block_with_sending_ancestors(origin, height, &remote_node)
+                self.client
+                    .download_sender_block_with_sending_ancestors(
+                        self.chain_id,
+                        origin,
+                        height,
+                        &remote_node,
+                    )
                     .await?;
                 if self.local_next_height_to_receive(origin).await? <= height {
                     warn!(
