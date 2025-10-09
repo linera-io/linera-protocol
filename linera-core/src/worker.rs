@@ -250,6 +250,44 @@ pub enum WorkerError {
     },
 }
 
+impl WorkerError {
+    /// Returns whether this error is caused by an issue in the local node.
+    ///
+    /// Returns `false` whenever the error could be caused by a bad message from a peer.
+    pub fn is_local(&self) -> bool {
+        match self {
+            WorkerError::CryptoError(_)
+            | WorkerError::ArithmeticError(_)
+            | WorkerError::InvalidOwner
+            | WorkerError::InvalidSigner(_)
+            | WorkerError::UnexpectedBlockHeight { .. }
+            | WorkerError::InvalidEpoch { .. }
+            | WorkerError::EventsNotFound(_)
+            | WorkerError::InvalidBlockChaining
+            | WorkerError::IncorrectOutcome { .. }
+            | WorkerError::InvalidTimestamp
+            | WorkerError::MissingCertificateValue
+            | WorkerError::InvalidLiteCertificate
+            | WorkerError::FastBlockUsingOracles
+            | WorkerError::BlobsNotFound(_)
+            | WorkerError::InvalidBlockProposal(_)
+            | WorkerError::UnexpectedBlob
+            | WorkerError::TooManyPublishedBlobs(_)
+            | WorkerError::ViewError(ViewError::NotFound(_)) => false,
+            WorkerError::InvalidCrossChainRequest
+            | WorkerError::ViewError(_)
+            | WorkerError::ConfirmedLogEntryNotFound { .. }
+            | WorkerError::PreprocessedBlocksEntryNotFound { .. }
+            | WorkerError::JoinError
+            | WorkerError::MissingNetworkDescription
+            | WorkerError::ChainActorSendError { .. }
+            | WorkerError::ChainActorRecvError { .. }
+            | WorkerError::ReadCertificatesError(_) => true,
+            WorkerError::ChainError(chain_error) => chain_error.is_local(),
+        }
+    }
+}
+
 impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: ChainError) -> Self {
