@@ -239,9 +239,15 @@ pub enum WorkerError {
     #[error("Missing network description")]
     MissingNetworkDescription,
     #[error("ChainWorkerActor for chain {chain_id} stopped executing unexpectedly: {error}")]
-    ChainActorSendError { chain_id: ChainId, error: String },
+    ChainActorSendError {
+        chain_id: ChainId,
+        error: Box<dyn std::error::Error + Send + Sync>,
+    },
     #[error("ChainWorkerActor for chain {chain_id} stopped executing without responding: {error}")]
-    ChainActorRecvError { chain_id: ChainId, error: String },
+    ChainActorRecvError {
+        chain_id: ChainId,
+        error: Box<dyn std::error::Error + Send + Sync>,
+    },
 }
 
 impl From<ChainError> for WorkerError {
@@ -808,7 +814,7 @@ where
                 // The actor endpoint was dropped. Better luck next time!
                 Err(WorkerError::ChainActorRecvError {
                     chain_id,
-                    error: e.to_string(),
+                    error: Box::new(e),
                 })
             }
             Ok(response) => response,
@@ -844,7 +850,7 @@ where
             // The actor was dropped. Give up without (re-)inserting the endpoint in the cache.
             return Err(WorkerError::ChainActorSendError {
                 chain_id,
-                error: e.to_string(),
+                error: Box::new(e),
             });
         }
 
