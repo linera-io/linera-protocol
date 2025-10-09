@@ -876,20 +876,19 @@ impl<Env: Environment> Client<Env> {
                         .download_certificates_by_heights(sender_chain_id, remote_heights)
                         .await
                         .map_err(|_| ())?;
-                    let mut good_certificates = vec![];
+                    let mut certificates_with_check_results = vec![];
                     for cert in certificates {
                         if let Ok(check_result) =
                             Self::check_certificate(max_epoch, committees_ref, &cert)
                         {
-                            if check_result.into_result().is_ok() {
-                                good_certificates.push(cert);
-                            }
+                            certificates_with_check_results
+                                .push((cert, check_result.into_result().is_ok()));
                         } else {
                             // Invalid signature - the validator is faulty
                             return Err(());
                         }
                     }
-                    Ok(good_certificates)
+                    Ok(certificates_with_check_results)
                 },
                 |errors| {
                     errors
@@ -901,7 +900,7 @@ impl<Env: Environment> Client<Env> {
             )
             .await
             {
-                Ok(certificates) => certificates,
+                Ok(certificates_with_check_results) => certificates_with_check_results,
                 Err(faulty_validators) => {
                     // filter out faulty validators and retry if any are left
                     nodes.retain(|node| !faulty_validators.contains(&node.public_key));
@@ -922,12 +921,19 @@ impl<Env: Environment> Client<Env> {
                 "received certificates",
             );
 
-            let mut processed_correctly = BTreeSet::new();
+            let mut to_remove_from_queue = BTreeSet::new();
 
-            for certificate in certificates {
+            for (certificate, check_result) in certificates {
                 let hash = certificate.hash();
                 let chain_id = certificate.block().header.chain_id;
                 let height = certificate.block().header.height;
+                if !check_result {
+                    // The certificate was correctly signed, but we were missing a committee to
+                    // validate it properly - do not receive it, but also do not attempt to
+                    // re-download it.
+                    to_remove_from_queue.insert(height);
+                    continue;
+                }
                 // We checked the certificates right after downloading them.
                 let mode = ReceiveCertificateMode::AlreadyChecked;
                 if let Err(error) = self
@@ -936,7 +942,7 @@ impl<Env: Environment> Client<Env> {
                 {
                     warn!(%error, %hash, "Received invalid certificate");
                 } else {
-                    processed_correctly.insert(height);
+                    to_remove_from_queue.insert(height);
                     if let Err(error) = sender.send(ChainAndHeight { chain_id, height }) {
                         error!(
                             %chain_id,
@@ -948,7 +954,7 @@ impl<Env: Environment> Client<Env> {
                 }
             }
 
-            remote_heights.retain(|height| !processed_correctly.contains(height));
+            remote_heights.retain(|height| !to_remove_from_queue.contains(height));
         }
         trace!(
             chain_id = %sender_chain_id,
