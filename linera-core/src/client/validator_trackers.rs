@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
-use linera_base::crypto::ValidatorPublicKey;
+use linera_base::{crypto::ValidatorPublicKey, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::ChainAndHeight;
 
 /// Manages a "tracker"  of a single validator.
@@ -90,5 +90,34 @@ impl ValidatorTrackers {
             .iter()
             .map(|(validator, tracker)| (*validator, tracker.current_tracker_value))
             .collect()
+    }
+
+    /// Compares validators' received logs of sender chains with local node information and returns
+    /// a per-chain list of block heights that sent us messages we didn't see yet. Updates
+    /// the trackers accordingly.
+    pub(super) fn filter_heights_to_download_and_update_trackers(
+        &mut self,
+        mut remote_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>>,
+        local_next_heights: BTreeMap<ChainId, BlockHeight>,
+    ) -> BTreeMap<ChainId, BTreeSet<BlockHeight>> {
+        for (sender_chain_id, remote_heights) in remote_heights.iter_mut() {
+            let local_next = *local_next_heights
+                .get(sender_chain_id)
+                .unwrap_or(&BlockHeight(0));
+            for height in &*remote_heights {
+                if *height < local_next {
+                    // we consider all of the heights below our local next height
+                    // to have been already downloaded, so we will increase the
+                    // validators' trackers accordingly
+                    self.downloaded_cert(ChainAndHeight {
+                        chain_id: *sender_chain_id,
+                        height: *height,
+                    });
+                }
+            }
+            remote_heights.retain(|h| *h >= local_next);
+        }
+
+        remote_heights
     }
 }

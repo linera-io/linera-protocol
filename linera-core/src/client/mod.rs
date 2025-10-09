@@ -854,7 +854,7 @@ impl<Env: Environment> Client<Env> {
         while !remote_heights.is_empty() {
             let remote_heights_ref = &remote_heights;
             nodes.shuffle(&mut rand::thread_rng());
-            let certificates = match communicate_in_parallel(
+            let certificates = match communicate_concurrently(
                 &nodes,
                 async move |remote_node| {
                     let mut remote_heights = remote_heights_ref.clone();
@@ -870,23 +870,26 @@ impl<Env: Environment> Client<Env> {
                     if remote_heights.is_empty() {
                         // It makes no sense to return `Ok(_)` if we aren't going to try downloading
                         // anything from the validator - let the function try the other validators
-                        Err(())
-                    } else {
-                        let mut certificates = remote_node
-                            .download_certificates_by_heights(sender_chain_id, remote_heights)
-                            .await
-                            .map_err(|_| ())?;
-                        certificates.retain(|cert| {
-                            Self::check_certificate(max_epoch, committees_ref, cert)
-                                .ok()
-                                .is_some_and(|check_result| check_result.into_result().is_ok())
-                        });
-                        if !certificates.is_empty() {
-                            Ok(certificates)
+                        return Err(());
+                    }
+                    let certificates = remote_node
+                        .download_certificates_by_heights(sender_chain_id, remote_heights)
+                        .await
+                        .map_err(|_| ())?;
+                    let mut good_certificates = vec![];
+                    for cert in certificates {
+                        if let Ok(check_result) =
+                            Self::check_certificate(max_epoch, committees_ref, &cert)
+                        {
+                            if check_result.into_result().is_ok() {
+                                good_certificates.push(cert);
+                            }
                         } else {
-                            Err(())
+                            // Invalid signature - the validator is faulty
+                            return Err(());
                         }
                     }
+                    Ok(good_certificates)
                 },
                 |errors| {
                     errors
@@ -931,14 +934,14 @@ impl<Env: Environment> Client<Env> {
                     .receive_sender_certificate(certificate, mode, None)
                     .await
                 {
-                    error!(%error, %hash, "Received invalid certificate");
+                    warn!(%error, %hash, "Received invalid certificate");
                 } else {
                     processed_correctly.insert(height);
-                    if let Err(err) = sender.send(ChainAndHeight { chain_id, height }) {
+                    if let Err(error) = sender.send(ChainAndHeight { chain_id, height }) {
                         error!(
                             %chain_id,
                             %height,
-                            error = %err,
+                            %error,
                             "failed to send chain and height over the channel",
                         );
                     }
@@ -1221,7 +1224,7 @@ impl<Env: Environment> Client<Env> {
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
         stream::iter(blob_ids.into_iter().map(|blob_id| {
-            communicate_in_parallel(
+            communicate_concurrently(
                 remote_nodes,
                 async move |remote_node| {
                     let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
@@ -2213,9 +2216,9 @@ impl<Env: Environment> ChainClient<Env> {
             "got result from communicate_with_quorum"
         );
 
-        if let Err(e) = result {
-            warn!(
-                error = %e,
+        if let Err(error) = result {
+            error!(
+                %error,
                 "Failed to synchronize received_logs from at least a quorum of validators",
             );
         }
@@ -2226,9 +2229,9 @@ impl<Env: Environment> ChainClient<Env> {
         };
 
         debug!(
-            received_logs_len=%received_logs.len(),
-            received_logs_total=%received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
-            "find_received_certificates: received_logs length"
+            received_logs_len = %received_logs.len(),
+            received_logs_total = %received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
+            "collected received logs"
         );
 
         let (received_logs, mut validator_trackers) = {
@@ -2286,9 +2289,17 @@ impl<Env: Environment> ChainClient<Env> {
             "download_sender_certificates: number of chains and certificates to sync",
         );
 
-        let remote_heights = self
-            .get_heights_to_download(&received_logs, &mut validator_trackers)
+        let remote_heights = received_logs.heights_per_chain();
+
+        // Obtain the next block height we need in the local node, for each chain.
+        let local_next_heights = self
+            .client
+            .local_node
+            .next_outbox_heights(remote_heights.keys(), self.chain_id)
             .await?;
+
+        let remote_heights = validator_trackers
+            .filter_heights_to_download_and_update_trackers(remote_heights, local_next_heights);
 
         debug!(
             remaining_total_certificates = %remote_heights.values().map(|h| h.len()).sum::<usize>(),
@@ -2374,43 +2385,6 @@ impl<Env: Environment> ChainClient<Env> {
         debug!("download_sender_certificates: finished processing other_sender_chains");
 
         Ok(validator_trackers)
-    }
-
-    /// Compares validators' received logs of sender chains with local node information and returns
-    /// a per-chain list of block heights that sent us messages we didn't see yet.
-    async fn get_heights_to_download(
-        &self,
-        received_logs: &ReceivedLogs,
-        validator_trackers: &mut ValidatorTrackers,
-    ) -> Result<BTreeMap<ChainId, BTreeSet<BlockHeight>>, ChainClientError> {
-        let mut remote_heights = received_logs.heights_per_chain();
-
-        // Obtain the next block height we need in the local node, for each chain.
-        let local_next_heights = self
-            .client
-            .local_node
-            .next_outbox_heights(remote_heights.keys(), self.chain_id)
-            .await?;
-
-        for (sender_chain_id, remote_heights) in remote_heights.iter_mut() {
-            let local_next = *local_next_heights
-                .get(sender_chain_id)
-                .unwrap_or(&BlockHeight(0));
-            for height in &*remote_heights {
-                if *height < local_next {
-                    // we consider all of the heights below our local next height
-                    // to have been already downloaded, so we will increase the
-                    // validators' trackers accordingly
-                    validator_trackers.downloaded_cert(ChainAndHeight {
-                        chain_id: *sender_chain_id,
-                        height: *height,
-                    });
-                }
-            }
-            remote_heights.retain(|h| *h >= local_next);
-        }
-
-        Ok(remote_heights)
     }
 
     /// Retries cross chain requests on the chains which may have been processed on
@@ -4401,7 +4375,7 @@ impl<Env: Environment> ChainClient<Env> {
 
 /// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay on
 /// each subsequent node. Returns error `err` is all of the nodes fail.
-async fn communicate_in_parallel<'a, A, E1, E2, F, G, R, V>(
+async fn communicate_concurrently<'a, A, E1, E2, F, G, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
     err: G,
