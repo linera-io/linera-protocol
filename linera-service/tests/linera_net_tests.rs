@@ -4617,7 +4617,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
             vec![owner1, owner2],
             vec![100, 100],
             0,
-            Amount::from_tokens(9),
+            Amount::from_tokens(11),
             u64::MAX,
         )
         .await?;
@@ -4641,7 +4641,6 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
         chain2,
         chain1,
     ));
-
     /// Runs the `client` in a task, so that it can race to produce blocks transferring tokens.
     ///
     /// Stops when transferring fails or the `notifier` channel is closed. When exiting, it will
