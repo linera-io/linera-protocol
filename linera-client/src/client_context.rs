@@ -785,7 +785,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
             .genesis_config_hash);
         let chain_info = self
             .make_chain_client(chain_id)
-            .chain_info()
+            .chain_info_with_manager_values()
             .await
             .map(|info| *info)
             .map_err(|e| e.into());

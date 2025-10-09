@@ -1124,6 +1124,12 @@ impl<Env: Environment> Client<Env> {
             }
         }
 
+        if certificates.is_empty() {
+            self.local_node
+                .retry_pending_cross_chain_requests(sender_chain_id)
+                .await?;
+        }
+
         // Process certificates in ascending block height order (BTreeMap keeps them sorted).
         for certificate in certificates.into_values() {
             self.receive_sender_certificate(
@@ -1335,7 +1341,7 @@ impl<Env: Environment> Client<Env> {
                         }
                     }
                 }
-                if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
+                while let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
                     if let ChainError::MissingCrossChainUpdate {
                         chain_id,
                         origin,
@@ -1357,8 +1363,10 @@ impl<Env: Environment> Client<Env> {
                         {
                             err = new_err;
                         } else {
-                            continue;
+                            continue 'proposal_loop;
                         }
+                    } else {
+                        break;
                     }
                 }
 
@@ -1965,7 +1973,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
-    async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
+    pub async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id)
             .with_manager_values()
             .with_committees();
