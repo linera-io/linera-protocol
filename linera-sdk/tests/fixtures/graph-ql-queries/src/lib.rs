@@ -10,20 +10,20 @@ use linera_sdk::{
 };
 use serde::{Deserialize, Serialize};
 
-pub struct ComplexDataAbi;
+pub struct GraphQlQueriesAbi;
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
-pub enum ComplexDataOperation {
+pub enum GraphQlQueriesOperation {
     /// Field4 operation
     InsertField4 { key1: String, key2: String, value: u64 },
 }
 
-impl ContractAbi for ComplexDataAbi {
-    type Operation = ComplexDataOperation;
+impl ContractAbi for GraphQlQueriesAbi {
+    type Operation = GraphQlQueriesOperation;
     type Response = ();
 }
 
-impl ServiceAbi for ComplexDataAbi {
+impl ServiceAbi for GraphQlQueriesAbi {
     type Query = Request;
     type QueryResponse = Response;
 }

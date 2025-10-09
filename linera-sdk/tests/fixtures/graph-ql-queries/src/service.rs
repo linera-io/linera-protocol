@@ -8,33 +8,33 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Request, Response, Schema};
-use complex_data_contract::{ComplexDataAbi, ComplexDataOperation};
+use graph_ql_queries::{GraphQlQueriesAbi, GraphQlQueriesOperation};
 use linera_sdk::{linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
 use linera_sdk::graphql::{GraphQLMutationRoot as _};
 
 
 
-use self::state::ComplexDataState;
+use self::state::GraphQlQueriesState;
 
-pub struct ComplexDataService {
-    state: Arc<ComplexDataState>,
+pub struct GraphQlQueriesService {
+    state: Arc<GraphQlQueriesState>,
     runtime: Arc<ServiceRuntime<Self>>,
 }
 
-linera_sdk::service!(ComplexDataService);
+linera_sdk::service!(GraphQlQueriesService);
 
-impl WithServiceAbi for ComplexDataService {
-    type Abi = ComplexDataAbi;
+impl WithServiceAbi for GraphQlQueriesService {
+    type Abi = GraphQlQueriesAbi;
 }
 
-impl Service for ComplexDataService {
+impl Service for GraphQlQueriesService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = ComplexDataState::load(runtime.root_view_storage_context())
+        let state = GraphQlQueriesState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        ComplexDataService {
+        GraphQlQueriesService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),
         }
@@ -43,7 +43,7 @@ impl Service for ComplexDataService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
-            ComplexDataOperation::mutation_root(self.runtime.clone()),
+            GraphQlQueriesOperation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
             .finish();

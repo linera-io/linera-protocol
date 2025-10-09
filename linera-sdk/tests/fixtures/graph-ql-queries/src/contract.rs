@@ -5,43 +5,43 @@
 
 mod state;
 
-use complex_data_contract::{ComplexDataAbi, ComplexDataOperation};
-use complex_data_contract::ComplexDataOperation::*;
+use graph_ql_queries::{GraphQlQueriesAbi, GraphQlQueriesOperation};
+use graph_ql_queries::GraphQlQueriesOperation::*;
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
 };
 
-use self::state::ComplexDataState;
+use self::state::GraphQlQueriesState;
 
-pub struct ComplexDataContract {
-    state: ComplexDataState,
+pub struct GraphQlQueriesContract {
+    state: GraphQlQueriesState,
 }
 
-linera_sdk::contract!(ComplexDataContract);
+linera_sdk::contract!(GraphQlQueriesContract);
 
-impl WithContractAbi for ComplexDataContract {
-    type Abi = ComplexDataAbi;
+impl WithContractAbi for GraphQlQueriesContract {
+    type Abi = GraphQlQueriesAbi;
 }
 
-impl Contract for ComplexDataContract {
+impl Contract for GraphQlQueriesContract {
     type Message = ();
     type InstantiationArgument = ();
     type Parameters = ();
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = ComplexDataState::load(runtime.root_view_storage_context())
+        let state = GraphQlQueriesState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        ComplexDataContract { state }
+        GraphQlQueriesContract { state }
     }
 
     async fn instantiate(&mut self, _value: ()) {
     }
 
-    async fn execute_operation(&mut self, operation: ComplexDataOperation) {
+    async fn execute_operation(&mut self, operation: GraphQlQueriesOperation) {
         match operation {
             InsertField4 { key1, key2, value } => {
                 let subview = self.state.field4.load_entry_mut(&key1).await.unwrap();

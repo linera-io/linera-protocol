@@ -6,6 +6,6 @@ use linera_sdk::views::{linera_views, CollectionView, MapView, RootView, ViewSto
 /// The application state.
 #[derive(RootView, async_graphql::SimpleObject)]
 #[view(context = ViewStorageContext)]
-pub struct ComplexDataState {
+pub struct GraphQlQueriesState {
     pub field4: CollectionView<String, MapView<String, u64>>,
 }

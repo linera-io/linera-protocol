@@ -8,13 +8,13 @@
 use linera_sdk::{
     test::{QueryOutcome, TestValidator},
 };
-use complex_data_contract::{ComplexDataAbi, ComplexDataOperation};
+use graph_ql_queries::{GraphQlQueriesAbi, GraphQlQueriesOperation};
 
 
 #[tokio::test]
 async fn test_queries() {
     let (validator, module_id) =
-        TestValidator::with_current_module::<ComplexDataAbi, (), ()>().await;
+        TestValidator::with_current_module::<GraphQlQueriesAbi, (), ()>().await;
 
     let mut chain = validator.new_chain().await;
 
@@ -23,7 +23,7 @@ async fn test_queries() {
         .await;
 
 
-    let operation = ComplexDataOperation::InsertField4 { key1: "Bonjour".into(), key2: "A bientot".into(), value: 49 };
+    let operation = GraphQlQueriesOperation::InsertField4 { key1: "Bonjour".into(), key2: "A bientot".into(), value: 49 };
 
     chain
         .add_block(|block| {
