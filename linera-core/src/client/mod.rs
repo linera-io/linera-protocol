@@ -1433,11 +1433,15 @@ pub struct ChainClientOptions {
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
+    /// Maximum number of sender certificates we try to download and receive in one go
+    /// when syncing sender chains.
+    pub sender_certificate_download_batch_size: usize,
     /// Maximum number of tasks that can be joined concurrently using buffer_unordered.
     pub max_joined_tasks: usize,
 }
 
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
+pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 
 #[cfg(with_testing)]
 impl ChainClientOptions {
@@ -1452,6 +1456,7 @@ impl ChainClientOptions {
             blob_download_timeout: Duration::from_secs(1),
             certificate_batch_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
         }
     }
@@ -2247,9 +2252,11 @@ impl<Env: Environment> ChainClient<Env> {
             )
         };
 
-        for received_log in received_logs.into_batches(CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES) {
+        for received_log in
+            received_logs.into_batches(self.options.sender_certificate_download_batch_size)
+        {
             validator_trackers = self
-                .download_sender_certificates(
+                .receive_sender_certificates(
                     received_log,
                     validator_trackers,
                     nodes.clone(),
@@ -2258,7 +2265,10 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?;
 
             let new_trackers = validator_trackers.to_map();
-            trace!(?new_trackers, "download_sender_certificates");
+            trace!(
+                ?new_trackers,
+                "find_received_certificates: new tracker values"
+            );
 
             // Update the trackers.
             if let Err(error) = self
@@ -2280,9 +2290,9 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(())
     }
 
-    /// Downloads the certificates for blocks sending messages to this chain that we are
-    /// still missing.
-    async fn download_sender_certificates(
+    /// Downloads and processes or preprocesses the certificates for blocks sending messages to
+    /// this chain that we are still missing.
+    async fn receive_sender_certificates(
         &self,
         received_logs: ReceivedLogs,
         mut validator_trackers: ValidatorTrackers,
@@ -2292,7 +2302,7 @@ impl<Env: Environment> ChainClient<Env> {
         debug!(
             num_chains = %received_logs.num_chains(),
             num_certs = %received_logs.num_certs(),
-            "download_sender_certificates: number of chains and certificates to sync",
+            "receive_sender_certificates: number of chains and certificates to sync",
         );
 
         let remote_heights = received_logs.heights_per_chain();
@@ -2309,7 +2319,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         debug!(
             remaining_total_certificates = %remote_heights.values().map(|h| h.len()).sum::<usize>(),
-            "download_sender_certificates: computed remote_heights"
+            "receive_sender_certificates: computed remote_heights"
         );
 
         let mut other_sender_chains = Vec::new();
@@ -2378,8 +2388,8 @@ impl<Env: Environment> ChainClient<Env> {
         })?;
 
         debug!(
-            num_other_chains=%other_sender_chains.len(),
-            "download_sender_certificates: processing certificates finished"
+            num_other_chains = %other_sender_chains.len(),
+            "receive_sender_certificates: processing certificates finished"
         );
 
         // Certificates for these chains were omitted from `certificates` because they were
@@ -2388,7 +2398,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.retry_pending_cross_chain_requests(&nodes, other_sender_chains)
             .await;
 
-        debug!("download_sender_certificates: finished processing other_sender_chains");
+        debug!("receive_sender_certificates: finished processing other_sender_chains");
 
         Ok(validator_trackers)
     }

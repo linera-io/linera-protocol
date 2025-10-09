@@ -12,7 +12,7 @@ use linera_base::{
 use linera_core::{
     client::{
         BlanketMessagePolicy, ChainClientOptions, MessagePolicy,
-        DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
     DEFAULT_GRACE_PERIOD,
@@ -162,6 +162,14 @@ pub struct ClientContextOptions {
     )]
     pub certificate_download_batch_size: u64,
 
+    /// Maximum number of sender certificates we try to download and receive in one go
+    /// when syncing sender chains.
+    #[arg(
+        long,
+        default_value_t = DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+    )]
+    pub sender_certificate_download_batch_size: usize,
+
     /// Maximum number of tasks that can are joined concurrently in the client.
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
@@ -184,6 +192,7 @@ impl ClientContextOptions {
             blob_download_timeout: self.blob_download_timeout,
             certificate_batch_download_timeout: self.certificate_batch_download_timeout,
             certificate_download_batch_size: self.certificate_download_batch_size,
+            sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
             max_joined_tasks: self.max_joined_tasks,
         }
     }
