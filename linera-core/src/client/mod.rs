@@ -469,35 +469,26 @@ impl<Env: Environment> Client<Env> {
         certificates: Vec<ConfirmedBlockCertificate>,
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
         let mut info = None;
-        let required_blob_ids: Vec<_> = certificates
-            .iter()
-            .flat_map(|certificate| certificate.value().required_blob_ids())
-            .collect();
+        let mut required_blob_ids = vec![];
+        let mut unhandled_certificates = vec![];
 
-        match self
-            .local_node
-            .read_blob_states_from_storage(&required_blob_ids)
-            .await
-        {
-            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                self.download_blobs(remote_node, blob_ids).await?;
-            }
-            x => {
-                x?;
+        for certificate in certificates {
+            //  `handle_certificate`  will  sparsely  preprocess the  certificate  if  its
+            // ancestors are not available.
+            match self.handle_certificate(certificate.clone()).await {
+                Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                    required_blob_ids.extend(blob_ids);
+                    unhandled_certificates.push(certificate);
+                }
+                chain_info_response => info = Some(chain_info_response?.info),
             }
         }
 
-        for certificate in certificates {
-            info = Some(
-                match self.handle_certificate(certificate.clone()).await {
-                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(remote_node, blob_ids).await?;
-                        self.handle_certificate(certificate).await?
-                    }
-                    x => x?,
-                }
-                .info,
-            );
+        if !required_blob_ids.is_empty() {
+            self.download_blobs(remote_node, required_blob_ids).await?;
+            for certificate in unhandled_certificates {
+                info = Some(self.handle_certificate(certificate.clone()).await?.info);
+            }
         }
 
         // Done with all certificates.
