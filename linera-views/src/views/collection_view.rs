@@ -370,8 +370,12 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                         let key = self
                             .context
                             .base_key()
+                            .base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let subview_context = self.context.clone_with_base_key(key);
+                        let key = self
+                            .context
+                            .base_key()
                             .base_tag_index(KeyTag::Index as u8, &short_key);
-                        let subview_context = self.context.clone_with_base_key(key.clone());
                         keys_to_check.push(key);
                         keys_to_check_metadata.push((position, subview_context));
                     }
