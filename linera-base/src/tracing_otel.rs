@@ -11,10 +11,7 @@ use {
     opentelemetry_otlp::{SpanExporter, WithExportConfig},
     opentelemetry_sdk::{trace::SdkTracerProvider, Resource},
     tracing_opentelemetry::OpenTelemetryLayer,
-    tracing_subscriber::{
-        filter::{filter_fn, FilterExt as _},
-        layer::Layer,
-    },
+    tracing_subscriber::{filter::filter_fn, layer::Layer},
 };
 
 /// Initializes tracing with OpenTelemetry OTLP exporter to Tempo.
@@ -43,15 +40,9 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
     global::set_tracer_provider(tracer_provider.clone());
     let tracer = tracer_provider.tracer("linera");
 
-    let telemetry_only_filter =
-        filter_fn(|metadata| metadata.is_span() && metadata.target() == "telemetry_only");
+    let tempo_filter = filter_fn(|metadata| metadata.is_span() && metadata.target() != "no_tempo");
 
-    let otel_env_filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-        .from_env_lossy();
-
-    let opentelemetry_filter = otel_env_filter.or(telemetry_only_filter);
-    let opentelemetry_layer = OpenTelemetryLayer::new(tracer).with_filter(opentelemetry_filter);
+    let opentelemetry_layer = OpenTelemetryLayer::new(tracer).with_filter(tempo_filter);
 
     let config = crate::tracing::get_env_config(log_name);
     let maybe_log_file_layer = config.maybe_log_file_layer();
