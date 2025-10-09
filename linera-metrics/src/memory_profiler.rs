@@ -12,7 +12,7 @@ use axum::{
 };
 use jemalloc_pprof::PROF_CTL;
 use thiserror::Error;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 #[derive(Debug, Error)]
 pub enum MemoryProfilerError {
@@ -40,7 +40,7 @@ impl MemoryProfiler {
                 return Err(MemoryProfilerError::JemallocProfilingNotActivated);
             }
 
-            info!("✓ jemalloc memory profiling is ready");
+            trace!("✓ jemalloc memory profiling is ready");
         } else {
             error!("PROF_CTL not available");
             return Err(MemoryProfilerError::ProfCtlNotAvailable);
@@ -55,7 +55,7 @@ impl MemoryProfiler {
 
         match Self::collect_heap_profile().await {
             Ok(profile_data) => {
-                info!("✓ Serving heap profile ({} bytes)", profile_data.len());
+                trace!("✓ Serving heap profile ({} bytes)", profile_data.len());
                 Ok((
                     StatusCode::OK,
                     [(header::CONTENT_TYPE, "application/octet-stream")],
@@ -75,7 +75,7 @@ impl MemoryProfiler {
 
         match Self::collect_heap_flamegraph().await {
             Ok(flamegraph_svg) => {
-                info!("✓ Serving heap flamegraph ({} bytes)", flamegraph_svg.len());
+                trace!("✓ Serving heap flamegraph ({} bytes)", flamegraph_svg.len());
                 Ok((
                     StatusCode::OK,
                     [(header::CONTENT_TYPE, "image/svg+xml")],
@@ -100,7 +100,7 @@ impl MemoryProfiler {
 
             match prof_ctl.dump_pprof() {
                 Ok(profile) => {
-                    info!("✓ Collected heap profile ({} bytes)", profile.len());
+                    trace!("✓ Collected heap profile ({} bytes)", profile.len());
                     Ok(profile)
                 }
                 Err(e) => {
@@ -124,7 +124,7 @@ impl MemoryProfiler {
 
             match prof_ctl.dump_flamegraph() {
                 Ok(flamegraph_bytes) => {
-                    info!("✓ Generated flamegraph ({} bytes)", flamegraph_bytes.len());
+                    trace!("✓ Generated flamegraph ({} bytes)", flamegraph_bytes.len());
                     Ok(flamegraph_bytes)
                 }
                 Err(e) => {
