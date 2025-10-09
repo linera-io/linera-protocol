@@ -5,11 +5,8 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use linera_sdk::{
-    test::{QueryOutcome, TestValidator},
-};
 use graph_ql_queries::{GraphQlQueriesAbi, GraphQlQueriesOperation};
-
+use linera_sdk::test::{QueryOutcome, TestValidator};
 
 #[tokio::test]
 async fn test_queries() {
@@ -18,15 +15,22 @@ async fn test_queries() {
 
     let mut chain = validator.new_chain().await;
 
-    let application_id = chain
-        .create_application(module_id, (), (), vec![])
-        .await;
-
+    let application_id = chain.create_application(module_id, (), (), vec![]).await;
 
     let operation1 = GraphQlQueriesOperation::SetRegister { value: 124 };
-    let operation2 = GraphQlQueriesOperation::InsertMapString { key: "a".into(), value: 91 };
-    let operation3 = GraphQlQueriesOperation::InsertCollString { key: "a".into(), value: 91 };
-    let operation4 = GraphQlQueriesOperation::InsertCollMap { key1: "A".into(), key2: "X".into(), value: 49 };
+    let operation2 = GraphQlQueriesOperation::InsertMapString {
+        key: "a".into(),
+        value: 91,
+    };
+    let operation3 = GraphQlQueriesOperation::InsertCollString {
+        key: "a".into(),
+        value: 91,
+    };
+    let operation4 = GraphQlQueriesOperation::InsertCollMap {
+        key1: "A".into(),
+        key2: "X".into(),
+        value: 49,
+    };
 
     chain
         .add_block(|block| {
@@ -37,7 +41,6 @@ async fn test_queries() {
                 .with_operation(application_id, operation4);
         })
         .await;
-
 
     // READ1
 

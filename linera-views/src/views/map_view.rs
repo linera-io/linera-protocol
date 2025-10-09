@@ -2075,10 +2075,7 @@ mod graphql {
             })
         }
 
-        async fn entry(
-            &self,
-            key: Vec<u8>,
-        ) -> Result<Entry<Vec<u8>, V>, async_graphql::Error> {
+        async fn entry(&self, key: Vec<u8>) -> Result<Entry<Vec<u8>, V>, async_graphql::Error> {
             Ok(Entry {
                 value: self.get(&key).await?,
                 key,

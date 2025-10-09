@@ -9,10 +9,10 @@ use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use graph_ql_queries::{GraphQlQueriesAbi, GraphQlQueriesOperation};
-use linera_sdk::{linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
-use linera_sdk::graphql::{GraphQLMutationRoot as _};
-
-
+use linera_sdk::{
+    graphql::GraphQLMutationRoot as _, linera_base_types::WithServiceAbi, views::View, Service,
+    ServiceRuntime,
+};
 
 use self::state::GraphQlQueriesState;
 
@@ -46,7 +46,7 @@ impl Service for GraphQlQueriesService {
             GraphQlQueriesOperation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
-            .finish();
+        .finish();
         schema.execute(request).await
     }
 }

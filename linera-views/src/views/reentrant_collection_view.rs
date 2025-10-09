@@ -2132,9 +2132,7 @@ mod graphql {
             &self,
             key: K,
         ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
-            let value = self
-                .try_load_entry(&key)
-                .await?;
+            let value = self.try_load_entry(&key).await?;
             Ok(Entry { value, key })
         }
 
@@ -2192,9 +2190,7 @@ mod graphql {
             &self,
             key: K,
         ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
-            let value = self
-                .try_load_entry(&key)
-                .await?;
+            let value = self.try_load_entry(&key).await?;
             Ok(Entry { value, key })
         }
 

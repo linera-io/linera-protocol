@@ -218,4 +218,3 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
         Some(self)
     }
 }
-

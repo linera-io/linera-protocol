@@ -21,7 +21,11 @@ pub enum GraphQlQueriesOperation {
     /// Insert in CollectionView
     InsertCollString { key: String, value: u8 },
     /// Insertion in the CollectionView / MapView
-    InsertCollMap { key1: String, key2: String, value: u64 },
+    InsertCollMap {
+        key1: String,
+        key2: String,
+        value: u64,
+    },
 }
 
 impl ContractAbi for GraphQlQueriesAbi {

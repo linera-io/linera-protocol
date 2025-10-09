@@ -5,8 +5,7 @@
 
 mod state;
 
-use graph_ql_queries::{GraphQlQueriesAbi, GraphQlQueriesOperation};
-use graph_ql_queries::GraphQlQueriesOperation::*;
+use graph_ql_queries::{GraphQlQueriesAbi, GraphQlQueriesOperation, GraphQlQueriesOperation::*};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
@@ -38,25 +37,24 @@ impl Contract for GraphQlQueriesContract {
         GraphQlQueriesContract { state }
     }
 
-    async fn instantiate(&mut self, _value: ()) {
-    }
+    async fn instantiate(&mut self, _value: ()) {}
 
     async fn execute_operation(&mut self, operation: GraphQlQueriesOperation) {
         match operation {
             SetRegister { value } => {
                 self.state.reg.set(value);
-            },
+            }
             InsertMapString { key, value } => {
                 self.state.map_s.insert(&key, value).unwrap();
-            },
+            }
             InsertCollString { key, value } => {
                 let subview = self.state.coll_s.load_entry_mut(&key).await.unwrap();
                 subview.set(value);
-            },
+            }
             InsertCollMap { key1, key2, value } => {
                 let subview = self.state.coll_map.load_entry_mut(&key1).await.unwrap();
                 subview.insert(&key2, value).unwrap();
-            },
+            }
         }
     }
 
