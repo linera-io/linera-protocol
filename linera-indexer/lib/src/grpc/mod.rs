@@ -95,7 +95,7 @@ where
                                 Err(error) => {
                                     // If there was an error, return it
                                     let status = Status::from(error);
-                                    error!("Error processing element: {}", status);
+                                    error!("Error processing element: {status:?}");
                                     return Some((
                                         Err(status),
                                         (input_stream, database, pending_blobs),

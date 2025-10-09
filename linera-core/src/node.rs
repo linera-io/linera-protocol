@@ -284,7 +284,7 @@ pub enum NodeError {
     CannotResolveValidatorAddress { address: String },
     #[error("Subscription error due to incorrect transport. Was expecting gRPC, instead found: {transport}")]
     SubscriptionError { transport: String },
-    #[error("Failed to subscribe; tonic status: {status}")]
+    #[error("Failed to subscribe; tonic status: {status:?}")]
     SubscriptionFailed { status: String },
 
     #[error("Node failed to provide a 'last used by' certificate for the blob")]
