@@ -2273,30 +2273,35 @@ impl<Env: Environment> ChainClient<Env> {
                 )
                 .await?;
 
-            let new_trackers = validator_trackers.to_map();
-            trace!(
-                ?new_trackers,
-                "find_received_certificates: new tracker values"
-            );
-
-            // Update the trackers.
-            if let Err(error) = self
-                .client
-                .local_node
-                .update_received_certificate_trackers(self.chain_id, new_trackers)
-                .await
-            {
-                error!(
-                    chain_id = %self.chain_id,
-                    %error,
-                    "Failed to update the certificate trackers for chain",
-                );
-            }
+            self.update_received_certificate_trackers(&validator_trackers)
+                .await;
         }
 
         info!("find_received_certificates finished");
 
         Ok(())
+    }
+
+    async fn update_received_certificate_trackers(&self, trackers: &ValidatorTrackers) {
+        let new_trackers = trackers.to_map();
+        trace!(
+            ?new_trackers,
+            "find_received_certificates: new tracker values"
+        );
+
+        // Update the trackers.
+        if let Err(error) = self
+            .client
+            .local_node
+            .update_received_certificate_trackers(self.chain_id, new_trackers)
+            .await
+        {
+            error!(
+                chain_id = %self.chain_id,
+                %error,
+                "Failed to update the certificate trackers for chain",
+            );
+        }
     }
 
     /// Downloads and processes or preprocesses the certificates for blocks sending messages to
@@ -2330,6 +2335,10 @@ impl<Env: Environment> ChainClient<Env> {
             remaining_total_certificates = %remote_heights.values().map(|h| h.len()).sum::<usize>(),
             "receive_sender_certificates: computed remote_heights"
         );
+
+        // Save the updated trackers for the next synchronization
+        self.update_received_certificate_trackers(&validator_trackers)
+            .await;
 
         let mut other_sender_chains = Vec::new();
         let (sender, mut receiver) = mpsc::unbounded_channel::<ChainAndHeight>();

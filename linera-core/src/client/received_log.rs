@@ -8,6 +8,7 @@ use linera_chain::data_types::ChainAndHeight;
 
 /// Struct keeping track of the blocks sending messages to some chain, from chains identified by
 /// the keys in the map.
+#[derive(Clone)]
 pub(super) struct ReceivedLogs(
     BTreeMap<ChainId, BTreeMap<BlockHeight, BTreeSet<ValidatorPublicKey>>>,
 );
@@ -125,6 +126,7 @@ impl BatchingHelper {
             if self.heights[&chain_id].is_empty() {
                 self.heights.remove(&chain_id);
                 self.keys.remove(self.current_chain);
+                self.current_taken_from_single_chain = 0;
                 if self.current_chain >= self.keys.len() {
                     self.current_chain = 0;
                 }
@@ -201,7 +203,8 @@ mod tests {
             }
         };
         let validator = ValidatorKeypair::generate().public_key;
-        let test_log = ReceivedLogs::from_iterator(
+        let test_log = ReceivedLogs::from_received_result(vec![(
+            validator,
             vec![
                 (chain1, 1),
                 (chain1, 2),
@@ -214,18 +217,14 @@ mod tests {
                 (chain2, 4),
             ]
             .into_iter()
-            .map(|(chain_id, height)| {
-                (
-                    ChainAndHeight {
-                        chain_id,
-                        height: height.into(),
-                    },
-                    validator,
-                )
-            }),
-        );
+            .map(|(chain_id, height)| ChainAndHeight {
+                chain_id,
+                height: height.into(),
+            })
+            .collect(),
+        )]);
 
-        let batches = test_log.into_batches(2, 1).collect::<Vec<_>>();
+        let batches = test_log.clone().into_batches(2, 1).collect::<Vec<_>>();
 
         assert_eq!(batches.len(), 5);
         assert_eq!(
@@ -259,6 +258,42 @@ mod tests {
                 vec![(chain1, 5)]
             ]
         );
+
+        // Check with 2 blocks per chain:
+        let batches = test_log.into_batches(2, 2).collect::<Vec<_>>();
+
+        assert_eq!(batches.len(), 5);
+        assert_eq!(
+            batches
+                .iter()
+                .map(|batch| batch.num_chains())
+                .collect::<Vec<_>>(),
+            vec![1, 1, 1, 1, 1]
+        );
+
+        let chains_heights = batches
+            .into_iter()
+            .map(|batch| {
+                batch
+                    .heights_per_chain()
+                    .into_iter()
+                    .flat_map(|(chain_id, heights)| {
+                        heights.into_iter().map(move |height| (chain_id, height.0))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            chains_heights,
+            vec![
+                vec![(chain1, 1), (chain1, 2)],
+                vec![(chain2, 1), (chain2, 2)],
+                vec![(chain1, 3), (chain1, 4)],
+                vec![(chain2, 3), (chain2, 4)],
+                vec![(chain1, 5)]
+            ]
+        );
     }
 
     #[test]
@@ -274,7 +309,8 @@ mod tests {
             }
         };
         let validator = ValidatorKeypair::generate().public_key;
-        let test_log = ReceivedLogs::from_iterator(
+        let test_log = ReceivedLogs::from_received_result(vec![(
+            validator,
             vec![
                 (chain1, 1),
                 (chain1, 2),
@@ -287,18 +323,14 @@ mod tests {
                 (chain1, 7),
             ]
             .into_iter()
-            .map(|(chain_id, height)| {
-                (
-                    ChainAndHeight {
-                        chain_id,
-                        height: height.into(),
-                    },
-                    validator,
-                )
-            }),
-        );
+            .map(|(chain_id, height)| ChainAndHeight {
+                chain_id,
+                height: height.into(),
+            })
+            .collect(),
+        )]);
 
-        let batches = test_log.into_batches(2, 1).collect::<Vec<_>>();
+        let batches = test_log.clone().into_batches(2, 1).collect::<Vec<_>>();
 
         assert_eq!(batches.len(), 5);
         assert_eq!(
@@ -330,6 +362,40 @@ mod tests {
                 vec![(chain1, 3), (chain1, 4)],
                 vec![(chain1, 5), (chain1, 6)],
                 vec![(chain1, 7)]
+            ]
+        );
+
+        // Check with batches of 3, 2 blocks per chain
+        let batches = test_log.into_batches(3, 2).collect::<Vec<_>>();
+
+        assert_eq!(batches.len(), 3);
+        assert_eq!(
+            batches
+                .iter()
+                .map(|batch| batch.num_chains())
+                .collect::<Vec<_>>(),
+            vec![2, 2, 1]
+        );
+
+        let chains_heights = batches
+            .into_iter()
+            .map(|batch| {
+                batch
+                    .heights_per_chain()
+                    .into_iter()
+                    .flat_map(|(chain_id, heights)| {
+                        heights.into_iter().map(move |height| (chain_id, height.0))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            chains_heights,
+            vec![
+                vec![(chain1, 1), (chain1, 2), (chain2, 1)],
+                vec![(chain1, 3), (chain1, 4), (chain2, 2)],
+                vec![(chain1, 5), (chain1, 6), (chain1, 7)],
             ]
         );
     }
