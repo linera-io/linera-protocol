@@ -104,7 +104,7 @@ impl ValidatorTracker {
         let current_highest = self
             .highest_downloaded
             .entry(chain_and_height.chain_id)
-            .or_insert(0.into());
+            .or_insert(BlockHeight(0));
         *current_highest = chain_and_height.height.max(*current_highest);
         self.maximize_tracker();
     }
