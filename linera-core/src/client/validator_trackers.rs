@@ -127,10 +127,14 @@ impl ValidatorTracker {
 
 #[cfg(test)]
 mod test {
-    use linera_base::{crypto::CryptoHash, identifiers::ChainId};
+    use linera_base::{
+        crypto::{CryptoHash, ValidatorKeypair},
+        data_types::BlockHeight,
+        identifiers::ChainId,
+    };
     use linera_chain::data_types::ChainAndHeight;
 
-    use super::ValidatorTracker;
+    use super::{super::received_log::ReceivedLogs, ValidatorTracker, ValidatorTrackers};
 
     #[test]
     fn test_validator_tracker() {
@@ -164,5 +168,51 @@ mod test {
             height: 0.into(),
         });
         assert_eq!(tracker.current_tracker_value, 3);
+    }
+
+    #[test]
+    fn test_filter_out_already_known() {
+        let chain1 = ChainId(CryptoHash::test_hash("chain1"));
+        let chain2 = ChainId(CryptoHash::test_hash("chain2"));
+
+        let validator = ValidatorKeypair::generate().public_key;
+
+        let log: Vec<_> = vec![
+            (chain1, 0),
+            (chain2, 0),
+            (chain1, 1),
+            (chain1, 2),
+            (chain2, 1),
+            (chain1, 3),
+            (chain2, 2),
+        ]
+        .into_iter()
+        .map(|(chain_id, height)| ChainAndHeight {
+            chain_id,
+            height: height.into(),
+        })
+        .collect();
+
+        let mut received_log = ReceivedLogs::from_received_result(vec![(validator, log.clone())]);
+
+        assert_eq!(received_log.num_chains(), 2);
+        assert_eq!(received_log.num_certs(), 7);
+
+        let mut tracker = ValidatorTrackers::new(
+            vec![(validator, log)],
+            &vec![(validator, 0)].into_iter().collect(),
+        );
+
+        let local_heights = vec![(chain1, BlockHeight(3)), (chain2, BlockHeight(3))]
+            .into_iter()
+            .collect();
+
+        tracker.filter_out_already_known(&mut received_log, local_heights);
+
+        assert_eq!(received_log.num_chains(), 2); // we do not remove empty chains
+        assert_eq!(received_log.num_certs(), 1);
+
+        // tracker should have shifted to point to (chain1, 3)
+        assert_eq!(tracker.0[&validator].current_tracker_value, 5);
     }
 }
