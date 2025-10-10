@@ -2252,9 +2252,18 @@ impl<Env: Environment> ChainClient<Env> {
             )
         };
 
-        for received_log in
-            received_logs.into_batches(self.options.sender_certificate_download_batch_size)
-        {
+        debug!(
+            num_chains = %received_logs.num_chains(),
+            num_certs = %received_logs.num_certs(),
+            "find_received_certificates: total number of chains and certificates to sync",
+        );
+
+        let max_blocks_per_chain =
+            self.options.sender_certificate_download_batch_size / self.options.max_joined_tasks * 2;
+        for received_log in received_logs.into_batches(
+            self.options.sender_certificate_download_batch_size,
+            max_blocks_per_chain,
+        ) {
             validator_trackers = self
                 .receive_sender_certificates(
                     received_log,

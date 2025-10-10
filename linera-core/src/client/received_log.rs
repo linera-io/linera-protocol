@@ -59,8 +59,12 @@ impl ReceivedLogs {
 
     /// Splits this `ReceivedLogs` into batches of size `batch_size`. Batches are sorted
     /// by chain ID and height.
-    pub(super) fn into_batches(self, batch_size: usize) -> impl Iterator<Item = ReceivedLogs> {
-        BatchingHelper::new(self.0, batch_size)
+    pub(super) fn into_batches(
+        self,
+        batch_size: usize,
+        max_blocks_per_chain: usize,
+    ) -> impl Iterator<Item = ReceivedLogs> {
+        BatchingHelper::new(self.0, batch_size, max_blocks_per_chain)
     }
 
     fn from_iterator<I: IntoIterator<Item = (ChainAndHeight, ValidatorPublicKey)>>(
@@ -87,20 +91,27 @@ struct BatchingHelper {
     keys: Vec<ChainId>,
     heights: BTreeMap<ChainId, BTreeMap<BlockHeight, BTreeSet<ValidatorPublicKey>>>,
     batch_size: usize,
+    max_blocks_per_chain: usize,
     current_chain: usize,
+    current_taken_from_single_chain: usize,
+    current_batch_counter: usize,
 }
 
 impl BatchingHelper {
     fn new(
         heights: BTreeMap<ChainId, BTreeMap<BlockHeight, BTreeSet<ValidatorPublicKey>>>,
         batch_size: usize,
+        max_blocks_per_chain: usize,
     ) -> Self {
         let keys = heights.keys().copied().collect();
         Self {
             keys,
             heights,
             batch_size,
+            max_blocks_per_chain,
             current_chain: 0,
+            current_taken_from_single_chain: 0,
+            current_batch_counter: 0,
         }
     }
 
@@ -125,10 +136,22 @@ impl BatchingHelper {
             }
         };
 
-        if self.current_chain < self.keys.len() - 1 {
-            self.current_chain += 1;
+        if self.current_taken_from_single_chain < self.max_blocks_per_chain - 1 {
+            self.current_taken_from_single_chain += 1;
         } else {
-            self.current_chain = 0;
+            self.current_taken_from_single_chain = 0;
+            if self.current_chain < self.keys.len() - 1 {
+                self.current_chain += 1;
+            } else {
+                self.current_chain = 0;
+            }
+        }
+
+        if self.current_batch_counter < self.batch_size - 1 {
+            self.current_batch_counter += 1;
+        } else {
+            self.current_taken_from_single_chain = 0;
+            self.current_batch_counter = 0;
         }
 
         maybe_heights
@@ -202,7 +225,7 @@ mod tests {
             }),
         );
 
-        let batches = test_log.into_batches(2).collect::<Vec<_>>();
+        let batches = test_log.into_batches(2, 1).collect::<Vec<_>>();
 
         assert_eq!(batches.len(), 5);
         assert_eq!(
@@ -275,7 +298,7 @@ mod tests {
             }),
         );
 
-        let batches = test_log.into_batches(2).collect::<Vec<_>>();
+        let batches = test_log.into_batches(2, 1).collect::<Vec<_>>();
 
         assert_eq!(batches.len(), 5);
         assert_eq!(
