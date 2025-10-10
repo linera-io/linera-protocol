@@ -169,9 +169,15 @@ Client implementation and command-line tool for the Linera blockchain
 * `--blob-download-timeout-ms <BLOB_DOWNLOAD_TIMEOUT>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
 
   Default value: `1000`
+* `--cert-batch-download-timeout-ms <CERTIFICATE_BATCH_DOWNLOAD_TIMEOUT>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds
+
+  Default value: `1000`
 * `--certificate-download-batch-size <CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of certificates that we download at a time from one validator when synchronizing one of our chains
 
   Default value: `500`
+* `--sender-certificate-download-batch-size <SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of sender certificates we try to download and receive in one go when syncing sender chains
+
+  Default value: `20000`
 * `--max-joined-tasks <MAX_JOINED_TASKS>` — Maximum number of tasks that can are joined concurrently in the client
 
   Default value: `100`
@@ -744,9 +750,6 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
   Default value: `0`
 * `--port <PORT>` — The port on which to run the server
-* `--sync-sleep-ms <SYNC_SLEEP_MS>` — Milliseconds to sleep between batches during background certificate synchronization
-
-  Default value: `500`
 
 
 
