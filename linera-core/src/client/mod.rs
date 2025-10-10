@@ -2223,7 +2223,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
         let certificate_count = certificates.values().map(BTreeMap::len).sum::<usize>();
 
-        tracing::trace!(
+        tracing::debug!(
             ?certificate_count,
             ?validator_count,
             "certificates received from validators",
