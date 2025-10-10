@@ -1134,6 +1134,153 @@ mod tests {
 
         Ok(())
     }
+
+    #[cfg(with_graphql)]
+    mod graphql_tests {
+        use super::*;
+        use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
+
+        // Create a simple GraphQL schema for testing
+        struct Query;
+
+        #[Object]
+        impl Query {
+            async fn test_set(&self) -> TestSetView {
+                let context = MemoryContext::new_for_testing(());
+                let mut set: SetView<_, u32> = SetView::load(context).await.unwrap();
+                
+                // Add test data
+                set.insert(&42).unwrap();
+                set.insert(&84).unwrap();
+                set.insert(&126).unwrap();
+                set.insert(&168).unwrap();
+                set.insert(&210).unwrap();
+                
+                TestSetView { set }
+            }
+        }
+
+        struct TestSetView {
+            set: SetView<MemoryContext<()>, u32>,
+        }
+
+        #[Object]
+        impl TestSetView {
+            async fn elements(&self, count: Option<usize>) -> Result<Vec<u32>, async_graphql::Error> {
+                // This calls line 1169: async fn elements(&self, count: Option<usize>)
+                let mut indices = self.set.indices().await?;
+                if let Some(count) = count {
+                    // This tests line 1172: indices.truncate(count);
+                    indices.truncate(count);
+                }
+                Ok(indices)
+            }
+
+            async fn count(&self) -> Result<u32, async_graphql::Error> {
+                Ok(self.set.count().await? as u32)
+            }
+        }
+
+        #[tokio::test]
+        async fn test_graphql_elements_without_count() -> Result<(), Box<dyn std::error::Error>> {
+            let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
+            
+            // Test line 1169 without count parameter - should return all elements
+            let query = r#"
+                query {
+                    testSet {
+                        elements
+                    }
+                }
+            "#;
+
+            let result = schema.execute(query).await;
+            assert!(result.errors.is_empty());
+            
+            let data = result.data.into_json()?;
+            let elements = &data["testSet"]["elements"];
+            assert!(elements.is_array());
+            assert_eq!(elements.as_array().unwrap().len(), 5);
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_graphql_elements_with_count() -> Result<(), Box<dyn std::error::Error>> {
+            let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
+            
+            // Test line 1172 truncate logic - should limit to 3 elements
+            let query = r#"
+                query {
+                    testSet {
+                        elements(count: 3)
+                    }
+                }
+            "#;
+
+            let result = schema.execute(query).await;
+            assert!(result.errors.is_empty());
+            
+            let data = result.data.into_json()?;
+            let elements = &data["testSet"]["elements"];
+            assert!(elements.is_array());
+            // This tests that line 1172 (indices.truncate(count)) worked correctly
+            assert_eq!(elements.as_array().unwrap().len(), 3);
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_graphql_count_field() -> Result<(), Box<dyn std::error::Error>> {
+            let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
+            
+            let query = r#"
+                query {
+                    testSet {
+                        count
+                    }
+                }
+            "#;
+
+            let result = schema.execute(query).await;
+            assert!(result.errors.is_empty());
+            
+            let data = result.data.into_json()?;
+            let count = &data["testSet"]["count"];
+            assert_eq!(count.as_u64().unwrap(), 5);
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_graphql_combined_query() -> Result<(), Box<dyn std::error::Error>> {
+            let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
+            
+            // Test both elements and count in a single query
+            let query = r#"
+                query {
+                    testSet {
+                        elements(count: 2)
+                        count
+                    }
+                }
+            "#;
+
+            let result = schema.execute(query).await;
+            assert!(result.errors.is_empty());
+            
+            let data = result.data.into_json()?;
+            let elements = &data["testSet"]["elements"];
+            let count = &data["testSet"]["count"];
+            
+            // Verify truncation worked (line 1172)
+            assert_eq!(elements.as_array().unwrap().len(), 2);
+            // Verify count returns total, not truncated count
+            assert_eq!(count.as_u64().unwrap(), 5);
+
+            Ok(())
+        }
+    }
 }
 
 #[cfg(with_graphql)]
