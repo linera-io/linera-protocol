@@ -87,7 +87,7 @@ impl ValidatorTrackers {
 struct ValidatorTracker {
     current_tracker_value: u64,
     to_be_downloaded: VecDeque<ChainAndHeight>,
-    already_downloaded: BTreeSet<ChainAndHeight>,
+    highest_downloaded: BTreeMap<ChainId, BlockHeight>,
 }
 
 impl ValidatorTracker {
@@ -96,28 +96,72 @@ impl ValidatorTracker {
         Self {
             current_tracker_value: tracker,
             to_be_downloaded: validator_log.into_iter().collect(),
-            already_downloaded: BTreeSet::new(),
+            highest_downloaded: BTreeMap::new(),
         }
     }
 
     /// Marks a certificate at a particular height in a particular chain as downloaded,
     /// and updates the tracker accordingly.
     fn downloaded_cert(&mut self, chain_and_height: ChainAndHeight) {
-        self.already_downloaded.insert(chain_and_height);
+        let current_highest = self
+            .highest_downloaded
+            .entry(chain_and_height.chain_id)
+            .or_insert(0.into());
+        *current_highest = chain_and_height.height.max(*current_highest);
         self.maximize_tracker();
     }
 
-    /// Matches the downloaded certificates with the log and increases the tracker value
-    /// to the first index that hasn't been downloaded yet.
+    /// Increases the tracker value to the first index that hasn't been downloaded yet.
     fn maximize_tracker(&mut self) {
-        while self
-            .to_be_downloaded
-            .front()
-            .is_some_and(|first_cert| self.already_downloaded.contains(first_cert))
-        {
-            let first_cert = self.to_be_downloaded.pop_front().unwrap();
-            self.already_downloaded.remove(&first_cert);
+        while self.to_be_downloaded.front().is_some_and(|first_cert| {
+            self.highest_downloaded
+                .get(&first_cert.chain_id)
+                .is_some_and(|max_downloaded_height| *max_downloaded_height >= first_cert.height)
+        }) {
+            let _first_cert = self.to_be_downloaded.pop_front().unwrap();
             self.current_tracker_value += 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use linera_base::{crypto::CryptoHash, identifiers::ChainId};
+    use linera_chain::data_types::ChainAndHeight;
+
+    use super::ValidatorTracker;
+
+    #[test]
+    fn test_validator_tracker() {
+        let chain1 = ChainId(CryptoHash::test_hash("chain1"));
+        let chain2 = ChainId(CryptoHash::test_hash("chain2"));
+        let mut tracker = ValidatorTracker::new(
+            0,
+            vec![(chain1, 0), (chain2, 0), (chain1, 1)]
+                .into_iter()
+                .map(|(chain_id, height)| ChainAndHeight {
+                    chain_id,
+                    height: height.into(),
+                })
+                .collect(),
+        );
+
+        tracker.downloaded_cert(ChainAndHeight {
+            chain_id: chain1,
+            height: 0.into(),
+        });
+        assert_eq!(tracker.current_tracker_value, 1);
+
+        tracker.downloaded_cert(ChainAndHeight {
+            chain_id: chain1,
+            height: 1.into(),
+        });
+        assert_eq!(tracker.current_tracker_value, 1);
+
+        tracker.downloaded_cert(ChainAndHeight {
+            chain_id: chain2,
+            height: 0.into(),
+        });
+        assert_eq!(tracker.current_tracker_value, 3);
     }
 }
