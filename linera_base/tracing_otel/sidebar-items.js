@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["init_with_chrome_trace_exporter","init_with_opentelemetry"],"type":["ChromeTraceGuard"]};

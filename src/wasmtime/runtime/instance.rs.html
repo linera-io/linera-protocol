@@ -1,0 +1,989 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-25.0.3/src/runtime/instance.rs`."><title>instance.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">wasmtime/runtime/</div>instance.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">crate</span>::linker::{Definition, DefinitionType};
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">crate</span>::runtime::vm::{
+<a href=#4 id=4 data-nosnippet>4</a>    Imports, InstanceAllocationRequest, ModuleRuntimeInfo, StorePtr, VMFuncRef, VMFunctionImport,
+<a href=#5 id=5 data-nosnippet>5</a>    VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
+<a href=#6 id=6 data-nosnippet>6</a>};
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span><span class="kw">crate</span>::store::{InstanceId, StoreOpaque, Stored};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::types::matching;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use crate</span>::{
+<a href=#10 id=10 data-nosnippet>10</a>    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
+<a href=#11 id=11 data-nosnippet>11</a>    StoreContext, StoreContextMut, Table, TypedFunc,
+<a href=#12 id=12 data-nosnippet>12</a>};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>alloc::sync::Arc;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>core::ptr::NonNull;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>wasmparser::WasmFeatures;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>wasmtime_environ::{
+<a href=#17 id=17 data-nosnippet>17</a>    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TypeTrace,
+<a href=#18 id=18 data-nosnippet>18</a>};
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a><span class="doccomment">/// An instantiated WebAssembly module.
+<a href=#21 id=21 data-nosnippet>21</a>///
+<a href=#22 id=22 data-nosnippet>22</a>/// This type represents the instantiation of a [`Module`]. Once instantiated
+<a href=#23 id=23 data-nosnippet>23</a>/// you can access the [`exports`](Instance::exports) which are of type
+<a href=#24 id=24 data-nosnippet>24</a>/// [`Extern`] and provide the ability to call functions, set globals, read
+<a href=#25 id=25 data-nosnippet>25</a>/// memory, etc. When interacting with any wasm code you'll want to make an
+<a href=#26 id=26 data-nosnippet>26</a>/// [`Instance`] to call any code or execute anything.
+<a href=#27 id=27 data-nosnippet>27</a>///
+<a href=#28 id=28 data-nosnippet>28</a>/// Instances are owned by a [`Store`](crate::Store) which is passed in at
+<a href=#29 id=29 data-nosnippet>29</a>/// creation time. It's recommended to create instances with
+<a href=#30 id=30 data-nosnippet>30</a>/// [`Linker::instantiate`](crate::Linker::instantiate) or similar
+<a href=#31 id=31 data-nosnippet>31</a>/// [`Linker`](crate::Linker) methods, but a more low-level constructor is also
+<a href=#32 id=32 data-nosnippet>32</a>/// available as [`Instance::new`].
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="attr">#[derive(Copy, Clone, Debug)]
+<a href=#34 id=34 data-nosnippet>34</a>#[repr(transparent)]
+<a href=#35 id=35 data-nosnippet>35</a></span><span class="kw">pub struct </span>Instance(Stored&lt;InstanceData&gt;);
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>InstanceData {
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="doccomment">/// The id of the instance within the store, used to find the original
+<a href=#39 id=39 data-nosnippet>39</a>    /// `InstanceHandle`.
+<a href=#40 id=40 data-nosnippet>40</a>    </span>id: InstanceId,
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// A lazily-populated list of exports of this instance. The order of
+<a href=#42 id=42 data-nosnippet>42</a>    /// exports here matches the order of the exports in the original
+<a href=#43 id=43 data-nosnippet>43</a>    /// module.
+<a href=#44 id=44 data-nosnippet>44</a>    </span>exports: Vec&lt;<span class="prelude-ty">Option</span>&lt;Extern&gt;&gt;,
+<a href=#45 id=45 data-nosnippet>45</a>}
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">impl </span>InstanceData {
+<a href=#48 id=48 data-nosnippet>48</a>    <span class="kw">pub fn </span>from_id(id: InstanceId) -&gt; InstanceData {
+<a href=#49 id=49 data-nosnippet>49</a>        InstanceData {
+<a href=#50 id=50 data-nosnippet>50</a>            id,
+<a href=#51 id=51 data-nosnippet>51</a>            exports: <span class="macro">vec!</span>[],
+<a href=#52 id=52 data-nosnippet>52</a>        }
+<a href=#53 id=53 data-nosnippet>53</a>    }
+<a href=#54 id=54 data-nosnippet>54</a>}
+<a href=#55 id=55 data-nosnippet>55</a>
+<a href=#56 id=56 data-nosnippet>56</a><span class="kw">impl </span>Instance {
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="doccomment">/// Creates a new [`Instance`] from the previously compiled [`Module`] and
+<a href=#58 id=58 data-nosnippet>58</a>    /// list of `imports` specified.
+<a href=#59 id=59 data-nosnippet>59</a>    ///
+<a href=#60 id=60 data-nosnippet>60</a>    /// This method instantiates the `module` provided with the `imports`,
+<a href=#61 id=61 data-nosnippet>61</a>    /// following the procedure in the [core specification][inst] to
+<a href=#62 id=62 data-nosnippet>62</a>    /// instantiate. Instantiation can fail for a number of reasons (many
+<a href=#63 id=63 data-nosnippet>63</a>    /// specified below), but if successful the `start` function will be
+<a href=#64 id=64 data-nosnippet>64</a>    /// automatically run (if specified in the `module`) and then the
+<a href=#65 id=65 data-nosnippet>65</a>    /// [`Instance`] will be returned.
+<a href=#66 id=66 data-nosnippet>66</a>    ///
+<a href=#67 id=67 data-nosnippet>67</a>    /// Per the WebAssembly spec, instantiation includes running the module's
+<a href=#68 id=68 data-nosnippet>68</a>    /// start function, if it has one (not to be confused with the `_start`
+<a href=#69 id=69 data-nosnippet>69</a>    /// function, which is not run).
+<a href=#70 id=70 data-nosnippet>70</a>    ///
+<a href=#71 id=71 data-nosnippet>71</a>    /// Note that this is a low-level function that just performs an
+<a href=#72 id=72 data-nosnippet>72</a>    /// instantiation. See the [`Linker`](crate::Linker) struct for an API which
+<a href=#73 id=73 data-nosnippet>73</a>    /// provides a convenient way to link imports and provides automatic Command
+<a href=#74 id=74 data-nosnippet>74</a>    /// and Reactor behavior.
+<a href=#75 id=75 data-nosnippet>75</a>    ///
+<a href=#76 id=76 data-nosnippet>76</a>    /// ## Providing Imports
+<a href=#77 id=77 data-nosnippet>77</a>    ///
+<a href=#78 id=78 data-nosnippet>78</a>    /// The entries in the list of `imports` are intended to correspond 1:1
+<a href=#79 id=79 data-nosnippet>79</a>    /// with the list of imports returned by [`Module::imports`]. Before
+<a href=#80 id=80 data-nosnippet>80</a>    /// calling [`Instance::new`] you'll want to inspect the return value of
+<a href=#81 id=81 data-nosnippet>81</a>    /// [`Module::imports`] and, for each import type, create an [`Extern`]
+<a href=#82 id=82 data-nosnippet>82</a>    /// which corresponds to that type.  These [`Extern`] values are all then
+<a href=#83 id=83 data-nosnippet>83</a>    /// collected into a list and passed to this function.
+<a href=#84 id=84 data-nosnippet>84</a>    ///
+<a href=#85 id=85 data-nosnippet>85</a>    /// Note that this function is intentionally relatively low level. For an
+<a href=#86 id=86 data-nosnippet>86</a>    /// easier time passing imports by doing name-based resolution it's
+<a href=#87 id=87 data-nosnippet>87</a>    /// recommended to instead use the [`Linker`](crate::Linker) type.
+<a href=#88 id=88 data-nosnippet>88</a>    ///
+<a href=#89 id=89 data-nosnippet>89</a>    /// ## Errors
+<a href=#90 id=90 data-nosnippet>90</a>    ///
+<a href=#91 id=91 data-nosnippet>91</a>    /// This function can fail for a number of reasons, including, but not
+<a href=#92 id=92 data-nosnippet>92</a>    /// limited to:
+<a href=#93 id=93 data-nosnippet>93</a>    ///
+<a href=#94 id=94 data-nosnippet>94</a>    /// * The number of `imports` provided doesn't match the number of imports
+<a href=#95 id=95 data-nosnippet>95</a>    ///   returned by the `module`'s [`Module::imports`] method.
+<a href=#96 id=96 data-nosnippet>96</a>    /// * The type of any [`Extern`] doesn't match the corresponding
+<a href=#97 id=97 data-nosnippet>97</a>    ///   [`ExternType`] entry that it maps to.
+<a href=#98 id=98 data-nosnippet>98</a>    /// * The `start` function in the instance, if present, traps.
+<a href=#99 id=99 data-nosnippet>99</a>    /// * Module/instance resource limits are exceeded.
+<a href=#100 id=100 data-nosnippet>100</a>    ///
+<a href=#101 id=101 data-nosnippet>101</a>    /// When instantiation fails it's recommended to inspect the return value to
+<a href=#102 id=102 data-nosnippet>102</a>    /// see why it failed, or bubble it upwards. If you'd like to specifically
+<a href=#103 id=103 data-nosnippet>103</a>    /// check for trap errors, you can use `error.downcast::&lt;Trap&gt;()`. For more
+<a href=#104 id=104 data-nosnippet>104</a>    /// about error handling see the [`Trap`] documentation.
+<a href=#105 id=105 data-nosnippet>105</a>    ///
+<a href=#106 id=106 data-nosnippet>106</a>    /// [`Trap`]: crate::Trap
+<a href=#107 id=107 data-nosnippet>107</a>    ///
+<a href=#108 id=108 data-nosnippet>108</a>    /// # Panics
+<a href=#109 id=109 data-nosnippet>109</a>    ///
+<a href=#110 id=110 data-nosnippet>110</a>    /// This function will panic if called with a store associated with a
+<a href=#111 id=111 data-nosnippet>111</a>    /// [`asynchronous config`](crate::Config::async_support). This function
+<a href=#112 id=112 data-nosnippet>112</a>    /// will also panic if any [`Extern`] supplied is not owned by `store`.
+<a href=#113 id=113 data-nosnippet>113</a>    ///
+<a href=#114 id=114 data-nosnippet>114</a>    /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
+<a href=#115 id=115 data-nosnippet>115</a>    /// [`ExternType`]: crate::ExternType
+<a href=#116 id=116 data-nosnippet>116</a>    </span><span class="kw">pub fn </span>new(
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw-2">mut </span>store: <span class="kw">impl </span>AsContextMut,
+<a href=#118 id=118 data-nosnippet>118</a>        module: <span class="kw-2">&amp;</span>Module,
+<a href=#119 id=119 data-nosnippet>119</a>        imports: <span class="kw-2">&amp;</span>[Extern],
+<a href=#120 id=120 data-nosnippet>120</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Instance&gt; {
+<a href=#121 id=121 data-nosnippet>121</a>        <span class="kw">let </span><span class="kw-2">mut </span>store = store.as_context_mut();
+<a href=#122 id=122 data-nosnippet>122</a>        <span class="kw">let </span>imports = Instance::typecheck_externs(store.<span class="number">0</span>, module, imports)<span class="question-mark">?</span>;
+<a href=#123 id=123 data-nosnippet>123</a>        <span class="comment">// Note that the unsafety here should be satisfied by the call to
+<a href=#124 id=124 data-nosnippet>124</a>        // `typecheck_externs` above which satisfies the condition that all
+<a href=#125 id=125 data-nosnippet>125</a>        // the imports are valid for this module.
+<a href=#126 id=126 data-nosnippet>126</a>        </span><span class="kw">unsafe </span>{ Instance::new_started(<span class="kw-2">&amp;mut </span>store, module, imports.as_ref()) }
+<a href=#127 id=127 data-nosnippet>127</a>    }
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="doccomment">/// Same as [`Instance::new`], except for usage in [asynchronous stores].
+<a href=#130 id=130 data-nosnippet>130</a>    ///
+<a href=#131 id=131 data-nosnippet>131</a>    /// For more details about this function see the documentation on
+<a href=#132 id=132 data-nosnippet>132</a>    /// [`Instance::new`]. The only difference between these two methods is that
+<a href=#133 id=133 data-nosnippet>133</a>    /// this one will asynchronously invoke the wasm start function in case it
+<a href=#134 id=134 data-nosnippet>134</a>    /// calls any imported function which is an asynchronous host function (e.g.
+<a href=#135 id=135 data-nosnippet>135</a>    /// created with [`Func::new_async`](crate::Func::new_async).
+<a href=#136 id=136 data-nosnippet>136</a>    ///
+<a href=#137 id=137 data-nosnippet>137</a>    /// # Panics
+<a href=#138 id=138 data-nosnippet>138</a>    ///
+<a href=#139 id=139 data-nosnippet>139</a>    /// This function will panic if called with a store associated with a
+<a href=#140 id=140 data-nosnippet>140</a>    /// [`synchronous config`](crate::Config::new). This is only compatible with
+<a href=#141 id=141 data-nosnippet>141</a>    /// stores associated with an [`asynchronous
+<a href=#142 id=142 data-nosnippet>142</a>    /// config`](crate::Config::async_support).
+<a href=#143 id=143 data-nosnippet>143</a>    ///
+<a href=#144 id=144 data-nosnippet>144</a>    /// This function will also panic, like [`Instance::new`], if any [`Extern`]
+<a href=#145 id=145 data-nosnippet>145</a>    /// specified does not belong to `store`.
+<a href=#146 id=146 data-nosnippet>146</a>    </span><span class="attr">#[cfg(feature = <span class="string">"async"</span>)]
+<a href=#147 id=147 data-nosnippet>147</a>    </span><span class="kw">pub async fn </span>new_async&lt;T&gt;(
+<a href=#148 id=148 data-nosnippet>148</a>        <span class="kw-2">mut </span>store: <span class="kw">impl </span>AsContextMut&lt;Data = T&gt;,
+<a href=#149 id=149 data-nosnippet>149</a>        module: <span class="kw-2">&amp;</span>Module,
+<a href=#150 id=150 data-nosnippet>150</a>        imports: <span class="kw-2">&amp;</span>[Extern],
+<a href=#151 id=151 data-nosnippet>151</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Instance&gt;
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">where
+<a href=#153 id=153 data-nosnippet>153</a>        </span>T: Send,
+<a href=#154 id=154 data-nosnippet>154</a>    {
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span><span class="kw-2">mut </span>store = store.as_context_mut();
+<a href=#156 id=156 data-nosnippet>156</a>        <span class="kw">let </span>imports = Instance::typecheck_externs(store.<span class="number">0</span>, module, imports)<span class="question-mark">?</span>;
+<a href=#157 id=157 data-nosnippet>157</a>        <span class="comment">// See `new` for notes on this unsafety
+<a href=#158 id=158 data-nosnippet>158</a>        </span><span class="kw">unsafe </span>{ Instance::new_started_async(<span class="kw-2">&amp;mut </span>store, module, imports.as_ref()).<span class="kw">await </span>}
+<a href=#159 id=159 data-nosnippet>159</a>    }
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">fn </span>typecheck_externs(
+<a href=#162 id=162 data-nosnippet>162</a>        store: <span class="kw-2">&amp;mut </span>StoreOpaque,
+<a href=#163 id=163 data-nosnippet>163</a>        module: <span class="kw-2">&amp;</span>Module,
+<a href=#164 id=164 data-nosnippet>164</a>        imports: <span class="kw-2">&amp;</span>[Extern],
+<a href=#165 id=165 data-nosnippet>165</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OwnedImports&gt; {
+<a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">for </span>import <span class="kw">in </span>imports {
+<a href=#167 id=167 data-nosnippet>167</a>            <span class="kw">if </span>!import.comes_from_same_store(store) {
+<a href=#168 id=168 data-nosnippet>168</a>                <span class="macro">bail!</span>(<span class="string">"cross-`Store` instantiation is not currently supported"</span>);
+<a href=#169 id=169 data-nosnippet>169</a>            }
+<a href=#170 id=170 data-nosnippet>170</a>        }
+<a href=#171 id=171 data-nosnippet>171</a>        typecheck(module, imports, |cx, ty, item| {
+<a href=#172 id=172 data-nosnippet>172</a>            <span class="kw">let </span>item = DefinitionType::from(store, item);
+<a href=#173 id=173 data-nosnippet>173</a>            cx.definition(ty, <span class="kw-2">&amp;</span>item)
+<a href=#174 id=174 data-nosnippet>174</a>        })<span class="question-mark">?</span>;
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">let </span><span class="kw-2">mut </span>owned_imports = OwnedImports::new(module);
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="kw">for </span>import <span class="kw">in </span>imports {
+<a href=#177 id=177 data-nosnippet>177</a>            owned_imports.push(import, store, module);
+<a href=#178 id=178 data-nosnippet>178</a>        }
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="prelude-val">Ok</span>(owned_imports)
+<a href=#180 id=180 data-nosnippet>180</a>    }
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="doccomment">/// Internal function to create an instance and run the start function.
+<a href=#183 id=183 data-nosnippet>183</a>    ///
+<a href=#184 id=184 data-nosnippet>184</a>    /// This function's unsafety is the same as `Instance::new_raw`.
+<a href=#185 id=185 data-nosnippet>185</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>new_started&lt;T&gt;(
+<a href=#186 id=186 data-nosnippet>186</a>        store: <span class="kw-2">&amp;mut </span>StoreContextMut&lt;<span class="lifetime">'_</span>, T&gt;,
+<a href=#187 id=187 data-nosnippet>187</a>        module: <span class="kw-2">&amp;</span>Module,
+<a href=#188 id=188 data-nosnippet>188</a>        imports: Imports&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#189 id=189 data-nosnippet>189</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Instance&gt; {
+<a href=#190 id=190 data-nosnippet>190</a>        <span class="macro">assert!</span>(
+<a href=#191 id=191 data-nosnippet>191</a>            !store.<span class="number">0</span>.async_support(),
+<a href=#192 id=192 data-nosnippet>192</a>            <span class="string">"must use async instantiation when async support is enabled"</span>,
+<a href=#193 id=193 data-nosnippet>193</a>        );
+<a href=#194 id=194 data-nosnippet>194</a>        <span class="self">Self</span>::new_started_impl(store, module, imports)
+<a href=#195 id=195 data-nosnippet>195</a>    }
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a>    <span class="doccomment">/// Internal function to create an instance and run the start function.
+<a href=#198 id=198 data-nosnippet>198</a>    ///
+<a href=#199 id=199 data-nosnippet>199</a>    /// ONLY CALL THIS IF YOU HAVE ALREADY CHECKED FOR ASYNCNESS AND HANDLED
+<a href=#200 id=200 data-nosnippet>200</a>    /// THE FIBER NONSENSE
+<a href=#201 id=201 data-nosnippet>201</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>new_started_impl&lt;T&gt;(
+<a href=#202 id=202 data-nosnippet>202</a>        store: <span class="kw-2">&amp;mut </span>StoreContextMut&lt;<span class="lifetime">'_</span>, T&gt;,
+<a href=#203 id=203 data-nosnippet>203</a>        module: <span class="kw-2">&amp;</span>Module,
+<a href=#204 id=204 data-nosnippet>204</a>        imports: Imports&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#205 id=205 data-nosnippet>205</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Instance&gt; {
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">let </span>(instance, start) = Instance::new_raw(store.<span class="number">0</span>, module, imports)<span class="question-mark">?</span>;
+<a href=#207 id=207 data-nosnippet>207</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(start) = start {
+<a href=#208 id=208 data-nosnippet>208</a>            instance.start_raw(store, start)<span class="question-mark">?</span>;
+<a href=#209 id=209 data-nosnippet>209</a>        }
+<a href=#210 id=210 data-nosnippet>210</a>        <span class="prelude-val">Ok</span>(instance)
+<a href=#211 id=211 data-nosnippet>211</a>    }
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a>    <span class="doccomment">/// Internal function to create an instance and run the start function.
+<a href=#214 id=214 data-nosnippet>214</a>    ///
+<a href=#215 id=215 data-nosnippet>215</a>    /// This function's unsafety is the same as `Instance::new_raw`.
+<a href=#216 id=216 data-nosnippet>216</a>    </span><span class="attr">#[cfg(feature = <span class="string">"async"</span>)]
+<a href=#217 id=217 data-nosnippet>217</a>    </span><span class="kw">async unsafe fn </span>new_started_async&lt;T&gt;(
+<a href=#218 id=218 data-nosnippet>218</a>        store: <span class="kw-2">&amp;mut </span>StoreContextMut&lt;<span class="lifetime">'_</span>, T&gt;,
+<a href=#219 id=219 data-nosnippet>219</a>        module: <span class="kw-2">&amp;</span>Module,
+<a href=#220 id=220 data-nosnippet>220</a>        imports: Imports&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#221 id=221 data-nosnippet>221</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Instance&gt;
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">where
+<a href=#223 id=223 data-nosnippet>223</a>        </span>T: Send,
+<a href=#224 id=224 data-nosnippet>224</a>    {
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="macro">assert!</span>(
+<a href=#226 id=226 data-nosnippet>226</a>            store.<span class="number">0</span>.async_support(),
+<a href=#227 id=227 data-nosnippet>227</a>            <span class="string">"must use sync instantiation when async support is disabled"</span>,
+<a href=#228 id=228 data-nosnippet>228</a>        );
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>        store
+<a href=#231 id=231 data-nosnippet>231</a>            .on_fiber(|store| <span class="self">Self</span>::new_started_impl(store, module, imports))
+<a href=#232 id=232 data-nosnippet>232</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#233 id=233 data-nosnippet>233</a>    </span>}
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="doccomment">/// Internal function to create an instance which doesn't have its `start`
+<a href=#236 id=236 data-nosnippet>236</a>    /// function run yet.
+<a href=#237 id=237 data-nosnippet>237</a>    ///
+<a href=#238 id=238 data-nosnippet>238</a>    /// This is not intended to be exposed from Wasmtime, it's intended to
+<a href=#239 id=239 data-nosnippet>239</a>    /// refactor out common code from `new_started` and `new_started_async`.
+<a href=#240 id=240 data-nosnippet>240</a>    ///
+<a href=#241 id=241 data-nosnippet>241</a>    /// Note that this step needs to be run on a fiber in async mode even
+<a href=#242 id=242 data-nosnippet>242</a>    /// though it doesn't do any blocking work because an async resource
+<a href=#243 id=243 data-nosnippet>243</a>    /// limiter may need to yield.
+<a href=#244 id=244 data-nosnippet>244</a>    ///
+<a href=#245 id=245 data-nosnippet>245</a>    /// # Unsafety
+<a href=#246 id=246 data-nosnippet>246</a>    ///
+<a href=#247 id=247 data-nosnippet>247</a>    /// This method is unsafe because it does not type-check the `imports`
+<a href=#248 id=248 data-nosnippet>248</a>    /// provided. The `imports` provided must be suitable for the module
+<a href=#249 id=249 data-nosnippet>249</a>    /// provided as well.
+<a href=#250 id=250 data-nosnippet>250</a>    </span><span class="kw">unsafe fn </span>new_raw(
+<a href=#251 id=251 data-nosnippet>251</a>        store: <span class="kw-2">&amp;mut </span>StoreOpaque,
+<a href=#252 id=252 data-nosnippet>252</a>        module: <span class="kw-2">&amp;</span>Module,
+<a href=#253 id=253 data-nosnippet>253</a>        imports: Imports&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#254 id=254 data-nosnippet>254</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Instance, <span class="prelude-ty">Option</span>&lt;FuncIndex&gt;)&gt; {
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="kw">if </span>!Engine::same(store.engine(), module.engine()) {
+<a href=#256 id=256 data-nosnippet>256</a>            <span class="macro">bail!</span>(<span class="string">"cross-`Engine` instantiation is not currently supported"</span>);
+<a href=#257 id=257 data-nosnippet>257</a>        }
+<a href=#258 id=258 data-nosnippet>258</a>        store.bump_resource_counts(module)<span class="question-mark">?</span>;
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="comment">// Allocate the GC heap, if necessary.
+<a href=#261 id=261 data-nosnippet>261</a>        </span><span class="kw">let _ </span>= store.gc_store_mut()<span class="question-mark">?</span>;
+<a href=#262 id=262 data-nosnippet>262</a>
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">let </span>compiled_module = module.compiled_module();
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="comment">// Register the module just before instantiation to ensure we keep the module
+<a href=#266 id=266 data-nosnippet>266</a>        // properly referenced while in use by the store.
+<a href=#267 id=267 data-nosnippet>267</a>        </span><span class="kw">let </span>module_id = store.modules_mut().register_module(module);
+<a href=#268 id=268 data-nosnippet>268</a>        store.fill_func_refs();
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="comment">// The first thing we do is issue an instance allocation request
+<a href=#271 id=271 data-nosnippet>271</a>        // to the instance allocator. This, on success, will give us an
+<a href=#272 id=272 data-nosnippet>272</a>        // instance handle.
+<a href=#273 id=273 data-nosnippet>273</a>        //
+<a href=#274 id=274 data-nosnippet>274</a>        // Note that the `host_state` here is a pointer back to the
+<a href=#275 id=275 data-nosnippet>275</a>        // `Instance` we'll be returning from this function. This is a
+<a href=#276 id=276 data-nosnippet>276</a>        // circular reference so we can't construct it before we construct
+<a href=#277 id=277 data-nosnippet>277</a>        // this instance, so we determine what the ID is and then assert
+<a href=#278 id=278 data-nosnippet>278</a>        // it's the same later when we do actually insert it.
+<a href=#279 id=279 data-nosnippet>279</a>        </span><span class="kw">let </span>instance_to_be = store.store_data().next_id::&lt;InstanceData&gt;();
+<a href=#280 id=280 data-nosnippet>280</a>
+<a href=#281 id=281 data-nosnippet>281</a>        <span class="kw">let </span><span class="kw-2">mut </span>instance_handle =
+<a href=#282 id=282 data-nosnippet>282</a>            store
+<a href=#283 id=283 data-nosnippet>283</a>                .engine()
+<a href=#284 id=284 data-nosnippet>284</a>                .allocator()
+<a href=#285 id=285 data-nosnippet>285</a>                .allocate_module(InstanceAllocationRequest {
+<a href=#286 id=286 data-nosnippet>286</a>                    runtime_info: <span class="kw-2">&amp;</span>ModuleRuntimeInfo::Module(module.clone()),
+<a href=#287 id=287 data-nosnippet>287</a>                    imports,
+<a href=#288 id=288 data-nosnippet>288</a>                    host_state: Box::new(Instance(instance_to_be)),
+<a href=#289 id=289 data-nosnippet>289</a>                    store: StorePtr::new(store.traitobj()),
+<a href=#290 id=290 data-nosnippet>290</a>                    wmemcheck: store.engine().config().wmemcheck,
+<a href=#291 id=291 data-nosnippet>291</a>                    pkey: store.get_pkey(),
+<a href=#292 id=292 data-nosnippet>292</a>                })<span class="question-mark">?</span>;
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>        <span class="comment">// The instance still has lots of setup, for example
+<a href=#295 id=295 data-nosnippet>295</a>        // data/elements/start/etc. This can all fail, but even on failure
+<a href=#296 id=296 data-nosnippet>296</a>        // the instance may persist some state via previous successful
+<a href=#297 id=297 data-nosnippet>297</a>        // initialization. For this reason once we have an instance handle
+<a href=#298 id=298 data-nosnippet>298</a>        // we immediately insert it into the store to keep it alive.
+<a href=#299 id=299 data-nosnippet>299</a>        //
+<a href=#300 id=300 data-nosnippet>300</a>        // Note that we `clone` the instance handle just to make easier
+<a href=#301 id=301 data-nosnippet>301</a>        // working the borrow checker here easier. Technically the `&amp;mut
+<a href=#302 id=302 data-nosnippet>302</a>        // instance` has somewhat of a borrow on `store` (which
+<a href=#303 id=303 data-nosnippet>303</a>        // conflicts with the borrow on `store.engine`) but this doesn't
+<a href=#304 id=304 data-nosnippet>304</a>        // matter in practice since initialization isn't even running any
+<a href=#305 id=305 data-nosnippet>305</a>        // code here anyway.
+<a href=#306 id=306 data-nosnippet>306</a>        </span><span class="kw">let </span>id = store.add_instance(instance_handle.clone(), module_id);
+<a href=#307 id=307 data-nosnippet>307</a>
+<a href=#308 id=308 data-nosnippet>308</a>        <span class="comment">// Additionally, before we start doing fallible instantiation, we
+<a href=#309 id=309 data-nosnippet>309</a>        // do one more step which is to insert an `InstanceData`
+<a href=#310 id=310 data-nosnippet>310</a>        // corresponding to this instance. This `InstanceData` can be used
+<a href=#311 id=311 data-nosnippet>311</a>        // via `Caller::get_export` if our instance's state "leaks" into
+<a href=#312 id=312 data-nosnippet>312</a>        // other instances, even if we don't return successfully from this
+<a href=#313 id=313 data-nosnippet>313</a>        // function.
+<a href=#314 id=314 data-nosnippet>314</a>        //
+<a href=#315 id=315 data-nosnippet>315</a>        // We don't actually load all exports from the instance at this
+<a href=#316 id=316 data-nosnippet>316</a>        // time, instead preferring to lazily load them as they're demanded.
+<a href=#317 id=317 data-nosnippet>317</a>        // For module/instance exports, though, those aren't actually
+<a href=#318 id=318 data-nosnippet>318</a>        // stored in the instance handle so we need to immediately handle
+<a href=#319 id=319 data-nosnippet>319</a>        // those here.
+<a href=#320 id=320 data-nosnippet>320</a>        </span><span class="kw">let </span>instance = {
+<a href=#321 id=321 data-nosnippet>321</a>            <span class="kw">let </span>exports = <span class="macro">vec!</span>[<span class="prelude-val">None</span>; compiled_module.module().exports.len()];
+<a href=#322 id=322 data-nosnippet>322</a>            <span class="kw">let </span>data = InstanceData { id, exports };
+<a href=#323 id=323 data-nosnippet>323</a>            Instance::from_wasmtime(data, store)
+<a href=#324 id=324 data-nosnippet>324</a>        };
+<a href=#325 id=325 data-nosnippet>325</a>
+<a href=#326 id=326 data-nosnippet>326</a>        <span class="comment">// double-check our guess of what the new instance's ID would be
+<a href=#327 id=327 data-nosnippet>327</a>        // was actually correct.
+<a href=#328 id=328 data-nosnippet>328</a>        </span><span class="macro">assert_eq!</span>(instance.<span class="number">0</span>, instance_to_be);
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="comment">// Now that we've recorded all information we need to about this
+<a href=#331 id=331 data-nosnippet>331</a>        // instance within a `Store` we can start performing fallible
+<a href=#332 id=332 data-nosnippet>332</a>        // initialization. Note that we still defer the `start` function to
+<a href=#333 id=333 data-nosnippet>333</a>        // later since that may need to run asynchronously.
+<a href=#334 id=334 data-nosnippet>334</a>        //
+<a href=#335 id=335 data-nosnippet>335</a>        // If this returns an error (or if the start function traps) then
+<a href=#336 id=336 data-nosnippet>336</a>        // any other initialization which may have succeeded which placed
+<a href=#337 id=337 data-nosnippet>337</a>        // items from this instance into other instances should be ok when
+<a href=#338 id=338 data-nosnippet>338</a>        // those items are loaded and run we'll have all the metadata to
+<a href=#339 id=339 data-nosnippet>339</a>        // look at them.
+<a href=#340 id=340 data-nosnippet>340</a>        </span>instance_handle.initialize(
+<a href=#341 id=341 data-nosnippet>341</a>            compiled_module.module(),
+<a href=#342 id=342 data-nosnippet>342</a>            store
+<a href=#343 id=343 data-nosnippet>343</a>                .engine()
+<a href=#344 id=344 data-nosnippet>344</a>                .features()
+<a href=#345 id=345 data-nosnippet>345</a>                .contains(WasmFeatures::BULK_MEMORY),
+<a href=#346 id=346 data-nosnippet>346</a>        )<span class="question-mark">?</span>;
+<a href=#347 id=347 data-nosnippet>347</a>
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="prelude-val">Ok</span>((instance, compiled_module.module().start_func))
+<a href=#349 id=349 data-nosnippet>349</a>    }
+<a href=#350 id=350 data-nosnippet>350</a>
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_wasmtime(handle: InstanceData, store: <span class="kw-2">&amp;mut </span>StoreOpaque) -&gt; Instance {
+<a href=#352 id=352 data-nosnippet>352</a>        Instance(store.store_data_mut().insert(handle))
+<a href=#353 id=353 data-nosnippet>353</a>    }
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">fn </span>start_raw&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, store: <span class="kw-2">&amp;mut </span>StoreContextMut&lt;<span class="lifetime">'_</span>, T&gt;, start: FuncIndex) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">let </span>id = store.<span class="number">0</span>.store_data()[<span class="self">self</span>.<span class="number">0</span>].id;
+<a href=#357 id=357 data-nosnippet>357</a>        <span class="comment">// If a start function is present, invoke it. Make sure we use all the
+<a href=#358 id=358 data-nosnippet>358</a>        // trap-handling configuration in `store` as well.
+<a href=#359 id=359 data-nosnippet>359</a>        </span><span class="kw">let </span>instance = store.<span class="number">0</span>.instance_mut(id);
+<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">let </span>f = instance.get_exported_func(start);
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="kw">let </span>caller_vmctx = instance.vmctx();
+<a href=#362 id=362 data-nosnippet>362</a>        <span class="kw">unsafe </span>{
+<a href=#363 id=363 data-nosnippet>363</a>            <span class="kw">super</span>::func::invoke_wasm_and_catch_traps(store, |_default_caller| {
+<a href=#364 id=364 data-nosnippet>364</a>                <span class="kw">let </span>func = f.func_ref.as_ref().array_call;
+<a href=#365 id=365 data-nosnippet>365</a>                func(
+<a href=#366 id=366 data-nosnippet>366</a>                    f.func_ref.as_ref().vmctx,
+<a href=#367 id=367 data-nosnippet>367</a>                    VMOpaqueContext::from_vmcontext(caller_vmctx),
+<a href=#368 id=368 data-nosnippet>368</a>                    [].as_mut_ptr(),
+<a href=#369 id=369 data-nosnippet>369</a>                    <span class="number">0</span>,
+<a href=#370 id=370 data-nosnippet>370</a>                )
+<a href=#371 id=371 data-nosnippet>371</a>            })<span class="question-mark">?</span>;
+<a href=#372 id=372 data-nosnippet>372</a>        }
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="prelude-val">Ok</span>(())
+<a href=#374 id=374 data-nosnippet>374</a>    }
+<a href=#375 id=375 data-nosnippet>375</a>
+<a href=#376 id=376 data-nosnippet>376</a>    <span class="doccomment">/// Get this instance's module.
+<a href=#377 id=377 data-nosnippet>377</a>    </span><span class="kw">pub fn </span>module&lt;<span class="lifetime">'a</span>, T: <span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, store: <span class="kw">impl </span>Into&lt;StoreContext&lt;<span class="lifetime">'a</span>, T&gt;&gt;) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Module {
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="self">self</span>._module(store.into().<span class="number">0</span>)
+<a href=#379 id=379 data-nosnippet>379</a>    }
+<a href=#380 id=380 data-nosnippet>380</a>
+<a href=#381 id=381 data-nosnippet>381</a>    <span class="kw">fn </span>_module&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, store: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>StoreOpaque) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Module {
+<a href=#382 id=382 data-nosnippet>382</a>        <span class="kw">let </span>InstanceData { id, .. } = store[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#383 id=383 data-nosnippet>383</a>        store.module_for_instance(id).unwrap()
+<a href=#384 id=384 data-nosnippet>384</a>    }
+<a href=#385 id=385 data-nosnippet>385</a>
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="doccomment">/// Returns the list of exported items from this [`Instance`].
+<a href=#387 id=387 data-nosnippet>387</a>    ///
+<a href=#388 id=388 data-nosnippet>388</a>    /// # Panics
+<a href=#389 id=389 data-nosnippet>389</a>    ///
+<a href=#390 id=390 data-nosnippet>390</a>    /// Panics if `store` does not own this instance.
+<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">pub fn </span>exports&lt;<span class="lifetime">'a</span>, T: <span class="lifetime">'a</span>&gt;(
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#393 id=393 data-nosnippet>393</a>        store: <span class="kw">impl </span>Into&lt;StoreContextMut&lt;<span class="lifetime">'a</span>, T&gt;&gt;,
+<a href=#394 id=394 data-nosnippet>394</a>    ) -&gt; <span class="kw">impl </span>ExactSizeIterator&lt;Item = Export&lt;<span class="lifetime">'a</span>&gt;&gt; + <span class="lifetime">'a </span>{
+<a href=#395 id=395 data-nosnippet>395</a>        <span class="self">self</span>._exports(store.into().<span class="number">0</span>)
+<a href=#396 id=396 data-nosnippet>396</a>    }
+<a href=#397 id=397 data-nosnippet>397</a>
+<a href=#398 id=398 data-nosnippet>398</a>    <span class="kw">fn </span>_exports&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#399 id=399 data-nosnippet>399</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#400 id=400 data-nosnippet>400</a>        store: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>StoreOpaque,
+<a href=#401 id=401 data-nosnippet>401</a>    ) -&gt; <span class="kw">impl </span>ExactSizeIterator&lt;Item = Export&lt;<span class="lifetime">'a</span>&gt;&gt; + <span class="lifetime">'a </span>{
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="comment">// If this is an `Instantiated` instance then all the `exports` may not
+<a href=#403 id=403 data-nosnippet>403</a>        // be filled in. Fill them all in now if that's the case.
+<a href=#404 id=404 data-nosnippet>404</a>        </span><span class="kw">let </span>InstanceData { exports, id, .. } = <span class="kw-2">&amp;</span>store[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">if </span>exports.iter().any(|e| e.is_none()) {
+<a href=#406 id=406 data-nosnippet>406</a>            <span class="kw">let </span>module = Arc::clone(store.instance(<span class="kw-2">*</span>id).module());
+<a href=#407 id=407 data-nosnippet>407</a>            <span class="kw">let </span>data = <span class="kw-2">&amp;</span>store[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#408 id=408 data-nosnippet>408</a>            <span class="kw">let </span>id = data.id;
+<a href=#409 id=409 data-nosnippet>409</a>
+<a href=#410 id=410 data-nosnippet>410</a>            <span class="kw">for </span>name <span class="kw">in </span>module.exports.keys() {
+<a href=#411 id=411 data-nosnippet>411</a>                <span class="kw">let </span>instance = store.instance(id);
+<a href=#412 id=412 data-nosnippet>412</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>((export_name_index, <span class="kw">_</span>, <span class="kw-2">&amp;</span>entity)) =
+<a href=#413 id=413 data-nosnippet>413</a>                    instance.module().exports.get_full(name)
+<a href=#414 id=414 data-nosnippet>414</a>                {
+<a href=#415 id=415 data-nosnippet>415</a>                    <span class="self">self</span>._get_export(store, entity, export_name_index);
+<a href=#416 id=416 data-nosnippet>416</a>                }
+<a href=#417 id=417 data-nosnippet>417</a>            }
+<a href=#418 id=418 data-nosnippet>418</a>        }
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">let </span>data = <span class="kw-2">&amp;</span>store.store_data()[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>module = store.instance(data.id).module();
+<a href=#422 id=422 data-nosnippet>422</a>        module
+<a href=#423 id=423 data-nosnippet>423</a>            .exports
+<a href=#424 id=424 data-nosnippet>424</a>            .iter()
+<a href=#425 id=425 data-nosnippet>425</a>            .zip(<span class="kw-2">&amp;</span>data.exports)
+<a href=#426 id=426 data-nosnippet>426</a>            .map(|((name, <span class="kw">_</span>), export)| Export::new(name, export.clone().unwrap()))
+<a href=#427 id=427 data-nosnippet>427</a>    }
+<a href=#428 id=428 data-nosnippet>428</a>
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="doccomment">/// Looks up an exported [`Extern`] value by name.
+<a href=#430 id=430 data-nosnippet>430</a>    ///
+<a href=#431 id=431 data-nosnippet>431</a>    /// This method will search the module for an export named `name` and return
+<a href=#432 id=432 data-nosnippet>432</a>    /// the value, if found.
+<a href=#433 id=433 data-nosnippet>433</a>    ///
+<a href=#434 id=434 data-nosnippet>434</a>    /// Returns `None` if there was no export named `name`.
+<a href=#435 id=435 data-nosnippet>435</a>    ///
+<a href=#436 id=436 data-nosnippet>436</a>    /// # Panics
+<a href=#437 id=437 data-nosnippet>437</a>    ///
+<a href=#438 id=438 data-nosnippet>438</a>    /// Panics if `store` does not own this instance.
+<a href=#439 id=439 data-nosnippet>439</a>    ///
+<a href=#440 id=440 data-nosnippet>440</a>    /// # Why does `get_export` take a mutable context?
+<a href=#441 id=441 data-nosnippet>441</a>    ///
+<a href=#442 id=442 data-nosnippet>442</a>    /// This method requires a mutable context because an instance's exports are
+<a href=#443 id=443 data-nosnippet>443</a>    /// lazily populated, and we cache them as they are accessed. This makes
+<a href=#444 id=444 data-nosnippet>444</a>    /// instantiating a module faster, but also means this method requires a
+<a href=#445 id=445 data-nosnippet>445</a>    /// mutable context.
+<a href=#446 id=446 data-nosnippet>446</a>    </span><span class="kw">pub fn </span>get_export(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>store: <span class="kw">impl </span>AsContextMut, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;Extern&gt; {
+<a href=#447 id=447 data-nosnippet>447</a>        <span class="kw">let </span>store = store.as_context_mut().<span class="number">0</span>;
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">let </span>data = <span class="kw-2">&amp;</span>store[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">let </span>instance = store.instance(data.id);
+<a href=#450 id=450 data-nosnippet>450</a>        <span class="kw">let </span>(export_name_index, <span class="kw">_</span>, <span class="kw-2">&amp;</span>entity) = instance.module().exports.get_full(name)<span class="question-mark">?</span>;
+<a href=#451 id=451 data-nosnippet>451</a>        <span class="self">self</span>._get_export(store, entity, export_name_index)
+<a href=#452 id=452 data-nosnippet>452</a>    }
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>    <span class="doccomment">/// Looks up an exported [`Extern`] value by a [`ModuleExport`] value.
+<a href=#455 id=455 data-nosnippet>455</a>    ///
+<a href=#456 id=456 data-nosnippet>456</a>    /// This is similar to [`Instance::get_export`] but uses a [`ModuleExport`] value to avoid
+<a href=#457 id=457 data-nosnippet>457</a>    /// string lookups where possible. [`ModuleExport`]s can be obtained by calling
+<a href=#458 id=458 data-nosnippet>458</a>    /// [`Module::get_export_index`] on the [`Module`] that this instance was instantiated with.
+<a href=#459 id=459 data-nosnippet>459</a>    ///
+<a href=#460 id=460 data-nosnippet>460</a>    /// This method will search the module for an export with a matching entity index and return
+<a href=#461 id=461 data-nosnippet>461</a>    /// the value, if found.
+<a href=#462 id=462 data-nosnippet>462</a>    ///
+<a href=#463 id=463 data-nosnippet>463</a>    /// Returns `None` if there was no export with a matching entity index.
+<a href=#464 id=464 data-nosnippet>464</a>    /// # Panics
+<a href=#465 id=465 data-nosnippet>465</a>    ///
+<a href=#466 id=466 data-nosnippet>466</a>    /// Panics if `store` does not own this instance.
+<a href=#467 id=467 data-nosnippet>467</a>    </span><span class="kw">pub fn </span>get_module_export(
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw-2">mut </span>store: <span class="kw">impl </span>AsContextMut,
+<a href=#470 id=470 data-nosnippet>470</a>        export: <span class="kw-2">&amp;</span>ModuleExport,
+<a href=#471 id=471 data-nosnippet>471</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Extern&gt; {
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">let </span>store = store.as_context_mut().<span class="number">0</span>;
+<a href=#473 id=473 data-nosnippet>473</a>
+<a href=#474 id=474 data-nosnippet>474</a>        <span class="comment">// Verify the `ModuleExport` matches the module used in this instance.
+<a href=#475 id=475 data-nosnippet>475</a>        </span><span class="kw">if </span><span class="self">self</span>._module(store).id() != export.module {
+<a href=#476 id=476 data-nosnippet>476</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#477 id=477 data-nosnippet>477</a>        }
+<a href=#478 id=478 data-nosnippet>478</a>
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="self">self</span>._get_export(store, export.entity, export.export_name_index)
+<a href=#480 id=480 data-nosnippet>480</a>    }
+<a href=#481 id=481 data-nosnippet>481</a>
+<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">fn </span>_get_export(
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#484 id=484 data-nosnippet>484</a>        store: <span class="kw-2">&amp;mut </span>StoreOpaque,
+<a href=#485 id=485 data-nosnippet>485</a>        entity: EntityIndex,
+<a href=#486 id=486 data-nosnippet>486</a>        export_name_index: usize,
+<a href=#487 id=487 data-nosnippet>487</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Extern&gt; {
+<a href=#488 id=488 data-nosnippet>488</a>        <span class="comment">// Instantiated instances will lazily fill in exports, so we process
+<a href=#489 id=489 data-nosnippet>489</a>        // all that lazy logic here.
+<a href=#490 id=490 data-nosnippet>490</a>        </span><span class="kw">let </span>data = <span class="kw-2">&amp;</span>store[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#491 id=491 data-nosnippet>491</a>
+<a href=#492 id=492 data-nosnippet>492</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(export) = <span class="kw-2">&amp;</span>data.exports[export_name_index] {
+<a href=#493 id=493 data-nosnippet>493</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(export.clone());
+<a href=#494 id=494 data-nosnippet>494</a>        }
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw">let </span>instance = store.instance_mut(data.id); <span class="comment">// Reborrow the &amp;mut InstanceHandle
+<a href=#497 id=497 data-nosnippet>497</a>        </span><span class="kw">let </span>item =
+<a href=#498 id=498 data-nosnippet>498</a>            <span class="kw">unsafe </span>{ Extern::from_wasmtime_export(instance.get_export_by_index(entity), store) };
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="kw">let </span>data = <span class="kw-2">&amp;mut </span>store[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#500 id=500 data-nosnippet>500</a>        data.exports[export_name_index] = <span class="prelude-val">Some</span>(item.clone());
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="prelude-val">Some</span>(item)
+<a href=#502 id=502 data-nosnippet>502</a>    }
+<a href=#503 id=503 data-nosnippet>503</a>
+<a href=#504 id=504 data-nosnippet>504</a>    <span class="doccomment">/// Looks up an exported [`Func`] value by name.
+<a href=#505 id=505 data-nosnippet>505</a>    ///
+<a href=#506 id=506 data-nosnippet>506</a>    /// Returns `None` if there was no export named `name`, or if there was but
+<a href=#507 id=507 data-nosnippet>507</a>    /// it wasn't a function.
+<a href=#508 id=508 data-nosnippet>508</a>    ///
+<a href=#509 id=509 data-nosnippet>509</a>    /// # Panics
+<a href=#510 id=510 data-nosnippet>510</a>    ///
+<a href=#511 id=511 data-nosnippet>511</a>    /// Panics if `store` does not own this instance.
+<a href=#512 id=512 data-nosnippet>512</a>    </span><span class="kw">pub fn </span>get_func(<span class="kw-2">&amp;</span><span class="self">self</span>, store: <span class="kw">impl </span>AsContextMut, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;Func&gt; {
+<a href=#513 id=513 data-nosnippet>513</a>        <span class="self">self</span>.get_export(store, name)<span class="question-mark">?</span>.into_func()
+<a href=#514 id=514 data-nosnippet>514</a>    }
+<a href=#515 id=515 data-nosnippet>515</a>
+<a href=#516 id=516 data-nosnippet>516</a>    <span class="doccomment">/// Looks up an exported [`Func`] value by name and with its type.
+<a href=#517 id=517 data-nosnippet>517</a>    ///
+<a href=#518 id=518 data-nosnippet>518</a>    /// This function is a convenience wrapper over [`Instance::get_func`] and
+<a href=#519 id=519 data-nosnippet>519</a>    /// [`Func::typed`]. For more information see the linked documentation.
+<a href=#520 id=520 data-nosnippet>520</a>    ///
+<a href=#521 id=521 data-nosnippet>521</a>    /// Returns an error if `name` isn't a function export or if the export's
+<a href=#522 id=522 data-nosnippet>522</a>    /// type did not match `Params` or `Results`
+<a href=#523 id=523 data-nosnippet>523</a>    ///
+<a href=#524 id=524 data-nosnippet>524</a>    /// # Panics
+<a href=#525 id=525 data-nosnippet>525</a>    ///
+<a href=#526 id=526 data-nosnippet>526</a>    /// Panics if `store` does not own this instance.
+<a href=#527 id=527 data-nosnippet>527</a>    </span><span class="kw">pub fn </span>get_typed_func&lt;Params, Results&gt;(
+<a href=#528 id=528 data-nosnippet>528</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#529 id=529 data-nosnippet>529</a>        <span class="kw-2">mut </span>store: <span class="kw">impl </span>AsContextMut,
+<a href=#530 id=530 data-nosnippet>530</a>        name: <span class="kw-2">&amp;</span>str,
+<a href=#531 id=531 data-nosnippet>531</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TypedFunc&lt;Params, Results&gt;&gt;
+<a href=#532 id=532 data-nosnippet>532</a>    <span class="kw">where
+<a href=#533 id=533 data-nosnippet>533</a>        </span>Params: <span class="kw">crate</span>::WasmParams,
+<a href=#534 id=534 data-nosnippet>534</a>        Results: <span class="kw">crate</span>::WasmResults,
+<a href=#535 id=535 data-nosnippet>535</a>    {
+<a href=#536 id=536 data-nosnippet>536</a>        <span class="kw">let </span>f = <span class="self">self
+<a href=#537 id=537 data-nosnippet>537</a>            </span>.get_export(store.as_context_mut(), name)
+<a href=#538 id=538 data-nosnippet>538</a>            .and_then(|f| f.into_func())
+<a href=#539 id=539 data-nosnippet>539</a>            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">"failed to find function export `{}`"</span>, name))<span class="question-mark">?</span>;
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="prelude-val">Ok</span>(f.typed::&lt;Params, Results&gt;(store)
+<a href=#541 id=541 data-nosnippet>541</a>            .with_context(|| <span class="macro">format!</span>(<span class="string">"failed to convert function `{name}` to given type"</span>))<span class="question-mark">?</span>)
+<a href=#542 id=542 data-nosnippet>542</a>    }
+<a href=#543 id=543 data-nosnippet>543</a>
+<a href=#544 id=544 data-nosnippet>544</a>    <span class="doccomment">/// Looks up an exported [`Table`] value by name.
+<a href=#545 id=545 data-nosnippet>545</a>    ///
+<a href=#546 id=546 data-nosnippet>546</a>    /// Returns `None` if there was no export named `name`, or if there was but
+<a href=#547 id=547 data-nosnippet>547</a>    /// it wasn't a table.
+<a href=#548 id=548 data-nosnippet>548</a>    ///
+<a href=#549 id=549 data-nosnippet>549</a>    /// # Panics
+<a href=#550 id=550 data-nosnippet>550</a>    ///
+<a href=#551 id=551 data-nosnippet>551</a>    /// Panics if `store` does not own this instance.
+<a href=#552 id=552 data-nosnippet>552</a>    </span><span class="kw">pub fn </span>get_table(<span class="kw-2">&amp;</span><span class="self">self</span>, store: <span class="kw">impl </span>AsContextMut, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;Table&gt; {
+<a href=#553 id=553 data-nosnippet>553</a>        <span class="self">self</span>.get_export(store, name)<span class="question-mark">?</span>.into_table()
+<a href=#554 id=554 data-nosnippet>554</a>    }
+<a href=#555 id=555 data-nosnippet>555</a>
+<a href=#556 id=556 data-nosnippet>556</a>    <span class="doccomment">/// Looks up an exported [`Memory`] value by name.
+<a href=#557 id=557 data-nosnippet>557</a>    ///
+<a href=#558 id=558 data-nosnippet>558</a>    /// Returns `None` if there was no export named `name`, or if there was but
+<a href=#559 id=559 data-nosnippet>559</a>    /// it wasn't a memory.
+<a href=#560 id=560 data-nosnippet>560</a>    ///
+<a href=#561 id=561 data-nosnippet>561</a>    /// # Panics
+<a href=#562 id=562 data-nosnippet>562</a>    ///
+<a href=#563 id=563 data-nosnippet>563</a>    /// Panics if `store` does not own this instance.
+<a href=#564 id=564 data-nosnippet>564</a>    </span><span class="kw">pub fn </span>get_memory(<span class="kw-2">&amp;</span><span class="self">self</span>, store: <span class="kw">impl </span>AsContextMut, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;Memory&gt; {
+<a href=#565 id=565 data-nosnippet>565</a>        <span class="self">self</span>.get_export(store, name)<span class="question-mark">?</span>.into_memory()
+<a href=#566 id=566 data-nosnippet>566</a>    }
+<a href=#567 id=567 data-nosnippet>567</a>
+<a href=#568 id=568 data-nosnippet>568</a>    <span class="doccomment">/// Looks up an exported [`SharedMemory`] value by name.
+<a href=#569 id=569 data-nosnippet>569</a>    ///
+<a href=#570 id=570 data-nosnippet>570</a>    /// Returns `None` if there was no export named `name`, or if there was but
+<a href=#571 id=571 data-nosnippet>571</a>    /// it wasn't a shared memory.
+<a href=#572 id=572 data-nosnippet>572</a>    ///
+<a href=#573 id=573 data-nosnippet>573</a>    /// # Panics
+<a href=#574 id=574 data-nosnippet>574</a>    ///
+<a href=#575 id=575 data-nosnippet>575</a>    /// Panics if `store` does not own this instance.
+<a href=#576 id=576 data-nosnippet>576</a>    </span><span class="kw">pub fn </span>get_shared_memory(
+<a href=#577 id=577 data-nosnippet>577</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#578 id=578 data-nosnippet>578</a>        <span class="kw-2">mut </span>store: <span class="kw">impl </span>AsContextMut,
+<a href=#579 id=579 data-nosnippet>579</a>        name: <span class="kw-2">&amp;</span>str,
+<a href=#580 id=580 data-nosnippet>580</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;SharedMemory&gt; {
+<a href=#581 id=581 data-nosnippet>581</a>        <span class="kw">let </span><span class="kw-2">mut </span>store = store.as_context_mut();
+<a href=#582 id=582 data-nosnippet>582</a>        <span class="self">self</span>.get_export(<span class="kw-2">&amp;mut </span>store, name)<span class="question-mark">?</span>.into_shared_memory()
+<a href=#583 id=583 data-nosnippet>583</a>    }
+<a href=#584 id=584 data-nosnippet>584</a>
+<a href=#585 id=585 data-nosnippet>585</a>    <span class="doccomment">/// Looks up an exported [`Global`] value by name.
+<a href=#586 id=586 data-nosnippet>586</a>    ///
+<a href=#587 id=587 data-nosnippet>587</a>    /// Returns `None` if there was no export named `name`, or if there was but
+<a href=#588 id=588 data-nosnippet>588</a>    /// it wasn't a global.
+<a href=#589 id=589 data-nosnippet>589</a>    ///
+<a href=#590 id=590 data-nosnippet>590</a>    /// # Panics
+<a href=#591 id=591 data-nosnippet>591</a>    ///
+<a href=#592 id=592 data-nosnippet>592</a>    /// Panics if `store` does not own this instance.
+<a href=#593 id=593 data-nosnippet>593</a>    </span><span class="kw">pub fn </span>get_global(<span class="kw-2">&amp;</span><span class="self">self</span>, store: <span class="kw">impl </span>AsContextMut, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;Global&gt; {
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="self">self</span>.get_export(store, name)<span class="question-mark">?</span>.into_global()
+<a href=#595 id=595 data-nosnippet>595</a>    }
+<a href=#596 id=596 data-nosnippet>596</a>
+<a href=#597 id=597 data-nosnippet>597</a>    <span class="attr">#[cfg(feature = <span class="string">"component-model"</span>)]
+<a href=#598 id=598 data-nosnippet>598</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>, store: <span class="kw-2">&amp;</span>StoreOpaque) -&gt; InstanceId {
+<a href=#599 id=599 data-nosnippet>599</a>        store[<span class="self">self</span>.<span class="number">0</span>].id
+<a href=#600 id=600 data-nosnippet>600</a>    }
+<a href=#601 id=601 data-nosnippet>601</a>
+<a href=#602 id=602 data-nosnippet>602</a>    <span class="doccomment">/// Get all globals within this instance.
+<a href=#603 id=603 data-nosnippet>603</a>    ///
+<a href=#604 id=604 data-nosnippet>604</a>    /// Returns both import and defined globals.
+<a href=#605 id=605 data-nosnippet>605</a>    ///
+<a href=#606 id=606 data-nosnippet>606</a>    /// Returns both exported and non-exported globals.
+<a href=#607 id=607 data-nosnippet>607</a>    ///
+<a href=#608 id=608 data-nosnippet>608</a>    /// Gives access to the full globals space.
+<a href=#609 id=609 data-nosnippet>609</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>all_globals&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#610 id=610 data-nosnippet>610</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#611 id=611 data-nosnippet>611</a>        store: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>StoreOpaque,
+<a href=#612 id=612 data-nosnippet>612</a>    ) -&gt; <span class="kw">impl </span>ExactSizeIterator&lt;Item = (GlobalIndex, Global)&gt; + <span class="lifetime">'a </span>{
+<a href=#613 id=613 data-nosnippet>613</a>        <span class="kw">let </span>data = <span class="kw-2">&amp;</span>store[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#614 id=614 data-nosnippet>614</a>        <span class="kw">let </span>instance = store.instance_mut(data.id);
+<a href=#615 id=615 data-nosnippet>615</a>        instance
+<a href=#616 id=616 data-nosnippet>616</a>            .all_globals()
+<a href=#617 id=617 data-nosnippet>617</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#618 id=618 data-nosnippet>618</a>            .into_iter()
+<a href=#619 id=619 data-nosnippet>619</a>            .map(|(i, g)| (i, <span class="kw">unsafe </span>{ Global::from_wasmtime_global(g, store) }))
+<a href=#620 id=620 data-nosnippet>620</a>    }
+<a href=#621 id=621 data-nosnippet>621</a>
+<a href=#622 id=622 data-nosnippet>622</a>    <span class="doccomment">/// Get all memories within this instance.
+<a href=#623 id=623 data-nosnippet>623</a>    ///
+<a href=#624 id=624 data-nosnippet>624</a>    /// Returns both import and defined memories.
+<a href=#625 id=625 data-nosnippet>625</a>    ///
+<a href=#626 id=626 data-nosnippet>626</a>    /// Returns both exported and non-exported memories.
+<a href=#627 id=627 data-nosnippet>627</a>    ///
+<a href=#628 id=628 data-nosnippet>628</a>    /// Gives access to the full memories space.
+<a href=#629 id=629 data-nosnippet>629</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>all_memories&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#630 id=630 data-nosnippet>630</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#631 id=631 data-nosnippet>631</a>        store: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>StoreOpaque,
+<a href=#632 id=632 data-nosnippet>632</a>    ) -&gt; <span class="kw">impl </span>ExactSizeIterator&lt;Item = (MemoryIndex, Memory)&gt; + <span class="lifetime">'a </span>{
+<a href=#633 id=633 data-nosnippet>633</a>        <span class="kw">let </span>data = <span class="kw-2">&amp;</span>store[<span class="self">self</span>.<span class="number">0</span>];
+<a href=#634 id=634 data-nosnippet>634</a>        <span class="kw">let </span>instance = store.instance_mut(data.id);
+<a href=#635 id=635 data-nosnippet>635</a>        instance
+<a href=#636 id=636 data-nosnippet>636</a>            .all_memories()
+<a href=#637 id=637 data-nosnippet>637</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#638 id=638 data-nosnippet>638</a>            .into_iter()
+<a href=#639 id=639 data-nosnippet>639</a>            .map(|(i, m)| (i, <span class="kw">unsafe </span>{ Memory::from_wasmtime_memory(m, store) }))
+<a href=#640 id=640 data-nosnippet>640</a>    }
+<a href=#641 id=641 data-nosnippet>641</a>}
+<a href=#642 id=642 data-nosnippet>642</a>
+<a href=#643 id=643 data-nosnippet>643</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>OwnedImports {
+<a href=#644 id=644 data-nosnippet>644</a>    functions: PrimaryMap&lt;FuncIndex, VMFunctionImport&gt;,
+<a href=#645 id=645 data-nosnippet>645</a>    tables: PrimaryMap&lt;TableIndex, VMTableImport&gt;,
+<a href=#646 id=646 data-nosnippet>646</a>    memories: PrimaryMap&lt;MemoryIndex, VMMemoryImport&gt;,
+<a href=#647 id=647 data-nosnippet>647</a>    globals: PrimaryMap&lt;GlobalIndex, VMGlobalImport&gt;,
+<a href=#648 id=648 data-nosnippet>648</a>}
+<a href=#649 id=649 data-nosnippet>649</a>
+<a href=#650 id=650 data-nosnippet>650</a><span class="kw">impl </span>OwnedImports {
+<a href=#651 id=651 data-nosnippet>651</a>    <span class="kw">fn </span>new(module: <span class="kw-2">&amp;</span>Module) -&gt; OwnedImports {
+<a href=#652 id=652 data-nosnippet>652</a>        <span class="kw">let </span><span class="kw-2">mut </span>ret = OwnedImports::empty();
+<a href=#653 id=653 data-nosnippet>653</a>        ret.reserve(module);
+<a href=#654 id=654 data-nosnippet>654</a>        <span class="kw">return </span>ret;
+<a href=#655 id=655 data-nosnippet>655</a>    }
+<a href=#656 id=656 data-nosnippet>656</a>
+<a href=#657 id=657 data-nosnippet>657</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>empty() -&gt; OwnedImports {
+<a href=#658 id=658 data-nosnippet>658</a>        OwnedImports {
+<a href=#659 id=659 data-nosnippet>659</a>            functions: PrimaryMap::new(),
+<a href=#660 id=660 data-nosnippet>660</a>            tables: PrimaryMap::new(),
+<a href=#661 id=661 data-nosnippet>661</a>            memories: PrimaryMap::new(),
+<a href=#662 id=662 data-nosnippet>662</a>            globals: PrimaryMap::new(),
+<a href=#663 id=663 data-nosnippet>663</a>        }
+<a href=#664 id=664 data-nosnippet>664</a>    }
+<a href=#665 id=665 data-nosnippet>665</a>
+<a href=#666 id=666 data-nosnippet>666</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>reserve(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module: <span class="kw-2">&amp;</span>Module) {
+<a href=#667 id=667 data-nosnippet>667</a>        <span class="kw">let </span>raw = module.compiled_module().module();
+<a href=#668 id=668 data-nosnippet>668</a>        <span class="self">self</span>.functions.reserve(raw.num_imported_funcs);
+<a href=#669 id=669 data-nosnippet>669</a>        <span class="self">self</span>.tables.reserve(raw.num_imported_tables);
+<a href=#670 id=670 data-nosnippet>670</a>        <span class="self">self</span>.memories.reserve(raw.num_imported_memories);
+<a href=#671 id=671 data-nosnippet>671</a>        <span class="self">self</span>.globals.reserve(raw.num_imported_globals);
+<a href=#672 id=672 data-nosnippet>672</a>    }
+<a href=#673 id=673 data-nosnippet>673</a>
+<a href=#674 id=674 data-nosnippet>674</a>    <span class="attr">#[cfg(feature = <span class="string">"component-model"</span>)]
+<a href=#675 id=675 data-nosnippet>675</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#676 id=676 data-nosnippet>676</a>        <span class="self">self</span>.functions.clear();
+<a href=#677 id=677 data-nosnippet>677</a>        <span class="self">self</span>.tables.clear();
+<a href=#678 id=678 data-nosnippet>678</a>        <span class="self">self</span>.memories.clear();
+<a href=#679 id=679 data-nosnippet>679</a>        <span class="self">self</span>.globals.clear();
+<a href=#680 id=680 data-nosnippet>680</a>    }
+<a href=#681 id=681 data-nosnippet>681</a>
+<a href=#682 id=682 data-nosnippet>682</a>    <span class="kw">fn </span>push(<span class="kw-2">&amp;mut </span><span class="self">self</span>, item: <span class="kw-2">&amp;</span>Extern, store: <span class="kw-2">&amp;mut </span>StoreOpaque, module: <span class="kw-2">&amp;</span>Module) {
+<a href=#683 id=683 data-nosnippet>683</a>        <span class="kw">match </span>item {
+<a href=#684 id=684 data-nosnippet>684</a>            Extern::Func(i) =&gt; {
+<a href=#685 id=685 data-nosnippet>685</a>                <span class="self">self</span>.functions.push(i.vmimport(store, module));
+<a href=#686 id=686 data-nosnippet>686</a>            }
+<a href=#687 id=687 data-nosnippet>687</a>            Extern::Global(i) =&gt; {
+<a href=#688 id=688 data-nosnippet>688</a>                <span class="self">self</span>.globals.push(i.vmimport(store));
+<a href=#689 id=689 data-nosnippet>689</a>            }
+<a href=#690 id=690 data-nosnippet>690</a>            Extern::Table(i) =&gt; {
+<a href=#691 id=691 data-nosnippet>691</a>                <span class="self">self</span>.tables.push(i.vmimport(store));
+<a href=#692 id=692 data-nosnippet>692</a>            }
+<a href=#693 id=693 data-nosnippet>693</a>            Extern::Memory(i) =&gt; {
+<a href=#694 id=694 data-nosnippet>694</a>                <span class="self">self</span>.memories.push(i.vmimport(store));
+<a href=#695 id=695 data-nosnippet>695</a>            }
+<a href=#696 id=696 data-nosnippet>696</a>            Extern::SharedMemory(i) =&gt; {
+<a href=#697 id=697 data-nosnippet>697</a>                <span class="self">self</span>.memories.push(i.vmimport(store));
+<a href=#698 id=698 data-nosnippet>698</a>            }
+<a href=#699 id=699 data-nosnippet>699</a>        }
+<a href=#700 id=700 data-nosnippet>700</a>    }
+<a href=#701 id=701 data-nosnippet>701</a>
+<a href=#702 id=702 data-nosnippet>702</a>    <span class="doccomment">/// Note that this is unsafe as the validity of `item` is not verified and
+<a href=#703 id=703 data-nosnippet>703</a>    /// it contains a bunch of raw pointers.
+<a href=#704 id=704 data-nosnippet>704</a>    </span><span class="attr">#[cfg(feature = <span class="string">"component-model"</span>)]
+<a href=#705 id=705 data-nosnippet>705</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>push_export(<span class="kw-2">&amp;mut </span><span class="self">self</span>, item: <span class="kw-2">&amp;</span><span class="kw">crate</span>::runtime::vm::Export) {
+<a href=#706 id=706 data-nosnippet>706</a>        <span class="kw">match </span>item {
+<a href=#707 id=707 data-nosnippet>707</a>            <span class="kw">crate</span>::runtime::vm::Export::Function(f) =&gt; {
+<a href=#708 id=708 data-nosnippet>708</a>                <span class="kw">let </span>f = f.func_ref.as_ref();
+<a href=#709 id=709 data-nosnippet>709</a>                <span class="self">self</span>.functions.push(VMFunctionImport {
+<a href=#710 id=710 data-nosnippet>710</a>                    wasm_call: f.wasm_call.unwrap(),
+<a href=#711 id=711 data-nosnippet>711</a>                    array_call: f.array_call,
+<a href=#712 id=712 data-nosnippet>712</a>                    vmctx: f.vmctx,
+<a href=#713 id=713 data-nosnippet>713</a>                });
+<a href=#714 id=714 data-nosnippet>714</a>            }
+<a href=#715 id=715 data-nosnippet>715</a>            <span class="kw">crate</span>::runtime::vm::Export::Global(g) =&gt; {
+<a href=#716 id=716 data-nosnippet>716</a>                <span class="self">self</span>.globals.push(VMGlobalImport { from: g.definition });
+<a href=#717 id=717 data-nosnippet>717</a>            }
+<a href=#718 id=718 data-nosnippet>718</a>            <span class="kw">crate</span>::runtime::vm::Export::Table(t) =&gt; {
+<a href=#719 id=719 data-nosnippet>719</a>                <span class="self">self</span>.tables.push(VMTableImport {
+<a href=#720 id=720 data-nosnippet>720</a>                    from: t.definition,
+<a href=#721 id=721 data-nosnippet>721</a>                    vmctx: t.vmctx,
+<a href=#722 id=722 data-nosnippet>722</a>                });
+<a href=#723 id=723 data-nosnippet>723</a>            }
+<a href=#724 id=724 data-nosnippet>724</a>            <span class="kw">crate</span>::runtime::vm::Export::Memory(m) =&gt; {
+<a href=#725 id=725 data-nosnippet>725</a>                <span class="self">self</span>.memories.push(VMMemoryImport {
+<a href=#726 id=726 data-nosnippet>726</a>                    from: m.definition,
+<a href=#727 id=727 data-nosnippet>727</a>                    vmctx: m.vmctx,
+<a href=#728 id=728 data-nosnippet>728</a>                    index: m.index,
+<a href=#729 id=729 data-nosnippet>729</a>                });
+<a href=#730 id=730 data-nosnippet>730</a>            }
+<a href=#731 id=731 data-nosnippet>731</a>        }
+<a href=#732 id=732 data-nosnippet>732</a>    }
+<a href=#733 id=733 data-nosnippet>733</a>
+<a href=#734 id=734 data-nosnippet>734</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Imports&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#735 id=735 data-nosnippet>735</a>        Imports {
+<a href=#736 id=736 data-nosnippet>736</a>            tables: <span class="self">self</span>.tables.values().as_slice(),
+<a href=#737 id=737 data-nosnippet>737</a>            globals: <span class="self">self</span>.globals.values().as_slice(),
+<a href=#738 id=738 data-nosnippet>738</a>            memories: <span class="self">self</span>.memories.values().as_slice(),
+<a href=#739 id=739 data-nosnippet>739</a>            functions: <span class="self">self</span>.functions.values().as_slice(),
+<a href=#740 id=740 data-nosnippet>740</a>        }
+<a href=#741 id=741 data-nosnippet>741</a>    }
+<a href=#742 id=742 data-nosnippet>742</a>}
+<a href=#743 id=743 data-nosnippet>743</a>
+<a href=#744 id=744 data-nosnippet>744</a><span class="doccomment">/// An instance, pre-instantiation, that is ready to be instantiated.
+<a href=#745 id=745 data-nosnippet>745</a>///
+<a href=#746 id=746 data-nosnippet>746</a>/// This structure represents an instance *just before* it was instantiated,
+<a href=#747 id=747 data-nosnippet>747</a>/// after all type-checking and imports have been resolved. The only thing left
+<a href=#748 id=748 data-nosnippet>748</a>/// to do for this instance is to actually run the process of instantiation.
+<a href=#749 id=749 data-nosnippet>749</a>///
+<a href=#750 id=750 data-nosnippet>750</a>/// Note that an `InstancePre` may not be tied to any particular [`Store`] if
+<a href=#751 id=751 data-nosnippet>751</a>/// none of the imports it closed over are tied to any particular [`Store`].
+<a href=#752 id=752 data-nosnippet>752</a>///
+<a href=#753 id=753 data-nosnippet>753</a>/// This structure is created through the [`Linker::instantiate_pre`] method,
+<a href=#754 id=754 data-nosnippet>754</a>/// which also has some more information and examples.
+<a href=#755 id=755 data-nosnippet>755</a>///
+<a href=#756 id=756 data-nosnippet>756</a>/// [`Store`]: crate::Store
+<a href=#757 id=757 data-nosnippet>757</a>/// [`Linker::instantiate_pre`]: crate::Linker::instantiate_pre
+<a href=#758 id=758 data-nosnippet>758</a></span><span class="kw">pub struct </span>InstancePre&lt;T&gt; {
+<a href=#759 id=759 data-nosnippet>759</a>    module: Module,
+<a href=#760 id=760 data-nosnippet>760</a>
+<a href=#761 id=761 data-nosnippet>761</a>    <span class="doccomment">/// The items which this `InstancePre` use to instantiate the `module`
+<a href=#762 id=762 data-nosnippet>762</a>    /// provided, passed to `Instance::new_started` after inserting them into a
+<a href=#763 id=763 data-nosnippet>763</a>    /// `Store`.
+<a href=#764 id=764 data-nosnippet>764</a>    ///
+<a href=#765 id=765 data-nosnippet>765</a>    /// Note that this is stored as an `Arc&lt;[T]&gt;` to quickly move a strong
+<a href=#766 id=766 data-nosnippet>766</a>    /// reference to everything internally into a `Store&lt;T&gt;` without having to
+<a href=#767 id=767 data-nosnippet>767</a>    /// clone each individual item.
+<a href=#768 id=768 data-nosnippet>768</a>    </span>items: Arc&lt;[Definition]&gt;,
+<a href=#769 id=769 data-nosnippet>769</a>
+<a href=#770 id=770 data-nosnippet>770</a>    <span class="doccomment">/// A count of `Definition::HostFunc` entries in `items` above to
+<a href=#771 id=771 data-nosnippet>771</a>    /// preallocate space in a `Store` up front for all entries to be inserted.
+<a href=#772 id=772 data-nosnippet>772</a>    </span>host_funcs: usize,
+<a href=#773 id=773 data-nosnippet>773</a>
+<a href=#774 id=774 data-nosnippet>774</a>    <span class="doccomment">/// The `VMFuncRef`s for the functions in `items` that do not
+<a href=#775 id=775 data-nosnippet>775</a>    /// have a `wasm_call` trampoline. We pre-allocate and pre-patch these
+<a href=#776 id=776 data-nosnippet>776</a>    /// `VMFuncRef`s so that we don't have to do it at
+<a href=#777 id=777 data-nosnippet>777</a>    /// instantiation time.
+<a href=#778 id=778 data-nosnippet>778</a>    ///
+<a href=#779 id=779 data-nosnippet>779</a>    /// This is an `Arc&lt;[T]&gt;` for the same reason as `items`.
+<a href=#780 id=780 data-nosnippet>780</a>    </span>func_refs: Arc&lt;[VMFuncRef]&gt;,
+<a href=#781 id=781 data-nosnippet>781</a>
+<a href=#782 id=782 data-nosnippet>782</a>    _marker: core::marker::PhantomData&lt;<span class="kw">fn</span>() -&gt; T&gt;,
+<a href=#783 id=783 data-nosnippet>783</a>}
+<a href=#784 id=784 data-nosnippet>784</a>
+<a href=#785 id=785 data-nosnippet>785</a><span class="doccomment">/// InstancePre's clone does not require T: Clone
+<a href=#786 id=786 data-nosnippet>786</a></span><span class="kw">impl</span>&lt;T&gt; Clone <span class="kw">for </span>InstancePre&lt;T&gt; {
+<a href=#787 id=787 data-nosnippet>787</a>    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#788 id=788 data-nosnippet>788</a>        <span class="self">Self </span>{
+<a href=#789 id=789 data-nosnippet>789</a>            module: <span class="self">self</span>.module.clone(),
+<a href=#790 id=790 data-nosnippet>790</a>            items: <span class="self">self</span>.items.clone(),
+<a href=#791 id=791 data-nosnippet>791</a>            host_funcs: <span class="self">self</span>.host_funcs,
+<a href=#792 id=792 data-nosnippet>792</a>            func_refs: <span class="self">self</span>.func_refs.clone(),
+<a href=#793 id=793 data-nosnippet>793</a>            _marker: <span class="self">self</span>._marker,
+<a href=#794 id=794 data-nosnippet>794</a>        }
+<a href=#795 id=795 data-nosnippet>795</a>    }
+<a href=#796 id=796 data-nosnippet>796</a>}
+<a href=#797 id=797 data-nosnippet>797</a>
+<a href=#798 id=798 data-nosnippet>798</a><span class="kw">impl</span>&lt;T&gt; InstancePre&lt;T&gt; {
+<a href=#799 id=799 data-nosnippet>799</a>    <span class="doccomment">/// Creates a new `InstancePre` which type-checks the `items` provided and
+<a href=#800 id=800 data-nosnippet>800</a>    /// on success is ready to instantiate a new instance.
+<a href=#801 id=801 data-nosnippet>801</a>    ///
+<a href=#802 id=802 data-nosnippet>802</a>    /// # Unsafety
+<a href=#803 id=803 data-nosnippet>803</a>    ///
+<a href=#804 id=804 data-nosnippet>804</a>    /// This method is unsafe as the `T` of the `InstancePre&lt;T&gt;` is not
+<a href=#805 id=805 data-nosnippet>805</a>    /// guaranteed to be the same as the `T` within the `Store`, the caller must
+<a href=#806 id=806 data-nosnippet>806</a>    /// verify that.
+<a href=#807 id=807 data-nosnippet>807</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe fn </span>new(module: <span class="kw-2">&amp;</span>Module, items: Vec&lt;Definition&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;InstancePre&lt;T&gt;&gt; {
+<a href=#808 id=808 data-nosnippet>808</a>        typecheck(module, <span class="kw-2">&amp;</span>items, |cx, ty, item| cx.definition(ty, <span class="kw-2">&amp;</span>item.ty()))<span class="question-mark">?</span>;
+<a href=#809 id=809 data-nosnippet>809</a>
+<a href=#810 id=810 data-nosnippet>810</a>        <span class="kw">let </span><span class="kw-2">mut </span>func_refs = <span class="macro">vec!</span>[];
+<a href=#811 id=811 data-nosnippet>811</a>        <span class="kw">let </span><span class="kw-2">mut </span>host_funcs = <span class="number">0</span>;
+<a href=#812 id=812 data-nosnippet>812</a>        <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">&amp;</span>items {
+<a href=#813 id=813 data-nosnippet>813</a>            <span class="kw">match </span>item {
+<a href=#814 id=814 data-nosnippet>814</a>                Definition::Extern(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {}
+<a href=#815 id=815 data-nosnippet>815</a>                Definition::HostFunc(f) =&gt; {
+<a href=#816 id=816 data-nosnippet>816</a>                    host_funcs += <span class="number">1</span>;
+<a href=#817 id=817 data-nosnippet>817</a>                    <span class="kw">if </span>f.func_ref().wasm_call.is_none() {
+<a href=#818 id=818 data-nosnippet>818</a>                        <span class="comment">// `f` needs its `VMFuncRef::wasm_call` patched with a
+<a href=#819 id=819 data-nosnippet>819</a>                        // Wasm-to-native trampoline.
+<a href=#820 id=820 data-nosnippet>820</a>                        </span><span class="macro">debug_assert!</span>(<span class="macro">matches!</span>(f.host_ctx(), <span class="kw">crate</span>::HostContext::Array(<span class="kw">_</span>)));
+<a href=#821 id=821 data-nosnippet>821</a>                        func_refs.push(VMFuncRef {
+<a href=#822 id=822 data-nosnippet>822</a>                            wasm_call: module.wasm_to_array_trampoline(f.sig_index()),
+<a href=#823 id=823 data-nosnippet>823</a>                            ..<span class="kw-2">*</span>f.func_ref()
+<a href=#824 id=824 data-nosnippet>824</a>                        });
+<a href=#825 id=825 data-nosnippet>825</a>                    }
+<a href=#826 id=826 data-nosnippet>826</a>                }
+<a href=#827 id=827 data-nosnippet>827</a>            }
+<a href=#828 id=828 data-nosnippet>828</a>        }
+<a href=#829 id=829 data-nosnippet>829</a>
+<a href=#830 id=830 data-nosnippet>830</a>        <span class="prelude-val">Ok</span>(InstancePre {
+<a href=#831 id=831 data-nosnippet>831</a>            module: module.clone(),
+<a href=#832 id=832 data-nosnippet>832</a>            items: items.into(),
+<a href=#833 id=833 data-nosnippet>833</a>            host_funcs,
+<a href=#834 id=834 data-nosnippet>834</a>            func_refs: func_refs.into(),
+<a href=#835 id=835 data-nosnippet>835</a>            _marker: core::marker::PhantomData,
+<a href=#836 id=836 data-nosnippet>836</a>        })
+<a href=#837 id=837 data-nosnippet>837</a>    }
+<a href=#838 id=838 data-nosnippet>838</a>
+<a href=#839 id=839 data-nosnippet>839</a>    <span class="doccomment">/// Returns a reference to the module that this [`InstancePre`] will be
+<a href=#840 id=840 data-nosnippet>840</a>    /// instantiating.
+<a href=#841 id=841 data-nosnippet>841</a>    </span><span class="kw">pub fn </span>module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Module {
+<a href=#842 id=842 data-nosnippet>842</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.module
+<a href=#843 id=843 data-nosnippet>843</a>    }
+<a href=#844 id=844 data-nosnippet>844</a>
+<a href=#845 id=845 data-nosnippet>845</a>    <span class="doccomment">/// Instantiates this instance, creating a new instance within the provided
+<a href=#846 id=846 data-nosnippet>846</a>    /// `store`.
+<a href=#847 id=847 data-nosnippet>847</a>    ///
+<a href=#848 id=848 data-nosnippet>848</a>    /// This function will run the actual process of instantiation to
+<a href=#849 id=849 data-nosnippet>849</a>    /// completion. This will use all of the previously-closed-over items as
+<a href=#850 id=850 data-nosnippet>850</a>    /// imports to instantiate the module that this was originally created with.
+<a href=#851 id=851 data-nosnippet>851</a>    ///
+<a href=#852 id=852 data-nosnippet>852</a>    /// For more information about instantiation see [`Instance::new`].
+<a href=#853 id=853 data-nosnippet>853</a>    ///
+<a href=#854 id=854 data-nosnippet>854</a>    /// # Panics
+<a href=#855 id=855 data-nosnippet>855</a>    ///
+<a href=#856 id=856 data-nosnippet>856</a>    /// Panics if any import closed over by this [`InstancePre`] isn't owned by
+<a href=#857 id=857 data-nosnippet>857</a>    /// `store`, or if `store` has async support enabled. Additionally this
+<a href=#858 id=858 data-nosnippet>858</a>    /// function will panic if the `store` provided comes from a different
+<a href=#859 id=859 data-nosnippet>859</a>    /// [`Engine`] than the [`InstancePre`] originally came from.
+<a href=#860 id=860 data-nosnippet>860</a>    </span><span class="kw">pub fn </span>instantiate(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>store: <span class="kw">impl </span>AsContextMut&lt;Data = T&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Instance&gt; {
+<a href=#861 id=861 data-nosnippet>861</a>        <span class="kw">let </span><span class="kw-2">mut </span>store = store.as_context_mut();
+<a href=#862 id=862 data-nosnippet>862</a>        <span class="kw">let </span>imports = pre_instantiate_raw(
+<a href=#863 id=863 data-nosnippet>863</a>            <span class="kw-2">&amp;mut </span>store.<span class="number">0</span>,
+<a href=#864 id=864 data-nosnippet>864</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.module,
+<a href=#865 id=865 data-nosnippet>865</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.items,
+<a href=#866 id=866 data-nosnippet>866</a>            <span class="self">self</span>.host_funcs,
+<a href=#867 id=867 data-nosnippet>867</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.func_refs,
+<a href=#868 id=868 data-nosnippet>868</a>        )<span class="question-mark">?</span>;
+<a href=#869 id=869 data-nosnippet>869</a>
+<a href=#870 id=870 data-nosnippet>870</a>        <span class="comment">// This unsafety should be handled by the type-checking performed by the
+<a href=#871 id=871 data-nosnippet>871</a>        // constructor of `InstancePre` to assert that all the imports we're passing
+<a href=#872 id=872 data-nosnippet>872</a>        // in match the module we're instantiating.
+<a href=#873 id=873 data-nosnippet>873</a>        </span><span class="kw">unsafe </span>{ Instance::new_started(<span class="kw-2">&amp;mut </span>store, <span class="kw-2">&amp;</span><span class="self">self</span>.module, imports.as_ref()) }
+<a href=#874 id=874 data-nosnippet>874</a>    }
+<a href=#875 id=875 data-nosnippet>875</a>
+<a href=#876 id=876 data-nosnippet>876</a>    <span class="doccomment">/// Creates a new instance, running the start function asynchronously
+<a href=#877 id=877 data-nosnippet>877</a>    /// instead of inline.
+<a href=#878 id=878 data-nosnippet>878</a>    ///
+<a href=#879 id=879 data-nosnippet>879</a>    /// For more information about asynchronous instantiation see the
+<a href=#880 id=880 data-nosnippet>880</a>    /// documentation on [`Instance::new_async`].
+<a href=#881 id=881 data-nosnippet>881</a>    ///
+<a href=#882 id=882 data-nosnippet>882</a>    /// # Panics
+<a href=#883 id=883 data-nosnippet>883</a>    ///
+<a href=#884 id=884 data-nosnippet>884</a>    /// Panics if any import closed over by this [`InstancePre`] isn't owned by
+<a href=#885 id=885 data-nosnippet>885</a>    /// `store`, or if `store` does not have async support enabled.
+<a href=#886 id=886 data-nosnippet>886</a>    </span><span class="attr">#[cfg(feature = <span class="string">"async"</span>)]
+<a href=#887 id=887 data-nosnippet>887</a>    </span><span class="kw">pub async fn </span>instantiate_async(
+<a href=#888 id=888 data-nosnippet>888</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw-2">mut </span>store: <span class="kw">impl </span>AsContextMut&lt;Data = T&gt;,
+<a href=#890 id=890 data-nosnippet>890</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Instance&gt;
+<a href=#891 id=891 data-nosnippet>891</a>    <span class="kw">where
+<a href=#892 id=892 data-nosnippet>892</a>        </span>T: Send,
+<a href=#893 id=893 data-nosnippet>893</a>    {
+<a href=#894 id=894 data-nosnippet>894</a>        <span class="kw">let </span><span class="kw-2">mut </span>store = store.as_context_mut();
+<a href=#895 id=895 data-nosnippet>895</a>        <span class="kw">let </span>imports = pre_instantiate_raw(
+<a href=#896 id=896 data-nosnippet>896</a>            <span class="kw-2">&amp;mut </span>store.<span class="number">0</span>,
+<a href=#897 id=897 data-nosnippet>897</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.module,
+<a href=#898 id=898 data-nosnippet>898</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.items,
+<a href=#899 id=899 data-nosnippet>899</a>            <span class="self">self</span>.host_funcs,
+<a href=#900 id=900 data-nosnippet>900</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.func_refs,
+<a href=#901 id=901 data-nosnippet>901</a>        )<span class="question-mark">?</span>;
+<a href=#902 id=902 data-nosnippet>902</a>
+<a href=#903 id=903 data-nosnippet>903</a>        <span class="comment">// This unsafety should be handled by the type-checking performed by the
+<a href=#904 id=904 data-nosnippet>904</a>        // constructor of `InstancePre` to assert that all the imports we're passing
+<a href=#905 id=905 data-nosnippet>905</a>        // in match the module we're instantiating.
+<a href=#906 id=906 data-nosnippet>906</a>        </span><span class="kw">unsafe </span>{ Instance::new_started_async(<span class="kw-2">&amp;mut </span>store, <span class="kw-2">&amp;</span><span class="self">self</span>.module, imports.as_ref()).<span class="kw">await </span>}
+<a href=#907 id=907 data-nosnippet>907</a>    }
+<a href=#908 id=908 data-nosnippet>908</a>}
+<a href=#909 id=909 data-nosnippet>909</a>
+<a href=#910 id=910 data-nosnippet>910</a><span class="doccomment">/// Helper function shared between
+<a href=#911 id=911 data-nosnippet>911</a>/// `InstancePre::{instantiate,instantiate_async}`
+<a href=#912 id=912 data-nosnippet>912</a>///
+<a href=#913 id=913 data-nosnippet>913</a>/// This is an out-of-line function to avoid the generic on `InstancePre` and
+<a href=#914 id=914 data-nosnippet>914</a>/// get this compiled into the `wasmtime` crate to avoid having it monomorphized
+<a href=#915 id=915 data-nosnippet>915</a>/// elsewhere.
+<a href=#916 id=916 data-nosnippet>916</a></span><span class="kw">fn </span>pre_instantiate_raw(
+<a href=#917 id=917 data-nosnippet>917</a>    store: <span class="kw-2">&amp;mut </span>StoreOpaque,
+<a href=#918 id=918 data-nosnippet>918</a>    module: <span class="kw-2">&amp;</span>Module,
+<a href=#919 id=919 data-nosnippet>919</a>    items: <span class="kw-2">&amp;</span>Arc&lt;[Definition]&gt;,
+<a href=#920 id=920 data-nosnippet>920</a>    host_funcs: usize,
+<a href=#921 id=921 data-nosnippet>921</a>    func_refs: <span class="kw-2">&amp;</span>Arc&lt;[VMFuncRef]&gt;,
+<a href=#922 id=922 data-nosnippet>922</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OwnedImports&gt; {
+<a href=#923 id=923 data-nosnippet>923</a>    <span class="kw">if </span>host_funcs &gt; <span class="number">0 </span>{
+<a href=#924 id=924 data-nosnippet>924</a>        <span class="comment">// Any linker-defined function of the `Definition::HostFunc` variant
+<a href=#925 id=925 data-nosnippet>925</a>        // will insert a function into the store automatically as part of
+<a href=#926 id=926 data-nosnippet>926</a>        // instantiation, so reserve space here to make insertion more efficient
+<a href=#927 id=927 data-nosnippet>927</a>        // as it won't have to realloc during the instantiation.
+<a href=#928 id=928 data-nosnippet>928</a>        </span>store.store_data_mut().reserve_funcs(host_funcs);
+<a href=#929 id=929 data-nosnippet>929</a>
+<a href=#930 id=930 data-nosnippet>930</a>        <span class="comment">// The usage of `to_extern_store_rooted` requires that the items are
+<a href=#931 id=931 data-nosnippet>931</a>        // rooted via another means, which happens here by cloning the list of
+<a href=#932 id=932 data-nosnippet>932</a>        // items into the store once. This avoids cloning each individual item
+<a href=#933 id=933 data-nosnippet>933</a>        // below.
+<a href=#934 id=934 data-nosnippet>934</a>        </span>store.push_rooted_funcs(items.clone());
+<a href=#935 id=935 data-nosnippet>935</a>        store.push_instance_pre_func_refs(func_refs.clone());
+<a href=#936 id=936 data-nosnippet>936</a>    }
+<a href=#937 id=937 data-nosnippet>937</a>
+<a href=#938 id=938 data-nosnippet>938</a>    <span class="kw">let </span><span class="kw-2">mut </span>func_refs = func_refs.iter().map(|f| NonNull::from(f));
+<a href=#939 id=939 data-nosnippet>939</a>    <span class="kw">let </span><span class="kw-2">mut </span>imports = OwnedImports::new(module);
+<a href=#940 id=940 data-nosnippet>940</a>    <span class="kw">for </span>import <span class="kw">in </span>items.iter() {
+<a href=#941 id=941 data-nosnippet>941</a>        <span class="kw">if </span>!import.comes_from_same_store(store) {
+<a href=#942 id=942 data-nosnippet>942</a>            <span class="macro">bail!</span>(<span class="string">"cross-`Store` instantiation is not currently supported"</span>);
+<a href=#943 id=943 data-nosnippet>943</a>        }
+<a href=#944 id=944 data-nosnippet>944</a>        <span class="comment">// This unsafety should be encapsulated in the constructor of
+<a href=#945 id=945 data-nosnippet>945</a>        // `InstancePre` where the `T` of the original item should match the
+<a href=#946 id=946 data-nosnippet>946</a>        // `T` of the store. Additionally the rooting necessary has happened
+<a href=#947 id=947 data-nosnippet>947</a>        // above.
+<a href=#948 id=948 data-nosnippet>948</a>        </span><span class="kw">let </span>item = <span class="kw">match </span>import {
+<a href=#949 id=949 data-nosnippet>949</a>            Definition::Extern(e, <span class="kw">_</span>) =&gt; e.clone(),
+<a href=#950 id=950 data-nosnippet>950</a>            Definition::HostFunc(func) =&gt; <span class="kw">unsafe </span>{
+<a href=#951 id=951 data-nosnippet>951</a>                func.to_func_store_rooted(
+<a href=#952 id=952 data-nosnippet>952</a>                    store,
+<a href=#953 id=953 data-nosnippet>953</a>                    <span class="kw">if </span>func.func_ref().wasm_call.is_none() {
+<a href=#954 id=954 data-nosnippet>954</a>                        <span class="prelude-val">Some</span>(func_refs.next().unwrap())
+<a href=#955 id=955 data-nosnippet>955</a>                    } <span class="kw">else </span>{
+<a href=#956 id=956 data-nosnippet>956</a>                        <span class="prelude-val">None
+<a href=#957 id=957 data-nosnippet>957</a>                    </span>},
+<a href=#958 id=958 data-nosnippet>958</a>                )
+<a href=#959 id=959 data-nosnippet>959</a>                .into()
+<a href=#960 id=960 data-nosnippet>960</a>            },
+<a href=#961 id=961 data-nosnippet>961</a>        };
+<a href=#962 id=962 data-nosnippet>962</a>        imports.push(<span class="kw-2">&amp;</span>item, store, module);
+<a href=#963 id=963 data-nosnippet>963</a>    }
+<a href=#964 id=964 data-nosnippet>964</a>
+<a href=#965 id=965 data-nosnippet>965</a>    <span class="prelude-val">Ok</span>(imports)
+<a href=#966 id=966 data-nosnippet>966</a>}
+<a href=#967 id=967 data-nosnippet>967</a>
+<a href=#968 id=968 data-nosnippet>968</a><span class="kw">fn </span>typecheck&lt;I&gt;(
+<a href=#969 id=969 data-nosnippet>969</a>    module: <span class="kw-2">&amp;</span>Module,
+<a href=#970 id=970 data-nosnippet>970</a>    import_args: <span class="kw-2">&amp;</span>[I],
+<a href=#971 id=971 data-nosnippet>971</a>    check: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>matching::MatchCx&lt;<span class="lifetime">'_</span>&gt;, <span class="kw-2">&amp;</span>EntityType, <span class="kw-2">&amp;</span>I) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;,
+<a href=#972 id=972 data-nosnippet>972</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#973 id=973 data-nosnippet>973</a>    <span class="kw">let </span>env_module = module.compiled_module().module();
+<a href=#974 id=974 data-nosnippet>974</a>    <span class="kw">let </span>expected_len = env_module.imports().count();
+<a href=#975 id=975 data-nosnippet>975</a>    <span class="kw">let </span>actual_len = import_args.len();
+<a href=#976 id=976 data-nosnippet>976</a>    <span class="kw">if </span>expected_len != actual_len {
+<a href=#977 id=977 data-nosnippet>977</a>        <span class="macro">bail!</span>(<span class="string">"expected {expected_len} imports, found {actual_len}"</span>);
+<a href=#978 id=978 data-nosnippet>978</a>    }
+<a href=#979 id=979 data-nosnippet>979</a>    <span class="kw">let </span>cx = matching::MatchCx::new(module.engine());
+<a href=#980 id=980 data-nosnippet>980</a>    <span class="kw">for </span>((name, field, <span class="kw-2">mut </span>expected_ty), actual) <span class="kw">in </span>env_module.imports().zip(import_args) {
+<a href=#981 id=981 data-nosnippet>981</a>        expected_ty.canonicalize_for_runtime_usage(<span class="kw-2">&amp;mut </span>|module_index| {
+<a href=#982 id=982 data-nosnippet>982</a>            module.signatures().shared_type(module_index).unwrap()
+<a href=#983 id=983 data-nosnippet>983</a>        });
+<a href=#984 id=984 data-nosnippet>984</a>
+<a href=#985 id=985 data-nosnippet>985</a>        check(<span class="kw-2">&amp;</span>cx, <span class="kw-2">&amp;</span>expected_ty, actual)
+<a href=#986 id=986 data-nosnippet>986</a>            .with_context(|| <span class="macro">format!</span>(<span class="string">"incompatible import type for `{name}::{field}`"</span>))<span class="question-mark">?</span>;
+<a href=#987 id=987 data-nosnippet>987</a>    }
+<a href=#988 id=988 data-nosnippet>988</a>    <span class="prelude-val">Ok</span>(())
+<a href=#989 id=989 data-nosnippet>989</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wasmer_derive", 0, "")

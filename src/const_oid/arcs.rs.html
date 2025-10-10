@@ -1,0 +1,170 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/const-oid-0.9.6/src/arcs.rs`."><title>arcs.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="const_oid" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">const_oid/</div>arcs.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Arcs are integer values which exist within an OID's hierarchy.
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use crate</span>::{Error, ObjectIdentifier, <span class="prelude-ty">Result</span>};
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>core::mem;
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a><span class="doccomment">/// Type alias used to represent an "arc" (i.e. integer identifier value).
+<a href=#7 id=7 data-nosnippet>7</a>///
+<a href=#8 id=8 data-nosnippet>8</a>/// X.660 does not define a maximum size of an arc.
+<a href=#9 id=9 data-nosnippet>9</a>///
+<a href=#10 id=10 data-nosnippet>10</a>/// The current representation is `u32`, which has been selected as being
+<a href=#11 id=11 data-nosnippet>11</a>/// sufficient to cover the current PKCS/PKIX use cases this library has been
+<a href=#12 id=12 data-nosnippet>12</a>/// used in conjunction with.
+<a href=#13 id=13 data-nosnippet>13</a>///
+<a href=#14 id=14 data-nosnippet>14</a>/// Future versions may potentially make it larger if a sufficiently important
+<a href=#15 id=15 data-nosnippet>15</a>/// use case is discovered.
+<a href=#16 id=16 data-nosnippet>16</a></span><span class="kw">pub type </span>Arc = u32;
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a><span class="doccomment">/// Maximum value of the first arc in an OID.
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>ARC_MAX_FIRST: Arc = <span class="number">2</span>;
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a><span class="doccomment">/// Maximum value of the second arc in an OID.
+<a href=#22 id=22 data-nosnippet>22</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>ARC_MAX_SECOND: Arc = <span class="number">39</span>;
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// Maximum number of bytes supported in an arc.
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">const </span>ARC_MAX_BYTES: usize = mem::size_of::&lt;Arc&gt;();
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// Maximum value of the last byte in an arc.
+<a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">const </span>ARC_MAX_LAST_OCTET: u8 = <span class="number">0b11110000</span>; <span class="comment">// Max bytes of leading 1-bits
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a></span><span class="doccomment">/// [`Iterator`] over [`Arc`] values (a.k.a. nodes) in an [`ObjectIdentifier`].
+<a href=#31 id=31 data-nosnippet>31</a>///
+<a href=#32 id=32 data-nosnippet>32</a>/// This iterates over all arcs in an OID, including the root.
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">pub struct </span>Arcs&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="doccomment">/// OID we're iterating over
+<a href=#35 id=35 data-nosnippet>35</a>    </span>oid: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ObjectIdentifier,
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a>    <span class="doccomment">/// Current position within the serialized DER bytes of this OID
+<a href=#38 id=38 data-nosnippet>38</a>    </span>cursor: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#39 id=39 data-nosnippet>39</a>}
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Arcs&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="doccomment">/// Create a new iterator over the arcs of this OID
+<a href=#43 id=43 data-nosnippet>43</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(oid: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ObjectIdentifier) -&gt; <span class="self">Self </span>{
+<a href=#44 id=44 data-nosnippet>44</a>        <span class="self">Self </span>{ oid, cursor: <span class="prelude-val">None </span>}
+<a href=#45 id=45 data-nosnippet>45</a>    }
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a>    <span class="doccomment">/// Try to parse the next arc in this OID.
+<a href=#48 id=48 data-nosnippet>48</a>    ///
+<a href=#49 id=49 data-nosnippet>49</a>    /// This method is fallible so it can be used as a first pass to determine
+<a href=#50 id=50 data-nosnippet>50</a>    /// that the arcs in the OID are well-formed.
+<a href=#51 id=51 data-nosnippet>51</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>try_next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Arc&gt;&gt; {
+<a href=#52 id=52 data-nosnippet>52</a>        <span class="kw">match </span><span class="self">self</span>.cursor {
+<a href=#53 id=53 data-nosnippet>53</a>            <span class="comment">// Indicates we're on the root OID
+<a href=#54 id=54 data-nosnippet>54</a>            </span><span class="prelude-val">None </span>=&gt; {
+<a href=#55 id=55 data-nosnippet>55</a>                <span class="kw">let </span>root = RootArcs::try_from(<span class="self">self</span>.oid.as_bytes()[<span class="number">0</span>])<span class="question-mark">?</span>;
+<a href=#56 id=56 data-nosnippet>56</a>                <span class="self">self</span>.cursor = <span class="prelude-val">Some</span>(<span class="number">0</span>);
+<a href=#57 id=57 data-nosnippet>57</a>                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(root.first_arc()))
+<a href=#58 id=58 data-nosnippet>58</a>            }
+<a href=#59 id=59 data-nosnippet>59</a>            <span class="prelude-val">Some</span>(<span class="number">0</span>) =&gt; {
+<a href=#60 id=60 data-nosnippet>60</a>                <span class="kw">let </span>root = RootArcs::try_from(<span class="self">self</span>.oid.as_bytes()[<span class="number">0</span>])<span class="question-mark">?</span>;
+<a href=#61 id=61 data-nosnippet>61</a>                <span class="self">self</span>.cursor = <span class="prelude-val">Some</span>(<span class="number">1</span>);
+<a href=#62 id=62 data-nosnippet>62</a>                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(root.second_arc()))
+<a href=#63 id=63 data-nosnippet>63</a>            }
+<a href=#64 id=64 data-nosnippet>64</a>            <span class="prelude-val">Some</span>(offset) =&gt; {
+<a href=#65 id=65 data-nosnippet>65</a>                <span class="kw">let </span><span class="kw-2">mut </span>result = <span class="number">0</span>;
+<a href=#66 id=66 data-nosnippet>66</a>                <span class="kw">let </span><span class="kw-2">mut </span>arc_bytes = <span class="number">0</span>;
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>                <span class="kw">loop </span>{
+<a href=#69 id=69 data-nosnippet>69</a>                    <span class="kw">let </span>len = <span class="macro">checked_add!</span>(offset, arc_bytes);
+<a href=#70 id=70 data-nosnippet>70</a>
+<a href=#71 id=71 data-nosnippet>71</a>                    <span class="kw">match </span><span class="self">self</span>.oid.as_bytes().get(len).cloned() {
+<a href=#72 id=72 data-nosnippet>72</a>                        <span class="comment">// The arithmetic below includes advance checks
+<a href=#73 id=73 data-nosnippet>73</a>                        // against `ARC_MAX_BYTES` and `ARC_MAX_LAST_OCTET`
+<a href=#74 id=74 data-nosnippet>74</a>                        // which ensure the operations will not overflow.
+<a href=#75 id=75 data-nosnippet>75</a>                        </span><span class="attr">#[allow(clippy::integer_arithmetic)]
+<a href=#76 id=76 data-nosnippet>76</a>                        </span><span class="prelude-val">Some</span>(byte) =&gt; {
+<a href=#77 id=77 data-nosnippet>77</a>                            arc_bytes = <span class="macro">checked_add!</span>(arc_bytes, <span class="number">1</span>);
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a>                            <span class="kw">if </span>(arc_bytes &gt; ARC_MAX_BYTES) &amp;&amp; (byte &amp; ARC_MAX_LAST_OCTET != <span class="number">0</span>) {
+<a href=#80 id=80 data-nosnippet>80</a>                                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::ArcTooBig);
+<a href=#81 id=81 data-nosnippet>81</a>                            }
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a>                            result = result &lt;&lt; <span class="number">7 </span>| (byte &amp; <span class="number">0b1111111</span>) <span class="kw">as </span>Arc;
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>                            <span class="kw">if </span>byte &amp; <span class="number">0b10000000 </span>== <span class="number">0 </span>{
+<a href=#86 id=86 data-nosnippet>86</a>                                <span class="self">self</span>.cursor = <span class="prelude-val">Some</span>(<span class="macro">checked_add!</span>(offset, arc_bytes));
+<a href=#87 id=87 data-nosnippet>87</a>                                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(result));
+<a href=#88 id=88 data-nosnippet>88</a>                            }
+<a href=#89 id=89 data-nosnippet>89</a>                        }
+<a href=#90 id=90 data-nosnippet>90</a>                        <span class="prelude-val">None </span>=&gt; {
+<a href=#91 id=91 data-nosnippet>91</a>                            <span class="kw">if </span>arc_bytes == <span class="number">0 </span>{
+<a href=#92 id=92 data-nosnippet>92</a>                                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+<a href=#93 id=93 data-nosnippet>93</a>                            } <span class="kw">else </span>{
+<a href=#94 id=94 data-nosnippet>94</a>                                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::Base128);
+<a href=#95 id=95 data-nosnippet>95</a>                            }
+<a href=#96 id=96 data-nosnippet>96</a>                        }
+<a href=#97 id=97 data-nosnippet>97</a>                    }
+<a href=#98 id=98 data-nosnippet>98</a>                }
+<a href=#99 id=99 data-nosnippet>99</a>            }
+<a href=#100 id=100 data-nosnippet>100</a>        }
+<a href=#101 id=101 data-nosnippet>101</a>    }
+<a href=#102 id=102 data-nosnippet>102</a>}
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Iterator <span class="kw">for </span>Arcs&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">type </span>Item = Arc;
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&gt; {
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="comment">// ObjectIdentifier constructors should ensure the OID is well-formed
+<a href=#109 id=109 data-nosnippet>109</a>        </span><span class="self">self</span>.try_next().expect(<span class="string">"OID malformed"</span>)
+<a href=#110 id=110 data-nosnippet>110</a>    }
+<a href=#111 id=111 data-nosnippet>111</a>}
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a><span class="doccomment">/// Byte containing the first and second arcs of an OID.
+<a href=#114 id=114 data-nosnippet>114</a>///
+<a href=#115 id=115 data-nosnippet>115</a>/// This is represented this way in order to reduce the overall size of the
+<a href=#116 id=116 data-nosnippet>116</a>/// [`ObjectIdentifier`] struct.
+<a href=#117 id=117 data-nosnippet>117</a></span><span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+<a href=#118 id=118 data-nosnippet>118</a></span><span class="kw">struct </span>RootArcs(u8);
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a><span class="kw">impl </span>RootArcs {
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="doccomment">/// Create [`RootArcs`] from the first and second arc values represented
+<a href=#122 id=122 data-nosnippet>122</a>    /// as `Arc` integers.
+<a href=#123 id=123 data-nosnippet>123</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const fn </span>new(first_arc: Arc, second_arc: Arc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#124 id=124 data-nosnippet>124</a>        <span class="kw">if </span>first_arc &gt; ARC_MAX_FIRST {
+<a href=#125 id=125 data-nosnippet>125</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::ArcInvalid { arc: first_arc });
+<a href=#126 id=126 data-nosnippet>126</a>        }
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>        <span class="kw">if </span>second_arc &gt; ARC_MAX_SECOND {
+<a href=#129 id=129 data-nosnippet>129</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::ArcInvalid { arc: second_arc });
+<a href=#130 id=130 data-nosnippet>130</a>        }
+<a href=#131 id=131 data-nosnippet>131</a>
+<a href=#132 id=132 data-nosnippet>132</a>        <span class="comment">// The checks above ensure this operation will not overflow
+<a href=#133 id=133 data-nosnippet>133</a>        </span><span class="attr">#[allow(clippy::integer_arithmetic)]
+<a href=#134 id=134 data-nosnippet>134</a>        </span><span class="kw">let </span>byte = (first_arc * (ARC_MAX_SECOND + <span class="number">1</span>)) <span class="kw">as </span>u8 + second_arc <span class="kw">as </span>u8;
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(byte))
+<a href=#137 id=137 data-nosnippet>137</a>    }
+<a href=#138 id=138 data-nosnippet>138</a>
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="doccomment">/// Get the value of the first arc
+<a href=#140 id=140 data-nosnippet>140</a>    </span><span class="attr">#[allow(clippy::integer_arithmetic)]
+<a href=#141 id=141 data-nosnippet>141</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const fn </span>first_arc(<span class="self">self</span>) -&gt; Arc {
+<a href=#142 id=142 data-nosnippet>142</a>        <span class="self">self</span>.<span class="number">0 </span><span class="kw">as </span>Arc / (ARC_MAX_SECOND + <span class="number">1</span>)
+<a href=#143 id=143 data-nosnippet>143</a>    }
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="doccomment">/// Get the value of the second arc
+<a href=#146 id=146 data-nosnippet>146</a>    </span><span class="attr">#[allow(clippy::integer_arithmetic)]
+<a href=#147 id=147 data-nosnippet>147</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const fn </span>second_arc(<span class="self">self</span>) -&gt; Arc {
+<a href=#148 id=148 data-nosnippet>148</a>        <span class="self">self</span>.<span class="number">0 </span><span class="kw">as </span>Arc % (ARC_MAX_SECOND + <span class="number">1</span>)
+<a href=#149 id=149 data-nosnippet>149</a>    }
+<a href=#150 id=150 data-nosnippet>150</a>}
+<a href=#151 id=151 data-nosnippet>151</a>
+<a href=#152 id=152 data-nosnippet>152</a><span class="kw">impl </span>TryFrom&lt;u8&gt; <span class="kw">for </span>RootArcs {
+<a href=#153 id=153 data-nosnippet>153</a>    <span class="kw">type </span>Error = Error;
+<a href=#154 id=154 data-nosnippet>154</a>
+<a href=#155 id=155 data-nosnippet>155</a>    <span class="comment">// Ensured not to overflow by constructor invariants
+<a href=#156 id=156 data-nosnippet>156</a>    </span><span class="attr">#[allow(clippy::integer_arithmetic)]
+<a href=#157 id=157 data-nosnippet>157</a>    </span><span class="kw">fn </span>try_from(octet: u8) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#158 id=158 data-nosnippet>158</a>        <span class="kw">let </span>first = octet <span class="kw">as </span>Arc / (ARC_MAX_SECOND + <span class="number">1</span>);
+<a href=#159 id=159 data-nosnippet>159</a>        <span class="kw">let </span>second = octet <span class="kw">as </span>Arc % (ARC_MAX_SECOND + <span class="number">1</span>);
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="kw">let </span>result = <span class="self">Self</span>::new(first, second)<span class="question-mark">?</span>;
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="macro">debug_assert_eq!</span>(octet, result.<span class="number">0</span>);
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="prelude-val">Ok</span>(result)
+<a href=#163 id=163 data-nosnippet>163</a>    }
+<a href=#164 id=164 data-nosnippet>164</a>}
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a><span class="kw">impl </span>From&lt;RootArcs&gt; <span class="kw">for </span>u8 {
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">fn </span>from(root_arcs: RootArcs) -&gt; u8 {
+<a href=#168 id=168 data-nosnippet>168</a>        root_arcs.<span class="number">0
+<a href=#169 id=169 data-nosnippet>169</a>    </span>}
+<a href=#170 id=170 data-nosnippet>170</a>}</code></pre></div></section></main></body></html>

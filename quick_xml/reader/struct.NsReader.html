@@ -1,0 +1,627 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A low level encoding-agnostic XML event reader that performs namespace resolution."><title>NsReader in quick_xml::reader - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="quick_xml" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../quick_xml/index.html">quick_<wbr>xml</a><span class="version">0.37.5</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">NsReader</a></h2><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.config" title="config">config</a></li><li><a href="#method.config_mut" title="config_mut">config_mut</a></li><li><a href="#method.from_file" title="from_file">from_file</a></li><li><a href="#method.from_reader" title="from_reader">from_reader</a></li><li><a href="#method.from_str" title="from_str">from_str</a></li><li><a href="#method.get_mut" title="get_mut">get_mut</a></li><li><a href="#method.into_inner" title="into_inner">into_inner</a></li><li><a href="#method.prefixes" title="prefixes">prefixes</a></li><li><a href="#method.read_event" title="read_event">read_event</a></li><li><a href="#method.read_event_into" title="read_event_into">read_event_into</a></li><li><a href="#method.read_resolved_event" title="read_resolved_event">read_resolved_event</a></li><li><a href="#method.read_resolved_event_into" title="read_resolved_event_into">read_resolved_event_into</a></li><li><a href="#method.read_text" title="read_text">read_text</a></li><li><a href="#method.read_to_end" title="read_to_end">read_to_end</a></li><li><a href="#method.read_to_end_into" title="read_to_end_into">read_to_end_into</a></li><li><a href="#method.resolve" title="resolve">resolve</a></li><li><a href="#method.resolve_attribute" title="resolve_attribute">resolve_attribute</a></li><li><a href="#method.resolve_element" title="resolve_element">resolve_element</a></li></ul><h3><a href="#deref-methods-Reader%3CR%3E">Methods from Deref&lt;<wbr>Target=<wbr>Reader&lt;<wbr>R&gt;&gt;</a></h3><ul class="block deref-methods"><li><a href="#method.buffer_position" title="buffer_position">buffer_position</a></li><li><a href="#method.config-1" title="config">config</a></li><li><a href="#method.decoder" title="decoder">decoder</a></li><li><a href="#method.error_position" title="error_position">error_position</a></li><li><a href="#method.get_ref" title="get_ref">get_ref</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-NsReader%3CR%3E" title="Clone">Clone</a></li><li><a href="#impl-Debug-for-NsReader%3CR%3E" title="Debug">Debug</a></li><li><a href="#impl-Deref-for-NsReader%3CR%3E" title="Deref">Deref</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-NsReader%3CR%3E" title="Freeze">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-NsReader%3CR%3E" title="RefUnwindSafe">RefUnwindSafe</a></li><li><a href="#impl-Send-for-NsReader%3CR%3E" title="Send">Send</a></li><li><a href="#impl-Sync-for-NsReader%3CR%3E" title="Sync">Sync</a></li><li><a href="#impl-Unpin-for-NsReader%3CR%3E" title="Unpin">Unpin</a></li><li><a href="#impl-UnwindSafe-for-NsReader%3CR%3E" title="UnwindSafe">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T" title="Any">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T" title="Borrow&#60;T&#62;">Borrow&#60;T&#62;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T" title="BorrowMut&#60;T&#62;">BorrowMut&#60;T&#62;</a></li><li><a href="#impl-CloneToUninit-for-T" title="CloneToUninit">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T" title="From&#60;T&#62;">From&#60;T&#62;</a></li><li><a href="#impl-Into%3CU%3E-for-T" title="Into&#60;U&#62;">Into&#60;U&#62;</a></li><li><a href="#impl-Receiver-for-P" title="Receiver">Receiver</a></li><li><a href="#impl-ToOwned-for-T" title="ToOwned">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T" title="TryFrom&#60;U&#62;">TryFrom&#60;U&#62;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T" title="TryInto&#60;U&#62;">TryInto&#60;U&#62;</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In quick_<wbr>xml::<wbr>reader</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">quick_xml</a>::<wbr><a href="index.html">reader</a></div><h1>Struct <span class="struct">NsReader</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/quick_xml/reader/ns_reader.rs.html#22-31">Source</a> </span></div><pre class="rust item-decl"><code>pub struct NsReader&lt;R&gt; { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A low level encoding-agnostic XML event reader that performs namespace resolution.</p>
+<p>Consumes a <a href="https://doc.rust-lang.org/1.86.0/std/io/trait.BufRead.html" title="trait std::io::BufRead"><code>BufRead</code></a> and streams XML <code>Event</code>s.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-NsReader%3CR%3E" class="impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#34-136">Source</a><a href="#impl-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;</h3><div class="docblock"><p>Builder methods</p>
+</div></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from_reader" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#37-39">Source</a><h4 class="code-header">pub fn <a href="#method.from_reader" class="fn">from_reader</a>(reader: R) -&gt; Self</h4></section></summary><div class="docblock"><p>Creates a <code>NsReader</code> that reads from a reader.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.config" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#43-45">Source</a><h4 class="code-header">pub const fn <a href="#method.config" class="fn">config</a>(&amp;self) -&gt; &amp;<a class="struct" href="struct.Config.html" title="struct quick_xml::reader::Config">Config</a></h4></section></summary><div class="docblock"><p>Returns reference to the parser configuration</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.config_mut" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#49-51">Source</a><h4 class="code-header">pub fn <a href="#method.config_mut" class="fn">config_mut</a>(&amp;mut self) -&gt; &amp;mut <a class="struct" href="struct.Config.html" title="struct quick_xml::reader::Config">Config</a></h4></section></summary><div class="docblock"><p>Returns mutable reference to the parser configuration</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.prefixes" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#133-135">Source</a><h4 class="code-header">pub const fn <a href="#method.prefixes" class="fn">prefixes</a>(&amp;self) -&gt; <a class="struct" href="../name/struct.PrefixIter.html" title="struct quick_xml::name::PrefixIter">PrefixIter</a>&lt;'_&gt; <a href="#" class="tooltip" data-notable-ty="PrefixIter&lt;&#39;_&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns all the prefixes currently declared except the default <code>xml</code> and <code>xmlns</code> namespaces.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<p>This example shows what results the returned iterator would return after
+reading each event of a simple XML.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::name::{Namespace, PrefixDeclaration};
+<span class="kw">use </span>quick_xml::NsReader;
+
+<span class="kw">let </span>src = <span class="string">"&lt;root&gt;
+  &lt;a xmlns=\"a1\" xmlns:a=\"a2\"&gt;
+    &lt;b xmlns=\"b1\" xmlns:b=\"b2\"&gt;
+      &lt;c/&gt;
+    &lt;/b&gt;
+    &lt;d/&gt;
+  &lt;/a&gt;
+&lt;/root&gt;"</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(src);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+<span class="comment">// No prefixes at the beginning
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[]);
+
+reader.read_resolved_event()<span class="question-mark">?</span>; <span class="comment">// &lt;root&gt;
+// No prefixes declared on root
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[]);
+
+reader.read_resolved_event()<span class="question-mark">?</span>; <span class="comment">// &lt;a&gt;
+// Two prefixes declared on "a"
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[
+    (PrefixDeclaration::Default, Namespace(<span class="string">b"a1"</span>)),
+    (PrefixDeclaration::Named(<span class="string">b"a"</span>), Namespace(<span class="string">b"a2"</span>))
+]);
+
+reader.read_resolved_event()<span class="question-mark">?</span>; <span class="comment">// &lt;b&gt;
+// The default prefix got overridden and new "b" prefix
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[
+    (PrefixDeclaration::Named(<span class="string">b"a"</span>), Namespace(<span class="string">b"a2"</span>)),
+    (PrefixDeclaration::Default, Namespace(<span class="string">b"b1"</span>)),
+    (PrefixDeclaration::Named(<span class="string">b"b"</span>), Namespace(<span class="string">b"b2"</span>))
+]);
+
+reader.read_resolved_event()<span class="question-mark">?</span>; <span class="comment">// &lt;c/&gt;
+// Still the same
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[
+    (PrefixDeclaration::Named(<span class="string">b"a"</span>), Namespace(<span class="string">b"a2"</span>)),
+    (PrefixDeclaration::Default, Namespace(<span class="string">b"b1"</span>)),
+    (PrefixDeclaration::Named(<span class="string">b"b"</span>), Namespace(<span class="string">b"b2"</span>))
+]);
+
+reader.read_resolved_event()<span class="question-mark">?</span>; <span class="comment">// &lt;/b&gt;
+// Still the same
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[
+    (PrefixDeclaration::Named(<span class="string">b"a"</span>), Namespace(<span class="string">b"a2"</span>)),
+    (PrefixDeclaration::Default, Namespace(<span class="string">b"b1"</span>)),
+    (PrefixDeclaration::Named(<span class="string">b"b"</span>), Namespace(<span class="string">b"b2"</span>))
+]);
+
+reader.read_resolved_event()<span class="question-mark">?</span>; <span class="comment">// &lt;d/&gt;
+// &lt;/b&gt; got closed so back to the prefixes declared on &lt;a&gt;
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[
+    (PrefixDeclaration::Default, Namespace(<span class="string">b"a1"</span>)),
+    (PrefixDeclaration::Named(<span class="string">b"a"</span>), Namespace(<span class="string">b"a2"</span>))
+]);
+
+reader.read_resolved_event()<span class="question-mark">?</span>; <span class="comment">// &lt;/a&gt;
+// Still the same
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[
+    (PrefixDeclaration::Default, Namespace(<span class="string">b"a1"</span>)),
+    (PrefixDeclaration::Named(<span class="string">b"a"</span>), Namespace(<span class="string">b"a2"</span>))
+]);
+
+reader.read_resolved_event()<span class="question-mark">?</span>; <span class="comment">// &lt;/root&gt;
+// &lt;a&gt; got closed
+</span><span class="macro">assert_eq!</span>(reader.prefixes().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[]);</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-NsReader%3CR%3E-1" class="impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#203-381">Source</a><a href="#impl-NsReader%3CR%3E-1" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;</h3><div class="docblock"><p>Getters</p>
+</div></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_inner" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#208-210">Source</a><h4 class="code-header">pub fn <a href="#method.into_inner" class="fn">into_inner</a>(self) -&gt; R</h4></section></summary><div class="docblock"><p>Consumes <code>NsReader</code> returning the underlying reader</p>
+<p>See the <a href="struct.Reader.html#method.into_inner" title="method quick_xml::reader::Reader::into_inner"><code>Reader::into_inner</code></a> for examples</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_mut" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#213-215">Source</a><h4 class="code-header">pub fn <a href="#method.get_mut" class="fn">get_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;mut R</a></h4></section></summary><div class="docblock"><p>Gets a mutable reference to the underlying reader.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.resolve" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#252-254">Source</a><h4 class="code-header">pub fn <a href="#method.resolve" class="fn">resolve</a>&lt;'n&gt;(
+    &amp;self,
+    name: <a class="struct" href="../name/struct.QName.html" title="struct quick_xml::name::QName">QName</a>&lt;'n&gt;,
+    attribute: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; (<a class="enum" href="../name/enum.ResolveResult.html" title="enum quick_xml::name::ResolveResult">ResolveResult</a>&lt;'_&gt;, <a class="struct" href="../name/struct.LocalName.html" title="struct quick_xml::name::LocalName">LocalName</a>&lt;'n&gt;)</h4></section></summary><div class="docblock"><p>Resolves a potentially qualified <strong>element name</strong> or <strong>attribute name</strong>
+into <em>(namespace name, local name)</em>.</p>
+<p><em>Qualified</em> names have the form <code>prefix:local-name</code> where the <code>prefix</code>
+is defined on any containing XML element via <code>xmlns:prefix="the:namespace:uri"</code>.
+The namespace prefix can be defined on the same element as the name in question.</p>
+<p>The method returns following results depending on the <code>name</code> shape,
+<code>attribute</code> flag and the presence of the default namespace:</p>
+<div><table><thead><tr><th>attribute</th><th><code>xmlns="..."</code></th><th>QName</th><th>ResolveResult</th><th>LocalName</th></tr></thead><tbody>
+<tr><td><code>true</code></td><td>Not defined</td><td><code>local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Unbound" title="variant quick_xml::name::ResolveResult::Unbound"><code>Unbound</code></a></td><td><code>local-name</code></td></tr>
+<tr><td><code>true</code></td><td>Defined</td><td><code>local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Unbound" title="variant quick_xml::name::ResolveResult::Unbound"><code>Unbound</code></a></td><td><code>local-name</code></td></tr>
+<tr><td><code>true</code></td><td><em>any</em></td><td><code>prefix:local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Bound" title="variant quick_xml::name::ResolveResult::Bound"><code>Bound</code></a> / <a href="../name/enum.ResolveResult.html#variant.Unknown" title="variant quick_xml::name::ResolveResult::Unknown"><code>Unknown</code></a></td><td><code>local-name</code></td></tr>
+<tr><td><code>false</code></td><td>Not defined</td><td><code>local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Unbound" title="variant quick_xml::name::ResolveResult::Unbound"><code>Unbound</code></a></td><td><code>local-name</code></td></tr>
+<tr><td><code>false</code></td><td>Defined</td><td><code>local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Bound" title="variant quick_xml::name::ResolveResult::Bound"><code>Bound</code></a> (default)</td><td><code>local-name</code></td></tr>
+<tr><td><code>false</code></td><td><em>any</em></td><td><code>prefix:local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Bound" title="variant quick_xml::name::ResolveResult::Bound"><code>Bound</code></a> / <a href="../name/enum.ResolveResult.html#variant.Unknown" title="variant quick_xml::name::ResolveResult::Unknown"><code>Unknown</code></a></td><td><code>local-name</code></td></tr>
+</tbody></table>
+</div>
+<p>If you want to clearly indicate that name that you resolve is an element
+or an attribute name, you could use <a href="struct.NsReader.html#method.resolve_attribute" title="method quick_xml::reader::NsReader::resolve_attribute"><code>resolve_attribute()</code></a> or <a href="struct.NsReader.html#method.resolve_element" title="method quick_xml::reader::NsReader::resolve_element"><code>resolve_element()</code></a>
+methods.</p>
+<h5 id="lifetimes"><a class="doc-anchor" href="#lifetimes">§</a>Lifetimes</h5>
+<ul>
+<li><code>'n</code>: lifetime of a name. Returned local name will be bound to the same
+lifetime as the name in question.</li>
+<li>returned namespace name will be bound to the reader itself</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.resolve_element" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#308-310">Source</a><h4 class="code-header">pub fn <a href="#method.resolve_element" class="fn">resolve_element</a>&lt;'n&gt;(
+    &amp;self,
+    name: <a class="struct" href="../name/struct.QName.html" title="struct quick_xml::name::QName">QName</a>&lt;'n&gt;,
+) -&gt; (<a class="enum" href="../name/enum.ResolveResult.html" title="enum quick_xml::name::ResolveResult">ResolveResult</a>&lt;'_&gt;, <a class="struct" href="../name/struct.LocalName.html" title="struct quick_xml::name::LocalName">LocalName</a>&lt;'n&gt;)</h4></section></summary><div class="docblock"><p>Resolves a potentially qualified <strong>element name</strong> into <em>(namespace name, local name)</em>.</p>
+<p><em>Qualified</em> element names have the form <code>prefix:local-name</code> where the
+<code>prefix</code> is defined on any containing XML element via <code>xmlns:prefix="the:namespace:uri"</code>.
+The namespace prefix can be defined on the same element as the element
+in question.</p>
+<p><em>Unqualified</em> elements inherits the current <em>default namespace</em>.</p>
+<p>The method returns following results depending on the <code>name</code> shape and
+the presence of the default namespace:</p>
+<div><table><thead><tr><th><code>xmlns="..."</code></th><th>QName</th><th>ResolveResult</th><th>LocalName</th></tr></thead><tbody>
+<tr><td>Not defined</td><td><code>local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Unbound" title="variant quick_xml::name::ResolveResult::Unbound"><code>Unbound</code></a></td><td><code>local-name</code></td></tr>
+<tr><td>Defined</td><td><code>local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Bound" title="variant quick_xml::name::ResolveResult::Bound"><code>Bound</code></a> (default)</td><td><code>local-name</code></td></tr>
+<tr><td><em>any</em></td><td><code>prefix:local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Bound" title="variant quick_xml::name::ResolveResult::Bound"><code>Bound</code></a> / <a href="../name/enum.ResolveResult.html#variant.Unknown" title="variant quick_xml::name::ResolveResult::Unknown"><code>Unknown</code></a></td><td><code>local-name</code></td></tr>
+</tbody></table>
+</div><h5 id="lifetimes-1"><a class="doc-anchor" href="#lifetimes-1">§</a>Lifetimes</h5>
+<ul>
+<li><code>'n</code>: lifetime of an element name. Returned local name will be bound
+to the same lifetime as the name in question.</li>
+<li>returned namespace name will be bound to the reader itself</li>
+</ul>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>This example shows how you can resolve qualified name into a namespace.
+Note, that in the code like this you do not need to do that manually,
+because the namespace resolution result returned by the <a href="struct.NsReader.html#method.read_resolved_event" title="method quick_xml::reader::NsReader::read_resolved_event"><code>read_resolved_event()</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::Event;
+<span class="kw">use </span>quick_xml::name::{Namespace, QName, ResolveResult::<span class="kw-2">*</span>};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">"&lt;tag xmlns='root namespace'/&gt;"</span>);
+
+<span class="kw">match </span>reader.read_event().unwrap() {
+    Event::Empty(e) =&gt; <span class="macro">assert_eq!</span>(
+        reader.resolve_element(e.name()),
+        (Bound(Namespace(<span class="string">b"root namespace"</span>)), QName(<span class="string">b"tag"</span>).into())
+    ),
+    <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.resolve_attribute" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#378-380">Source</a><h4 class="code-header">pub fn <a href="#method.resolve_attribute" class="fn">resolve_attribute</a>&lt;'n&gt;(
+    &amp;self,
+    name: <a class="struct" href="../name/struct.QName.html" title="struct quick_xml::name::QName">QName</a>&lt;'n&gt;,
+) -&gt; (<a class="enum" href="../name/enum.ResolveResult.html" title="enum quick_xml::name::ResolveResult">ResolveResult</a>&lt;'_&gt;, <a class="struct" href="../name/struct.LocalName.html" title="struct quick_xml::name::LocalName">LocalName</a>&lt;'n&gt;)</h4></section></summary><div class="docblock"><p>Resolves a potentially qualified <strong>attribute name</strong> into <em>(namespace name, local name)</em>.</p>
+<p><em>Qualified</em> attribute names have the form <code>prefix:local-name</code> where the
+<code>prefix</code> is defined on any containing XML element via <code>xmlns:prefix="the:namespace:uri"</code>.
+The namespace prefix can be defined on the same element as the attribute
+in question.</p>
+<p><em>Unqualified</em> attribute names do <em>not</em> inherit the current <em>default namespace</em>.</p>
+<p>The method returns following results depending on the <code>name</code> shape and
+the presence of the default namespace:</p>
+<div><table><thead><tr><th><code>xmlns="..."</code></th><th>QName</th><th>ResolveResult</th><th>LocalName</th></tr></thead><tbody>
+<tr><td>Not defined</td><td><code>local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Unbound" title="variant quick_xml::name::ResolveResult::Unbound"><code>Unbound</code></a></td><td><code>local-name</code></td></tr>
+<tr><td>Defined</td><td><code>local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Unbound" title="variant quick_xml::name::ResolveResult::Unbound"><code>Unbound</code></a></td><td><code>local-name</code></td></tr>
+<tr><td><em>any</em></td><td><code>prefix:local-name</code></td><td><a href="../name/enum.ResolveResult.html#variant.Bound" title="variant quick_xml::name::ResolveResult::Bound"><code>Bound</code></a> / <a href="../name/enum.ResolveResult.html#variant.Unknown" title="variant quick_xml::name::ResolveResult::Unknown"><code>Unknown</code></a></td><td><code>local-name</code></td></tr>
+</tbody></table>
+</div><h5 id="lifetimes-2"><a class="doc-anchor" href="#lifetimes-2">§</a>Lifetimes</h5>
+<ul>
+<li><code>'n</code>: lifetime of an attribute name. Returned local name will be bound
+to the same lifetime as the name in question.</li>
+<li>returned namespace name will be bound to the reader itself</li>
+</ul>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::Event;
+<span class="kw">use </span>quick_xml::name::{Namespace, QName, ResolveResult::<span class="kw-2">*</span>};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">"
+    &lt;tag one='1'
+         p:two='2'
+         xmlns='root namespace'
+         xmlns:p='other namespace'/&gt;
+"</span>);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+
+<span class="kw">match </span>reader.read_event().unwrap() {
+    Event::Empty(e) =&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>iter = e.attributes();
+
+        <span class="comment">// Unlike elements, attributes without explicit namespace
+        // not bound to any namespace
+        </span><span class="kw">let </span>one = iter.next().unwrap().unwrap();
+        <span class="macro">assert_eq!</span>(
+            reader.resolve_attribute(one.key),
+            (Unbound, QName(<span class="string">b"one"</span>).into())
+        );
+
+        <span class="kw">let </span>two = iter.next().unwrap().unwrap();
+        <span class="macro">assert_eq!</span>(
+            reader.resolve_attribute(two.key),
+            (Bound(Namespace(<span class="string">b"other namespace"</span>)), QName(<span class="string">b"two"</span>).into())
+        );
+    }
+    <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+}</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-NsReader%3CR%3E-2" class="impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#383-609">Source</a><a href="#impl-NsReader%3CR%3E-2" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/std/io/trait.BufRead.html" title="trait std::io::BufRead">BufRead</a>&gt; <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.read_event_into" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#437-439">Source</a><h4 class="code-header">pub fn <a href="#method.read_event_into" class="fn">read_event_into</a>&lt;'b&gt;(&amp;mut self, buf: &amp;'b mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="type" href="../errors/type.Result.html" title="type quick_xml::errors::Result">Result</a>&lt;<a class="enum" href="../events/enum.Event.html" title="enum quick_xml::events::Event">Event</a>&lt;'b&gt;&gt;</h4></section></summary><div class="docblock"><p>Reads the next event into given buffer.</p>
+<p>This method manages namespaces but doesn’t resolve them automatically.
+You should call <a href="struct.NsReader.html#method.resolve_element" title="method quick_xml::reader::NsReader::resolve_element"><code>resolve_element()</code></a> if you want to get a namespace.</p>
+<p>You also can use <a href="struct.NsReader.html#method.read_resolved_event_into" title="method quick_xml::reader::NsReader::read_resolved_event_into"><code>read_resolved_event_into()</code></a> instead if you want to resolve
+namespace as soon as you get an event.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::Event;
+<span class="kw">use </span>quick_xml::name::{Namespace, ResolveResult::<span class="kw-2">*</span>};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">r#"
+    &lt;x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test"&gt;
+       &lt;y:tag2&gt;&lt;!--Test comment--&gt;Test&lt;/y:tag2&gt;
+       &lt;y:tag2&gt;Test 2&lt;/y:tag2&gt;
+    &lt;/x:tag1&gt;
+"#</span>);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+
+<span class="kw">let </span><span class="kw-2">mut </span>count = <span class="number">0</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+<span class="kw">let </span><span class="kw-2">mut </span>txt = Vec::new();
+<span class="kw">loop </span>{
+    <span class="kw">match </span>reader.read_event_into(<span class="kw-2">&amp;mut </span>buf).unwrap() {
+        Event::Start(e) =&gt; {
+            count += <span class="number">1</span>;
+            <span class="kw">let </span>(ns, local) = reader.resolve_element(e.name());
+            <span class="kw">match </span>local.as_ref() {
+                <span class="string">b"tag1" </span>=&gt; <span class="macro">assert_eq!</span>(ns, Bound(Namespace(<span class="string">b"www.xxxx"</span>))),
+                <span class="string">b"tag2" </span>=&gt; <span class="macro">assert_eq!</span>(ns, Bound(Namespace(<span class="string">b"www.yyyy"</span>))),
+                <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+            }
+        }
+        Event::Text(e) =&gt; {
+            txt.push(e.unescape().unwrap().into_owned())
+        }
+        Event::Eof =&gt; <span class="kw">break</span>,
+        <span class="kw">_ </span>=&gt; (),
+    }
+    buf.clear();
+}
+<span class="macro">assert_eq!</span>(count, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(txt, <span class="macro">vec!</span>[<span class="string">"Test"</span>.to_string(), <span class="string">"Test 2"</span>.to_string()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_resolved_event_into" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#498-504">Source</a><h4 class="code-header">pub fn <a href="#method.read_resolved_event_into" class="fn">read_resolved_event_into</a>&lt;'b&gt;(
+    &amp;mut self,
+    buf: &amp;'b mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt;,
+) -&gt; <a class="type" href="../errors/type.Result.html" title="type quick_xml::errors::Result">Result</a>&lt;(<a class="enum" href="../name/enum.ResolveResult.html" title="enum quick_xml::name::ResolveResult">ResolveResult</a>&lt;'_&gt;, <a class="enum" href="../events/enum.Event.html" title="enum quick_xml::events::Event">Event</a>&lt;'b&gt;)&gt;</h4></section></summary><div class="docblock"><p>Reads the next event into given buffer and resolves its namespace (if applicable).</p>
+<p>Namespace is resolved only for <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a>, <a href="../events/enum.Event.html#variant.Empty" title="variant quick_xml::events::Event::Empty"><code>Empty</code></a> and <a href="../events/enum.Event.html#variant.End" title="variant quick_xml::events::Event::End"><code>End</code></a> events.
+For all other events the concept of namespace is not defined, so
+a <a href="../name/enum.ResolveResult.html#variant.Unbound" title="variant quick_xml::name::ResolveResult::Unbound"><code>ResolveResult::Unbound</code></a> is returned.</p>
+<p>If you are not interested in namespaces, you can use <a href="struct.NsReader.html#method.read_event_into" title="method quick_xml::reader::NsReader::read_event_into"><code>read_event_into()</code></a>
+which will not automatically resolve namespaces for you.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::Event;
+<span class="kw">use </span>quick_xml::name::{Namespace, QName, ResolveResult::<span class="kw-2">*</span>};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">r#"
+    &lt;x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test"&gt;
+       &lt;y:tag2&gt;&lt;!--Test comment--&gt;Test&lt;/y:tag2&gt;
+       &lt;y:tag2&gt;Test 2&lt;/y:tag2&gt;
+    &lt;/x:tag1&gt;
+"#</span>);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+
+<span class="kw">let </span><span class="kw-2">mut </span>count = <span class="number">0</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+<span class="kw">let </span><span class="kw-2">mut </span>txt = Vec::new();
+<span class="kw">loop </span>{
+    <span class="kw">match </span>reader.read_resolved_event_into(<span class="kw-2">&amp;mut </span>buf).unwrap() {
+        (Bound(Namespace(<span class="string">b"www.xxxx"</span>)), Event::Start(e)) =&gt; {
+            count += <span class="number">1</span>;
+            <span class="macro">assert_eq!</span>(e.local_name(), QName(<span class="string">b"tag1"</span>).into());
+        }
+        (Bound(Namespace(<span class="string">b"www.yyyy"</span>)), Event::Start(e)) =&gt; {
+            count += <span class="number">1</span>;
+            <span class="macro">assert_eq!</span>(e.local_name(), QName(<span class="string">b"tag2"</span>).into());
+        }
+        (<span class="kw">_</span>, Event::Start(<span class="kw">_</span>)) =&gt; <span class="macro">unreachable!</span>(),
+
+        (<span class="kw">_</span>, Event::Text(e)) =&gt; {
+            txt.push(e.unescape().unwrap().into_owned())
+        }
+        (<span class="kw">_</span>, Event::Eof) =&gt; <span class="kw">break</span>,
+        <span class="kw">_ </span>=&gt; (),
+    }
+    buf.clear();
+}
+<span class="macro">assert_eq!</span>(count, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(txt, <span class="macro">vec!</span>[<span class="string">"Test"</span>.to_string(), <span class="string">"Test 2"</span>.to_string()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_to_end_into" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#604-608">Source</a><h4 class="code-header">pub fn <a href="#method.read_to_end_into" class="fn">read_to_end_into</a>(
+    &amp;mut self,
+    end: <a class="struct" href="../name/struct.QName.html" title="struct quick_xml::name::QName">QName</a>&lt;'_&gt;,
+    buf: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt;,
+) -&gt; <a class="type" href="../errors/type.Result.html" title="type quick_xml::errors::Result">Result</a>&lt;<a class="type" href="type.Span.html" title="type quick_xml::reader::Span">Span</a>&gt;</h4></section></summary><div class="docblock"><p>Reads until end element is found using provided buffer as intermediate
+storage for events content. This function is supposed to be called after
+you already read a <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a> event.</p>
+<p>Returns a span that cover content between <code>&gt;</code> of an opening tag and <code>&lt;</code> of
+a closing tag or an empty slice, if <a href="struct.Config.html#structfield.expand_empty_elements" title="field quick_xml::reader::Config::expand_empty_elements"><code>expand_empty_elements</code></a> is set and
+this method was called after reading expanded <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a> event.</p>
+<p>Manages nested cases where parent and child elements have the <em>literally</em>
+same name.</p>
+<p>If a corresponding <a href="../events/enum.Event.html#variant.End" title="variant quick_xml::events::Event::End"><code>End</code></a> event is not found, an error of type <a href="../errors/enum.Error.html#variant.IllFormed" title="variant quick_xml::errors::Error::IllFormed"><code>IllFormed</code></a>
+will be returned. In particularly, that error will be returned if you call
+this method without consuming the corresponding <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a> event first.</p>
+<p>If your reader created from a string slice or byte array slice, it is
+better to use <a href="struct.NsReader.html#method.read_to_end" title="method quick_xml::reader::NsReader::read_to_end"><code>read_to_end()</code></a> method, because it will not copy bytes
+into intermediate buffer.</p>
+<p>The provided <code>buf</code> buffer will be filled only by one event content at time.
+Before reading of each event the buffer will be cleared. If you know an
+appropriate size of each event, you can preallocate the buffer to reduce
+number of reallocations.</p>
+<p>The <code>end</code> parameter should contain name of the end element <em>in the reader
+encoding</em>. It is good practice to always get that parameter using
+<a href="../events/struct.BytesStart.html#method.to_end" title="method quick_xml::events::BytesStart::to_end"><code>BytesStart::to_end()</code></a> method.</p>
+<h5 id="namespaces"><a class="doc-anchor" href="#namespaces">§</a>Namespaces</h5>
+<p>While the <code>NsReader</code> does namespace resolution, namespaces does not
+change the algorithm for comparing names. Although the names <code>a:name</code>
+and <code>b:name</code> where both prefixes <code>a</code> and <code>b</code> resolves to the same namespace,
+are semantically equivalent, <code>&lt;/b:name&gt;</code> cannot close <code>&lt;a:name&gt;</code>, because
+according to <a href="https://www.w3.org/TR/xml11/#dt-etag">the specification</a></p>
+<blockquote>
+<p>The end of every element that begins with a <strong>start-tag</strong> MUST be marked
+by an <strong>end-tag</strong> containing a name that echoes the element’s type as
+given in the <strong>start-tag</strong></p>
+</blockquote>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>This example shows, how you can skip XML content after you read the
+start event.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::{BytesStart, Event};
+<span class="kw">use </span>quick_xml::name::{Namespace, ResolveResult};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">r#"
+    &lt;outer xmlns="namespace 1"&gt;
+        &lt;inner xmlns="namespace 2"&gt;
+            &lt;outer&gt;&lt;/outer&gt;
+        &lt;/inner&gt;
+        &lt;inner&gt;
+            &lt;inner&gt;&lt;/inner&gt;
+            &lt;inner/&gt;
+            &lt;outer&gt;&lt;/outer&gt;
+            &lt;p:outer xmlns:p="ns"&gt;&lt;/p:outer&gt;
+            &lt;outer/&gt;
+        &lt;/inner&gt;
+    &lt;/outer&gt;
+"#</span>);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+
+<span class="kw">let </span>ns = Namespace(<span class="string">b"namespace 1"</span>);
+<span class="kw">let </span>start = BytesStart::from_content(<span class="string">r#"outer xmlns="namespace 1""#</span>, <span class="number">5</span>);
+<span class="kw">let </span>end   = start.to_end().into_owned();
+
+<span class="comment">// First, we read a start event...
+</span><span class="macro">assert_eq!</span>(
+    reader.read_resolved_event_into(<span class="kw-2">&amp;mut </span>buf).unwrap(),
+    (ResolveResult::Bound(ns), Event::Start(start))
+);
+
+<span class="comment">// ...then, we could skip all events to the corresponding end event.
+// This call will correctly handle nested &lt;outer&gt; elements.
+// Note, however, that this method does not handle namespaces.
+</span>reader.read_to_end_into(end.name(), <span class="kw-2">&amp;mut </span>buf).unwrap();
+
+<span class="comment">// At the end we should get an Eof event, because we ate the whole XML
+</span><span class="macro">assert_eq!</span>(
+    reader.read_resolved_event_into(<span class="kw-2">&amp;mut </span>buf).unwrap(),
+    (ResolveResult::Unbound, Event::Eof)
+);</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-NsReader%3CBufReader%3CFile%3E%3E" class="impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#611-616">Source</a><a href="#impl-NsReader%3CBufReader%3CFile%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/io/buffered/bufreader/struct.BufReader.html" title="struct std::io::buffered::bufreader::BufReader">BufReader</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/fs/struct.File.html" title="struct std::fs::File">File</a>&gt;&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from_file" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#613-615">Source</a><h4 class="code-header">pub fn <a href="#method.from_file" class="fn">from_file</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;&gt;(path: P) -&gt; <a class="type" href="../errors/type.Result.html" title="type quick_xml::errors::Result">Result</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Creates an XML reader from a file path.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-NsReader%3C%26%5Bu8%5D%3E" class="impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#618-915">Source</a><a href="#impl-NsReader%3C%26%5Bu8%5D%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'i&gt; <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;&amp;'i [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>]&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from_str" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#622-624">Source</a><h4 class="code-header">pub fn <a href="#method.from_str" class="fn">from_str</a>(s: &amp;'i <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>) -&gt; Self</h4></section></summary><div class="docblock"><p>Creates an XML reader from a string slice.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_event" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#681-683">Source</a><h4 class="code-header">pub fn <a href="#method.read_event" class="fn">read_event</a>(&amp;mut self) -&gt; <a class="type" href="../errors/type.Result.html" title="type quick_xml::errors::Result">Result</a>&lt;<a class="enum" href="../events/enum.Event.html" title="enum quick_xml::events::Event">Event</a>&lt;'i&gt;&gt;</h4></section></summary><div class="docblock"><p>Reads the next event, borrow its content from the input buffer.</p>
+<p>This method manages namespaces but doesn’t resolve them automatically.
+You should call <a href="struct.NsReader.html#method.resolve_element" title="method quick_xml::reader::NsReader::resolve_element"><code>resolve_element()</code></a> if you want to get a namespace.</p>
+<p>You also can use <a href="struct.NsReader.html#method.read_resolved_event" title="method quick_xml::reader::NsReader::read_resolved_event"><code>read_resolved_event()</code></a> instead if you want to resolve namespace
+as soon as you get an event.</p>
+<p>There is no asynchronous <code>read_event_async()</code> version of this function,
+because it is not necessary – the contents are already in memory and no IO
+is needed, therefore there is no potential for blocking.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::Event;
+<span class="kw">use </span>quick_xml::name::{Namespace, ResolveResult::<span class="kw-2">*</span>};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">r#"
+    &lt;x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test"&gt;
+       &lt;y:tag2&gt;&lt;!--Test comment--&gt;Test&lt;/y:tag2&gt;
+       &lt;y:tag2&gt;Test 2&lt;/y:tag2&gt;
+    &lt;/x:tag1&gt;
+"#</span>);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+
+<span class="kw">let </span><span class="kw-2">mut </span>count = <span class="number">0</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>txt = Vec::new();
+<span class="kw">loop </span>{
+    <span class="kw">match </span>reader.read_event().unwrap() {
+        Event::Start(e) =&gt; {
+            count += <span class="number">1</span>;
+            <span class="kw">let </span>(ns, local) = reader.resolve_element(e.name());
+            <span class="kw">match </span>local.as_ref() {
+                <span class="string">b"tag1" </span>=&gt; <span class="macro">assert_eq!</span>(ns, Bound(Namespace(<span class="string">b"www.xxxx"</span>))),
+                <span class="string">b"tag2" </span>=&gt; <span class="macro">assert_eq!</span>(ns, Bound(Namespace(<span class="string">b"www.yyyy"</span>))),
+                <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+            }
+        }
+        Event::Text(e) =&gt; {
+            txt.push(e.unescape().unwrap().into_owned())
+        }
+        Event::Eof =&gt; <span class="kw">break</span>,
+        <span class="kw">_ </span>=&gt; (),
+    }
+}
+<span class="macro">assert_eq!</span>(count, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(txt, <span class="macro">vec!</span>[<span class="string">"Test"</span>.to_string(), <span class="string">"Test 2"</span>.to_string()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_resolved_event" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#745-748">Source</a><h4 class="code-header">pub fn <a href="#method.read_resolved_event" class="fn">read_resolved_event</a>(&amp;mut self) -&gt; <a class="type" href="../errors/type.Result.html" title="type quick_xml::errors::Result">Result</a>&lt;(<a class="enum" href="../name/enum.ResolveResult.html" title="enum quick_xml::name::ResolveResult">ResolveResult</a>&lt;'_&gt;, <a class="enum" href="../events/enum.Event.html" title="enum quick_xml::events::Event">Event</a>&lt;'i&gt;)&gt;</h4></section></summary><div class="docblock"><p>Reads the next event, borrow its content from the input buffer, and resolves
+its namespace (if applicable).</p>
+<p>Namespace is resolved only for <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a>, <a href="../events/enum.Event.html#variant.Empty" title="variant quick_xml::events::Event::Empty"><code>Empty</code></a> and <a href="../events/enum.Event.html#variant.End" title="variant quick_xml::events::Event::End"><code>End</code></a> events.
+For all other events the concept of namespace is not defined, so
+a <a href="../name/enum.ResolveResult.html#variant.Unbound" title="variant quick_xml::name::ResolveResult::Unbound"><code>ResolveResult::Unbound</code></a> is returned.</p>
+<p>If you are not interested in namespaces, you can use <a href="struct.NsReader.html#method.read_event" title="method quick_xml::reader::NsReader::read_event"><code>read_event()</code></a>
+which will not automatically resolve namespaces for you.</p>
+<p>There is no asynchronous <code>read_resolved_event_async()</code> version of this function,
+because it is not necessary – the contents are already in memory and no IO
+is needed, therefore there is no potential for blocking.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::Event;
+<span class="kw">use </span>quick_xml::name::{Namespace, QName, ResolveResult::<span class="kw-2">*</span>};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">r#"
+    &lt;x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test"&gt;
+       &lt;y:tag2&gt;&lt;!--Test comment--&gt;Test&lt;/y:tag2&gt;
+       &lt;y:tag2&gt;Test 2&lt;/y:tag2&gt;
+    &lt;/x:tag1&gt;
+"#</span>);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+
+<span class="kw">let </span><span class="kw-2">mut </span>count = <span class="number">0</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>txt = Vec::new();
+<span class="kw">loop </span>{
+    <span class="kw">match </span>reader.read_resolved_event().unwrap() {
+        (Bound(Namespace(<span class="string">b"www.xxxx"</span>)), Event::Start(e)) =&gt; {
+            count += <span class="number">1</span>;
+            <span class="macro">assert_eq!</span>(e.local_name(), QName(<span class="string">b"tag1"</span>).into());
+        }
+        (Bound(Namespace(<span class="string">b"www.yyyy"</span>)), Event::Start(e)) =&gt; {
+            count += <span class="number">1</span>;
+            <span class="macro">assert_eq!</span>(e.local_name(), QName(<span class="string">b"tag2"</span>).into());
+        }
+        (<span class="kw">_</span>, Event::Start(<span class="kw">_</span>)) =&gt; <span class="macro">unreachable!</span>(),
+
+        (<span class="kw">_</span>, Event::Text(e)) =&gt; {
+            txt.push(e.unescape().unwrap().into_owned())
+        }
+        (<span class="kw">_</span>, Event::Eof) =&gt; <span class="kw">break</span>,
+        <span class="kw">_ </span>=&gt; (),
+    }
+}
+<span class="macro">assert_eq!</span>(count, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(txt, <span class="macro">vec!</span>[<span class="string">"Test"</span>.to_string(), <span class="string">"Test 2"</span>.to_string()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_to_end" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#840-844">Source</a><h4 class="code-header">pub fn <a href="#method.read_to_end" class="fn">read_to_end</a>(&amp;mut self, end: <a class="struct" href="../name/struct.QName.html" title="struct quick_xml::name::QName">QName</a>&lt;'_&gt;) -&gt; <a class="type" href="../errors/type.Result.html" title="type quick_xml::errors::Result">Result</a>&lt;<a class="type" href="type.Span.html" title="type quick_xml::reader::Span">Span</a>&gt;</h4></section></summary><div class="docblock"><p>Reads until end element is found. This function is supposed to be called
+after you already read a <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a> event.</p>
+<p>Returns a span that cover content between <code>&gt;</code> of an opening tag and <code>&lt;</code> of
+a closing tag or an empty slice, if <a href="struct.Config.html#structfield.expand_empty_elements" title="field quick_xml::reader::Config::expand_empty_elements"><code>expand_empty_elements</code></a> is set and
+this method was called after reading expanded <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a> event.</p>
+<p>Manages nested cases where parent and child elements have the <em>literally</em>
+same name.</p>
+<p>If a corresponding <a href="../events/enum.Event.html#variant.End" title="variant quick_xml::events::Event::End"><code>End</code></a> event is not found, an error of type <a href="../errors/enum.Error.html#variant.IllFormed" title="variant quick_xml::errors::Error::IllFormed"><code>IllFormed</code></a>
+will be returned. In particularly, that error will be returned if you call
+this method without consuming the corresponding <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a> event first.</p>
+<p>The <code>end</code> parameter should contain name of the end element <em>in the reader
+encoding</em>. It is good practice to always get that parameter using
+<a href="../events/struct.BytesStart.html#method.to_end" title="method quick_xml::events::BytesStart::to_end"><code>BytesStart::to_end()</code></a> method.</p>
+<p>There is no asynchronous <code>read_to_end_async()</code> version of this function,
+because it is not necessary – the contents are already in memory and no IO
+is needed, therefore there is no potential for blocking.</p>
+<h5 id="namespaces-1"><a class="doc-anchor" href="#namespaces-1">§</a>Namespaces</h5>
+<p>While the <code>NsReader</code> does namespace resolution, namespaces does not
+change the algorithm for comparing names. Although the names <code>a:name</code>
+and <code>b:name</code> where both prefixes <code>a</code> and <code>b</code> resolves to the same namespace,
+are semantically equivalent, <code>&lt;/b:name&gt;</code> cannot close <code>&lt;a:name&gt;</code>, because
+according to <a href="https://www.w3.org/TR/xml11/#dt-etag">the specification</a></p>
+<blockquote>
+<p>The end of every element that begins with a <strong>start-tag</strong> MUST be marked
+by an <strong>end-tag</strong> containing a name that echoes the element’s type as
+given in the <strong>start-tag</strong></p>
+</blockquote>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<p>This example shows, how you can skip XML content after you read the
+start event.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::{BytesStart, Event};
+<span class="kw">use </span>quick_xml::name::{Namespace, ResolveResult};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">r#"
+    &lt;outer xmlns="namespace 1"&gt;
+        &lt;inner xmlns="namespace 2"&gt;
+            &lt;outer&gt;&lt;/outer&gt;
+        &lt;/inner&gt;
+        &lt;inner&gt;
+            &lt;inner&gt;&lt;/inner&gt;
+            &lt;inner/&gt;
+            &lt;outer&gt;&lt;/outer&gt;
+            &lt;p:outer xmlns:p="ns"&gt;&lt;/p:outer&gt;
+            &lt;outer/&gt;
+        &lt;/inner&gt;
+    &lt;/outer&gt;
+"#</span>);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+
+<span class="kw">let </span>ns = Namespace(<span class="string">b"namespace 1"</span>);
+<span class="kw">let </span>start = BytesStart::from_content(<span class="string">r#"outer xmlns="namespace 1""#</span>, <span class="number">5</span>);
+<span class="kw">let </span>end   = start.to_end().into_owned();
+
+<span class="comment">// First, we read a start event...
+</span><span class="macro">assert_eq!</span>(
+    reader.read_resolved_event().unwrap(),
+    (ResolveResult::Bound(ns), Event::Start(start))
+);
+
+<span class="comment">// ...then, we could skip all events to the corresponding end event.
+// This call will correctly handle nested &lt;outer&gt; elements.
+// Note, however, that this method does not handle namespaces.
+</span>reader.read_to_end(end.name()).unwrap();
+
+<span class="comment">// At the end we should get an Eof event, because we ate the whole XML
+</span><span class="macro">assert_eq!</span>(
+    reader.read_resolved_event().unwrap(),
+    (ResolveResult::Unbound, Event::Eof)
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_text" class="method"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#912-914">Source</a><h4 class="code-header">pub fn <a href="#method.read_text" class="fn">read_text</a>(&amp;mut self, end: <a class="struct" href="../name/struct.QName.html" title="struct quick_xml::name::QName">QName</a>&lt;'_&gt;) -&gt; <a class="type" href="../errors/type.Result.html" title="type quick_xml::errors::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'i, <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Reads content between start and end tags, including any markup. This
+function is supposed to be called after you already read a <a href="../events/enum.Event.html#variant.Start" title="variant quick_xml::events::Event::Start"><code>Start</code></a> event.</p>
+<p>Manages nested cases where parent and child elements have the <em>literally</em>
+same name.</p>
+<p>This method does not unescape read data, instead it returns content
+“as is” of the XML document. This is because it has no idea what text
+it reads, and if, for example, it contains CDATA section, attempt to
+unescape it content will spoil data.</p>
+<p>Any text will be decoded using the XML current <a href="struct.Reader.html#method.decoder" title="method quick_xml::reader::Reader::decoder"><code>decoder()</code></a>.</p>
+<p>Actually, this method perform the following code:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>span = reader.read_to_end(end)<span class="question-mark">?</span>;
+<span class="kw">let </span>text = reader.decoder().decode(<span class="kw-2">&amp;</span>reader.inner_slice[span]);</code></pre></div>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<p>This example shows, how you can read a HTML content from your XML document.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_xml::events::{BytesStart, Event};
+<span class="kw">use </span>quick_xml::reader::NsReader;
+
+<span class="kw">let </span><span class="kw-2">mut </span>reader = NsReader::from_str(<span class="string">r#"
+    &lt;html&gt;
+        &lt;title&gt;This is a HTML text&lt;/title&gt;
+        &lt;p&gt;Usual XML rules does not apply inside it
+        &lt;p&gt;For example, elements not needed to be &amp;quot;closed&amp;quot;
+    &lt;/html&gt;
+"#</span>);
+reader.config_mut().trim_text(<span class="bool-val">true</span>);
+
+<span class="kw">let </span>start = BytesStart::new(<span class="string">"html"</span>);
+<span class="kw">let </span>end   = start.to_end().into_owned();
+
+<span class="comment">// First, we read a start event...
+</span><span class="macro">assert_eq!</span>(reader.read_event().unwrap(), Event::Start(start));
+<span class="comment">// ...and disable checking of end names because we expect HTML further...
+</span>reader.config_mut().check_end_names = <span class="bool-val">false</span>;
+
+<span class="comment">// ...then, we could read text content until close tag.
+// This call will correctly handle nested &lt;html&gt; elements.
+</span><span class="kw">let </span>text = reader.read_text(end.name()).unwrap();
+<span class="macro">assert_eq!</span>(text, Cow::Borrowed(<span class="string">r#"
+        &lt;title&gt;This is a HTML text&lt;/title&gt;
+        &lt;p&gt;Usual XML rules does not apply inside it
+        &lt;p&gt;For example, elements not needed to be &amp;quot;closed&amp;quot;
+    "#</span>));
+
+<span class="comment">// Now we can enable checks again
+</span>reader.config_mut().check_end_names = <span class="bool-val">true</span>;
+
+<span class="comment">// At the end we should get an Eof event, because we ate the whole XML
+</span><span class="macro">assert_eq!</span>(reader.read_event().unwrap(), Event::Eof);</code></pre></div>
+</div></details></div></details></div><details class="toggle big-toggle" open><summary><h2 id="deref-methods-Reader%3CR%3E" class="section-header"><span>Methods from <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = <a class="struct" href="struct.Reader.html" title="struct quick_xml::reader::Reader">Reader</a>&lt;R&gt;&gt;</span><a href="#deref-methods-Reader%3CR%3E" class="anchor">§</a></h2></summary><div id="deref-methods-Reader%3CR%3E-1" class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.config-1" class="method"><a class="src rightside" href="../../src/quick_xml/reader/mod.rs.html#705-707">Source</a><h4 class="code-header">pub fn <a href="#method.config-1" class="fn">config</a>(&amp;self) -&gt; &amp;<a class="struct" href="struct.Config.html" title="struct quick_xml::reader::Config">Config</a></h4></section></summary><div class="docblock"><p>Returns reference to the parser configuration</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_ref" class="method"><a class="src rightside" href="../../src/quick_xml/reader/mod.rs.html#776-778">Source</a><h4 class="code-header">pub fn <a href="#method.get_ref" class="fn">get_ref</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;R</a></h4></section></summary><div class="docblock"><p>Gets a reference to the underlying reader.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.buffer_position" class="method"><a class="src rightside" href="../../src/quick_xml/reader/mod.rs.html#792-800">Source</a><h4 class="code-header">pub fn <a href="#method.buffer_position" class="fn">buffer_position</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a></h4></section></summary><div class="docblock"><p>Gets the current byte position in the input data.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.error_position" class="method"><a class="src rightside" href="../../src/quick_xml/reader/mod.rs.html#813-815">Source</a><h4 class="code-header">pub fn <a href="#method.error_position" class="fn">error_position</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a></h4></section></summary><div class="docblock"><p>Gets the last error byte position in the input data. If there is no errors
+yet, returns <code>0</code>.</p>
+<p>Unlike <code>buffer_position</code> it will point to the place where it is rational
+to report error to the end user. For example, all <a href="../errors/enum.SyntaxError.html" title="enum quick_xml::errors::SyntaxError"><code>SyntaxError</code></a>s are
+reported when the parser sees EOF inside of some kind of markup. The
+<code>buffer_position()</code> will point to the last byte of input which is not
+very useful. <code>error_position()</code> will point to the start of corresponding
+markup element (i. e. to the <code>&lt;</code> character).</p>
+<p>This position is always <code>&lt;= buffer_position()</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decoder" class="method"><a class="src rightside" href="../../src/quick_xml/reader/mod.rs.html#827-829">Source</a><h4 class="code-header">pub fn <a href="#method.decoder" class="fn">decoder</a>(&amp;self) -&gt; <a class="struct" href="../encoding/struct.Decoder.html" title="struct quick_xml::encoding::Decoder">Decoder</a></h4></section></summary><div class="docblock"><p>Get the decoder, used to decode bytes, read by this reader, to the strings.</p>
+<p>If <a href="../index.html#encoding"><code>encoding</code></a> feature is enabled, the used encoding may change after
+parsing the XML declaration, otherwise encoding is fixed to UTF-8.</p>
+<p>If <a href="../index.html#encoding"><code>encoding</code></a> feature is enabled and no encoding is specified in declaration,
+defaults to UTF-8.</p>
+</div></details></div></details><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-NsReader%3CR%3E" class="impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#21">Source</a><a href="#impl-Clone-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#21">Source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;</h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/clone.rs.html#174">Source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: &amp;Self)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-NsReader%3CR%3E" class="impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#21">Source</a><a href="#impl-Debug-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#21">Source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.86.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.86.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Deref-for-NsReader%3CR%3E" class="impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#917-924">Source</a><a href="#impl-Deref-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;</h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Target" class="associatedtype trait-impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#918">Source</a><a href="#associatedtype.Target" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html#associatedtype.Target" class="associatedtype">Target</a> = <a class="struct" href="struct.Reader.html" title="struct quick_xml::reader::Reader">Reader</a>&lt;R&gt;</h4></section></summary><div class='docblock'>The resulting type after dereferencing.</div></details><details class="toggle method-toggle" open><summary><section id="method.deref" class="method trait-impl"><a class="src rightside" href="../../src/quick_xml/reader/ns_reader.rs.html#921-923">Source</a><a href="#method.deref" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html#tymethod.deref" class="fn">deref</a>(&amp;self) -&gt; &amp;Self::<a class="associatedtype" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html#associatedtype.Target" title="type core::ops::deref::Deref::Target">Target</a></h4></section></summary><div class='docblock'>Dereferences the value.</div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-NsReader%3CR%3E" class="impl"><a href="#impl-Freeze-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a>,</div></h3></section><section id="impl-RefUnwindSafe-for-NsReader%3CR%3E" class="impl"><a href="#impl-RefUnwindSafe-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a>,</div></h3></section><section id="impl-Send-for-NsReader%3CR%3E" class="impl"><a href="#impl-Send-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h3></section><section id="impl-Sync-for-NsReader%3CR%3E" class="impl"><a href="#impl-Sync-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h3></section><section id="impl-Unpin-for-NsReader%3CR%3E" class="impl"><a href="#impl-Unpin-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h3></section><section id="impl-UnwindSafe-for-NsReader%3CR%3E" class="impl"><a href="#impl-UnwindSafe-for-NsReader%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.NsReader.html" title="struct quick_xml::reader::NsReader">NsReader</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a>,</div></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/any.rs.html#138">Source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/any.rs.html#139">Source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.86.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/borrow.rs.html#209">Source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/borrow.rs.html#211">Source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.86.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/borrow.rs.html#217">Source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/borrow.rs.html#218">Source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.86.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/clone.rs.html#273">Source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/clone.rs.html#275">Source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html">*mut </a><a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.86.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#767">Source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#770">Source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#750-752">Source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#760">Source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Receiver-for-P" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/ops/deref.rs.html#375-377">Source</a><a href="#impl-Receiver-for-P" class="anchor">§</a><h3 class="code-header">impl&lt;P, T&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Receiver.html" title="trait core::ops::deref::Receiver">Receiver</a> for P<div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = T&gt; + ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Target-1" class="associatedtype trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/ops/deref.rs.html#379">Source</a><a href="#associatedtype.Target-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Receiver.html#associatedtype.Target" class="associatedtype">Target</a> = T</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>arbitrary_self_types</code>)</span></div></span><div class='docblock'>The target type on which the method may be called.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/alloc/borrow.rs.html#82-84">Source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/alloc/borrow.rs.html#86">Source</a><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.86.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/alloc/borrow.rs.html#87">Source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.86.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/alloc/borrow.rs.html#91">Source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.86.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#807-809">Source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#811">Source</a><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#814">Source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#792-794">Source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#796">Source</a><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.86.0/src/core/convert/mod.rs.html#799">Source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div><script type="text/json" id="notable-traits-data">{"PrefixIter<'_>":"<h3>Notable traits for <code><a class=\"struct\" href=\"../name/struct.PrefixIter.html\" title=\"struct quick_xml::name::PrefixIter\">PrefixIter</a>&lt;'a&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"../name/struct.PrefixIter.html\" title=\"struct quick_xml::name::PrefixIter\">PrefixIter</a>&lt;'a&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.86.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = (<a class=\"enum\" href=\"../name/enum.PrefixDeclaration.html\" title=\"enum quick_xml::name::PrefixDeclaration\">PrefixDeclaration</a>&lt;'a&gt;, <a class=\"struct\" href=\"../name/struct.Namespace.html\" title=\"struct quick_xml::name::Namespace\">Namespace</a>&lt;'a&gt;);</div>"}</script></section></div></main></body></html>
