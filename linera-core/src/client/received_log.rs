@@ -87,7 +87,13 @@ impl ReceivedLogs {
 }
 
 /// Iterator adapter lazily yielding batches of size `self.batch_size` from
-/// `self.iterator`.
+/// `heights`.
+/// Given sets of heights per chain for some chains, it will return a batch containing up to
+/// `max_blocks_per_chain` heights from the first chain, up to `max_blocks_per_chain` from the
+/// second chain, etc., up to `batch_size` in total. If it runs out of chains before the batch is
+/// full, it will restart adding up to `max_blocks_per_chain` from the first chain.
+/// This way we will get batches that are fairly balanced between the number of chains and number
+/// of blocks per chain.
 struct BatchingHelper {
     keys: Vec<ChainId>,
     heights: BTreeMap<ChainId, BTreeMap<BlockHeight, BTreeSet<ValidatorPublicKey>>>,
@@ -396,6 +402,109 @@ mod tests {
                 vec![(chain1, 1), (chain1, 2), (chain2, 1)],
                 vec![(chain1, 3), (chain1, 4), (chain2, 2)],
                 vec![(chain1, 5), (chain1, 6), (chain1, 7)],
+            ]
+        );
+    }
+
+    #[test]
+    fn test_multiple_validators() {
+        let (chain1, chain2) = {
+            // make sure that chain1 is lexicographically earlier than chain2
+            let chain_a = ChainId(CryptoHash::test_hash("chain_a"));
+            let chain_b = ChainId(CryptoHash::test_hash("chain_b"));
+            if chain_a < chain_b {
+                (chain_a, chain_b)
+            } else {
+                (chain_b, chain_a)
+            }
+        };
+        let validator1 = ValidatorKeypair::generate().public_key;
+        let validator2 = ValidatorKeypair::generate().public_key;
+        let test_log = ReceivedLogs::from_received_result(vec![
+            (
+                validator1,
+                vec![
+                    (chain1, 1),
+                    (chain1, 2),
+                    (chain2, 1),
+                    (chain1, 3),
+                    (chain2, 2),
+                    (chain1, 4),
+                    (chain1, 5),
+                    (chain1, 6),
+                    // validator 1 does not have (chain1, 7)
+                ]
+                .into_iter()
+                .map(|(chain_id, height)| ChainAndHeight {
+                    chain_id,
+                    height: height.into(),
+                })
+                .collect(),
+            ),
+            (
+                validator2,
+                vec![
+                    (chain1, 1),
+                    (chain1, 2),
+                    (chain1, 3),
+                    (chain1, 4),
+                    (chain1, 5),
+                    (chain2, 1),
+                    (chain1, 6),
+                    (chain1, 7),
+                    // validator2 does not have (chain2, 2)
+                ]
+                .into_iter()
+                .map(|(chain_id, height)| ChainAndHeight {
+                    chain_id,
+                    height: height.into(),
+                })
+                .collect(),
+            ),
+        ]);
+
+        let batches = test_log.clone().into_batches(2, 1).collect::<Vec<_>>();
+
+        assert_eq!(batches.len(), 5);
+        assert_eq!(
+            batches
+                .iter()
+                .map(|batch| batch.num_chains())
+                .collect::<Vec<_>>(),
+            vec![2, 2, 1, 1, 1]
+        );
+
+        // Check that we know which validators have which blocks.
+        assert!(batches[0].validator_has_block(&validator1, chain2, 1.into()));
+        assert!(batches[0].validator_has_block(&validator2, chain2, 1.into()));
+
+        assert!(batches[1].validator_has_block(&validator1, chain2, 2.into()));
+        assert!(!batches[1].validator_has_block(&validator2, chain2, 2.into()));
+
+        assert!(!batches[4].validator_has_block(&validator1, chain1, 7.into()));
+        assert!(batches[4].validator_has_block(&validator2, chain1, 7.into()));
+
+        let chains_heights = batches
+            .into_iter()
+            .map(|batch| {
+                batch
+                    .heights_per_chain()
+                    .into_iter()
+                    .flat_map(|(chain_id, heights)| {
+                        heights.into_iter().map(move |height| (chain_id, height.0))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            chains_heights,
+            vec![
+                vec![(chain1, 1), (chain2, 1)],
+                vec![(chain1, 2), (chain2, 2)],
+                vec![(chain1, 3), (chain1, 4)],
+                vec![(chain1, 5), (chain1, 6)],
+                vec![(chain1, 7)]
             ]
         );
     }

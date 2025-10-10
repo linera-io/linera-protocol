@@ -100,7 +100,7 @@ impl ValidatorTrackers {
         mut remote_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>>,
         local_next_heights: BTreeMap<ChainId, BlockHeight>,
     ) -> BTreeMap<ChainId, BTreeSet<BlockHeight>> {
-        for (sender_chain_id, remote_heights) in remote_heights.iter_mut() {
+        for (sender_chain_id, remote_heights) in &mut remote_heights {
             let local_next = *local_next_heights
                 .get(sender_chain_id)
                 .unwrap_or(&BlockHeight(0));
