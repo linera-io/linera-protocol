@@ -1448,6 +1448,259 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn test_contains_update_removed_returns_false() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // First add an item and persist it
+        set.insert(vec![1, 2, 3]);
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Verify it exists
+        assert!(set.contains(&[1, 2, 3]).await?);
+
+        // Now remove the item - this creates an Update::Removed
+        set.remove(vec![1, 2, 3]);
+
+        // This tests line 196: Update::Removed => false,
+        // The contains() method should return false for the removed item
+        let contains_result = set.contains(&[1, 2, 3]).await?;
+        assert!(!contains_result);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_contains_delete_storage_first_returns_false() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Add some items and persist them
+        set.insert(vec![1]);
+        set.insert(vec![2]);
+        set.insert(vec![3]);
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Verify items exist
+        assert!(set.contains(&[1]).await?);
+        assert!(set.contains(&[2]).await?);
+        assert!(set.contains(&[3]).await?);
+
+        // Clear the set - this sets delete_storage_first = true
+        set.clear();
+
+        // This tests line 202: return Ok(false); when delete_storage_first is true
+        // All items should now return false, even for keys that exist in storage
+        assert!(!set.contains(&[1]).await?);
+        assert!(!set.contains(&[2]).await?);
+        assert!(!set.contains(&[3]).await?);
+
+        // Even non-existent keys should return false
+        assert!(!set.contains(&[99]).await?);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_contains_delete_storage_first_with_new_additions() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Add and persist some initial data
+        set.insert(vec![1]);
+        set.insert(vec![2]);
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Clear the set (sets delete_storage_first = true)
+        set.clear();
+
+        // Add new items after clearing
+        set.insert(vec![3]);
+        set.insert(vec![4]);
+
+        // Line 202 should be bypassed for new items since they have Update::Set
+        // Old items should return false due to line 202
+        assert!(!set.contains(&[1]).await?);  // Old item - line 202 path
+        assert!(!set.contains(&[2]).await?);  // Old item - line 202 path
+        assert!(set.contains(&[3]).await?);   // New item - has Update::Set
+        assert!(set.contains(&[4]).await?);   // New item - has Update::Set
+
+        Ok(())
+    }
+
+    #[tokio::test] 
+    async fn test_contains_mixed_update_scenarios() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Test various combinations to exercise both line 196 and line 202
+
+        // Add some items
+        set.insert(vec![1]);
+        set.insert(vec![2]);
+        set.insert(vec![3]);
+
+        // Remove one item - creates Update::Removed (tests line 196)
+        set.remove(vec![2]);
+
+        // Verify line 196 behavior
+        assert!(set.contains(&[1]).await?);   // Still has Update::Set
+        assert!(!set.contains(&[2]).await?);  // Line 196: Update::Removed => false
+        assert!(set.contains(&[3]).await?);   // Still has Update::Set
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_for_each_key_while_update_set_processing_in_stored_loop() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Add data to storage first
+        set.insert(vec![2]);
+        set.insert(vec![4]);
+        set.insert(vec![6]);
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Add pending updates that will be processed alongside stored keys
+        set.insert(vec![1]);  // Update::Set - comes before stored keys
+        set.insert(vec![3]);  // Update::Set - comes between stored keys
+        set.remove(vec![5]);  // Update::Removed - should be ignored
+
+        let mut processed_keys = Vec::new();
+
+        // This tests line 292: closing brace of Update::Set block in stored keys processing
+        // Only Update::Set entries should be processed, Update::Removed should be skipped
+        set.for_each_key_while(|key| {
+            processed_keys.push(key.to_vec());
+            Ok(true)
+        }).await?;
+
+        // Should process stored keys (2, 4, 6) and Update::Set pending keys (1, 3)
+        // Should NOT process Update::Removed key (5)
+        assert!(processed_keys.contains(&vec![1]));  // Update::Set
+        assert!(processed_keys.contains(&vec![2]));  // Stored
+        assert!(processed_keys.contains(&vec![3]));  // Update::Set
+        assert!(processed_keys.contains(&vec![4]));  // Stored
+        assert!(!processed_keys.contains(&vec![5])); // Update::Removed - should be skipped
+        assert!(processed_keys.contains(&vec![6]));  // Stored
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_for_each_key_while_inner_loop_completion() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Add multiple stored keys
+        set.insert(vec![10]);
+        set.insert(vec![20]);
+        set.insert(vec![30]);
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Add pending updates with various patterns
+        set.insert(vec![5]);   // Before first stored key
+        set.insert(vec![15]);  // Between stored keys
+        set.insert(vec![25]);  // Between stored keys
+        set.insert(vec![35]);  // After last stored key
+
+        let mut keys_in_order = Vec::new();
+
+        // This tests line 307: closing brace of the inner loop that processes stored keys
+        // The inner loop should properly handle all stored keys and interleaved updates
+        set.for_each_key_while(|key| {
+            keys_in_order.push(key.to_vec());
+            Ok(true)
+        }).await?;
+
+        // Verify all keys were processed
+        assert!(keys_in_order.contains(&vec![5]));
+        assert!(keys_in_order.contains(&vec![10]));
+        assert!(keys_in_order.contains(&vec![15]));
+        assert!(keys_in_order.contains(&vec![20]));
+        assert!(keys_in_order.contains(&vec![25]));
+        assert!(keys_in_order.contains(&vec![30]));
+        assert!(keys_in_order.contains(&vec![35]));
+
+        // Should have processed 7 keys total
+        assert_eq!(keys_in_order.len(), 7);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_set_view_hash_mut_delegation() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: SetView<_, u32> = SetView::load(context).await?;
+
+        // Add some data to the SetView
+        set.insert(&42)?;
+        set.insert(&84)?;
+        set.insert(&126)?;
+
+        // Test line 641: self.set.hash_mut().await - SetView delegates to ByteSetView
+        let hash1 = set.hash_mut().await?;
+        let hash2 = set.hash().await?;
+
+        // Both should produce the same result since SetView delegates to ByteSetView
+        assert_eq!(hash1, hash2);
+
+        // Verify that the delegation works correctly when data changes
+        set.insert(&168)?;
+        let hash3 = set.hash_mut().await?;
+        assert_ne!(hash1, hash3);
+
+        // Test that SetView hash delegation produces same result as direct ByteSetView hash
+        let context2 = MemoryContext::new_for_testing(());
+        let mut byte_set = ByteSetView::load(context2).await?;
+        
+        // Add equivalent data to ByteSetView (using serialized form of the same numbers)
+        use crate::context::BaseKey;
+        byte_set.insert(BaseKey::derive_short_key(&42u32)?);
+        byte_set.insert(BaseKey::derive_short_key(&84u32)?);
+        byte_set.insert(BaseKey::derive_short_key(&126u32)?);
+        byte_set.insert(BaseKey::derive_short_key(&168u32)?);
+
+        let byte_set_hash = byte_set.hash_mut().await?;
+        assert_eq!(hash3, byte_set_hash);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_set_view_hash_delegation_with_different_types() -> Result<(), ViewError> {
+        // Test that the delegation works with different types
+        let context = MemoryContext::new_for_testing(());
+        let mut string_set: SetView<_, String> = SetView::load(context).await?;
+
+        string_set.insert(&"hello".to_string())?;
+        string_set.insert(&"world".to_string())?;
+
+        // Line 641 should work for any type that implements Serialize
+        let hash1 = string_set.hash_mut().await?;
+        let hash2 = string_set.hash().await?;
+        assert_eq!(hash1, hash2);
+
+        // Verify hash changes with data
+        string_set.insert(&"test".to_string())?;
+        let hash3 = string_set.hash_mut().await?;
+        assert_ne!(hash1, hash3);
+
+        Ok(())
+    }
+
     #[cfg(with_graphql)]
     mod graphql_tests {
         use super::*;
