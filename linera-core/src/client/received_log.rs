@@ -58,6 +58,19 @@ impl ReceivedLogs {
         self.0.values().map(|heights| heights.len()).sum()
     }
 
+    /// An iterator over the chains in the log.
+    pub(super) fn chains(&self) -> impl Iterator<Item = &'_ ChainId> + '_ {
+        self.0.keys()
+    }
+
+    /// Gets a mutable reference to the map of heights for the given chain.
+    pub(super) fn get_chain_mut(
+        &mut self,
+        chain_id: &ChainId,
+    ) -> Option<&mut BTreeMap<BlockHeight, BTreeSet<ValidatorPublicKey>>> {
+        self.0.get_mut(chain_id)
+    }
+
     /// Splits this `ReceivedLogs` into batches of size `batch_size`. Batches are sorted
     /// by chain ID and height.
     pub(super) fn into_batches(

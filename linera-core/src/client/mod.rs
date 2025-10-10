@@ -2299,7 +2299,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// this chain that we are still missing.
     async fn receive_sender_certificates(
         &self,
-        received_logs: ReceivedLogs,
+        mut received_logs: ReceivedLogs,
         mut validator_trackers: ValidatorTrackers,
         nodes: &[RemoteNode<Env::ValidatorNode>],
         cancellation_token: Option<CancellationToken>,
@@ -2310,57 +2310,51 @@ impl<Env: Environment> ChainClient<Env> {
             "receive_sender_certificates: number of chains and certificates to sync",
         );
 
-        let mut remote_heights = received_logs.heights_per_chain();
-
         // Obtain the next block height we need in the local node, for each chain.
         let local_next_heights = self
             .client
             .local_node
-            .next_outbox_heights(remote_heights.keys(), self.chain_id)
+            .next_outbox_heights(received_logs.chains(), self.chain_id)
             .await?;
 
-        validator_trackers.filter_heights_to_download_and_update_trackers(
-            &mut remote_heights,
-            local_next_heights,
-        );
+        validator_trackers.filter_out_already_known(&mut received_logs, local_next_heights);
 
         debug!(
-            remaining_total_certificates = %remote_heights.values().map(|h| h.len()).sum::<usize>(),
+            remaining_total_certificates = %received_logs.num_certs(),
             "receive_sender_certificates: computed remote_heights"
         );
 
         let mut other_sender_chains = Vec::new();
         let (sender, mut receiver) = mpsc::unbounded_channel::<ChainAndHeight>();
 
-        let cert_futures =
-            remote_heights
-                .into_iter()
-                .filter_map(|(sender_chain_id, remote_heights)| {
-                    if remote_heights.is_empty() {
-                        // Our highest, locally executed block is higher than any block height
-                        // from the current batch. Skip this batch, but remember to wait for
-                        // the messages to be delivered to the inboxes.
-                        other_sender_chains.push(sender_chain_id);
-                        return None;
-                    };
-                    let remote_heights = remote_heights.into_iter().collect::<Vec<_>>();
-                    let sender = sender.clone();
-                    let client = self.client.clone();
-                    let mut nodes = nodes.to_vec();
-                    nodes.shuffle(&mut rand::thread_rng());
-                    let received_logs_ref = &received_logs;
-                    Some(async move {
-                        client
-                            .download_and_process_sender_chain(
-                                sender_chain_id,
-                                &nodes,
-                                received_logs_ref,
-                                remote_heights,
-                                sender,
-                            )
-                            .await
-                    })
-                });
+        let cert_futures = received_logs.heights_per_chain().into_iter().filter_map(
+            |(sender_chain_id, remote_heights)| {
+                if remote_heights.is_empty() {
+                    // Our highest, locally executed block is higher than any block height
+                    // from the current batch. Skip this batch, but remember to wait for
+                    // the messages to be delivered to the inboxes.
+                    other_sender_chains.push(sender_chain_id);
+                    return None;
+                };
+                let remote_heights = remote_heights.into_iter().collect::<Vec<_>>();
+                let sender = sender.clone();
+                let client = self.client.clone();
+                let mut nodes = nodes.to_vec();
+                nodes.shuffle(&mut rand::thread_rng());
+                let received_logs_ref = &received_logs;
+                Some(async move {
+                    client
+                        .download_and_process_sender_chain(
+                            sender_chain_id,
+                            &nodes,
+                            received_logs_ref,
+                            remote_heights,
+                            sender,
+                        )
+                        .await
+                })
+            },
+        );
 
         let update_trackers = linera_base::task::spawn(async move {
             while let Some(chain_and_height) = receiver.recv().await {

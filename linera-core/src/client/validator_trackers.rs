@@ -1,10 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use linera_base::{crypto::ValidatorPublicKey, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::ChainAndHeight;
+
+use super::received_log::ReceivedLogs;
 
 /// Keeps multiple `ValidatorTracker`s for multiple validators.
 pub(super) struct ValidatorTrackers(BTreeMap<ValidatorPublicKey, ValidatorTracker>);
@@ -48,27 +50,28 @@ impl ValidatorTrackers {
     /// Compares validators' received logs of sender chains with local node information and returns
     /// a per-chain list of block heights that sent us messages we didn't see yet. Updates
     /// the trackers accordingly.
-    pub(super) fn filter_heights_to_download_and_update_trackers(
+    pub(super) fn filter_out_already_known(
         &mut self,
-        remote_heights: &mut BTreeMap<ChainId, BTreeSet<BlockHeight>>,
+        received_logs: &mut ReceivedLogs,
         local_next_heights: BTreeMap<ChainId, BlockHeight>,
     ) {
-        for (sender_chain_id, remote_heights) in remote_heights {
-            let local_next = *local_next_heights
-                .get(sender_chain_id)
-                .unwrap_or(&BlockHeight(0));
-            for height in &*remote_heights {
-                if *height < local_next {
-                    // we consider all of the heights below our local next height
-                    // to have been already downloaded, so we will increase the
-                    // validators' trackers accordingly
-                    self.downloaded_cert(ChainAndHeight {
-                        chain_id: *sender_chain_id,
-                        height: *height,
-                    });
-                }
+        for (sender_chain_id, local_highest) in &local_next_heights {
+            if let Some(remote_heights) = received_logs.get_chain_mut(sender_chain_id) {
+                remote_heights.retain(|height, _| {
+                    if height < local_highest {
+                        // we consider all of the heights below our local next height
+                        // to have been already downloaded, so we will increase the
+                        // validators' trackers accordingly
+                        self.downloaded_cert(ChainAndHeight {
+                            chain_id: *sender_chain_id,
+                            height: *height,
+                        });
+                        false
+                    } else {
+                        true
+                    }
+                });
             }
-            remote_heights.retain(|h| *h >= local_next);
         }
     }
 }
