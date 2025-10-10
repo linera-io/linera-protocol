@@ -209,7 +209,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     #[instrument(skip(self))]
     pub async fn run(
         mut self,
-        sync_sleep_ms: Option<u64>,
+        enable_background_sync: bool,
     ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
@@ -229,8 +229,8 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         };
 
         // Start background tasks to sync received certificates for each chain,
-        // if enabled (sync_sleep_ms is Some).
-        if let Some(sync_sleep_ms) = sync_sleep_ms {
+        // if enabled.
+        if enable_background_sync {
             let context = Arc::clone(&self.context);
             let cancellation_token = self.cancellation_token.clone();
             for chain_id in chain_ids.keys() {
@@ -240,7 +240,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 drop(linera_base::task::spawn(async move {
                     if let Err(e) = Self::background_sync_received_certificates(
                         context,
-                        sync_sleep_ms,
                         chain_id,
                         cancellation_token,
                     )
@@ -417,39 +416,15 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     #[instrument(skip(context, cancellation_token))]
     async fn background_sync_received_certificates(
         context: Arc<Mutex<C>>,
-        sync_sleep_ms: u64,
         chain_id: ChainId,
         cancellation_token: CancellationToken,
     ) -> Result<(), Error> {
         info!("Starting background certificate sync for chain {chain_id}");
         let client = context.lock().await.make_chain_client(chain_id);
 
-        loop {
-            // Check if we should stop.
-            if cancellation_token.is_cancelled() {
-                info!("Background sync cancelled for chain {chain_id}");
-                break;
-            }
-
-            // Sleep to avoid overwhelming the system.
-            Self::sleep(sync_sleep_ms).await;
-
-            // Sync one batch.
-            match client.sync_received_certificates_batch().await {
-                Ok(has_more) => {
-                    if !has_more {
-                        info!("Background sync completed for chain {chain_id}");
-                        break;
-                    }
-                }
-                Err(e) => {
-                    warn!("Error syncing batch for chain {chain_id}: {e}. Will retry.");
-                    // Continue trying despite errors - validators might be temporarily unavailable.
-                }
-            }
-        }
-
-        Ok(())
+        Ok(client
+            .find_received_certificates(Some(cancellation_token))
+            .await?)
     }
 
     /// Starts listening for notifications about the given chain.

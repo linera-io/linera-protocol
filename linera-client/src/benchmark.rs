@@ -133,7 +133,7 @@ impl<Env: Environment> Benchmark<Env> {
         let barrier = Arc::new(Barrier::new(num_chains + 1));
 
         let chain_listener_future = chain_listener
-            .run(Some(500)) // Default sync_sleep_ms for benchmarks
+            .run(true) // Enabling background sync for benchmarks
             .await
             .map_err(|_| BenchmarkError::ChainListenerStartupError)?;
         let chain_listener_handle = tokio::spawn(chain_listener_future.in_current_span());

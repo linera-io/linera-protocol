@@ -155,7 +155,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let cancellation_token = CancellationToken::new();
     let child_token = cancellation_token.child_token();
     let chain_listener = ChainListener::new(config, context, storage, child_token)
-        .run(None) // Unit test doesn't need background sync
+        .run(false) // Unit test doesn't need background sync
         .await
         .unwrap();
 
@@ -219,7 +219,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let cancellation_token = CancellationToken::new();
     let child_token = cancellation_token.child_token();
     let chain_listener = ChainListener::new(config, context, storage.clone(), child_token)
-        .run(None) // Unit test doesn't need background sync
+        .run(false) // Unit test doesn't need background sync
         .await
         .unwrap();
 

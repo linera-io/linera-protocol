@@ -5270,6 +5270,7 @@ dependencies = [
  "time-expiry",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tonic 0.14.2",
  "tracing",
  "tracing-subscriber 0.3.19",
