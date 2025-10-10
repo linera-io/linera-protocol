@@ -1701,6 +1701,250 @@ mod tests {
         Ok(())
     }
 
+    // CustomSetView tests - similar patterns but using CustomSerialize
+    #[tokio::test]
+    async fn test_custom_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add initial data
+        set.insert(&42u128)?;
+        set.insert(&84u128)?;
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Clear the set
+        set.clear();
+
+        // Add new items - this should trigger the Update::Set branch (line 103 equivalent)
+        set.insert(&123u128)?;
+        set.insert(&456u128)?;
+
+        let mut batch = Batch::new();
+        let delete_view = set.flush(&mut batch)?;
+
+        // Should be false due to Update::Set entries
+        assert!(!delete_view);
+
+        // Verify final state
+        set.context().store().write_batch(batch).await?;
+        let new_set: CustomSetView<_, u128> = CustomSetView::load(set.context().clone()).await?;
+        assert!(new_set.contains(&123u128).await?);
+        assert!(new_set.contains(&456u128).await?);
+        assert!(!new_set.contains(&42u128).await?);
+        assert!(!new_set.contains(&84u128).await?);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_contains_update_removed_returns_false() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add and persist an item
+        set.insert(&12345u128)?;
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Verify it exists
+        assert!(set.contains(&12345u128).await?);
+
+        // Remove the item - creates Update::Removed (tests line 196 equivalent)
+        set.remove(&12345u128)?;
+
+        // Should return false for the removed item
+        assert!(!set.contains(&12345u128).await?);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_contains_delete_storage_first_returns_false() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add items and persist
+        set.insert(&111u128)?;
+        set.insert(&222u128)?;
+        set.insert(&333u128)?;
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Verify items exist
+        assert!(set.contains(&111u128).await?);
+        assert!(set.contains(&222u128).await?);
+
+        // Clear the set - sets delete_storage_first = true
+        set.clear();
+
+        // Tests line 202 equivalent: should return false when delete_storage_first is true
+        assert!(!set.contains(&111u128).await?);
+        assert!(!set.contains(&222u128).await?);
+        assert!(!set.contains(&333u128).await?);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_count_delegation() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Test that CustomSetView delegates count to ByteSetView (line 557 equivalent)
+        let count = set.count().await?;
+        assert_eq!(count, 0);
+
+        // Add items and verify delegation works
+        set.insert(&100u128)?;
+        set.insert(&200u128)?;
+        set.insert(&300u128)?;
+
+        let count = set.count().await?;
+        assert_eq!(count, 3);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_hash_mut_delegation() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add some data
+        set.insert(&1000u128)?;
+        set.insert(&2000u128)?;
+
+        // Test hash_mut delegation (line 641 equivalent for CustomSetView)
+        let hash1 = set.hash_mut().await?;
+        let hash2 = set.hash().await?;
+
+        // Both should produce the same result since CustomSetView delegates to ByteSetView
+        assert_eq!(hash1, hash2);
+
+        // Verify hash changes when data changes
+        set.insert(&3000u128)?;
+        let hash3 = set.hash_mut().await?;
+        assert_ne!(hash1, hash3);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_for_each_index_while_deserialization() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add some data
+        set.insert(&424242u128)?;
+        set.insert(&848484u128)?;
+        set.insert(&121212u128)?;
+
+        let mut indices_processed = Vec::new();
+        
+        // Test CustomSerialize deserialization (line 590 equivalent but with CustomSerialize)
+        set.for_each_index_while(|index| {
+            indices_processed.push(index);
+            Ok(true)
+        }).await?;
+
+        // Verify that custom deserialization worked correctly
+        assert_eq!(indices_processed.len(), 3);
+        assert!(indices_processed.contains(&424242u128));
+        assert!(indices_processed.contains(&848484u128));
+        assert!(indices_processed.contains(&121212u128));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_for_each_index_while_early_return() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add several indices
+        set.insert(&10u128)?;
+        set.insert(&20u128)?;
+        set.insert(&30u128)?;
+        set.insert(&40u128)?;
+
+        let mut count = 0;
+        
+        // Test custom deserialization with early return
+        set.for_each_index_while(|index| {
+            count += 1;
+            if index == 30u128 {
+                Ok(false)  // Should stop iteration early
+            } else {
+                Ok(true)
+            }
+        }).await?;
+
+        // Should have processed indices until reaching 30
+        assert!(count >= 3);
+        assert!(count <= 4);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_indices_method() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Test the indices() method which uses custom deserialization
+        let indices = set.indices().await?;
+        assert_eq!(indices.len(), 0);
+
+        // Add some data
+        set.insert(&777u128)?;
+        set.insert(&888u128)?;
+        set.insert(&999u128)?;
+
+        let indices = set.indices().await?;
+        assert_eq!(indices.len(), 3);
+        assert!(indices.contains(&777u128));
+        assert!(indices.contains(&888u128));
+        assert!(indices.contains(&999u128));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_mixed_operations() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Test a combination of operations
+        set.insert(&100u128)?;
+        set.insert(&200u128)?;
+        set.insert(&300u128)?;
+
+        // Remove one item (creates Update::Removed)
+        set.remove(&200u128)?;
+
+        // Verify mixed update states
+        assert!(set.contains(&100u128).await?);
+        assert!(!set.contains(&200u128).await?);  // Update::Removed should return false
+        assert!(set.contains(&300u128).await?);
+
+        // Test count with mixed updates
+        let count = set.count().await?;
+        assert_eq!(count, 2);
+
+        // Test indices with mixed updates
+        let indices = set.indices().await?;
+        assert_eq!(indices.len(), 2);
+        assert!(indices.contains(&100u128));
+        assert!(!indices.contains(&200u128));
+        assert!(indices.contains(&300u128));
+
+        Ok(())
+    }
+
     #[cfg(with_graphql)]
     mod graphql_tests {
         use super::*;
