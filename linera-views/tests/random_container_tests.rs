@@ -532,6 +532,19 @@ impl<C: Context> NestedCollectionMapView<C> {
             let key_values = key_values1.into_iter().collect::<BTreeMap<String, u64>>();
             state_map.insert(index, key_values);
         }
+        let key_subviews1 = self.map1.try_load_all_entries().await?;
+        let key_subviews2 = self.map2.try_load_all_entries().await?;
+        for ((key_subview1, key_subview2), index) in
+            key_subviews1.into_iter().zip(key_subviews2).zip(indices2)
+        {
+            let (index1, subview1) = key_subview1;
+            let (index2, subview2) = key_subview2;
+            assert_eq!(index1, index, "index1 should be coherent");
+            assert_eq!(index2, index, "index1 should be coherent");
+            let key_values1 = subview1.index_values().await?;
+            let key_values2 = subview2.index_values().await?;
+            assert_eq!(key_values1, key_values2, "key-values should be equal");
+        }
         Ok(state_map)
     }
 }
