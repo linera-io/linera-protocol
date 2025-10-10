@@ -19,9 +19,20 @@ use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    config::ShardId,
     HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
     HandleValidatedCertificateRequest,
 };
+
+/// Information about shard configuration for a specific chain.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct ShardInfo {
+    /// The ID of the shard assigned to the chain.
+    pub shard_id: ShardId,
+    /// The total number of shards in the validator network.
+    pub total_shards: usize,
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -44,6 +55,7 @@ pub enum RpcMessage {
     MissingBlobIds(Vec<BlobId>),
     VersionInfoQuery,
     NetworkDescriptionQuery,
+    ShardInfoQuery(Box<ChainId>),
 
     // Outbound
     Vote(Box<LiteVote>),
@@ -59,6 +71,7 @@ pub enum RpcMessage {
     DownloadCertificatesByHeightsResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Vec<BlobId>),
+    ShardInfoResponse(Box<ShardInfo>),
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
@@ -85,6 +98,7 @@ impl RpcMessage {
             DownloadPendingBlob(request) => request.0,
             DownloadCertificatesByHeights(chain_id, _) => *chain_id,
             HandlePendingBlob(request) => request.0,
+            ShardInfoQuery(chain_id) => **chain_id,
             Vote(_)
             | Error(_)
             | ChainInfoResponse(_)
@@ -107,6 +121,7 @@ impl RpcMessage {
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
+            | ShardInfoResponse(_)
             | DownloadCertificatesResponse(_) => {
                 return None;
             }
@@ -123,6 +138,7 @@ impl RpcMessage {
         match self {
             VersionInfoQuery
             | NetworkDescriptionQuery
+            | ShardInfoQuery(_)
             | UploadBlob(_)
             | DownloadBlob(_)
             | DownloadConfirmedBlock(_)
@@ -143,6 +159,7 @@ impl RpcMessage {
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | NetworkDescriptionResponse(_)
+            | ShardInfoResponse(_)
             | UploadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
