@@ -50,10 +50,10 @@ impl ValidatorTrackers {
     /// the trackers accordingly.
     pub(super) fn filter_heights_to_download_and_update_trackers(
         &mut self,
-        mut remote_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>>,
+        remote_heights: &mut BTreeMap<ChainId, BTreeSet<BlockHeight>>,
         local_next_heights: BTreeMap<ChainId, BlockHeight>,
-    ) -> BTreeMap<ChainId, BTreeSet<BlockHeight>> {
-        for (sender_chain_id, remote_heights) in &mut remote_heights {
+    ) {
+        for (sender_chain_id, remote_heights) in remote_heights {
             let local_next = *local_next_heights
                 .get(sender_chain_id)
                 .unwrap_or(&BlockHeight(0));
@@ -70,8 +70,6 @@ impl ValidatorTrackers {
             }
             remote_heights.retain(|h| *h >= local_next);
         }
-
-        remote_heights
     }
 }
 

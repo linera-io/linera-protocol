@@ -841,7 +841,6 @@ impl<Env: Environment> Client<Env> {
         mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
-        // Verify the certificate before doing any expensive networking.
         let (max_epoch, committees) = match self.admin_committees().await {
             Ok(result) => result,
             Err(error) => {
@@ -966,11 +965,11 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip(self))]
     async fn get_received_log_from_validator(
         &self,
-        trackers: &HashMap<ValidatorPublicKey, u64>,
         chain_id: ChainId,
         remote_node: &RemoteNode<Env::ValidatorNode>,
+        tracker: u64,
     ) -> Result<Vec<ChainAndHeight>, ChainClientError> {
-        let mut offset = trackers.get(&remote_node.public_key).copied().unwrap_or(0);
+        let mut offset = tracker;
 
         // Retrieve the list of newly received certificates from this validator.
         let mut remote_log = Vec::new();
@@ -2207,11 +2206,11 @@ impl<Env: Environment> ChainClient<Env> {
             |_| (),
             |remote_node| {
                 let client = &self.client;
-                let trackers_clone = trackers.clone();
+                let tracker = trackers.get(&remote_node.public_key).copied().unwrap_or(0);
                 let received_log_batches = Arc::clone(&received_log_batches);
                 Box::pin(async move {
                     let batch = client
-                        .get_received_log_from_validator(&trackers_clone, chain_id, &remote_node)
+                        .get_received_log_from_validator(chain_id, &remote_node, tracker)
                         .await?;
                     let mut batches = received_log_batches.lock().unwrap();
                     batches.push((remote_node.public_key, batch));
@@ -2221,11 +2220,6 @@ impl<Env: Environment> ChainClient<Env> {
             self.options.grace_period,
         )
         .await;
-
-        trace!(
-            received_log_batches_len = %received_log_batches.lock().unwrap().len(),
-            "got result from communicate_with_quorum"
-        );
 
         if let Err(error) = result {
             error!(
@@ -2268,7 +2262,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .receive_sender_certificates(
                     received_log,
                     validator_trackers,
-                    nodes.clone(),
+                    &nodes,
                     cancellation_token.clone(),
                 )
                 .await?;
@@ -2283,17 +2277,14 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     async fn update_received_certificate_trackers(&self, trackers: &ValidatorTrackers) {
-        let new_trackers = trackers.to_map();
-        trace!(
-            ?new_trackers,
-            "find_received_certificates: new tracker values"
-        );
+        let updated_trackers = trackers.to_map();
+        trace!(?updated_trackers, "updated tracker values");
 
         // Update the trackers.
         if let Err(error) = self
             .client
             .local_node
-            .update_received_certificate_trackers(self.chain_id, new_trackers)
+            .update_received_certificate_trackers(self.chain_id, updated_trackers)
             .await
         {
             error!(
@@ -2310,7 +2301,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         received_logs: ReceivedLogs,
         mut validator_trackers: ValidatorTrackers,
-        nodes: Vec<RemoteNode<Env::ValidatorNode>>,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
         cancellation_token: Option<CancellationToken>,
     ) -> Result<ValidatorTrackers, ChainClientError> {
         debug!(
@@ -2319,7 +2310,7 @@ impl<Env: Environment> ChainClient<Env> {
             "receive_sender_certificates: number of chains and certificates to sync",
         );
 
-        let remote_heights = received_logs.heights_per_chain();
+        let mut remote_heights = received_logs.heights_per_chain();
 
         // Obtain the next block height we need in the local node, for each chain.
         let local_next_heights = self
@@ -2328,17 +2319,15 @@ impl<Env: Environment> ChainClient<Env> {
             .next_outbox_heights(remote_heights.keys(), self.chain_id)
             .await?;
 
-        let remote_heights = validator_trackers
-            .filter_heights_to_download_and_update_trackers(remote_heights, local_next_heights);
+        validator_trackers.filter_heights_to_download_and_update_trackers(
+            &mut remote_heights,
+            local_next_heights,
+        );
 
         debug!(
             remaining_total_certificates = %remote_heights.values().map(|h| h.len()).sum::<usize>(),
             "receive_sender_certificates: computed remote_heights"
         );
-
-        // Save the updated trackers for the next synchronization
-        self.update_received_certificate_trackers(&validator_trackers)
-            .await;
 
         let mut other_sender_chains = Vec::new();
         let (sender, mut receiver) = mpsc::unbounded_channel::<ChainAndHeight>();
@@ -2347,7 +2336,6 @@ impl<Env: Environment> ChainClient<Env> {
             remote_heights
                 .into_iter()
                 .filter_map(|(sender_chain_id, remote_heights)| {
-                    let remote_heights = remote_heights.into_iter().collect::<Vec<_>>();
                     if remote_heights.is_empty() {
                         // Our highest, locally executed block is higher than any block height
                         // from the current batch. Skip this batch, but remember to wait for
@@ -2355,9 +2343,10 @@ impl<Env: Environment> ChainClient<Env> {
                         other_sender_chains.push(sender_chain_id);
                         return None;
                     };
+                    let remote_heights = remote_heights.into_iter().collect::<Vec<_>>();
                     let sender = sender.clone();
                     let client = self.client.clone();
-                    let mut nodes = nodes.clone();
+                    let mut nodes = nodes.to_vec();
                     nodes.shuffle(&mut rand::thread_rng());
                     let received_logs_ref = &received_logs;
                     Some(async move {
@@ -2413,7 +2402,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Certificates for these chains were omitted from `certificates` because they were
         // already processed locally. If they were processed in a concurrent task, it is not
         // guaranteed that their cross-chain messages were already handled.
-        self.retry_pending_cross_chain_requests(&nodes, other_sender_chains)
+        self.retry_pending_cross_chain_requests(nodes, other_sender_chains)
             .await;
 
         debug!("receive_sender_certificates: finished processing other_sender_chains");
