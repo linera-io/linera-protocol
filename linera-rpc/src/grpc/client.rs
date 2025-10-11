@@ -497,4 +497,13 @@ impl ValidatorNode for GrpcClient {
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Ok(client_delegate!(self, missing_blob_ids, blob_ids)?.try_into()?)
     }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    async fn get_shard_info(&self, chain_id: ChainId) -> Result<linera_core::data_types::ShardInfo, NodeError> {
+        let response = client_delegate!(self, get_shard_info, chain_id)?;
+        Ok(linera_core::data_types::ShardInfo {
+            shard_id: response.shard_id as usize,
+            total_shards: response.total_shards as usize,
+        })
+    }
 }

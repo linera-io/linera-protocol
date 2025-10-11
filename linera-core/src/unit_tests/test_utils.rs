@@ -272,6 +272,14 @@ where
         })
         .await
     }
+
+    async fn get_shard_info(&self, _chain_id: ChainId) -> Result<crate::data_types::ShardInfo, NodeError> {
+        // For test purposes, return a dummy shard info
+        Ok(crate::data_types::ShardInfo {
+            shard_id: 0,
+            total_shards: 1,
+        })
+    }
 }
 
 impl<S> LocalValidatorClient<S>

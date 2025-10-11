@@ -286,6 +286,17 @@ impl TryFrom<RpcMessage> for BlobId {
     }
 }
 
+impl TryFrom<RpcMessage> for ShardInfo {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::ShardInfoResponse(shard_info) => Ok(*shard_info),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
 impl From<NodeError> for RpcMessage {
     fn from(error: NodeError) -> Self {
         RpcMessage::Error(Box::new(error))
