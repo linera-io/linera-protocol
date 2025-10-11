@@ -2223,8 +2223,10 @@ impl<Env: Environment> ChainClient<Env> {
         }
         let certificate_count = certificates.values().map(BTreeMap::len).sum::<usize>();
 
-        tracing::info!(
-            "Received {certificate_count} certificates from {validator_count} validator(s)."
+        tracing::debug!(
+            ?certificate_count,
+            ?validator_count,
+            "certificates received from validators",
         );
 
         // Process the certificates sorted by chain and in ascending order of block height.
