@@ -947,51 +947,55 @@ mod tests {
     async fn test_byte_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
-
         // Initially should have no pending changes
         assert!(!set.has_pending_changes().await);
 
         // First, add some initial data to storage
         set.insert(vec![1, 2, 3]);
         set.insert(vec![4, 5, 6]);
-        
         // Should have pending changes after inserts
         assert!(set.has_pending_changes().await);
-        
+
+        // Check keys before flush
+        assert_eq!(set.keys().await?, vec![vec![1, 2, 3], vec![4, 5, 6]]);
+
         let mut batch = Batch::new();
         set.flush(&mut batch)?;
         set.context().store().write_batch(batch).await?;
-
         // Should have no pending changes after flush
         assert!(!set.has_pending_changes().await);
 
+        // Check keys after flush - should be same
+        assert_eq!(set.keys().await?, vec![vec![1, 2, 3], vec![4, 5, 6]]);
+
         // Now clear the set (this sets delete_storage_first = true)
         set.clear();
-        
         // Should have pending changes after clear
         assert!(set.has_pending_changes().await);
+
+        // After clear, keys should be empty
+        assert!(set.keys().await?.is_empty());
 
         // Add new items after clearing - this creates Update::Set entries
         set.insert(vec![7, 8, 9]);
         set.insert(vec![10, 11, 12]);
-
         // Should still have pending changes
         assert!(set.has_pending_changes().await);
+
+        // Check keys after adding new items
+        assert_eq!(set.keys().await?, vec![vec![7, 8, 9], vec![10, 11, 12]]);
 
         // Create a new batch and flush
         let mut batch = Batch::new();
         let delete_view = set.flush(&mut batch)?;
-
         // The key assertion: delete_view should be false because we had Update::Set entries
         // This tests line 103: if let Update::Set(_) = update { ... delete_view = false; }
         assert!(!delete_view);
-
         // Verify the batch contains the expected operations
-        assert!(!batch.operations.is_empty());
+        assert!(!batch.is_empty());
 
         // Write the batch and verify the final state
         set.context().store().write_batch(batch).await?;
-
         // Should have no pending changes after final flush
         assert!(!set.has_pending_changes().await);
 
@@ -1001,7 +1005,6 @@ mod tests {
         assert!(new_set.contains(&[10, 11, 12]).await?);
         assert!(!new_set.contains(&[1, 2, 3]).await?);
         assert!(!new_set.contains(&[4, 5, 6]).await?);
-
         // New set should have no pending changes
         assert!(!new_set.has_pending_changes().await);
 
@@ -1105,13 +1108,7 @@ mod tests {
         set.insert(vec![5, 6]);
 
         // Call keys() method which executes line 223
-        let keys = set.keys().await?;
-
-        // Verify the Vec::new() initialization worked and keys were collected
-        assert_eq!(keys.len(), 3);
-        assert!(keys.contains(&vec![1, 2]));
-        assert!(keys.contains(&vec![3, 4]));
-        assert!(keys.contains(&vec![5, 6]));
+        assert_eq!(set.keys().await?, vec![vec![1,2],vec![3,4],vec![5,6]]);
 
         Ok(())
     }
@@ -1150,19 +1147,24 @@ mod tests {
 
         // Add items and verify delegation works
         set.insert(&42)?;
-        
+
         // Should have pending changes after first insert
         assert!(set.has_pending_changes().await);
-        
+
+        // Check indices after first insert
+        assert_eq!(set.indices().await?, vec![42]);
+
         set.insert(&84)?;
         set.insert(&126)?;
 
         // Should still have pending changes
         assert!(set.has_pending_changes().await);
 
+        // Check indices after all inserts
+        assert_eq!(set.indices().await?, vec![42, 84, 126]);
+
         // This calls line 557 which delegates to the underlying ByteSetView
-        let count = set.count().await?;
-        assert_eq!(count, 3);
+        assert_eq!(set.count().await?, 3);
 
         Ok(())
     }
@@ -1185,7 +1187,7 @@ mod tests {
         set.insert(vec![4]);  // This will create another Update::Set
 
         let mut keys_processed = Vec::new();
-        
+
         // This will exercise line 286: match update pattern
         // The method iterates through stored keys and pending updates
         set.for_each_key_while(|key| {
@@ -1217,7 +1219,7 @@ mod tests {
         set.context().store().write_batch(batch).await?;
 
         let mut count = 0;
-        
+
         // This tests line 300: return Ok(()); when function returns false
         set.for_each_key_while(|_key| {
             count += 1;
@@ -1275,12 +1277,12 @@ mod tests {
         set.insert(vec![2]);  // This will be processed as an Update::Set
 
         let mut count = 0;
-        
+
         // This tests line 290: return Ok(()); in the Update::Set branch
         // The function should return false on the first Update::Set key, triggering early return
         set.for_each_key_while(|key| {
             count += 1;
-            if key == &[0] {
+            if key == [0] {
                 Ok(false)  // This should trigger line 290: return Ok(());
             } else {
                 Ok(true)
@@ -1305,11 +1307,11 @@ mod tests {
         set.insert(vec![3]);
 
         let mut count = 0;
-        
+
         // This tests line 311: return Ok(()); in the remaining updates while loop
         set.for_each_key_while(|key| {
             count += 1;
-            if key == &[2] {
+            if key == [2] {
                 Ok(false)  // This should trigger line 311: return Ok(());
             } else {
                 Ok(true)
@@ -1318,34 +1320,6 @@ mod tests {
 
         // Should have stopped early when processing key [2]
         assert_eq!(count, 2);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_set_view_for_each_index_while_deserialization() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: SetView<_, u32> = SetView::load(context).await?;
-
-        // Add some data
-        set.insert(&42)?;
-        set.insert(&84)?;
-        set.insert(&126)?;
-
-        let mut indices_processed = Vec::new();
-        
-        // This tests line 590: let index = BaseKey::deserialize_value(key)?;
-        // The SetView should deserialize byte keys back to u32 indices
-        set.for_each_index_while(|index| {
-            indices_processed.push(index);
-            Ok(true)
-        }).await?;
-
-        // Verify that deserialization worked correctly
-        assert_eq!(indices_processed.len(), 3);
-        assert!(indices_processed.contains(&42));
-        assert!(indices_processed.contains(&84));
-        assert!(indices_processed.contains(&126));
 
         Ok(())
     }
@@ -1362,7 +1336,7 @@ mod tests {
         set.insert(&40)?;
 
         let mut count = 0;
-        
+
         // Test line 590 deserialization combined with early return
         set.for_each_index_while(|index| {
             count += 1;
@@ -1397,7 +1371,7 @@ mod tests {
         set.insert(vec![4]);  // This creates an Update::Set that matches stored key [4]
 
         let mut keys_processed = Vec::new();
-        
+
         // This tests line 295: break; when key == &index
         // When the update key [4] matches the stored index [4], it should break and continue to next stored key
         set.for_each_key_while(|key| {
@@ -1409,7 +1383,7 @@ mod tests {
         assert!(keys_processed.contains(&vec![2]));
         assert!(keys_processed.contains(&vec![4]));
         assert!(keys_processed.contains(&vec![6]));
-        
+
         // Count occurrences of [4] - should be exactly 1 due to the break on line 295
         let count_4 = keys_processed.iter().filter(|&key| key == &vec![4]).count();
         assert_eq!(count_4, 1);
@@ -1430,7 +1404,7 @@ mod tests {
         set.remove(vec![4]);  // Update::Removed - should be ignored in the loop
 
         let mut keys_processed = Vec::new();
-        
+
         // This tests line 313: closing brace of Update::Set block in remaining updates
         // Only Update::Set entries should be processed, Update::Removed should be skipped
         set.for_each_key_while(|key| {
@@ -1462,7 +1436,7 @@ mod tests {
         set.insert(vec![5]);  // Update::Set
 
         let mut processed_keys = Vec::new();
-        
+
         // This further tests the Update::Set filtering in the remaining updates loop
         set.for_each_key_while(|key| {
             processed_keys.push(key.to_vec());
@@ -1490,16 +1464,22 @@ mod tests {
 
         // First add an item and persist it
         set.insert(vec![1, 2, 3]);
-        
+
         // Should have pending changes after insert
         assert!(set.has_pending_changes().await);
-        
+
+        // Check keys before flush
+        assert_eq!(set.keys().await?, vec![vec![1, 2, 3]]);
+
         let mut batch = Batch::new();
         set.flush(&mut batch)?;
         set.context().store().write_batch(batch).await?;
 
         // No pending changes after flush
         assert!(!set.has_pending_changes().await);
+
+        // Check keys after flush
+        assert_eq!(set.keys().await?, vec![vec![1, 2, 3]]);
 
         // Verify it exists
         assert!(set.contains(&[1, 2, 3]).await?);
@@ -1509,6 +1489,9 @@ mod tests {
 
         // Should have pending changes after remove
         assert!(set.has_pending_changes().await);
+
+        // After remove, keys should be empty
+        assert!(set.keys().await?.is_empty());
 
         // This tests line 196: Update::Removed => false,
         // The contains() method should return false for the removed item
@@ -1580,7 +1563,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_contains_mixed_update_scenarios() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
@@ -1710,7 +1693,7 @@ mod tests {
         // Test that SetView hash delegation produces same result as direct ByteSetView hash
         let context2 = MemoryContext::new_for_testing(());
         let mut byte_set = ByteSetView::load(context2).await?;
-        
+
         // Add equivalent data to ByteSetView (using serialized form of the same numbers)
         use crate::context::BaseKey;
         byte_set.insert(BaseKey::derive_short_key(&42u32)?);
@@ -1758,10 +1741,13 @@ mod tests {
         // Add initial data
         set.insert(&42u128)?;
         set.insert(&84u128)?;
-        
+
         // Should have pending changes after inserts
         assert!(set.has_pending_changes().await);
-        
+
+        // Check indices before flush
+        assert_eq!(set.indices().await?, vec![42u128, 84u128]);
+
         let mut batch = Batch::new();
         set.flush(&mut batch)?;
         set.context().store().write_batch(batch).await?;
@@ -1769,11 +1755,17 @@ mod tests {
         // No pending changes after flush
         assert!(!set.has_pending_changes().await);
 
+        // Check indices after flush
+        assert_eq!(set.indices().await?, vec![42u128, 84u128]);
+
         // Clear the set
         set.clear();
 
         // Should have pending changes after clear
         assert!(set.has_pending_changes().await);
+
+        // After clear, indices should be empty
+        assert!(set.indices().await?.is_empty());
 
         // Add new items - this should trigger the Update::Set branch (line 103 equivalent)
         set.insert(&123u128)?;
@@ -1781,6 +1773,9 @@ mod tests {
 
         // Should still have pending changes
         assert!(set.has_pending_changes().await);
+
+        // Check indices after new inserts
+        assert_eq!(set.indices().await?, vec![123u128, 456u128]);
 
         let mut batch = Batch::new();
         let delete_view = set.flush(&mut batch)?;
@@ -1790,10 +1785,10 @@ mod tests {
 
         // Verify final state
         set.context().store().write_batch(batch).await?;
-        
+
         // No pending changes after final flush
         assert!(!set.has_pending_changes().await);
-        
+
         let new_set: CustomSetView<_, u128> = CustomSetView::load(set.context().clone()).await?;
         assert!(new_set.contains(&123u128).await?);
         assert!(new_set.contains(&456u128).await?);
@@ -1912,7 +1907,7 @@ mod tests {
         set.insert(&121212u128)?;
 
         let mut indices_processed = Vec::new();
-        
+
         // Test CustomSerialize deserialization (line 590 equivalent but with CustomSerialize)
         set.for_each_index_while(|index| {
             indices_processed.push(index);
@@ -1940,7 +1935,7 @@ mod tests {
         set.insert(&40u128)?;
 
         let mut count = 0;
-        
+
         // Test custom deserialization with early return
         set.for_each_index_while(|index| {
             count += 1;
@@ -1959,37 +1954,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_custom_set_view_indices_method() -> Result<(), ViewError> {
+    async fn test_custom_set_view_mixed_operations() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
 
         // Test the indices() method which uses custom deserialization
-        let indices = set.indices().await?;
-        assert_eq!(indices.len(), 0);
-
-        // Add some data
-        set.insert(&777u128)?;
-        set.insert(&888u128)?;
-        set.insert(&999u128)?;
-
-        let indices = set.indices().await?;
-        assert_eq!(indices.len(), 3);
-        assert!(indices.contains(&777u128));
-        assert!(indices.contains(&888u128));
-        assert!(indices.contains(&999u128));
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_custom_set_view_mixed_operations() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        assert!(set.indices().await?.is_empty());
 
         // Test a combination of operations
         set.insert(&100u128)?;
         set.insert(&200u128)?;
         set.insert(&300u128)?;
+
+        // Check indices after all inserts
+        assert_eq!(set.indices().await?, vec![100u128, 200u128, 300u128]);
 
         // Remove one item (creates Update::Removed)
         set.remove(&200u128)?;
@@ -2000,15 +1978,10 @@ mod tests {
         assert!(set.contains(&300u128).await?);
 
         // Test count with mixed updates
-        let count = set.count().await?;
-        assert_eq!(count, 2);
+        assert_eq!(set.count().await?, 2);
 
-        // Test indices with mixed updates
-        let indices = set.indices().await?;
-        assert_eq!(indices.len(), 2);
-        assert!(indices.contains(&100u128));
-        assert!(!indices.contains(&200u128));
-        assert!(indices.contains(&300u128));
+        // Test indices with mixed updates - should not include removed item
+        assert_eq!(set.indices().await?, vec![100u128, 300u128]);
 
         Ok(())
     }
@@ -2140,14 +2113,14 @@ mod tests {
             async fn test_set(&self) -> TestSetView {
                 let context = MemoryContext::new_for_testing(());
                 let mut set: SetView<_, u32> = SetView::load(context).await.unwrap();
-                
+
                 // Add test data
                 set.insert(&42).unwrap();
                 set.insert(&84).unwrap();
                 set.insert(&126).unwrap();
                 set.insert(&168).unwrap();
                 set.insert(&210).unwrap();
-                
+
                 TestSetView { set }
             }
         }
@@ -2176,7 +2149,7 @@ mod tests {
         #[tokio::test]
         async fn test_graphql_elements_without_count() -> Result<(), Box<dyn std::error::Error>> {
             let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
-            
+
             // Test line 1169 without count parameter - should return all elements
             let query = r#"
                 query {
@@ -2188,7 +2161,7 @@ mod tests {
 
             let result = schema.execute(query).await;
             assert!(result.errors.is_empty());
-            
+
             let data = result.data.into_json()?;
             let elements = &data["testSet"]["elements"];
             assert!(elements.is_array());
@@ -2200,7 +2173,7 @@ mod tests {
         #[tokio::test]
         async fn test_graphql_elements_with_count() -> Result<(), Box<dyn std::error::Error>> {
             let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
-            
+
             // Test line 1172 truncate logic - should limit to 3 elements
             let query = r#"
                 query {
@@ -2212,7 +2185,7 @@ mod tests {
 
             let result = schema.execute(query).await;
             assert!(result.errors.is_empty());
-            
+
             let data = result.data.into_json()?;
             let elements = &data["testSet"]["elements"];
             assert!(elements.is_array());
@@ -2225,7 +2198,7 @@ mod tests {
         #[tokio::test]
         async fn test_graphql_count_field() -> Result<(), Box<dyn std::error::Error>> {
             let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
-            
+
             let query = r#"
                 query {
                     testSet {
@@ -2236,7 +2209,7 @@ mod tests {
 
             let result = schema.execute(query).await;
             assert!(result.errors.is_empty());
-            
+
             let data = result.data.into_json()?;
             let count = &data["testSet"]["count"];
             assert_eq!(count.as_u64().unwrap(), 5);
@@ -2247,7 +2220,7 @@ mod tests {
         #[tokio::test]
         async fn test_graphql_combined_query() -> Result<(), Box<dyn std::error::Error>> {
             let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
-            
+
             // Test both elements and count in a single query
             let query = r#"
                 query {
@@ -2260,11 +2233,11 @@ mod tests {
 
             let result = schema.execute(query).await;
             assert!(result.errors.is_empty());
-            
+
             let data = result.data.into_json()?;
             let elements = &data["testSet"]["elements"];
             let count = &data["testSet"]["count"];
-            
+
             // Verify truncation worked (line 1172)
             assert_eq!(elements.as_array().unwrap().len(), 2);
             // Verify count returns total, not truncated count
