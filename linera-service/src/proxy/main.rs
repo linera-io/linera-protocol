@@ -484,8 +484,10 @@ impl ProxyOptions {
         let server_config: ValidatorServerConfig =
             util::read_json(&self.config_path).expect("Fail to read server config");
         let public_key = &server_config.validator.public_key;
-        linera_base::tracing::init_with_opentelemetry(&format!("validator-{public_key}-proxy"))
-            .await;
+        linera_base::tracing::init_with_opentelemetry(
+            &format!("validator-{public_key}-proxy"),
+            None,
+        );
 
         let store_config = self
             .storage_config
