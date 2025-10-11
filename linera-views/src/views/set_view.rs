@@ -948,19 +948,35 @@ mod tests {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
 
+        // Initially should have no pending changes
+        assert!(!set.has_pending_changes().await);
+
         // First, add some initial data to storage
         set.insert(vec![1, 2, 3]);
         set.insert(vec![4, 5, 6]);
+        
+        // Should have pending changes after inserts
+        assert!(set.has_pending_changes().await);
+        
         let mut batch = Batch::new();
         set.flush(&mut batch)?;
         set.context().store().write_batch(batch).await?;
 
+        // Should have no pending changes after flush
+        assert!(!set.has_pending_changes().await);
+
         // Now clear the set (this sets delete_storage_first = true)
         set.clear();
+        
+        // Should have pending changes after clear
+        assert!(set.has_pending_changes().await);
 
         // Add new items after clearing - this creates Update::Set entries
         set.insert(vec![7, 8, 9]);
         set.insert(vec![10, 11, 12]);
+
+        // Should still have pending changes
+        assert!(set.has_pending_changes().await);
 
         // Create a new batch and flush
         let mut batch = Batch::new();
@@ -976,12 +992,18 @@ mod tests {
         // Write the batch and verify the final state
         set.context().store().write_batch(batch).await?;
 
+        // Should have no pending changes after final flush
+        assert!(!set.has_pending_changes().await);
+
         // Reload and verify only the new items exist
         let new_set = ByteSetView::load(set.context().clone()).await?;
         assert!(new_set.contains(&[7, 8, 9]).await?);
         assert!(new_set.contains(&[10, 11, 12]).await?);
         assert!(!new_set.contains(&[1, 2, 3]).await?);
         assert!(!new_set.contains(&[4, 5, 6]).await?);
+
+        // New set should have no pending changes
+        assert!(!new_set.has_pending_changes().await);
 
         Ok(())
     }
@@ -1119,14 +1141,24 @@ mod tests {
         let context = MemoryContext::new_for_testing(());
         let mut set: SetView<_, u32> = SetView::load(context).await?;
 
+        // Initially no pending changes
+        assert!(!set.has_pending_changes().await);
+
         // Test line 557: self.set.count().await - SetView delegates to ByteSetView
         let count = set.count().await?;
         assert_eq!(count, 0);
 
         // Add items and verify delegation works
         set.insert(&42)?;
+        
+        // Should have pending changes after first insert
+        assert!(set.has_pending_changes().await);
+        
         set.insert(&84)?;
         set.insert(&126)?;
+
+        // Should still have pending changes
+        assert!(set.has_pending_changes().await);
 
         // This calls line 557 which delegates to the underlying ByteSetView
         let count = set.count().await?;
@@ -1453,17 +1485,30 @@ mod tests {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
 
+        // Initially no pending changes
+        assert!(!set.has_pending_changes().await);
+
         // First add an item and persist it
         set.insert(vec![1, 2, 3]);
+        
+        // Should have pending changes after insert
+        assert!(set.has_pending_changes().await);
+        
         let mut batch = Batch::new();
         set.flush(&mut batch)?;
         set.context().store().write_batch(batch).await?;
+
+        // No pending changes after flush
+        assert!(!set.has_pending_changes().await);
 
         // Verify it exists
         assert!(set.contains(&[1, 2, 3]).await?);
 
         // Now remove the item - this creates an Update::Removed
         set.remove(vec![1, 2, 3]);
+
+        // Should have pending changes after remove
+        assert!(set.has_pending_changes().await);
 
         // This tests line 196: Update::Removed => false,
         // The contains() method should return false for the removed item
@@ -1707,19 +1752,35 @@ mod tests {
         let context = MemoryContext::new_for_testing(());
         let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
 
+        // Initially no pending changes
+        assert!(!set.has_pending_changes().await);
+
         // Add initial data
         set.insert(&42u128)?;
         set.insert(&84u128)?;
+        
+        // Should have pending changes after inserts
+        assert!(set.has_pending_changes().await);
+        
         let mut batch = Batch::new();
         set.flush(&mut batch)?;
         set.context().store().write_batch(batch).await?;
 
+        // No pending changes after flush
+        assert!(!set.has_pending_changes().await);
+
         // Clear the set
         set.clear();
+
+        // Should have pending changes after clear
+        assert!(set.has_pending_changes().await);
 
         // Add new items - this should trigger the Update::Set branch (line 103 equivalent)
         set.insert(&123u128)?;
         set.insert(&456u128)?;
+
+        // Should still have pending changes
+        assert!(set.has_pending_changes().await);
 
         let mut batch = Batch::new();
         let delete_view = set.flush(&mut batch)?;
@@ -1729,11 +1790,18 @@ mod tests {
 
         // Verify final state
         set.context().store().write_batch(batch).await?;
+        
+        // No pending changes after final flush
+        assert!(!set.has_pending_changes().await);
+        
         let new_set: CustomSetView<_, u128> = CustomSetView::load(set.context().clone()).await?;
         assert!(new_set.contains(&123u128).await?);
         assert!(new_set.contains(&456u128).await?);
         assert!(!new_set.contains(&42u128).await?);
         assert!(!new_set.contains(&84u128).await?);
+
+        // New set should have no pending changes
+        assert!(!new_set.has_pending_changes().await);
 
         Ok(())
     }
@@ -1941,6 +2009,120 @@ mod tests {
         assert!(indices.contains(&100u128));
         assert!(!indices.contains(&200u128));
         assert!(indices.contains(&300u128));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_has_pending_changes_comprehensive() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set = ByteSetView::load(context).await?;
+
+        // Fresh load should have no pending changes
+        assert!(!set.has_pending_changes().await);
+
+        // Insert creates pending changes
+        set.insert(vec![1]);
+        assert!(set.has_pending_changes().await);
+
+        // Multiple inserts still have pending changes
+        set.insert(vec![2]);
+        set.insert(vec![3]);
+        assert!(set.has_pending_changes().await);
+
+        // Flush clears pending changes
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+        assert!(!set.has_pending_changes().await);
+
+        // Remove creates pending changes
+        set.remove(vec![1]);
+        assert!(set.has_pending_changes().await);
+
+        // Clear creates pending changes
+        set.clear();
+        assert!(set.has_pending_changes().await);
+
+        // Insert after clear still has pending changes
+        set.insert(vec![4]);
+        assert!(set.has_pending_changes().await);
+
+        // Rollback clears pending changes
+        set.rollback();
+        assert!(!set.has_pending_changes().await);
+
+        // After rollback, original data should still be accessible
+        assert!(set.contains(&[2]).await?);
+        assert!(set.contains(&[3]).await?);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_set_view_has_pending_changes_comprehensive() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: SetView<_, u32> = SetView::load(context).await?;
+
+        // Fresh load should have no pending changes
+        assert!(!set.has_pending_changes().await);
+
+        // Insert creates pending changes
+        set.insert(&42)?;
+        assert!(set.has_pending_changes().await);
+
+        // Multiple operations maintain pending changes
+        set.insert(&84)?;
+        set.remove(&42)?;
+        assert!(set.has_pending_changes().await);
+
+        // Flush clears pending changes
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+        assert!(!set.has_pending_changes().await);
+
+        // Clear creates pending changes
+        set.clear();
+        assert!(set.has_pending_changes().await);
+
+        // Rollback clears pending changes
+        set.rollback();
+        assert!(!set.has_pending_changes().await);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_has_pending_changes_comprehensive() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Fresh load should have no pending changes
+        assert!(!set.has_pending_changes().await);
+
+        // Insert creates pending changes
+        set.insert(&12345u128)?;
+        assert!(set.has_pending_changes().await);
+
+        // Multiple operations maintain pending changes
+        set.insert(&67890u128)?;
+        set.remove(&12345u128)?;
+        assert!(set.has_pending_changes().await);
+
+        // Flush clears pending changes
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+        assert!(!set.has_pending_changes().await);
+
+        // Clear creates pending changes
+        set.clear();
+        assert!(set.has_pending_changes().await);
+
+        // Rollback clears pending changes
+        set.rollback();
+        assert!(!set.has_pending_changes().await);
 
         Ok(())
     }
