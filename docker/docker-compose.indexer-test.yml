@@ -6,7 +6,7 @@ services:
     ports:
       - "${LINERA_STORAGE_SERVICE_PORT:-1235}:${LINERA_STORAGE_SERVICE_PORT:-1235}"
     command: >
-      sh -c "./linera-storage-server memory --endpoint 0.0.0.0:${LINERA_STORAGE_SERVICE_PORT:-1235}"
+      ./linera-storage-server memory --endpoint 0.0.0.0:${LINERA_STORAGE_SERVICE_PORT:-1235}
     environment:
       - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
     healthcheck:
@@ -51,10 +51,10 @@ services:
       - "${BLOCK_EXPORTER_PORT:-8882}:${BLOCK_EXPORTER_PORT:-8882}"
       - "${METRICS_PORT:-9091}:${METRICS_PORT:-9091}"
     command: >
-      sh -c "./linera-exporter 
-      --storage service:tcp:linera-storage-service:${LINERA_STORAGE_SERVICE_PORT:-1235}:linera_storage_service_server_0_db 
-      --config-path /exporter-config.toml 
-      --metrics-port ${METRICS_PORT:-9091}"
+      ./linera-exporter
+      --storage service:tcp:linera-storage-service:${LINERA_STORAGE_SERVICE_PORT:-1235}:linera_storage_service_server_0_db
+      --config-path /exporter-config.toml
+      --metrics-port ${METRICS_PORT:-9091}
     environment:
       - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}
       - BLOCK_EXPORTER_PORT=${BLOCK_EXPORTER_PORT:-8882}
@@ -82,14 +82,14 @@ services:
       - "${FAUCET_PORT:-8080}:${FAUCET_PORT:-8080}"
       - "13001:13001"
     command: >
-      sh -c "./linera net 
+      ./linera net
       --storage service:tcp:linera-storage-service:${LINERA_STORAGE_SERVICE_PORT:-1235}:linera_storage_service
       up
       --with-faucet
       --faucet-port ${FAUCET_PORT:-8080}
       --with-block-exporter
       --exporter-address linera-block-exporter
-      --exporter-port ${BLOCK_EXPORTER_PORT:-8882}"
+      --exporter-port ${BLOCK_EXPORTER_PORT:-8882}
     environment:
       - RUST_LOG=linera=info
       - LINERA_STORAGE_SERVICE_PORT=${LINERA_STORAGE_SERVICE_PORT:-1235}

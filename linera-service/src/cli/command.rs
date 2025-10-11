@@ -1175,6 +1175,16 @@ pub enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[arg(long, default_value = "false")]
         dual_store: bool,
+
+        /// Build Docker image with memory-profiling feature enabled.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "false")]
+        with_memory_profiling: bool,
+
+        /// Build Docker image with tempo feature enabled.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "false")]
+        with_tempo: bool,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

@@ -801,6 +801,8 @@ where
     metrics_port: NonZeroU16,
     default_chain: Option<ChainId>,
     context: Arc<Mutex<C>>,
+    #[cfg(feature = "memory-profiling")]
+    memory_profiling: bool,
 }
 
 impl<C> Clone for NodeService<C>
@@ -815,6 +817,8 @@ where
             metrics_port: self.metrics_port,
             default_chain: self.default_chain,
             context: Arc::clone(&self.context),
+            #[cfg(feature = "memory-profiling")]
+            memory_profiling: self.memory_profiling,
         }
     }
 }
@@ -830,6 +834,7 @@ where
         #[cfg(with_metrics)] metrics_port: NonZeroU16,
         default_chain: Option<ChainId>,
         context: C,
+        #[cfg(feature = "memory-profiling")] memory_profiling: bool,
     ) -> Self {
         Self {
             config,
@@ -838,6 +843,8 @@ where
             metrics_port,
             default_chain,
             context: Arc::new(Mutex::new(context)),
+            #[cfg(feature = "memory-profiling")]
+            memory_profiling,
         }
     }
 
@@ -876,7 +883,12 @@ where
             axum::routing::get(util::graphiql).post(Self::application_handler);
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.metrics_address(), cancellation_token.clone());
+        monitoring_server::start_metrics(
+            self.metrics_address(),
+            cancellation_token.clone(),
+            #[cfg(feature = "memory-profiling")]
+            self.memory_profiling,
+        );
 
         let app = Router::new()
             .route("/", index_handler)

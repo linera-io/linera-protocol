@@ -25,7 +25,8 @@ ARG binaries=
 ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
-ARG build_features=scylladb,metrics,memory-profiling,tempo
+ARG build_features=scylladb,metrics
+ARG additional_features=
 ARG rustflags="-C force-frame-pointers=yes"
 
 FROM rust:1.74-slim-bookworm AS builder
@@ -34,6 +35,7 @@ ARG target
 ARG build_flag
 ARG build_folder
 ARG build_features
+ARG additional_features
 ARG rustflags
 
 RUN apt-get update && apt-get install -y \
@@ -74,12 +76,17 @@ COPY rust-toolchain* Cargo.* ./
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
-RUN cargo build ${build_flag:+"$build_flag"} \
+RUN if [ -n "$additional_features" ]; then \
+        features="$build_features,$additional_features"; \
+    else \
+        features="$build_features"; \
+    fi && \
+    cargo build ${build_flag:+"$build_flag"} \
     --target "$target" \
     --bin linera \
     --bin linera-proxy \
     --bin linera-server \
-    --features $build_features
+    --features "$features"
 
 RUN mv \
     target/"$target"/"$build_folder"/linera \
@@ -118,14 +125,4 @@ COPY --from=binaries \
     linera \
     linera-server \
     linera-proxy \
-    ./
-
-COPY --chmod=755 \
-    docker/server-entrypoint.sh \
-    docker/server-init.sh \
-    docker/proxy-entrypoint.sh \
-    docker/proxy-init.sh \
-    docker/compose-server-entrypoint.sh \
-    docker/compose-proxy-entrypoint.sh \
-    docker/compose-server-init.sh \
     ./

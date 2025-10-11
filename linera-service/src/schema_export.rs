@@ -231,6 +231,8 @@ async fn main() -> std::io::Result<()> {
         std::num::NonZeroU16::new(8081).unwrap(),
         None,
         DummyContext,
+        #[cfg(feature = "memory-profiling")]
+        false,
     );
     let schema = service.schema().sdl();
     print!("{}", schema);
