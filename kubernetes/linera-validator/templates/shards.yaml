@@ -35,7 +35,16 @@ spec:
         - name: linera-server-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./server-init.sh", {{ .Values.storage | quote }}, {{ .Values.storageReplicationFactor | quote }}]
+          command:
+            - "./linera"
+            - "storage"
+            - "initialize"
+            - "--storage"
+            - {{ .Values.storage | quote }}
+            - "--genesis"
+            - "/config/genesis.json"
+            - "--storage-replication-factor"
+            - {{ .Values.storageReplicationFactor | quote }}
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
@@ -53,10 +62,27 @@ spec:
         - name: linera-server
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./server-entrypoint.sh", {{ .Values.storage | quote }}, {{ .Values.storageReplicationFactor | quote }}]
+          command:
+            - "./linera-server"
+            - "run"
+            - "--storage"
+            - {{ .Values.storage | quote }}
+            - "--server"
+            - "/config/server.json"
+            - "--shard"
+            - "$(POD_ORDINAL)"
+            - "--storage-replication-factor"
+            - {{ .Values.storageReplicationFactor | quote }}
+            - "--memory-profiling"
+            - "--otel-exporter-otlp-endpoint"
+            - "http://tempo.tempo.svc.cluster.local:4317"
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+            - name: POD_ORDINAL
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['statefulset.kubernetes.io/pod-ordinal']
             {{- if .Values.serverTokioThreads }}
             - name: LINERA_SERVER_TOKIO_THREADS
               value: "{{ .Values.serverTokioThreads }}"

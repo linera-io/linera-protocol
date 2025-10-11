@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  build-and-push:
+  build-and-push-base:
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
 
@@ -28,11 +28,11 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-    
+
       - name: Authenticate Docker with GCP
         run: |
           gcloud auth configure-docker us-docker.pkg.dev
-  
+
       - name: Set env variables
         run: |
           echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
@@ -46,17 +46,70 @@ jobs:
       - name: Set docker image env variable
         run: |
           echo "DOCKER_IMAGE=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera" >> $GITHUB_ENV
-  
-      - name: Build Docker image
+
+      - name: Build base Docker image
         run: |
           docker build --build-arg git_commit=${{ env.GIT_COMMIT_LONG }} \
             -f docker/Dockerfile . \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }} \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }} \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}
-  
-      - name: Push Docker image to Google Artifact Registry
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }}_base \
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }}_base \
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}_base
+
+      - name: Push base Docker image to Google Artifact Registry
         run: |
-          docker push ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }}
-          docker push ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }}
-          docker push ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}
+          docker push ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }}_base
+          docker push ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }}_base
+          docker push ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}_base
+
+  build-and-push-full:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Auth service account
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Authenticate Docker with GCP
+        run: |
+          gcloud auth configure-docker us-docker.pkg.dev
+
+      - name: Set env variables
+        run: |
+          echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          echo "GIT_COMMIT_LONG=${GITHUB_SHA}" >> $GITHUB_ENV
+          if [ -n "${{ github.head_ref }}" ]; then
+            echo "BRANCH_NAME=${{ github.head_ref }}" >> $GITHUB_ENV
+          else
+            echo "BRANCH_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
+
+      - name: Set docker image env variable
+        run: |
+          echo "DOCKER_IMAGE=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera" >> $GITHUB_ENV
+
+      - name: Build full Docker image
+        run: |
+          docker build --build-arg git_commit=${{ env.GIT_COMMIT_LONG }} \
+            --build-arg additional_features=tempo,memory-profiling \
+            -f docker/Dockerfile . \
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }}_full \
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }}_full \
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}_full
+
+      - name: Push full Docker image to Google Artifact Registry
+        run: |
+          docker push ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }}_full
+          docker push ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }}_full
+          docker push ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}_full

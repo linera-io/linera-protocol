@@ -923,6 +923,8 @@ impl Runnable for Job {
                         monitoring_server::start_metrics(
                             metrics_address,
                             shutdown_notifier.clone(),
+                            #[cfg(feature = "memory-profiling")]
+                            false,
                         );
                     }
 
@@ -1184,6 +1186,8 @@ impl Runnable for Job {
                         monitoring_server::start_metrics(
                             metrics_address,
                             shutdown_notifier.clone(),
+                            #[cfg(feature = "memory-profiling")]
+                            false,
                         );
                     }
 
@@ -1286,6 +1290,8 @@ impl Runnable for Job {
                     metrics_port,
                     default_chain,
                     context,
+                    #[cfg(feature = "memory-profiling")]
+                    options.memory_profiling,
                 );
                 let cancellation_token = CancellationToken::new();
                 tokio::spawn(listen_for_shutdown_signals(cancellation_token.clone()));
@@ -1329,6 +1335,8 @@ impl Runnable for Job {
                     chain_listener_config: config,
                     storage_path,
                     max_batch_size,
+                    #[cfg(feature = "memory-profiling")]
+                    memory_profiling: options.memory_profiling,
                 };
                 let faucet = FaucetService::new(config, context, storage).await?;
                 let cancellation_token = CancellationToken::new();
@@ -1814,6 +1822,16 @@ struct ClientOptions {
     #[arg(long, env = "LINERA_CLIENT_TOKIO_BLOCKING_THREADS")]
     tokio_blocking_threads: Option<usize>,
 
+    /// Enable memory profiling with jemalloc (requires memory-profiling feature).
+    #[cfg(feature = "memory-profiling")]
+    #[arg(long)]
+    memory_profiling: bool,
+
+    /// OpenTelemetry OTLP exporter endpoint for Tempo (requires tempo feature).
+    #[cfg(feature = "tempo")]
+    #[arg(long, env = "LINERA_OTEL_EXPORTER_OTLP_ENDPOINT")]
+    otel_exporter_otlp_endpoint: Option<String>,
+
     /// Subcommand.
     #[command(subcommand)]
     command: ClientCommand,
@@ -2073,13 +2091,19 @@ fn init_tracing(
     options: &ClientOptions,
 ) -> anyhow::Result<Option<linera_base::tracing::ChromeTraceGuard>> {
     if matches!(&options.command, ClientCommand::Faucet { .. }) {
-        linera_base::tracing::init_with_opentelemetry(
-            &options.command.log_file_name(),
-            options
-                .context_options
-                .otel_exporter_otlp_endpoint
-                .as_deref(),
-        );
+        #[cfg(feature = "tempo")]
+        if let Some(endpoint) = &options.otel_exporter_otlp_endpoint {
+            linera_base::tracing::init_with_opentelemetry(
+                &options.command.log_file_name(),
+                endpoint,
+            );
+        } else {
+            linera_base::tracing::init(&options.command.log_file_name());
+        }
+
+        #[cfg(not(feature = "tempo"))]
+        linera_base::tracing::init(&options.command.log_file_name());
+
         Ok(None)
     } else if options.context_options.chrome_trace_exporter {
         let trace_file_path = options

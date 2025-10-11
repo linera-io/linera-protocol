@@ -20,17 +20,16 @@ use {
 /// Initializes tracing with OpenTelemetry OTLP exporter to Tempo.
 ///
 /// Exports traces to Tempo using the OTLP protocol. Requires the `tempo` feature.
+/// The `otlp_endpoint` parameter is required and must be provided by the caller.
 #[cfg(feature = "tempo")]
-pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
-    let endpoint = otlp_endpoint.unwrap_or("http://tempo.tempo.svc.cluster.local:4317");
-
+pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: &str) {
     let resource = Resource::builder()
         .with_service_name(log_name.to_string())
         .build();
 
     let exporter = SpanExporter::builder()
         .with_tonic()
-        .with_endpoint(endpoint)
+        .with_endpoint(otlp_endpoint)
         .build()
         .expect("Failed to create OTLP exporter");
 
@@ -63,15 +62,6 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
         .with(maybe_log_file_layer)
         .with(stderr_layer)
         .init();
-}
-
-/// Fallback when tempo feature is not enabled.
-#[cfg(not(feature = "tempo"))]
-pub fn init_with_opentelemetry(log_name: &str, _otlp_endpoint: Option<&str>) {
-    eprintln!(
-        "OTLP export requires the 'tempo' feature to be enabled! Falling back to default tracing initialization."
-    );
-    crate::tracing::init(log_name);
 }
 
 /// Guard that flushes Chrome trace file when dropped.

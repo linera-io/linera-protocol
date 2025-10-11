@@ -96,6 +96,16 @@ pub struct ProxyOptions {
     /// Runs a specific proxy instance.
     #[arg(long)]
     id: Option<usize>,
+
+    /// Enable memory profiling with jemalloc (requires memory-profiling feature).
+    #[cfg(feature = "memory-profiling")]
+    #[arg(long)]
+    memory_profiling: bool,
+
+    /// OpenTelemetry OTLP exporter endpoint for Tempo (requires tempo feature).
+    #[cfg(feature = "tempo")]
+    #[arg(long, env = "LINERA_OTEL_EXPORTER_OTLP_ENDPOINT")]
+    otel_exporter_otlp_endpoint: Option<String>,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -114,6 +124,8 @@ struct ProxyContext {
     send_timeout: Duration,
     recv_timeout: Duration,
     id: usize,
+    #[cfg(feature = "memory-profiling")]
+    memory_profiling: bool,
 }
 
 impl ProxyContext {
@@ -124,6 +136,8 @@ impl ProxyContext {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             id: options.id.unwrap_or(0),
+            #[cfg(feature = "memory-profiling")]
+            memory_profiling: options.memory_profiling,
         })
     }
 }
@@ -163,6 +177,8 @@ where
                     tls,
                     storage,
                     context.id,
+                    #[cfg(feature = "memory-profiling")]
+                    context.memory_profiling,
                 ))
             }
             (
@@ -182,6 +198,8 @@ where
                 recv_timeout: context.recv_timeout,
                 storage,
                 id: context.id,
+                #[cfg(feature = "memory-profiling")]
+                memory_profiling: context.memory_profiling,
             })),
             _ => {
                 bail!(
@@ -207,6 +225,8 @@ where
     recv_timeout: Duration,
     storage: S,
     id: usize,
+    #[cfg(feature = "memory-profiling")]
+    memory_profiling: bool,
 }
 
 #[async_trait]
@@ -265,7 +285,12 @@ where
         let address = self.get_listen_address();
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(address, shutdown_signal.clone());
+        monitoring_server::start_metrics(
+            address,
+            shutdown_signal.clone(),
+            #[cfg(feature = "memory-profiling")]
+            self.memory_profiling,
+        );
 
         self.public_config
             .protocol
@@ -484,10 +509,17 @@ impl ProxyOptions {
         let server_config: ValidatorServerConfig =
             util::read_json(&self.config_path).expect("Fail to read server config");
         let public_key = &server_config.validator.public_key;
-        linera_base::tracing::init_with_opentelemetry(
-            &format!("validator-{public_key}-proxy"),
-            None,
-        );
+        let log_name = format!("validator-{public_key}-proxy");
+
+        #[cfg(feature = "tempo")]
+        if let Some(endpoint) = &self.otel_exporter_otlp_endpoint {
+            linera_base::tracing::init_with_opentelemetry(&log_name, endpoint);
+        } else {
+            linera_base::tracing::init(&log_name);
+        }
+
+        #[cfg(not(feature = "tempo"))]
+        linera_base::tracing::init(&log_name);
 
         let store_config = self
             .storage_config

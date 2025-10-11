@@ -153,6 +153,8 @@ struct GrpcProxyInner<S> {
     tls: TlsConfig,
     storage: S,
     id: usize,
+    #[cfg(feature = "memory-profiling")]
+    memory_profiling: bool,
 }
 
 impl<S> GrpcProxy<S>
@@ -166,6 +168,7 @@ where
         tls: TlsConfig,
         storage: S,
         id: usize,
+        #[cfg(feature = "memory-profiling")] memory_profiling: bool,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
             internal_config,
@@ -176,6 +179,8 @@ where
             tls,
             storage,
             id,
+            #[cfg(feature = "memory-profiling")]
+            memory_profiling,
         }))
     }
 
@@ -248,7 +253,12 @@ where
         let mut join_set = JoinSet::new();
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
+        monitoring_server::start_metrics(
+            self.metrics_address(),
+            shutdown_signal.clone(),
+            #[cfg(feature = "memory-profiling")]
+            self.0.memory_profiling,
+        );
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter

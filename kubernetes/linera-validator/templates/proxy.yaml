@@ -55,7 +55,12 @@ spec:
         - name: linera-proxy-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./proxy-init.sh"]
+          command:
+            - "./linera"
+            - "storage"
+            - "check-existence"
+            - "--storage"
+            - "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
@@ -70,10 +75,25 @@ spec:
               name: linera-port
             - containerPort: 20100
               name: private-port
-          command: ["./proxy-entrypoint.sh", {{ .Values.storageReplicationFactor | quote }}]
+          command:
+            - "./linera-proxy"
+            - "--storage"
+            - "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+            - "--storage-replication-factor"
+            - {{ .Values.storageReplicationFactor | quote }}
+            - "--id"
+            - "$(POD_ORDINAL)"
+            - "--memory-profiling"
+            - "--otel-exporter-otlp-endpoint"
+            - "http://tempo.tempo.svc.cluster.local:4317"
+            - "/config/server.json"
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+            - name: POD_ORDINAL
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['statefulset.kubernetes.io/pod-ordinal']
           volumeMounts:
             - name: config
               mountPath: "/config"

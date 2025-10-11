@@ -14,25 +14,30 @@ use crate::memory_profiler::MemoryProfiler;
 pub fn start_metrics(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,
+    #[cfg(feature = "memory-profiling")] enable_profiling: bool,
 ) {
     #[cfg(feature = "memory-profiling")]
     let app = {
-        // Try to add memory profiling endpoint
-        match MemoryProfiler::check_prof_ctl() {
-            Ok(()) => {
-                info!("Memory profiling available, enabling /debug/pprof and /debug/flamegraph endpoints");
-                Router::new()
-                    .route("/metrics", get(serve_metrics))
-                    .route("/debug/pprof", get(MemoryProfiler::heap_profile))
-                    .route("/debug/flamegraph", get(MemoryProfiler::heap_flamegraph))
+        if enable_profiling {
+            // Try to add memory profiling endpoint
+            match MemoryProfiler::check_prof_ctl() {
+                Ok(()) => {
+                    info!("Memory profiling available, enabling /debug/pprof and /debug/flamegraph endpoints");
+                    Router::new()
+                        .route("/metrics", get(serve_metrics))
+                        .route("/debug/pprof", get(MemoryProfiler::heap_profile))
+                        .route("/debug/flamegraph", get(MemoryProfiler::heap_flamegraph))
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Memory profiling not available: {}, serving metrics-only",
+                        e
+                    );
+                    Router::new().route("/metrics", get(serve_metrics))
+                }
             }
-            Err(e) => {
-                tracing::warn!(
-                    "Memory profiling not available: {}, serving metrics-only",
-                    e
-                );
-                Router::new().route("/metrics", get(serve_metrics))
-            }
+        } else {
+            Router::new().route("/metrics", get(serve_metrics))
         }
     };
 

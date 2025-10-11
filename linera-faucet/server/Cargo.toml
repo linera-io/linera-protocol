@@ -19,6 +19,7 @@ ignored = ["prometheus"]
 
 [features]
 metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
+memory-profiling = []
 
 [build-dependencies]
 cfg_aliases.workspace = true

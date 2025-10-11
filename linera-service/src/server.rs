@@ -71,6 +71,8 @@ struct ServerContext {
     grace_period: Duration,
     chain_worker_ttl: Duration,
     chain_info_max_received_log_entries: usize,
+    #[cfg(feature = "memory-profiling")]
+    memory_profiling: bool,
 }
 
 impl ServerContext {
@@ -130,6 +132,8 @@ impl ServerContext {
                 monitoring_server::start_metrics(
                     (listen_address.clone(), port),
                     shutdown_signal.clone(),
+                    #[cfg(feature = "memory-profiling")]
+                    self.memory_profiling,
                 );
             }
 
@@ -176,6 +180,8 @@ impl ServerContext {
                 monitoring_server::start_metrics(
                     (listen_address.to_string(), port),
                     shutdown_signal.clone(),
+                    #[cfg(feature = "memory-profiling")]
+                    self.memory_profiling,
                 );
             }
 
@@ -274,6 +280,16 @@ struct ServerOptions {
     /// The number of Tokio blocking threads to use.
     #[arg(long, env = "LINERA_SERVER_TOKIO_BLOCKING_THREADS")]
     tokio_blocking_threads: Option<usize>,
+
+    /// Enable memory profiling with jemalloc (requires memory-profiling feature).
+    #[cfg(feature = "memory-profiling")]
+    #[arg(long)]
+    memory_profiling: bool,
+
+    /// OpenTelemetry OTLP exporter endpoint for Tempo (requires tempo feature).
+    #[cfg(feature = "tempo")]
+    #[arg(long, env = "LINERA_OTEL_EXPORTER_OTLP_ENDPOINT")]
+    otel_exporter_otlp_endpoint: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -492,7 +508,17 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
 }
 
 async fn run(options: ServerOptions) {
-    linera_base::tracing::init_with_opentelemetry(&log_file_name_for(&options.command), None);
+    let log_name = log_file_name_for(&options.command);
+
+    #[cfg(feature = "tempo")]
+    if let Some(endpoint) = &options.otel_exporter_otlp_endpoint {
+        linera_base::tracing::init_with_opentelemetry(&log_name, endpoint);
+    } else {
+        linera_base::tracing::init(&log_name);
+    }
+
+    #[cfg(not(feature = "tempo"))]
+    linera_base::tracing::init(&log_name);
 
     match options.command {
         ServerCommand::Run {
@@ -520,6 +546,8 @@ async fn run(options: ServerOptions) {
                 grace_period,
                 chain_worker_ttl,
                 chain_info_max_received_log_entries,
+                #[cfg(feature = "memory-profiling")]
+                memory_profiling: options.memory_profiling,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config
