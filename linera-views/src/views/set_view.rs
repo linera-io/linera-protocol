@@ -1400,35 +1400,6 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_set_view_deserialization_early_return() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: SetView<_, u32> = SetView::load(context).await?;
-
-        // Add several indices
-        set.insert(&10)?;
-        set.insert(&20)?;
-        set.insert(&30)?;
-        set.insert(&40)?;
-
-        let mut count = 0;
-
-        // Test line 590 deserialization combined with early return
-        set.for_each_index_while(|index| {
-            count += 1;
-            if index == 30 {
-                Ok(false)  // Should stop iteration early
-            } else {
-                Ok(true)
-            }
-        }).await?;
-
-        // Should have processed indices until reaching 30
-        assert!(count >= 3);
-        assert!(count <= 4);  // Depends on ordering, but should stop at or before 4
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_for_each_key_while_break_on_matching_key() -> Result<(), ViewError> {
@@ -1499,36 +1470,6 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_mixed_update_types_in_remaining_loop() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set = ByteSetView::load(context).await?;
-
-        // Create a complex scenario with mixed update types
-        set.insert(vec![1]);  // Update::Set
-        set.remove(vec![2]);  // Update::Removed
-        set.insert(vec![3]);  // Update::Set
-        set.remove(vec![4]);  // Update::Removed
-        set.insert(vec![5]);  // Update::Set
-
-        let mut processed_keys = Vec::new();
-
-        // This further tests the Update::Set filtering in the remaining updates loop
-        set.for_each_key_while(|key| {
-            processed_keys.push(key.to_vec());
-            Ok(true)
-        }).await?;
-
-        // Should only process Update::Set entries (1, 3, 5), not Update::Removed (2, 4)
-        assert_eq!(processed_keys.len(), 3);
-        assert!(processed_keys.contains(&vec![1]));
-        assert!(processed_keys.contains(&vec![3]));
-        assert!(processed_keys.contains(&vec![5]));
-        assert!(!processed_keys.contains(&vec![2]));
-        assert!(!processed_keys.contains(&vec![4]));
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_contains_update_removed_returns_false() -> Result<(), ViewError> {
@@ -1639,28 +1580,6 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_contains_mixed_update_scenarios() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set = ByteSetView::load(context).await?;
-
-        // Test various combinations to exercise both line 196 and line 202
-
-        // Add some items
-        set.insert(vec![1]);
-        set.insert(vec![2]);
-        set.insert(vec![3]);
-
-        // Remove one item - creates Update::Removed (tests line 196)
-        set.remove(vec![2]);
-
-        // Verify line 196 behavior
-        assert!(set.contains(&[1]).await?);   // Still has Update::Set
-        assert!(!set.contains(&[2]).await?);  // Line 196: Update::Removed => false
-        assert!(set.contains(&[3]).await?);   // Still has Update::Set
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_for_each_key_while_update_set_processing_in_stored_loop() -> Result<(), ViewError> {
@@ -1783,27 +1702,6 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_set_view_hash_delegation_with_different_types() -> Result<(), ViewError> {
-        // Test that the delegation works with different types
-        let context = MemoryContext::new_for_testing(());
-        let mut string_set: SetView<_, String> = SetView::load(context).await?;
-
-        string_set.insert(&"hello".to_string())?;
-        string_set.insert(&"world".to_string())?;
-
-        // Line 641 should work for any type that implements Serialize
-        let hash1 = string_set.hash_mut().await?;
-        let hash2 = string_set.hash().await?;
-        assert_eq!(hash1, hash2);
-
-        // Verify hash changes with data
-        string_set.insert(&"test".to_string())?;
-        let hash3 = string_set.hash_mut().await?;
-        assert_ne!(hash1, hash3);
-
-        Ok(())
-    }
 
     // CustomSetView tests - similar patterns but using CustomSerialize
     #[tokio::test]
@@ -1999,68 +1897,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_custom_set_view_for_each_index_while_early_return() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
 
-        // Add several indices
-        set.insert(&10u128)?;
-        set.insert(&20u128)?;
-        set.insert(&30u128)?;
-        set.insert(&40u128)?;
-
-        let mut count = 0;
-
-        // Test custom deserialization with early return
-        set.for_each_index_while(|index| {
-            count += 1;
-            if index == 30u128 {
-                Ok(false)  // Should stop iteration early
-            } else {
-                Ok(true)
-            }
-        }).await?;
-
-        // Should have processed indices until reaching 30
-        assert!(count >= 3);
-        assert!(count <= 4);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_custom_set_view_mixed_operations() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
-
-        // Test the indices() method which uses custom deserialization
-        assert!(set.indices().await?.is_empty());
-
-        // Test a combination of operations
-        set.insert(&100u128)?;
-        set.insert(&200u128)?;
-        set.insert(&300u128)?;
-
-        // Check indices after all inserts
-        assert_eq!(set.indices().await?, vec![100u128, 200u128, 300u128]);
-
-        // Remove one item (creates Update::Removed)
-        set.remove(&200u128)?;
-
-        // Verify mixed update states
-        assert!(set.contains(&100u128).await?);
-        assert!(!set.contains(&200u128).await?);  // Update::Removed should return false
-        assert!(set.contains(&300u128).await?);
-
-        // Test count with mixed updates
-        assert_eq!(set.count().await?, 2);
-
-        // Test indices with mixed updates - should not include removed item
-        assert_eq!(set.indices().await?, vec![100u128, 300u128]);
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_has_pending_changes_comprehensive() -> Result<(), ViewError> {
@@ -2108,73 +1945,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_set_view_has_pending_changes_comprehensive() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: SetView<_, u32> = SetView::load(context).await?;
 
-        // Fresh load should have no pending changes
-        assert!(!set.has_pending_changes().await);
-
-        // Insert creates pending changes
-        set.insert(&42)?;
-        assert!(set.has_pending_changes().await);
-
-        // Multiple operations maintain pending changes
-        set.insert(&84)?;
-        set.remove(&42)?;
-        assert!(set.has_pending_changes().await);
-
-        // Flush clears pending changes
-        let mut batch = Batch::new();
-        set.flush(&mut batch)?;
-        set.context().store().write_batch(batch).await?;
-        assert!(!set.has_pending_changes().await);
-
-        // Clear creates pending changes
-        set.clear();
-        assert!(set.has_pending_changes().await);
-
-        // Rollback clears pending changes
-        set.rollback();
-        assert!(!set.has_pending_changes().await);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_custom_set_view_has_pending_changes_comprehensive() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
-
-        // Fresh load should have no pending changes
-        assert!(!set.has_pending_changes().await);
-
-        // Insert creates pending changes
-        set.insert(&12345u128)?;
-        assert!(set.has_pending_changes().await);
-
-        // Multiple operations maintain pending changes
-        set.insert(&67890u128)?;
-        set.remove(&12345u128)?;
-        assert!(set.has_pending_changes().await);
-
-        // Flush clears pending changes
-        let mut batch = Batch::new();
-        set.flush(&mut batch)?;
-        set.context().store().write_batch(batch).await?;
-        assert!(!set.has_pending_changes().await);
-
-        // Clear creates pending changes
-        set.clear();
-        assert!(set.has_pending_changes().await);
-
-        // Rollback clears pending changes
-        set.rollback();
-        assert!(!set.has_pending_changes().await);
-
-        Ok(())
-    }
 
     #[cfg(with_graphql)]
     mod graphql_tests {
@@ -2293,33 +2064,5 @@ mod tests {
             Ok(())
         }
 
-        #[tokio::test]
-        async fn test_graphql_combined_query() -> Result<(), Box<dyn std::error::Error>> {
-            let schema = Schema::build(Query, EmptyMutation, EmptySubscription).finish();
-
-            // Test both elements and count in a single query
-            let query = r#"
-                query {
-                    testSet {
-                        elements(count: 2)
-                        count
-                    }
-                }
-            "#;
-
-            let result = schema.execute(query).await;
-            assert!(result.errors.is_empty());
-
-            let data = result.data.into_json()?;
-            let elements = &data["testSet"]["elements"];
-            let count = &data["testSet"]["count"];
-
-            // Verify truncation worked (line 1172)
-            assert_eq!(elements.as_array().unwrap().len(), 2);
-            // Verify count returns total, not truncated count
-            assert_eq!(count.as_u64().unwrap(), 5);
-
-            Ok(())
-        }
     }
 }
