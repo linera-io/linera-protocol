@@ -1360,7 +1360,6 @@ mod tests {
         Ok(())
     }
 
-
     #[tokio::test]
     async fn test_for_each_key_while_break_on_matching_key() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
@@ -1819,35 +1818,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_custom_set_view_for_each_index_while_deserialization() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
-
-        // Add some data
-        set.insert(&424242u128)?;
-        set.insert(&848484u128)?;
-        set.insert(&121212u128)?;
-
-        let mut indices_processed = Vec::new();
-
-        // Test CustomSerialize deserialization (line 590 equivalent but with CustomSerialize)
-        set.for_each_index_while(|index| {
-            indices_processed.push(index);
-            Ok(true)
-        }).await?;
-
-        // Verify that custom deserialization worked correctly
-        assert_eq!(indices_processed.len(), 3);
-        assert!(indices_processed.contains(&424242u128));
-        assert!(indices_processed.contains(&848484u128));
-        assert!(indices_processed.contains(&121212u128));
-
-        Ok(())
-    }
-
-
-
-    #[tokio::test]
     async fn test_custom_set_view_for_each_index_while_method_signature() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
@@ -1987,8 +1957,6 @@ mod tests {
 
         Ok(())
     }
-
-
 
     #[cfg(with_graphql)]
     mod graphql_tests {
