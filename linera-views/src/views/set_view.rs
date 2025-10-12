@@ -1774,26 +1774,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_custom_set_view_count_delegation() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
-
-        // Test that CustomSetView delegates count to ByteSetView (line 557 equivalent)
-        let count = set.count().await?;
-        assert_eq!(count, 0);
-
-        // Add items and verify delegation works
-        set.insert(&100u128)?;
-        set.insert(&200u128)?;
-        set.insert(&300u128)?;
-
-        let count = set.count().await?;
-        assert_eq!(count, 3);
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_custom_set_view_hash_mut_delegation() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
@@ -1821,11 +1801,14 @@ mod tests {
     async fn test_custom_set_view_for_each_index_while_method_signature() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+        assert_eq!(set.count().await?, 0);
 
         // Add some data to test the method
         set.insert(&100u128)?;
         set.insert(&200u128)?;
         set.insert(&300u128)?;
+
+        assert_eq!(set.count().await?, 3);
 
         let mut collected_indices = Vec::new();
 
@@ -1837,10 +1820,7 @@ mod tests {
         }).await?;
 
         // Verify the method worked correctly
-        assert_eq!(collected_indices.len(), 3);
-        assert!(collected_indices.contains(&100u128));
-        assert!(collected_indices.contains(&200u128));
-        assert!(collected_indices.contains(&300u128));
+        assert_eq!(collected_indices, vec![100u128,200u128,300u128]);
 
         Ok(())
     }
