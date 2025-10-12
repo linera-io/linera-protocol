@@ -1076,69 +1076,77 @@ RpcMessage:
     16:
       NetworkDescriptionQuery: UNIT
     17:
+      ShardInfoQuery:
+        NEWTYPE:
+          TYPENAME: ChainId
+    18:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    18:
+    19:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    19:
+    20:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    20:
+    21:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    21:
+    22:
       NetworkDescriptionResponse:
         NEWTYPE:
           TYPENAME: NetworkDescription
-    22:
+    23:
       UploadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobId
-    23:
+    24:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    24:
+    25:
       DownloadPendingBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    25:
+    26:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: Block
-    26:
+    27:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    27:
+    28:
       DownloadCertificatesByHeightsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    28:
+    29:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    29:
+    30:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    30:
+    31:
+      ShardInfoResponse:
+        NEWTYPE:
+          TYPENAME: ShardInfo
+    32:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
-    31:
+    33:
       BlobLastUsedByCertificate:
         NEWTYPE:
           TYPENAME: BlobId
-    32:
+    34:
       BlobLastUsedByCertificateResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlockCertificate
@@ -1152,6 +1160,10 @@ Secp256k1Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+ShardInfo:
+  STRUCT:
+    - shard_id: U64
+    - total_shards: U64
 StreamId:
   STRUCT:
     - application_id:
