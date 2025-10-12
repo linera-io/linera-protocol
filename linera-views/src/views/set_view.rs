@@ -1014,13 +1014,11 @@ mod graphql {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        context::MemoryContext,
-        store::{WritableKeyValueStore as _},
-    };
+    use crate::{context::MemoryContext, store::WritableKeyValueStore as _};
 
     #[tokio::test]
-    async fn test_byte_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError> {
+    async fn test_byte_set_view_flush_with_delete_storage_first_and_set_updates(
+    ) -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
         // Initially should have no pending changes
@@ -1089,7 +1087,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_byte_set_view_flush_with_delete_storage_first_no_set_updates() -> Result<(), ViewError> {
+    async fn test_byte_set_view_flush_with_delete_storage_first_no_set_updates(
+    ) -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
 
@@ -1111,7 +1110,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_byte_set_view_flush_with_delete_storage_first_mixed_updates() -> Result<(), ViewError> {
+    async fn test_byte_set_view_flush_with_delete_storage_first_mixed_updates(
+    ) -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
 
@@ -1126,7 +1126,7 @@ mod tests {
         set.clear();
 
         // Add some items back and remove others
-        set.insert(vec![7, 8, 9]);  // This creates Update::Set
+        set.insert(vec![7, 8, 9]); // This creates Update::Set
         set.remove(vec![10, 11, 12]); // This creates Update::Removed (but gets optimized away due to delete_storage_first)
 
         let mut batch = Batch::new();
@@ -1139,7 +1139,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError> {
+    async fn test_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError>
+    {
         let context = MemoryContext::new_for_testing(());
         let mut set: SetView<_, u32> = SetView::load(context).await?;
 
@@ -1223,8 +1224,8 @@ mod tests {
         set.context().store().write_batch(batch).await?;
 
         // Add some pending updates that will be processed in the loop
-        set.insert(vec![2]);  // This will create an Update::Set
-        set.insert(vec![4]);  // This will create another Update::Set
+        set.insert(vec![2]); // This will create an Update::Set
+        set.insert(vec![4]); // This will create another Update::Set
 
         let mut keys_processed = Vec::new();
 
@@ -1232,11 +1233,15 @@ mod tests {
         // The method iterates through stored keys and pending updates
         set.for_each_key_while(|key| {
             keys_processed.push(key.to_vec());
-            Ok(true)  // Continue processing
-        }).await?;
+            Ok(true) // Continue processing
+        })
+        .await?;
 
         // Should have processed both stored and pending keys
-        assert_eq!(keys_processed, vec![vec![1],vec![2],vec![3],vec![4],vec![5]]);
+        assert_eq!(
+            keys_processed,
+            vec![vec![1], vec![2], vec![3], vec![4], vec![5]]
+        );
 
         Ok(())
     }
@@ -1260,11 +1265,12 @@ mod tests {
         set.for_each_key_while(|_key| {
             count += 1;
             if count >= 2 {
-                Ok(false)  // This should trigger early return on line 300
+                Ok(false) // This should trigger early return on line 300
             } else {
                 Ok(true)
             }
-        }).await?;
+        })
+        .await?;
 
         // Should have stopped early, processing only 2 keys
         assert_eq!(count, 2);
@@ -1309,8 +1315,8 @@ mod tests {
         set.context().store().write_batch(batch).await?;
 
         // Add pending updates that come before stored keys lexicographically
-        set.insert(vec![0]);  // This will be processed first as an Update::Set
-        set.insert(vec![2]);  // This will be processed as an Update::Set
+        set.insert(vec![0]); // This will be processed first as an Update::Set
+        set.insert(vec![2]); // This will be processed as an Update::Set
 
         let mut count = 0;
 
@@ -1319,11 +1325,12 @@ mod tests {
         set.for_each_key_while(|key| {
             count += 1;
             if key == [0] {
-                Ok(false)  // This should trigger line 290: return Ok(());
+                Ok(false) // This should trigger line 290: return Ok(());
             } else {
                 Ok(true)
             }
-        }).await?;
+        })
+        .await?;
 
         // Should have stopped early after processing the first key
         assert_eq!(count, 1);
@@ -1348,11 +1355,12 @@ mod tests {
         set.for_each_key_while(|key| {
             count += 1;
             if key == [2] {
-                Ok(false)  // This should trigger line 311: return Ok(());
+                Ok(false) // This should trigger line 311: return Ok(());
             } else {
                 Ok(true)
             }
-        }).await?;
+        })
+        .await?;
 
         // Should have stopped early when processing key [2]
         assert_eq!(count, 2);
@@ -1460,17 +1468,17 @@ mod tests {
 
         // Line 202 should be bypassed for new items since they have Update::Set
         // Old items should return false due to line 202
-        assert!(!set.contains(&[1]).await?);  // Old item - line 202 path
-        assert!(!set.contains(&[2]).await?);  // Old item - line 202 path
-        assert!(set.contains(&[3]).await?);   // New item - has Update::Set
-        assert!(set.contains(&[4]).await?);   // New item - has Update::Set
+        assert!(!set.contains(&[1]).await?); // Old item - line 202 path
+        assert!(!set.contains(&[2]).await?); // Old item - line 202 path
+        assert!(set.contains(&[3]).await?); // New item - has Update::Set
+        assert!(set.contains(&[4]).await?); // New item - has Update::Set
 
         Ok(())
     }
 
-
     #[tokio::test]
-    async fn test_for_each_key_while_update_set_processing_in_stored_loop() -> Result<(), ViewError> {
+    async fn test_for_each_key_while_update_set_processing_in_stored_loop() -> Result<(), ViewError>
+    {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
 
@@ -1483,9 +1491,9 @@ mod tests {
         set.context().store().write_batch(batch).await?;
 
         // Add pending updates that will be processed alongside stored keys
-        set.insert(vec![1]);  // Update::Set - comes before stored keys
-        set.insert(vec![3]);  // Update::Set - comes between stored keys
-        set.remove(vec![5]);  // Update::Removed - should be ignored
+        set.insert(vec![1]); // Update::Set - comes before stored keys
+        set.insert(vec![3]); // Update::Set - comes between stored keys
+        set.remove(vec![5]); // Update::Removed - should be ignored
 
         let mut processed_keys = Vec::new();
 
@@ -1494,11 +1502,15 @@ mod tests {
         set.for_each_key_while(|key| {
             processed_keys.push(key.to_vec());
             Ok(true)
-        }).await?;
+        })
+        .await?;
 
         // Should process stored keys (2, 4, 6) and Update::Set pending keys (1, 3)
         // Should NOT process Update::Removed key (5)
-        assert_eq!(processed_keys, vec![vec![1], vec![2], vec![3], vec![4],vec![6]]);
+        assert_eq!(
+            processed_keys,
+            vec![vec![1], vec![2], vec![3], vec![4], vec![6]]
+        );
 
         Ok(())
     }
@@ -1542,10 +1554,10 @@ mod tests {
         Ok(())
     }
 
-
     // CustomSetView tests - similar patterns but using CustomSerialize
     #[tokio::test]
-    async fn test_custom_set_view_flush_with_delete_storage_first_and_set_updates() -> Result<(), ViewError> {
+    async fn test_custom_set_view_flush_with_delete_storage_first_and_set_updates(
+    ) -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
 
@@ -1639,7 +1651,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_custom_set_view_contains_delete_storage_first_returns_false() -> Result<(), ViewError> {
+    async fn test_custom_set_view_contains_delete_storage_first_returns_false(
+    ) -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
 
@@ -1710,10 +1723,11 @@ mod tests {
         set.for_each_index_while(|index| {
             collected_indices.push(index);
             Ok(true)
-        }).await?;
+        })
+        .await?;
 
         // Verify the method worked correctly
-        assert_eq!(collected_indices, vec![100u128,200u128,300u128]);
+        assert_eq!(collected_indices, vec![100u128, 200u128, 300u128]);
 
         Ok(())
     }
@@ -1833,8 +1847,9 @@ mod tests {
 
     #[cfg(with_graphql)]
     mod graphql_tests {
-        use super::*;
         use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
+
+        use super::*;
 
         // Create a simple GraphQL schema for testing
         struct Query;
@@ -1862,7 +1877,10 @@ mod tests {
 
         #[Object]
         impl TestSetView {
-            async fn elements(&self, count: Option<usize>) -> Result<Vec<u32>, async_graphql::Error> {
+            async fn elements(
+                &self,
+                count: Option<usize>,
+            ) -> Result<Vec<u32>, async_graphql::Error> {
                 // This calls line 1169: async fn elements(&self, count: Option<usize>)
                 let mut indices = self.set.indices().await?;
                 if let Some(count) = count {
@@ -1947,6 +1965,5 @@ mod tests {
 
             Ok(())
         }
-
     }
 }
