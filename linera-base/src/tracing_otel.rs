@@ -30,7 +30,7 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
         None => match std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
             Ok(ep) => ep,
             Err(_) => {
-                tracing::debug!(
+                eprintln!(
                     "OTEL_EXPORTER_OTLP_ENDPOINT not set and no endpoint provided. \
                      Falling back to standard tracing without OpenTelemetry support."
                 );
