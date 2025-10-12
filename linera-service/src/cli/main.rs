@@ -2067,17 +2067,47 @@ async fn kill_all_processes(pids: &[u32]) {
     }
 }
 
-fn should_init_opentelemetry(command: &ClientCommand) -> bool {
-    matches!(command, ClientCommand::Faucet { .. })
+#[cfg(not(target_arch = "wasm32"))]
+fn init_tracing(
+    options: &ClientOptions,
+) -> anyhow::Result<Option<linera_base::tracing::ChromeTraceGuard>> {
+    if matches!(&options.command, ClientCommand::Faucet { .. }) {
+        linera_base::tracing::init_with_opentelemetry(
+            &options.command.log_file_name(),
+            options
+                .context_options
+                .otel_exporter_otlp_endpoint
+                .as_deref(),
+        );
+        Ok(None)
+    } else if options.context_options.chrome_trace_exporter {
+        let trace_file_path = options
+            .context_options
+            .otel_trace_file
+            .as_deref()
+            .map_or_else(
+                || format!("{}.trace.json", options.command.log_file_name()),
+                |s| s.to_string(),
+            );
+        let writer = std::fs::File::create(&trace_file_path)?;
+        Ok(Some(linera_base::tracing::init_with_chrome_trace_exporter(
+            &options.command.log_file_name(),
+            writer,
+        )))
+    } else {
+        linera_base::tracing::init(&options.command.log_file_name());
+        Ok(None)
+    }
 }
 
-fn main() -> anyhow::Result<()> {
+#[cfg(target_arch = "wasm32")]
+fn init_tracing(options: &ClientOptions) {
+    linera_base::tracing::init(&options.command.log_file_name());
+}
+
+fn main() -> anyhow::Result<process::ExitCode> {
     let options = ClientOptions::init();
-
-    if !should_init_opentelemetry(&options.command) {
-        linera_base::tracing::init(&options.command.log_file_name());
-    }
-
+    let _guard = init_tracing(&options)?;
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
     } else {
@@ -2101,25 +2131,20 @@ fn main() -> anyhow::Result<()> {
 
     let result = runtime
         .enable_all()
-        .build()
-        .expect("Failed to create Tokio runtime")
+        .build()?
         .block_on(run(&options).instrument(span));
 
-    let error_code = match result {
-        Ok(code) => code,
+    Ok(match result {
+        Ok(0) => process::ExitCode::SUCCESS,
+        Ok(code) => process::ExitCode::from(code as u8),
         Err(msg) => {
             error!("Error is {:?}", msg);
-            2
+            process::ExitCode::FAILURE
         }
-    };
-    process::exit(error_code);
+    })
 }
 
 async fn run(options: &ClientOptions) -> Result<i32, Error> {
-    if should_init_opentelemetry(&options.command) {
-        linera_base::tracing::init_with_opentelemetry(&options.command.log_file_name()).await;
-    }
-
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();

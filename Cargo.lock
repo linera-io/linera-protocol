@@ -5196,6 +5196,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_with",
+ "tempfile",
  "test-case",
  "test-strategy",
  "thiserror 1.0.69",
@@ -5203,6 +5204,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
+ "tracing-chrome",
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.19",
  "tracing-web",
@@ -10606,6 +10608,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-chrome"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf0a738ed5d6450a9fb96e86a23ad808de2b727fd1394585da5cdd6788ffe724"
+dependencies = [
+ "serde_json",
+ "tracing-core",
+ "tracing-subscriber 0.3.19",
+]
+
+[[package]]
 name = "tracing-core"
 version = "0.1.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10676,9 +10689,11 @@ dependencies = [
  "serde",
  "serde_json",
  "sharded-slab",
+ "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
+ "tracing-log",
  "tracing-serde",
 ]
 
