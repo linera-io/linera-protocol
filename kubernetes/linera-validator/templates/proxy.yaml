@@ -69,6 +69,8 @@ spec:
               value: {{ .Values.logLevel }}
             - name: RUST_BACKTRACE
               value: "1"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otelExporterEndpoint }}
       containers:
         - name: linera-proxy
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
@@ -82,6 +84,8 @@ spec:
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otelExporterEndpoint }}
           volumeMounts:
             - name: config
               mountPath: "/config"
