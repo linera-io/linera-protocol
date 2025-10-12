@@ -935,6 +935,82 @@ pub type HashedSetView<C, I> = WrappedHashableContainerView<C, SetView<C, I>, Ha
 pub type HashedCustomSetView<C, I> =
     WrappedHashableContainerView<C, CustomSetView<C, I>, HasherOutput>;
 
+#[cfg(with_graphql)]
+mod graphql {
+    use std::borrow::Cow;
+
+    use serde::{de::DeserializeOwned, Serialize};
+
+    use super::{CustomSetView, SetView};
+    use crate::{
+        common::CustomSerialize,
+        context::Context,
+        graphql::{hash_name, mangle},
+    };
+
+    impl<C: Send + Sync, I: async_graphql::OutputType> async_graphql::TypeName for SetView<C, I> {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "SetView_{}_{:08x}",
+                mangle(I::type_name()),
+                hash_name::<I>(),
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C, I> SetView<C, I>
+    where
+        C: Context,
+        I: Send + Sync + Serialize + DeserializeOwned + async_graphql::OutputType,
+    {
+        async fn elements(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
+            let mut indices = self.indices().await?;
+            if let Some(count) = count {
+                indices.truncate(count);
+            }
+            Ok(indices)
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
+        }
+    }
+
+    impl<C: Send + Sync, I: async_graphql::OutputType> async_graphql::TypeName for CustomSetView<C, I> {
+        fn type_name() -> Cow<'static, str> {
+            format!(
+                "CustomSetView_{}_{:08x}",
+                mangle(I::type_name()),
+                hash_name::<I>(),
+            )
+            .into()
+        }
+    }
+
+    #[async_graphql::Object(cache_control(no_cache), name_type)]
+    impl<C, I> CustomSetView<C, I>
+    where
+        C: Context,
+        I: Send + Sync + CustomSerialize + async_graphql::OutputType,
+    {
+        async fn elements(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
+            let mut indices = self.indices().await?;
+            if let Some(count) = count {
+                indices.truncate(count);
+            }
+            Ok(indices)
+        }
+
+        #[graphql(derived(name = "count"))]
+        async fn count_(&self) -> Result<u32, async_graphql::Error> {
+            Ok(self.count().await? as u32)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2244,82 +2320,6 @@ mod tests {
             assert_eq!(count.as_u64().unwrap(), 5);
 
             Ok(())
-        }
-    }
-}
-
-#[cfg(with_graphql)]
-mod graphql {
-    use std::borrow::Cow;
-
-    use serde::{de::DeserializeOwned, Serialize};
-
-    use super::{CustomSetView, SetView};
-    use crate::{
-        common::CustomSerialize,
-        context::Context,
-        graphql::{hash_name, mangle},
-    };
-
-    impl<C: Send + Sync, I: async_graphql::OutputType> async_graphql::TypeName for SetView<C, I> {
-        fn type_name() -> Cow<'static, str> {
-            format!(
-                "SetView_{}_{:08x}",
-                mangle(I::type_name()),
-                hash_name::<I>(),
-            )
-            .into()
-        }
-    }
-
-    #[async_graphql::Object(cache_control(no_cache), name_type)]
-    impl<C, I> SetView<C, I>
-    where
-        C: Context,
-        I: Send + Sync + Serialize + DeserializeOwned + async_graphql::OutputType,
-    {
-        async fn elements(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
-            let mut indices = self.indices().await?;
-            if let Some(count) = count {
-                indices.truncate(count);
-            }
-            Ok(indices)
-        }
-
-        #[graphql(derived(name = "count"))]
-        async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.count().await? as u32)
-        }
-    }
-
-    impl<C: Send + Sync, I: async_graphql::OutputType> async_graphql::TypeName for CustomSetView<C, I> {
-        fn type_name() -> Cow<'static, str> {
-            format!(
-                "CustomSetView_{}_{:08x}",
-                mangle(I::type_name()),
-                hash_name::<I>(),
-            )
-            .into()
-        }
-    }
-
-    #[async_graphql::Object(cache_control(no_cache), name_type)]
-    impl<C, I> CustomSetView<C, I>
-    where
-        C: Context,
-        I: Send + Sync + CustomSerialize + async_graphql::OutputType,
-    {
-        async fn elements(&self, count: Option<usize>) -> Result<Vec<I>, async_graphql::Error> {
-            let mut indices = self.indices().await?;
-            if let Some(count) = count {
-                indices.truncate(count);
-            }
-            Ok(indices)
-        }
-
-        #[graphql(derived(name = "count"))]
-        async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.count().await? as u32)
         }
     }
 }
