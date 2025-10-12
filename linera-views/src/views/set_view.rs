@@ -1041,8 +1041,9 @@ mod tests {
         // Should have no pending changes after flush
         assert!(!set.has_pending_changes().await);
 
-        // Check keys after flush - should be same
+        // Check keys after flush
         assert_eq!(set.keys().await?, vec![vec![1, 2, 3], vec![4, 5, 6]]);
+        assert_eq!(set.count().await?, 2);
 
         // Now clear the set (this sets delete_storage_first = true)
         set.clear();
@@ -1174,42 +1175,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_byte_set_view_keys_initialization() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set = ByteSetView::load(context).await?;
-
-        // Add several keys to test line 223: let mut keys = Vec::new();
-        set.insert(vec![1, 2]);
-        set.insert(vec![3, 4]);
-        set.insert(vec![5, 6]);
-
-        // Call keys() method which executes line 223
-        assert_eq!(set.keys().await?, vec![vec![1,2],vec![3,4],vec![5,6]]);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_byte_set_view_count_initialization() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set = ByteSetView::load(context).await?;
-
-        // Test with empty set first - count should start at 0 (line 245)
-        let count = set.count().await?;
-        assert_eq!(count, 0);
-
-        // Add items and verify count increments from 0 (line 245: let mut count = 0;)
-        set.insert(vec![1]);
-        set.insert(vec![2]);
-        set.insert(vec![3]);
-
-        let count = set.count().await?;
-        assert_eq!(count, 3);
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_set_view_count_delegation() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set: SetView<_, u32> = SetView::load(context).await?;
@@ -1218,8 +1183,7 @@ mod tests {
         assert!(!set.has_pending_changes().await);
 
         // Test line 557: self.set.count().await - SetView delegates to ByteSetView
-        let count = set.count().await?;
-        assert_eq!(count, 0);
+        assert_eq!(set.count().await?, 0);
 
         // Add items and verify delegation works
         set.insert(&42)?;
@@ -1272,11 +1236,7 @@ mod tests {
         }).await?;
 
         // Should have processed both stored and pending keys
-        assert!(keys_processed.len() >= 4);
-        assert!(keys_processed.contains(&vec![1]));
-        assert!(keys_processed.contains(&vec![2]));
-        assert!(keys_processed.contains(&vec![3]));
-        assert!(keys_processed.contains(&vec![4]));
+        assert_eq!(keys_processed, vec![vec![1],vec![2],vec![3],vec![4],vec![5]]);
 
         Ok(())
     }
@@ -1427,13 +1387,7 @@ mod tests {
         }).await?;
 
         // Should process each key only once, even though [4] appears in both stored and pending
-        assert!(keys_processed.contains(&vec![2]));
-        assert!(keys_processed.contains(&vec![4]));
-        assert!(keys_processed.contains(&vec![6]));
-
-        // Count occurrences of [4] - should be exactly 1 due to the break on line 295
-        let count_4 = keys_processed.iter().filter(|&key| key == &vec![4]).count();
-        assert_eq!(count_4, 1);
+        assert_eq!(keys_processed, vec![vec![2],vec![4],vec![6]]);
 
         Ok(())
     }
@@ -1460,12 +1414,7 @@ mod tests {
         }).await?;
 
         // Should only process the Update::Set entries, not the Update::Removed
-        assert_eq!(keys_processed.len(), 3);
-        assert!(keys_processed.contains(&vec![1]));
-        assert!(keys_processed.contains(&vec![2]));
-        assert!(keys_processed.contains(&vec![3]));
-        // Should NOT contain [4] because it's Update::Removed
-        assert!(!keys_processed.contains(&vec![4]));
+        assert_eq!(keys_processed, vec![vec![1],vec![2],vec![3]]);
 
         Ok(())
     }
@@ -1512,8 +1461,7 @@ mod tests {
 
         // This tests line 196: Update::Removed => false,
         // The contains() method should return false for the removed item
-        let contains_result = set.contains(&[1, 2, 3]).await?;
-        assert!(!contains_result);
+        assert!(!set.contains(&[1, 2, 3]).await?);
 
         Ok(())
     }
@@ -1898,6 +1846,101 @@ mod tests {
     }
 
 
+
+    #[tokio::test]
+    async fn test_custom_set_view_for_each_index_while_method_signature() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add some data to test the method
+        set.insert(&100u128)?;
+        set.insert(&200u128)?;
+        set.insert(&300u128)?;
+
+        let mut collected_indices = Vec::new();
+
+        // Test line 584: pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+        // This tests the method signature and implementation
+        set.for_each_index_while(|index| {
+            collected_indices.push(index);
+            Ok(true)
+        }).await?;
+
+        // Verify the method worked correctly
+        assert_eq!(collected_indices.len(), 3);
+        assert!(collected_indices.contains(&100u128));
+        assert!(collected_indices.contains(&200u128));
+        assert!(collected_indices.contains(&300u128));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_rollback() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add and persist some initial data
+        set.insert(&100u128)?;
+        set.insert(&200u128)?;
+        let mut batch = Batch::new();
+        set.flush(&mut batch)?;
+        set.context().store().write_batch(batch).await?;
+
+        // Verify initial state
+        assert!(set.contains(&100u128).await?);
+        assert!(set.contains(&200u128).await?);
+        assert!(!set.has_pending_changes().await);
+
+        // Make some changes
+        set.insert(&300u128)?;
+        set.remove(&100u128)?;
+        assert!(set.has_pending_changes().await);
+
+        // Verify changes are present before rollback
+        assert!(set.contains(&300u128).await?);
+        assert!(!set.contains(&100u128).await?);
+
+        // Test line 687: self.set.rollback() - CustomSetView rollback delegation
+        set.rollback();
+
+        // After rollback, should revert to original state
+        assert!(!set.has_pending_changes().await);
+        assert!(set.contains(&100u128).await?);
+        assert!(set.contains(&200u128).await?);
+        assert!(!set.contains(&300u128).await?);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_custom_set_view_clone_unchecked() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut set: CustomSetView<_, u128> = CustomSetView::load(context).await?;
+
+        // Add some data to the original set
+        set.insert(&42u128)?;
+        set.insert(&84u128)?;
+
+        // Test line 709: CustomSetView { set: self.set.clone_unchecked(), _phantom: PhantomData, }
+        let mut cloned_set = set.clone_unchecked();
+
+        // Verify the clone has the same data
+        assert!(cloned_set.contains(&42u128).await?);
+        assert!(cloned_set.contains(&84u128).await?);
+
+        // Verify changes to clone don't affect original
+        cloned_set.insert(&126u128)?;
+        assert!(cloned_set.contains(&126u128).await?);
+        assert!(!set.contains(&126u128).await?);
+
+        // Verify changes to original don't affect clone
+        set.insert(&168u128)?;
+        assert!(set.contains(&168u128).await?);
+        assert!(!cloned_set.contains(&168u128).await?);
+
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_has_pending_changes_comprehensive() -> Result<(), ViewError> {
