@@ -20,9 +20,25 @@ use {
 /// Initializes tracing with OpenTelemetry OTLP exporter to Tempo.
 ///
 /// Exports traces to Tempo using the OTLP protocol. Requires the `tempo` feature.
+/// Only enables OpenTelemetry if OTEL_EXPORTER_OTLP_ENDPOINT env var is set.
+/// This prevents DNS errors in environments where OpenTelemetry is not deployed.
 #[cfg(feature = "tempo")]
 pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
-    let endpoint = otlp_endpoint.unwrap_or("http://tempo.tempo.svc.cluster.local:4317");
+    // Check if OpenTelemetry endpoint is configured via parameter or env var
+    let endpoint = match otlp_endpoint {
+        Some(ep) => ep.to_string(),
+        None => match std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
+            Ok(ep) => ep,
+            Err(_) => {
+                eprintln!(
+                    "OTEL_EXPORTER_OTLP_ENDPOINT not set and no endpoint provided. \
+                     Falling back to standard tracing without OpenTelemetry support."
+                );
+                crate::tracing::init(log_name);
+                return;
+            }
+        },
+    };
 
     let resource = Resource::builder()
         .with_service_name(log_name.to_string())
