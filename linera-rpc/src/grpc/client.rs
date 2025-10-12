@@ -499,7 +499,10 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
-    async fn get_shard_info(&self, chain_id: ChainId) -> Result<linera_core::data_types::ShardInfo, NodeError> {
+    async fn get_shard_info(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
         let response = client_delegate!(self, get_shard_info, chain_id)?;
         Ok(linera_core::data_types::ShardInfo {
             shard_id: response.shard_id as usize,

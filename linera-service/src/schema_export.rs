@@ -154,7 +154,10 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn get_shard_info(&self, _: ChainId) -> Result<linera_core::data_types::ShardInfo, NodeError> {
+    async fn get_shard_info(
+        &self,
+        _: ChainId,
+    ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }

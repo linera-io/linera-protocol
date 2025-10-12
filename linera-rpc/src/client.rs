@@ -299,7 +299,10 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn get_shard_info(&self, chain_id: ChainId) -> Result<linera_core::data_types::ShardInfo, NodeError> {
+    async fn get_shard_info(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.get_shard_info(chain_id).await?,
 

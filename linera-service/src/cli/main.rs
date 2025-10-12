@@ -531,14 +531,14 @@ impl Runnable for Job {
                 context.update_wallet_from_client(&chain_client).await?;
                 let committee = result.context("Failed to get local committee")?;
                 let node_provider = context.make_node_provider();
-                
+
                 println!("Chain ID: {}", chain_id);
                 println!("Validator Shard Information:\n");
-                
+
                 for (name, state) in committee.validators() {
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
-                    
+
                     match node.get_shard_info(chain_id).await {
                         Ok(shard_info) => {
                             println!("  Validator: {}", name);

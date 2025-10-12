@@ -21,6 +21,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera process-inbox`↴](#linera-process-inbox)
 * [`linera query-validator`↴](#linera-query-validator)
 * [`linera query-validators`↴](#linera-query-validators)
+* [`linera query-shard-info`↴](#linera-query-shard-info)
 * [`linera sync-validator`↴](#linera-sync-validator)
 * [`linera sync-all-validators`↴](#linera-sync-all-validators)
 * [`linera set-validator`↴](#linera-set-validator)
@@ -94,6 +95,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
 * `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are at it
 * `query-validators` — Show the current set of validators for a chain. Also print some information about the given chain while we are at it
+* `query-shard-info` — Query validators for shard information about a specific chain
 * `sync-validator` — Synchronizes a validator with the local state of chains
 * `sync-all-validators` — Synchronizes all validators with the local state of chains
 * `set-validator` — Add or modify a validator (admin only)
@@ -485,6 +487,18 @@ Show the current set of validators for a chain. Also print some information abou
 
 * `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
 * `<MIN_VOTES>` — Skip validators with less voting weight that this
+
+
+
+## `linera query-shard-info`
+
+Query validators for shard information about a specific chain
+
+**Usage:** `linera query-shard-info <CHAIN_ID>`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain to query shard information for
 
 
 

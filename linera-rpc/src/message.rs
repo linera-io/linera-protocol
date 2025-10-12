@@ -19,9 +19,8 @@ use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::ShardId,
-    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
-    HandleValidatedCertificateRequest,
+    config::ShardId, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
+    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 /// Information about shard configuration for a specific chain.
