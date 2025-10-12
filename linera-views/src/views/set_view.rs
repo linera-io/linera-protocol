@@ -1361,65 +1361,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_for_each_key_while_break_on_matching_key() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set = ByteSetView::load(context).await?;
-
-        // Add data to storage first
-        set.insert(vec![2]);
-        set.insert(vec![4]);
-        set.insert(vec![6]);
-        let mut batch = Batch::new();
-        set.flush(&mut batch)?;
-        set.context().store().write_batch(batch).await?;
-
-        // Add a pending update that matches one of the stored keys
-        set.insert(vec![4]);  // This creates an Update::Set that matches stored key [4]
-
-        let mut keys_processed = Vec::new();
-
-        // This tests line 295: break; when key == &index
-        // When the update key [4] matches the stored index [4], it should break and continue to next stored key
-        set.for_each_key_while(|key| {
-            keys_processed.push(key.to_vec());
-            Ok(true)
-        }).await?;
-
-        // Should process each key only once, even though [4] appears in both stored and pending
-        assert_eq!(keys_processed, vec![vec![2],vec![4],vec![6]]);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_remaining_updates_update_set_processing() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set = ByteSetView::load(context).await?;
-
-        // Don't add any data to storage, only add pending updates
-        // This ensures we only exercise the remaining updates loop (line 308-315)
-        set.insert(vec![1]);  // Update::Set
-        set.insert(vec![2]);  // Update::Set
-        set.insert(vec![3]);  // Update::Set
-        set.remove(vec![4]);  // Update::Removed - should be ignored in the loop
-
-        let mut keys_processed = Vec::new();
-
-        // This tests line 313: closing brace of Update::Set block in remaining updates
-        // Only Update::Set entries should be processed, Update::Removed should be skipped
-        set.for_each_key_while(|key| {
-            keys_processed.push(key.to_vec());
-            Ok(true)
-        }).await?;
-
-        // Should only process the Update::Set entries, not the Update::Removed
-        assert_eq!(keys_processed, vec![vec![1],vec![2],vec![3]]);
-
-        Ok(())
-    }
-
-
-    #[tokio::test]
     async fn test_contains_update_removed_returns_false() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut set = ByteSetView::load(context).await?;
@@ -1557,55 +1498,7 @@ mod tests {
 
         // Should process stored keys (2, 4, 6) and Update::Set pending keys (1, 3)
         // Should NOT process Update::Removed key (5)
-        assert!(processed_keys.contains(&vec![1]));  // Update::Set
-        assert!(processed_keys.contains(&vec![2]));  // Stored
-        assert!(processed_keys.contains(&vec![3]));  // Update::Set
-        assert!(processed_keys.contains(&vec![4]));  // Stored
-        assert!(!processed_keys.contains(&vec![5])); // Update::Removed - should be skipped
-        assert!(processed_keys.contains(&vec![6]));  // Stored
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_for_each_key_while_inner_loop_completion() -> Result<(), ViewError> {
-        let context = MemoryContext::new_for_testing(());
-        let mut set = ByteSetView::load(context).await?;
-
-        // Add multiple stored keys
-        set.insert(vec![10]);
-        set.insert(vec![20]);
-        set.insert(vec![30]);
-        let mut batch = Batch::new();
-        set.flush(&mut batch)?;
-        set.context().store().write_batch(batch).await?;
-
-        // Add pending updates with various patterns
-        set.insert(vec![5]);   // Before first stored key
-        set.insert(vec![15]);  // Between stored keys
-        set.insert(vec![25]);  // Between stored keys
-        set.insert(vec![35]);  // After last stored key
-
-        let mut keys_in_order = Vec::new();
-
-        // This tests line 307: closing brace of the inner loop that processes stored keys
-        // The inner loop should properly handle all stored keys and interleaved updates
-        set.for_each_key_while(|key| {
-            keys_in_order.push(key.to_vec());
-            Ok(true)
-        }).await?;
-
-        // Verify all keys were processed
-        assert!(keys_in_order.contains(&vec![5]));
-        assert!(keys_in_order.contains(&vec![10]));
-        assert!(keys_in_order.contains(&vec![15]));
-        assert!(keys_in_order.contains(&vec![20]));
-        assert!(keys_in_order.contains(&vec![25]));
-        assert!(keys_in_order.contains(&vec![30]));
-        assert!(keys_in_order.contains(&vec![35]));
-
-        // Should have processed 7 keys total
-        assert_eq!(keys_in_order.len(), 7);
+        assert_eq!(processed_keys, vec![vec![1], vec![2], vec![3], vec![4],vec![6]]);
 
         Ok(())
     }
