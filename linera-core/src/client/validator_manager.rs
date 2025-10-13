@@ -391,6 +391,40 @@ impl<Env: Environment> ValidatorManager<Env> {
         .await
     }
 
+    /// Executes an operation with a specific peer.
+    ///
+    /// Similar to [`with_best`](Self::with_best), but uses the provided peer directly
+    /// instead of selecting the best available peer. This is useful when you need to
+    /// query a specific validator node.
+    ///
+    /// # Type Parameters
+    /// - `R`: The inner result type (what the operation returns on success)
+    /// - `F`: The async closure type that takes a `RemoteNode` and returns a future
+    /// - `Fut`: The future type returned by the closure
+    ///
+    /// # Arguments
+    /// - `key`: Unique identifier for request deduplication
+    /// - `peer`: The specific peer to use for the operation
+    /// - `operation`: Async closure that takes the peer and performs the operation
+    ///
+    /// # Returns
+    /// The result from the operation, potentially from cache or a deduplicated in-flight request
+    pub async fn with_peer<R, F, Fut>(
+        &self,
+        key: RequestKey,
+        peer: RemoteNode<Env::ValidatorNode>,
+        operation: F,
+    ) -> Result<R, NodeError>
+    where
+        Result<R, NodeError>: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
+        Fut: Future<Output = Result<R, NodeError>>,
+    {
+        self.add_peer(peer.clone()).await;
+        self.deduplicated_request(key, || async { self.track_request(peer, operation).await })
+            .await
+    }
+
     pub async fn add_peer(&self, node: RemoteNode<Env::ValidatorNode>) {
         let mut nodes = self.nodes.write().await;
         let public_key = node.public_key;
@@ -590,10 +624,6 @@ impl<Env: Environment> ValidatorManager<Env> {
 
         // Store in cache
         self.store_in_cache(key.clone(), shared_result).await;
-        tracing::info!(
-            key = ?key,
-            "stored result in cache after request completion"
-        );
         result
     }
 
@@ -634,6 +664,32 @@ impl<Env: Environment> ValidatorManager<Env> {
         );
     }
 
+    /// Returns all peers ordered by their score (highest first).
+    ///
+    /// Only includes peers that can currently accept requests. Each peer is paired
+    /// with its calculated score based on latency, success rate, and availability.
+    ///
+    /// # Returns
+    /// A vector of `(score, peer)` tuples sorted by score in descending order.
+    /// Returns an empty vector if no peers can accept requests.
+    pub async fn peers_by_score(&self) -> Vec<(f64, RemoteNode<Env::ValidatorNode>)> {
+        let nodes = self.nodes.read().await;
+
+        // Filter nodes that can accept requests and calculate their scores
+        let mut scored_nodes = Vec::new();
+        for info in nodes.values() {
+            if info.can_accept_request(self.max_requests_per_node).await {
+                let score = info.calculate_score().await;
+                scored_nodes.push((score, info.node.clone()));
+            }
+        }
+
+        // Sort by score (highest first)
+        scored_nodes.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+
+        scored_nodes
+    }
+
     /// Selects the best available peer using weighted random selection from top performers.
     ///
     /// This method:
@@ -646,23 +702,11 @@ impl<Env: Environment> ValidatorManager<Env> {
     ///
     /// Returns `None` if no nodes are available or all are at capacity.
     async fn select_best_peer(&self) -> Option<RemoteNode<Env::ValidatorNode>> {
-        let nodes = self.nodes.read().await;
-
-        // Filter nodes that can accept requests and calculate their scores
-        let mut scored_nodes = Vec::new();
-        for info in nodes.values() {
-            if info.can_accept_request(self.max_requests_per_node).await {
-                let score = info.calculate_score().await;
-                scored_nodes.push((score, info.node.clone()));
-            }
-        }
+        let scored_nodes = self.peers_by_score().await;
 
         if scored_nodes.is_empty() {
             return None;
         }
-
-        // Sort by score (highest first)
-        scored_nodes.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
         // Use weighted random selection from top performers (top 3 or all if less)
         let top_count = scored_nodes.len().min(3);

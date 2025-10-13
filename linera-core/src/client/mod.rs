@@ -808,8 +808,16 @@ impl<Env: Environment> Client<Env> {
                         // anything from the validator - let the function try the other validators
                         return Err(());
                     }
-                    let certificates = remote_node
-                        .download_certificates_by_heights(sender_chain_id, remote_heights)
+                    let request_key = RequestKey::CertificatesByHeights {
+                        chain_id: sender_chain_id,
+                        heights: remote_heights.clone(),
+                    };
+                    let certificates = self
+                        .remote_nodes
+                        .with_peer(request_key, remote_node, |peer| async move {
+                            peer.download_certificates_by_heights(sender_chain_id, remote_heights)
+                                .await
+                        })
                         .await
                         .map_err(|_| ())?;
                     let mut certificates_with_check_results = vec![];
@@ -965,8 +973,16 @@ impl<Env: Environment> Client<Env> {
         // Stop if we've reached the height we've already processed.
         while current_height >= next_outbox_height {
             // Download the certificate for this height.
-            let downloaded = remote_node
-                .download_certificates_by_heights(sender_chain_id, vec![current_height])
+            let request_key = RequestKey::CertificatesByHeights {
+                chain_id: sender_chain_id,
+                heights: vec![current_height],
+            };
+            let downloaded = self
+                .remote_nodes
+                .with_peer(request_key, remote_node.clone(), |peer| async move {
+                    peer.download_certificates_by_heights(sender_chain_id, vec![current_height])
+                        .await
+                })
                 .await?;
             let Some(certificate) = downloaded.into_iter().next() else {
                 return Err(ChainClientError::CannotDownloadMissingSenderBlock {
@@ -4164,7 +4180,7 @@ impl<Env: Environment> ChainClient<Env> {
 }
 
 /// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay on
-/// each subsequent node. Returns error `err` is all of the nodes fail.
+/// each subsequent node. Returns error `err` if all of the nodes fail.
 async fn communicate_concurrently<'a, A, E1, E2, F, G, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
