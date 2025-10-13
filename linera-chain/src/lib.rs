@@ -199,7 +199,7 @@ impl ChainError {
             | ChainError::UnexpectedMessage { .. }
             | ChainError::InternalError(_)
             | ChainError::BcsError(_) => true,
-            ChainError::ExecutionError(_execution_error, _) => true, // TODO: execution_error.is_local()
+            ChainError::ExecutionError(execution_error, _) => execution_error.is_local(),
         }
     }
 }
