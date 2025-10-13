@@ -455,7 +455,10 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                     results.push((short_key.clone(), Some(view)));
                 }
                 None => {
-                    assert!(!self.delete_storage_first); // otherwise it would not be in keys.
+                    // If a key is not in `updates`, then it is in storage.
+                    // The key exists since otherwise it would not be in `short_keys`.
+                    // Therefore we have `self.delete_storage_first = false`.
+                    assert!(!self.delete_storage_first);
                     results.push((short_key.clone(), None));
                     let key = self
                         .context
