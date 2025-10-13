@@ -40,7 +40,7 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -56,7 +56,7 @@ use linera_client::{
 use linera_core::{
     client::{ChainClientError, ListeningMode},
     data_types::ClientOutcome,
-    node::ValidatorNodeProvider,
+    node::{NodeError, ValidatorNodeProvider},
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
 };
@@ -1627,11 +1627,21 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 context.client.track_chain(chain_id);
                 let chain_client = context.make_chain_client(chain_id);
-                if sync {
-                    chain_client.synchronize_chain_state(chain_id).await?;
+
+                let result = if sync {
+                    chain_client.synchronize_chain_state(chain_id).await
                 } else {
-                    chain_client.fetch_chain_info().await?;
+                    chain_client.fetch_chain_info().await
+                };
+                match result {
+                    Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(blob_ids)))
+                        if blob_ids == vec![BlobId { blob_type: BlobType::ChainDescription, hash: chain_id.0 }] => {
+                            bail!("Error following chain {chain_id}: It does not exist");
+                        }
+                    Err(e) => return Err(e.into()),
+                    Ok(_) => {}
                 }
+
                 context.update_wallet_from_client(&chain_client).await?;
                 info!(
                     "Chain followed and added in {} ms",
