@@ -4475,7 +4475,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
             vec![owner1, owner2],
             vec![100, 100],
             0,
-            Amount::from_tokens(9),
+            Amount::from_tokens(11),
             u64::MAX,
         )
         .await?;
