@@ -66,6 +66,9 @@ service ValidatorNode {
   // Request the network description seen by this node.
   rpc GetNetworkDescription(google.protobuf.Empty) returns (NetworkDescription);
 
+  // Request shard information for a specific chain.
+  rpc GetShardInfo(ChainId) returns (ShardInfo);
+
   // Download a blob.
   rpc DownloadBlob(BlobId) returns (BlobContent);
 
@@ -154,6 +157,12 @@ message NetworkDescription {
     uint64 genesis_timestamp = 3;
     ChainId admin_chain_id = 4;
     CryptoHash genesis_committee_blob_hash = 5;
+}
+
+// Information about shard configuration for a specific chain.
+message ShardInfo {
+    uint64 shard_id = 1;
+    uint64 total_shards = 2;
 }
 
 // A request for client to subscribe to notifications for a given `ChainId`

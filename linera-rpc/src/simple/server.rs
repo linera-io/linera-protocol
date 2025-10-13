@@ -372,6 +372,8 @@ where
             | RpcMessage::VersionInfoResponse(_)
             | RpcMessage::NetworkDescriptionQuery
             | RpcMessage::NetworkDescriptionResponse(_)
+            | RpcMessage::ShardInfoQuery(_)
+            | RpcMessage::ShardInfoResponse(_)
             | RpcMessage::DownloadBlob(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadPendingBlobResponse(_)

@@ -20,7 +20,7 @@ pub mod simple;
 pub mod grpc;
 
 pub use client::Client;
-pub use message::RpcMessage;
+pub use message::{RpcMessage, ShardInfo};
 pub use node_provider::{NodeOptions, NodeProvider};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

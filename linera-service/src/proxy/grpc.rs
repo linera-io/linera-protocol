@@ -541,6 +541,23 @@ where
         Ok(Response::new(description.into()))
     }
 
+    #[instrument(skip_all, err(Display), fields(method = "get_shard_info"))]
+    async fn get_shard_info(
+        &self,
+        request: Request<api::ChainId>,
+    ) -> Result<Response<api::ShardInfo>, Status> {
+        let chain_id = request.into_inner().try_into()?;
+        let shard_id = self.0.internal_config.get_shard_id(chain_id);
+        let total_shards = self.0.internal_config.shards.len();
+
+        let shard_info = api::ShardInfo {
+            shard_id: shard_id as u64,
+            total_shards: total_shards as u64,
+        };
+
+        Ok(Response::new(shard_info))
+    }
+
     #[instrument(
         target = "telemetry_only",
         skip_all,

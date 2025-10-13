@@ -153,6 +153,13 @@ impl ValidatorNode for DummyValidatorNode {
     async fn missing_blob_ids(&self, _: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
+
+    async fn get_shard_info(
+        &self,
+        _: ChainId,
+    ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
 }
 
 struct DummyValidatorNodeProvider;

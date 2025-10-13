@@ -56,7 +56,7 @@ use linera_client::{
 use linera_core::{
     client::{ChainClientError, ListeningMode},
     data_types::ClientOutcome,
-    node::ValidatorNodeProvider,
+    node::{ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
 };
@@ -520,6 +520,41 @@ impl Runnable for Job {
                     num_ok_validators,
                     committee.validators().len()
                 );
+            }
+
+            QueryShardInfo { chain_id } => {
+                let mut context =
+                    options.create_client_context(storage, wallet, signer.into_value());
+                println!("Querying validators for shard information about chain {chain_id}.\n");
+                let chain_client = context.make_chain_client(chain_id);
+                let result = chain_client.local_committee().await;
+                context.update_wallet_from_client(&chain_client).await?;
+                let committee = result.context("Failed to get local committee")?;
+                let node_provider = context.make_node_provider();
+
+                println!("Chain ID: {}", chain_id);
+                println!("Validator Shard Information:\n");
+
+                for (name, state) in committee.validators() {
+                    let address = &state.network_address;
+                    let node = node_provider.make_node(address)?;
+
+                    match node.get_shard_info(chain_id).await {
+                        Ok(shard_info) => {
+                            println!("  Validator: {}", name);
+                            println!("    Address: {}", address);
+                            println!("    Total Shards: {}", shard_info.total_shards);
+                            println!("    Shard ID for chain: {}", shard_info.shard_id);
+                            println!();
+                        }
+                        Err(e) => {
+                            println!("  Validator: {}", name);
+                            println!("    Address: {}", address);
+                            println!("    Error: Failed to get shard info - {}", e);
+                            println!();
+                        }
+                    }
+                }
             }
 
             SyncValidator {

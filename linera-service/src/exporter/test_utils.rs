@@ -377,6 +377,13 @@ impl ValidatorNode for DummyValidator {
     ) -> Result<Response<BlobIds>, Status> {
         unimplemented!()
     }
+
+    async fn get_shard_info(
+        &self,
+        _request: Request<linera_rpc::grpc::api::ChainId>,
+    ) -> Result<Response<linera_rpc::grpc::api::ShardInfo>, Status> {
+        unimplemented!()
+    }
 }
 
 #[async_trait]

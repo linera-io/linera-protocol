@@ -163,6 +163,12 @@ pub trait ValidatorNode {
 
     /// Returns the missing `Blob`s by their IDs.
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;
+
+    /// Gets shard information for a specific chain.
+    async fn get_shard_info(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<crate::data_types::ShardInfo, NodeError>;
 }
 
 /// Turn an address into a validator node.
