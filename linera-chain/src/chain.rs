@@ -865,16 +865,23 @@ where
 
         let recipients = block_execution_tracker.recipients();
         let mut previous_message_blocks = BTreeMap::new();
-        for recipient in recipients {
-            if let Some(height) = previous_message_blocks_view.get(&recipient).await? {
-                let hash = confirmed_log
-                    .get(usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?)
-                    .await?
-                    .ok_or_else(|| {
-                        ChainError::InternalError("missing entry in confirmed_log".into())
-                    })?;
-                previous_message_blocks.insert(recipient, (hash, height));
+        let heights = previous_message_blocks_view.multi_get(&recipients).await?;
+        let mut recipient_heights = Vec::new();
+        let mut indices = Vec::new();
+        for (height, recipient) in heights.into_iter().zip(recipients) {
+            if let Some(height) = height {
+                let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
+                indices.push(index);
+                recipient_heights.push((recipient, height));
             }
+        }
+        let hashes = confirmed_log.multi_get(indices).await?;
+        for (hash, (recipient, height)) in hashes.into_iter().zip(recipient_heights) {
+            let hash = hash
+                .ok_or_else(|| {
+                    ChainError::InternalError("missing entry in confirmed_log".into())
+                })?;
+            previous_message_blocks.insert(recipient, (hash, height));
         }
 
         let streams = block_execution_tracker.event_streams();
