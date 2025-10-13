@@ -918,68 +918,6 @@ impl<Env: Environment> Client<Env> {
         Ok(remote_log)
     }
 
-    /// Downloads only the specific sender blocks needed for missing cross-chain messages.
-    /// This is a targeted alternative to `find_received_certificates` that only downloads
-    /// the exact sender blocks we're missing, rather than searching through all received
-    /// certificates.
-    async fn download_missing_sender_blocks(
-        &self,
-        receiver_chain_id: ChainId,
-        missing_blocks: BTreeMap<ChainId, Vec<BlockHeight>>,
-    ) -> Result<(), ChainClientError> {
-        if missing_blocks.is_empty() {
-            return Ok(());
-        }
-
-        let (_, committee) = self.admin_committee().await?;
-        let nodes = self.make_nodes(&committee)?;
-
-        // Download certificates for each sender chain at the specific heights.
-        stream::iter(missing_blocks.into_iter())
-            .map(|(sender_chain_id, heights)| {
-                let height = heights.into_iter().max();
-                let mut shuffled_nodes = nodes.clone();
-                shuffled_nodes.shuffle(&mut rand::thread_rng());
-                async move {
-                    let Some(height) = height else {
-                        return Ok(());
-                    };
-                    // Try to download from any node.
-                    for node in &shuffled_nodes {
-                        if let Err(err) = self
-                            .download_sender_block_with_sending_ancestors(
-                                receiver_chain_id,
-                                sender_chain_id,
-                                height,
-                                node,
-                            )
-                            .await
-                        {
-                            tracing::debug!(
-                                %height,
-                                %receiver_chain_id,
-                                %sender_chain_id,
-                                %err,
-                                validator = %node.public_key,
-                                "Failed to fetch sender block",
-                            );
-                        } else {
-                            return Ok::<_, ChainClientError>(());
-                        }
-                    }
-                    // If all nodes fail, return an error.
-                    Err(ChainClientError::CannotDownloadMissingSenderBlock {
-                        chain_id: sender_chain_id,
-                        height,
-                    })
-                }
-            })
-            .buffer_unordered(self.options.max_joined_tasks)
-            .try_collect::<Vec<_>>()
-            .await?;
-        Ok(())
-    }
-
     /// Downloads a specific sender block and recursively downloads any earlier blocks
     /// that also sent a message to our chain, based on `previous_message_blocks`.
     ///
@@ -2076,16 +2014,6 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?;
         }
 
-        // Check if we're missing any sender blocks for cross-chain messages.
-        let missing_blocks = self
-            .chain_state_view()
-            .await?
-            .collect_missing_sender_blocks()
-            .await?;
-        // Download any sender blocks we're missing.
-        self.client
-            .download_missing_sender_blocks(self.chain_id, missing_blocks)
-            .await?;
         self.client.update_from_info(&info);
         Ok(info)
     }
