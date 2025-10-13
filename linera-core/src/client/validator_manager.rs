@@ -50,11 +50,11 @@ enum RequestKey {
         heights: Vec<BlockHeight>,
     },
     /// Download a blob by ID
-    Blob { blob_id: BlobId },
+    Blob(BlobId),
     /// Download a pending blob
     PendingBlob { chain_id: ChainId, blob_id: BlobId },
     /// Download certificate for a specific blob
-    CertificateForBlob { blob_id: BlobId },
+    CertificateForBlob(BlobId),
 }
 
 /// Result types that can be shared across deduplicated requests
@@ -520,7 +520,7 @@ impl<Env: Environment> ValidatorManager<Env> {
 
     #[instrument(level = "trace", skip_all)]
     pub async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
-        let key = RequestKey::Blob { blob_id };
+        let key = RequestKey::Blob(blob_id);
         self.deduplicated_request(key, || async {
             self.track_request(|peer| async move { Ok(peer.try_download_blob(blob_id).await) })
                 .await
@@ -570,7 +570,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         &self,
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        let key = RequestKey::CertificateForBlob { blob_id };
+        let key = RequestKey::CertificateForBlob(blob_id);
         self.deduplicated_request(key, || async {
             self.track_request(
                 |peer| async move { peer.download_certificate_for_blob(blob_id).await },
