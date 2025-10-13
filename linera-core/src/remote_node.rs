@@ -207,7 +207,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     #[instrument(level = "trace")]
-    pub async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
+    pub async fn download_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, NodeError> {
         match self.node.download_blob(blob_id).await {
             Ok(blob) => {
                 let blob = Blob::new(blob);
@@ -216,18 +216,20 @@ impl<N: ValidatorNode> RemoteNode<N> {
                         "Validator {} sent an invalid blob {blob_id}.",
                         self.public_key
                     );
-                    None
+                    Ok(None)
                 } else {
-                    Some(blob)
+                    Ok(Some(blob))
                 }
             }
-            Err(error) => {
+            Err(NodeError::BlobsNotFound(_error)) => {
                 tracing::debug!(
-                    "Failed to fetch blob {blob_id} from validator {}: {error}",
-                    self.public_key
+                    ?blob_id,
+                    validator=?self.public_key,
+                    "validator is missing the blob",
                 );
-                None
+                Ok(None)
             }
+            Err(error) => Err(error),
         }
     }
 

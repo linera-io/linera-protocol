@@ -61,7 +61,7 @@ pub enum RequestKey {
 #[derive(Debug, Clone)]
 pub enum RequestResult {
     Certificates(Result<Vec<ConfirmedBlockCertificate>, NodeError>),
-    Blob(Option<Blob>),
+    Blob(Result<Option<Blob>, NodeError>),
     BlobContent(Result<BlobContent, NodeError>),
     Certificate(Box<Result<ConfirmedBlockCertificate, NodeError>>),
 }
@@ -81,7 +81,7 @@ impl From<Result<Vec<ConfirmedBlockCertificate>, NodeError>> for RequestResult {
     }
 }
 
-impl From<RequestResult> for Option<Blob> {
+impl From<RequestResult> for Result<Option<Blob>, NodeError> {
     fn from(result: RequestResult) -> Self {
         match result {
             RequestResult::Blob(r) => r,
@@ -90,8 +90,8 @@ impl From<RequestResult> for Option<Blob> {
     }
 }
 
-impl From<Option<Blob>> for RequestResult {
-    fn from(result: Option<Blob>) -> Self {
+impl From<Result<Option<Blob>, NodeError>> for RequestResult {
+    fn from(result: Result<Option<Blob>, NodeError>) -> Self {
         RequestResult::Blob(result)
     }
 }
@@ -253,52 +253,195 @@ impl<Env: Environment> ValidatorManager<Env> {
         }
     }
 
-    /// Selects the best available peer using weighted random selection from top performers.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn download_certificates(
+        &self,
+        chain_id: ChainId,
+        start: BlockHeight,
+        limit: u64,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let key = RequestKey::Certificates {
+            chain_id,
+            start,
+            limit,
+        };
+        self.with_best(key, |peer| async move {
+            peer.download_certificates_from(chain_id, start, limit)
+                .await
+        })
+        .await
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub async fn download_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, NodeError> {
+        let key = RequestKey::Blob(blob_id);
+        self.with_best(key, |peer| async move { peer.download_blob(blob_id).await })
+            .await
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub async fn download_certificates_by_heights(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        let key = RequestKey::CertificatesByHeights {
+            chain_id,
+            heights: heights.clone(),
+        };
+        self.with_best(key, |peer| async move {
+            peer.download_certificates_by_heights(chain_id, heights)
+                .await
+        })
+        .await
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError> {
+        let key = RequestKey::PendingBlob { chain_id, blob_id };
+        self.with_best(key, |peer| async move {
+            peer.node.download_pending_blob(chain_id, blob_id).await
+        })
+        .await
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub async fn download_certificate_for_blob(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        let key = RequestKey::CertificateForBlob(blob_id);
+        self.with_best(key, |peer| async move {
+            peer.download_certificate_for_blob(blob_id).await
+        })
+        .await
+    }
+
+    /// Downloads the blobs with the given IDs. This is done in one concurrent task per blob.
+    /// Uses intelligent peer selection based on scores and load balancing.
+    /// Returns `None` if it couldn't find all blobs.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn download_blobs(
+        &self,
+        blob_ids: &[BlobId],
+        _timeout: Duration,
+    ) -> Result<Option<Vec<Blob>>, NodeError> {
+        let mut stream = blob_ids
+            .iter()
+            .map(|blob_id| self.download_blob(*blob_id))
+            .collect::<FuturesUnordered<_>>();
+
+        let mut blobs = Vec::new();
+        while let Some(maybe_blob) = stream.next().await {
+            blobs.push(maybe_blob?);
+        }
+        Ok(blobs.into_iter().collect::<Option<Vec<_>>>())
+    }
+
+    /// Executes an operation with an automatically selected peer, handling deduplication,
+    /// tracking, and peer selection.
     ///
-    /// This method:
-    /// 1. Filters nodes that have available request capacity
-    /// 2. Sorts them by performance score
-    /// 3. Performs weighted random selection from the top 3 performers
+    /// This method provides a high-level API for executing operations against remote nodes
+    /// while leveraging the ValidatorManager's intelligent peer selection, performance tracking,
+    /// and request deduplication capabilities.
     ///
-    /// This approach balances between choosing high-performing nodes and distributing
-    /// load across multiple validators to avoid creating hotspots.
+    /// # Type Parameters
+    /// - `R`: The inner result type (what the operation returns on success)
+    /// - `F`: The async closure type that takes a `RemoteNode` and returns a future
+    /// - `Fut`: The future type returned by the closure
     ///
-    /// Returns `None` if no nodes are available or all are at capacity.
-    async fn select_best_peer(&self) -> Option<RemoteNode<Env::ValidatorNode>> {
+    /// # Arguments
+    /// - `key`: Unique identifier for request deduplication
+    /// - `operation`: Async closure that takes a selected peer and performs the operation
+    ///
+    /// # Returns
+    /// The result from the operation, potentially from cache or a deduplicated in-flight request
+    ///
+    /// # Example
+    /// ```ignore
+    /// let result: Result<Vec<ConfirmedBlockCertificate>, NodeError> = validator_manager
+    ///     .with_best(
+    ///         RequestKey::Certificates { chain_id, start, limit },
+    ///         |peer| async move {
+    ///             peer.download_certificates_from(chain_id, start, limit).await
+    ///         }
+    ///     )
+    ///     .await;
+    /// ```
+    pub async fn with_best<R, F, Fut>(&self, key: RequestKey, operation: F) -> Result<R, NodeError>
+    where
+        Result<R, NodeError>: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
+        Fut: Future<Output = Result<R, NodeError>>,
+    {
+        self.deduplicated_request(key, || async {
+            // Select the best available peer
+            let peer = self
+                .select_best_peer()
+                .await
+                .ok_or_else(|| NodeError::WorkerError {
+                    error: "No validators available".to_string(),
+                })?;
+            self.track_request(peer, operation).await
+        })
+        .await
+    }
+
+    pub async fn add_peer(&self, node: RemoteNode<Env::ValidatorNode>) {
+        let mut nodes = self.nodes.write().await;
+        let public_key = node.public_key;
+        nodes.entry(public_key).or_insert_with(|| {
+            NodeInfo::with_config(
+                node,
+                self.default_weights,
+                self.default_alpha,
+                self.default_max_expected_latency_ms,
+                self.max_requests_per_node,
+            )
+        });
+    }
+
+    pub async fn add_peers(
+        &self,
+        new_nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
+    ) {
+        let mut nodes = self.nodes.write().await;
+        for node in new_nodes {
+            let public_key = node.public_key;
+            nodes.entry(public_key).or_insert_with(|| {
+                NodeInfo::with_config(
+                    node,
+                    self.default_weights,
+                    self.default_alpha,
+                    self.default_max_expected_latency_ms,
+                    self.max_requests_per_node,
+                )
+            });
+        }
+    }
+
+    /// Returns current performance metrics for all managed nodes.
+    ///
+    /// Each entry contains:
+    /// - Performance score (f64, normalized 0.0-1.0)
+    /// - EMA success rate (f64, 0.0-1.0)
+    /// - Total requests processed (u64)
+    ///
+    /// Useful for monitoring and debugging node performance.
+    pub async fn get_node_scores(&self) -> BTreeMap<ValidatorPublicKey, (f64, f64, u64)> {
         let nodes = self.nodes.read().await;
+        let mut result = BTreeMap::new();
 
-        // Filter nodes that can accept requests and calculate their scores
-        let mut scored_nodes = Vec::new();
-        for info in nodes.values() {
-            if info.can_accept_request(self.max_requests_per_node).await {
-                let score = info.calculate_score().await;
-                scored_nodes.push((score, info.node.clone()));
-            }
+        for (key, info) in nodes.iter() {
+            let score = info.calculate_score().await;
+            result.insert(*key, (score, info.ema_success_rate, info.total_requests));
         }
 
-        if scored_nodes.is_empty() {
-            return None;
-        }
-
-        // Sort by score (highest first)
-        scored_nodes.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-
-        // Use weighted random selection from top performers (top 3 or all if less)
-        let top_count = scored_nodes.len().min(3);
-        let top_nodes = &scored_nodes[..top_count];
-
-        // Create weights based on normalized scores
-        // Add small epsilon to prevent zero weights
-        let weights: Vec<f64> = top_nodes.iter().map(|(score, _)| score.max(0.01)).collect();
-
-        if let Ok(dist) = WeightedIndex::new(&weights) {
-            let mut rng = rand::thread_rng();
-            let index = dist.sample(&mut rng);
-            Some(top_nodes[index].1.clone())
-        } else {
-            // Fallback to the best node if weights are invalid
-            Some(scored_nodes[0].1.clone())
-        }
+        result
     }
 
     /// Wraps a request operation with performance tracking and capacity management.
@@ -317,19 +460,15 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// # Errors
     /// Returns `NodeError::WorkerError` if no peers are available or all are at capacity.
     /// Otherwise, propagates any error from the operation.
-    async fn track_request<T, F, Fut>(&self, operation: F) -> Result<T, NodeError>
+    async fn track_request<T, F, Fut>(
+        &self,
+        peer: RemoteNode<Env::ValidatorNode>,
+        operation: F,
+    ) -> Result<T, NodeError>
     where
         F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
         Fut: Future<Output = Result<T, NodeError>>,
     {
-        // Select the best available peer
-        let peer = self
-            .select_best_peer()
-            .await
-            .ok_or_else(|| NodeError::WorkerError {
-                error: "No validators available".to_string(),
-            })?;
-
         let start_time = Instant::now();
         let public_key = peer.public_key;
 
@@ -369,43 +508,6 @@ impl<Env: Environment> ValidatorManager<Env> {
         }
 
         result
-    }
-
-    /// Stores a result in the cache with LRU eviction if cache is full.
-    ///
-    /// If the cache is at capacity, this method removes the oldest entry before
-    /// inserting the new one. Entries are considered "oldest" based on their cached_at timestamp.
-    async fn store_in_cache(&self, key: RequestKey, result: Arc<RequestResult>) {
-        let mut cache = self.cache.write().await;
-
-        // If cache is at capacity, remove the oldest entry (LRU eviction)
-        if cache.len() >= self.max_cache_size {
-            if let Some(oldest_key) = cache
-                .iter()
-                .min_by_key(|(_, entry)| entry.cached_at)
-                .map(|(k, _)| k.clone())
-            {
-                cache.remove(&oldest_key);
-                tracing::info!(
-                    evicted_key = ?oldest_key,
-                    "evicted oldest cache entry due to capacity limit"
-                );
-            }
-        }
-
-        // Insert new entry
-        cache.insert(
-            key.clone(),
-            CacheEntry {
-                result,
-                cached_at: Instant::now(),
-            },
-        );
-        tracing::trace!(
-            key = ?key,
-            cache_size = cache.len(),
-            "stored result in cache"
-        );
     }
 
     /// Deduplicates concurrent requests for the same data.
@@ -495,202 +597,89 @@ impl<Env: Environment> ValidatorManager<Env> {
         result
     }
 
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_certificates(
-        &self,
-        chain_id: ChainId,
-        start: BlockHeight,
-        limit: u64,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let key = RequestKey::Certificates {
-            chain_id,
-            start,
-            limit,
-        };
-        self.deduplicated_request(key, || async {
-            self.track_request(|peer| async move {
-                peer.download_certificates_from(chain_id, start, limit)
-                    .await
-            })
-            .await
-        })
-        .await
-    }
+    /// Stores a result in the cache with LRU eviction if cache is full.
+    ///
+    /// If the cache is at capacity, this method removes the oldest entry before
+    /// inserting the new one. Entries are considered "oldest" based on their cached_at timestamp.
+    async fn store_in_cache(&self, key: RequestKey, result: Arc<RequestResult>) {
+        let mut cache = self.cache.write().await;
 
-    #[instrument(level = "trace", skip_all)]
-    pub async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
-        let key = RequestKey::Blob(blob_id);
-        self.deduplicated_request(key, || async {
-            self.track_request(|peer| async move { Ok(peer.try_download_blob(blob_id).await) })
-                .await
-                .unwrap_or(None)
-        })
-        .await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_certificates_by_heights(
-        &self,
-        chain_id: ChainId,
-        heights: Vec<BlockHeight>,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let key = RequestKey::CertificatesByHeights {
-            chain_id,
-            heights: heights.clone(),
-        };
-        self.deduplicated_request(key, || async {
-            self.track_request(|peer| async move {
-                peer.download_certificates_by_heights(chain_id, heights)
-                    .await
-            })
-            .await
-        })
-        .await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_pending_blob(
-        &self,
-        chain_id: ChainId,
-        blob_id: BlobId,
-    ) -> Result<BlobContent, NodeError> {
-        let key = RequestKey::PendingBlob { chain_id, blob_id };
-        self.deduplicated_request(key, || async {
-            self.track_request(|peer| async move {
-                peer.node.download_pending_blob(chain_id, blob_id).await
-            })
-            .await
-        })
-        .await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_certificate_for_blob(
-        &self,
-        blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        let key = RequestKey::CertificateForBlob(blob_id);
-        self.deduplicated_request(key, || async {
-            self.track_request(
-                |peer| async move { peer.download_certificate_for_blob(blob_id).await },
-            )
-            .await
-        })
-        .await
-    }
-
-    /// Downloads the blobs with the given IDs. This is done in one concurrent task per blob.
-    /// Uses intelligent peer selection based on scores and load balancing.
-    /// Returns `None` if it couldn't find all blobs.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_blobs(
-        &self,
-        blob_ids: &[BlobId],
-        _timeout: Duration,
-    ) -> Option<Vec<Blob>> {
-        let mut stream = blob_ids
-            .iter()
-            .map(|blob_id| self.try_download_blob(*blob_id))
-            .collect::<FuturesUnordered<_>>();
-
-        let mut blobs = Vec::new();
-        while let Some(maybe_blob) = stream.next().await {
-            blobs.push(maybe_blob?);
+        // If cache is at capacity, remove the oldest entry (LRU eviction)
+        if cache.len() >= self.max_cache_size {
+            if let Some(oldest_key) = cache
+                .iter()
+                .min_by_key(|(_, entry)| entry.cached_at)
+                .map(|(k, _)| k.clone())
+            {
+                cache.remove(&oldest_key);
+                tracing::info!(
+                    evicted_key = ?oldest_key,
+                    "evicted oldest cache entry due to capacity limit"
+                );
+            }
         }
-        Some(blobs)
+
+        // Insert new entry
+        cache.insert(
+            key.clone(),
+            CacheEntry {
+                result,
+                cached_at: Instant::now(),
+            },
+        );
+        tracing::trace!(
+            key = ?key,
+            cache_size = cache.len(),
+            "stored result in cache"
+        );
     }
 
-    /// Executes an operation with an automatically selected peer, handling deduplication,
-    /// tracking, and peer selection.
+    /// Selects the best available peer using weighted random selection from top performers.
     ///
-    /// This method provides a high-level API for executing operations against remote nodes
-    /// while leveraging the ValidatorManager's intelligent peer selection, performance tracking,
-    /// and request deduplication capabilities.
+    /// This method:
+    /// 1. Filters nodes that have available request capacity
+    /// 2. Sorts them by performance score
+    /// 3. Performs weighted random selection from the top 3 performers
     ///
-    /// # Type Parameters
-    /// - `R`: The inner result type (what the operation returns on success)
-    /// - `F`: The async closure type that takes a `RemoteNode` and returns a future
-    /// - `Fut`: The future type returned by the closure
+    /// This approach balances between choosing high-performing nodes and distributing
+    /// load across multiple validators to avoid creating hotspots.
     ///
-    /// # Arguments
-    /// - `key`: Unique identifier for request deduplication
-    /// - `operation`: Async closure that takes a selected peer and performs the operation
-    ///
-    /// # Returns
-    /// The result from the operation, potentially from cache or a deduplicated in-flight request
-    ///
-    /// # Example
-    /// ```ignore
-    /// let result: Result<Vec<ConfirmedBlockCertificate>, NodeError> = validator_manager
-    ///     .with_best(
-    ///         RequestKey::Certificates { chain_id, start, limit },
-    ///         |peer| async move {
-    ///             peer.download_certificates_from(chain_id, start, limit).await
-    ///         }
-    ///     )
-    ///     .await;
-    /// ```
-    pub async fn with_best<R, F, Fut>(&self, key: RequestKey, operation: F) -> Result<R, NodeError>
-    where
-        Result<R, NodeError>: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
-        F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
-        Fut: Future<Output = Result<R, NodeError>>,
-    {
-        self.deduplicated_request(key, || async { self.track_request(operation).await })
-            .await
-    }
-
-    pub async fn add_peer(&self, node: RemoteNode<Env::ValidatorNode>) {
-        let mut nodes = self.nodes.write().await;
-        let public_key = node.public_key;
-        nodes.entry(public_key).or_insert_with(|| {
-            NodeInfo::with_config(
-                node,
-                self.default_weights,
-                self.default_alpha,
-                self.default_max_expected_latency_ms,
-                self.max_requests_per_node,
-            )
-        });
-    }
-
-    pub async fn add_peers(
-        &self,
-        new_nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
-    ) {
-        let mut nodes = self.nodes.write().await;
-        for node in new_nodes {
-            let public_key = node.public_key;
-            nodes.entry(public_key).or_insert_with(|| {
-                NodeInfo::with_config(
-                    node,
-                    self.default_weights,
-                    self.default_alpha,
-                    self.default_max_expected_latency_ms,
-                    self.max_requests_per_node,
-                )
-            });
-        }
-    }
-
-    /// Returns current performance metrics for all managed nodes.
-    ///
-    /// Each entry contains:
-    /// - Performance score (f64, normalized 0.0-1.0)
-    /// - EMA success rate (f64, 0.0-1.0)
-    /// - Total requests processed (u64)
-    ///
-    /// Useful for monitoring and debugging node performance.
-    pub async fn get_node_scores(&self) -> BTreeMap<ValidatorPublicKey, (f64, f64, u64)> {
+    /// Returns `None` if no nodes are available or all are at capacity.
+    async fn select_best_peer(&self) -> Option<RemoteNode<Env::ValidatorNode>> {
         let nodes = self.nodes.read().await;
-        let mut result = BTreeMap::new();
 
-        for (key, info) in nodes.iter() {
-            let score = info.calculate_score().await;
-            result.insert(*key, (score, info.ema_success_rate, info.total_requests));
+        // Filter nodes that can accept requests and calculate their scores
+        let mut scored_nodes = Vec::new();
+        for info in nodes.values() {
+            if info.can_accept_request(self.max_requests_per_node).await {
+                let score = info.calculate_score().await;
+                scored_nodes.push((score, info.node.clone()));
+            }
         }
 
-        result
+        if scored_nodes.is_empty() {
+            return None;
+        }
+
+        // Sort by score (highest first)
+        scored_nodes.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+
+        // Use weighted random selection from top performers (top 3 or all if less)
+        let top_count = scored_nodes.len().min(3);
+        let top_nodes = &scored_nodes[..top_count];
+
+        // Create weights based on normalized scores
+        // Add small epsilon to prevent zero weights
+        let weights: Vec<f64> = top_nodes.iter().map(|(score, _)| score.max(0.01)).collect();
+
+        if let Ok(dist) = WeightedIndex::new(&weights) {
+            let mut rng = rand::thread_rng();
+            let index = dist.sample(&mut rng);
+            Some(top_nodes[index].1.clone())
+        } else {
+            // Fallback to the best node if weights are invalid
+            Some(scored_nodes[0].1.clone())
+        }
     }
 }
 

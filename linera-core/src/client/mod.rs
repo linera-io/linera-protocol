@@ -422,18 +422,15 @@ impl<Env: Environment> Client<Env> {
         {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_nodes.add_peer(remote_node.clone()).await;
-                let blobs =
-                    futures::stream::iter(blob_ids.iter().copied().map(|blob_id| async move {
-                        let request_key = RequestKey::Blob(blob_id);
-                        self.remote_nodes
-                            .with_best(request_key, async move |peer| {
-                                peer.try_download_blob(blob_id).await.ok_or_else(|| todo!())
-                            })
-                            .await
-                    }))
-                    .buffer_unordered(self.options.max_joined_tasks)
-                    .collect::<Vec<_>>()
-                    .await;
+                let blobs = self
+                    .remote_nodes
+                    .download_blobs(blob_ids, self.options.blob_download_timeout)
+                    .await?
+                    .ok_or_else(|| {
+                        ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(
+                            blob_ids.to_vec(),
+                        ))
+                    })?;
                 self.local_node.store_blobs(&blobs).await?;
             }
             x => {
@@ -711,7 +708,7 @@ impl<Env: Environment> Client<Env> {
                     let blobs = self
                         .remote_nodes
                         .download_blobs(blob_ids, self.options.blob_download_timeout)
-                        .await
+                        .await?
                         .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
                     self.process_certificate(certificate).await?;
@@ -754,7 +751,7 @@ impl<Env: Environment> Client<Env> {
                     let blobs = self
                         .remote_nodes
                         .download_blobs(blob_ids, self.options.blob_download_timeout)
-                        .await
+                        .await?
                         .ok_or(err)?;
 
                     self.local_node.store_blobs(&blobs).await?;
