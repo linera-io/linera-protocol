@@ -334,13 +334,13 @@ where
                 ))))
             }
             ShardInfoQuery(chain_id) => {
-                let shard_id = self.internal_config.get_shard_id(*chain_id);
+                let shard_id = self.internal_config.get_shard_id(chain_id);
                 let total_shards = self.internal_config.shards.len();
                 let shard_info = linera_rpc::ShardInfo {
                     shard_id,
                     total_shards,
                 };
-                Ok(Some(RpcMessage::ShardInfoResponse(Box::new(shard_info))))
+                Ok(Some(RpcMessage::ShardInfoResponse(shard_info)))
             }
             UploadBlob(content) => {
                 let blob = Blob::new(*content);

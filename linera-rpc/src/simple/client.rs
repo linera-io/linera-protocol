@@ -264,9 +264,8 @@ impl ValidatorNode for SimpleClient {
         &self,
         chain_id: ChainId,
     ) -> Result<linera_core::data_types::ShardInfo, NodeError> {
-        let rpc_shard_info: crate::message::ShardInfo = self
-            .query(RpcMessage::ShardInfoQuery(Box::new(chain_id)))
-            .await?;
+        let rpc_shard_info: crate::message::ShardInfo =
+            self.query(RpcMessage::ShardInfoQuery(chain_id)).await?;
         Ok(linera_core::data_types::ShardInfo {
             shard_id: rpc_shard_info.shard_id,
             total_shards: rpc_shard_info.total_shards,

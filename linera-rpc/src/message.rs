@@ -75,8 +75,8 @@ pub enum RpcMessage {
 
     BlobLastUsedByCertificate(Box<BlobId>),
     BlobLastUsedByCertificateResponse(Box<ConfirmedBlockCertificate>),
-    ShardInfoQuery(Box<ChainId>),
-    ShardInfoResponse(Box<ShardInfo>),
+    ShardInfoQuery(ChainId),
+    ShardInfoResponse(ShardInfo),
 }
 
 impl RpcMessage {
@@ -97,7 +97,7 @@ impl RpcMessage {
             DownloadPendingBlob(request) => request.0,
             DownloadCertificatesByHeights(chain_id, _) => *chain_id,
             HandlePendingBlob(request) => request.0,
-            ShardInfoQuery(chain_id) => **chain_id,
+            ShardInfoQuery(chain_id) => *chain_id,
             Vote(_)
             | Error(_)
             | ChainInfoResponse(_)
@@ -289,7 +289,7 @@ impl TryFrom<RpcMessage> for ShardInfo {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
-            RpcMessage::ShardInfoResponse(shard_info) => Ok(*shard_info),
+            RpcMessage::ShardInfoResponse(shard_info) => Ok(shard_info),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }
