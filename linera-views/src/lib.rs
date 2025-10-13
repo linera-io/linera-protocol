@@ -119,5 +119,10 @@ pub use views::{
     queue_view, reentrant_collection_view, register_view, set_view,
 };
 /// Re-exports used by the derive macros of this library.
+
 #[doc(hidden)]
-pub use {generic_array, sha3};
+#[allow(deprecated)]
+pub use generic_array;
+
+#[doc(hidden)]
+pub use sha3;

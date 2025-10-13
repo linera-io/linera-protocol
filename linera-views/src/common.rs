@@ -17,6 +17,7 @@ use crate::ViewError;
 
 type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;
 #[doc(hidden)]
+#[allow(deprecated)]
 pub type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 
 #[derive(Clone, Debug)]
