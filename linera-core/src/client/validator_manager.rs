@@ -632,23 +632,8 @@ impl<Env: Environment> ValidatorManager<Env> {
     /// If the cache is at capacity, this method removes the oldest entry before
     /// inserting the new one. Entries are considered "oldest" based on their cached_at timestamp.
     async fn store_in_cache(&self, key: RequestKey, result: Arc<RequestResult>) {
+        self.evict_expired_cache_entries().await; // Clean up expired entries first
         let mut cache = self.cache.write().await;
-
-        // If cache is at capacity, remove the oldest entry (LRU eviction)
-        if cache.len() >= self.max_cache_size {
-            if let Some(oldest_key) = cache
-                .iter()
-                .min_by_key(|(_, entry)| entry.cached_at)
-                .map(|(k, _)| k.clone())
-            {
-                cache.remove(&oldest_key);
-                tracing::info!(
-                    evicted_key = ?oldest_key,
-                    "evicted oldest cache entry due to capacity limit"
-                );
-            }
-        }
-
         // Insert new entry
         cache.insert(
             key.clone(),
@@ -659,9 +644,41 @@ impl<Env: Environment> ValidatorManager<Env> {
         );
         tracing::trace!(
             key = ?key,
-            cache_size = cache.len(),
             "stored result in cache"
         );
+    }
+
+    /// Removes all cache entries that are older than the configured cache TTL.
+    ///
+    /// This method scans the cache and removes entries where the time elapsed since
+    /// `cached_at` exceeds `cache_ttl`. It's useful for explicitly cleaning up stale
+    /// cache entries rather than relying on lazy expiration checks.
+    pub async fn evict_expired_cache_entries(&self) -> usize {
+        let mut cache = self.cache.write().await;
+        let now = Instant::now();
+        if cache.len() <= self.max_cache_size {
+            return 0; // No need to evict if under max size
+        }
+
+        let expired_keys: Vec<RequestKey> = cache
+            .iter()
+            .filter_map(|(key, entry)| {
+                if now.duration_since(entry.cached_at) > self.cache_ttl {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for key in &expired_keys {
+            cache.remove(key);
+        }
+
+        if !expired_keys.is_empty() {
+            tracing::trace!(count = expired_keys.len(), "evicted expired cache entries");
+        }
+        expired_keys.len()
     }
 
     /// Returns all peers ordered by their score (highest first).
