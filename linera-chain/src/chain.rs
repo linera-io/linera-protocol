@@ -7,7 +7,6 @@ use std::{
     sync::Arc,
 };
 
-use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
@@ -31,7 +30,6 @@ use linera_views::{
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
     set_view::SetView,
-    store::ReadableKeyValueStore as _,
     views::{ClonableView, CryptoHashView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
@@ -517,58 +515,6 @@ where
         Ok(())
     }
 
-    /// Verifies that this chain is up-to-date and all the messages executed ahead of time
-    /// have been properly received by now.
-    #[instrument(target = "telemetry_only", skip_all, fields(
-        chain_id = %self.chain_id()
-    ))]
-    pub async fn validate_incoming_bundles(&self) -> Result<(), ChainError> {
-        let chain_id = self.chain_id();
-        let pairs = self.inboxes.try_load_all_entries().await?;
-        let max_stream_queries = self.context().store().max_stream_queries();
-        let stream = stream::iter(pairs)
-            .map(|(origin, inbox)| async move {
-                if let Some(bundle) = inbox.removed_bundles.front().await? {
-                    return Err(ChainError::MissingCrossChainUpdate {
-                        chain_id,
-                        origin,
-                        height: bundle.height,
-                    });
-                }
-                Ok::<(), ChainError>(())
-            })
-            .buffer_unordered(max_stream_queries);
-        stream.try_collect::<Vec<_>>().await?;
-        Ok(())
-    }
-
-    /// Collects all missing sender blocks from removed bundles across all inboxes.
-    /// Returns a map of origin chain IDs to their respective missing block heights.
-    #[instrument(target = "telemetry_only", skip_all, fields(
-        chain_id = %self.chain_id()
-    ))]
-    pub async fn collect_missing_sender_blocks(
-        &self,
-    ) -> Result<BTreeMap<ChainId, Vec<BlockHeight>>, ChainError> {
-        let pairs = self.inboxes.try_load_all_entries().await?;
-        let max_stream_queries = self.context().store().max_stream_queries();
-        let stream = stream::iter(pairs)
-            .map(|(origin, inbox)| async move {
-                let mut missing_heights = Vec::new();
-                let bundles = inbox.removed_bundles.elements().await?;
-                for bundle in bundles {
-                    missing_heights.push(bundle.height);
-                }
-                Ok::<(ChainId, Vec<BlockHeight>), ChainError>((origin, missing_heights))
-            })
-            .buffer_unordered(max_stream_queries);
-        let results: Vec<(ChainId, Vec<BlockHeight>)> = stream.try_collect().await?;
-        Ok(results
-            .into_iter()
-            .filter(|(_, heights)| !heights.is_empty())
-            .collect())
-    }
-
     pub async fn next_block_height_to_receive(
         &self,
         origin: &ChainId,
@@ -715,6 +661,7 @@ where
     pub async fn remove_bundles_from_inboxes(
         &mut self,
         timestamp: Timestamp,
+        must_be_present: bool,
         incoming_bundles: impl IntoIterator<Item = &IncomingBundle>,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
@@ -749,6 +696,16 @@ where
                     .remove_bundle(bundle)
                     .await
                     .map_err(|error| (chain_id, origin, error))?;
+                if must_be_present {
+                    ensure!(
+                        was_present,
+                        ChainError::MissingCrossChainUpdate {
+                            chain_id,
+                            origin,
+                            height: bundle.height,
+                        }
+                    );
+                }
                 if was_present && !bundle.is_skippable() {
                     removed_unskippable.insert(BundleInInbox::new(origin, bundle));
                 }

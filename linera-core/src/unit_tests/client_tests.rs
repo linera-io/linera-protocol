@@ -2845,19 +2845,15 @@ where
         )
         .await?;
 
-    // Test that prepare_chain downloads only the sender blocks for acknowledged messages.
-    // The new client has the inbox state showing that a message from sender was processed,
-    // but needs to download the sender block. The message from sender2 hasn't been
-    // processed yet, so its block should NOT be downloaded.
+    // Test that prepare_chain does not download any sender chain blocks.
     let info = receiver2.prepare_chain().await?;
     assert_eq!(info.next_block_height, BlockHeight::from(1));
 
-    // Verify that sender's block WAS downloaded.
     let local_node = &receiver2.client.local_node;
     let sender_info = local_node.chain_info(sender.chain_id()).await?;
     assert_eq!(
         sender_info.next_block_height,
-        BlockHeight::from(1),
+        BlockHeight::ZERO,
         "prepare_chain should download acknowledged sender blocks"
     );
 

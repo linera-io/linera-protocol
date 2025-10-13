@@ -839,7 +839,11 @@ where
         let local_time = self.storage.clock().current_time();
         let chain = &mut self.chain;
         chain
-            .remove_bundles_from_inboxes(block.header.timestamp, block.body.incoming_bundles())
+            .remove_bundles_from_inboxes(
+                block.header.timestamp,
+                false,
+                block.body.incoming_bundles(),
+            )
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
@@ -1310,7 +1314,7 @@ where
         let local_time = self.storage.clock().current_time();
 
         self.chain
-            .remove_bundles_from_inboxes(block.timestamp, block.incoming_bundles())
+            .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
@@ -1329,8 +1333,6 @@ where
             .tip_state
             .get_mut()
             .update_counters(&block.transactions, &outcome.messages)?;
-        // Verify that the resulting chain would have no unconfirmed incoming messages.
-        chain.validate_incoming_bundles().await?;
         // Don't save the changes since the block is not confirmed yet.
         chain.rollback();
 
