@@ -1246,27 +1246,32 @@ where
         &mut self,
         block: &Block,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
-        let mut emitted_streams: BTreeMap<StreamId, BTreeSet<u32>> = BTreeMap::new();
+        let mut emitted_streams = BTreeMap::<StreamId, BTreeSet<u32>>::new();
         for event in block.body.events.iter().flatten() {
             emitted_streams
                 .entry(event.stream_id.clone())
                 .or_default()
                 .insert(event.index);
         }
+        let mut stream_ids = Vec::new();
+        let mut list_indices = Vec::new();
+        for (stream_id, indices) in emitted_streams {
+            stream_ids.push(stream_id);
+            list_indices.push(indices);
+        }
 
         let mut updated_streams = BTreeSet::new();
-        for (stream_id, indices) in emitted_streams {
+        let next_indices = self.next_expected_events.multi_get(&stream_ids).await?;
+        for ((next_index, indices), stream_id) in
+            next_indices.into_iter().zip(list_indices).zip(stream_ids)
+        {
             let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
                 // we don't expect the epoch stream to contain event 0
                 1
             } else {
                 0
             };
-            let mut current_expected_index = self
-                .next_expected_events
-                .get(&stream_id)
-                .await?
-                .unwrap_or(initial_index);
+            let mut current_expected_index = next_index.unwrap_or(initial_index);
             for index in indices {
                 if index == current_expected_index {
                     updated_streams.insert(stream_id.clone());
