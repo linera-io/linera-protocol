@@ -434,6 +434,15 @@ where
             }
         }
     }
+
+    fn log_error(&self, error: &linera_core::worker::WorkerError, context: &str) {
+        let nickname = self.state.nickname();
+        if error.is_local() {
+            error!(nickname, %error, "{}", context);
+        } else {
+            debug!(nickname, %error, "{}", context);
+        }
+    }
 }
 
 #[tonic::async_trait]
@@ -513,12 +522,7 @@ where
             }
             Err(error) => {
                 Self::log_request_outcome_and_latency(start, false, "handle_lite_certificate");
-                let nickname = self.state.nickname();
-                if error.is_local() {
-                    error!(nickname, %error, "Failed to handle lite certificate");
-                } else {
-                    debug!(nickname, %error, "Failed to handle lite certificate");
-                }
+                self.log_error(&error, "Failed to handle lite certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -562,12 +566,7 @@ where
             }
             Err(error) => {
                 Self::log_request_outcome_and_latency(start, false, "handle_confirmed_certificate");
-                let nickname = self.state.nickname();
-                if error.is_local() {
-                    error!(nickname, %error, "Failed to handle confirmed certificate");
-                } else {
-                    debug!(nickname, %error, "Failed to handle confirmed certificate");
-                }
+                self.log_error(&error, "Failed to handle confirmed certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -602,12 +601,7 @@ where
             }
             Err(error) => {
                 Self::log_request_outcome_and_latency(start, false, "handle_validated_certificate");
-                let nickname = self.state.nickname();
-                if error.is_local() {
-                    error!(nickname, %error, "Failed to handle validated certificate");
-                } else {
-                    debug!(nickname, %error, "Failed to handle validated certificate");
-                }
+                self.log_error(&error, "Failed to handle validated certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -641,12 +635,7 @@ where
             }
             Err(error) => {
                 Self::log_request_outcome_and_latency(start, false, "handle_timeout_certificate");
-                let nickname = self.state.nickname();
-                if error.is_local() {
-                    error!(nickname, %error, "Failed to handle timeout certificate");
-                } else {
-                    debug!(nickname, %error, "Failed to handle timeout certificate");
-                }
+                self.log_error(&error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -676,12 +665,7 @@ where
             }
             Err(error) => {
                 Self::log_request_outcome_and_latency(start, false, "handle_chain_info_query");
-                let nickname = self.state.nickname();
-                if error.is_local() {
-                    error!(nickname, %error, "Failed to handle chain info query");
-                } else {
-                    debug!(nickname, %error, "Failed to handle chain info query");
-                }
+                self.log_error(&error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -715,12 +699,7 @@ where
             }
             Err(error) => {
                 Self::log_request_outcome_and_latency(start, false, "download_pending_blob");
-                let nickname = self.state.nickname();
-                if error.is_local() {
-                    error!(nickname, %error, "Failed to download pending blob");
-                } else {
-                    debug!(nickname, %error, "Failed to download pending blob");
-                }
+                self.log_error(&error, "Failed to download pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -751,12 +730,7 @@ where
             }
             Err(error) => {
                 Self::log_request_outcome_and_latency(start, false, "handle_pending_blob");
-                let nickname = self.state.nickname();
-                if error.is_local() {
-                    error!(nickname, %error, "Failed to handle pending blob");
-                } else {
-                    debug!(nickname, %error, "Failed to handle pending blob");
-                }
+                self.log_error(&error, "Failed to handle pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
