@@ -36,6 +36,7 @@ use crate::{
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
+    LocalNodeError,
 };
 
 /// The default amount of time we wait for additional validators to contribute
@@ -361,6 +362,10 @@ where
                 Err(NodeError::WrongRound(_round)) => {
                     // The proposal is for a different round, so we need to update the validator.
                     // TODO: this should probably be more specific as to which rounds are retried.
+                    tracing::debug!(
+                        "Wrong round; sending chain {chain_id} to validator {}.",
+                        self.remote_node.public_key
+                    );
                     self.send_chain_information(
                         chain_id,
                         proposal.content.block.height,
@@ -371,7 +376,13 @@ where
                 Err(NodeError::UnexpectedBlockHeight {
                     expected_block_height,
                     found_block_height,
-                }) if expected_block_height < found_block_height => {
+                }) if expected_block_height < found_block_height
+                    && found_block_height == proposal.content.block.height =>
+                {
+                    tracing::debug!(
+                        "Wrong height; sending chain {chain_id} to validator {}.",
+                        self.remote_node.public_key
+                    );
                     // The proposal is for a later block height, so we need to update the validator.
                     self.send_chain_information(
                         chain_id,
@@ -389,6 +400,10 @@ where
                         .get(&origin)
                         .is_none_or(|h| *h < height) =>
                 {
+                    tracing::debug!(
+                        "Missing cross-chain update; sending chain {origin} to validator {}.",
+                        self.remote_node.public_key
+                    );
                     sent_cross_chain_updates.insert(origin, height);
                     // Some received certificates may be missing for this validator
                     // (e.g. to create the chain or make the balance sufficient) so we are going to
@@ -407,6 +422,10 @@ where
                         .map(|event_id| event_id.chain_id)
                         .filter(|chain_id| !publisher_chain_ids_sent.contains(chain_id))
                         .collect::<BTreeSet<_>>();
+                    tracing::debug!(
+                        "Missing events; sending chains {new_chain_ids:?} to validator {}",
+                        self.remote_node.public_key
+                    );
                     ensure!(
                         !new_chain_ids.is_empty(),
                         NodeError::EventsNotFound(event_ids)
@@ -430,6 +449,7 @@ where
                 Err(NodeError::BlobsNotFound(_) | NodeError::InactiveChain(_))
                     if !blob_ids.is_empty() =>
                 {
+                    tracing::debug!("Missing blobs");
                     // For `BlobsNotFound`, we assume that the local node should already be
                     // updated with the needed blobs, so sending the chain information about the
                     // certificates that last used the blobs to the validator node should be enough.
@@ -465,6 +485,7 @@ where
                             .and_modify(|h| *h = block_height.max(*h))
                             .or_insert(block_height);
                     }
+                    tracing::debug!("Sending chains {chain_heights:?}");
 
                     self.send_chain_info_up_to_heights(
                         chain_heights,
@@ -523,7 +544,11 @@ where
                             && event_id.chain_id == self.admin_id
                     }) =>
                 {
-                    // The chain is missing epoch events. Send all blocks.
+                    if chain_id != self.admin_id {
+                        tracing::error!(
+                            "Missing epochs were not handled by send_confirmed_certificate."
+                        );
+                    }
                     let query = ChainInfoQuery::new(chain_id);
                     self.remote_node.handle_chain_info_query(query).await?
                 }
@@ -586,7 +611,12 @@ where
         };
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let local_info = self.local_node.handle_chain_info_query(query).await?.info;
+        let local_info = match self.local_node.handle_chain_info_query(query).await {
+            Ok(response) => response.info,
+            // We don't have the full chain description.
+            Err(LocalNodeError::BlobsNotFound(_)) => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
         let manager = local_info.manager;
         if local_info.next_block_height != remote_height || manager.current_round <= remote_round {
             return Ok(());
