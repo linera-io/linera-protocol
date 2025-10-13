@@ -1635,9 +1635,14 @@ impl Runnable for Job {
                 };
                 match result {
                     Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(blob_ids)))
-                        if blob_ids == vec![BlobId { blob_type: BlobType::ChainDescription, hash: chain_id.0 }] => {
-                            bail!("Error following chain {chain_id}: It does not exist");
-                        }
+                        if blob_ids
+                            == vec![BlobId {
+                                blob_type: BlobType::ChainDescription,
+                                hash: chain_id.0,
+                            }] =>
+                    {
+                        bail!("Error following chain {chain_id}: It does not exist");
+                    }
                     Err(e) => return Err(e.into()),
                     Ok(_) => {}
                 }
