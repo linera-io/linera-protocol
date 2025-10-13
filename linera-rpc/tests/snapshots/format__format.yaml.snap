@@ -1076,80 +1076,80 @@ RpcMessage:
     16:
       NetworkDescriptionQuery: UNIT
     17:
-      ShardInfoQuery:
-        NEWTYPE:
-          TYPENAME: ChainId
-    18:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    19:
+    18:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    20:
+    19:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    21:
+    20:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    22:
+    21:
       NetworkDescriptionResponse:
         NEWTYPE:
           TYPENAME: NetworkDescription
-    23:
+    22:
       UploadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobId
-    24:
+    23:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    25:
+    24:
       DownloadPendingBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    26:
+    25:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: Block
-    27:
+    26:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    28:
+    27:
       DownloadCertificatesByHeightsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    29:
+    28:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    30:
+    29:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    31:
-      ShardInfoResponse:
-        NEWTYPE:
-          TYPENAME: ShardInfo
-    32:
+    30:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
-    33:
+    31:
       BlobLastUsedByCertificate:
         NEWTYPE:
           TYPENAME: BlobId
-    34:
+    32:
       BlobLastUsedByCertificateResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlockCertificate
+    33:
+      ShardInfoQuery:
+        NEWTYPE:
+          TYPENAME: ChainId
+    34:
+      ShardInfoResponse:
+        NEWTYPE:
+          TYPENAME: ShardInfo
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

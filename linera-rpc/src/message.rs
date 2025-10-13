@@ -54,7 +54,6 @@ pub enum RpcMessage {
     MissingBlobIds(Vec<BlobId>),
     VersionInfoQuery,
     NetworkDescriptionQuery,
-    ShardInfoQuery(Box<ChainId>),
 
     // Outbound
     Vote(Box<LiteVote>),
@@ -70,13 +69,14 @@ pub enum RpcMessage {
     DownloadCertificatesByHeightsResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Vec<BlobId>),
-    ShardInfoResponse(Box<ShardInfo>),
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
 
     BlobLastUsedByCertificate(Box<BlobId>),
     BlobLastUsedByCertificateResponse(Box<ConfirmedBlockCertificate>),
+    ShardInfoQuery(Box<ChainId>),
+    ShardInfoResponse(Box<ShardInfo>),
 }
 
 impl RpcMessage {
