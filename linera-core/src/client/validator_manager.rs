@@ -37,7 +37,7 @@ const CACHE_MAX_SIZE: usize = 1000;
 ///
 /// Used for request deduplication to avoid redundant downloads of the same data.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum RequestKey {
+pub enum RequestKey {
     /// Download certificates from a starting height
     Certificates {
         chain_id: ChainId,
@@ -59,7 +59,7 @@ enum RequestKey {
 
 /// Result types that can be shared across deduplicated requests
 #[derive(Debug, Clone)]
-enum RequestResult {
+pub enum RequestResult {
     Certificates(Result<Vec<ConfirmedBlockCertificate>, NodeError>),
     Blob(Option<Blob>),
     BlobContent(Result<BlobContent, NodeError>),
@@ -599,6 +599,46 @@ impl<Env: Environment> ValidatorManager<Env> {
             blobs.push(maybe_blob?);
         }
         Some(blobs)
+    }
+
+    /// Executes an operation with an automatically selected peer, handling deduplication,
+    /// tracking, and peer selection.
+    ///
+    /// This method provides a high-level API for executing operations against remote nodes
+    /// while leveraging the ValidatorManager's intelligent peer selection, performance tracking,
+    /// and request deduplication capabilities.
+    ///
+    /// # Type Parameters
+    /// - `R`: The inner result type (what the operation returns on success)
+    /// - `F`: The async closure type that takes a `RemoteNode` and returns a future
+    /// - `Fut`: The future type returned by the closure
+    ///
+    /// # Arguments
+    /// - `key`: Unique identifier for request deduplication
+    /// - `operation`: Async closure that takes a selected peer and performs the operation
+    ///
+    /// # Returns
+    /// The result from the operation, potentially from cache or a deduplicated in-flight request
+    ///
+    /// # Example
+    /// ```ignore
+    /// let result: Result<Vec<ConfirmedBlockCertificate>, NodeError> = validator_manager
+    ///     .with_best(
+    ///         RequestKey::Certificates { chain_id, start, limit },
+    ///         |peer| async move {
+    ///             peer.download_certificates_from(chain_id, start, limit).await
+    ///         }
+    ///     )
+    ///     .await;
+    /// ```
+    pub async fn with_best<R, F, Fut>(&self, key: RequestKey, operation: F) -> Result<R, NodeError>
+    where
+        Result<R, NodeError>: From<RequestResult> + Into<RequestResult> + Clone + Send + 'static,
+        F: FnOnce(RemoteNode<Env::ValidatorNode>) -> Fut,
+        Fut: Future<Output = Result<R, NodeError>>,
+    {
+        self.deduplicated_request(key, || async { self.track_request(operation).await })
+            .await
     }
 
     pub async fn add_peer(&self, node: RemoteNode<Env::ValidatorNode>) {

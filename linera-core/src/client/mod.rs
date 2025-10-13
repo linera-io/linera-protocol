@@ -70,6 +70,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
 use validator_trackers::ValidatorTrackers;
 
 use crate::{
+    client::validator_manager::RequestKey,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout},
     environment::Environment,
     local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
@@ -360,7 +361,17 @@ impl<Env: Environment> Client<Env> {
             self.remote_nodes.add_peer(remote_node.clone()).await;
             let certificates = self
                 .remote_nodes
-                .download_certificates(chain_id, next_height, limit)
+                .with_best(
+                    RequestKey::Certificates {
+                        chain_id,
+                        start: next_height,
+                        limit,
+                    },
+                    async move |peer| {
+                        peer.download_certificates_from(chain_id, next_height, limit)
+                            .await
+                    },
+                )
                 .await?;
             let Some(info) = self.process_certificates(remote_node, certificates).await? else {
                 break;
@@ -413,7 +424,12 @@ impl<Env: Environment> Client<Env> {
                 self.remote_nodes.add_peer(remote_node.clone()).await;
                 let blobs =
                     futures::stream::iter(blob_ids.iter().copied().map(|blob_id| async move {
-                        self.remote_nodes.try_download_blob(blob_id).await.unwrap()
+                        let request_key = RequestKey::Blob(blob_id);
+                        self.remote_nodes
+                            .with_best(request_key, async move |peer| {
+                                peer.try_download_blob(blob_id).await.ok_or_else(|| todo!())
+                            })
+                            .await
                     }))
                     .buffer_unordered(self.options.max_joined_tasks)
                     .collect::<Vec<_>>()
@@ -1140,7 +1156,9 @@ impl<Env: Environment> Client<Env> {
                         for blob_id in required_blob_ids {
                             let blob_content = match self
                                 .remote_nodes
-                                .download_pending_blob(chain_id, blob_id)
+                                .with_best(RequestKey::Blob(blob_id), async move |peer| {
+                                    peer.node.download_pending_blob(chain_id, blob_id).await
+                                })
                                 .await
                             {
                                 Ok(content) => content,
@@ -1264,14 +1282,16 @@ impl<Env: Environment> Client<Env> {
         let timeout = self.options.blob_download_timeout;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
+        self.remote_nodes.add_peers(remote_nodes.to_vec()).await;
         stream::iter(blob_ids.into_iter().map(|blob_id| {
             communicate_concurrently(
                 remote_nodes,
                 async move |remote_node| {
-                    self.remote_nodes.add_peer(remote_node.clone()).await;
                     let certificate = self
                         .remote_nodes
-                        .download_certificate_for_blob(blob_id)
+                        .with_best(RequestKey::CertificateForBlob(blob_id), async move |peer| {
+                            peer.download_certificate_for_blob(blob_id).await
+                        })
                         .await?;
                     self.receive_sender_certificate(
                         certificate,
