@@ -356,7 +356,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                 info.update_metrics(result.is_ok(), response_time_ms);
                 info.release_request_slot().await;
                 let score = info.calculate_score().await;
-                tracing::info!(
+                tracing::trace!(
                     node = %public_key,
                     address = %info.node.node.address(),
                     success = %result.is_ok(),
@@ -388,7 +388,7 @@ impl<Env: Environment> ValidatorManager<Env> {
                 cache.remove(&oldest_key);
                 tracing::info!(
                     evicted_key = ?oldest_key,
-                    "Evicted oldest cache entry due to capacity limit"
+                    "evicted oldest cache entry due to capacity limit"
                 );
             }
         }
@@ -404,7 +404,7 @@ impl<Env: Environment> ValidatorManager<Env> {
         tracing::trace!(
             key = ?key,
             cache_size = cache.len(),
-            "Stored result in cache"
+            "stored result in cache"
         );
     }
 
@@ -439,45 +439,34 @@ impl<Env: Environment> ValidatorManager<Env> {
         }
 
         // Check if request is already in-flight
-        loop {
-            let receiver_opt;
+        let mut in_flight = self.in_flight_requests.write().await;
 
-            {
-                let mut in_flight = self.in_flight_requests.write().await;
-
-                if let Some(sender) = in_flight.get(&key) {
-                    // Request already in-flight, subscribe to result
-                    receiver_opt = Some(sender.subscribe());
+        if let Some(sender) = in_flight.get(&key) {
+            tracing::trace!(
+                key = ?key,
+                "deduplicating request - joining existing in-flight request"
+            );
+            let mut receiver = sender.subscribe();
+            drop(in_flight);
+            // Wait for result from existing request
+            match receiver.recv().await {
+                Ok(result) => return T::from((*result).clone()),
+                Err(_) => {
                     tracing::trace!(
                         key = ?key,
-                        "Deduplicating request - joining existing in-flight request"
+                        "in-flight request sender dropped"
                     );
-                } else {
-                    // Create new broadcast channel for this request
-                    let (sender, _receiver) = broadcast::channel(1);
-                    in_flight.insert(key.clone(), sender);
-                    break;
                 }
             }
-
-            // Wait for result from existing request
-            if let Some(mut receiver) = receiver_opt {
-                match receiver.recv().await {
-                    Ok(result) => return T::from((*result).clone()),
-                    Err(_) => {
-                        // Sender dropped, retry
-                        tracing::trace!(
-                            key = ?key,
-                            "In-flight request sender dropped, retrying"
-                        );
-                        continue;
-                    }
-                }
-            }
+        } else {
+            // Create new broadcast channel for this request
+            let (sender, _receiver) = broadcast::channel(1);
+            in_flight.insert(key.clone(), sender);
+            drop(in_flight);
         }
 
         // Execute the actual request
-        tracing::trace!(key = ?key, "Executing new request");
+        tracing::trace!(key = ?key, "executing new request");
         let result = operation().await;
         let result_for_broadcast: RequestResult = result.clone().into();
         let shared_result = Arc::new(result_for_broadcast);
@@ -486,13 +475,23 @@ impl<Env: Environment> ValidatorManager<Env> {
         {
             let mut in_flight = self.in_flight_requests.write().await;
             if let Some(sender) = in_flight.remove(&key) {
-                let _ = sender.send(shared_result.clone());
+                tracing::info!(
+                    key = ?key,
+                    waiters = sender.receiver_count(),
+                    "request completed; broadcasting result to waiters",
+                );
+                if sender.receiver_count() != 0 {
+                    let _ = sender.send(shared_result.clone()).unwrap();
+                }
             }
         }
 
         // Store in cache
-        self.store_in_cache(key, shared_result).await;
-
+        self.store_in_cache(key.clone(), shared_result).await;
+        tracing::info!(
+            key = ?key,
+            "stored result in cache after request completion"
+        );
         result
     }
 
