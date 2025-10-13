@@ -247,7 +247,7 @@ where
         {
             Ok(maybe_response) => maybe_response,
             Err(error) => {
-                error!(error = %error, "Failed to proxy message to {}", shard.address());
+                error!(%error, "Failed to proxy message to {}", shard.address());
                 None
             }
         }
