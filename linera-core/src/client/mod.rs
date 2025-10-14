@@ -356,15 +356,15 @@ impl<Env: Environment> Client<Env> {
                 .ok_or(ArithmeticError::Overflow)?
                 .min(self.options.certificate_download_batch_size);
 
-            self.remote_nodes.add_peer(remote_node.clone()).await;
             let certificates = self
                 .remote_nodes
-                .with_best(
+                .with_peer(
                     RequestKey::Certificates {
                         chain_id,
                         start: next_height,
                         limit,
                     },
+                    remote_node.clone(),
                     async move |peer| {
                         peer.download_certificates_from(chain_id, next_height, limit)
                             .await
@@ -1167,9 +1167,13 @@ impl<Env: Environment> Client<Env> {
                         for blob_id in required_blob_ids {
                             let blob_content = match self
                                 .remote_nodes
-                                .with_best(RequestKey::Blob(blob_id), async move |peer| {
-                                    peer.node.download_pending_blob(chain_id, blob_id).await
-                                })
+                                .with_peer(
+                                    RequestKey::Blob(blob_id),
+                                    remote_node.clone(),
+                                    async move |peer| {
+                                        peer.node.download_pending_blob(chain_id, blob_id).await
+                                    },
+                                )
                                 .await
                             {
                                 Ok(content) => content,
@@ -1302,9 +1306,11 @@ impl<Env: Environment> Client<Env> {
                 async move |remote_node| {
                     let certificate = self
                         .remote_nodes
-                        .with_best(RequestKey::CertificateForBlob(blob_id), async move |peer| {
-                            peer.download_certificate_for_blob(blob_id).await
-                        })
+                        .with_peer(
+                            RequestKey::CertificateForBlob(blob_id),
+                            remote_node.clone(),
+                            async move |peer| peer.download_certificate_for_blob(blob_id).await,
+                        )
                         .await?;
                     self.receive_sender_certificate(
                         certificate,
