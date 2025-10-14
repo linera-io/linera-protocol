@@ -1990,7 +1990,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
-    /// its current height and are not missing any received messages from the inbox.
+    /// its current height.
     #[instrument(level = "trace")]
     pub async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
