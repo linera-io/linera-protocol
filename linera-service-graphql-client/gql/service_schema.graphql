@@ -95,6 +95,16 @@ input ApplicationPermissions {
 }
 
 """
+Application permissions metadata for GraphQL.
+"""
+type ApplicationPermissionsMetadata {
+	"""
+	JSON serialized ApplicationPermissions.
+	"""
+	permissionsJson: String!
+}
+
+"""
 A blob of binary data, with its content-addressed blob ID.
 """
 scalar Blob
@@ -328,6 +338,16 @@ Represents the owner(s) of a chain
 """
 scalar ChainOwnership
 
+"""
+Chain ownership metadata for GraphQL.
+"""
+type ChainOwnershipMetadata {
+	"""
+	JSON serialized ChainOwnership for full representation.
+	"""
+	ownershipJson: String!
+}
+
 type ChainStateExtendedView {
 	chainId: ChainId!
 	"""
@@ -447,7 +467,7 @@ type Chains {
 Change application permissions operation metadata.
 """
 type ChangeApplicationPermissionsMetadata {
-	permissionsJson: String!
+	permissions: ApplicationPermissionsMetadata!
 }
 
 """
@@ -458,6 +478,7 @@ type ChangeOwnershipOperationMetadata {
 	owners: [OwnerWithWeight!]!
 	multiLeaderRounds: Int!
 	openMultiLeaderRounds: Boolean!
+	timeoutConfig: TimeoutConfigMetadata!
 }
 
 """
@@ -1207,6 +1228,8 @@ Open chain operation metadata.
 """
 type OpenChainOperationMetadata {
 	balance: Amount!
+	ownership: ChainOwnershipMetadata!
+	applicationPermissions: ApplicationPermissionsMetadata!
 }
 
 type Operation {
@@ -1546,6 +1569,28 @@ type SystemOperationMetadata {
 	UpdateStreams operation details
 	"""
 	updateStreams: [UpdateStreamMetadata!]
+}
+
+"""
+Timeout configuration metadata for GraphQL.
+"""
+type TimeoutConfigMetadata {
+	"""
+	The duration of the fast round in milliseconds.
+	"""
+	fastRoundMs: String
+	"""
+	The duration of the first single-leader and all multi-leader rounds in milliseconds.
+	"""
+	baseTimeoutMs: String!
+	"""
+	The duration by which the timeout increases after each single-leader round in milliseconds.
+	"""
+	timeoutIncrementMs: String!
+	"""
+	The age of an incoming tracked or protected message after which validators start transitioning to fallback mode, in milliseconds.
+	"""
+	fallbackDurationMs: String!
 }
 
 """

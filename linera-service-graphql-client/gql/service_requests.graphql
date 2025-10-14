@@ -420,6 +420,12 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
               }
               openChain {
                 balance
+                ownership {
+                  ownershipJson
+                }
+                applicationPermissions {
+                  permissionsJson
+                }
               }
               changeOwnership {
                 superOwners
@@ -429,9 +435,17 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                 }
                 multiLeaderRounds
                 openMultiLeaderRounds
+                timeoutConfig {
+                  fastRoundMs
+                  baseTimeoutMs
+                  timeoutIncrementMs
+                  fallbackDurationMs
+                }
               }
               changeApplicationPermissions {
-                permissionsJson
+                permissions {
+                  permissionsJson
+                }
               }
               admin {
                 adminOperationType
@@ -583,6 +597,12 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
               }
               openChain {
                 balance
+                ownership {
+                  ownershipJson
+                }
+                applicationPermissions {
+                  permissionsJson
+                }
               }
               changeOwnership {
                 superOwners
@@ -592,9 +612,17 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                 }
                 multiLeaderRounds
                 openMultiLeaderRounds
+                timeoutConfig {
+                  fastRoundMs
+                  baseTimeoutMs
+                  timeoutIncrementMs
+                  fallbackDurationMs
+                }
               }
               changeApplicationPermissions {
-                permissionsJson
+                permissions {
+                  permissionsJson
+                }
               }
               admin {
                 adminOperationType

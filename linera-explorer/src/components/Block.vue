@@ -5,6 +5,7 @@ import { getOperations, getIncomingBundles } from './utils'
 import Json from './Json.vue'
 // Op is now imported by Transaction.vue
 import Transaction from './Transaction.vue'
+import OutgoingMessages from './OutgoingMessages.vue'
 
 const props = defineProps<{block: ConfirmedBlock, title: string}>()
 
@@ -103,16 +104,15 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
           <span></span>
         </li>
         <div v-if="block.block.body.messages.length!==0" class="collapse" :id="'out-messages-collapse-'+block.hash">
-          <ul class="list-group">
-            <li v-for="(m, i) in block.block.body.messages" class="list-group-item p-0" key="block.hash+'-outmessage-'+i">
-              <div class="card">
-                <div class="card-header">Messages for transaction {{ i+1 }}</div>
-                <div class="card-body">
-                  <Json :data="m"/>
-                </div>
-              </div>
-            </li>
-          </ul>
+          <div class="p-3">
+            <OutgoingMessages
+              v-for="(messages, i) in block.block.body.messages"
+              :key="block.hash+'-outmessages-'+i"
+              :messages="messages"
+              :transaction-index="i"
+              :block-hash="block.hash"
+            />
+          </div>
         </div>
         <li v-if="Object.keys(block.block.body.previousMessageBlocks).length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#previous-message-blocks-collapse-'+block.hash">
           <span><strong>Previous Message Blocks</strong> ({{ Object.keys(block.block.body.previousMessageBlocks).length }})</span>

@@ -1,7 +1,9 @@
 import { mount } from '@vue/test-utils'
+import { set_test_config } from './utils'
 import Block from './Block.vue'
 
-test('Block mounting', () => {
+test('Block mounting', async () => {
+  await set_test_config()
   mount(Block, {
     props: {
       title: 'Block',

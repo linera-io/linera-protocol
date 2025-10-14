@@ -6,14 +6,73 @@
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::Amount,
+    data_types::{Amount, ApplicationPermissions},
     hex,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_execution::{
     system::AdminOperation, Message, Operation, SystemMessage, SystemOperation,
 };
 use serde::{Deserialize, Serialize};
+
+/// Timeout configuration metadata for GraphQL.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct TimeoutConfigMetadata {
+    /// The duration of the fast round in milliseconds.
+    pub fast_round_ms: Option<String>,
+    /// The duration of the first single-leader and all multi-leader rounds in milliseconds.
+    pub base_timeout_ms: String,
+    /// The duration by which the timeout increases after each single-leader round in milliseconds.
+    pub timeout_increment_ms: String,
+    /// The age of an incoming tracked or protected message after which validators start transitioning to fallback mode, in milliseconds.
+    pub fallback_duration_ms: String,
+}
+
+impl From<&TimeoutConfig> for TimeoutConfigMetadata {
+    fn from(config: &TimeoutConfig) -> Self {
+        TimeoutConfigMetadata {
+            fast_round_ms: config
+                .fast_round_duration
+                .map(|d| (d.as_micros() / 1000).to_string()),
+            base_timeout_ms: (config.base_timeout.as_micros() / 1000).to_string(),
+            timeout_increment_ms: (config.timeout_increment.as_micros() / 1000).to_string(),
+            fallback_duration_ms: (config.fallback_duration.as_micros() / 1000).to_string(),
+        }
+    }
+}
+
+/// Chain ownership metadata for GraphQL.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct ChainOwnershipMetadata {
+    /// JSON serialized ChainOwnership for full representation.
+    pub ownership_json: String,
+}
+
+impl From<&ChainOwnership> for ChainOwnershipMetadata {
+    fn from(ownership: &ChainOwnership) -> Self {
+        ChainOwnershipMetadata {
+            ownership_json: serde_json::to_string(ownership)
+                .unwrap_or_else(|_| format!("{:?}", ownership)),
+        }
+    }
+}
+
+/// Application permissions metadata for GraphQL.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct ApplicationPermissionsMetadata {
+    /// JSON serialized ApplicationPermissions.
+    pub permissions_json: String,
+}
+
+impl From<&ApplicationPermissions> for ApplicationPermissionsMetadata {
+    fn from(permissions: &ApplicationPermissions) -> Self {
+        ApplicationPermissionsMetadata {
+            permissions_json: serde_json::to_string(permissions)
+                .unwrap_or_else(|_| format!("{:?}", permissions)),
+        }
+    }
+}
 
 /// Structured representation of a system operation for GraphQL.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
@@ -67,6 +126,8 @@ pub struct ClaimOperationMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct OpenChainOperationMetadata {
     pub balance: Amount,
+    pub ownership: ChainOwnershipMetadata,
+    pub application_permissions: ApplicationPermissionsMetadata,
 }
 
 /// Change ownership operation metadata.
@@ -76,6 +137,7 @@ pub struct ChangeOwnershipOperationMetadata {
     pub owners: Vec<OwnerWithWeight>,
     pub multi_leader_rounds: i32,
     pub open_multi_leader_rounds: bool,
+    pub timeout_config: TimeoutConfigMetadata,
 }
 
 /// Owner with weight metadata.
@@ -88,7 +150,7 @@ pub struct OwnerWithWeight {
 /// Change application permissions operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct ChangeApplicationPermissionsMetadata {
-    pub permissions_json: String, // JSON serialized ApplicationPermissions
+    pub permissions: ApplicationPermissionsMetadata,
 }
 
 /// Admin operation metadata.
@@ -245,6 +307,10 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 claim: None,
                 open_chain: Some(OpenChainOperationMetadata {
                     balance: config.balance,
+                    ownership: ChainOwnershipMetadata::from(&config.ownership),
+                    application_permissions: ApplicationPermissionsMetadata::from(
+                        &config.application_permissions,
+                    ),
                 }),
                 change_ownership: None,
                 change_application_permissions: None,
@@ -276,7 +342,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 owners,
                 multi_leader_rounds,
                 open_multi_leader_rounds,
-                ..
+                timeout_config,
             } => SystemOperationMetadata {
                 system_operation_type: "ChangeOwnership".to_string(),
                 transfer: None,
@@ -293,6 +359,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                         .collect(),
                     multi_leader_rounds: *multi_leader_rounds as i32,
                     open_multi_leader_rounds: *open_multi_leader_rounds,
+                    timeout_config: TimeoutConfigMetadata::from(timeout_config),
                 }),
                 change_application_permissions: None,
                 admin: None,
@@ -310,7 +377,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 open_chain: None,
                 change_ownership: None,
                 change_application_permissions: Some(ChangeApplicationPermissionsMetadata {
-                    permissions_json: format!("{:?}", permissions),
+                    permissions: ApplicationPermissionsMetadata::from(permissions),
                 }),
                 admin: None,
                 create_application: None,

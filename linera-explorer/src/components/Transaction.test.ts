@@ -62,7 +62,7 @@ describe('Transaction Component', () => {
               certificateHash: 'f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a',
               transactionIndex: 0,
               messages: [{
-                authenticatedSigner: null,
+                authenticatedOwner: null,
                 grant: '1000',
                 refundGrantTo: null,
                 kind: 'Tracked',
@@ -127,7 +127,7 @@ describe('Transaction Component', () => {
               certificateHash: 'f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a',
               transactionIndex: 0,
               messages: [{
-                authenticatedSigner: null,
+                authenticatedOwner: null,
                 grant: '0',
                 refundGrantTo: null,
                 kind: 'Tracked',
@@ -184,7 +184,7 @@ describe('Transaction Component', () => {
               certificateHash: 'f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a',
               transactionIndex: 0,
               messages: [{
-                authenticatedSigner: null,
+                authenticatedOwner: null,
                 grant: '0',
                 refundGrantTo: null,
                 kind: 'Tracked',
@@ -227,7 +227,7 @@ describe('Transaction Component', () => {
               certificateHash: 'f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a',
               transactionIndex: 0,
               messages: [{
-                authenticatedSigner: null,
+                authenticatedOwner: null,
                 grant: '0',
                 refundGrantTo: null,
                 kind: 'Tracked',

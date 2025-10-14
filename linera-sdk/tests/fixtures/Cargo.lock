@@ -2196,6 +2196,7 @@ dependencies = [
  "rand_distr",
  "serde",
  "serde_bytes",
+ "serde_json",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
