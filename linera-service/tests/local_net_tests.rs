@@ -1026,12 +1026,11 @@ async fn test_update_validator_sender_gaps(config: LocalNetConfig) -> Result<()>
     sender_client
         .transfer(Amount::from_tokens(2), sender_chain, sender_chain)
         .await?;
+    receiver_client.process_inbox(receiver_chain).await?;
     // transfer some more to create a gap in the chain from the recipient's perspective
     sender_client
         .transfer(Amount::from_tokens(3), sender_chain, receiver_chain)
         .await?;
-
-    receiver_client.process_inbox(receiver_chain).await?;
 
     // Restart the stopped validator and stop another one.
     net.restart_validator(UNAWARE_VALIDATOR_INDEX).await?;
@@ -1055,11 +1054,9 @@ async fn test_update_validator_sender_gaps(config: LocalNetConfig) -> Result<()>
         BlockHeight::ZERO
     );
 
-    // Try to send tokens from receiver to sender. Receiver should have a gap in the
-    // sender chain at this point.
-    receiver_client
-        .transfer(Amount::from_tokens(4), receiver_chain, sender_chain)
-        .await?;
+    // Process the last sender block. The client has a gap in the sender chain and does
+    // not update the unaware validator about block 1.
+    receiver_client.process_inbox(receiver_chain).await?;
 
     // Synchronize the validator
     let validator_address = net.validator_address(UNAWARE_VALIDATOR_INDEX);
