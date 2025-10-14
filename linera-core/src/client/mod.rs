@@ -2164,75 +2164,6 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info)
     }
 
-    /// Submits a fast block proposal to the validators.
-    ///
-    /// This must only be used with valid epoch and super owner.
-    #[instrument(level = "trace", skip(committee, operations))]
-    pub async fn submit_fast_block_proposal(
-        &self,
-        committee: &Committee,
-        operations: &[Operation],
-        incoming_bundles: &[IncomingBundle],
-        super_owner: AccountOwner,
-    ) -> Result<(u64, u64, u64, u64), ChainClientError> {
-        let creating_proposal_start = Instant::now();
-        let info = self.chain_info().await?;
-        let timestamp = self.next_timestamp(incoming_bundles, info.timestamp);
-        let transactions = incoming_bundles
-            .iter()
-            .map(|bundle| Transaction::ReceiveMessages(bundle.clone()))
-            .chain(
-                operations
-                    .iter()
-                    .map(|operation| Transaction::ExecuteOperation(operation.clone())),
-            )
-            .collect::<Vec<_>>();
-        let proposed_block = ProposedBlock {
-            epoch: info.epoch,
-            chain_id: self.chain_id,
-            transactions,
-            previous_block_hash: info.block_hash,
-            height: info.next_block_height,
-            authenticated_owner: Some(super_owner),
-            timestamp,
-        };
-        let proposal = Box::new(
-            BlockProposal::new_initial(
-                super_owner,
-                Round::Fast,
-                proposed_block.clone(),
-                self.signer(),
-            )
-            .await
-            .map_err(ChainClientError::signer_failure)?,
-        );
-        let creating_proposal_ms = creating_proposal_start.elapsed().as_millis() as u64;
-        let stage_block_execution_start = Instant::now();
-        let block = self
-            .client
-            .local_node
-            .stage_block_execution(proposed_block, None, Vec::new())
-            .await?
-            .0;
-        let stage_block_execution_ms = stage_block_execution_start.elapsed().as_millis() as u64;
-        let creating_confirmed_block_start = Instant::now();
-        let value = ConfirmedBlock::new(block);
-        let creating_confirmed_block_ms =
-            creating_confirmed_block_start.elapsed().as_millis() as u64;
-        let submitting_block_proposal_start = Instant::now();
-        self.client
-            .submit_block_proposal(committee, proposal, value)
-            .await?;
-        let submitting_block_proposal_ms =
-            submitting_block_proposal_start.elapsed().as_millis() as u64;
-        Ok((
-            creating_proposal_ms,
-            stage_block_execution_ms,
-            creating_confirmed_block_ms,
-            submitting_block_proposal_ms,
-        ))
-    }
-
     /// Attempts to update all validators about the local chain.
     #[instrument(level = "trace", skip(old_committee))]
     pub async fn update_validators(
@@ -2710,6 +2641,11 @@ impl<Env: Environment> ChainClient<Env> {
                         "Another block was committed; retrying."
                     );
                 }
+                Ok(ExecuteBlockOutcome::NothingToExecute) => {
+                    return Err(ChainClientError::BlockProposalError(
+                        "no operations in proposal",
+                    ));
+                }
                 Err(ChainClientError::CommunicationError(CommunicationError::Trusted(
                     NodeError::UnexpectedBlockHeight {
                         expected_block_height,
@@ -2765,7 +2701,12 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::Committed(None) => {}
         }
 
-        let confirmed_value = self.new_pending_block(operations, blobs).await?;
+        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+        if transactions.is_empty() {
+            return Ok(ExecuteBlockOutcome::NothingToExecute);
+        }
+
+        let confirmed_value = self.new_pending_block(transactions, blobs).await?;
 
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
@@ -2786,16 +2727,44 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
+    /// Creates a vector of transactions which, in addition to the provided operations,
+    /// also contains epoch changes, receiving message bundles and event stream updates
+    /// (if there are any to be processed).
+    #[instrument(level = "trace", skip(operations))]
+    async fn prepend_epochs_messages_and_events(
+        &self,
+        operations: Vec<Operation>,
+    ) -> Result<Vec<Transaction>, ChainClientError> {
+        let incoming_bundles = self.pending_message_bundles().await?;
+        let stream_updates = self.collect_stream_updates().await?;
+        Ok(self
+            .collect_epoch_changes()
+            .await?
+            .into_iter()
+            .map(Transaction::ExecuteOperation)
+            .chain(
+                incoming_bundles
+                    .into_iter()
+                    .map(Transaction::ReceiveMessages),
+            )
+            .chain(
+                stream_updates
+                    .into_iter()
+                    .map(Transaction::ExecuteOperation),
+            )
+            .chain(operations.into_iter().map(Transaction::ExecuteOperation))
+            .collect::<Vec<_>>())
+    }
+
     /// Creates a new pending block and handles the proposal in the local node.
     /// Next time `process_pending_block_without_prepare` is called, this block will be proposed
     /// to the validators.
-    #[instrument(level = "trace", skip(operations, blobs))]
+    #[instrument(level = "trace", skip(transactions, blobs))]
     async fn new_pending_block(
         &self,
-        operations: Vec<Operation>,
+        transactions: Vec<Transaction>,
         blobs: Vec<Blob>,
     ) -> Result<ConfirmedBlock, ChainClientError> {
-        let incoming_bundles = self.pending_message_bundles().await?;
         let identity = self.identity().await?;
 
         ensure!(
@@ -2806,19 +2775,7 @@ impl<Env: Environment> ChainClient<Env> {
             )
         );
         let info = self.chain_info_with_committees().await?;
-        let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
-        let transactions = self
-            .next_epoch_change()
-            .await?
-            .into_iter()
-            .map(Transaction::ExecuteOperation)
-            .chain(
-                incoming_bundles
-                    .into_iter()
-                    .map(Transaction::ReceiveMessages),
-            )
-            .chain(operations.into_iter().map(Transaction::ExecuteOperation))
-            .collect::<Vec<_>>();
+        let timestamp = self.next_timestamp(&transactions, info.timestamp);
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
@@ -2858,15 +2815,12 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
-    #[instrument(level = "trace", skip(incoming_bundles))]
-    fn next_timestamp(
-        &self,
-        incoming_bundles: &[IncomingBundle],
-        block_time: Timestamp,
-    ) -> Timestamp {
+    #[instrument(level = "trace", skip(transactions))]
+    fn next_timestamp(&self, transactions: &[Transaction], block_time: Timestamp) -> Timestamp {
         let local_time = self.storage_client().clock().current_time();
-        incoming_bundles
+        transactions
             .iter()
+            .filter_map(Transaction::incoming_bundle)
             .map(|msg| msg.bundle.timestamp)
             .max()
             .map_or(local_time, |timestamp| timestamp.max(local_time))
@@ -2994,11 +2948,11 @@ impl<Env: Environment> ChainClient<Env> {
             return Ok((chain_balance, Some(owner_balance)));
         }
         let info = self.chain_info().await?;
-        let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
         let transactions = incoming_bundles
             .into_iter()
             .map(Transaction::ReceiveMessages)
             .collect::<Vec<_>>();
+        let timestamp = self.next_timestamp(&transactions, info.timestamp);
         let block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
@@ -3497,6 +3451,8 @@ impl<Env: Environment> ChainClient<Env> {
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
+                // We create a vector of operations with one element above
+                ExecuteBlockOutcome::NothingToExecute => unreachable!(),
             };
         }
     }
@@ -3552,6 +3508,8 @@ impl<Env: Environment> ChainClient<Env> {
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
+                // We execute a single operation
+                ExecuteBlockOutcome::NothingToExecute => unreachable!(),
             };
             // The only operation, i.e. the last transaction, created the new chain.
             let chain_blob = certificate
@@ -3777,57 +3735,24 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
 
-        let mut epoch_change_ops = self.collect_epoch_changes().await?.into_iter();
-
         let mut certificates = Vec::new();
         loop {
-            let incoming_bundles = self.pending_message_bundles().await?;
-            let stream_updates = self.collect_stream_updates().await?;
-            let block_operations = stream_updates
-                .into_iter()
-                .chain(epoch_change_ops.next())
-                .collect::<Vec<_>>();
-            if incoming_bundles.is_empty() && block_operations.is_empty() {
-                return Ok((certificates, None));
-            }
-            match self.execute_block(block_operations, vec![]).await {
+            // We provide no operations - this means that the only operations executed
+            // will be epoch changes, receiving messages and processing event stream
+            // updates, if any are pending.
+            match self.execute_block(vec![], vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
                 }
+                Ok(ExecuteBlockOutcome::NothingToExecute) => {
+                    // There were no more messages or events to be processed
+                    return Ok((certificates, None));
+                }
                 Err(error) => return Err(error),
             };
         }
-    }
-
-    /// Returns an operation to process the next epoch change, if any is pending.
-    async fn next_epoch_change(&self) -> Result<Option<Operation>, ChainClientError> {
-        let (min_epoch, next_epoch) = {
-            let (epoch, committees) = self.epoch_and_committees().await?;
-            let min_epoch = *committees.keys().next().unwrap_or(&Epoch::ZERO);
-            (min_epoch, epoch.try_add_one()?)
-        };
-
-        if self
-            .has_admin_event(EPOCH_STREAM_NAME, next_epoch.0)
-            .await?
-        {
-            return Ok(Some(Operation::system(SystemOperation::ProcessNewEpoch(
-                next_epoch,
-            ))));
-        }
-
-        if self
-            .has_admin_event(REMOVED_EPOCH_STREAM_NAME, min_epoch.0)
-            .await?
-        {
-            return Ok(Some(Operation::system(
-                SystemOperation::ProcessRemovedEpoch(min_epoch),
-            )));
-        }
-
-        Ok(None)
     }
 
     /// Returns operations to process all pending epoch changes: first the new epochs, in order,
@@ -4494,6 +4419,8 @@ enum ExecuteBlockOutcome {
     /// We are not the round leader and cannot do anything. Try again at the specified time or
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
+    /// We attempted to execute a block with no transactions inside.
+    NothingToExecute,
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
