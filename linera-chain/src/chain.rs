@@ -655,6 +655,10 @@ where
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.
+    ///
+    /// If `must_be_present` is `true`, an error is returned if any of the bundles have not been
+    /// added to the inbox yet. So this should be `true` if the bundles are in a block _proposal_,
+    /// and `false` if the block is already confirmed.
     #[instrument(target = "telemetry_only", skip_all, fields(
         chain_id = %self.chain_id(),
     ))]

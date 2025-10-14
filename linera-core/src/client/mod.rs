@@ -402,19 +402,12 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<Option<Box<ChainInfo>>, ChainClientError> {
         let mut last_info = None;
         // First load any blocks from local storage, if available.
-        let mut hashes = Vec::new();
-        let mut next_height = BlockHeight::ZERO;
-        {
-            let chain = self.local_node.chain_state_view(chain_id).await?;
-            next_height = next_height.max(chain.tip_state.get().next_block_height);
-            while next_height < stop {
-                let Some(hash) = chain.preprocessed_blocks.get(&next_height).await? else {
-                    break;
-                };
-                hashes.push(hash);
-                next_height = next_height.try_add_one()?;
-            }
-        }
+        let chain_info = self.local_node.chain_info(chain_id).await?;
+        let mut next_height = chain_info.next_block_height;
+        let hashes = self
+            .local_node
+            .get_preprocessed_block_hashes(chain_id, next_height, stop)
+            .await?;
         let certificates = self
             .storage_client()
             .read_certificates(hashes.clone())
@@ -3971,11 +3964,11 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         origin: ChainId,
     ) -> Result<BlockHeight, ChainClientError> {
-        let chain = self.chain_state_view().await?;
-        Ok(match chain.inboxes.try_load_entry(&origin).await? {
-            Some(inbox) => inbox.next_block_height_to_receive()?,
-            None => BlockHeight::ZERO,
-        })
+        Ok(self
+            .client
+            .local_node
+            .get_inbox_next_height(self.chain_id, origin)
+            .await?)
     }
 
     #[instrument(level = "trace", skip(remote_node, local_node, notification))]
