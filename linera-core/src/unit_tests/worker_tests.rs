@@ -36,7 +36,7 @@ use linera_chain::{
         CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
         GenericCertificate, Timeout, ValidatedBlock,
     },
-    ChainError, ChainExecutionContext,
+    ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
     committee::Committee,
@@ -47,11 +47,12 @@ use linera_execution::{
     test_utils::{
         dummy_chain_description, ExpectedCall, RegisterMockApplication, SystemExecutionState,
     },
-    ExecutionError, Message, MessageKind, OutgoingMessage, Query, QueryContext, QueryOutcome,
-    QueryResponse, SystemQuery, SystemResponse,
+    ExecutionError, ExecutionRuntimeContext, Message, MessageKind, OutgoingMessage, Query,
+    QueryContext, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
+    context::Context,
     memory::MemoryDatabase,
     random::generate_test_namespace,
     store::TestKeyValueDatabase as _,
@@ -471,6 +472,18 @@ where
                 .collect(),
             ..SystemExecutionState::new(description.clone())
         }
+    }
+}
+
+/// Asserts that there are no "removed" bundles in the inbox, that have been included as
+/// incoming in a block but not received from the sender chain yet.
+async fn assert_no_removed_bundles<C>(chain: &ChainStateView<C>)
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    for (_, inbox) in chain.inboxes.try_load_all_entries().await.unwrap() {
+        assert_eq!(inbox.removed_bundles.front().await.unwrap(), None);
     }
 }
 
@@ -2478,7 +2491,7 @@ where
     {
         let chain = env.worker().chain_state_view(chain_2).await?;
         assert!(chain.is_active());
-        chain.validate_incoming_bundles().await?;
+        assert_no_removed_bundles(&chain).await;
     }
 
     // Process the bounced message and try to use the refund.
@@ -2519,7 +2532,7 @@ where
     {
         let chain = env.worker.chain_state_view(chain_1).await?;
         assert!(chain.is_active());
-        chain.validate_incoming_bundles().await?;
+        assert_no_removed_bundles(&chain).await;
     }
     Ok(())
 }
@@ -2575,7 +2588,7 @@ where
     {
         let admin_chain = env.worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_bundles().await?;
+        assert_no_removed_bundles(&admin_chain).await;
         assert_eq!(
             BlockHeight::from(1),
             admin_chain.tip_state.get().next_block_height
@@ -2656,7 +2669,7 @@ where
             *user_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
-        user_chain.validate_incoming_bundles().await?;
+        assert_no_removed_bundles(&user_chain).await;
         matches!(
             &user_chain
                 .inboxes
@@ -2739,7 +2752,7 @@ where
             Some(admin_id)
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
-        user_chain.validate_incoming_bundles().await?;
+        assert_no_removed_bundles(&user_chain).await;
         Ok(())
     }
 }
@@ -3033,10 +3046,15 @@ where
         // The admin chain has an anticipated message.
         let admin_chain = env.worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        assert_matches!(
-            admin_chain.validate_incoming_bundles().await,
-            Err(ChainError::MissingCrossChainUpdate { .. })
-        );
+        assert!(admin_chain
+            .inboxes
+            .try_load_entry(&user_id)
+            .await?
+            .unwrap()
+            .removed_bundles
+            .front()
+            .await?
+            .is_some());
     }
 
     // Try again to execute the transfer from the user chain to the admin chain.
@@ -3049,7 +3067,7 @@ where
         // The admin chain has no more anticipated messages.
         let admin_chain = env.worker().chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_bundles().await?;
+        assert_no_removed_bundles(&admin_chain).await;
     }
 
     // Let's make a certificate for a block creating another epoch.
