@@ -1190,6 +1190,87 @@ where
         })
         .await
     }
+
+    /// Gets preprocessed block hashes in a given height range.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id,
+        start = %start,
+        end = %end
+    ))]
+    pub async fn get_preprocessed_block_hashes(
+        &self,
+        chain_id: ChainId,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> Result<Vec<CryptoHash>, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetPreprocessedBlockHashes {
+                start,
+                end,
+                callback,
+            }
+        })
+        .await
+    }
+
+    /// Gets the next block height to receive from an inbox.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id,
+        origin = %origin
+    ))]
+    pub async fn get_inbox_next_height(
+        &self,
+        chain_id: ChainId,
+        origin: ChainId,
+    ) -> Result<BlockHeight, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetInboxNextHeight { origin, callback }
+        })
+        .await
+    }
+
+    /// Gets locking blobs for specific blob IDs.
+    /// Returns `Ok(None)` if any of the blobs is not found.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id,
+        num_blob_ids = %blob_ids.len()
+    ))]
+    pub async fn get_locking_blobs(
+        &self,
+        chain_id: ChainId,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Option<Vec<Blob>>, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::GetLockingBlobs { blob_ids, callback }
+        })
+        .await
+    }
+
+    /// Reads a range from the confirmed log.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        nickname = %self.nickname,
+        chain_id = %chain_id,
+        start = %start,
+        end = %end
+    ))]
+    pub async fn read_confirmed_log(
+        &self,
+        chain_id: ChainId,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> Result<Vec<CryptoHash>, WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::ReadConfirmedLog {
+                start,
+                end,
+                callback,
+            }
+        })
+        .await
+    }
 }
 
 #[cfg(with_testing)]

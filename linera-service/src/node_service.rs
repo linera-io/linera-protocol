@@ -627,10 +627,7 @@ where
         let client = self.context.lock().await.make_chain_client(chain_id);
         let hash = match hash {
             Some(hash) => Some(hash),
-            None => {
-                let view = client.chain_state_view().await?;
-                view.tip_state.get().block_hash
-            }
+            None => client.chain_info().await?.block_hash,
         };
         if let Some(hash) = hash {
             let block = client.read_confirmed_block(hash).await?;
@@ -665,10 +662,7 @@ where
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
-            None => {
-                let view = client.chain_state_view().await?;
-                view.tip_state.get().block_hash
-            }
+            None => client.chain_info().await?.block_hash,
         };
         let Some(from) = from else {
             return Ok(vec![]);

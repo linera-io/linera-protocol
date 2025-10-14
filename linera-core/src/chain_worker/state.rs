@@ -205,6 +205,26 @@ where
                         .await,
                 )
                 .is_ok(),
+            ChainWorkerRequest::GetPreprocessedBlockHashes {
+                start,
+                end,
+                callback,
+            } => callback
+                .send(self.get_preprocessed_block_hashes(start, end).await)
+                .is_ok(),
+            ChainWorkerRequest::GetInboxNextHeight { origin, callback } => callback
+                .send(self.get_inbox_next_height(origin).await)
+                .is_ok(),
+            ChainWorkerRequest::GetLockingBlobs { blob_ids, callback } => callback
+                .send(self.get_locking_blobs(blob_ids).await)
+                .is_ok(),
+            ChainWorkerRequest::ReadConfirmedLog {
+                start,
+                end,
+                callback,
+            } => callback
+                .send(self.read_confirmed_log(start, end).await)
+                .is_ok(),
         };
 
         if !responded {
@@ -1018,6 +1038,92 @@ where
             .update_received_certificate_trackers(new_trackers);
         self.save().await?;
         Ok(())
+    }
+
+    /// Returns the preprocessed block hashes in the given height range.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        start = %start,
+        end = %end
+    ))]
+    async fn get_preprocessed_block_hashes(
+        &self,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> Result<Vec<CryptoHash>, WorkerError> {
+        let mut hashes = Vec::new();
+        let mut height = start;
+        while height < end {
+            match self.chain.preprocessed_blocks.get(&height).await? {
+                Some(hash) => hashes.push(hash),
+                None => break,
+            }
+            height = height.try_add_one()?;
+        }
+        Ok(hashes)
+    }
+
+    /// Returns the next block height to receive from an inbox.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        origin = %origin
+    ))]
+    async fn get_inbox_next_height(&self, origin: ChainId) -> Result<BlockHeight, WorkerError> {
+        Ok(match self.chain.inboxes.try_load_entry(&origin).await? {
+            Some(inbox) => inbox.next_block_height_to_receive()?,
+            None => BlockHeight::ZERO,
+        })
+    }
+
+    /// Returns the locking blobs for the given blob IDs.
+    /// Returns `Ok(None)` if any of the blobs is not found.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        num_blob_ids = %blob_ids.len()
+    ))]
+    async fn get_locking_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Option<Vec<Blob>>, WorkerError> {
+        let mut blobs = Vec::new();
+        for blob_id in blob_ids {
+            match self.chain.manager.locking_blobs.get(&blob_id).await? {
+                None => return Ok(None),
+                Some(blob) => blobs.push(blob),
+            }
+        }
+        Ok(Some(blobs))
+    }
+
+    /// Reads a range from the confirmed log.
+    #[instrument(target = "telemetry_only", skip_all, fields(
+        chain_id = %self.chain_id(),
+        start = %start,
+        end = %end
+    ))]
+    async fn read_confirmed_log(
+        &self,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> Result<Vec<CryptoHash>, WorkerError> {
+        let start_usize = usize::try_from(start)?;
+        let end_usize = usize::try_from(end)?;
+        let log_heights: Vec<_> = (start_usize..end_usize).collect();
+        let hashes = self
+            .chain
+            .confirmed_log
+            .multi_get(log_heights.clone())
+            .await?
+            .into_iter()
+            .enumerate()
+            .map(|(i, maybe_hash)| {
+                maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                    height: BlockHeight(u64::try_from(start_usize + i).unwrap_or(u64::MAX)),
+                    chain_id: self.chain_id(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(hashes)
     }
 
     /// Attempts to vote for a leader timeout, if possible.
