@@ -11,7 +11,7 @@ use linera_base::{data_types::ArithmeticError, ensure};
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, HasherOutput},
+    common::{get_key_range_for_prefix, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     key_value_store_view::SizeData,
@@ -580,7 +580,7 @@ impl<C: Context> SmallKeyValueStoreView<C> {
                 WriteOperation::DeletePrefix { key_prefix } => {
                     ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
                     let key_list = map
-                        .range(get_interval(key_prefix.clone()))
+                        .range(get_key_range_for_prefix(key_prefix.clone()))
                         .map(|x| x.0.to_vec())
                         .collect::<Vec<_>>();
                     for key in key_list {
@@ -673,7 +673,7 @@ impl<C: Context> SmallKeyValueStoreView<C> {
         let len = key_prefix.len();
         let map = self.map.get();
         Ok(map
-            .range(get_interval(key_prefix.to_vec()))
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
             .map(|x| x.0[len..].to_vec())
             .collect::<Vec<_>>())
     }
@@ -707,7 +707,7 @@ impl<C: Context> SmallKeyValueStoreView<C> {
         let len = key_prefix.len();
         let map = self.map.get();
         Ok(map
-            .range(get_interval(key_prefix.to_vec()))
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
             .map(|x| (x.0[len..].to_vec(), x.1.to_vec()))
             .collect::<Vec<_>>())
     }
