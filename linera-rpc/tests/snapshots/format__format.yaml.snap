@@ -1142,6 +1142,14 @@ RpcMessage:
       BlobLastUsedByCertificateResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlockCertificate
+    33:
+      ShardInfoQuery:
+        NEWTYPE:
+          TYPENAME: ChainId
+    34:
+      ShardInfoResponse:
+        NEWTYPE:
+          TYPENAME: ShardInfo
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -1152,6 +1160,10 @@ Secp256k1Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+ShardInfo:
+  STRUCT:
+    - shard_id: U64
+    - total_shards: U64
 StreamId:
   STRUCT:
     - application_id:

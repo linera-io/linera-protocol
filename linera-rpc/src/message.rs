@@ -19,9 +19,19 @@ use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
-    HandleValidatedCertificateRequest,
+    config::ShardId, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
+    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
+
+/// Information about shard configuration for a specific chain.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct ShardInfo {
+    /// The ID of the shard assigned to the chain.
+    pub shard_id: ShardId,
+    /// The total number of shards in the validator network.
+    pub total_shards: usize,
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -65,6 +75,8 @@ pub enum RpcMessage {
 
     BlobLastUsedByCertificate(Box<BlobId>),
     BlobLastUsedByCertificateResponse(Box<ConfirmedBlockCertificate>),
+    ShardInfoQuery(ChainId),
+    ShardInfoResponse(ShardInfo),
 }
 
 impl RpcMessage {
@@ -85,6 +97,7 @@ impl RpcMessage {
             DownloadPendingBlob(request) => request.0,
             DownloadCertificatesByHeights(chain_id, _) => *chain_id,
             HandlePendingBlob(request) => request.0,
+            ShardInfoQuery(chain_id) => *chain_id,
             Vote(_)
             | Error(_)
             | ChainInfoResponse(_)
@@ -107,6 +120,7 @@ impl RpcMessage {
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
+            | ShardInfoResponse(_)
             | DownloadCertificatesResponse(_) => {
                 return None;
             }
@@ -123,6 +137,7 @@ impl RpcMessage {
         match self {
             VersionInfoQuery
             | NetworkDescriptionQuery
+            | ShardInfoQuery(_)
             | UploadBlob(_)
             | DownloadBlob(_)
             | DownloadConfirmedBlock(_)
@@ -143,6 +158,7 @@ impl RpcMessage {
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | NetworkDescriptionResponse(_)
+            | ShardInfoResponse(_)
             | UploadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
@@ -263,6 +279,17 @@ impl TryFrom<RpcMessage> for BlobId {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::UploadBlobResponse(blob_id) => Ok(*blob_id),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for ShardInfo {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::ShardInfoResponse(shard_info) => Ok(shard_info),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

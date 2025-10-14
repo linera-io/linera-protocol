@@ -354,6 +354,12 @@ pub enum ClientCommand {
         min_votes: Option<u64>,
     },
 
+    /// Query validators for shard information about a specific chain.
+    QueryShardInfo {
+        /// The chain to query shard information for.
+        chain_id: ChainId,
+    },
+
     /// Synchronizes a validator with the local state of chains.
     SyncValidator {
         /// The public address of the validator to synchronize.
@@ -998,6 +1004,7 @@ impl ClientCommand {
             | ClientCommand::ProcessInbox { .. }
             | ClientCommand::QueryValidator { .. }
             | ClientCommand::QueryValidators { .. }
+            | ClientCommand::QueryShardInfo { .. }
             | ClientCommand::SyncValidator { .. }
             | ClientCommand::SyncAllValidators { .. }
             | ClientCommand::SetValidator { .. }

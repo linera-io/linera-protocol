@@ -15,7 +15,7 @@ use linera_core::{
 use linera_storage::Storage;
 use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
 
 use super::transport::{MessageHandler, ServerHandle, TransportProtocol};
 use crate::{
@@ -188,8 +188,7 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        let nickname = self.server.state.nickname();
-                        warn!(nickname, %error, "Failed to handle block proposal");
+                        self.log_error(&error, "Failed to handle block proposal");
                         Err(error.into())
                     }
                 }
@@ -242,8 +241,7 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle timeout certificate");
+                        self.log_error(&error, "Failed to handle timeout certificate");
                         Err(error.into())
                     }
                 }
@@ -262,10 +260,7 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        error!(
-                            nickname = self.server.state.nickname(), %error,
-                            "Failed to handle validated certificate"
-                        );
+                        self.log_error(&error, "Failed to handle validated certificate");
                         Err(error.into())
                     }
                 }
@@ -293,8 +288,7 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle confirmed certificate");
+                        self.log_error(&error, "Failed to handle confirmed certificate");
                         Err(error.into())
                     }
                 }
@@ -308,8 +302,7 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle chain info query");
+                        self.log_error(&error, "Failed to handle chain info query");
                         Err(error.into())
                     }
                 }
@@ -320,8 +313,7 @@ where
                         self.handle_network_actions(actions);
                     }
                     Err(error) => {
-                        let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle cross-chain request");
+                        self.log_error(&error, "Failed to handle cross-chain request");
                     }
                 }
                 // No user to respond to.
@@ -339,8 +331,7 @@ where
                         blob.into(),
                     )))),
                     Err(error) => {
-                        let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle pending blob request");
+                        self.log_error(&error, "Failed to handle pending blob request");
                         Err(error.into())
                     }
                 }
@@ -355,8 +346,7 @@ where
                 {
                     Ok(info) => Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info)))),
                     Err(error) => {
-                        let nickname = self.server.state.nickname();
-                        error!(nickname, %error, "Failed to handle pending blob");
+                        self.log_error(&error, "Failed to handle pending blob");
                         Err(error.into())
                     }
                 }
@@ -372,6 +362,8 @@ where
             | RpcMessage::VersionInfoResponse(_)
             | RpcMessage::NetworkDescriptionQuery
             | RpcMessage::NetworkDescriptionResponse(_)
+            | RpcMessage::ShardInfoQuery(_)
+            | RpcMessage::ShardInfoResponse(_)
             | RpcMessage::DownloadBlob(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadPendingBlobResponse(_)
@@ -438,6 +430,15 @@ where
                 error!(%error, "dropping cross-chain request");
                 break;
             }
+        }
+    }
+
+    fn log_error(&self, error: &WorkerError, context: &str) {
+        let nickname = self.server.state.nickname();
+        if error.is_local() {
+            error!(nickname, %error, "{}", context);
+        } else {
+            debug!(nickname, %error, "{}", context);
         }
     }
 }

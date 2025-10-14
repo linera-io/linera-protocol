@@ -1073,10 +1073,17 @@ where
             Vec::new()
         };
         // Everything after (including) next_height in preprocessed_blocks if we have it.
-        for height in start.max(next_height).0..=end.0 {
-            if let Some(hash) = self.preprocessed_blocks.get(&BlockHeight(height)).await? {
-                hashes.push(hash);
-            }
+        let block_heights = (start.max(next_height).0..=end.0)
+            .map(BlockHeight)
+            .collect::<Vec<_>>();
+        for hash in self
+            .preprocessed_blocks
+            .multi_get(&block_heights)
+            .await?
+            .into_iter()
+            .flatten()
+        {
+            hashes.push(hash);
         }
         Ok(hashes)
     }

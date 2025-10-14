@@ -322,6 +322,74 @@ pub enum ExecutionError {
     OutdatedUpdateStreams,
 }
 
+impl ExecutionError {
+    /// Returns whether this error is caused by an issue in the local node.
+    ///
+    /// Returns `false` whenever the error could be caused by a bad message from a peer.
+    pub fn is_local(&self) -> bool {
+        match self {
+            ExecutionError::ArithmeticError(_)
+            | ExecutionError::UserError(_)
+            | ExecutionError::DecompressionError(_)
+            | ExecutionError::InvalidPromise
+            | ExecutionError::CrossApplicationCallInFinalize { .. }
+            | ExecutionError::ReentrantCall(_)
+            | ExecutionError::ApplicationBytecodeNotFound(_)
+            | ExecutionError::UnsupportedDynamicApplicationLoad(_)
+            | ExecutionError::ExcessiveRead
+            | ExecutionError::ExcessiveWrite
+            | ExecutionError::MaximumFuelExceeded(_)
+            | ExecutionError::MaximumServiceOracleExecutionTimeExceeded
+            | ExecutionError::ServiceOracleResponseTooLarge
+            | ExecutionError::BlockTooLarge
+            | ExecutionError::HttpResponseSizeLimitExceeded { .. }
+            | ExecutionError::UnauthorizedApplication(_)
+            | ExecutionError::UnexpectedOracleResponse
+            | ExecutionError::JsonError(_)
+            | ExecutionError::BcsError(_)
+            | ExecutionError::OracleResponseMismatch
+            | ExecutionError::ServiceOracleQueryOperations(_)
+            | ExecutionError::AssertBefore { .. }
+            | ExecutionError::StreamNameTooLong
+            | ExecutionError::BlobTooLarge
+            | ExecutionError::BytecodeTooLarge
+            | ExecutionError::UnauthorizedHttpRequest(_)
+            | ExecutionError::InvalidUrlForHttpRequest(_)
+            | ExecutionError::InactiveChain(_)
+            | ExecutionError::BlobsNotFound(_)
+            | ExecutionError::EventsNotFound(_)
+            | ExecutionError::InvalidHeaderName(_)
+            | ExecutionError::InvalidHeaderValue(_)
+            | ExecutionError::InvalidEpoch { .. }
+            | ExecutionError::IncorrectTransferAmount
+            | ExecutionError::UnauthenticatedTransferOwner
+            | ExecutionError::InsufficientBalance { .. }
+            | ExecutionError::FeesExceedFunding { .. }
+            | ExecutionError::IncorrectClaimAmount
+            | ExecutionError::UnauthenticatedClaimOwner
+            | ExecutionError::AdminOperationOnNonAdminChain
+            | ExecutionError::InvalidCommitteeEpoch { .. }
+            | ExecutionError::InvalidCommitteeRemoval
+            | ExecutionError::MissingOracleResponse
+            | ExecutionError::UnprocessedStreams
+            | ExecutionError::OutdatedUpdateStreams
+            | ExecutionError::ViewError(ViewError::NotFound(_)) => false,
+            #[cfg(with_wasm_runtime)]
+            ExecutionError::WasmError(_) => false,
+            #[cfg(with_revm)]
+            ExecutionError::EvmError(..) => false,
+            ExecutionError::MissingRuntimeResponse
+            | ExecutionError::ViewError(_)
+            | ExecutionError::ReqwestError(_)
+            | ExecutionError::ContractModuleSend(_)
+            | ExecutionError::ServiceModuleSend(_)
+            | ExecutionError::NoNetworkDescriptionFound
+            | ExecutionError::InternalError(_)
+            | ExecutionError::IoError(_) => true,
+        }
+    }
+}
+
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
     /// Instantiate the application state on the chain that owns the application.

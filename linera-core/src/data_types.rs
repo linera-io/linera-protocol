@@ -238,6 +238,16 @@ pub struct ChainInfoResponse {
     pub signature: Option<ValidatorSignature>,
 }
 
+/// Information about shard allocation for a chain.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct ShardInfo {
+    /// The shard ID that will process this chain.
+    pub shard_id: usize,
+    /// The total number of shards in the validator.
+    pub total_shards: usize,
+}
+
 /// An internal request between chains within a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
