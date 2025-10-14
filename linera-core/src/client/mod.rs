@@ -2680,13 +2680,16 @@ impl<Env: Environment> ChainClient<Env> {
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
-        if operations.is_empty() {
-            return Err(ChainClientError::BlockProposalError(
-                "no operations to execute",
+        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+
+        if transactions.is_empty() {
+            return Err(ChainClientError::LocalNodeError(
+                LocalNodeError::WorkerError(WorkerError::ChainError(Box::new(
+                    ChainError::EmptyBlock,
+                ))),
             ));
         }
 
-        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
         self.execute_prepared_transactions(transactions, blobs)
             .await
     }
