@@ -13,6 +13,7 @@ use chain_client_state::ChainClientState;
 use custom_debug_derive::Debug;
 use futures::{
     future::{self, Either, FusedFuture, Future, FutureExt},
+    select,
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt, TryStreamExt},
 };
 #[cfg(with_metrics)]
@@ -60,10 +61,7 @@ use rand::prelude::SliceRandom as _;
 use received_log::ReceivedLogs;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{
-    select,
-    sync::{mpsc, OwnedRwLockReadGuard},
-};
+use tokio::sync::{mpsc, OwnedRwLockReadGuard};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn, Instrument as _};
@@ -2345,7 +2343,7 @@ impl<Env: Environment> ChainClient<Env> {
             validator_trackers
         });
 
-        let cancellation_future = Box::pin(
+        let mut cancellation_future = Box::pin(
             async move {
                 if let Some(token) = cancellation_token {
                     token.cancelled().await
