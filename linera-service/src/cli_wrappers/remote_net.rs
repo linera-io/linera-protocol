@@ -54,7 +54,7 @@ impl LineraNetConfig for RemoteNetTestingConfig {
         // And the remaining 2 here
         for _ in 0..2 {
             client
-                .open_and_assign(&client, Amount::from_tokens(100))
+                .open_and_assign(&client, Amount::from_tokens(10))
                 .await
                 .unwrap();
         }

@@ -4475,7 +4475,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
             vec![owner1, owner2],
             vec![100, 100],
             0,
-            Amount::from_tokens(11),
+            Amount::from_tokens(9),
             u64::MAX,
         )
         .await?;
@@ -4483,7 +4483,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     client2.assign(owner2, chain2).await?;
     client2.sync(chain2).await?;
 
-    let (tx, mut rx) = mpsc::channel(8);
+    let (tx, mut rx) = mpsc::channel(6);
     let drop_barrier = Arc::new(Barrier::new(3));
     let handle1 = tokio::spawn(run_client(
         drop_barrier.clone(),
@@ -4529,7 +4529,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
         result
     }
 
-    for _ in 0..8 {
+    for _ in 0..6 {
         let () = rx.next().await.unwrap();
     }
     drop(rx);
