@@ -187,15 +187,12 @@ where
         blob_ids: impl IntoIterator<Item = &BlobId>,
         chain_id: ChainId,
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
-        let chain = self.chain_state_view(chain_id).await?;
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            match chain.manager.locking_blobs.get(blob_id).await? {
-                None => return Ok(None),
-                Some(blob) => blobs.push(blob),
-            }
-        }
-        Ok(Some(blobs))
+        let blob_ids_vec: Vec<_> = blob_ids.into_iter().copied().collect();
+        Ok(self
+            .node
+            .state
+            .get_locking_blobs(chain_id, blob_ids_vec)
+            .await?)
     }
 
     /// Writes the given blobs to storage if there is an appropriate blob state.
@@ -303,6 +300,31 @@ where
             .update_received_certificate_trackers(chain_id, new_trackers)
             .await?;
         Ok(())
+    }
+
+    pub async fn get_preprocessed_block_hashes(
+        &self,
+        chain_id: ChainId,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> Result<Vec<linera_base::crypto::CryptoHash>, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_preprocessed_block_hashes(chain_id, start, end)
+            .await?)
+    }
+
+    pub async fn get_inbox_next_height(
+        &self,
+        chain_id: ChainId,
+        origin: ChainId,
+    ) -> Result<BlockHeight, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_inbox_next_height(chain_id, origin)
+            .await?)
     }
 }
 
