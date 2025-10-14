@@ -2641,11 +2641,6 @@ impl<Env: Environment> ChainClient<Env> {
                         "Another block was committed; retrying."
                     );
                 }
-                Ok(ExecuteBlockOutcome::NothingToExecute) => {
-                    return Err(ChainClientError::BlockProposalError(
-                        "no operations in proposal",
-                    ));
-                }
                 Err(ChainClientError::CommunicationError(CommunicationError::Trusted(
                     NodeError::UnexpectedBlockHeight {
                         expected_block_height,
@@ -2685,6 +2680,23 @@ impl<Env: Environment> ChainClient<Env> {
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
+        if operations.is_empty() {
+            return Err(ChainClientError::BlockProposalError(
+                "no operations to execute",
+            ));
+        }
+
+        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+        self.execute_prepared_transactions(transactions, blobs)
+            .await
+    }
+
+    #[instrument(level = "trace", skip(transactions, blobs))]
+    async fn execute_prepared_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+        blobs: Vec<Blob>,
+    ) -> Result<ExecuteBlockOutcome, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
@@ -2699,11 +2711,6 @@ impl<Env: Environment> ChainClient<Env> {
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
             ClientOutcome::Committed(None) => {}
-        }
-
-        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
-        if transactions.is_empty() {
-            return Ok(ExecuteBlockOutcome::NothingToExecute);
         }
 
         let confirmed_value = self.new_pending_block(transactions, blobs).await?;
@@ -3451,8 +3458,6 @@ impl<Env: Environment> ChainClient<Env> {
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
-                // We create a vector of operations with one element above
-                ExecuteBlockOutcome::NothingToExecute => unreachable!(),
             };
         }
     }
@@ -3508,8 +3513,6 @@ impl<Env: Environment> ChainClient<Env> {
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
-                // We execute a single operation
-                ExecuteBlockOutcome::NothingToExecute => unreachable!(),
             };
             // The only operation, i.e. the last transaction, created the new chain.
             let chain_blob = certificate
@@ -3740,15 +3743,19 @@ impl<Env: Environment> ChainClient<Env> {
             // We provide no operations - this means that the only operations executed
             // will be epoch changes, receiving messages and processing event stream
             // updates, if any are pending.
-            match self.execute_block(vec![], vec![]).await {
+            let transactions = self.prepend_epochs_messages_and_events(vec![]).await?;
+            // Nothing in the inbox and no stream updates to be processed.
+            if transactions.is_empty() {
+                return Ok((certificates, None));
+            }
+            match self
+                .execute_prepared_transactions(transactions, vec![])
+                .await
+            {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
-                }
-                Ok(ExecuteBlockOutcome::NothingToExecute) => {
-                    // There were no more messages or events to be processed
-                    return Ok((certificates, None));
                 }
                 Err(error) => return Err(error),
             };
@@ -4419,8 +4426,6 @@ enum ExecuteBlockOutcome {
     /// We are not the round leader and cannot do anything. Try again at the specified time or
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
-    /// We attempted to execute a block with no transactions inside.
-    NothingToExecute,
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
