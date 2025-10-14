@@ -254,71 +254,10 @@ impl<Env: Environment> ValidatorManager<Env> {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn download_certificates(
-        &self,
-        chain_id: ChainId,
-        start: BlockHeight,
-        limit: u64,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let key = RequestKey::Certificates {
-            chain_id,
-            start,
-            limit,
-        };
-        self.with_best(key, |peer| async move {
-            peer.download_certificates_from(chain_id, start, limit)
-                .await
-        })
-        .await
-    }
-
-    #[instrument(level = "trace", skip_all)]
     pub async fn download_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, NodeError> {
         let key = RequestKey::Blob(blob_id);
         self.with_best(key, |peer| async move { peer.download_blob(blob_id).await })
             .await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_certificates_by_heights(
-        &self,
-        chain_id: ChainId,
-        heights: Vec<BlockHeight>,
-    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        let key = RequestKey::CertificatesByHeights {
-            chain_id,
-            heights: heights.clone(),
-        };
-        self.with_best(key, |peer| async move {
-            peer.download_certificates_by_heights(chain_id, heights)
-                .await
-        })
-        .await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_pending_blob(
-        &self,
-        chain_id: ChainId,
-        blob_id: BlobId,
-    ) -> Result<BlobContent, NodeError> {
-        let key = RequestKey::PendingBlob { chain_id, blob_id };
-        self.with_best(key, |peer| async move {
-            peer.node.download_pending_blob(chain_id, blob_id).await
-        })
-        .await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn download_certificate_for_blob(
-        &self,
-        blob_id: BlobId,
-    ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        let key = RequestKey::CertificateForBlob(blob_id);
-        self.with_best(key, |peer| async move {
-            peer.download_certificate_for_blob(blob_id).await
-        })
-        .await
     }
 
     /// Downloads the blobs with the given IDs. This is done in one concurrent task per blob.

@@ -1263,12 +1263,14 @@ impl<Env: Environment> Client<Env> {
         let certificate = Box::new(certificate);
         match self.process_certificate(certificate.clone()).await {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                self.remote_nodes.add_peer(remote_node.clone()).await;
                 let mut blobs = Vec::new();
                 for blob_id in blob_ids {
+                    let key = RequestKey::PendingBlob { chain_id, blob_id };
                     let blob_content = self
                         .remote_nodes
-                        .download_pending_blob(chain_id, blob_id)
+                        .with_peer(key, remote_node.clone(), |peer| async move {
+                            peer.node.download_pending_blob(chain_id, blob_id).await
+                        })
                         .await?;
                     blobs.push(Blob::new(blob_content));
                 }
